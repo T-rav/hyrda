@@ -111,24 +111,18 @@ To add or modify agent processes:
 ### Running Locally
 
 ```bash
-cd slack-bot
-python app.py
+make install
+make run
 ```
 
 ### Running with Docker
 
 ```bash
-cd slack-bot
-docker build -t insight-mesh-slack-bot .
-docker run -d --env-file .env --name insight-mesh-bot insight-mesh-slack-bot
+make docker-build
+make docker-run
 ```
 
-### Running with Docker Compose
 
-```bash
-# From the project root
-docker-compose up -d slack-bot
-```
 
 ## Configuration Options
 

@@ -23,26 +23,19 @@ A Slack bot for Insight Mesh that leverages Slack's API to provide intelligent a
    LLM_API_KEY=your-llm-api-key
    LLM_MODEL=gpt-4o-mini
    ```
-3. Run the bot:
+3. Install dependencies and run the bot:
    ```bash
-   cd slack-bot
-   python app.py
+   make install
+   make run
    ```
    
 ## Docker Deployment
 
-Build and run the Docker container:
+Build and run the Docker container using Make targets:
 
 ```bash
-docker build -t insight-mesh-slack-bot .
-docker run -d --env-file .env --name insight-mesh-bot insight-mesh-slack-bot
-```
-
-Or with Docker Compose:
-
-```bash
-# Already included in the main docker-compose.yml
-docker-compose up -d slack-bot
+make docker-build
+make docker-run
 ```
 
 ## Architecture
@@ -139,19 +132,11 @@ To add a new agent process:
 
 ### Local Setup
 
-1. Create a virtual environment:
+1. (Optional) Create and activate a virtual environment
+2. Install dependencies and run via Make:
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Create a `.env` file with your configuration
-4. Run the bot:
-   ```bash
-   python app.py
+   make install
+   make run
    ```
 
 ### Code Organization
