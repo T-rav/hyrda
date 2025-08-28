@@ -88,3 +88,83 @@ Uses pytest with async support:
 - Test files in `src/tests/`
 - Coverage reporting available
 - Run with `PYTHONPATH=src pytest -q src/tests`
+
+## Production Deployment
+
+### Docker Deployment (Recommended)
+
+```bash
+# Build and deploy with Docker Compose
+./deployment/deploy.sh docker
+
+# Manual deployment
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+**Features:**
+- Health checks on port 8080 (`/health`, `/ready`, `/metrics`)
+- Automatic restart on failure
+- Log rotation and persistent storage
+- Resource limits (512M memory, 0.5 CPU)
+- Graceful shutdown handling
+
+### Systemd Deployment
+
+```bash
+# Deploy as system service
+sudo ./deployment/deploy.sh systemd
+```
+
+### Environment Variables
+
+Required for production:
+```bash
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_APP_TOKEN=xapp-your-app-token  
+LLM_API_URL=https://your-api.com
+LLM_API_KEY=your-api-key
+```
+
+Optional:
+```bash
+ENVIRONMENT=production          # Enables JSON logging
+LOG_LEVEL=INFO                 # DEBUG, INFO, WARNING, ERROR
+HEALTH_PORT=8080              # Health check server port
+```
+
+### Monitoring & Alerting
+
+**Health Endpoints:**
+- `GET /health` - Basic health check
+- `GET /ready` - Readiness probe (checks LLM API)
+- `GET /metrics` - Basic metrics
+
+**Automated Monitoring:**
+```bash
+# Set up monitoring cron job (every 5 minutes)
+*/5 * * * * /path/to/monitoring_check.sh
+```
+
+**Logging:**
+- Production: Structured JSON logs to stdout and files
+- Development: Human-readable console logs
+- Log rotation: 50MB files, 5 backups for main log, 10 for errors
+- Third-party library logs suppressed
+
+### Production Considerations
+
+**Resource Requirements (100 users):**
+- Memory: 256MB reserved, 512MB limit
+- CPU: 0.25 cores reserved, 0.5 limit
+- Disk: ~100MB for application, variable for logs
+
+**Security:**
+- Runs as non-root user
+- Container security hardening
+- Environment variable protection
+
+**Reliability:**
+- Graceful shutdown on SIGTERM/SIGINT
+- Auto-restart on crashes
+- Health check integration with orchestrators
+- Connection recovery for network issues

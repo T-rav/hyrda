@@ -1,0 +1,29 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Slack bot application logs
+  - job_name: slack-bot-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: slack-bot
+          service: slack-bot
+          __path__: /var/log/app/*.log
+
+  # System logs
+  - job_name: system-logs  
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/*.log

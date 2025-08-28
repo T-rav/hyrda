@@ -1,4 +1,5 @@
 import os
+import signal
 import asyncio
 import logging
 from slack_bolt.async_app import AsyncApp
@@ -11,10 +12,14 @@ from utils.logging import configure_logging
 from services.llm_service import LLMService
 from services.slack_service import SlackService
 from handlers.event_handlers import register_handlers
+from health import HealthChecker
 
 # Configure logging
 configure_logging()
 logger = logging.getLogger(__name__)
+
+# Global shutdown event
+shutdown_event = asyncio.Event()
 
 def create_app():
     """Create and configure the Slack app"""
@@ -42,8 +47,17 @@ async def maintain_presence(client: WebClient):
         # Sleep for 5 minutes
         await asyncio.sleep(300)
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+    shutdown_event.set()
+
 async def run():
-    """Start the Slack bot asynchronously"""
+    """Start the Slack bot asynchronously with graceful shutdown"""
+    # Setup signal handlers
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
     # Display permission requirements warning
     logger.warning("=== PERMISSION REQUIREMENTS ===")
     logger.warning("To fully support thread responses, please ensure your Slack app has these permissions:")
@@ -54,48 +68,96 @@ async def run():
     logger.warning("If missing any of these, reinstall your app at https://api.slack.com/apps")
     logger.warning("===============================")
     
-    # Create and configure the app
-    app, slack_service, llm_service = create_app()
-    
-    # Register event handlers
-    await register_handlers(app, slack_service, llm_service)
-    
-    # Set bot presence to "auto" (online)
-    try:
-        auth_test = await app.client.auth_test()
-        logger.info(f"Auth test response: {auth_test}")
-        logger.info(f"Bot user ID: {auth_test.get('user_id')}")
-        logger.info(f"Bot name: {auth_test.get('user')}")
-        
-        # Update bot ID if not set
-        if not slack_service.bot_id:
-            slack_service.bot_id = auth_test.get('user_id')
-            logger.info(f"Updated bot ID to: {slack_service.bot_id}")
-        
-        # Set initial presence
-        logger.info("Setting presence to 'auto'...")
-        presence_response = await app.client.users_setPresence(presence="auto")
-        logger.info(f"Presence API response: {presence_response}")
-        
-        # Start the presence maintenance task
-        asyncio.create_task(maintain_presence(app.client))
-    except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        import traceback
-        logger.error(f"Startup error traceback: {traceback.format_exc()}")
+    settings = None
+    health_checker = None
+    handler = None
+    llm_service = None
     
     try:
+        # Create and configure the app
+        app, slack_service, llm_service = create_app()
+        settings = Settings()
+        
+        # Start health check server
+        health_checker = HealthChecker(settings)
+        health_port = int(os.getenv("HEALTH_PORT", "8080"))
+        await health_checker.start_server(health_port)
+        logger.info(f"Health check server started on port {health_port}")
+        
+        # Register event handlers
+        await register_handlers(app, slack_service, llm_service)
+        
+        # Set bot presence to "auto" (online)
+        try:
+            auth_test = await app.client.auth_test()
+            logger.info(f"Bot authenticated: {auth_test.get('user')} ({auth_test.get('user_id')})")
+            
+            # Update bot ID if not set
+            if not slack_service.bot_id:
+                slack_service.bot_id = auth_test.get('user_id')
+                logger.info(f"Updated bot ID to: {slack_service.bot_id}")
+            
+            # Set initial presence
+            await app.client.users_setPresence(presence="auto")
+            logger.info("Bot presence set to online")
+            
+            # Start the presence maintenance task
+            presence_task = asyncio.create_task(maintain_presence(app.client))
+            
+        except Exception as e:
+            logger.error(f"Error during startup: {e}")
+            raise
+        
         # Start the Socket Mode handler
         handler = AsyncSocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
         logger.info("Starting Insight Mesh Assistant...")
-        await handler.start_async()
+        
+        # Start handler in background
+        handler_task = asyncio.create_task(handler.start_async())
+        
+        # Wait for shutdown signal
+        await shutdown_event.wait()
+        logger.info("Shutdown signal received, cleaning up...")
+        
+        # Cancel background tasks
+        if 'presence_task' in locals():
+            presence_task.cancel()
+        handler_task.cancel()
+        
+        # Wait for tasks to complete
+        try:
+            await asyncio.gather(presence_task, handler_task, return_exceptions=True)
+        except Exception:
+            pass
+            
     except Exception as e:
-        logger.error(f"Error starting socket mode: {e}")
+        logger.error(f"Error in main application: {e}")
         import traceback
-        logger.error(f"Socket mode error traceback: {traceback.format_exc()}")
+        logger.error(f"Application error traceback: {traceback.format_exc()}")
+        raise
     finally:
-        # Close services
-        await llm_service.close()
+        # Cleanup resources
+        logger.info("Cleaning up resources...")
+        
+        if handler:
+            try:
+                await handler.close_async()
+            except Exception as e:
+                logger.error(f"Error closing socket handler: {e}")
+                
+        if llm_service:
+            try:
+                await llm_service.close()
+            except Exception as e:
+                logger.error(f"Error closing LLM service: {e}")
+                
+        if health_checker:
+            try:
+                await health_checker.stop_server()
+            except Exception as e:
+                logger.error(f"Error stopping health check server: {e}")
+        
+        logger.info("Shutdown complete")
 
 def main():
     """Main entry point"""

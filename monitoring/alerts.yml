@@ -1,0 +1,54 @@
+groups:
+- name: slack-bot-alerts
+  rules:
+  # Bot is down
+  - alert: SlackBotDown
+    expr: up{job="slack-bot"} == 0
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Slack bot is down"
+      description: "Slack bot has been down for more than 1 minute"
+
+  # High memory usage
+  - alert: SlackBotHighMemory
+    expr: (container_memory_usage_bytes{name="insight-mesh-slack-bot"} / container_spec_memory_limit_bytes{name="insight-mesh-slack-bot"}) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Slack bot high memory usage"
+      description: "Slack bot memory usage is above 80% for 5 minutes"
+
+  # High CPU usage
+  - alert: SlackBotHighCPU
+    expr: rate(container_cpu_usage_seconds_total{name="insight-mesh-slack-bot"}[5m]) > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Slack bot high CPU usage"
+      description: "Slack bot CPU usage is above 80% for 5 minutes"
+
+  # Container restarts
+  - alert: SlackBotRestarting
+    expr: increase(container_start_time_seconds{name="insight-mesh-slack-bot"}[10m]) > 0
+    for: 0m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Slack bot container restarted"
+      description: "Slack bot container has restarted"
+
+- name: system-alerts
+  rules:
+  # Disk space
+  - alert: HighDiskUsage
+    expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low disk space"
+      description: "Disk space is below 10%"
