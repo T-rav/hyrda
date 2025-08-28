@@ -28,9 +28,6 @@ def create_app():
     llm_service = LLMService(settings.llm)
     slack_service = SlackService(settings.slack, client)
     
-    # Register event handlers
-    asyncio.create_task(register_handlers(app, slack_service, llm_service))
-    
     return app, slack_service, llm_service
 
 async def maintain_presence(client: WebClient):
@@ -59,6 +56,9 @@ async def run():
     
     # Create and configure the app
     app, slack_service, llm_service = create_app()
+    
+    # Register event handlers
+    await register_handlers(app, slack_service, llm_service)
     
     # Set bot presence to "auto" (online)
     try:

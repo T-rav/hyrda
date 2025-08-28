@@ -28,9 +28,7 @@ class TestApp:
         }):
             with patch('app.AsyncApp') as mock_app_class, \
                  patch('app.LLMService') as mock_llm_service_class, \
-                 patch('app.SlackService') as mock_slack_service_class, \
-                 patch('app.register_handlers') as mock_register_handlers, \
-                 patch('app.asyncio.create_task') as mock_create_task:
+                 patch('app.SlackService') as mock_slack_service_class:
                 
                 # Mock AsyncApp
                 mock_app = MagicMock()
@@ -51,9 +49,6 @@ class TestApp:
                 # Verify services were created
                 mock_llm_service_class.assert_called_once()
                 mock_slack_service_class.assert_called_once()
-                
-                # Verify handlers were registered
-                mock_create_task.assert_called_once()
                 
                 assert app == mock_app
                 assert slack_service == mock_slack_service
@@ -102,7 +97,7 @@ class TestApp:
         """Test successful app run"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
-             patch('app.asyncio.create_task') as mock_create_task, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             
             # Mock app and services
@@ -156,6 +151,7 @@ class TestApp:
         """Test app run with auth error"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             
             # Mock app and services
@@ -187,6 +183,7 @@ class TestApp:
         """Test app run with socket mode error"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             
             # Mock app and services
@@ -216,6 +213,7 @@ class TestApp:
         """Test app run with presence setting error"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             
             # Mock app and services
@@ -249,6 +247,7 @@ class TestApp:
         """Test app run when bot ID is already set"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             
             # Mock app and services
@@ -294,6 +293,7 @@ class TestApp:
         """Test that permission warning messages are displayed"""
         with patch('app.create_app') as mock_create_app, \
              patch('app.AsyncSocketModeHandler') as mock_handler_class, \
+             patch('app.register_handlers') as mock_register_handlers, \
              patch('app.logger') as mock_logger, \
              patch.dict(os.environ, {"SLACK_APP_TOKEN": "xapp-test-token"}):
             

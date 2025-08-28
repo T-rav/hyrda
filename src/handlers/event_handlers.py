@@ -72,16 +72,8 @@ async def register_handlers(app, slack_service, llm_service):
         try:
             event = body["event"]
             
-            # Enhanced logging for ALL incoming messages
-            logger.info(f"FULL MESSAGE EVENT: {event}")
-            logger.info(f"Event keys: {list(event.keys())}")
-            logger.info(f"Channel type: {event.get('channel_type', 'N/A')}")
-            logger.info(f"User ID: {event.get('user', 'MISSING')}")
-            logger.info(f"Bot ID: {event.get('bot_id', 'N/A')}")
-            logger.info(f"Subtype: {event.get('subtype', 'N/A')}")
-            logger.info(f"Thread TS: {event.get('thread_ts', 'N/A')}")
-            logger.info(f"TS: {event.get('ts', 'N/A')}")
-            logger.info(f"Text: '{event.get('text', '')}'")
+            # Log key message details
+            logger.debug(f"Message event: channel={event.get('channel')}, user={event.get('user')}, thread_ts={event.get('thread_ts')}")
             
             # Skip if it's from a bot
             if event.get("bot_id") or event.get("subtype") == "bot_message":
@@ -130,8 +122,7 @@ async def process_message_by_context(
 ):
     """Process message based on its context (DM, mention, thread)"""
     
-    logger.info(f"CONTEXT DECISION - user_id: {user_id}, channel: {channel}, channel_type: {channel_type}")
-    logger.info(f"CONTEXT DECISION - thread_ts: {thread_ts}, ts: {ts}")
+    logger.debug(f"Processing message: channel_type={channel_type}, thread_ts={thread_ts}")
     
     # Check if message is in a DM
     if channel_type == "im":
@@ -151,7 +142,7 @@ async def process_message_by_context(
     is_mention = f"<@{bot_id}>" in text if bot_id else False
     
     if is_mention:
-        logger.info(f"Processing message with bot mention - bot_id: {bot_id}, is_mention: {is_mention}")
+        logger.info("Processing message with bot mention")
         # Extract text after mention
         clean_text = text.split(">", 1)[-1].strip() if ">" in text else text
         await handle_message(
@@ -164,49 +155,30 @@ async def process_message_by_context(
         )
         return
         
-    # If in thread, respond to all messages in the thread
+    # If in thread, check if bot should respond
     if thread_ts:
-        logger.info(f"Message is in a thread, processing - thread_ts: {thread_ts}")
+        logger.info("Message is in a thread, checking participation")
         
         try:
-            # IMPORTANT: FORCE RESPONSE IN ALL THREADS
-            # This is a temporary fix until we get the correct event subscriptions
-            # Always respond to messages in threads
-            logger.info(f"TEMPORARY FIX: Always responding to messages in threads - channel_type: {channel_type}")
-            await handle_message(
-                text=text,
-                user_id=user_id,
-                slack_service=slack_service,
-                llm_service=llm_service,
-                channel=channel,
-                thread_ts=thread_ts
-            )
-            return
+            # Check if bot is already a participant in this thread
+            thread_info = await slack_service.get_thread_info(channel, thread_ts)
             
-            # Original code - temporarily disabled:
-            # Check thread history to see if bot is part of this thread
-            # thread_info = await slack_service.get_thread_info(channel, thread_ts)
-            # logger.info(f"Thread info: {thread_info}")
-            
-            # # Only respond if the bot is already a participant in this thread
-            # if thread_info.get("bot_is_participant", False):
-            #     logger.info(f"Bot responding to thread - is_participant: true, channel_type: {channel_type}")
-            #     await handle_message(
-            #         text=text,
-            #         user_id=user_id,
-            #         slack_service=slack_service,
-            #         llm_service=llm_service,
-            #         channel=channel,
-            #         thread_ts=thread_ts
-            #     )
-            # else:
-            #     logger.info(f"Bot is not a participant in this thread, ignoring - channel_type: {channel_type}")
+            # Only respond if the bot is already a participant in this thread
+            if thread_info.get("bot_is_participant", False):
+                logger.info("Bot responding to thread message")
+                await handle_message(
+                    text=text,
+                    user_id=user_id,
+                    slack_service=slack_service,
+                    llm_service=llm_service,
+                    channel=channel,
+                    thread_ts=thread_ts
+                )
+            else:
+                logger.debug("Bot is not a participant in this thread, ignoring")
         except Exception as e:
-            error_msg = str(e)
-            logger.error(f"Error checking thread history: {error_msg}")
-            
-            # Permission errors in group or private channels - respond anyway
-            logger.info(f"Error occurred, but responding anyway - channel_type: {channel_type}")
+            logger.error(f"Error checking thread history: {e}")
+            # On permission errors, respond anyway since we can't verify participation
             await handle_message(
                 text=text,
                 user_id=user_id,

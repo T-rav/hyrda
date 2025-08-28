@@ -5,23 +5,19 @@ from typing import Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 # Available agent processes
+# Note: These are example processes. Replace with your actual processing scripts.
 AGENT_PROCESSES = {
-    "agent_index_data": {
-        "name": "Data Indexing Job",
-        "description": "Indexes your documents into the RAG system",
-        "command": "python dagster_project/run_job.py index_files"
-    },
-    "agent_import_slack": {
-        "name": "Slack Import Job",
-        "description": "Imports data from Slack channels",
-        "command": "python dagster_project/slack_assets.py run slack_channels_job"
-    },
-    "agent_check_status": {
-        "name": "Job Status Check",
-        "description": "Checks status of running jobs",
-        "command": "python dagster_project/check_status.py"
+    "agent_example_process": {
+        "name": "Example Process",
+        "description": "An example agent process (replace with your actual processes)",
+        "command": "echo 'Example process executed successfully'"
     }
-    # Add more agent processes as needed
+    # Add your actual agent processes here:
+    # "agent_your_process": {
+    #     "name": "Your Process Name",
+    #     "description": "What your process does",
+    #     "command": "python /path/to/your/script.py"
+    # }
 }
 
 async def run_agent_process(process_id: str) -> Dict[str, Any]:
