@@ -63,35 +63,15 @@ class MessageFormatter:
 
     @staticmethod
     def format_markdown_for_slack(text: str) -> str:
-        """Convert standard markdown to Slack-compatible markdown"""
-        # Convert **bold** to *bold* (Slack uses single asterisks for bold)
-        text = re.sub(r"\*\*(.*?)\*\*", r"*\1*", text)
+        """Convert standard markdown to Slack-compatible markdown using slackify-markdown library"""
+        try:
+            from slackify_markdown import slackify_markdown
 
-        # Convert _italic_ to _italic_ (already compatible)
-        # Convert __bold__ to *bold*
-        text = re.sub(r"__(.*?)__", r"*\1*", text)
-
-        # Convert [text](url) links to <url|text>
-        text = re.sub(r"\[(.*?)\]\((.*?)\)", r"<\2|\1>", text)
-
-        # Convert `inline code` to `inline code` (already compatible)
-
-        # Ensure proper line breaks for lists
-        lines = text.split("\n")
-        formatted_lines = []
-
-        for line in lines:
-            # Format list items with proper indentation
-            if line.strip().startswith("• "):
-                formatted_lines.append(line)
-            elif line.strip().startswith("- ") or line.strip().startswith("* "):
-                # Convert to bullet and ensure proper spacing
-                content = line.strip()[2:].strip()
-                formatted_lines.append(f"• {content}")
-            else:
-                formatted_lines.append(line)
-
-        return "\n".join(formatted_lines)
+            return slackify_markdown(text)
+        except ImportError:
+            # Fallback to basic conversion if library not available
+            logger.warning("slackify-markdown not available, using basic conversion")
+            return text.replace("**", "*").replace("__", "*")
 
     @staticmethod
     async def format_message(text: str | None) -> str:
