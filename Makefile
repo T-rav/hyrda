@@ -57,32 +57,32 @@ run: check-env
 	cd $(PROJECT_ROOT) && $(PYTHON) app.py
 
 test:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
 
 test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=75 --maxfail=10
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=75 --maxfail=10
 
 test-file:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -v tests/$(FILE)
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
 
 test-integration:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -m integration --maxfail=5 -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m integration --maxfail=5 -v
 
 test-unit:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -m "not integration" -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m "not integration" -v
 
 lint:
-	cd $(PROJECT_ROOT) && ../venv/bin/ruff check . --fix
-	cd $(PROJECT_ROOT) && ../venv/bin/black .
-	cd $(PROJECT_ROOT) && ../venv/bin/isort .
+	cd $(PROJECT_ROOT) && ruff check . --fix
+	cd $(PROJECT_ROOT) && black .
+	cd $(PROJECT_ROOT) && isort .
 
 lint-check:
-	cd $(PROJECT_ROOT) && ../venv/bin/ruff check .
-	cd $(PROJECT_ROOT) && ../venv/bin/black --check .
-	cd $(PROJECT_ROOT) && ../venv/bin/isort --check-only .
+	cd $(PROJECT_ROOT) && ruff check .
+	cd $(PROJECT_ROOT) && black --check .
+	cd $(PROJECT_ROOT) && isort --check-only .
 
 typecheck:
-	cd $(PROJECT_ROOT) && ../venv/bin/pyright
+	cd $(PROJECT_ROOT) && pyright
 
 quality: lint-check typecheck test
 
@@ -122,10 +122,10 @@ ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
 
 pre-commit:
-	venv/bin/pre-commit run --all-files
+	pre-commit run --all-files
 
 security:
-	cd $(PROJECT_ROOT) && ../venv/bin/bandit -r . -f json -o ../security-report.json || ../venv/bin/bandit -r . -f txt
+	cd $(PROJECT_ROOT) && bandit -r . -f json -o ../security-report.json || bandit -r . -f txt
 
 clean:
 	find . -type f -name "*.pyc" -delete
