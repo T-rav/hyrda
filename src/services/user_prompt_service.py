@@ -2,7 +2,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String, Text, delete, desc, select
+from sqlalchemy import DateTime, String, Text, delete, desc, select, update
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -40,7 +40,7 @@ class UserPromptService:
         self.database_url = database_url
         self.engine = create_async_engine(database_url, echo=False)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
-        self.migration_manager = None
+        self.migration_manager: MigrationManager | None = None
 
     async def initialize(self):
         """Initialize database with migrations"""
@@ -49,10 +49,10 @@ class UserPromptService:
         register_migrations(self.migration_manager)
 
         # Initialize migration system
-        await self.migration_manager.initialize()
-
-        # Apply any pending migrations
-        await self.migration_manager.apply_migrations()
+        if self.migration_manager is not None:
+            await self.migration_manager.initialize()
+            # Apply any pending migrations
+            await self.migration_manager.apply_migrations()
 
         logger.info("User prompt database initialized with migrations")
 
@@ -67,11 +67,13 @@ class UserPromptService:
         async with self.async_session() as session:
             try:
                 # Mark all existing prompts as not current
-                await session.execute(
-                    UserPrompt.__table__.update()
+                # Mark all existing prompts as not current using update query
+                stmt = (
+                    update(UserPrompt)
                     .where(UserPrompt.user_id == user_id)
                     .values(is_current=False)
                 )
+                await session.execute(stmt)
 
                 # Add new prompt as current
                 new_prompt = UserPrompt(user_id=user_id, prompt=prompt, is_current=True)
@@ -127,9 +129,10 @@ class UserPromptService:
 
                 history = []
                 for prompt in prompts:
+                    PREVIEW_LENGTH = 50
                     preview = (
-                        prompt.prompt[:50] + "..."
-                        if len(prompt.prompt) > 50
+                        prompt.prompt[:PREVIEW_LENGTH] + "..."
+                        if len(prompt.prompt) > PREVIEW_LENGTH
                         else prompt.prompt
                     )
                     history.append(

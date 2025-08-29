@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import DateTime, String, select
+from sqlalchemy import DateTime, String, delete, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -134,11 +134,11 @@ class MigrationManager:
                 await migration.down(session)
 
                 # Remove from migration history
-                await session.execute(
-                    MigrationHistory.__table__.delete().where(
-                        MigrationHistory.version == version
-                    )
+                # Remove from migration history using delete query
+                stmt = delete(MigrationHistory).where(
+                    MigrationHistory.version == version
                 )
+                await session.execute(stmt)
 
                 await session.commit()
                 logger.info(f"Successfully rolled back migration {migration.version}")

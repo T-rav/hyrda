@@ -2,6 +2,7 @@ import logging
 from datetime import UTC, datetime
 
 from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp.web_runner import AppRunner, TCPSite
 
 from config.settings import Settings
 
@@ -23,8 +24,8 @@ class HealthChecker:
         self.prompt_service = prompt_service
         self.start_time = datetime.now(UTC)
         self.app = None
-        self.runner = None
-        self.site = None
+        self.runner: AppRunner | None = None
+        self.site: TCPSite | None = None
 
     async def start_server(self, port: int = 8080):
         """Start health check HTTP server"""
@@ -106,7 +107,7 @@ class HealthChecker:
 
         checks["configuration"] = {
             "status": "healthy" if not missing_vars else "unhealthy",
-            "missing_variables": missing_vars,
+            "missing_variables": ", ".join(missing_vars) if missing_vars else "none",
         }
 
         if missing_vars:
