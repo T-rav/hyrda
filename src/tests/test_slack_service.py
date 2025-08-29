@@ -272,6 +272,11 @@ class TestSlackService:
             return_value={"messages": mock_messages}
         )
 
+        # Mock auth_test to return both user_id and bot_id
+        slack_service.client.auth_test = AsyncMock(
+            return_value={"user_id": "B12345678", "bot_id": "B08RGGA6QKS"}
+        )
+
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
         assert thread_info["exists"] is True
@@ -295,6 +300,11 @@ class TestSlackService:
             return_value={"messages": mock_messages}
         )
 
+        # Mock auth_test to return both user_id and bot_id (neither matches participants)
+        slack_service.client.auth_test = AsyncMock(
+            return_value={"user_id": "U99999999", "bot_id": "B99999999"}
+        )
+
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
         assert thread_info["exists"] is True
@@ -306,6 +316,9 @@ class TestSlackService:
     async def test_get_thread_info_no_bot_id(self, slack_service):
         """Test thread info when bot ID is not set"""
         slack_service.bot_id = None
+        # Clear bot_user_id to trigger auth_test call
+        if hasattr(slack_service, "bot_user_id"):
+            slack_service.bot_user_id = None
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
@@ -315,12 +328,14 @@ class TestSlackService:
             return_value={"messages": mock_messages}
         )
         slack_service.client.auth_test = AsyncMock(
-            return_value={"user_id": "B12345678"}
+            return_value={"user_id": "B12345678", "bot_id": "B08RGGA6QKS"}
         )
 
         await slack_service.get_thread_info(channel, thread_ts)
 
-        assert slack_service.bot_id == "B12345678"
+        # With our new logic, bot_id gets set to the actual bot_id from auth_test (if available)
+        assert slack_service.bot_id == "B08RGGA6QKS"
+        assert slack_service.bot_user_id == "B12345678"
         slack_service.client.auth_test.assert_called_once()
 
     @pytest.mark.asyncio
