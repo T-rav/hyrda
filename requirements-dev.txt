@@ -1,0 +1,24 @@
+# Development tools with exact versions for reproducibility
+# This ensures identical tool behavior between local development and CI
+
+# Core linting and formatting (must match .tool-versions)
+ruff==0.8.4
+isort==5.13.2
+pyright==1.1.390
+bandit[toml]==1.8.0
+
+# Pre-commit framework
+pre-commit==4.0.1
+
+# Legacy support (gradually being replaced by Ruff)
+black==25.1.0
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Test support libraries
+aioresponses>=0.7.4
+fakeredis>=2.20.0

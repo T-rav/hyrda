@@ -44,7 +44,7 @@ install-test:
 	$(PIP) install -r $(PROJECT_ROOT)/requirements-test.txt
 
 install-dev: install install-test
-	$(PIP) install ruff black isort pyright pre-commit bandit[toml]
+	$(PIP) install -r requirements-dev.txt
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -72,14 +72,10 @@ test-unit:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m "not integration" -v
 
 lint:
-	cd $(PROJECT_ROOT) && ruff check . --fix
-	cd $(PROJECT_ROOT) && black .
-	cd $(PROJECT_ROOT) && isort .
+	./scripts/lint.sh --fix
 
 lint-check:
-	cd $(PROJECT_ROOT) && ruff check .
-	cd $(PROJECT_ROOT) && black --check .
-	cd $(PROJECT_ROOT) && isort --check-only .
+	./scripts/lint.sh
 
 typecheck:
 	cd $(PROJECT_ROOT) && pyright

@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 # Optional import to handle cases where langfuse isn't installed
 try:
     from langfuse import Langfuse  # type: ignore[import-untyped]
-    from langfuse.decorators import observe  # noqa: F401 - used in other modules  # type: ignore[import-untyped]
     from langfuse.decorators import langfuse_context  # type: ignore[import-untyped]
+    from langfuse.decorators import (  # noqa: F401 - used in other modules  # type: ignore[import-untyped]
+        observe,
+    )
 
     _langfuse_available = True
 except ImportError:

@@ -6,6 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
 
+### 🔄 Unified Linting System
+Pre-commit hooks and CI now use **identical scripts and tool versions** to prevent environment mismatches:
+- **Same Script**: `./scripts/lint.sh` used by both local and CI  
+- **Same Versions**: `requirements-dev.txt` pins exact tool versions
+- **Same Config**: `pyproject.toml` shared across environments
+
+This eliminates the "works locally but fails in CI" problem!
+
 ### Commit Process:
 1. Fix all linting, formatting, and security issues identified by pre-commit hooks
 2. Ensure all tests pass (`make test`)
@@ -213,11 +221,15 @@ make test                    # Full test suite with coverage
 make test-coverage          # Tests with HTML coverage report  
 make test-file FILE=test_name.py  # Run specific test file
 
-# Quality checks (REQUIRED before commit)
-make lint                   # Auto-fix linting issues
-make lint-check            # Check linting without fixing
-make typecheck             # Run mypy type checking
+# Quality checks (REQUIRED before commit)  
+make lint                   # Auto-fix linting issues (uses unified script)
+make lint-check            # Check linting without fixing (uses unified script)
+make typecheck             # Run pyright type checking
 make quality               # Run all quality checks + tests
+
+# Direct unified script usage (same behavior as CI)
+./scripts/lint.sh --fix     # Auto-fix mode (same as make lint)
+./scripts/lint.sh           # Check mode (same as make lint-check)
 ```
 
 #### Pre-commit Requirements

@@ -3,40 +3,16 @@
 # Run manually: pre-commit run --all-files
 
 repos:
-  # Ruff - Fast Python linter and formatter
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+  # Unified linting script - ensures identical behavior with CI
+  - repo: local
     hooks:
-      # Linter with auto-fix
-      - id: ruff
-        args: [--fix]
-        types_or: [python, pyi]
-      # Formatter
-      - id: ruff-format
-        types_or: [python, pyi]
-
-  # Black - Python code formatter (disabled in favor of ruff-format)
-  # - repo: https://github.com/psf/black
-  #   rev: 25.1.0
-  #   hooks:
-  #     - id: black
-  #       language_version: python3
-  #       args: [--line-length=88]
-
-  # isort - Import sorting
-  - repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: [--profile=black]
-
-  # Pyright - Static type checking
-  - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.390
-    hooks:
-      - id: pyright
-        files: ^src/
-        exclude: ^src/tests/
+      - id: unified-lint-check
+        name: Unified Linting (Ruff + isort + Pyright)
+        entry: ./scripts/lint.sh
+        language: system
+        files: ^src/.*\.py$
+        pass_filenames: false
+        always_run: true
 
   # Built-in hooks for general cleanup
   - repo: https://github.com/pre-commit/pre-commit-hooks
