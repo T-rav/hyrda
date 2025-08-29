@@ -96,11 +96,12 @@ ignore = [
     "PLR0913", # too many arguments
     "PLR0912", # too many branches
     "PLR0915", # too many statements
+    "PLR2004", # magic value used in comparison
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["PLR2004", "S101", "B011", "F811"]  # Allow tests to use magic values, asserts, etc.
-"migrations/*" = ["PLR2004"]  # Allow magic values in migrations
+"tests/*" = ["S101", "B011", "F811"]  # Allow tests to use asserts, etc.
+"migrations/*" = []  # No special ignores needed for migrations now
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
