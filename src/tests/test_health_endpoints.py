@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 # Add the parent directory to sys.path to allow importing the module
@@ -45,7 +46,6 @@ class TestHealthEndpoints:
 
     def test_health_checker_uptime_calculation(self):
         """Test that health checker can calculate uptime"""
-        from datetime import UTC, datetime
 
         mock_settings = MagicMock()
         health_checker = HealthChecker(mock_settings)

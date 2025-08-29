@@ -126,7 +126,8 @@ async def rollback_migration(version: str):
 
 def main():
     """Main CLI entry point"""
-    if len(sys.argv) < 2:
+    MIN_ARGS_WITH_COMMAND = 2
+    if len(sys.argv) < MIN_ARGS_WITH_COMMAND:
         print("Usage:")
         print("  python migrate.py status                 # Show migration status")
         print("  python migrate.py migrate                # Apply pending migrations")
@@ -142,7 +143,8 @@ def main():
     elif command == "migrate":
         asyncio.run(apply_migrations())
     elif command == "rollback":
-        if len(sys.argv) < 3:
+        MIN_ARGS_WITH_VERSION = 3
+        if len(sys.argv) < MIN_ARGS_WITH_VERSION:
             print("❌ Please specify migration version to rollback")
             sys.exit(1)
         version = sys.argv[2]

@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app import create_app
 from config.settings import Settings
+from handlers.message_handlers import handle_message
 from health import HealthChecker
 from services.user_prompt_service import UserPromptService
 
@@ -175,7 +176,6 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_full_message_flow_with_prompt_service(self):
         """Test complete message flow with custom user prompt"""
-        from handlers.message_handlers import handle_message
 
         # Mock services
         mock_slack_service = AsyncMock()
@@ -219,7 +219,6 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_prompt_command_integration(self):
         """Test @prompt command integration with database"""
-        from handlers.message_handlers import handle_message
 
         mock_slack_service = AsyncMock()
         mock_llm_service = AsyncMock()
@@ -250,7 +249,6 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_conversation_cache_integration(self):
         """Test conversation cache integration with message handling"""
-        from handlers.message_handlers import handle_message
 
         mock_slack_service = AsyncMock()
         mock_llm_service = AsyncMock()
@@ -291,7 +289,6 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_error_handling_integration(self):
         """Test error handling across integrated components"""
-        from handlers.message_handlers import handle_message
 
         mock_slack_service = AsyncMock()
         mock_slack_service.send_thinking_indicator.return_value = "thinking_ts"

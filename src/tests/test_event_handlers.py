@@ -141,9 +141,9 @@ class TestEventHandlers:
         self, mock_slack_service, mock_llm_service
     ):
         """Test processing message that shouldn't get response"""
-        with patch("handlers.event_handlers.handle_message") as mock_handle_message:
-            mock_handle_message = AsyncMock()
-
+        with patch(
+            "handlers.event_handlers.handle_message", new_callable=AsyncMock
+        ) as mock_handle_message:
             # Message in channel without mention or thread
             await process_message_by_context(
                 user_id="U12345",
