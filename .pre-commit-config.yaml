@@ -30,20 +30,11 @@ repos:
       - id: isort
         args: [--profile=black]
 
-  # MyPy - Static type checking
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.17.1
+  # Pyright - Static type checking
+  - repo: https://github.com/RobertCraigie/pyright-python
+    rev: v1.1.390
     hooks:
-      - id: mypy
-        args: [--ignore-missing-imports, --explicit-package-bases]
-        additional_dependencies: [
-          pydantic>=2.0.0,
-          pydantic-settings>=2.0.0,
-          sqlalchemy>=2.0.0,
-          aiohttp>=3.8.0,
-          slack-bolt>=1.23.0,
-          types-redis,
-        ]
+      - id: pyright
         files: ^src/
         exclude: ^src/tests/
 
@@ -90,7 +81,7 @@ default_language_version:
 
 # Skip hooks for specific scenarios
 ci:
-  skip: [mypy]  # Skip mypy in CI since we run it separately
+  skip: [pyright]  # Skip pyright in CI since we run it separately
 
 # Performance: only run on changed files by default
 default_stages: [pre-commit]

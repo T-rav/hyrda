@@ -74,7 +74,7 @@ class HealthChecker:
             async with (
                 ClientSession() as session,
                 session.get(
-                    f"{self.settings.llm.api_url}/health",
+                    f"{self.settings.llm.base_url}/health",
                     timeout=ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
                 ) as resp,
             ):
