@@ -79,7 +79,7 @@ class OpenAIProvider(LLMProvider):
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=formatted_messages,
+                messages=formatted_messages,  # type: ignore[arg-type]
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
             )
@@ -96,7 +96,7 @@ class OpenAIProvider(LLMProvider):
                 },
             )
 
-            return content
+            return str(content) if content else None
 
         except Exception as e:
             logger.error(
@@ -199,7 +199,7 @@ class OllamaProvider(LLMProvider):
     def __init__(self, settings: LLMSettings):
         super().__init__(settings)
         self.base_url = settings.base_url or "http://localhost:11434"
-        self.session = None
+        self.session: aiohttp.ClientSession | None = None
 
     async def ensure_session(self) -> aiohttp.ClientSession:
         """Ensure an active client session exists"""
@@ -243,7 +243,8 @@ class OllamaProvider(LLMProvider):
             async with session.post(
                 f"{self.base_url}/api/chat", json=payload
             ) as response:
-                if response.status == 200:
+                HTTP_OK = 200
+                if response.status == HTTP_OK:
                     result = await response.json()
                     content = result.get("message", {}).get("content", "")
 
@@ -256,7 +257,7 @@ class OllamaProvider(LLMProvider):
                         },
                     )
 
-                    return content
+                    return str(content)
                 else:
                     error_text = await response.text()
                     logger.error(
@@ -300,4 +301,4 @@ def create_llm_provider(settings: LLMSettings) -> LLMProvider:
     if not provider_class:
         raise ValueError(f"Unsupported LLM provider: {settings.provider}")
 
-    return provider_class(settings)
+    return provider_class(settings)  # type: ignore[abstract]

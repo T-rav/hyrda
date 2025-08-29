@@ -60,7 +60,7 @@ async def maintain_presence(client: WebClient):
     """Keep the bot's presence status active"""
     while True:
         try:
-            await client.users_setPresence(presence="auto")
+            await client.users_setPresence(presence="auto")  # type: ignore[misc]
             logger.debug("Updated bot presence status")
         except Exception as e:
             logger.error(f"Error updating presence: {e}")
