@@ -5,6 +5,11 @@ LLM Service with RAG support - backward compatible interface
 import logging
 
 from config.settings import Settings
+from services.langfuse_service import (
+    get_langfuse_service,
+    initialize_langfuse_service,
+    observe,
+)
 from services.rag_service import RAGService
 from services.user_prompt_service import UserPromptService
 
@@ -26,21 +31,30 @@ class LLMService:
         self.user_prompt_service = user_prompt_service
         self.rag_service = RAGService(settings)
 
+        # Initialize Langfuse service
+        self.langfuse_service = initialize_langfuse_service(settings.langfuse)
+
         # Legacy properties for backward compatibility
         self.model = settings.llm.model
         self.api_url = f"{settings.llm.provider} API"  # For logging compatibility
 
         logger.info(f"Initialized LLM service with provider: {settings.llm.provider}")
+        if self.langfuse_service.enabled:
+            logger.info("Langfuse observability enabled")
+        else:
+            logger.info("Langfuse observability disabled")
 
     async def initialize(self):
         """Initialize RAG service"""
         await self.rag_service.initialize()
 
+    @observe(name="llm_service_response", as_type="generation")
     async def get_response(
         self,
         messages: list[dict[str, str]],
         user_id: str | None = None,
         use_rag: bool = True,
+        conversation_id: str | None = None,
     ) -> str | None:
         """
         Get response from LLM with optional RAG enhancement
@@ -49,10 +63,13 @@ class LLMService:
             messages: Conversation history
             user_id: User ID for custom system prompts
             use_rag: Whether to use RAG retrieval (default: True)
+            conversation_id: Conversation/thread ID for tracing
 
         Returns:
             Generated response or None if failed
         """
+        langfuse_service = get_langfuse_service()
+
         try:
             # Get user's custom system prompt if available
             system_message = None
@@ -90,6 +107,22 @@ class LLMService:
                 use_rag=use_rag,
             )
 
+            # Trace complete conversation with Langfuse
+            if langfuse_service and user_id and response:
+                langfuse_service.trace_conversation(
+                    user_id=user_id,
+                    conversation_id=conversation_id or "unknown",
+                    user_message=current_query,
+                    bot_response=response,
+                    metadata={
+                        "rag_enabled": use_rag,
+                        "custom_prompt_used": system_message is not None,
+                        "message_count": len(conversation_history),
+                        "llm_provider": self.settings.llm.provider,
+                        "llm_model": self.settings.llm.model,
+                    },
+                )
+
             return response
 
         except Exception as e:
@@ -97,10 +130,15 @@ class LLMService:
             return None
 
     async def get_response_without_rag(
-        self, messages: list[dict[str, str]], user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        user_id: str | None = None,
+        conversation_id: str | None = None,
     ) -> str | None:
         """Get response without RAG retrieval"""
-        return await self.get_response(messages, user_id, use_rag=False)
+        return await self.get_response(
+            messages, user_id, use_rag=False, conversation_id=conversation_id
+        )
 
     async def ingest_documents(self, documents: list[dict]) -> int:
         """
@@ -129,4 +167,9 @@ class LLMService:
     async def close(self):
         """Clean up resources"""
         await self.rag_service.close()
+
+        # Close Langfuse service
+        if self.langfuse_service:
+            await self.langfuse_service.close()
+
         logger.info("LLM service closed")

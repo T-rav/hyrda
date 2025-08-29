@@ -3,6 +3,7 @@ LLM provider implementations for direct API integration
 """
 
 import logging
+import time
 from abc import ABC, abstractmethod
 
 import aiohttp
@@ -10,6 +11,7 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 
 from config.settings import LLMSettings
+from services.langfuse_service import get_langfuse_service, observe
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +54,14 @@ class OpenAIProvider(LLMProvider):
 
         self.client = AsyncOpenAI(**client_kwargs)
 
+    @observe(name="openai_llm_call", as_type="generation")
     async def get_response(
         self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from OpenAI API"""
+        start_time = time.time()
+        langfuse_service = get_langfuse_service()
+
         try:
             # Prepare messages
             formatted_messages = []
@@ -85,6 +91,31 @@ class OpenAIProvider(LLMProvider):
             )
 
             content = response.choices[0].message.content
+            duration = time.time() - start_time
+
+            # Extract usage information
+            usage = None
+            if response.usage:
+                usage = {
+                    "input_tokens": response.usage.prompt_tokens,
+                    "output_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                }
+
+            # Trace with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_llm_call(
+                    provider="openai",
+                    model=self.model,
+                    messages=formatted_messages,
+                    response=content,
+                    metadata={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "duration_seconds": duration,
+                    },
+                    usage=usage,
+                )
 
             logger.info(
                 "OpenAI API success",
@@ -93,18 +124,40 @@ class OpenAIProvider(LLMProvider):
                     "response_length": len(content) if content else 0,
                     "tokens_used": response.usage.total_tokens if response.usage else 0,
                     "event_type": "openai_api_success",
+                    "duration": duration,
                 },
             )
 
             return str(content) if content else None
 
         except Exception as e:
+            duration = time.time() - start_time
+            error_msg = str(e)
+
+            # Trace error with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_llm_call(
+                    provider="openai",
+                    model=self.model,
+                    messages=formatted_messages
+                    if "formatted_messages" in locals()
+                    else messages,
+                    response=None,
+                    metadata={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "duration_seconds": duration,
+                    },
+                    error=error_msg,
+                )
+
             logger.error(
                 "OpenAI API error",
                 extra={
                     "model": self.model,
-                    "error": str(e),
+                    "error": error_msg,
                     "event_type": "openai_api_error",
+                    "duration": duration,
                 },
             )
             return None
@@ -122,10 +175,14 @@ class AnthropicProvider(LLMProvider):
         super().__init__(settings)
         self.client = AsyncAnthropic(api_key=settings.api_key.get_secret_value())
 
+    @observe(name="anthropic_llm_call", as_type="generation")
     async def get_response(
         self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from Anthropic API"""
+        start_time = time.time()
+        langfuse_service = get_langfuse_service()
+
         try:
             # Convert messages to Anthropic format
             formatted_messages = []
@@ -159,6 +216,33 @@ class AnthropicProvider(LLMProvider):
             response = await self.client.messages.create(**kwargs)
 
             content = response.content[0].text if response.content else None
+            duration = time.time() - start_time
+
+            # Extract usage information
+            usage = None
+            if response.usage:
+                usage = {
+                    "input_tokens": response.usage.input_tokens,
+                    "output_tokens": response.usage.output_tokens,
+                    "total_tokens": response.usage.input_tokens
+                    + response.usage.output_tokens,
+                }
+
+            # Trace with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_llm_call(
+                    provider="anthropic",
+                    model=self.model,
+                    messages=formatted_messages,
+                    response=content,
+                    metadata={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "duration_seconds": duration,
+                        "system_message": system_message,
+                    },
+                    usage=usage,
+                )
 
             logger.info(
                 "Anthropic API success",
@@ -171,18 +255,41 @@ class AnthropicProvider(LLMProvider):
                         else 0
                     ),
                     "event_type": "anthropic_api_success",
+                    "duration": duration,
                 },
             )
 
             return content
 
         except Exception as e:
+            duration = time.time() - start_time
+            error_msg = str(e)
+
+            # Trace error with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_llm_call(
+                    provider="anthropic",
+                    model=self.model,
+                    messages=formatted_messages
+                    if "formatted_messages" in locals()
+                    else messages,
+                    response=None,
+                    metadata={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "duration_seconds": duration,
+                        "system_message": system_message,
+                    },
+                    error=error_msg,
+                )
+
             logger.error(
                 "Anthropic API error",
                 extra={
                     "model": self.model,
-                    "error": str(e),
+                    "error": error_msg,
                     "event_type": "anthropic_api_error",
+                    "duration": duration,
                 },
             )
             return None
@@ -207,10 +314,14 @@ class OllamaProvider(LLMProvider):
             self.session = aiohttp.ClientSession()
         return self.session
 
+    @observe(name="ollama_llm_call", as_type="generation")
     async def get_response(
         self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from Ollama API"""
+        start_time = time.time()
+        langfuse_service = get_langfuse_service()
+
         try:
             session = await self.ensure_session()
 
@@ -247,6 +358,22 @@ class OllamaProvider(LLMProvider):
                 if response.status == HTTP_OK:
                     result = await response.json()
                     content = result.get("message", {}).get("content", "")
+                    duration = time.time() - start_time
+
+                    # Trace with Langfuse (Ollama doesn't provide token usage)
+                    if langfuse_service:
+                        langfuse_service.trace_llm_call(
+                            provider="ollama",
+                            model=self.model,
+                            messages=payload["messages"],
+                            response=content,
+                            metadata={
+                                "temperature": self.temperature,
+                                "max_tokens": self.max_tokens,
+                                "duration_seconds": duration,
+                                "base_url": self.base_url,
+                            },
+                        )
 
                     logger.info(
                         "Ollama API success",
@@ -254,12 +381,32 @@ class OllamaProvider(LLMProvider):
                             "model": self.model,
                             "response_length": len(content),
                             "event_type": "ollama_api_success",
+                            "duration": duration,
                         },
                     )
 
                     return str(content)
                 else:
                     error_text = await response.text()
+                    duration = time.time() - start_time
+
+                    # Trace error with Langfuse
+                    if langfuse_service:
+                        langfuse_service.trace_llm_call(
+                            provider="ollama",
+                            model=self.model,
+                            messages=payload["messages"],
+                            response=None,
+                            metadata={
+                                "temperature": self.temperature,
+                                "max_tokens": self.max_tokens,
+                                "duration_seconds": duration,
+                                "base_url": self.base_url,
+                                "status_code": response.status,
+                            },
+                            error=f"HTTP {response.status}: {error_text}",
+                        )
+
                     logger.error(
                         "Ollama API error",
                         extra={
@@ -267,17 +414,38 @@ class OllamaProvider(LLMProvider):
                             "status_code": response.status,
                             "error": error_text,
                             "event_type": "ollama_api_error",
+                            "duration": duration,
                         },
                     )
                     return None
 
         except Exception as e:
+            duration = time.time() - start_time
+            error_msg = str(e)
+
+            # Trace error with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_llm_call(
+                    provider="ollama",
+                    model=self.model,
+                    messages=messages,
+                    response=None,
+                    metadata={
+                        "temperature": self.temperature,
+                        "max_tokens": self.max_tokens,
+                        "duration_seconds": duration,
+                        "base_url": self.base_url,
+                    },
+                    error=error_msg,
+                )
+
             logger.error(
                 "Ollama API exception",
                 extra={
                     "model": self.model,
-                    "error": str(e),
+                    "error": error_msg,
                     "event_type": "ollama_api_exception",
+                    "duration": duration,
                 },
             )
             return None

@@ -112,6 +112,22 @@ class RAGSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
+class LangfuseSettings(BaseSettings):
+    """Langfuse observability settings"""
+
+    enabled: bool = Field(default=True, description="Enable Langfuse tracing")
+    public_key: str = Field(default="", description="Langfuse public key")
+    secret_key: SecretStr = Field(
+        default=SecretStr(""), description="Langfuse secret key"
+    )
+    host: str = Field(
+        default="https://cloud.langfuse.com", description="Langfuse host URL"
+    )
+    debug: bool = Field(default=False, description="Enable Langfuse debug logging")
+
+    model_config = ConfigDict(env_prefix="LANGFUSE_")  # type: ignore[assignment,typeddict-unknown-key]
+
+
 class Settings(BaseSettings):
     """Main application settings"""
 
@@ -123,6 +139,7 @@ class Settings(BaseSettings):
     vector: VectorSettings = Field(default_factory=VectorSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
+    langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     debug: bool = False
     log_level: str = "INFO"
 

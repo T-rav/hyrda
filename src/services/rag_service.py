@@ -8,6 +8,7 @@ from typing import Any
 
 from config.settings import Settings
 from services.embedding_service import chunk_text, create_embedding_provider
+from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.vector_service import create_vector_store
 
@@ -124,6 +125,7 @@ class RAGService:
             logger.error(f"Error during document ingestion: {e}")
             raise
 
+    @observe(name="rag_retrieval", as_type="retrieval")
     async def retrieve_context(self, query: str) -> list[dict[str, Any]]:
         """
         Retrieve relevant context for a query
@@ -138,6 +140,8 @@ class RAGService:
             logger.warning("RAG not enabled - no context retrieved")
             return []
 
+        langfuse_service = get_langfuse_service()
+
         try:
             # Generate query embedding
             query_embedding = await self.embedding_provider.get_embedding(query)
@@ -149,6 +153,20 @@ class RAGService:
                 similarity_threshold=self.settings.rag.similarity_threshold,
             )
 
+            # Trace retrieval with Langfuse
+            if langfuse_service:
+                langfuse_service.trace_retrieval(
+                    query=query,
+                    results=results,
+                    metadata={
+                        "vector_provider": self.settings.vector.provider,
+                        "embedding_provider": self.settings.embedding.provider,
+                        "embedding_model": self.settings.embedding.model,
+                        "max_chunks": self.settings.rag.max_chunks,
+                        "similarity_threshold": self.settings.rag.similarity_threshold,
+                    },
+                )
+
             logger.info(f"Retrieved {len(results)} relevant chunks for query")
             return results
 
@@ -156,6 +174,7 @@ class RAGService:
             logger.error(f"Error during context retrieval: {e}")
             return []
 
+    @observe(name="rag_generation", as_type="generation")
     async def generate_response(
         self,
         query: str,
@@ -175,6 +194,9 @@ class RAGService:
         Returns:
             Generated response
         """
+        langfuse_service = get_langfuse_service()
+        context_chunks = []
+
         try:
             final_system_message = system_message
 
@@ -227,6 +249,21 @@ class RAGService:
             )
 
             if response:
+                # Trace the complete RAG generation
+                if langfuse_service:
+                    metadata = {
+                        "rag_enabled": use_rag,
+                        "context_chunks_used": len(context_chunks),
+                        "llm_provider": self.settings.llm.provider,
+                        "llm_model": self.settings.llm.model,
+                        "conversation_length": len(conversation_history),
+                    }
+
+                    if context_chunks:
+                        metadata["avg_similarity"] = sum(
+                            chunk.get("similarity", 0) for chunk in context_chunks
+                        ) / len(context_chunks)
+
                 logger.info(f"Generated response with length: {len(response)}")
                 return response
             else:

@@ -19,6 +19,7 @@ chromadb>=0.4.0
 sentence-transformers>=2.2.0
 pinecone-client>=3.0.0
 numpy>=1.24.0
+langfuse>=2.7.0
 
 # Testing dependencies
 pytest>=7.0.0

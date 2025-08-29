@@ -203,8 +203,11 @@ async def handle_message(
         )
 
         # Get the LLM response
+        conversation_id = (
+            thread_ts or f"{channel}_{user_id}"
+        )  # Use thread_ts or fallback
         llm_response = await llm_service.get_response(
-            messages=llm_messages, user_id=user_id
+            messages=llm_messages, user_id=user_id, conversation_id=conversation_id
         )
 
         # Delete the thinking message
