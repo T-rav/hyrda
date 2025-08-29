@@ -10,7 +10,7 @@ authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "slack-bolt>=1.23.0",
     "slack-sdk>=3.35.0",

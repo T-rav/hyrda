@@ -25,9 +25,7 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def get_response(
-        self,
-        messages: list[dict[str, str]],
-        system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Generate a response from the LLM"""
         pass
@@ -55,9 +53,7 @@ class OpenAIProvider(LLMProvider):
         self.client = AsyncOpenAI(**client_kwargs)
 
     async def get_response(
-        self,
-        messages: list[dict[str, str]],
-        system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from OpenAI API"""
         try:
@@ -78,7 +74,7 @@ class OpenAIProvider(LLMProvider):
                     "temperature": self.temperature,
                     "max_tokens": self.max_tokens,
                     "event_type": "openai_api_request",
-                }
+                },
             )
 
             response = await self.client.chat.completions.create(
@@ -97,7 +93,7 @@ class OpenAIProvider(LLMProvider):
                     "response_length": len(content) if content else 0,
                     "tokens_used": response.usage.total_tokens if response.usage else 0,
                     "event_type": "openai_api_success",
-                }
+                },
             )
 
             return content
@@ -109,13 +105,13 @@ class OpenAIProvider(LLMProvider):
                     "model": self.model,
                     "error": str(e),
                     "event_type": "openai_api_error",
-                }
+                },
             )
             return None
 
     async def close(self):
         """Close OpenAI client"""
-        if hasattr(self.client, '_client'):
+        if hasattr(self.client, "_client"):
             await self.client.close()
 
 
@@ -124,14 +120,10 @@ class AnthropicProvider(LLMProvider):
 
     def __init__(self, settings: LLMSettings):
         super().__init__(settings)
-        self.client = AsyncAnthropic(
-            api_key=settings.api_key.get_secret_value()
-        )
+        self.client = AsyncAnthropic(api_key=settings.api_key.get_secret_value())
 
     async def get_response(
-        self,
-        messages: list[dict[str, str]],
-        system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from Anthropic API"""
         try:
@@ -139,10 +131,9 @@ class AnthropicProvider(LLMProvider):
             formatted_messages = []
             for msg in messages:
                 if msg["role"] in ["user", "assistant"]:
-                    formatted_messages.append({
-                        "role": msg["role"],
-                        "content": msg["content"]
-                    })
+                    formatted_messages.append(
+                        {"role": msg["role"], "content": msg["content"]}
+                    )
 
             logger.info(
                 "Calling Anthropic API",
@@ -152,7 +143,7 @@ class AnthropicProvider(LLMProvider):
                     "temperature": self.temperature,
                     "max_tokens": self.max_tokens,
                     "event_type": "anthropic_api_request",
-                }
+                },
             )
 
             kwargs = {
@@ -174,9 +165,13 @@ class AnthropicProvider(LLMProvider):
                 extra={
                     "model": self.model,
                     "response_length": len(content) if content else 0,
-                    "tokens_used": response.usage.input_tokens + response.usage.output_tokens if response.usage else 0,
+                    "tokens_used": (
+                        response.usage.input_tokens + response.usage.output_tokens
+                        if response.usage
+                        else 0
+                    ),
                     "event_type": "anthropic_api_success",
-                }
+                },
             )
 
             return content
@@ -188,13 +183,13 @@ class AnthropicProvider(LLMProvider):
                     "model": self.model,
                     "error": str(e),
                     "event_type": "anthropic_api_error",
-                }
+                },
             )
             return None
 
     async def close(self):
         """Close Anthropic client"""
-        if hasattr(self.client, '_client'):
+        if hasattr(self.client, "_client"):
             await self.client.close()
 
 
@@ -213,9 +208,7 @@ class OllamaProvider(LLMProvider):
         return self.session
 
     async def get_response(
-        self,
-        messages: list[dict[str, str]],
-        system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from Ollama API"""
         try:
@@ -228,12 +221,14 @@ class OllamaProvider(LLMProvider):
                 "options": {
                     "temperature": self.temperature,
                     "num_predict": self.max_tokens,
-                }
+                },
             }
 
             # Add system message if provided
             if system_message:
-                payload["messages"].insert(0, {"role": "system", "content": system_message})
+                payload["messages"].insert(
+                    0, {"role": "system", "content": system_message}
+                )
 
             logger.info(
                 "Calling Ollama API",
@@ -242,12 +237,11 @@ class OllamaProvider(LLMProvider):
                     "base_url": self.base_url,
                     "message_count": len(payload["messages"]),
                     "event_type": "ollama_api_request",
-                }
+                },
             )
 
             async with session.post(
-                f"{self.base_url}/api/chat",
-                json=payload
+                f"{self.base_url}/api/chat", json=payload
             ) as response:
                 if response.status == 200:
                     result = await response.json()
@@ -259,7 +253,7 @@ class OllamaProvider(LLMProvider):
                             "model": self.model,
                             "response_length": len(content),
                             "event_type": "ollama_api_success",
-                        }
+                        },
                     )
 
                     return content
@@ -272,7 +266,7 @@ class OllamaProvider(LLMProvider):
                             "status_code": response.status,
                             "error": error_text,
                             "event_type": "ollama_api_error",
-                        }
+                        },
                     )
                     return None
 
@@ -283,7 +277,7 @@ class OllamaProvider(LLMProvider):
                     "model": self.model,
                     "error": str(e),
                     "event_type": "ollama_api_exception",
-                }
+                },
             )
             return None
 

@@ -275,8 +275,8 @@ def mock_service():
 ```python
 # ✅ REQUIRED: All functions must have type hints
 async def process_message(
-    text: str, 
-    user_id: str, 
+    text: str,
+    user_id: str,
     service: SlackService
 ) -> bool:
     """Process a message with proper typing."""

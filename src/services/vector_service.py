@@ -30,7 +30,7 @@ class VectorStore(ABC):
         self,
         texts: list[str],
         embeddings: list[list[float]],
-        metadata: list[dict[str, Any]] | None = None
+        metadata: list[dict[str, Any]] | None = None,
     ):
         """Add documents to the vector store"""
         pass
@@ -40,7 +40,7 @@ class VectorStore(ABC):
         self,
         query_embedding: list[float],
         limit: int = 5,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
     ) -> list[dict[str, Any]]:
         """Search for similar documents"""
         pass
@@ -73,28 +73,30 @@ class ChromaVectorStore(VectorStore):
             # Parse URL to determine if it's HTTP or persistent
             if self.settings.url.startswith("http"):
                 # HTTP client
-                host, port = self.settings.url.replace("http://", "").replace("https://", "").split(":")
-                self.client = chromadb.HttpClient(
-                    host=host,
-                    port=int(port)
+                host, port = (
+                    self.settings.url.replace("http://", "")
+                    .replace("https://", "")
+                    .split(":")
                 )
+                self.client = chromadb.HttpClient(host=host, port=int(port))
             else:
                 # Persistent client
                 self.client = chromadb.PersistentClient(
                     path=self.settings.url,
-                    settings=ChromaSettings(anonymized_telemetry=False)
+                    settings=ChromaSettings(anonymized_telemetry=False),
                 )
 
             # Get or create collection
             self.collection = self.client.get_or_create_collection(
-                name=self.collection_name,
-                metadata={"hnsw:space": "cosine"}
+                name=self.collection_name, metadata={"hnsw:space": "cosine"}
             )
 
             logger.info(f"ChromaDB initialized with collection: {self.collection_name}")
 
         except ImportError:
-            raise ImportError("chromadb package not installed. Run: pip install chromadb")
+            raise ImportError(
+                "chromadb package not installed. Run: pip install chromadb"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB: {e}")
             raise
@@ -103,7 +105,7 @@ class ChromaVectorStore(VectorStore):
         self,
         texts: list[str],
         embeddings: list[list[float]],
-        metadata: list[dict[str, Any]] | None = None
+        metadata: list[dict[str, Any]] | None = None,
     ):
         """Add documents to ChromaDB"""
         try:
@@ -122,7 +124,7 @@ class ChromaVectorStore(VectorStore):
                 documents=texts,
                 embeddings=embeddings,
                 metadatas=metadata,
-                ids=document_ids
+                ids=document_ids,
             )
 
             logger.info(f"Added {len(texts)} documents to ChromaDB")
@@ -135,31 +137,44 @@ class ChromaVectorStore(VectorStore):
         self,
         query_embedding: list[float],
         limit: int = 5,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
     ) -> list[dict[str, Any]]:
         """Search ChromaDB for similar documents"""
         try:
             results = self.collection.query(
-                query_embeddings=[query_embedding],
-                n_results=limit
+                query_embeddings=[query_embedding], n_results=limit
             )
 
             # Format results
             documents = []
-            if results['documents'] and results['documents'][0]:
-                for i, doc in enumerate(results['documents'][0]):
-                    distance = results['distances'][0][i] if results.get('distances') else 0
+            if results["documents"] and results["documents"][0]:
+                for i, doc in enumerate(results["documents"][0]):
+                    distance = (
+                        results["distances"][0][i] if results.get("distances") else 0
+                    )
                     similarity = 1 - distance  # Convert distance to similarity
 
                     if similarity >= similarity_threshold:
-                        documents.append({
-                            'content': doc,
-                            'similarity': similarity,
-                            'metadata': results['metadatas'][0][i] if results.get('metadatas') else {},
-                            'id': results['ids'][0][i] if results.get('ids') else f"doc_{i}"
-                        })
+                        documents.append(
+                            {
+                                "content": doc,
+                                "similarity": similarity,
+                                "metadata": (
+                                    results["metadatas"][0][i]
+                                    if results.get("metadatas")
+                                    else {}
+                                ),
+                                "id": (
+                                    results["ids"][0][i]
+                                    if results.get("ids")
+                                    else f"doc_{i}"
+                                ),
+                            }
+                        )
 
-            logger.info(f"Found {len(documents)} documents above similarity threshold {similarity_threshold}")
+            logger.info(
+                f"Found {len(documents)} documents above similarity threshold {similarity_threshold}"
+            )
             return documents
 
         except Exception as e:
@@ -205,7 +220,9 @@ class PineconeVectorStore(VectorStore):
             logger.info(f"Pinecone initialized with index: {self.collection_name}")
 
         except ImportError:
-            raise ImportError("pinecone package not installed. Run: pip install pinecone-client")
+            raise ImportError(
+                "pinecone package not installed. Run: pip install pinecone-client"
+            )
         except Exception as e:
             logger.error(f"Failed to initialize Pinecone: {e}")
             raise
@@ -214,7 +231,7 @@ class PineconeVectorStore(VectorStore):
         self,
         texts: list[str],
         embeddings: list[list[float]],
-        metadata: list[dict[str, Any]] | None = None
+        metadata: list[dict[str, Any]] | None = None,
     ):
         """Add documents to Pinecone"""
         try:
@@ -224,22 +241,18 @@ class PineconeVectorStore(VectorStore):
                 doc_id = f"doc_{text_hash}_{i}"
 
                 doc_metadata = metadata[i] if metadata else {}
-                doc_metadata['text'] = text  # Store text in metadata
+                doc_metadata["text"] = text  # Store text in metadata
 
-                vectors.append({
-                    'id': doc_id,
-                    'values': embedding,
-                    'metadata': doc_metadata
-                })
+                vectors.append(
+                    {"id": doc_id, "values": embedding, "metadata": doc_metadata}
+                )
 
             # Upsert in batches
             batch_size = 100
             for i in range(0, len(vectors), batch_size):
-                batch = vectors[i:i + batch_size]
+                batch = vectors[i : i + batch_size]
                 await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    self.index.upsert,
-                    batch
+                    None, self.index.upsert, batch
                 )
 
             logger.info(f"Added {len(texts)} documents to Pinecone")
@@ -252,7 +265,7 @@ class PineconeVectorStore(VectorStore):
         self,
         query_embedding: list[float],
         limit: int = 5,
-        similarity_threshold: float = 0.7
+        similarity_threshold: float = 0.7,
     ) -> list[dict[str, Any]]:
         """Search Pinecone for similar documents"""
         try:
@@ -263,21 +276,25 @@ class PineconeVectorStore(VectorStore):
                     vector=query_embedding,
                     top_k=limit,
                     include_metadata=True,
-                    include_values=False
-                )
+                    include_values=False,
+                ),
             )
 
             documents = []
             for match in query_result.matches:
                 if match.score >= similarity_threshold:
-                    documents.append({
-                        'content': match.metadata.get('text', ''),
-                        'similarity': match.score,
-                        'metadata': match.metadata,
-                        'id': match.id
-                    })
+                    documents.append(
+                        {
+                            "content": match.metadata.get("text", ""),
+                            "similarity": match.score,
+                            "metadata": match.metadata,
+                            "id": match.id,
+                        }
+                    )
 
-            logger.info(f"Found {len(documents)} documents above similarity threshold {similarity_threshold}")
+            logger.info(
+                f"Found {len(documents)} documents above similarity threshold {similarity_threshold}"
+            )
             return documents
 
         except Exception as e:
@@ -288,9 +305,7 @@ class PineconeVectorStore(VectorStore):
         """Delete documents from Pinecone"""
         try:
             await asyncio.get_event_loop().run_in_executor(
-                None,
-                self.index.delete,
-                document_ids
+                None, self.index.delete, document_ids
             )
             logger.info(f"Deleted {len(document_ids)} documents from Pinecone")
         except Exception as e:

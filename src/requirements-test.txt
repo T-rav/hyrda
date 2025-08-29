@@ -1,3 +1,4 @@
+# Python 3.11 required - see pyproject.toml
 # Test-specific dependencies
 pytest>=7.0.0
 pytest-asyncio>=0.23.0

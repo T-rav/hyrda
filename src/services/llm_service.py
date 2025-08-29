@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 class LLMService:
     """
     Enhanced LLM service with RAG capabilities
-    
+
     Maintains backward compatibility with the original interface while
     adding support for direct LLM providers and vector-based retrieval
     """
 
-    def __init__(self, settings: Settings, user_prompt_service: UserPromptService | None = None):
+    def __init__(
+        self, settings: Settings, user_prompt_service: UserPromptService | None = None
+    ):
         self.settings = settings
         self.user_prompt_service = user_prompt_service
         self.rag_service = RAGService(settings)
@@ -38,16 +40,16 @@ class LLMService:
         self,
         messages: list[dict[str, str]],
         user_id: str | None = None,
-        use_rag: bool = True
+        use_rag: bool = True,
     ) -> str | None:
         """
         Get response from LLM with optional RAG enhancement
-        
+
         Args:
             messages: Conversation history
             user_id: User ID for custom system prompts
             use_rag: Whether to use RAG retrieval (default: True)
-            
+
         Returns:
             Generated response or None if failed
         """
@@ -56,12 +58,16 @@ class LLMService:
             system_message = None
             if user_id and self.user_prompt_service:
                 try:
-                    custom_prompt = await self.user_prompt_service.get_user_prompt(user_id)
+                    custom_prompt = await self.user_prompt_service.get_user_prompt(
+                        user_id
+                    )
                     if custom_prompt:
                         system_message = custom_prompt
                         logger.info(f"Using custom system prompt for user {user_id}")
                 except Exception as e:
-                    logger.warning(f"Failed to get custom prompt for user {user_id}: {e}")
+                    logger.warning(
+                        f"Failed to get custom prompt for user {user_id}: {e}"
+                    )
 
             # Extract the current query (last user message)
             current_query = None
@@ -81,7 +87,7 @@ class LLMService:
                 query=current_query,
                 conversation_history=conversation_history[:-1],  # Exclude current query
                 system_message=system_message,
-                use_rag=use_rag
+                use_rag=use_rag,
             )
 
             return response
@@ -91,9 +97,7 @@ class LLMService:
             return None
 
     async def get_response_without_rag(
-        self,
-        messages: list[dict[str, str]],
-        user_id: str | None = None
+        self, messages: list[dict[str, str]], user_id: str | None = None
     ) -> str | None:
         """Get response without RAG retrieval"""
         return await self.get_response(messages, user_id, use_rag=False)
@@ -101,10 +105,10 @@ class LLMService:
     async def ingest_documents(self, documents: list[dict]) -> int:
         """
         Ingest documents into the knowledge base
-        
+
         Args:
             documents: List of documents with 'content' and optional 'metadata'
-            
+
         Returns:
             Number of chunks ingested
         """

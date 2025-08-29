@@ -26,6 +26,8 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capab
 
 ## 🚀 Quick Start
 
+**Requirements:** Python 3.11
+
 ### 1. **Clone and Configure**
 ```bash
 git clone https://github.com/8thlight/ai-slack-bot.git
@@ -319,7 +321,7 @@ If you're experiencing issues:
 1. **Slack Configuration**: Ensure all Slack app permissions and event subscriptions are configured correctly
 2. **Environment Variables**: Verify all required variables in `.env` are set (Slack tokens, LLM API key, vector DB credentials)
 3. **LLM Provider**: Test your OpenAI/Anthropic API key is valid and has sufficient quota
-4. **Vector Database**: 
+4. **Vector Database**:
    - **Pinecone**: Check your index exists and API key is correct
    - **ChromaDB**: Ensure the directory is writable
 5. **Document Ingestion**: Use `python ingest_documents.py --status` to check your knowledge base

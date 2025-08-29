@@ -53,7 +53,7 @@ def mock_settings():
 @pytest.fixture
 def llm_service(mock_settings):
     """Create LLM service for testing"""
-    with patch('services.llm_service.RAGService') as mock_rag_service:
+    with patch("services.llm_service.RAGService") as mock_rag_service:
         mock_rag_service.return_value = AsyncMock()
         service = LLMService(mock_settings, user_prompt_service=None)
         return service
@@ -130,10 +130,7 @@ class TestLLMService:
         assert result == "Hello without RAG!"
         # Verify RAG service was called with use_rag=False
         llm_service.rag_service.generate_response.assert_called_once_with(
-            query="Hello",
-            conversation_history=[],
-            system_message=None,
-            use_rag=False
+            query="Hello", conversation_history=[], system_message=None, use_rag=False
         )
 
     @pytest.mark.asyncio
@@ -153,9 +150,7 @@ class TestLLMService:
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, llm_service):
         """Test document ingestion"""
-        documents = [
-            {"content": "Test document", "metadata": {"source": "test"}}
-        ]
+        documents = [{"content": "Test document", "metadata": {"source": "test"}}]
 
         # Mock RAG service ingestion
         llm_service.rag_service.ingest_documents = AsyncMock(return_value=5)
@@ -183,7 +178,7 @@ class TestLLMService:
         expected_status = {
             "rag_enabled": False,
             "llm_provider": "openai",
-            "llm_model": "gpt-4o-mini"
+            "llm_model": "gpt-4o-mini",
         }
 
         llm_service.rag_service.get_system_status = AsyncMock(

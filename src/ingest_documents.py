@@ -31,7 +31,9 @@ from services.rag_service import DocumentProcessor, RAGService
 logger = logging.getLogger(__name__)
 
 
-async def ingest_file(rag_service: RAGService, file_path: str, metadata: dict[str, Any] = None) -> int:
+async def ingest_file(
+    rag_service: RAGService, file_path: str, metadata: dict[str, Any] = None
+) -> int:
     """Ingest a single file"""
     try:
         path = Path(file_path)
@@ -45,8 +47,8 @@ async def ingest_file(rag_service: RAGService, file_path: str, metadata: dict[st
         # Determine file type and process accordingly
         suffix = path.suffix.lower()
 
-        if suffix in ['.txt', '.md', '.rst']:
-            if suffix == '.md':
+        if suffix in [".txt", ".md", ".rst"]:
+            if suffix == ".md":
                 doc = DocumentProcessor.process_markdown_file(str(path), metadata)
             else:
                 doc = DocumentProcessor.process_text_file(str(path), metadata)
@@ -55,10 +57,12 @@ async def ingest_file(rag_service: RAGService, file_path: str, metadata: dict[st
             print(f"✅ Ingested {chunks} chunks from {file_path}")
             return chunks
 
-        elif suffix == '.json':
-            docs = DocumentProcessor.process_json_file(str(path), 'content', metadata)
+        elif suffix == ".json":
+            docs = DocumentProcessor.process_json_file(str(path), "content", metadata)
             chunks = await rag_service.ingest_documents(docs)
-            print(f"✅ Ingested {chunks} chunks from {len(docs)} documents in {file_path}")
+            print(
+                f"✅ Ingested {chunks} chunks from {len(docs)} documents in {file_path}"
+            )
             return chunks
 
         else:
@@ -70,7 +74,9 @@ async def ingest_file(rag_service: RAGService, file_path: str, metadata: dict[st
         return 0
 
 
-async def ingest_directory(rag_service: RAGService, directory: str, metadata: dict[str, Any] = None) -> int:
+async def ingest_directory(
+    rag_service: RAGService, directory: str, metadata: dict[str, Any] = None
+) -> int:
     """Ingest all supported files in a directory"""
     try:
         path = Path(directory)
@@ -81,12 +87,12 @@ async def ingest_directory(rag_service: RAGService, directory: str, metadata: di
 
         print(f"📁 Processing directory: {directory}")
 
-        supported_extensions = {'.txt', '.md', '.rst', '.json'}
+        supported_extensions = {".txt", ".md", ".rst", ".json"}
         files = []
 
         # Find all supported files
         for ext in supported_extensions:
-            files.extend(path.rglob(f'*{ext}'))
+            files.extend(path.rglob(f"*{ext}"))
 
         if not files:
             print(f"⚠️  No supported files found in {directory}")
@@ -107,7 +113,9 @@ async def ingest_directory(rag_service: RAGService, directory: str, metadata: di
         return 0
 
 
-async def ingest_url(rag_service: RAGService, url: str, metadata: dict[str, Any] = None) -> int:
+async def ingest_url(
+    rag_service: RAGService, url: str, metadata: dict[str, Any] = None
+) -> int:
     """Ingest a document from a URL"""
     try:
         print(f"🌐 Fetching URL: {url}")
@@ -123,18 +131,16 @@ async def ingest_url(rag_service: RAGService, url: str, metadata: dict[str, Any]
                 # Create document
                 parsed_url = urlparse(url)
                 doc_metadata = metadata or {}
-                doc_metadata.update({
-                    'source_url': url,
-                    'domain': parsed_url.netloc,
-                    'path': parsed_url.path,
-                    'content_type': response.headers.get('content-type', ''),
-                })
+                doc_metadata.update(
+                    {
+                        "source_url": url,
+                        "domain": parsed_url.netloc,
+                        "path": parsed_url.path,
+                        "content_type": response.headers.get("content-type", ""),
+                    }
+                )
 
-                doc = {
-                    'content': content,
-                    'metadata': doc_metadata,
-                    'id': url
-                }
+                doc = {"content": content, "metadata": doc_metadata, "id": url}
 
                 chunks = await rag_service.ingest_documents([doc])
                 print(f"✅ Ingested {chunks} chunks from {url}")
@@ -149,13 +155,23 @@ async def main():
     """Main CLI function"""
     parser = argparse.ArgumentParser(description="Ingest documents into the RAG system")
     parser.add_argument("--file", "-f", help="Path to a single file to ingest")
-    parser.add_argument("--directory", "-d", help="Path to directory containing documents")
+    parser.add_argument(
+        "--directory", "-d", help="Path to directory containing documents"
+    )
     parser.add_argument("--url", "-u", help="URL to fetch and ingest")
     parser.add_argument("--json", "-j", help="Path to JSON file with documents")
-    parser.add_argument("--content-field", default="content", help="Field name for content in JSON documents")
+    parser.add_argument(
+        "--content-field",
+        default="content",
+        help="Field name for content in JSON documents",
+    )
     parser.add_argument("--metadata", "-m", help="JSON string with additional metadata")
-    parser.add_argument("--batch-size", "-b", type=int, default=50, help="Batch size for processing")
-    parser.add_argument("--status", "-s", action="store_true", help="Show system status")
+    parser.add_argument(
+        "--batch-size", "-b", type=int, default=50, help="Batch size for processing"
+    )
+    parser.add_argument(
+        "--status", "-s", action="store_true", help="Show system status"
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
 
     args = parser.parse_args()
@@ -208,9 +224,13 @@ async def main():
 
         elif args.json:
             if args.content_field:
-                docs = DocumentProcessor.process_json_file(args.json, args.content_field, metadata)
+                docs = DocumentProcessor.process_json_file(
+                    args.json, args.content_field, metadata
+                )
                 total_chunks = await rag_service.ingest_documents(docs)
-                print(f"✅ Ingested {total_chunks} chunks from {len(docs)} JSON documents")
+                print(
+                    f"✅ Ingested {total_chunks} chunks from {len(docs)} JSON documents"
+                )
             else:
                 print("❌ --content-field required for JSON ingestion")
                 return 1
@@ -233,6 +253,7 @@ async def main():
         print(f"❌ Error: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 

@@ -39,14 +39,16 @@ class EmbeddingProvider(ABC):
 class OpenAIEmbeddingProvider(EmbeddingProvider):
     """OpenAI embedding provider"""
 
-    def __init__(self, settings: EmbeddingSettings, llm_settings: LLMSettings | None = None):
+    def __init__(
+        self, settings: EmbeddingSettings, llm_settings: LLMSettings | None = None
+    ):
         super().__init__(settings)
 
         # Use embedding API key if provided, otherwise fallback to LLM API key
         api_key = (
-            settings.api_key.get_secret_value() if settings.api_key
-            else llm_settings.api_key.get_secret_value() if llm_settings
-            else None
+            settings.api_key.get_secret_value()
+            if settings.api_key
+            else llm_settings.api_key.get_secret_value() if llm_settings else None
         )
 
         if not api_key:
@@ -57,11 +59,12 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
     async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts"""
         try:
-            logger.info(f"Generating embeddings for {len(texts)} texts using {self.model}")
+            logger.info(
+                f"Generating embeddings for {len(texts)} texts using {self.model}"
+            )
 
             response = await self.client.embeddings.create(
-                model=self.model,
-                input=texts
+                model=self.model, input=texts
             )
 
             embeddings = [data.embedding for data in response.data]
@@ -72,8 +75,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     "model": self.model,
                     "text_count": len(texts),
                     "embedding_dimensions": len(embeddings[0]) if embeddings else 0,
-                    "event_type": "embeddings_success"
-                }
+                    "event_type": "embeddings_success",
+                },
             )
 
             return embeddings
@@ -85,8 +88,8 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     "model": self.model,
                     "text_count": len(texts),
                     "error": str(e),
-                    "event_type": "embeddings_error"
-                }
+                    "event_type": "embeddings_error",
+                },
             )
             raise
 
@@ -97,7 +100,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
 
     async def close(self):
         """Close OpenAI client"""
-        if hasattr(self.client, '_client'):
+        if hasattr(self.client, "_client"):
             await self.client.close()
 
 
@@ -119,9 +122,7 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
 
             # Load model in executor to avoid blocking
             self.model_instance = await asyncio.get_event_loop().run_in_executor(
-                None,
-                SentenceTransformer,
-                self.model
+                None, SentenceTransformer, self.model
             )
 
             self._initialized = True
@@ -141,14 +142,16 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
         await self._initialize()
 
         try:
-            logger.info(f"Generating embeddings for {len(texts)} texts using {self.model}")
+            logger.info(
+                f"Generating embeddings for {len(texts)} texts using {self.model}"
+            )
 
             # Run encoding in executor to avoid blocking
             embeddings = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self.model_instance.encode,
                 texts,
-                {"convert_to_numpy": True, "show_progress_bar": False}
+                {"convert_to_numpy": True, "show_progress_bar": False},
             )
 
             # Convert numpy arrays to lists
@@ -159,9 +162,11 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
                 extra={
                     "model": self.model,
                     "text_count": len(texts),
-                    "embedding_dimensions": len(embeddings_list[0]) if embeddings_list else 0,
-                    "event_type": "embeddings_success"
-                }
+                    "embedding_dimensions": (
+                        len(embeddings_list[0]) if embeddings_list else 0
+                    ),
+                    "event_type": "embeddings_success",
+                },
             )
 
             return embeddings_list
@@ -173,8 +178,8 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
                     "model": self.model,
                     "text_count": len(texts),
                     "error": str(e),
-                    "event_type": "embeddings_error"
-                }
+                    "event_type": "embeddings_error",
+                },
             )
             raise
 
@@ -190,15 +195,16 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
 
 
 def create_embedding_provider(
-    settings: EmbeddingSettings,
-    llm_settings: LLMSettings | None = None
+    settings: EmbeddingSettings, llm_settings: LLMSettings | None = None
 ) -> EmbeddingProvider:
     """Factory function to create the appropriate embedding provider"""
 
     provider_map = {
         "openai": lambda: OpenAIEmbeddingProvider(settings, llm_settings),
         "sentence-transformers": lambda: SentenceTransformerEmbeddingProvider(settings),
-        "sentence_transformers": lambda: SentenceTransformerEmbeddingProvider(settings),  # Alternative name
+        "sentence_transformers": lambda: SentenceTransformerEmbeddingProvider(
+            settings
+        ),  # Alternative name
     }
 
     provider_factory = provider_map.get(settings.provider.lower())
@@ -212,17 +218,17 @@ def chunk_text(
     text: str,
     chunk_size: int = 1000,
     chunk_overlap: int = 200,
-    separators: list[str] | None = None
+    separators: list[str] | None = None,
 ) -> list[str]:
     """
     Split text into overlapping chunks for embedding
-    
+
     Args:
         text: Text to chunk
         chunk_size: Maximum size of each chunk
         chunk_overlap: Number of characters to overlap between chunks
         separators: List of separators to try (in order of preference)
-    
+
     Returns:
         List of text chunks
     """
