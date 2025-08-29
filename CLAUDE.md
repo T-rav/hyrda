@@ -91,14 +91,14 @@ Uses pytest with async support:
 
 ## Production Deployment
 
-### Docker Deployment (Recommended)
+### Full Stack Deployment (Default)
 
 ```bash
-# Build and deploy with Docker Compose
-./deployment/deploy.sh docker
+# Deploy with complete monitoring stack (DEFAULT)
+./deployment/deploy.sh
 
-# Manual deployment
-docker-compose -f docker-compose.prod.yml up -d
+# Or explicitly specify monitoring
+./deployment/deploy.sh monitoring
 ```
 
 **Features:**
@@ -108,10 +108,13 @@ docker-compose -f docker-compose.prod.yml up -d
 - Resource limits (512M memory, 0.5 CPU)
 - Graceful shutdown handling
 
-### Systemd Deployment
+### Alternative Deployments
 
 ```bash
-# Deploy as system service
+# Basic bot only (lightweight)
+./deployment/deploy.sh docker
+
+# System service (no Docker)  
 sudo ./deployment/deploy.sh systemd
 ```
 

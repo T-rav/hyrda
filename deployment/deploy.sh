@@ -5,7 +5,7 @@
 
 set -e
 
-DEPLOYMENT_TYPE=${1:-docker}
+DEPLOYMENT_TYPE=${1:-monitoring}
 APP_DIR="/opt/slack-bot"
 SERVICE_NAME="slack-bot"
 
@@ -157,10 +157,10 @@ case $DEPLOYMENT_TYPE in
         ;;
         
     *)
-        echo "Usage: $0 [docker|systemd|monitoring]"
+        echo "Usage: $0 [monitoring|docker|systemd]"
+        echo "  monitoring - Deploy with full monitoring stack (DEFAULT)"
         echo "  docker     - Deploy bot only with Docker Compose"
         echo "  systemd    - Deploy as systemd service"
-        echo "  monitoring - Deploy with full monitoring stack (Prometheus, Grafana, etc.)"
         exit 1
         ;;
 esac
