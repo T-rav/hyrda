@@ -25,6 +25,13 @@ make docker-build # Build Docker image
 make docker-run   # Run Docker container with .env
 ```
 
+### Database Migrations
+```bash
+cd src && python migrate.py status    # Show migration status
+cd src && python migrate.py migrate   # Apply pending migrations
+cd src && python migrate.py rollback 001  # Rollback specific migration
+```
+
 ### Utilities
 ```bash
 make clean        # Remove caches and build artifacts
@@ -141,6 +148,7 @@ HEALTH_PORT=8080              # Health check server port
 - `GET /health` - Basic health check
 - `GET /ready` - Readiness probe (checks LLM API)
 - `GET /metrics` - Basic metrics
+- `GET /migrations` - Database migration status
 
 **Automated Monitoring:**
 ```bash

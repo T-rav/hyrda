@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, DateTime, Integer, Text, select, delete, desc
 from sqlalchemy.dialects.postgresql import UUID
+from migrations.migration_manager import MigrationManager
+from migrations.registry import register_migrations
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -25,17 +27,29 @@ class UserPromptService:
     """Service for managing user system prompts with PostgreSQL persistence"""
     
     def __init__(self, database_url: str):
+        self.database_url = database_url
         self.engine = create_async_engine(database_url, echo=False)
         self.async_session = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.migration_manager = None
         
     async def initialize(self):
-        """Create tables if they don't exist"""
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("User prompt database tables initialized")
+        """Initialize database with migrations"""
+        # Initialize migration manager
+        self.migration_manager = MigrationManager(self.database_url)
+        register_migrations(self.migration_manager)
+        
+        # Initialize migration system
+        await self.migration_manager.initialize()
+        
+        # Apply any pending migrations
+        await self.migration_manager.apply_migrations()
+        
+        logger.info("User prompt database initialized with migrations")
         
     async def close(self):
         """Close database connections"""
+        if self.migration_manager:
+            await self.migration_manager.close()
         await self.engine.dispose()
         
     async def set_user_prompt(self, user_id: str, prompt: str) -> None:

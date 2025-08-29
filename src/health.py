@@ -4,15 +4,17 @@ from datetime import datetime, timezone
 from aiohttp import web, ClientSession
 from config.settings import Settings
 from services.conversation_cache import ConversationCache
+from services.user_prompt_service import UserPromptService
 
 logger = logging.getLogger(__name__)
 
 class HealthChecker:
     """Health check service for monitoring bot status"""
     
-    def __init__(self, settings: Settings, conversation_cache=None):
+    def __init__(self, settings: Settings, conversation_cache=None, prompt_service=None):
         self.settings = settings
         self.conversation_cache = conversation_cache
+        self.prompt_service = prompt_service
         self.start_time = datetime.now(timezone.utc)
         self.app = None
         self.runner = None
@@ -24,6 +26,7 @@ class HealthChecker:
         app.router.add_get('/health', self.health_check)
         app.router.add_get('/ready', self.readiness_check)
         app.router.add_get('/metrics', self.metrics)
+        app.router.add_get('/migrations', self.migration_status)
         
         self.runner = web.AppRunner(app)
         await self.runner.setup()
@@ -119,3 +122,25 @@ class HealthChecker:
             metrics["cache"] = cache_stats
         
         return web.json_response(metrics)
+        
+    async def migration_status(self, request):
+        """Database migration status endpoint"""
+        if not self.prompt_service or not self.prompt_service.migration_manager:
+            return web.json_response({
+                "status": "disabled",
+                "message": "Database or migrations not enabled"
+            })
+            
+        try:
+            status = await self.prompt_service.migration_manager.get_migration_status()
+            return web.json_response({
+                "status": "healthy",
+                "migrations": status,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception as e:
+            return web.json_response({
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }, status=500)

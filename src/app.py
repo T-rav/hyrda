@@ -100,7 +100,7 @@ async def run():
             logger.info("User prompt database initialized")
         
         # Start health check server
-        health_checker = HealthChecker(settings, conversation_cache)
+        health_checker = HealthChecker(settings, conversation_cache, prompt_service)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
         logger.info(f"Health check server started on port {health_port}")
