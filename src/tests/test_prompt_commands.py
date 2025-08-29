@@ -316,7 +316,7 @@ class TestPromptCommands:
             else:
                 is_prompt_command = False
                 command_part = None
-            
+
             if should_match:
                 assert is_prompt_command is True
                 assert command_part == expected_command

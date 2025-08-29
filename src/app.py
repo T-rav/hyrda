@@ -35,7 +35,6 @@ def create_app():
 
     # Create services
     client = app.client
-    llm_service = LLMService(settings.llm)
     slack_service = SlackService(settings.slack, client)
 
     # Create conversation cache
@@ -49,6 +48,9 @@ def create_app():
     prompt_service = None
     if settings.database.enabled:
         prompt_service = UserPromptService(settings.database.url)
+
+    # Create LLM service with full settings and prompt service
+    llm_service = LLMService(settings, prompt_service)
 
     return app, slack_service, llm_service, conversation_cache, prompt_service
 
@@ -109,6 +111,10 @@ async def run():
         if prompt_service:
             await prompt_service.initialize()
             logger.info("User prompt database initialized")
+
+        # Initialize LLM service (includes RAG)
+        await llm_service.initialize()
+        logger.info("LLM service initialized")
 
         # Start health check server
         health_checker = HealthChecker(settings, conversation_cache, prompt_service)

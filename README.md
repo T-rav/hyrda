@@ -1,33 +1,82 @@
 # Insight Mesh Slack AI Bot
 
-A Slack bot for Insight Mesh that leverages Slack's API to provide intelligent assistance via LLM integration.
+A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities that provides intelligent, context-aware assistance using your own knowledge base.
 
-## Features
+## ✨ Features
 
+### 🧠 **RAG-Powered Intelligence**
+- **Vector Database**: ChromaDB or Pinecone for semantic document search
+- **Direct LLM Integration**: OpenAI, Anthropic, or local Ollama models
+- **Knowledge-Aware**: Responds using your ingested documentation and data
+- **Source Attribution**: Shows which documents informed the response
+
+### 🔧 **Production Ready**
 - **Thread Management**: Automatically manages conversation threads and context
 - **Typing Indicators**: Shows typing states while generating responses
 - **Online Presence**: Shows as "online" with a green status indicator
-- **RAG Integration**: Connects to your LLM API for Retrieval-Augmented Generation
-- **Agent Processes**: Allows users to start and monitor data processing jobs directly from Slack
-- **Simplified Interface**: Clean interface showing only Messages and About tabs
-- **Modular Architecture**: Well-structured code with separation of concerns
+- **Custom User Prompts**: Users can customize bot behavior with `@prompt` commands
+- **Comprehensive Testing**: 154 tests with 100% reliability
+- **CI/CD Pipeline**: GitHub Actions with quality checks and Docker builds
 
-## Quick Start
+### 🚀 **Easy Setup**
+- **No Proxy Required**: Direct API integration eliminates infrastructure complexity
+- **Flexible Configuration**: Support for multiple LLM and vector database providers
+- **Document Ingestion**: CLI tool for loading your knowledge base
+- **Docker Deployment**: Full production deployment with monitoring
 
-1. Configure your Slack app in Slack (see "Slack App Setup Guide" below)
-2. Create a `.env` file with the following variables in your project root:
-   ```
-   SLACK_BOT_TOKEN=xoxb-your-bot-token
-   SLACK_APP_TOKEN=xapp-your-app-token
-   LLM_API_URL=http://your-llm-api-url
-   LLM_API_KEY=your-llm-api-key
-   LLM_MODEL=gpt-4o-mini
-   ```
-3. Install dependencies and run the bot:
-   ```bash
-   make install
-   make run
-   ```
+## 🚀 Quick Start
+
+### 1. **Clone and Configure**
+```bash
+git clone https://github.com/8thlight/ai-slack-bot.git
+cd ai-slack-bot
+
+# Copy example configuration
+cp .env.example .env
+```
+
+### 2. **Set Up Your Environment**
+Edit `.env` with your credentials:
+```bash
+# Slack (get from https://api.slack.com/apps)
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_APP_TOKEN=xapp-your-app-token
+
+# OpenAI (get from https://platform.openai.com/api-keys)
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-your-openai-api-key
+LLM_MODEL=gpt-4o-mini
+
+# Pinecone (get from https://app.pinecone.io)
+VECTOR_ENABLED=true
+VECTOR_PROVIDER=pinecone
+VECTOR_URL=https://your-index.svc.environment.pinecone.io
+VECTOR_API_KEY=your-pinecone-api-key
+VECTOR_COLLECTION_NAME=knowledge-base
+
+# Optional: Database for user prompts (use SQLite if not provided)
+DATABASE_URL=postgresql://user:pass@localhost:5432/slack_bot
+```
+
+### 3. **Install and Run**
+```bash
+# Install dependencies
+make install
+
+# Run the bot
+make run
+```
+
+### 4. **Load Your Knowledge Base**
+```bash
+# Ingest documentation
+cd src
+python ingest_documents.py --directory ../docs/
+python ingest_documents.py --url https://docs.yourcompany.com/api.md
+python ingest_documents.py --status  # Check system status
+```
+
+That's it! Your RAG-enabled Slack bot is now running with your custom knowledge base. 🎉
 
 ## Slack App Setup Guide
 
@@ -152,25 +201,32 @@ The bot is built using:
 - **slack-bolt**: Slack's official Python framework for building Slack apps
 - **aiohttp**: Asynchronous HTTP client/server for Python
 - **pydantic**: Data validation and settings management
-- **LiteLLM Proxy**: Compatible with OpenAI's API for connecting to different LLM providers
+- **Direct LLM Integration**: OpenAI, Anthropic, or local Ollama models
+- **Vector Databases**: ChromaDB or Pinecone for semantic document search
+- **RAG Pipeline**: Retrieval-Augmented Generation for knowledge-aware responses
 
 ### Project Structure
 
 ```
 slack-bot/
 ├── config/            # Configuration management
-│   ├── settings.py    # Pydantic settings models
+│   ├── settings.py    # Pydantic settings models for LLM, vector DB, and RAG
 ├── handlers/          # Event handling
 │   ├── agent_processes.py  # Agent process functionality
 │   ├── event_handlers.py   # Slack event handlers
 │   ├── message_handlers.py # Message handling logic
 ├── services/          # Core services
-│   ├── llm_service.py      # LLM API integration
+│   ├── llm_service.py      # RAG-enabled LLM service
+│   ├── rag_service.py      # RAG orchestration and retrieval
+│   ├── vector_service.py   # Vector database abstraction (ChromaDB/Pinecone)
+│   ├── embedding_service.py # Text embedding generation
+│   ├── llm_providers.py    # Direct LLM provider implementations
 │   ├── slack_service.py    # Slack API integration
 │   ├── formatting.py       # Message formatting utilities
 ├── utils/             # Utilities
 │   ├── errors.py           # Error handling
 │   ├── logging.py          # Logging configuration
+├── ingest_documents.py     # CLI tool for document ingestion
 ├── app.py             # Main application entry point
 ├── Dockerfile         # Docker configuration
 └── requirements.txt   # Python dependencies
@@ -249,21 +305,26 @@ To add a new agent process:
 
 ### Code Organization
 
-- **config/settings.py**: Pydantic settings models for configuration management
-- **handlers/**: Contains all event and message handling logic
-- **services/**: Core service functionality (LLM, Slack API, formatting)
+- **config/settings.py**: Comprehensive settings for LLM providers, vector databases, and RAG configuration
+- **handlers/**: Event and message handling with RAG integration
+- **services/**: RAG pipeline, vector storage, embedding generation, and direct LLM providers
 - **utils/**: Utility functions and helpers
+- **ingest_documents.py**: CLI tool for loading your knowledge base
 - **app.py**: Main application entry point
 
 ## Troubleshooting
 
 If you're experiencing issues:
 
-1. Ensure all Slack app permissions and event subscriptions are configured correctly
-2. Check that your environment variables are set correctly
-3. Verify your LLM API is accessible from the bot
-4. Look for error messages in the bot logs
-5. Check the specific service logs to pinpoint issues
+1. **Slack Configuration**: Ensure all Slack app permissions and event subscriptions are configured correctly
+2. **Environment Variables**: Verify all required variables in `.env` are set (Slack tokens, LLM API key, vector DB credentials)
+3. **LLM Provider**: Test your OpenAI/Anthropic API key is valid and has sufficient quota
+4. **Vector Database**: 
+   - **Pinecone**: Check your index exists and API key is correct
+   - **ChromaDB**: Ensure the directory is writable
+5. **Document Ingestion**: Use `python ingest_documents.py --status` to check your knowledge base
+6. **Bot Logs**: Look for specific error messages in the application logs
+7. **RAG Pipeline**: Test with `VECTOR_ENABLED=false` to isolate LLM vs vector DB issues
 
 ## Notes About Socket Mode
 

@@ -57,8 +57,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        cd src
-        pip install -r requirements-test.txt
+        make install-dev
 
     - name: Set up test environment
       env:
@@ -79,20 +78,11 @@ jobs:
 
     - name: Run linting
       run: |
-        cd src
-        # Install linting tools if not in requirements
-        pip install ruff black isort
-        # Run formatters and linters
-        black --check --diff .
-        isort --check-only --diff .
-        ruff check .
+        make lint-check
 
     - name: Run type checking
       run: |
-        cd src
-        pip install mypy
-        # Run mypy on key modules (ignore test files for now)
-        mypy --ignore-missing-imports app.py services/ handlers/ config/ migrations/
+        make typecheck
 
     - name: Run tests with coverage
       env:
@@ -107,20 +97,12 @@ jobs:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: |
-        cd src
-        PYTHONPATH=. pytest \
-          --cov=. \
-          --cov-report=term-missing \
-          --cov-report=xml \
-          --cov-fail-under=75 \
-          --maxfail=10 \
-          -v \
-          tests/
+        make test-coverage
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
-        file: src/coverage.xml
+        file: htmlcov/coverage.xml
         fail_ci_if_error: true
         verbose: true
 
@@ -165,8 +147,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        cd src
-        pip install -r requirements-test.txt
+        make install-dev
 
     - name: Run integration tests
       env:
@@ -181,12 +162,7 @@ jobs:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: |
-        cd src
-        PYTHONPATH=. pytest \
-          -m integration \
-          --maxfail=5 \
-          -v \
-          tests/
+        make test-integration
 
   docker-test:
     runs-on: ubuntu-latest

@@ -25,6 +25,18 @@ make docker-build # Build Docker image
 make docker-run   # Run Docker container with .env
 ```
 
+### RAG System
+```bash
+# Ingest documents into knowledge base
+cd src && python ingest_documents.py --file path/to/doc.txt
+cd src && python ingest_documents.py --directory path/to/docs/
+cd src && python ingest_documents.py --url https://example.com/doc.md
+cd src && python ingest_documents.py --status  # Show system status
+
+# Example: Ingest project documentation
+cd src && python ingest_documents.py --directory ../docs/ --metadata '{"source": "project_docs"}'
+```
+
 ### Database Migrations
 ```bash
 cd src && python migrate.py status    # Show migration status
@@ -39,24 +51,84 @@ make clean        # Remove caches and build artifacts
 
 ## Environment Configuration
 
-The application requires a `.env` file in the project root with:
-```
+The application requires a `.env` file in the project root. Copy `.env.example` as a starting point:
+
+### Basic Configuration
+```bash
+# Slack
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
-LLM_API_URL=http://your-llm-api-url
-LLM_API_KEY=your-llm-api-key
+
+# LLM Provider (choose one)
+LLM_PROVIDER=openai  # openai, anthropic, ollama
+LLM_API_KEY=your-api-key
 LLM_MODEL=gpt-4o-mini
+
+# Database & Cache
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/slack_bot
+CACHE_REDIS_URL=redis://localhost:6379
+```
+
+### RAG Configuration (Optional)
+```bash
+# Vector Database
+VECTOR_ENABLED=true
+VECTOR_PROVIDER=chroma  # chroma, pinecone
+VECTOR_URL=http://localhost:8000
+
+# Embeddings
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+
+# Retrieval Settings
+RAG_MAX_CHUNKS=5
+RAG_SIMILARITY_THRESHOLD=0.7
+```
+
+### Quick Setup Examples
+
+**OpenAI + ChromaDB (Local):**
+```bash
+LLM_PROVIDER=openai
+LLM_API_KEY=sk-your-openai-key
+VECTOR_PROVIDER=chroma
+VECTOR_URL=./chroma_db
+```
+
+**Anthropic + Pinecone (Cloud):**
+```bash
+LLM_PROVIDER=anthropic
+LLM_API_KEY=your-anthropic-key
+VECTOR_PROVIDER=pinecone
+VECTOR_API_KEY=your-pinecone-key
+```
+
+**Ollama (Local, No RAG):**
+```bash
+LLM_PROVIDER=ollama
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama2
+VECTOR_ENABLED=false
 ```
 
 ## Architecture Overview
 
-This is a Python-based Slack bot for Insight Mesh that integrates with LLM APIs for RAG functionality and agent processes.
+This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and comprehensive testing.
 
-### Core Structure
+### 🏗️ Core Architecture
+
+#### New RAG-Enabled Design
+- **Direct LLM Integration**: OpenAI, Anthropic, or Ollama (no proxy required)
+- **Vector Database**: ChromaDB or Pinecone for knowledge storage
+- **Embedding Service**: Configurable text vectorization
+- **RAG Pipeline**: Retrieval-augmented response generation
+- **Document Ingestion**: CLI tool for knowledge base management
+
+#### Core Structure
 - **src/app.py**: Main application entry point with async Socket Mode handler
 - **src/config/**: Pydantic settings with environment-based configuration
 - **src/handlers/**: Event and message handling, including agent process management
-- **src/services/**: Core services for LLM API, Slack API, and message formatting
+- **src/services/**: Core services including RAG, LLM providers, and vector storage
 - **src/utils/**: Error handling and logging utilities
 
 ### Key Components
@@ -83,11 +155,30 @@ Defined in `handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. 
 - Shows typing indicators during response generation
 - Maintains online presence status
 
-### LLM Integration
-- Compatible with OpenAI API format
-- Sends user authentication tokens via headers and metadata
-- Uses async HTTP client (aiohttp) for API calls
-- Configurable model, temperature, and token limits
+### RAG & LLM Integration
+
+#### Supported LLM Providers
+- **OpenAI**: GPT-4, GPT-3.5, with configurable models
+- **Anthropic**: Claude 3 (Haiku, Sonnet, Opus)  
+- **Ollama**: Local models (Llama 2, Code Llama, etc.)
+
+#### Vector Database Options
+- **ChromaDB**: Local or server deployment
+- **Pinecone**: Cloud-hosted vector database
+
+#### RAG Pipeline Features
+- **Document Chunking**: Configurable size and overlap
+- **Semantic Search**: Vector similarity with threshold filtering
+- **Context Integration**: Retrieved chunks enhance LLM responses
+- **Metadata Support**: Track document sources and properties
+- **Configurable Retrieval**: Adjust chunk count and similarity thresholds
+
+#### How It Works
+1. **Ingestion**: Documents are chunked and embedded into vector database
+2. **Query Processing**: User questions are embedded for similarity search
+3. **Retrieval**: Most relevant chunks are retrieved based on similarity
+4. **Augmentation**: Retrieved context is added to the LLM prompt
+5. **Generation**: LLM generates response with enhanced context
 
 ## Testing Framework & Quality Standards
 

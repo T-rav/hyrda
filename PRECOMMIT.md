@@ -99,7 +99,7 @@ SKIP=mypy git commit -m "Skip type checking"
 
 ### Tool Configs
 - **Ruff/Black/isort/MyPy**: `pyproject.toml`
-- **Bandit**: `pyproject.toml` 
+- **Bandit**: `pyproject.toml`
 - **Coverage**: `pyproject.toml`
 
 ### Updating Hooks

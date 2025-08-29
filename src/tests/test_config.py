@@ -33,15 +33,17 @@ class TestConfig:
         with patch.dict(
             os.environ,
             {
-                "LLM_API_URL": "http://test-api.com",
+                "LLM_PROVIDER": "openai",
                 "LLM_API_KEY": "test-api-key",
                 "LLM_MODEL": "test-model",
+                "LLM_BASE_URL": "http://test-api.com",
             },
         ):
             settings = LLMSettings()
-            assert settings.api_url == "http://test-api.com"
+            assert settings.provider == "openai"
             assert settings.api_key.get_secret_value() == "test-api-key"
             assert settings.model == "test-model"
+            assert settings.base_url == "http://test-api.com"
 
     def test_settings_defaults(self):
         """Test Settings default values"""

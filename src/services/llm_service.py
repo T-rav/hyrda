@@ -1,129 +1,128 @@
+"""
+LLM Service with RAG support - backward compatible interface
+"""
+
 import logging
 
-import aiohttp
-
-from config.settings import LLMSettings
+from config.settings import Settings
+from services.rag_service import RAGService
+from services.user_prompt_service import UserPromptService
 
 logger = logging.getLogger(__name__)
 
 
 class LLMService:
-    """Service for interacting with the LLM API"""
+    """
+    Enhanced LLM service with RAG capabilities
+    
+    Maintains backward compatibility with the original interface while
+    adding support for direct LLM providers and vector-based retrieval
+    """
 
-    def __init__(self, settings: LLMSettings):
-        self.api_url = settings.api_url
-        self.api_key = settings.api_key.get_secret_value()
-        self.model = settings.model
-        self.session = None
+    def __init__(self, settings: Settings, user_prompt_service: UserPromptService | None = None):
+        self.settings = settings
+        self.user_prompt_service = user_prompt_service
+        self.rag_service = RAGService(settings)
 
-    async def ensure_session(self) -> aiohttp.ClientSession:
-        """Ensure an active client session exists"""
-        if self.session is None or self.session.closed:
-            self.session = aiohttp.ClientSession()
-        return self.session
+        # Legacy properties for backward compatibility
+        self.model = settings.llm.model
+        self.api_url = f"{settings.llm.provider} API"  # For logging compatibility
+
+        logger.info(f"Initialized LLM service with provider: {settings.llm.provider}")
+
+    async def initialize(self):
+        """Initialize RAG service"""
+        await self.rag_service.initialize()
 
     async def get_response(
-        self, messages: list[dict[str, str]], user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        user_id: str | None = None,
+        use_rag: bool = True
     ) -> str | None:
-        """Get response from LLM via API"""
-        if not self.api_key:
-            logger.error("LLM_API_KEY is not set")
+        """
+        Get response from LLM with optional RAG enhancement
+        
+        Args:
+            messages: Conversation history
+            user_id: User ID for custom system prompts
+            use_rag: Whether to use RAG retrieval (default: True)
+            
+        Returns:
+            Generated response or None if failed
+        """
+        try:
+            # Get user's custom system prompt if available
+            system_message = None
+            if user_id and self.user_prompt_service:
+                try:
+                    custom_prompt = await self.user_prompt_service.get_user_prompt(user_id)
+                    if custom_prompt:
+                        system_message = custom_prompt
+                        logger.info(f"Using custom system prompt for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to get custom prompt for user {user_id}: {e}")
+
+            # Extract the current query (last user message)
+            current_query = None
+            conversation_history = []
+
+            for msg in messages:
+                if msg.get("role") == "user":
+                    current_query = msg.get("content", "")
+                conversation_history.append(msg)
+
+            if not current_query:
+                logger.warning("No user query found in messages")
+                return None
+
+            # Generate response using RAG service
+            response = await self.rag_service.generate_response(
+                query=current_query,
+                conversation_history=conversation_history[:-1],  # Exclude current query
+                system_message=system_message,
+                use_rag=use_rag
+            )
+
+            return response
+
+        except Exception as e:
+            logger.error(f"Error in LLM service: {e}")
             return None
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+    async def get_response_without_rag(
+        self,
+        messages: list[dict[str, str]],
+        user_id: str | None = None
+    ) -> str | None:
+        """Get response without RAG retrieval"""
+        return await self.get_response(messages, user_id, use_rag=False)
 
-        # Add user auth token if provided
-        if user_id:
-            auth_token = f"slack:{user_id}"
-            headers["X-Auth-Token"] = auth_token
-            logger.info(f"Added X-Auth-Token header: {auth_token}")
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.7,
-            "max_tokens": 1000,
-        }
-
-        # Add metadata with user auth token for the callback pipeline
-        if user_id:
-            auth_token = f"slack:{user_id}"
-            payload["metadata"] = {"X-Auth-Token": auth_token, "user_id": user_id}
-            logger.info(f"Added user auth token to metadata: {auth_token}")
-
-        logger.info(f"LLM API URL: {self.api_url}")
-        logger.info(f"LLM Model: {self.model}")
-
-        session = await self.ensure_session()
+    async def ingest_documents(self, documents: list[dict]) -> int:
+        """
+        Ingest documents into the knowledge base
+        
+        Args:
+            documents: List of documents with 'content' and optional 'metadata'
+            
+        Returns:
+            Number of chunks ingested
+        """
+        if not self.settings.vector.enabled:
+            logger.warning("Vector storage disabled - cannot ingest documents")
+            return 0
 
         try:
-            logger.info(
-                "Calling LLM API",
-                extra={
-                    "api_url": self.api_url,
-                    "model": self.model,
-                    "user_id": user_id,
-                    "message_count": len(messages),
-                    "event_type": "llm_api_request",
-                },
-            )
-
-            async with session.post(
-                f"{self.api_url}/chat/completions", headers=headers, json=payload
-            ) as response:
-                result_text = await response.text()
-
-                if response.status == 200:
-                    result = await response.json()
-                    response_content = result["choices"][0]["message"]["content"]
-
-                    logger.info(
-                        "LLM API success",
-                        extra={
-                            "api_url": self.api_url,
-                            "model": self.model,
-                            "user_id": user_id,
-                            "status_code": response.status,
-                            "response_length": len(response_content),
-                            "event_type": "llm_api_success",
-                        },
-                    )
-
-                    return response_content
-                else:
-                    logger.error(
-                        "LLM API error",
-                        extra={
-                            "api_url": self.api_url,
-                            "model": self.model,
-                            "user_id": user_id,
-                            "status_code": response.status,
-                            "error_response": result_text,
-                            "event_type": "llm_api_error",
-                        },
-                    )
-                    return None
+            return await self.rag_service.ingest_documents(documents)
         except Exception as e:
-            logger.error(
-                "LLM API exception",
-                extra={
-                    "api_url": self.api_url,
-                    "model": self.model,
-                    "user_id": user_id,
-                    "error": str(e),
-                    "event_type": "llm_api_exception",
-                },
-            )
-            import traceback
+            logger.error(f"Error ingesting documents: {e}")
+            return 0
 
-            logger.error(f"LLM API exception traceback: {traceback.format_exc()}")
-            return None
+    async def get_system_status(self) -> dict:
+        """Get system status information"""
+        return await self.rag_service.get_system_status()
 
     async def close(self):
-        """Close the HTTP session"""
-        if self.session and not self.session.closed:
-            await self.session.close()
-        self.session = None
+        """Clean up resources"""
+        await self.rag_service.close()
+        logger.info("LLM service closed")

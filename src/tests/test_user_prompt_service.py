@@ -38,14 +38,13 @@ class TestUserPromptService:
     @pytest.mark.asyncio
     async def test_initialization_success(self, mock_database_url):
         """Test successful service initialization"""
-        with patch(
-            "services.user_prompt_service.create_async_engine"
-        ), patch(
-            "services.user_prompt_service.async_sessionmaker"
-        ), patch(
-            "services.user_prompt_service.MigrationManager"
-        ) as mock_migration_manager:
-
+        with (
+            patch("services.user_prompt_service.create_async_engine"),
+            patch("services.user_prompt_service.async_sessionmaker"),
+            patch(
+                "services.user_prompt_service.MigrationManager"
+            ) as mock_migration_manager,
+        ):
             mock_migration_instance = AsyncMock()
             mock_migration_manager.return_value = mock_migration_instance
             mock_migration_instance.initialize = AsyncMock()

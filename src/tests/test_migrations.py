@@ -57,12 +57,10 @@ class TestMigrationManager:
     @pytest.mark.asyncio
     async def test_migration_manager_initialization(self, mock_database_url):
         """Test MigrationManager initialization"""
-        with patch(
-            "migrations.migration_manager.create_async_engine"
-        ) as mock_engine, patch(
-            "migrations.migration_manager.async_sessionmaker"
+        with (
+            patch("migrations.migration_manager.create_async_engine") as mock_engine,
+            patch("migrations.migration_manager.async_sessionmaker"),
         ):
-
             manager = MigrationManager(mock_database_url)
             await manager.initialize()
 
@@ -72,10 +70,10 @@ class TestMigrationManager:
     @pytest.mark.asyncio
     async def test_add_migration(self, mock_database_url):
         """Test adding migrations to manager"""
-        with patch("migrations.migration_manager.create_async_engine"), patch(
-            "migrations.migration_manager.async_sessionmaker"
+        with (
+            patch("migrations.migration_manager.create_async_engine"),
+            patch("migrations.migration_manager.async_sessionmaker"),
         ):
-
             manager = MigrationManager(mock_database_url)
             test_migration = TestMigration()
 
@@ -249,10 +247,10 @@ class TestMigrationRegistry:
 
     def test_register_migrations(self, mock_database_url):
         """Test registering migrations from registry"""
-        with patch("migrations.migration_manager.create_async_engine"), patch(
-            "migrations.migration_manager.async_sessionmaker"
+        with (
+            patch("migrations.migration_manager.create_async_engine"),
+            patch("migrations.migration_manager.async_sessionmaker"),
         ):
-
             manager = MigrationManager(mock_database_url)
             register_migrations(manager)
 
@@ -264,10 +262,10 @@ class TestMigrationRegistry:
 
     def test_migration_ordering(self, mock_database_url):
         """Test that migrations are ordered by version"""
-        with patch("migrations.migration_manager.create_async_engine"), patch(
-            "migrations.migration_manager.async_sessionmaker"
+        with (
+            patch("migrations.migration_manager.create_async_engine"),
+            patch("migrations.migration_manager.async_sessionmaker"),
         ):
-
             manager = MigrationManager(mock_database_url)
 
             # Add migrations out of order

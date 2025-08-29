@@ -19,16 +19,14 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_create_app_with_all_services(self):
         """Test app creation with all services enabled"""
-        with patch("app.Settings") as mock_settings, patch(
-            "app.AsyncApp"
-        ) as mock_app, patch("app.LLMService"), patch(
-            "app.SlackService"
-        ), patch(
-            "app.ConversationCache"
-        ) as mock_cache, patch(
-            "app.UserPromptService"
-        ) as mock_prompt_service:
-
+        with (
+            patch("app.Settings") as mock_settings,
+            patch("app.AsyncApp") as mock_app,
+            patch("app.LLMService"),
+            patch("app.SlackService"),
+            patch("app.ConversationCache") as mock_cache,
+            patch("app.UserPromptService") as mock_prompt_service,
+        ):
             # Mock settings
             settings_instance = MagicMock()
             settings_instance.slack.bot_token = "xoxb-test"
@@ -76,10 +74,12 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_create_app_with_disabled_services(self):
         """Test app creation with services disabled"""
-        with patch("app.Settings") as mock_settings, patch(
-            "app.AsyncApp"
-        ) as mock_app, patch("app.LLMService"), patch("app.SlackService"):
-
+        with (
+            patch("app.Settings") as mock_settings,
+            patch("app.AsyncApp") as mock_app,
+            patch("app.LLMService"),
+            patch("app.SlackService"),
+        ):
             # Mock settings with services disabled
             settings_instance = MagicMock()
             settings_instance.slack.bot_token = "xoxb-test"
@@ -109,14 +109,13 @@ class TestIntegration:
         """Test complete database initialization with migrations"""
         mock_database_url = "postgresql+asyncpg://test:test@localhost/test"
 
-        with patch(
-            "services.user_prompt_service.create_async_engine"
-        ), patch(
-            "services.user_prompt_service.async_sessionmaker"
-        ), patch(
-            "services.user_prompt_service.MigrationManager"
-        ) as mock_migration_manager:
-
+        with (
+            patch("services.user_prompt_service.create_async_engine"),
+            patch("services.user_prompt_service.async_sessionmaker"),
+            patch(
+                "services.user_prompt_service.MigrationManager"
+            ) as mock_migration_manager,
+        ):
             # Mock migration manager
             mock_migration_instance = AsyncMock()
             mock_migration_manager.return_value = mock_migration_instance
@@ -329,8 +328,9 @@ class TestIntegration:
             {
                 "SLACK_BOT_TOKEN": "xoxb-test",
                 "SLACK_APP_TOKEN": "xapp-test",
-                "LLM_API_URL": "https://api.test.com",
+                "LLM_PROVIDER": "openai",
                 "LLM_API_KEY": "test-key",
+                "LLM_BASE_URL": "https://api.test.com",
                 "DATABASE_URL": "postgresql+asyncpg://test:test@localhost/test",
             },
         ):
@@ -338,7 +338,8 @@ class TestIntegration:
 
             assert settings.slack.bot_token == "xoxb-test"
             assert settings.slack.app_token == "xapp-test"
-            assert settings.llm.api_url == "https://api.test.com"
+            assert settings.llm.provider == "openai"
+            assert settings.llm.base_url == "https://api.test.com"
             assert (
                 settings.database.url == "postgresql+asyncpg://test:test@localhost/test"
             )

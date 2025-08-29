@@ -60,13 +60,13 @@ test:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
 
 test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=75 --maxfail=10
 
 test-file:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
 
 test-integration:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m integration -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m integration --maxfail=5 -v
 
 test-unit:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m "not integration" -v
