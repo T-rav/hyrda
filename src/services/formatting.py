@@ -59,7 +59,39 @@ class MessageFormatter:
     def format_bullet_points(text: str) -> str:
         """Format bullet points for better Slack rendering"""
         # Replace GitHub-style bullets with Slack-compatible ones
-        return text.replace("* ", "• ")
+        return text.replace("* ", "• ").replace("- ", "• ")
+
+    @staticmethod
+    def format_markdown_for_slack(text: str) -> str:
+        """Convert standard markdown to Slack-compatible markdown"""
+        # Convert **bold** to *bold* (Slack uses single asterisks for bold)
+        text = re.sub(r"\*\*(.*?)\*\*", r"*\1*", text)
+
+        # Convert _italic_ to _italic_ (already compatible)
+        # Convert __bold__ to *bold*
+        text = re.sub(r"__(.*?)__", r"*\1*", text)
+
+        # Convert [text](url) links to <url|text>
+        text = re.sub(r"\[(.*?)\]\((.*?)\)", r"<\2|\1>", text)
+
+        # Convert `inline code` to `inline code` (already compatible)
+
+        # Ensure proper line breaks for lists
+        lines = text.split("\n")
+        formatted_lines = []
+
+        for line in lines:
+            # Format list items with proper indentation
+            if line.strip().startswith("• "):
+                formatted_lines.append(line)
+            elif line.strip().startswith("- ") or line.strip().startswith("* "):
+                # Convert to bullet and ensure proper spacing
+                content = line.strip()[2:].strip()
+                formatted_lines.append(f"• {content}")
+            else:
+                formatted_lines.append(line)
+
+        return "\n".join(formatted_lines)
 
     @staticmethod
     async def format_message(text: str | None) -> str:
@@ -69,7 +101,7 @@ class MessageFormatter:
 
         # Apply all formatting rules
         text = MessageFormatter.format_code_blocks(text)
-        text = MessageFormatter.format_bullet_points(text)
+        text = MessageFormatter.format_markdown_for_slack(text)
         text = await MessageFormatter.format_for_slack(text)
 
         return text
