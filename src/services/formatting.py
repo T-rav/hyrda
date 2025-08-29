@@ -1,6 +1,11 @@
 import logging
 import re
 
+try:
+    from slackify_markdown import slackify_markdown
+except ImportError:
+    slackify_markdown = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,11 +69,9 @@ class MessageFormatter:
     @staticmethod
     def format_markdown_for_slack(text: str) -> str:
         """Convert standard markdown to Slack-compatible markdown using slackify-markdown library"""
-        try:
-            from slackify_markdown import slackify_markdown
-
+        if slackify_markdown is not None:
             return slackify_markdown(text)
-        except ImportError:
+        else:
             # Fallback to basic conversion if library not available
             logger.warning("slackify-markdown not available, using basic conversion")
             return text.replace("**", "*").replace("__", "*")

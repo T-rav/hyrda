@@ -53,7 +53,7 @@ class TestMessageFormatter:
     async def test_format_message_complete(self):
         """Test complete message formatting pipeline"""
         input_text = "Here's some code:\n```python\nprint('hello')\n```\n\nAnd a list:\n* Item 1\n* Item 2\n\nSources used:\n[Document](http://example.com)"
-        expected = "Here's some code:\n```\nprint('hello')\n```\n\nAnd a list:\n• Item 1\n• Item 2\n\nSources used:\n<http://example.com|Document>"
+        expected = "Here's some code:\n```\nprint('hello')\n```\nAnd a list:\n•   Item 1\n•   Item 2\nSources used:\n<http://example.com|Document>"
 
         result = await MessageFormatter.format_message(input_text)
         assert result == expected
