@@ -18,6 +18,7 @@ class TestIntegration:
     """Integration tests for the complete system"""
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_create_app_with_all_services(self):
         """Test app creation with all services enabled"""
         with (
@@ -73,6 +74,7 @@ class TestIntegration:
             )
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_create_app_with_disabled_services(self):
         """Test app creation with services disabled"""
         with (
@@ -106,6 +108,7 @@ class TestIntegration:
             assert prompt_service is None
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_database_initialization_flow(self):
         """Test complete database initialization with migrations"""
         mock_database_url = "postgresql+asyncpg://test:test@localhost/test"
@@ -136,6 +139,7 @@ class TestIntegration:
             assert service.migration_manager is not None
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_health_checker_with_all_services(self):
         """Test health checker with all services available"""
         with patch("health.Settings"):
@@ -174,6 +178,7 @@ class TestIntegration:
             assert health_checker.prompt_service == mock_prompt_service
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_full_message_flow_with_prompt_service(self):
         """Test complete message flow with custom user prompt"""
 
@@ -217,6 +222,7 @@ class TestIntegration:
         mock_slack_service.send_message.assert_called_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_prompt_command_integration(self):
         """Test @prompt command integration with database"""
 
@@ -247,6 +253,7 @@ class TestIntegration:
         mock_llm_service.get_response.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_conversation_cache_integration(self):
         """Test conversation cache integration with message handling"""
 
@@ -287,6 +294,7 @@ class TestIntegration:
         )  # User + bot message
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_error_handling_integration(self):
         """Test error handling across integrated components"""
 
@@ -342,6 +350,7 @@ class TestIntegration:
             )
 
     @pytest.mark.asyncio
+    @pytest.mark.integration
     async def test_service_cleanup_on_shutdown(self):
         """Test that all services are properly cleaned up on shutdown"""
         mock_prompt_service = AsyncMock()
