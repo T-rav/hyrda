@@ -119,6 +119,11 @@ class TestEventHandlers:
         self, mock_slack_service, mock_llm_service
     ):
         """Test processing message in thread"""
+        # Mock thread info to indicate bot is a participant
+        mock_slack_service.get_thread_info = AsyncMock(
+            return_value={"bot_is_participant": True}
+        )
+
         with patch(
             "handlers.event_handlers.handle_message", new_callable=AsyncMock
         ) as mock_handle_message:
@@ -133,7 +138,7 @@ class TestEventHandlers:
                 llm_service=mock_llm_service,
             )
 
-            # Should always respond in threads (temporary fix)
+            # Should respond in threads when bot is participant
             mock_handle_message.assert_called_once()
 
     @pytest.mark.asyncio

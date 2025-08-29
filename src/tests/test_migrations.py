@@ -34,8 +34,8 @@ def mock_migration_manager():
     return manager
 
 
-class TestMigration(Migration):
-    """Test migration class for testing"""
+class MockMigration(Migration):
+    """Mock migration class for testing"""
 
     def __init__(self):
         super().__init__("999", "Test Migration")
@@ -75,7 +75,7 @@ class TestMigrationManager:
             patch("migrations.migration_manager.async_sessionmaker"),
         ):
             manager = MigrationManager(mock_database_url)
-            test_migration = TestMigration()
+            test_migration = MockMigration()
 
             manager.add_migration(test_migration)
 
@@ -164,7 +164,7 @@ class TestMigrationManager:
 
     def test_migration_base_class(self):
         """Test Migration base class"""
-        test_migration = TestMigration()
+        test_migration = MockMigration()
 
         assert test_migration.version == "999"
         assert test_migration.name == "Test Migration"
@@ -174,7 +174,7 @@ class TestMigrationManager:
     @pytest.mark.asyncio
     async def test_migration_up_execution(self):
         """Test migration up method execution"""
-        test_migration = TestMigration()
+        test_migration = MockMigration()
         mock_session = AsyncMock()
 
         await test_migration.up(mock_session)
@@ -184,7 +184,7 @@ class TestMigrationManager:
     @pytest.mark.asyncio
     async def test_migration_down_execution(self):
         """Test migration down method execution"""
-        test_migration = TestMigration()
+        test_migration = MockMigration()
         mock_session = AsyncMock()
 
         await test_migration.down(mock_session)
@@ -267,9 +267,9 @@ class TestMigrationRegistry:
             manager = MigrationManager(mock_database_url)
 
             # Add migrations out of order
-            migration_003 = TestMigration()
+            migration_003 = MockMigration()
             migration_003.version = "003"
-            migration_002 = TestMigration()
+            migration_002 = MockMigration()
             migration_002.version = "002"
             migration_001 = CreateUserPromptsTable()
 
