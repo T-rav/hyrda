@@ -64,25 +64,55 @@ class LLMService:
         session = await self.ensure_session()
         
         try:
-            logger.info(f"Sending request to LLM API with {len(messages)} messages")
+            logger.info("Calling LLM API", extra={
+                "api_url": self.api_url,
+                "model": self.model,
+                "user_id": user_id,
+                "message_count": len(messages),
+                "event_type": "llm_api_request"
+            })
+            
             async with session.post(
                 f"{self.api_url}/chat/completions",
                 headers=headers,
                 json=payload
             ) as response:
-                logger.info(f"Response status: {response.status}")
+                result_text = await response.text()
+                
                 if response.status == 200:
                     result = await response.json()
-                    logger.info("Successfully received response from LLM API")
-                    return result["choices"][0]["message"]["content"]
+                    response_content = result["choices"][0]["message"]["content"]
+                    
+                    logger.info("LLM API success", extra={
+                        "api_url": self.api_url,
+                        "model": self.model,
+                        "user_id": user_id,
+                        "status_code": response.status,
+                        "response_length": len(response_content),
+                        "event_type": "llm_api_success"
+                    })
+                    
+                    return response_content
                 else:
-                    error_text = await response.text()
-                    logger.error(f"LLM API error: Status {response.status} - {error_text}")
+                    logger.error("LLM API error", extra={
+                        "api_url": self.api_url,
+                        "model": self.model,
+                        "user_id": user_id,
+                        "status_code": response.status,
+                        "error_response": result_text,
+                        "event_type": "llm_api_error"
+                    })
                     return None
         except Exception as e:
-            logger.error(f"Error calling LLM API: {e}")
+            logger.error("LLM API exception", extra={
+                "api_url": self.api_url,
+                "model": self.model,
+                "user_id": user_id,
+                "error": str(e),
+                "event_type": "llm_api_exception"
+            })
             import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
+            logger.error(f"LLM API exception traceback: {traceback.format_exc()}")
             return None
     
     async def close(self):

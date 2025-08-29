@@ -21,7 +21,13 @@ async def handle_message(
     thread_ts: Optional[str] = None
 ):
     """Handle an incoming message from Slack"""
-    logger.info(f"Handling message: '{text}' from user {user_id} in channel {channel}, thread {thread_ts}")
+    logger.info("Processing user message", extra={
+        "user_message": text,
+        "user_id": user_id,
+        "channel_id": channel,
+        "thread_ts": thread_ts,
+        "event_type": "user_message"
+    })
     
     # For tracking the thinking indicator message
     thinking_message_ts = None
@@ -44,6 +50,16 @@ async def handle_message(
         # Prepare the LLM request
         llm_messages = await prepare_llm_messages(text, thread_messages)
         
+        # Log the full context being sent to LLM
+        logger.debug("Sending context to LLM", extra={
+            "llm_messages": llm_messages,
+            "user_id": user_id,
+            "channel_id": channel,
+            "thread_ts": thread_ts,
+            "event_type": "llm_request",
+            "message_count": len(llm_messages)
+        })
+        
         # Get the LLM response
         llm_response = await llm_service.get_response(
             messages=llm_messages,
@@ -56,7 +72,14 @@ async def handle_message(
             
         # Send the response
         if llm_response:
-            logger.info(f"Sending response to Slack: channel={channel}, thread_ts={thread_ts}")
+            logger.info("Generated LLM response", extra={
+                "llm_response": llm_response,
+                "user_id": user_id,
+                "channel_id": channel,
+                "thread_ts": thread_ts,
+                "event_type": "llm_response",
+                "response_length": len(llm_response)
+            })
             
             # Format the response for better rendering in Slack
             formatted_response = await MessageFormatter.format_message(llm_response)
@@ -66,9 +89,21 @@ async def handle_message(
                 text=formatted_response,
                 thread_ts=thread_ts
             )
-            logger.info(f"Response sent successfully")
+            
+            logger.info("Response sent to Slack", extra={
+                "user_id": user_id,
+                "channel_id": channel,
+                "thread_ts": thread_ts,
+                "event_type": "slack_response_sent",
+                "formatted_response": formatted_response
+            })
         else:
-            logger.error("No LLM response received, sending error message")
+            logger.error("No LLM response received", extra={
+                "user_id": user_id,
+                "channel_id": channel,
+                "thread_ts": thread_ts,
+                "event_type": "llm_response_failed"
+            })
             await slack_service.send_message(
                 channel=channel,
                 text="I'm sorry, I encountered an error while generating a response.",
