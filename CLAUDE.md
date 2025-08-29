@@ -89,12 +89,217 @@ Defined in `handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. 
 - Uses async HTTP client (aiohttp) for API calls
 - Configurable model, temperature, and token limits
 
-## Testing Framework
+## Testing Framework & Quality Standards
 
-Uses pytest with async support:
-- Test files in `src/tests/`
-- Coverage reporting available
-- Run with `PYTHONPATH=src pytest -q src/tests`
+### Test Suite Requirements
+
+**🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
+
+The project maintains a **154/154 test success rate (100%)** - this standard must be preserved.
+
+#### Test Commands
+```bash
+# Run all tests (REQUIRED before any commit)
+make test                    # Full test suite with coverage
+make test-coverage          # Tests with HTML coverage report  
+make test-file FILE=test_name.py  # Run specific test file
+
+# Quality checks (REQUIRED before commit)
+make lint                   # Auto-fix linting issues
+make lint-check            # Check linting without fixing
+make typecheck             # Run mypy type checking
+make quality               # Run all quality checks + tests
+```
+
+#### Pre-commit Requirements
+```bash
+# Setup (run once)
+make setup-dev             # Install dev tools + pre-commit hooks
+
+# Before every commit (MANDATORY)
+make pre-commit           # Run all pre-commit hooks
+git add . && git commit   # Hooks run automatically
+
+# CI simulation
+make ci                   # Run complete CI pipeline locally
+```
+
+### Testing Standards
+
+#### 1. Test Coverage Requirements
+- **Minimum 80% code coverage** (enforced by CI)
+- **All new functions/classes MUST have tests**
+- **Critical paths require 100% coverage**
+
+#### 2. Test Types & Structure
+```
+src/tests/
+├── test_app.py              # Application initialization
+├── test_config.py           # Configuration management  
+├── test_conversation_cache.py  # Redis caching
+├── test_event_handlers.py   # Slack event handling
+├── test_formatting.py       # Message formatting
+├── test_health_endpoints.py # Health check endpoints
+├── test_integration.py      # End-to-end workflows
+├── test_llm_service.py      # LLM API integration
+├── test_message_handlers.py # Message processing
+├── test_migrations.py       # Database migrations
+├── test_prompt_commands.py  # User prompt commands
+├── test_slack_service.py    # Slack API integration
+├── test_user_prompt_service.py  # Database operations
+└── test_utils.py           # Utilities and helpers
+```
+
+#### 3. Test Patterns (Follow These Examples)
+```python
+# ✅ GOOD: Async test with proper mocking
+@pytest.mark.asyncio
+async def test_message_handling_success(mock_slack_service):
+    mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
+    result = await handle_message("test", "U123", mock_slack_service, "C123")
+    assert result is True
+    mock_slack_service.send_message.assert_called_once()
+
+# ✅ GOOD: Simple fixture for consistent mocking  
+@pytest.fixture
+def mock_service():
+    service = AsyncMock(spec=ServiceClass)
+    service.method.return_value = "expected_result"
+    return service
+
+# ❌ BAD: Complex async mocking that can hang tests
+# Avoid deep nested AsyncMock patterns
+```
+
+### Code Quality Standards  
+
+#### 1. Linting & Formatting (Auto-enforced)
+- **Ruff**: Fast linting with auto-fix
+- **Black**: Code formatting  
+- **isort**: Import sorting
+- **MyPy**: Type checking (strict mode)
+- **Bandit**: Security scanning
+
+#### 2. Type Annotations (Required)
+```python
+# ✅ REQUIRED: All functions must have type hints
+async def process_message(
+    text: str, 
+    user_id: str, 
+    service: SlackService
+) -> bool:
+    """Process a message with proper typing."""
+    return True
+
+# ❌ FORBIDDEN: Untyped functions
+def process_message(text, user_id, service):
+    return True
+```
+
+### Development Workflow (MANDATORY)
+
+#### For Every Code Change:
+
+1. **Write Tests First** (TDD approach preferred)
+   ```bash
+   # Create test file for new feature
+   touch src/tests/test_new_feature.py
+   # Write failing tests
+   # Implement feature to make tests pass
+   ```
+
+2. **Maintain Existing Tests**
+   ```bash
+   # After code changes, ensure all tests still pass
+   make test
+   # Update tests if interfaces change
+   # Never delete tests without replacement
+   ```
+
+3. **Run Quality Checks**
+   ```bash
+   # MANDATORY before every commit
+   make quality              # All checks + tests
+   make pre-commit          # Pre-commit hooks
+   ```
+
+4. **Commit with Verified Quality**
+   ```bash
+   # Only commit when all checks pass
+   git add .
+   git commit -m "feat: add new feature with comprehensive tests"
+   git push
+   ```
+
+#### For Bug Fixes:
+
+1. **Write Reproduction Test**
+   ```python
+   def test_bug_reproduction():
+       """Test that reproduces the reported bug."""
+       # This test should fail initially
+       assert buggy_function() == expected_result
+   ```
+
+2. **Fix the Bug**
+   ```python
+   # Implement fix
+   # Test should now pass
+   ```
+
+3. **Add Edge Case Tests**
+   ```python
+   def test_edge_cases():
+       """Test edge cases related to the bug."""
+       # Prevent regression
+   ```
+
+### Integration with CI/CD
+
+#### GitHub Actions Pipeline
+- **Triggered on**: Every push and PR
+- **Runs**: `make ci` (quality + tests + build)
+- **Blocks merge**: If any test fails or coverage < 80%
+
+#### Pre-commit Hooks (Local)
+- **Ruff linting** with auto-fix
+- **Black formatting**  
+- **Type checking**
+- **Security scanning**
+- **Test file validation**
+
+### Test Environment
+
+#### Test Configuration
+```bash
+# Test database (automatic setup)
+DATABASE_URL=postgresql://test:test@localhost:5432/test_db
+
+# Test Redis (optional, uses fakeredis if unavailable)  
+CACHE_REDIS_URL=redis://localhost:6379/1
+
+# Test environment file
+cp src/tests/.env.test .env.test
+```
+
+#### Test Data Management
+- **Use fixtures for consistent test data**
+- **Mock external services (Slack, LLM APIs)**
+- **Clean up after tests (database, cache)**
+- **Isolate tests (no shared state)**
+
+### Performance Testing
+
+```bash
+# Monitor test performance
+make test-coverage          # Includes timing
+pytest --durations=10       # Show 10 slowest tests
+
+# Keep tests fast (< 2 seconds per test)
+# Use mocking instead of real API calls
+```
+
+This testing framework ensures **100% reliability** and **production-ready code quality**.
 
 ## Production Deployment
 
