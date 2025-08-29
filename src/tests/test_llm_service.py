@@ -8,110 +8,196 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from services.llm_service import LLMService
+from config.settings import Settings
 
 
 @pytest.fixture
-def llm_service():
+def mock_settings():
+    """Create mock settings for testing"""
+    settings = MagicMock(spec=Settings)
+    
+    # LLM settings
+    settings.llm.provider = "openai"
+    settings.llm.api_key = MagicMock()
+    settings.llm.api_key.get_secret_value.return_value = "test-api-key"
+    settings.llm.model = "gpt-4o-mini"
+    settings.llm.temperature = 0.7
+    settings.llm.max_tokens = 2000
+    settings.llm.base_url = None
+    
+    # Vector settings (disabled for most tests)
+    settings.vector.enabled = False
+    settings.vector.provider = "chroma"
+    settings.vector.url = "./test_chroma"
+    settings.vector.collection_name = "test_collection"
+    
+    # Embedding settings
+    settings.embedding.provider = "openai"
+    settings.embedding.model = "text-embedding-3-small"
+    settings.embedding.api_key = None
+    settings.embedding.chunk_size = 1000
+    settings.embedding.chunk_overlap = 200
+    
+    # RAG settings
+    settings.rag.max_chunks = 5
+    settings.rag.similarity_threshold = 0.7
+    settings.rag.rerank_enabled = False
+    settings.rag.include_metadata = True
+    
+    return settings
+
+
+@pytest.fixture
+def llm_service(mock_settings):
     """Create LLM service for testing"""
-    settings = MagicMock()
-    settings.api_url = "http://test-api.com"
-    settings.api_key = MagicMock()
-    settings.api_key.get_secret_value.return_value = "test-api-key"
-    settings.model = "test-model"
-    return LLMService(settings)
+    with patch('services.llm_service.RAGService') as mock_rag_service:
+        mock_rag_service.return_value = AsyncMock()
+        service = LLMService(mock_settings, user_prompt_service=None)
+        return service
 
 
 class TestLLMService:
-    """Tests for LLM service - simplified to focus on core logic"""
+    """Tests for RAG-enabled LLM service"""
 
     def test_init(self, llm_service):
         """Test LLM service initialization"""
-        assert llm_service.api_url == "http://test-api.com"
-        assert llm_service.model == "test-model"
-        assert llm_service.session is None
+        assert llm_service.model == "gpt-4o-mini"
+        assert "openai API" in llm_service.api_url  # Legacy compatibility property
+        assert llm_service.settings is not None
+        assert llm_service.rag_service is not None
 
     @pytest.mark.asyncio
-    async def test_ensure_session_creates_new_session(self, llm_service):
-        """Test that ensure_session creates a session when none exists"""
-        # Initially no session
-        assert llm_service.session is None
+    async def test_initialize(self, llm_service):
+        """Test LLM service initialization"""
+        llm_service.rag_service.initialize = AsyncMock()
         
-        # Mock the session creation without patching the import
-        with patch.object(llm_service, 'session', MagicMock()) as mock_session:
-            mock_session.closed = False
-            session = await llm_service.ensure_session()
-            # Should have a session now
-            assert session is not None
+        await llm_service.initialize()
+        
+        llm_service.rag_service.initialize.assert_called_once()
 
-    @pytest.mark.asyncio 
-    async def test_get_response_no_api_key(self):
-        """Test get_response when API key is missing"""
-        settings = MagicMock()
-        settings.api_url = "http://test-api.com"
-        settings.api_key = MagicMock()
-        settings.api_key.get_secret_value.return_value = ""
-        settings.model = "test-model"
+    @pytest.mark.asyncio
+    async def test_get_response_success(self, llm_service):
+        """Test successful response generation"""
+        messages = [{"role": "user", "content": "Hello"}]
+        user_id = "U12345"
         
-        service = LLMService(settings)
+        # Mock RAG service response
+        llm_service.rag_service.generate_response = AsyncMock(
+            return_value="Hello! How can I help you?"
+        )
+        
+        result = await llm_service.get_response(messages, user_id)
+        
+        assert result == "Hello! How can I help you?"
+        llm_service.rag_service.generate_response.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_response_with_user_prompt(self, llm_service):
+        """Test response generation with custom user prompt"""
+        messages = [{"role": "user", "content": "What is Python?"}]
+        user_id = "U12345"
+        
+        # Mock user prompt service
+        mock_prompt_service = AsyncMock()
+        mock_prompt_service.get_user_prompt.return_value = "You are a Python expert"
+        llm_service.user_prompt_service = mock_prompt_service
+        
+        # Mock RAG service response
+        llm_service.rag_service.generate_response = AsyncMock(
+            return_value="Python is a programming language..."
+        )
+        
+        result = await llm_service.get_response(messages, user_id)
+        
+        assert result == "Python is a programming language..."
+        mock_prompt_service.get_user_prompt.assert_called_once_with(user_id)
+
+    @pytest.mark.asyncio
+    async def test_get_response_without_rag(self, llm_service):
+        """Test response generation without RAG"""
+        messages = [{"role": "user", "content": "Hello"}]
+        user_id = "U12345"
+        
+        # Mock RAG service response
+        llm_service.rag_service.generate_response = AsyncMock(
+            return_value="Hello without RAG!"
+        )
+        
+        result = await llm_service.get_response_without_rag(messages, user_id)
+        
+        assert result == "Hello without RAG!"
+        # Verify RAG service was called with use_rag=False
+        llm_service.rag_service.generate_response.assert_called_once_with(
+            query="Hello",
+            conversation_history=[],
+            system_message=None,
+            use_rag=False
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_response_error(self, llm_service):
+        """Test response generation with error"""
         messages = [{"role": "user", "content": "Hello"}]
         
-        result = await service.get_response(messages)
+        # Mock RAG service to raise exception
+        llm_service.rag_service.generate_response = AsyncMock(
+            side_effect=Exception("API error")
+        )
+        
+        result = await llm_service.get_response(messages)
+        
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_close_session(self, llm_service):
-        """Test closing LLM service session"""
-        # Set up a mock session
-        mock_session = MagicMock()
-        llm_service.session = mock_session
+    async def test_ingest_documents_success(self, llm_service):
+        """Test document ingestion"""
+        documents = [
+            {"content": "Test document", "metadata": {"source": "test"}}
+        ]
+        
+        # Mock RAG service ingestion
+        llm_service.rag_service.ingest_documents = AsyncMock(return_value=5)
+        llm_service.settings.vector.enabled = True
+        
+        result = await llm_service.ingest_documents(documents)
+        
+        assert result == 5
+        llm_service.rag_service.ingest_documents.assert_called_once_with(documents)
+
+    @pytest.mark.asyncio
+    async def test_ingest_documents_disabled(self, llm_service):
+        """Test document ingestion when vector storage is disabled"""
+        documents = [{"content": "Test document"}]
+        
+        llm_service.settings.vector.enabled = False
+        
+        result = await llm_service.ingest_documents(documents)
+        
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_get_system_status(self, llm_service):
+        """Test system status retrieval"""
+        expected_status = {
+            "rag_enabled": False,
+            "llm_provider": "openai",
+            "llm_model": "gpt-4o-mini"
+        }
+        
+        llm_service.rag_service.get_system_status = AsyncMock(
+            return_value=expected_status
+        )
+        
+        result = await llm_service.get_system_status()
+        
+        assert result == expected_status
+        llm_service.rag_service.get_system_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_close(self, llm_service):
+        """Test closing LLM service"""
+        llm_service.rag_service.close = AsyncMock()
         
         await llm_service.close()
         
-        # After closing, session should be None
-        assert llm_service.session is None
-
-    @pytest.mark.asyncio
-    async def test_close_no_session(self, llm_service):
-        """Test closing when no session exists"""
-        assert llm_service.session is None
-        
-        # Should not raise error
-        await llm_service.close()
-        
-        assert llm_service.session is None
-
-    def test_api_url_property(self, llm_service):
-        """Test API URL is accessible"""
-        assert llm_service.api_url == "http://test-api.com"
-
-    def test_model_property(self, llm_service):
-        """Test model name is accessible"""
-        assert llm_service.model == "test-model"
-
-    @pytest.mark.asyncio
-    async def test_ensure_session_reuses_existing_session(self, llm_service):
-        """Test that ensure_session reuses existing session"""
-        mock_session = MagicMock()
-        mock_session.closed = False
-        llm_service.session = mock_session
-        
-        session = await llm_service.ensure_session()
-        
-        assert session == mock_session
-        # Should not create new session
-
-    def test_headers_property(self, llm_service):
-        """Test that headers are properly configured"""
-        expected_headers = {
-            "Authorization": "Bearer test-api-key",
-            "Content-Type": "application/json"
-        }
-        
-        # Test internal header generation logic
-        api_key = llm_service.api_key
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        assert headers == expected_headers
+        llm_service.rag_service.close.assert_called_once()

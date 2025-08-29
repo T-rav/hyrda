@@ -2,8 +2,6 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Add the parent directory to sys.path to allow importing the module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -15,23 +13,24 @@ class TestApp:
 
     def test_create_app(self):
         """Test app creation returns expected components"""
-        with patch.dict(
-            os.environ,
-            {
-                "SLACK_BOT_TOKEN": "xoxb-test-token",
-                "SLACK_APP_TOKEN": "xapp-test-token",
-                "LLM_API_URL": "http://test-api.com",
-                "LLM_API_KEY": "test-api-key",
-                "DATABASE_URL": "postgresql://test:test@localhost:5432/test_db",
-            },
-        ), patch("app.AsyncApp") as mock_app_class, patch(
-            "app.LLMService"
-        ) as mock_llm_service_class, patch(
-            "app.SlackService"
-        ) as mock_slack_service_class, patch(
-            "app.ConversationCache"
-        ), patch(
-            "app.UserPromptService"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SLACK_BOT_TOKEN": "xoxb-test-token",
+                    "SLACK_APP_TOKEN": "xapp-test-token",
+                    "LLM_PROVIDER": "openai",
+                    "LLM_API_KEY": "test-api-key",
+                    "LLM_MODEL": "gpt-4o-mini",
+                    "DATABASE_URL": "postgresql://test:test@localhost:5432/test_db",
+                    "VECTOR_ENABLED": "false",
+                },
+            ),
+            patch("app.AsyncApp") as mock_app_class,
+            patch("app.LLMService") as mock_llm_service_class,
+            patch("app.SlackService") as mock_slack_service_class,
+            patch("app.ConversationCache"),
+            patch("app.UserPromptService"),
         ):
             # Mock AsyncApp
             mock_app = MagicMock()
