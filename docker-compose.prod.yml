@@ -13,10 +13,15 @@ services:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
       - HEALTH_PORT=8080
+      - CACHE_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/slackbot
     ports:
       - "8080:8080"  # Health check port
     volumes:
       - ./logs:/app/logs  # Persistent logs
+    depends_on:
+      - redis
+      - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -37,6 +42,64 @@ services:
         reservations:
           memory: 256M
           cpus: '0.25'
+    networks:
+      - bot-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: slack-bot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+    networks:
+      - bot-network
+
+  # PostgreSQL for user prompt storage  
+  postgres:
+    image: postgres:15-alpine
+    container_name: slack-bot-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=slackbot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    networks:
+      - bot-network
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:
 
 # Optional: Add monitoring stack
   # prometheus:

@@ -9,7 +9,7 @@ from utils.errors import handle_error
 
 logger = logging.getLogger(__name__)
 
-async def register_handlers(app, slack_service, llm_service):
+async def register_handlers(app, slack_service, llm_service, conversation_cache=None, prompt_service=None):
     """Register all event handlers with the Slack app"""
     
     @app.event("assistant_thread_started")
@@ -53,7 +53,9 @@ async def register_handlers(app, slack_service, llm_service):
                 slack_service=slack_service,
                 llm_service=llm_service,
                 channel=channel,
-                thread_ts=thread_ts
+                thread_ts=thread_ts,
+                conversation_cache=conversation_cache,
+                prompt_service=prompt_service
             )
         except Exception as e:
             await handle_error(
@@ -102,7 +104,9 @@ async def register_handlers(app, slack_service, llm_service):
                 thread_ts=thread_ts,
                 ts=ts,
                 slack_service=slack_service,
-                llm_service=llm_service
+                llm_service=llm_service,
+                conversation_cache=conversation_cache,
+                prompt_service=prompt_service
             )
                 
         except Exception as e:
@@ -118,7 +122,9 @@ async def process_message_by_context(
     thread_ts: Optional[str],
     ts: str,
     slack_service: SlackService,
-    llm_service: LLMService
+    llm_service: LLMService,
+    conversation_cache=None,
+    prompt_service=None
 ):
     """Process message based on its context (DM, mention, thread)"""
     
@@ -133,7 +139,9 @@ async def process_message_by_context(
             slack_service=slack_service,
             llm_service=llm_service,
             channel=channel,
-            thread_ts=thread_ts or ts  # Use thread_ts if in thread, otherwise ts
+            thread_ts=thread_ts or ts,  # Use thread_ts if in thread, otherwise ts
+            conversation_cache=conversation_cache,
+            prompt_service=prompt_service
         )
         return
         
@@ -151,7 +159,9 @@ async def process_message_by_context(
             slack_service=slack_service,
             llm_service=llm_service,
             channel=channel,
-            thread_ts=thread_ts or ts
+            thread_ts=thread_ts or ts,
+            conversation_cache=conversation_cache,
+            prompt_service=prompt_service
         )
         return
         
@@ -172,7 +182,9 @@ async def process_message_by_context(
                     slack_service=slack_service,
                     llm_service=llm_service,
                     channel=channel,
-                    thread_ts=thread_ts
+                    thread_ts=thread_ts,
+                    conversation_cache=conversation_cache,
+                    prompt_service=prompt_service
                 )
             else:
                 logger.debug("Bot is not a participant in this thread, ignoring")
@@ -185,7 +197,9 @@ async def process_message_by_context(
                 slack_service=slack_service,
                 llm_service=llm_service,
                 channel=channel,
-                thread_ts=thread_ts
+                thread_ts=thread_ts,
+                conversation_cache=conversation_cache,
+                prompt_service=prompt_service
             )
         return
             

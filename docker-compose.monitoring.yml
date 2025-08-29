@@ -14,11 +14,16 @@ services:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
       - HEALTH_PORT=8080
+      - CACHE_REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/slackbot
     ports:
       - "8080:8080"
     volumes:
       - ./logs:/app/logs
       - /var/run/docker.sock:/var/run/docker.sock:ro  # For container metrics
+    depends_on:
+      - redis
+      - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -35,6 +40,29 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+    networks:
+      - monitoring
+
+  # Redis for conversation caching
+  redis:
+    image: redis:7-alpine
+    container_name: slack-bot-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
     networks:
       - monitoring
 
@@ -75,6 +103,32 @@ services:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - monitoring
+
+  # PostgreSQL for user prompt storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: slack-bot-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=slackbot
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
     networks:
       - monitoring
 
@@ -146,6 +200,8 @@ networks:
     driver: bridge
 
 volumes:
+  redis-data:
+  postgres-data:
   prometheus-data:
   grafana-data:
   alertmanager-data:

@@ -11,6 +11,8 @@ from config.settings import Settings
 from utils.logging import configure_logging
 from services.llm_service import LLMService
 from services.slack_service import SlackService
+from services.conversation_cache import ConversationCache
+from services.user_prompt_service import UserPromptService
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
 
@@ -33,7 +35,20 @@ def create_app():
     llm_service = LLMService(settings.llm)
     slack_service = SlackService(settings.slack, client)
     
-    return app, slack_service, llm_service
+    # Create conversation cache
+    conversation_cache = None
+    if settings.cache.enabled:
+        conversation_cache = ConversationCache(
+            redis_url=settings.cache.redis_url,
+            ttl=settings.cache.conversation_ttl
+        )
+    
+    # Create user prompt service
+    prompt_service = None
+    if settings.database.enabled:
+        prompt_service = UserPromptService(settings.database.url)
+    
+    return app, slack_service, llm_service, conversation_cache, prompt_service
 
 async def maintain_presence(client: WebClient):
     """Keep the bot's presence status active"""
@@ -72,20 +87,26 @@ async def run():
     health_checker = None
     handler = None
     llm_service = None
+    prompt_service = None
     
     try:
         # Create and configure the app
-        app, slack_service, llm_service = create_app()
+        app, slack_service, llm_service, conversation_cache, prompt_service = create_app()
         settings = Settings()
         
+        # Initialize prompt service database
+        if prompt_service:
+            await prompt_service.initialize()
+            logger.info("User prompt database initialized")
+        
         # Start health check server
-        health_checker = HealthChecker(settings)
+        health_checker = HealthChecker(settings, conversation_cache)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
         logger.info(f"Health check server started on port {health_port}")
         
         # Register event handlers
-        await register_handlers(app, slack_service, llm_service)
+        await register_handlers(app, slack_service, llm_service, conversation_cache, prompt_service)
         
         # Set bot presence to "auto" (online)
         try:
@@ -150,6 +171,18 @@ async def run():
                 await llm_service.close()
             except Exception as e:
                 logger.error(f"Error closing LLM service: {e}")
+                
+        if 'conversation_cache' in locals() and conversation_cache:
+            try:
+                await conversation_cache.close()
+            except Exception as e:
+                logger.error(f"Error closing conversation cache: {e}")
+                
+        if prompt_service:
+            try:
+                await prompt_service.close()
+            except Exception as e:
+                logger.error(f"Error closing user prompt service: {e}")
                 
         if health_checker:
             try:

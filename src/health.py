@@ -3,14 +3,16 @@ import logging
 from datetime import datetime, timezone
 from aiohttp import web, ClientSession
 from config.settings import Settings
+from services.conversation_cache import ConversationCache
 
 logger = logging.getLogger(__name__)
 
 class HealthChecker:
     """Health check service for monitoring bot status"""
     
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, conversation_cache=None):
         self.settings = settings
+        self.conversation_cache = conversation_cache
         self.start_time = datetime.now(timezone.utc)
         self.app = None
         self.runner = None
@@ -105,9 +107,15 @@ class HealthChecker:
         """Basic metrics endpoint"""
         uptime = datetime.now(timezone.utc) - self.start_time
         
-        return web.json_response({
+        metrics = {
             "uptime_seconds": int(uptime.total_seconds()),
             "start_time": self.start_time.isoformat(),
             "current_time": datetime.now(timezone.utc).isoformat(),
-            # Add more metrics as needed
-        })
+        }
+        
+        # Add cache statistics if available
+        if self.conversation_cache:
+            cache_stats = await self.conversation_cache.get_cache_stats()
+            metrics["cache"] = cache_stats
+        
+        return web.json_response(metrics)

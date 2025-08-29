@@ -24,11 +24,28 @@ class AgentSettings(BaseSettings):
     
     model_config = ConfigDict(env_prefix="AGENT_")
 
+class CacheSettings(BaseSettings):
+    """Redis cache settings"""
+    redis_url: str = Field(default="redis://localhost:6379", description="Redis connection URL")
+    conversation_ttl: int = Field(default=1800, description="Conversation cache TTL in seconds (30 minutes)")
+    enabled: bool = Field(default=True, description="Enable conversation caching")
+    
+    model_config = ConfigDict(env_prefix="CACHE_")
+
+class DatabaseSettings(BaseSettings):
+    """PostgreSQL database settings"""
+    url: str = Field(description="PostgreSQL connection URL")
+    enabled: bool = Field(default=True, description="Enable database features")
+    
+    model_config = ConfigDict(env_prefix="DATABASE_")
+
 class Settings(BaseSettings):
     """Main application settings"""
     slack: SlackSettings = Field(default_factory=SlackSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
+    cache: CacheSettings = Field(default_factory=CacheSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     debug: bool = False
     log_level: str = "INFO"
     
