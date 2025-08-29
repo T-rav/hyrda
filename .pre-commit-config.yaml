@@ -81,7 +81,7 @@ default_language_version:
 
 # Skip hooks for specific scenarios
 ci:
-  skip: [pyright]  # Skip pyright in CI since we run it separately
+  skip: []  # Run all hooks in CI to ensure consistency with local development
 
 # Performance: only run on changed files by default
 default_stages: [pre-commit]
