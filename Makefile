@@ -44,7 +44,7 @@ install-test:
 	$(PIP) install -r $(PROJECT_ROOT)/requirements-test.txt
 
 install-dev: install install-test
-	$(PIP) install ruff black isort mypy pre-commit bandit[toml]
+	$(PIP) install ruff black isort pyright pre-commit bandit[toml]
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -57,32 +57,32 @@ run: check-env
 	cd $(PROJECT_ROOT) && $(PYTHON) app.py
 
 test:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -v
 
 test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=75 --maxfail=10
+	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=75 --maxfail=10
 
 test-file:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
+	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -v tests/$(FILE)
 
 test-integration:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m integration --maxfail=5 -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -m integration --maxfail=5 -v
 
 test-unit:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m "not integration" -v
+	cd $(PROJECT_ROOT) && PYTHONPATH=. ../venv/bin/pytest -m "not integration" -v
 
 lint:
-	cd $(PROJECT_ROOT) && ruff check . --fix
-	cd $(PROJECT_ROOT) && black .
-	cd $(PROJECT_ROOT) && isort .
+	cd $(PROJECT_ROOT) && ../venv/bin/ruff check . --fix
+	cd $(PROJECT_ROOT) && ../venv/bin/black .
+	cd $(PROJECT_ROOT) && ../venv/bin/isort .
 
 lint-check:
-	cd $(PROJECT_ROOT) && ruff check .
-	cd $(PROJECT_ROOT) && black --check .
-	cd $(PROJECT_ROOT) && isort --check-only .
+	cd $(PROJECT_ROOT) && ../venv/bin/ruff check .
+	cd $(PROJECT_ROOT) && ../venv/bin/black --check .
+	cd $(PROJECT_ROOT) && ../venv/bin/isort --check-only .
 
 typecheck:
-	cd $(PROJECT_ROOT) && mypy --ignore-missing-imports app.py services/ handlers/ config/ migrations/
+	cd $(PROJECT_ROOT) && ../venv/bin/pyright
 
 quality: lint-check typecheck test
 
@@ -122,10 +122,10 @@ ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
 
 pre-commit:
-	pre-commit run --all-files
+	venv/bin/pre-commit run --all-files
 
 security:
-	cd $(PROJECT_ROOT) && bandit -r . -f json -o ../security-report.json || bandit -r . -f txt
+	cd $(PROJECT_ROOT) && ../venv/bin/bandit -r . -f json -o ../security-report.json || ../venv/bin/bandit -r . -f txt
 
 clean:
 	find . -type f -name "*.pyc" -delete
@@ -133,5 +133,5 @@ clean:
 	rm -rf .coverage htmlcov/ $(PROJECT_ROOT)/htmlcov_slack-bot/
 	rm -rf .pytest_cache $(PROJECT_ROOT)/.pytest_cache
 	rm -rf .ruff_cache $(PROJECT_ROOT)/.ruff_cache
-	rm -rf .mypy_cache $(PROJECT_ROOT)/.mypy_cache
+	rm -rf .pyright_cache $(PROJECT_ROOT)/.pyright_cache
 	rm -f security-report.json
