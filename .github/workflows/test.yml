@@ -182,6 +182,6 @@ jobs:
 
     - name: Test Docker Compose
       run: |
-        # Test docker-compose configuration
-        docker-compose -f docker-compose.prod.yml config
-        docker-compose -f docker-compose.monitoring.yml config
+        # Test docker compose configuration
+        docker compose -f docker-compose.prod.yml config
+        docker compose -f docker-compose.monitoring.yml config
