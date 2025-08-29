@@ -9,7 +9,7 @@ class SlackSettings(BaseSettings):
     app_token: str = Field(description="Slack app token (xapp-...)")
     bot_id: str = ""
 
-    model_config = ConfigDict(env_prefix="SLACK_")
+    model_config = ConfigDict(env_prefix="SLACK_")  # type: ignore[assignment]
 
 
 class LLMSettings(BaseSettings):
@@ -26,7 +26,7 @@ class LLMSettings(BaseSettings):
     temperature: float = Field(default=0.7, description="Response temperature")
     max_tokens: int = Field(default=2000, description="Maximum response tokens")
 
-    model_config = ConfigDict(env_prefix="LLM_")
+    model_config = ConfigDict(env_prefix="LLM_")  # type: ignore[assignment]
 
 
 class AgentSettings(BaseSettings):
@@ -34,7 +34,7 @@ class AgentSettings(BaseSettings):
 
     enabled: bool = True
 
-    model_config = ConfigDict(env_prefix="AGENT_")
+    model_config = ConfigDict(env_prefix="AGENT_")  # type: ignore[assignment]
 
 
 class CacheSettings(BaseSettings):
@@ -48,7 +48,7 @@ class CacheSettings(BaseSettings):
     )
     enabled: bool = Field(default=True, description="Enable conversation caching")
 
-    model_config = ConfigDict(env_prefix="CACHE_")
+    model_config = ConfigDict(env_prefix="CACHE_")  # type: ignore[assignment]
 
 
 class DatabaseSettings(BaseSettings):
@@ -57,7 +57,7 @@ class DatabaseSettings(BaseSettings):
     url: str = Field(description="PostgreSQL connection URL")
     enabled: bool = Field(default=True, description="Enable database features")
 
-    model_config = ConfigDict(env_prefix="DATABASE_")
+    model_config = ConfigDict(env_prefix="DATABASE_")  # type: ignore[assignment]
 
 
 class VectorSettings(BaseSettings):
@@ -75,7 +75,7 @@ class VectorSettings(BaseSettings):
     )
     enabled: bool = Field(default=True, description="Enable RAG functionality")
 
-    model_config = ConfigDict(env_prefix="VECTOR_")
+    model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment]
 
 
 class EmbeddingSettings(BaseSettings):
@@ -94,7 +94,7 @@ class EmbeddingSettings(BaseSettings):
     chunk_size: int = Field(default=1000, description="Text chunk size for embedding")
     chunk_overlap: int = Field(default=200, description="Overlap between chunks")
 
-    model_config = ConfigDict(env_prefix="EMBEDDING_")
+    model_config = ConfigDict(env_prefix="EMBEDDING_")  # type: ignore[assignment]
 
 
 class RAGSettings(BaseSettings):
@@ -109,21 +109,21 @@ class RAGSettings(BaseSettings):
         default=True, description="Include document metadata in context"
     )
 
-    model_config = ConfigDict(env_prefix="RAG_")
+    model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment]
 
 
 class Settings(BaseSettings):
     """Main application settings"""
 
-    slack: SlackSettings = Field(default_factory=SlackSettings)
-    llm: LLMSettings = Field(default_factory=LLMSettings)
+    slack: SlackSettings = Field(default_factory=SlackSettings)  # type: ignore[arg-type]
+    llm: LLMSettings = Field(default_factory=LLMSettings)  # type: ignore[arg-type]
     agent: AgentSettings = Field(default_factory=AgentSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
-    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)  # type: ignore[arg-type]
     vector: VectorSettings = Field(default_factory=VectorSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     debug: bool = False
     log_level: str = "INFO"
 
-    model_config = ConfigDict(env_file=".env", extra="ignore")
+    model_config = ConfigDict(env_file=".env", extra="ignore")  # type: ignore[assignment]

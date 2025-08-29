@@ -67,8 +67,8 @@ class ChromaVectorStore(VectorStore):
     async def initialize(self):
         """Initialize ChromaDB client and collection"""
         try:
-            import chromadb
-            from chromadb.config import Settings as ChromaSettings
+            import chromadb  # noqa: PLC0415
+            from chromadb.config import Settings as ChromaSettings  # noqa: PLC0415
 
             # Parse URL to determine if it's HTTP or persistent
             if self.settings.url.startswith("http"):
@@ -87,6 +87,8 @@ class ChromaVectorStore(VectorStore):
                 )
 
             # Get or create collection
+            if self.client is None:
+                raise RuntimeError("ChromaDB client not initialized")
             self.collection = self.client.get_or_create_collection(
                 name=self.collection_name, metadata={"hnsw:space": "cosine"}
             )
@@ -96,7 +98,7 @@ class ChromaVectorStore(VectorStore):
         except ImportError:
             raise ImportError(
                 "chromadb package not installed. Run: pip install chromadb"
-            )
+            ) from None
         except Exception as e:
             logger.error(f"Failed to initialize ChromaDB: {e}")
             raise
@@ -112,7 +114,9 @@ class ChromaVectorStore(VectorStore):
             # Generate IDs based on content hash
             document_ids = []
             for i, text in enumerate(texts):
-                text_hash = hashlib.md5(text.encode()).hexdigest()
+                text_hash = hashlib.md5(
+                    text.encode(), usedforsecurity=False
+                ).hexdigest()
                 document_ids.append(f"doc_{text_hash}_{i}")
 
             # Prepare metadata
@@ -120,6 +124,8 @@ class ChromaVectorStore(VectorStore):
                 metadata = [{"text": text} for text in texts]
 
             # Add to collection
+            if self.collection is None:
+                raise RuntimeError("ChromaDB collection not initialized")
             self.collection.add(
                 documents=texts,
                 embeddings=embeddings,
@@ -141,6 +147,8 @@ class ChromaVectorStore(VectorStore):
     ) -> list[dict[str, Any]]:
         """Search ChromaDB for similar documents"""
         try:
+            if self.collection is None:
+                raise RuntimeError("ChromaDB collection not initialized")
             results = self.collection.query(
                 query_embeddings=[query_embedding], n_results=limit
             )
@@ -184,6 +192,8 @@ class ChromaVectorStore(VectorStore):
     async def delete_documents(self, document_ids: list[str]):
         """Delete documents from ChromaDB"""
         try:
+            if self.collection is None:
+                raise RuntimeError("ChromaDB collection not initialized")
             self.collection.delete(ids=document_ids)
             logger.info(f"Deleted {len(document_ids)} documents from ChromaDB")
         except Exception as e:
@@ -205,8 +215,7 @@ class PineconeVectorStore(VectorStore):
     async def initialize(self):
         """Initialize Pinecone client and index"""
         try:
-            import pinecone
-            from pinecone import Pinecone
+            from pinecone import Pinecone  # noqa: PLC0415
 
             if not self.settings.api_key:
                 raise ValueError("Pinecone API key is required")
@@ -222,7 +231,7 @@ class PineconeVectorStore(VectorStore):
         except ImportError:
             raise ImportError(
                 "pinecone package not installed. Run: pip install pinecone-client"
-            )
+            ) from None
         except Exception as e:
             logger.error(f"Failed to initialize Pinecone: {e}")
             raise
@@ -237,7 +246,9 @@ class PineconeVectorStore(VectorStore):
         try:
             vectors = []
             for i, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
-                text_hash = hashlib.md5(text.encode()).hexdigest()
+                text_hash = hashlib.md5(
+                    text.encode(), usedforsecurity=False
+                ).hexdigest()
                 doc_id = f"doc_{text_hash}_{i}"
 
                 doc_metadata = metadata[i] if metadata else {}
@@ -248,6 +259,8 @@ class PineconeVectorStore(VectorStore):
                 )
 
             # Upsert in batches
+            if self.index is None:
+                raise RuntimeError("Pinecone index not initialized")
             batch_size = 100
             for i in range(0, len(vectors), batch_size):
                 batch = vectors[i : i + batch_size]
@@ -269,6 +282,8 @@ class PineconeVectorStore(VectorStore):
     ) -> list[dict[str, Any]]:
         """Search Pinecone for similar documents"""
         try:
+            if self.index is None:
+                raise RuntimeError("Pinecone index not initialized")
             # Run query in executor to avoid blocking
             query_result = await asyncio.get_event_loop().run_in_executor(
                 None,
@@ -304,6 +319,8 @@ class PineconeVectorStore(VectorStore):
     async def delete_documents(self, document_ids: list[str]):
         """Delete documents from Pinecone"""
         try:
+            if self.index is None:
+                raise RuntimeError("Pinecone index not initialized")
             await asyncio.get_event_loop().run_in_executor(
                 None, self.index.delete, document_ids
             )

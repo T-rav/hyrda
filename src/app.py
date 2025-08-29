@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import signal
+import traceback
 
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
@@ -172,7 +173,6 @@ async def run():
 
     except Exception as e:
         logger.error(f"Error in main application: {e}")
-        import traceback
 
         logger.error(f"Application error traceback: {traceback.format_exc()}")
         raise

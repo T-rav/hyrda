@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import sys
+import traceback
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 async def ingest_file(
-    rag_service: RAGService, file_path: str, metadata: dict[str, Any] = None
+    rag_service: RAGService, file_path: str, metadata: dict[str, Any] | None = None
 ) -> int:
     """Ingest a single file"""
     try:
@@ -55,7 +56,7 @@ async def ingest_file(
 
             chunks = await rag_service.ingest_documents([doc])
             print(f"✅ Ingested {chunks} chunks from {file_path}")
-            return chunks
+            return int(chunks)
 
         elif suffix == ".json":
             docs = DocumentProcessor.process_json_file(str(path), "content", metadata)
@@ -63,7 +64,7 @@ async def ingest_file(
             print(
                 f"✅ Ingested {chunks} chunks from {len(docs)} documents in {file_path}"
             )
-            return chunks
+            return int(chunks)
 
         else:
             print(f"⚠️  Unsupported file type: {suffix}")
@@ -75,7 +76,7 @@ async def ingest_file(
 
 
 async def ingest_directory(
-    rag_service: RAGService, directory: str, metadata: dict[str, Any] = None
+    rag_service: RAGService, directory: str, metadata: dict[str, Any] | None = None
 ) -> int:
     """Ingest all supported files in a directory"""
     try:
@@ -88,7 +89,7 @@ async def ingest_directory(
         print(f"📁 Processing directory: {directory}")
 
         supported_extensions = {".txt", ".md", ".rst", ".json"}
-        files = []
+        files: list[Path] = []
 
         # Find all supported files
         for ext in supported_extensions:
@@ -114,37 +115,40 @@ async def ingest_directory(
 
 
 async def ingest_url(
-    rag_service: RAGService, url: str, metadata: dict[str, Any] = None
+    rag_service: RAGService, url: str, metadata: dict[str, Any] | None = None
 ) -> int:
     """Ingest a document from a URL"""
     try:
         print(f"🌐 Fetching URL: {url}")
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    print(f"❌ Failed to fetch {url}: HTTP {response.status}")
-                    return 0
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(url) as response,
+        ):
+            HTTP_OK = 200
+            if response.status != HTTP_OK:
+                print(f"❌ Failed to fetch {url}: HTTP {response.status}")
+                return 0
 
-                content = await response.text()
+            content = await response.text()
 
-                # Create document
-                parsed_url = urlparse(url)
-                doc_metadata = metadata or {}
-                doc_metadata.update(
-                    {
-                        "source_url": url,
-                        "domain": parsed_url.netloc,
-                        "path": parsed_url.path,
-                        "content_type": response.headers.get("content-type", ""),
-                    }
-                )
+            # Create document
+            parsed_url = urlparse(url)
+            doc_metadata = metadata or {}
+            doc_metadata.update(
+                {
+                    "source_url": url,
+                    "domain": parsed_url.netloc,
+                    "path": parsed_url.path,
+                    "content_type": response.headers.get("content-type", ""),
+                }
+            )
 
-                doc = {"content": content, "metadata": doc_metadata, "id": url}
+            doc = {"content": content, "metadata": doc_metadata, "id": url}
 
-                chunks = await rag_service.ingest_documents([doc])
-                print(f"✅ Ingested {chunks} chunks from {url}")
-                return chunks
+            chunks = await rag_service.ingest_documents([doc])
+            print(f"✅ Ingested {chunks} chunks from {url}")
+            return int(chunks)
 
     except Exception as e:
         print(f"❌ Error fetching {url}: {e}")
@@ -227,7 +231,7 @@ async def main():
                 docs = DocumentProcessor.process_json_file(
                     args.json, args.content_field, metadata
                 )
-                total_chunks = await rag_service.ingest_documents(docs)
+                total_chunks = int(await rag_service.ingest_documents(docs))
                 print(
                     f"✅ Ingested {total_chunks} chunks from {len(docs)} JSON documents"
                 )
@@ -252,8 +256,6 @@ async def main():
     except Exception as e:
         print(f"❌ Error: {e}")
         if args.verbose:
-            import traceback
-
             traceback.print_exc()
         return 1
 

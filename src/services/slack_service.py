@@ -1,5 +1,6 @@
 import logging
 import re
+import traceback
 from typing import Any
 
 from slack_sdk import WebClient
@@ -29,14 +30,14 @@ class SlackService:
     ) -> str | None:
         """Send a message to a Slack channel"""
         try:
-            response = await self.client.chat_postMessage(
+            response = await self.client.chat_postMessage(  # type: ignore[misc]
                 channel=channel,
                 text=text,
                 thread_ts=thread_ts,
                 blocks=blocks,
                 mrkdwn=mrkdwn,
             )
-            return response.get("ts")
+            return response.get("ts")  # type: ignore[no-any-return]
         except SlackApiError as e:
             logger.error(f"Error sending message: {e}")
             return None
@@ -46,7 +47,7 @@ class SlackService:
     ) -> str | None:
         """Send a thinking indicator message"""
         try:
-            response = await self.client.chat_postMessage(
+            response = await self.client.chat_postMessage(  # type: ignore[misc]
                 channel=channel,
                 text="⏳ _Thinking..._",
                 thread_ts=thread_ts,
@@ -75,7 +76,7 @@ class SlackService:
 
         try:
             logger.info(f"Retrieving thread history for thread {thread_ts}")
-            history_response = await self.client.conversations_replies(
+            history_response = await self.client.conversations_replies(  # type: ignore[misc]
                 channel=channel, ts=thread_ts, limit=limit
             )
 
@@ -87,7 +88,7 @@ class SlackService:
 
                 # Get bot's user ID to identify bot messages
                 if not self.bot_id:
-                    bot_info = await self.client.auth_test()
+                    bot_info = await self.client.auth_test()  # type: ignore[misc]
                     self.bot_id = bot_info.get("user_id")
 
                 # Process each message in the thread
@@ -115,7 +116,6 @@ class SlackService:
                 )
         except Exception as e:
             logger.error(f"Error retrieving thread history: {e}")
-            import traceback
 
             logger.error(f"Thread history error traceback: {traceback.format_exc()}")
 
@@ -137,7 +137,7 @@ class SlackService:
             logger.info(
                 f"Retrieving thread info for thread {thread_ts} in channel {channel}"
             )
-            history_response = await self.client.conversations_replies(
+            history_response = await self.client.conversations_replies(  # type: ignore[misc]
                 channel=channel,
                 ts=thread_ts,
                 limit=100,  # Get a good sample of the thread
@@ -151,7 +151,7 @@ class SlackService:
 
                 # Get bot's user ID if we don't have it yet
                 if not self.bot_id:
-                    bot_info = await self.client.auth_test()
+                    bot_info = await self.client.auth_test()  # type: ignore[misc]
                     self.bot_id = bot_info.get("user_id")
 
                 # Check if the bot is a participant and collect all participant IDs
@@ -181,7 +181,6 @@ class SlackService:
                 needed_scope = "unknown"
                 if "needed" in error_msg:
                     # Try to extract the needed scope from the error message
-                    import re
 
                     match = re.search(r"needed: '([^']+)'", error_msg)
                     if match:

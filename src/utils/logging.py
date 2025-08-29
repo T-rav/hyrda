@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 from datetime import UTC, datetime
+from logging.handlers import RotatingFileHandler
 
 
 class JSONFormatter(logging.Formatter):
@@ -64,7 +65,6 @@ def configure_logging(level: str | None = None, log_file: str | None = None):
         os.makedirs("logs", exist_ok=True)
 
         # Main log file
-        from logging.handlers import RotatingFileHandler
 
         file_handler = RotatingFileHandler(
             "logs/app.log",

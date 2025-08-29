@@ -112,13 +112,13 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
         self.model_instance = None
         self._initialized = False
 
-    async def _initialize(self):
+    async def _initialize(self) -> None:
         """Initialize the sentence transformer model"""
         if self._initialized:
             return
 
         try:
-            from sentence_transformers import SentenceTransformer
+            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
 
             # Load model in executor to avoid blocking
             self.model_instance = await asyncio.get_event_loop().run_in_executor(
@@ -132,7 +132,7 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
             raise ImportError(
                 "sentence-transformers package not installed. "
                 "Run: pip install sentence-transformers"
-            )
+            ) from None
         except Exception as e:
             logger.error(f"Failed to initialize SentenceTransformer: {e}")
             raise
@@ -147,6 +147,9 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
             )
 
             # Run encoding in executor to avoid blocking
+            if self.model_instance is None:
+                raise RuntimeError("SentenceTransformer model not initialized")
+
             embeddings = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self.model_instance.encode,

@@ -2,6 +2,7 @@
 RAG (Retrieval-Augmented Generation) service that combines vector search with LLM generation
 """
 
+import json
 import logging
 from typing import Any
 
@@ -330,7 +331,6 @@ class DocumentProcessor:
         metadata: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Process a JSON file containing multiple documents"""
-        import json
 
         try:
             with open(file_path, encoding="utf-8") as f:

@@ -2,6 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 CRITICAL: Never Skip Commit Hooks
+
+**NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
+
+### Commit Process:
+1. Fix all linting, formatting, and security issues identified by pre-commit hooks
+2. Ensure all tests pass (`make test`)
+3. Only commit once code passes all quality checks
+4. Pre-commit hooks are there to maintain code quality and security
+
+### If hooks fail:
+- Fix the issues reported (imports, formatting, security, type hints)
+- Run `make lint` to auto-fix what can be fixed automatically  
+- Manually fix remaining issues
+- Then commit normally
+
+**Code quality is non-negotiable.** Broken code should never be committed.
+
 ## Development Commands
 
 ### Setup and Installation

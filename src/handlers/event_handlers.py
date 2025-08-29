@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from handlers.message_handlers import handle_message
 from services.llm_service import LLMService
@@ -123,7 +124,6 @@ async def register_handlers(
 
         except Exception as e:
             logger.error(f"Error in message event handler: {e}")
-            import traceback
 
             logger.error(f"Message handler error: {traceback.format_exc()}")
 
