@@ -1,7 +1,7 @@
 global:
   smtp_smarthost: 'localhost:587'
   smtp_from: 'alerts@yourcompany.com'
-  
+
 route:
   group_by: ['alertname']
   group_wait: 10s
@@ -18,13 +18,13 @@ receivers:
       {{ range .Alerts }}
       Alert: {{ .Annotations.summary }}
       Description: {{ .Annotations.description }}
-      
+
       Labels:
       {{ range .Labels.SortedPairs }}
         {{ .Name }}: {{ .Value }}
       {{ end }}
       {{ end }}
-  
+
   # Optional: Slack webhook notifications
   # slack_configs:
   # - api_url: 'YOUR_SLACK_WEBHOOK_URL'

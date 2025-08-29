@@ -20,7 +20,7 @@ scrape_configs:
           __path__: /var/log/app/*.log
 
   # System logs
-  - job_name: system-logs  
+  - job_name: system-logs
     static_configs:
       - targets:
           - localhost

@@ -1,0 +1,12 @@
+# Test-specific dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.10.0
+
+# Required for mocking external services
+aioresponses>=0.7.0
+fakeredis>=2.18.0
+
+# Main application dependencies (for imports)
+-r requirements.txt

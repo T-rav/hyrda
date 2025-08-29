@@ -14,4 +14,4 @@ sqlalchemy[asyncio]>=2.0.0
 # Testing dependencies
 pytest>=7.0.0
 pytest-asyncio>=0.18.0
-pytest-cov>=4.1.0 
+pytest-cov>=4.1.0

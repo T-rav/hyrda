@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Test runner
+  test-runner:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: slack-bot-test-runner
+    environment:
+      - ENVIRONMENT=test
+      - LOG_LEVEL=WARNING
+      - DATABASE_URL=postgresql+asyncpg://test:test@test-postgres:5432/test_db
+      - CACHE_REDIS_URL=redis://test-redis:6379/0
+      - SLACK_BOT_TOKEN=xoxb-test-token
+      - SLACK_APP_TOKEN=xapp-test-token
+      - LLM_API_URL=https://api.test.com/v1
+      - LLM_API_KEY=test-api-key
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    volumes:
+      - .:/workspace
+      - ./src:/app
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install -r requirements-test.txt &&
+        PYTHONPATH=. pytest -v
+      "
+    networks:
+      - test-network
+
+  # Test database
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: slack-bot-test-db
+    environment:
+      - POSTGRES_DB=test_db
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+    ports:
+      - "15432:5432"  # Different port to avoid conflicts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - test-network
+    tmpfs:
+      - /var/lib/postgresql/data  # Use tmpfs for faster tests
+
+  # Test cache
+  test-redis:
+    image: redis:7-alpine
+    container_name: slack-bot-test-redis
+    ports:
+      - "16379:6379"  # Different port to avoid conflicts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - test-network
+    tmpfs:
+      - /data  # Use tmpfs for faster tests
+
+networks:
+  test-network:
+    driver: bridge

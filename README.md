@@ -28,7 +28,7 @@ A Slack bot for Insight Mesh that leverages Slack's API to provide intelligent a
    make install
    make run
    ```
- 
+
 ## Slack App Setup Guide
 
 This guide helps you configure your Slack app to work with the Insight Mesh bot.
@@ -194,7 +194,7 @@ The bot works in all types of Slack conversations with the following behavior:
 
 - **Direct Messages (DMs)**: Always responds to all messages
 - **Group Direct Messages**: Requires the `mpim:history` permission
-- **Private Channels**: Requires the `groups:history` permission 
+- **Private Channels**: Requires the `groups:history` permission
 - **Public Channels**: Requires the `channels:history` permission
 
 In all non-DM contexts (channels, group DMs), the bot:
@@ -273,4 +273,4 @@ While this implementation uses Socket Mode for development convenience, we recom
 2. Switching to HTTP endpoints for production deployments by:
    - Disabling Socket Mode in your Slack app settings
    - Setting up a public HTTP endpoint for your bot
-   - Updating your app to use that endpoint instead of Socket Mode 
+   - Updating your app to use that endpoint instead of Socket Mode

@@ -1,0 +1,212 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-slack-bot"
+version = "1.0.0"
+description = "Production-ready AI Slack bot with comprehensive monitoring and user prompt management"
+authors = [
+    {name = "Travis Frisinger", email = "travis@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "slack-bolt>=1.23.0",
+    "slack-sdk>=3.35.0", 
+    "aiohttp>=3.8.0",
+    "python-dotenv>=1.0.0",
+    "loguru>=0.7.0",
+    "requests>=2.28.0",
+    "asyncio>=3.4.3",
+    "pydantic>=1.9.0",
+    "pydantic-settings>=2.0.0",
+    "redis>=5.0.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.10.0",
+    "aioresponses>=0.7.0",
+    "fakeredis>=2.18.0",
+]
+dev = [
+    "ruff>=0.12.0",
+    "black>=25.0.0",
+    "isort>=5.14.0",
+    "mypy>=1.17.0",
+    "pre-commit>=4.0.0",
+    "bandit[toml]>=1.8.0",
+]
+
+[project.scripts]
+slack-bot = "src.app:main"
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["src"]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "htmlcov",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "PL",   # pylint
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long, handled by black
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101", "B011", "F811"]  # Allow tests to use magic values, asserts, etc.
+"migrations/*" = ["PLR2004"]  # Allow magic values in migrations
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+# Black configuration
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | htmlcov
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["src"]
+src_paths = ["src"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = [
+    "slack_bolt.*",
+    "slack_sdk.*",
+    "redis.*",
+    "aiohttp.*",
+    "loguru.*",
+]
+ignore_missing_imports = true
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # Skip assert_used test
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+python_paths = ["src"]
+asyncio_mode = "auto"
+addopts = [
+    "--verbose",
+    "--cov=src", 
+    "--cov-fail-under=75",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "src/tests/*",
+    "src/*/__init__.py",
+    "venv/*",
+    ".venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

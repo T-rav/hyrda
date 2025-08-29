@@ -18,14 +18,14 @@ log() {
 send_alert() {
     local message="$1"
     local subject="Slack Bot Alert - $(hostname)"
-    
+
     log "ALERT: $message"
-    
+
     # Email alert (requires mailutils or similar)
     if command -v mail &> /dev/null && [ -n "$ALERT_EMAIL" ]; then
         echo "$message" | mail -s "$subject" "$ALERT_EMAIL"
     fi
-    
+
     # Slack webhook alert (optional)
     if [ -n "$ALERT_WEBHOOK" ]; then
         curl -X POST -H 'Content-type: application/json' \
@@ -39,7 +39,7 @@ if command -v docker &> /dev/null; then
     # Docker health check
     if docker ps --format "table {{.Names}}" | grep -q "$CONTAINER_NAME"; then
         log "Container $CONTAINER_NAME is running"
-        
+
         # Check container health status
         HEALTH_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null)
         if [ "$HEALTH_STATUS" = "unhealthy" ]; then

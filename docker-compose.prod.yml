@@ -67,7 +67,7 @@ services:
     networks:
       - bot-network
 
-  # PostgreSQL for user prompt storage  
+  # PostgreSQL for user prompt storage
   postgres:
     image: postgres:15-alpine
     container_name: slack-bot-postgres

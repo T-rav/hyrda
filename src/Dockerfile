@@ -46,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 USER appuser
 
 # Use exec form for better signal handling
-CMD ["python", "-u", "app.py"] 
+CMD ["python", "-u", "app.py"]

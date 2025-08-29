@@ -1,0 +1,96 @@
+# Pre-commit hooks configuration
+# Run: pre-commit install (after pip install pre-commit)
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Linter with auto-fix
+      - id: ruff
+        args: [--fix]
+        types_or: [python, pyi]
+      # Formatter
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # Black - Python code formatter (backup/alternative to ruff-format)
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: [--line-length=88]
+
+  # isort - Import sorting
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black]
+
+  # MyPy - Static type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.17.1
+    hooks:
+      - id: mypy
+        args: [--ignore-missing-imports, --explicit-package-bases]
+        additional_dependencies: [
+          pydantic>=2.0.0,
+          pydantic-settings>=2.0.0,
+          sqlalchemy>=2.0.0,
+          aiohttp>=3.8.0,
+          slack-bolt>=1.23.0,
+          types-redis,
+        ]
+        files: ^src/
+        exclude: ^src/tests/
+
+  # Built-in hooks for general cleanup
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+      # Check for merge conflicts
+      - id: check-merge-conflict
+      # Check YAML syntax
+      - id: check-yaml
+        exclude: ^docker-compose.*\.yml$  # Docker compose has some extended syntax
+      # Check TOML syntax
+      - id: check-toml
+      # Check JSON syntax
+      - id: check-json
+      # Check for large files
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      # Check Python syntax
+      - id: check-ast
+      # Fix mixed line endings
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # Security scanning
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+        files: ^src/
+        exclude: ^src/tests/
+
+# Global configuration
+default_language_version:
+  python: python3
+
+# Skip hooks for specific scenarios
+ci:
+  skip: [mypy]  # Skip mypy in CI since we run it separately
+
+# Performance: only run on changed files by default
+default_stages: [pre-commit]
