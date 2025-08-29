@@ -189,11 +189,7 @@ def mock_external_apis():
         mock_response.status = 200
         mock_response.json.return_value = {"status": "ok"}
 
-        mock_session.return_value.__aenter__.return_value.get.return_value.__aenter__.return_value = (
-            mock_response
-        )
-        mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = (
-            mock_response
-        )
+        mock_session.return_value.__aenter__.return_value.get.return_value.__aenter__.return_value = mock_response
+        mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
 
         yield mock_session

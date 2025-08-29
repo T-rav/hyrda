@@ -149,17 +149,50 @@ class SlackService:
                 thread_info["message_count"] = len(messages)
                 thread_info["messages"] = messages
 
-                # Get bot's user ID if we don't have it yet
-                if not self.bot_id:
+                # Get both bot's user ID and bot ID if we don't have them yet
+                if not hasattr(self, "bot_user_id") or not self.bot_user_id:
                     bot_info = await self.client.auth_test()  # type: ignore[misc]
-                    self.bot_id = bot_info.get("user_id")
+                    self.bot_user_id = bot_info.get("user_id")  # Bot's user ID (U...)
+                    actual_bot_id = bot_info.get("bot_id")  # Bot's bot ID (B...)
+
+                    # Log what we got from auth_test
+                    logger.info(
+                        f"Auth test results: user_id={self.bot_user_id}, bot_id={actual_bot_id}"
+                    )
+
+                    # Keep the existing bot_id if it's already set, but store the user_id separately
+                    if actual_bot_id:
+                        logger.info(
+                            f"Updating bot_id from {self.bot_id} to {actual_bot_id}"
+                        )
+                        self.bot_id = actual_bot_id
 
                 # Check if the bot is a participant and collect all participant IDs
                 for msg in messages:
                     user_id = msg.get("user")
+                    bot_id = msg.get("bot_id")
+
                     if user_id:
                         thread_info["participant_ids"].add(user_id)
-                    if user_id == self.bot_id:
+
+                    # Check both possible ways the bot could appear in messages:
+                    # 1. As a user (user_id field)
+                    # 2. As a bot (bot_id field)
+                    is_bot_message = (
+                        user_id
+                        and (
+                            user_id == self.bot_id
+                            or user_id == getattr(self, "bot_user_id", None)
+                        )
+                    ) or (
+                        bot_id
+                        and (
+                            bot_id == self.bot_id
+                            or bot_id == getattr(self, "bot_user_id", None)
+                        )
+                    )
+
+                    if is_bot_message:
                         thread_info["bot_is_participant"] = True
 
                 # Convert participant_ids to a list for serialization
@@ -169,7 +202,7 @@ class SlackService:
                     f"Thread info: exists={thread_info['exists']}, count={thread_info['message_count']}, bot_participant={thread_info['bot_is_participant']}"
                 )
                 logger.info(
-                    f"Thread participants: {thread_info['participant_ids']}, bot_id={self.bot_id}"
+                    f"Thread participants: {thread_info['participant_ids']}, bot_user_id={getattr(self, 'bot_user_id', None)}, bot_id={self.bot_id}"
                 )
         except Exception as e:
             error_msg = str(e)

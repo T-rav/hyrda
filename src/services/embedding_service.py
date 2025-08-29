@@ -48,7 +48,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         api_key = (
             settings.api_key.get_secret_value()
             if settings.api_key
-            else llm_settings.api_key.get_secret_value() if llm_settings else None
+            else llm_settings.api_key.get_secret_value()
+            if llm_settings
+            else None
         )
 
         if not api_key:
