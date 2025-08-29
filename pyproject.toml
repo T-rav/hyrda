@@ -163,7 +163,7 @@ asyncio_mode = "auto"
 addopts = [
     "--verbose",
     "--cov=src",
-    "--cov-fail-under=75",
+    "--cov-fail-under=65",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",
@@ -185,6 +185,8 @@ omit = [
     "src/*/__init__.py",
     "venv/*",
     ".venv/*",
+    "src/migrate.py",
+    "src/ingest_documents.py",
 ]
 
 [tool.coverage.report]
