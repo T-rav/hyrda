@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 
 import aiohttp
 from anthropic import AsyncAnthropic
-from openai import AsyncOpenAI
+from langfuse.openai import AsyncOpenAI
 
 from config.settings import LLMSettings
 from services.langfuse_service import get_langfuse_service, observe
@@ -54,13 +54,11 @@ class OpenAIProvider(LLMProvider):
 
         self.client = AsyncOpenAI(**client_kwargs)
 
-    @observe(name="openai_llm_call", as_type="generation")
     async def get_response(
         self, messages: list[dict[str, str]], system_message: str | None = None
     ) -> str | None:
         """Get response from OpenAI API"""
         start_time = time.time()
-        langfuse_service = get_langfuse_service()
 
         try:
             # Prepare messages
@@ -102,20 +100,7 @@ class OpenAIProvider(LLMProvider):
                     "total_tokens": response.usage.total_tokens,
                 }
 
-            # Trace with Langfuse
-            if langfuse_service:
-                langfuse_service.trace_llm_call(
-                    provider="openai",
-                    model=self.model,
-                    messages=formatted_messages,
-                    response=content,
-                    metadata={
-                        "temperature": self.temperature,
-                        "max_tokens": self.max_tokens,
-                        "duration_seconds": duration,
-                    },
-                    usage=usage,
-                )
+
 
             logger.info(
                 "OpenAI API success",
@@ -134,22 +119,7 @@ class OpenAIProvider(LLMProvider):
             duration = time.time() - start_time
             error_msg = str(e)
 
-            # Trace error with Langfuse
-            if langfuse_service:
-                langfuse_service.trace_llm_call(
-                    provider="openai",
-                    model=self.model,
-                    messages=formatted_messages
-                    if "formatted_messages" in locals()
-                    else messages,
-                    response=None,
-                    metadata={
-                        "temperature": self.temperature,
-                        "max_tokens": self.max_tokens,
-                        "duration_seconds": duration,
-                    },
-                    error=error_msg,
-                )
+
 
             logger.error(
                 "OpenAI API error",

@@ -8,6 +8,7 @@ from config.settings import Settings
 from services.langfuse_service import (
     get_langfuse_service,
     initialize_langfuse_service,
+    langfuse_context,
     observe,
 )
 from services.rag_service import RAGService
@@ -69,6 +70,17 @@ class LLMService:
             Generated response or None if failed
         """
         langfuse_service = get_langfuse_service()
+
+        # Set session context for all traces within this conversation
+        if conversation_id:
+            langfuse_context.update_current_trace(
+                session_id=conversation_id,
+                user_id=user_id,
+                metadata={
+                    "platform": "slack",
+                    "rag_enabled": use_rag,
+                }
+            )
 
         try:
             # Get user's custom system prompt if available

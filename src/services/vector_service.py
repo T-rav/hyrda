@@ -215,16 +215,16 @@ class PineconeVectorStore(VectorStore):
     async def initialize(self):
         """Initialize Pinecone client and index"""
         try:
-            from pinecone import Pinecone  # noqa: PLC0415
+            import pinecone  # noqa: PLC0415
 
             if not self.settings.api_key:
                 raise ValueError("Pinecone API key is required")
 
             # Initialize Pinecone
-            pc = Pinecone(api_key=self.settings.api_key.get_secret_value())
+            pinecone.init(api_key=self.settings.api_key.get_secret_value())
 
             # Connect to existing index
-            self.index = pc.Index(self.collection_name)
+            self.index = pinecone.Index(self.collection_name)
 
             logger.info(f"Pinecone initialized with index: {self.collection_name}")
 

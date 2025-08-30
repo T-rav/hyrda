@@ -17,7 +17,7 @@ openai>=1.35.0
 anthropic>=0.25.0
 chromadb>=0.4.0
 sentence-transformers>=2.2.0
-pinecone>=3.0.0
+pinecone-client==2.2.4
 numpy>=1.24.0
 langfuse>=2.7.0
 

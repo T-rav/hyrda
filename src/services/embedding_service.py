@@ -6,7 +6,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 
-from openai import AsyncOpenAI
+from langfuse.openai import AsyncOpenAI
 
 from config.settings import EmbeddingSettings, LLMSettings
 
