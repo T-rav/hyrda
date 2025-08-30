@@ -15,8 +15,9 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capab
 - **Typing Indicators**: Shows typing states while generating responses
 - **Online Presence**: Shows as "online" with a green status indicator
 - **Custom User Prompts**: Users can customize bot behavior with `@prompt` commands
+- **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
 - **Comprehensive Testing**: 154 tests with 100% reliability
-- **CI/CD Pipeline**: GitHub Actions with quality checks and Docker builds
+- **Unified Development**: Identical linting/testing between local and CI environments
 
 ### 🚀 **Easy Setup**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
