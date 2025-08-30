@@ -27,7 +27,7 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
     ) -> str | None:
         """Generate a response from the LLM"""
         pass
@@ -55,7 +55,7 @@ class OpenAIProvider(LLMProvider):
         self.client = AsyncOpenAI(**client_kwargs)
 
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
     ) -> str | None:
         """Get response from OpenAI API"""
         start_time = time.time()
@@ -81,12 +81,25 @@ class OpenAIProvider(LLMProvider):
                 },
             )
 
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=formatted_messages,  # type: ignore[arg-type]
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
+            # Prepare request parameters
+            request_params = {
+                "model": self.model,
+                "messages": formatted_messages,  # type: ignore[arg-type]
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+            }
+            
+            # Add Langfuse tracking metadata if provided
+            metadata = {}
+            if session_id:
+                metadata["langfuse_session_id"] = session_id
+            if user_id:
+                metadata["langfuse_user_id"] = user_id
+            
+            if metadata:
+                request_params["metadata"] = metadata
+
+            response = await self.client.chat.completions.create(**request_params)
 
             content = response.choices[0].message.content
             duration = time.time() - start_time
@@ -147,7 +160,7 @@ class AnthropicProvider(LLMProvider):
 
     @observe(name="anthropic_llm_call", as_type="generation")
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
     ) -> str | None:
         """Get response from Anthropic API"""
         start_time = time.time()
@@ -286,7 +299,7 @@ class OllamaProvider(LLMProvider):
 
     @observe(name="ollama_llm_call", as_type="generation")
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None
+        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
     ) -> str | None:
         """Get response from Ollama API"""
         start_time = time.time()

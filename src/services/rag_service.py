@@ -181,6 +181,8 @@ class RAGService:
         conversation_history: list[dict[str, str]],
         system_message: str | None = None,
         use_rag: bool = True,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         """
         Generate a response using RAG or direct LLM
@@ -245,7 +247,7 @@ class RAGService:
 
             # Generate response
             response = await self.llm_provider.get_response(
-                messages=messages, system_message=final_system_message
+                messages=messages, system_message=final_system_message, session_id=session_id, user_id=user_id
             )
 
             if response:

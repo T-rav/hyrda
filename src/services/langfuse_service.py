@@ -12,37 +12,35 @@ logger = logging.getLogger(__name__)
 # Optional import to handle cases where langfuse isn't installed
 try:
     from langfuse import Langfuse  # type: ignore[import-untyped]
-    from langfuse.decorators import langfuse_context  # type: ignore[import-untyped]
-    from langfuse.decorators import (  # noqa: F401 - used in other modules  # type: ignore[import-untyped]
-        observe,
-    )
-
     _langfuse_available = True
+    logger.info("Langfuse client available")
 except ImportError:
     logger.warning("Langfuse not available - tracing will be disabled")
     _langfuse_available = False
 
-    # Provide no-op decorator if langfuse is not available
-    def observe(name: str = None, as_type: str = None, **kwargs):
-        def decorator(func):
-            return func
+# Provide no-op decorator if langfuse is not available or decorators are missing
+def observe(name: str = None, as_type: str = None, **kwargs):
+    """Simple no-op decorator since langfuse.openai handles tracing automatically"""
+    def decorator(func):
+        return func
+    return decorator
 
-        return decorator
+class MockLangfuseContext:
+    """Mock context for compatibility"""
+    def update_current_trace(self, **kwargs):
+        pass
 
-    class MockLangfuseContext:
-        def update_current_trace(self, **kwargs):
-            pass
+    def update_current_observation(self, **kwargs):
+        pass
 
-        def update_current_observation(self, **kwargs):
-            pass
+    def score_current_trace(self, **kwargs):
+        pass
 
-        def score_current_trace(self, **kwargs):
-            pass
+    def score_current_observation(self, **kwargs):
+        pass
 
-        def score_current_observation(self, **kwargs):
-            pass
-
-    langfuse_context = MockLangfuseContext()
+# Use mock context since decorators aren't available in this langfuse version
+langfuse_context = MockLangfuseContext()
 
 
 class LangfuseService:
@@ -54,6 +52,8 @@ class LangfuseService:
         self.settings = settings
         self.client: Langfuse | None = None
         self.enabled = settings.enabled and _langfuse_available
+        self.current_trace = None
+        self.current_session_id = None
 
         if self.enabled:
             self._initialize_client()
@@ -173,6 +173,40 @@ class LangfuseService:
         except Exception as e:
             logger.error(f"Error tracing retrieval: {e}")
 
+    def start_conversation_trace(
+        self,
+        user_id: str,
+        conversation_id: str,
+        metadata: dict[str, Any] | None = None,
+    ):
+        """
+        Start a new conversation trace with session tracking
+
+        Args:
+            user_id: Slack user ID
+            conversation_id: Conversation/thread ID for session grouping
+            metadata: Additional metadata
+        """
+        if not self.enabled or not self.client:
+            return
+
+        try:
+            # Create a new trace for this conversation
+            self.current_trace = self.client.trace(
+                name="slack_conversation",
+                user_id=user_id,
+                session_id=conversation_id,
+                metadata={
+                    "platform": "slack",
+                    "conversation_id": conversation_id,
+                    **(metadata or {}),
+                },
+            )
+            self.current_session_id = conversation_id
+            logger.debug(f"Started conversation trace with session_id: {conversation_id}")
+        except Exception as e:
+            logger.error(f"Error starting conversation trace: {e}")
+
     def trace_conversation(
         self,
         user_id: str,
@@ -191,22 +225,27 @@ class LangfuseService:
             bot_response: Bot's response
             metadata: Additional metadata
         """
-        if not self.enabled:
+        if not self.enabled or not self.client:
             return
 
         try:
-            langfuse_context.update_current_trace(
-                name="slack_conversation",
-                user_id=user_id,
-                session_id=conversation_id,
-                input={"user_message": user_message},
-                output={"bot_response": bot_response},
-                metadata={
-                    "platform": "slack",
-                    "conversation_id": conversation_id,
-                    **(metadata or {}),
-                },
-            )
+            # Create or get existing trace for this conversation
+            if not self.current_trace or self.current_session_id != conversation_id:
+                self.start_conversation_trace(user_id, conversation_id, metadata)
+
+            if self.current_trace:
+                # Update the trace with conversation data
+                self.current_trace.update(
+                    input={"user_message": user_message},
+                    output={"bot_response": bot_response},
+                    metadata={
+                        "platform": "slack",
+                        "conversation_id": conversation_id,
+                        **(metadata or {}),
+                    },
+                )
+                logger.debug(f"Updated conversation trace for session: {conversation_id}")
+
         except Exception as e:
             logger.error(f"Error tracing conversation: {e}")
 

@@ -71,16 +71,7 @@ class LLMService:
         """
         langfuse_service = get_langfuse_service()
 
-        # Set session context for all traces within this conversation
-        if conversation_id:
-            langfuse_context.update_current_trace(
-                session_id=conversation_id,
-                user_id=user_id,
-                metadata={
-                    "platform": "slack",
-                    "rag_enabled": use_rag,
-                }
-            )
+
 
         try:
             # Get user's custom system prompt if available
@@ -117,6 +108,8 @@ class LLMService:
                 conversation_history=conversation_history[:-1],  # Exclude current query
                 system_message=system_message,
                 use_rag=use_rag,
+                session_id=conversation_id,
+                user_id=user_id,
             )
 
             # Trace complete conversation with Langfuse
