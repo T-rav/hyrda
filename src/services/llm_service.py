@@ -70,8 +70,6 @@ class LLMService:
         """
         langfuse_service = get_langfuse_service()
 
-
-
         try:
             # Get user's custom system prompt if available
             system_message = None

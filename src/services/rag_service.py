@@ -113,7 +113,7 @@ class RAGService:
 
                 total_chunks += len(all_chunks)
                 logger.info(
-                    f"Ingested batch {i//batch_size + 1}: {len(all_chunks)} chunks"
+                    f"Ingested batch {i // batch_size + 1}: {len(all_chunks)} chunks"
                 )
 
             logger.info(
@@ -247,7 +247,10 @@ class RAGService:
 
             # Generate response
             response = await self.llm_provider.get_response(
-                messages=messages, system_message=final_system_message, session_id=session_id, user_id=user_id
+                messages=messages,
+                system_message=final_system_message,
+                session_id=session_id,
+                user_id=user_id,
             )
 
             if response:

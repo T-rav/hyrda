@@ -27,7 +27,11 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        system_message: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str | None:
         """Generate a response from the LLM"""
         pass
@@ -55,7 +59,11 @@ class OpenAIProvider(LLMProvider):
         self.client = AsyncOpenAI(**client_kwargs)
 
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        system_message: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str | None:
         """Get response from OpenAI API"""
         start_time = time.time()
@@ -113,8 +121,6 @@ class OpenAIProvider(LLMProvider):
                     "total_tokens": response.usage.total_tokens,
                 }
 
-
-
             logger.info(
                 "OpenAI API success",
                 extra={
@@ -132,8 +138,6 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             duration = time.time() - start_time
             error_msg = str(e)
-
-
 
             logger.error(
                 "OpenAI API error",
@@ -161,7 +165,11 @@ class AnthropicProvider(LLMProvider):
 
     @observe(name="anthropic_llm_call", as_type="generation")
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        system_message: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str | None:
         """Get response from Anthropic API"""
         start_time = time.time()
@@ -300,7 +308,11 @@ class OllamaProvider(LLMProvider):
 
     @observe(name="ollama_llm_call", as_type="generation")
     async def get_response(
-        self, messages: list[dict[str, str]], system_message: str | None = None, session_id: str | None = None, user_id: str | None = None
+        self,
+        messages: list[dict[str, str]],
+        system_message: str | None = None,
+        session_id: str | None = None,
+        user_id: str | None = None,
     ) -> str | None:
         """Get response from Ollama API"""
         start_time = time.time()

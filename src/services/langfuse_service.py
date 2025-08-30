@@ -3,30 +3,39 @@ Langfuse service for LLM observability and tracing
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from config.settings import LangfuseSettings
+
+if TYPE_CHECKING:
+    from langfuse import Langfuse
 
 logger = logging.getLogger(__name__)
 
 # Optional import to handle cases where langfuse isn't installed
 try:
     from langfuse import Langfuse  # type: ignore[import-untyped]
+
     _langfuse_available = True
     logger.info("Langfuse client available")
 except ImportError:
     logger.warning("Langfuse not available - tracing will be disabled")
     _langfuse_available = False
 
+
 # Provide no-op decorator if langfuse is not available or decorators are missing
 def observe(name: str = None, as_type: str = None, **kwargs):
     """Simple no-op decorator since langfuse.openai handles tracing automatically"""
+
     def decorator(func):
         return func
+
     return decorator
+
 
 class MockLangfuseContext:
     """Mock context for compatibility"""
+
     def update_current_trace(self, **kwargs):
         pass
 
@@ -38,6 +47,7 @@ class MockLangfuseContext:
 
     def score_current_observation(self, **kwargs):
         pass
+
 
 # Use mock context since decorators aren't available in this langfuse version
 langfuse_context = MockLangfuseContext()
@@ -203,7 +213,9 @@ class LangfuseService:
                 },
             )
             self.current_session_id = conversation_id
-            logger.debug(f"Started conversation trace with session_id: {conversation_id}")
+            logger.debug(
+                f"Started conversation trace with session_id: {conversation_id}"
+            )
         except Exception as e:
             logger.error(f"Error starting conversation trace: {e}")
 
@@ -244,7 +256,9 @@ class LangfuseService:
                         **(metadata or {}),
                     },
                 )
-                logger.debug(f"Updated conversation trace for session: {conversation_id}")
+                logger.debug(
+                    f"Updated conversation trace for session: {conversation_id}"
+                )
 
         except Exception as e:
             logger.error(f"Error tracing conversation: {e}")
