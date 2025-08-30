@@ -2,7 +2,7 @@ import logging
 import re
 
 try:
-    from slackify_markdown import slackify_markdown
+    from slackify_markdown import slackify_markdown  # type: ignore[import-untyped]
 except ImportError:
     slackify_markdown = None
 
