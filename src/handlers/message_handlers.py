@@ -202,10 +202,9 @@ async def handle_message(
             },
         )
 
-        # Get the LLM response
-        conversation_id = (
-            thread_ts or f"{channel}_{user_id}"
-        )  # Use thread_ts or fallback
+        # Get the LLM response with slack_thread prefix for Langfuse
+        base_id = thread_ts or f"{channel}_{user_id}"
+        conversation_id = f"slack_thread_{base_id}"
         llm_response = await llm_service.get_response(
             messages=llm_messages, user_id=user_id, conversation_id=conversation_id
         )
