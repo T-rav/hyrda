@@ -20,27 +20,28 @@ def mock_langfuse():
     with patch.dict(os.environ, {"LANGFUSE_ENABLED": "false"}, clear=False):
         # Mock the entire langfuse module to prevent import errors
         langfuse_mock = MagicMock()
-        
+
         # Mock the decorators
         def mock_observe(name=None, as_type=None, **kwargs):
             def decorator(func):
                 return func
             return decorator
-        
+
         langfuse_mock.decorators.observe = mock_observe
         langfuse_mock.decorators.langfuse_context = MagicMock()
         langfuse_mock.openai.AsyncOpenAI = MagicMock()
-        
-        with patch.dict("sys.modules", {
-            "langfuse": langfuse_mock,
-            "langfuse.decorators": langfuse_mock.decorators,
-            "langfuse.openai": langfuse_mock.openai,
-        }):
-            # Mock the Langfuse service functions
-            with patch("services.langfuse_service.get_langfuse_service", return_value=None):
-                with patch("services.langfuse_service.observe", side_effect=mock_observe):
-                    with patch("services.langfuse_service.langfuse_context", MagicMock()):
-                        yield
+
+        with (
+            patch.dict("sys.modules", {
+                "langfuse": langfuse_mock,
+                "langfuse.decorators": langfuse_mock.decorators,
+                "langfuse.openai": langfuse_mock.openai,
+            }),
+            patch("services.langfuse_service.get_langfuse_service", return_value=None),
+            patch("services.langfuse_service.observe", side_effect=mock_observe),
+            patch("services.langfuse_service.langfuse_context", MagicMock()),
+        ):
+            yield
 
 
 @pytest.fixture(scope="session")

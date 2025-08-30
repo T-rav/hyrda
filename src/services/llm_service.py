@@ -8,7 +8,6 @@ from config.settings import Settings
 from services.langfuse_service import (
     get_langfuse_service,
     initialize_langfuse_service,
-    langfuse_context,
     observe,
 )
 from services.rag_service import RAGService

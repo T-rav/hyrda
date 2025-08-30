@@ -88,14 +88,14 @@ class OpenAIProvider(LLMProvider):
                 "temperature": self.temperature,
                 "max_tokens": self.max_tokens,
             }
-            
+
             # Add Langfuse tracking metadata if provided
             metadata = {}
             if session_id:
                 metadata["langfuse_session_id"] = session_id
             if user_id:
                 metadata["langfuse_user_id"] = user_id
-            
+
             if metadata:
                 request_params["metadata"] = metadata
 
@@ -121,6 +121,7 @@ class OpenAIProvider(LLMProvider):
                     "model": self.model,
                     "response_length": len(content) if content else 0,
                     "tokens_used": response.usage.total_tokens if response.usage else 0,
+                    "usage": usage,
                     "event_type": "openai_api_success",
                     "duration": duration,
                 },

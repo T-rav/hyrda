@@ -8,7 +8,7 @@ from typing import Any
 
 from config.settings import Settings
 from services.embedding_service import chunk_text, create_embedding_provider
-from services.langfuse_service import get_langfuse_service, langfuse_context, observe
+from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.vector_service import create_vector_store
 
