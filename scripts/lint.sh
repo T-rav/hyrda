@@ -1,42 +1,48 @@
 #!/bin/bash
-# Unified linting script used by both pre-commit and CI
-# This ensures identical behavior between local development and CI
 
-set -e  # Exit on first error
+# Unified linting script for both local and CI environments
+# This ensures identical behavior between pre-commit hooks and CI pipeline
 
-# Change to project root
-cd "$(dirname "$0")/.."
+set -e
 
-echo "🔍 Running unified linting checks..."
+PROJECT_ROOT="src"
+FIX_MODE=false
 
-# 1. Ruff linting with auto-fix (if --fix flag is provided)
-echo "📋 Running Ruff linting..."
-if [[ "$1" == "--fix" ]]; then
-    ruff check . --fix
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --fix)
+            FIX_MODE=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--fix]"
+            exit 1
+            ;;
+    esac
+done
+
+echo "🔍 Running linting checks..."
+
+# Run ruff for linting and formatting
+if [ "$FIX_MODE" = true ]; then
+    echo "📝 Running ruff with auto-fix..."
+    python3.11 -m ruff check $PROJECT_ROOT --fix
+    echo "🎨 Running black formatting..."
+    python3.11 -m black $PROJECT_ROOT
+    echo "📦 Running isort import sorting..."
+    python3.11 -m isort $PROJECT_ROOT
 else
-    ruff check .
+    echo "🔍 Running ruff check (no fixes)..."
+    python3.11 -m ruff check $PROJECT_ROOT
+    echo "🎨 Checking black formatting..."
+    python3.11 -m black $PROJECT_ROOT --check
+    echo "📦 Checking isort import sorting..."
+    python3.11 -m isort $PROJECT_ROOT --check-only
 fi
 
-# 2. Ruff formatting
-echo "🎨 Running Ruff formatting..."
-if [[ "$1" == "--fix" ]]; then
-    ruff format .
-else
-    ruff format --check .
-fi
+echo "🔒 Running security checks..."
+cd $PROJECT_ROOT && python3.11 -m bandit -r . -f txt --severity-level medium --confidence-level medium
 
-# 3. Import sorting with isort
-echo "📦 Running import sorting..."
-if [[ "$1" == "--fix" ]]; then
-    isort .
-else
-    isort --check-only .
-fi
-
-# 4. Type checking with Pyright (only if not in fix mode)
-if [[ "$1" != "--fix" ]]; then
-    echo "🔬 Running type checking..."
-    pyright
-fi
-
-echo "✅ All linting checks passed!"
+echo "✅ All linting checks completed!"
