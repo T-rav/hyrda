@@ -262,9 +262,11 @@ class AnthropicProvider(LLMProvider):
                 langfuse_service.trace_llm_call(
                     provider="anthropic",
                     model=self.model,
-                    messages=formatted_messages
-                    if "formatted_messages" in locals()
-                    else messages,
+                    messages=(
+                        formatted_messages
+                        if "formatted_messages" in locals()
+                        else messages
+                    ),
                     response=None,
                     metadata={
                         "temperature": self.temperature,

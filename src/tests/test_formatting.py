@@ -26,7 +26,7 @@ class TestMessageFormatter:
     async def test_format_bullet_points(self):
         """Test formatting of bullet points"""
         input_text = "Here's a list:\n* Item 1\n* Item 2"
-        expected = "Here's a list:\n• Item 1\n• Item 2"
+        expected = "Here's a list:\n•   Item 1\n•   Item 2"
 
         result = MessageFormatter.format_bullet_points(input_text)
         assert result == expected

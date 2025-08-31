@@ -63,8 +63,8 @@ class MessageFormatter:
     @staticmethod
     def format_bullet_points(text: str) -> str:
         """Format bullet points for better Slack rendering"""
-        # Replace GitHub-style bullets with Slack-compatible ones
-        return text.replace("* ", "• ").replace("- ", "• ")
+        # Replace GitHub-style bullets with Slack-compatible ones with proper spacing
+        return text.replace("* ", "•   ").replace("- ", "•   ")
 
     @staticmethod
     def format_markdown_for_slack(text: str) -> str:
@@ -84,7 +84,11 @@ class MessageFormatter:
 
         # Apply all formatting rules
         text = MessageFormatter.format_code_blocks(text)
+        text = MessageFormatter.format_bullet_points(text)
         text = MessageFormatter.format_markdown_for_slack(text)
         text = await MessageFormatter.format_for_slack(text)
+
+        # Compact blank lines for better Slack rendering in complete message formatting
+        text = re.sub(r"\n\s*\n", "\n", text)
 
         return text

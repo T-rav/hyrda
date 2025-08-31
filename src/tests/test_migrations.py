@@ -117,7 +117,9 @@ class TestMigrationManager:
     @pytest.mark.asyncio
     async def test_apply_migrations_with_pending(self, mock_migration_manager):
         """Test applying migrations when some are pending"""
-        mock_migration_manager.get_applied_migrations.return_value = []  # No applied migrations
+        mock_migration_manager.get_applied_migrations.return_value = (
+            []
+        )  # No applied migrations
 
         await mock_migration_manager.apply_migrations()
 

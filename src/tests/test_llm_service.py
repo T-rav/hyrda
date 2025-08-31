@@ -130,7 +130,12 @@ class TestLLMService:
         assert result == "Hello without RAG!"
         # Verify RAG service was called with use_rag=False
         llm_service.rag_service.generate_response.assert_called_once_with(
-            query="Hello", conversation_history=[], system_message=None, use_rag=False
+            query="Hello",
+            conversation_history=[],
+            system_message=None,
+            use_rag=False,
+            session_id=None,
+            user_id="U12345",
         )
 
     @pytest.mark.asyncio
