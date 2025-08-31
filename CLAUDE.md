@@ -222,14 +222,14 @@ make test-coverage          # Tests with HTML coverage report
 make test-file FILE=test_name.py  # Run specific test file
 
 # Quality checks (REQUIRED before commit)  
-make lint                   # Auto-fix linting issues (uses unified script)
-make lint-check            # Check linting without fixing (uses unified script)
-make typecheck             # Run pyright type checking
-make quality               # Run all quality checks + tests
+make lint                   # Auto-fix with ruff + pyright + bandit (unified script)
+make lint-check            # Check-only mode with ruff + pyright + bandit (unified script)
+make typecheck             # Run pyright type checking only (legacy, use lint-check instead)
+make quality               # Run complete pipeline: linting + type checking + tests
 
-# Direct unified script usage (same behavior as CI)
-./scripts/lint.sh --fix     # Auto-fix mode (same as make lint)
-./scripts/lint.sh           # Check mode (same as make lint-check)
+# Direct unified script usage (identical to CI behavior)
+./scripts/lint.sh --fix     # Auto-fix mode: ruff format + ruff check --fix + pyright + bandit
+./scripts/lint.sh           # Check mode: ruff format --check + ruff check + pyright + bandit
 ```
 
 #### Pre-commit Requirements
@@ -294,12 +294,28 @@ def mock_service():
 
 ### Code Quality Standards  
 
-#### 1. Linting & Formatting (Auto-enforced)
-- **Ruff**: Fast linting with auto-fix
-- **Black**: Code formatting  
-- **isort**: Import sorting
-- **MyPy**: Type checking (strict mode)
-- **Bandit**: Security scanning
+#### 1. Unified Quality Tooling (Auto-enforced)
+- **Ruff**: Fast linting, formatting, and import sorting (replaces black + isort)
+- **Pyright**: Type checking (strict mode, replaces MyPy for better performance)
+- **Bandit**: Security vulnerability scanning
+
+**🎯 Unified Script**: `./scripts/lint.sh` ensures identical behavior across:
+- Local development (`make lint`, `make lint-check`)
+- Pre-commit hooks (automatic on git commit)
+- CI pipeline (GitHub Actions)
+
+**Benefits**: Single modern toolchain, faster execution, zero conflicts between tools.
+
+#### Consistency Guarantees
+The unified `./scripts/lint.sh` script ensures **identical behavior** across all environments:
+
+| Environment | Tools | Consistency |
+|-------------|-------|-------------|
+| Local dev (`make lint-check`) | Ruff + Pyright + Bandit | ✅ Same script |
+| Pre-commit hooks | Ruff + Pyright + Bandit | ✅ Same script |
+| CI pipeline | Ruff + Pyright + Bandit | ✅ Same script |
+
+**No more "works locally but fails in CI"** - all environments use identical tooling and configuration.
 
 #### 2. Type Annotations (Required)
 ```python
@@ -383,11 +399,12 @@ def process_message(text, user_id, service):
 - **Blocks merge**: If any test fails or coverage < 80%
 
 #### Pre-commit Hooks (Local)
-- **Ruff linting** with auto-fix
-- **Black formatting**  
-- **Type checking**
-- **Security scanning**
-- **Test file validation**
+- **Unified Quality Checks**: Uses `./scripts/lint.sh` (same as CI)
+- **Ruff**: Linting, formatting, and import sorting
+- **Pyright**: Type checking with strict mode
+- **Bandit**: Security vulnerability scanning
+- **File cleanup**: Trailing whitespace, line endings, merge conflicts
+- **Syntax validation**: Python AST, YAML, TOML, JSON
 
 ### Test Environment
 
