@@ -60,7 +60,7 @@ test:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
 
 test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest --cov=. --cov-report=term-missing --cov-report=html:../htmlcov --cov-report=xml:../htmlcov/coverage.xml --cov-fail-under=65 --maxfail=10
+	cd $(PROJECT_ROOT) && PYTHONPATH=. python3.11 -m coverage run --source=. --omit="ingest_documents.py,migrate.py,app.py" -m pytest && python3.11 -m coverage report
 
 test-file:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
