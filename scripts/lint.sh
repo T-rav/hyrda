@@ -39,7 +39,10 @@ else
     python3.11 -m ruff format $PROJECT_ROOT --check
 fi
 
-echo "🔒 Running security checks..."
-cd $PROJECT_ROOT && python3.11 -m bandit -r . -f txt --severity-level medium --confidence-level medium
+echo "🔍 Running type checking..."
+(cd $PROJECT_ROOT && python3.11 -m pyright)
 
-echo "✅ All linting checks completed with ruff!"
+echo "🔒 Running security checks..."
+(cd $PROJECT_ROOT && python3.11 -m bandit -r . -f txt --severity-level medium --confidence-level medium)
+
+echo "✅ All checks completed with ruff + pyright + bandit!"

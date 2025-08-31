@@ -80,7 +80,7 @@ lint-check:
 typecheck:
 	cd $(PROJECT_ROOT) && pyright
 
-quality: lint-check typecheck test
+quality: lint-check test
 
 migrate-status:
 	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py status
