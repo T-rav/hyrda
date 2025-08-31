@@ -7,7 +7,7 @@ repos:
   - repo: local
     hooks:
       - id: unified-lint-check
-        name: Unified Linting (Ruff + isort + Pyright)
+        name: Unified Linting (Ruff only - replaces black + isort)
         entry: ./scripts/lint.sh
         language: system
         files: ^src/.*\.py$

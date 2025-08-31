@@ -90,7 +90,7 @@ select = [
     "SIM",  # flake8-simplify
 ]
 ignore = [
-    "E501",   # line too long, handled by black
+    "E501",   # line too long, handled by ruff format
     "B008",   # do not perform function calls in argument defaults
     "C901",   # too complex
     "PLR0913", # too many arguments
@@ -106,33 +106,12 @@ ignore = [
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 
-# Black configuration
-[tool.black]
-line-length = 88
-target-version = ['py311']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | build
-  | dist
-  | htmlcov
-)/
-'''
-
-# isort configuration
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
-known_first_party = ["src"]
-src_paths = ["src"]
+# Ruff formatting configuration (replaces black and isort)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
 
 # Pyright configuration
 [tool.pyright]
