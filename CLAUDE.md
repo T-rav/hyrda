@@ -448,14 +448,15 @@ This testing framework ensures **100% reliability** and **production-ready code 
 
 ## Production Deployment
 
-### Full Stack Deployment (Default)
+### Docker Deployment (Recommended)
 
 ```bash
-# Deploy with complete monitoring stack (DEFAULT)
-./deployment/deploy.sh
+# Build and run with Docker Compose
+docker compose -f docker-compose.prod.yml up -d
 
-# Or explicitly specify monitoring
-./deployment/deploy.sh monitoring
+# Or build Docker image directly
+make docker-build
+make docker-run
 ```
 
 **Features:**
@@ -464,16 +465,7 @@ This testing framework ensures **100% reliability** and **production-ready code 
 - Log rotation and persistent storage
 - Resource limits (512M memory, 0.5 CPU)
 - Graceful shutdown handling
-
-### Alternative Deployments
-
-```bash
-# Basic bot only (lightweight)
-./deployment/deploy.sh docker
-
-# System service (no Docker)  
-sudo ./deployment/deploy.sh systemd
-```
+- Container isolation and security
 
 ### Environment Variables
 
@@ -500,11 +492,11 @@ HEALTH_PORT=8080              # Health check server port
 - `GET /metrics` - Basic metrics
 - `GET /migrations` - Database migration status
 
-**Automated Monitoring:**
-```bash
-# Set up monitoring cron job (every 5 minutes)
-*/5 * * * * /path/to/monitoring_check.sh
-```
+**Docker Monitoring:**
+- Built-in health checks with Docker and Docker Compose
+- Container auto-restart on failure
+- Health check endpoints exposed on port 8080
+- Use `docker logs slack-bot` to view application logs
 
 **Logging:**
 - Production: Structured JSON logs to stdout and files
