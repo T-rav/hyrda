@@ -51,6 +51,7 @@ class LLMService:
         user_id: str | None = None,
         use_rag: bool = True,
         conversation_id: str | None = None,
+        current_query: str | None = None,
     ) -> str | None:
         """
         Get response from LLM with optional RAG enhancement
@@ -70,23 +71,31 @@ class LLMService:
             # No custom system prompts - using default only
             system_message = None
 
-            # Extract the current query (last user message)
-            current_query = None
-            conversation_history = []
+            # Use provided current_query or extract from messages
+            if current_query:
+                # Use the explicitly provided current query
+                query_to_use = current_query
+                conversation_history = messages  # Use full history for context
+            else:
+                # Fallback: extract the current query (last user message)
+                query_to_use = None
+                conversation_history = []
 
-            for msg in messages:
-                if msg.get("role") == "user":
-                    current_query = msg.get("content", "")
-                conversation_history.append(msg)
+                for msg in messages:
+                    if msg.get("role") == "user":
+                        query_to_use = msg.get("content", "")
+                    conversation_history.append(msg)
 
-            if not current_query:
+            if not query_to_use:
                 logger.warning("No user query found in messages")
                 return None
 
             # Generate response using RAG service
             response = await self.rag_service.generate_response(
-                query=current_query,
-                conversation_history=conversation_history[:-1],  # Exclude current query
+                query=query_to_use,
+                conversation_history=conversation_history[:-1]
+                if not current_query
+                else conversation_history,
                 system_message=system_message,
                 use_rag=use_rag,
                 session_id=conversation_id,

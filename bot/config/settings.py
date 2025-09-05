@@ -105,7 +105,7 @@ class RAGSettings(BaseSettings):
 
     max_chunks: int = Field(default=5, description="Maximum chunks to retrieve")
     similarity_threshold: float = Field(
-        default=0.7, description="Minimum similarity score"
+        default=0.35, description="Minimum similarity score"
     )
     rerank_enabled: bool = Field(default=False, description="Enable result reranking")
     include_metadata: bool = Field(

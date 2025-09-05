@@ -26,15 +26,37 @@ import requests
 
 # Local imports (assuming we'll use the existing ingestion logic)
 sys.path.append(str(Path(__file__).parent.parent / "bot"))
-from services.vector_service import get_vector_service
+
+# Load .env file from current directory or parent directories
+from dotenv import load_dotenv
+def find_and_load_env():
+    """Find and load .env file from current directory or parent directories"""
+    current_path = Path.cwd()
+    for path in [current_path] + list(current_path.parents):
+        env_file = path / ".env"
+        if env_file.exists():
+            load_dotenv(env_file)
+            print(f"📄 Loaded environment from: {env_file}")
+            return True
+    print("⚠️  No .env file found in current directory or parent directories")
+    return False
+
+# Load environment variables
+find_and_load_env()
+
+from services.vector_service import create_vector_store
+from services.embedding_service import create_embedding_provider, chunk_text
 from config.settings import Settings
 
 
 class GoogleDriveIngester:
     """Handles Google Drive authentication and document ingestion."""
 
-    # Define the scopes needed for Google Drive API
-    SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+    # Define the scopes needed for Google Drive API (including shared drives)
+    SCOPES = [
+        'https://www.googleapis.com/auth/drive.readonly',
+        'https://www.googleapis.com/auth/drive.metadata.readonly'
+    ]
 
     def __init__(self, credentials_file: Optional[str] = None, token_file: Optional[str] = None):
         """
@@ -48,19 +70,43 @@ class GoogleDriveIngester:
         self.token_file = token_file or 'token.json'
         self.service = None
         self.vector_service = None
+        self.embedding_service = None
 
     def authenticate(self) -> bool:
         """
-        Authenticate with Google Drive API using OAuth2.
+        Authenticate with Google Drive API using OAuth2 or environment variables.
 
         Returns:
             bool: True if authentication successful, False otherwise
         """
         creds = None
 
-        # Load existing token if available
-        if os.path.exists(self.token_file):
-            creds = Credentials.from_authorized_user_file(self.token_file, self.SCOPES)
+        # Try environment variables first
+        client_id = os.getenv('GOOGLE_CLIENT_ID')
+        client_secret = os.getenv('GOOGLE_CLIENT_SECRET')
+        refresh_token = os.getenv('GOOGLE_REFRESH_TOKEN')
+
+        if client_id and client_secret and refresh_token:
+            print("Using credentials from environment variables...")
+            try:
+                creds = Credentials(
+                    token=None,
+                    refresh_token=refresh_token,
+                    id_token=None,
+                    token_uri="https://oauth2.googleapis.com/token",
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    scopes=self.SCOPES
+                )
+                creds.refresh(Request())
+                print("✅ Environment credentials authenticated successfully")
+            except Exception as e:
+                print(f"❌ Environment credentials failed: {e}")
+                return False
+        else:
+            # Load existing token if available
+            if os.path.exists(self.token_file):
+                creds = Credentials.from_authorized_user_file(self.token_file, self.SCOPES)
 
         # If there are no (valid) credentials available, let the user log in
         if not creds or not creds.valid:
@@ -72,8 +118,18 @@ class GoogleDriveIngester:
                     return False
             else:
                 if not os.path.exists(self.credentials_file):
-                    print(f"Credentials file not found: {self.credentials_file}")
-                    print("Please download OAuth2 credentials from Google Cloud Console")
+                    # Create a minimal OAuth2 credentials structure for the flow
+                    print("🔐 First time setup - Creating login flow...")
+
+                    # Use a generic OAuth2 client (this would need actual client credentials)
+                    # For now, show the user they need to set up OAuth2
+                    print("\n❌ No OAuth2 credentials found.")
+                    print("📝 To create a login screen like n8n, we need OAuth2 app credentials.")
+                    print("\n🚀 One-time setup:")
+                    print("1. Go to: https://console.cloud.google.com/")
+                    print("2. Create project → Enable Google Drive API → Create OAuth2 Desktop credentials")
+                    print("3. Download as 'credentials.json' and put it in this folder")
+                    print("4. After that, this will work like n8n - just login once!")
                     return False
 
                 try:
@@ -120,13 +176,79 @@ class GoogleDriveIngester:
             # Query for files in the specified folder
             query = f"'{folder_id}' in parents and trashed=false"
 
-            results = self.service.files().list(
-                q=query,
-                pageSize=1000,
-                fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
-            ).execute()
+            if folder_path == "":  # Only debug for root folder to avoid spam
+                print(f"🔍 Querying Google Drive with: {query}")
+
+            # For shared drives, use a broader query that we know works
+            results = None
+            try:
+                # Try the broader shared drive query first (we know this works from debug)
+                if folder_path == "":
+                    print("🔄 Using broad shared drive query...")
+
+                all_results = self.service.files().list(
+                    q="trashed=false",
+                    pageSize=1000,
+                    includeItemsFromAllDrives=True,
+                    supportsAllDrives=True,
+                    fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+                ).execute()
+
+                # Filter to only files that have our folder_id as parent
+                all_files = all_results.get('files', [])
+                filtered_files = [f for f in all_files if folder_id in f.get('parents', [])]
+                results = {'files': filtered_files}
+
+                if folder_path == "":
+                    print(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
+
+            except HttpError as e:
+                # Fallback to original query approach
+                if folder_path == "":
+                    print(f"⚠️  Broad query failed, trying specific parent query: {e}")
+
+                try:
+                    results = self.service.files().list(
+                        q=query,
+                        pageSize=1000,
+                        includeItemsFromAllDrives=True,
+                        supportsAllDrives=True,
+                        fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+                    ).execute()
+                    if folder_path == "":
+                        print(f"✅ Found {len(results.get('files', []))} items using fallback query")
+                except HttpError as e2:
+                    if folder_path == "":
+                        print(f"❌ All query methods failed: {e2}")
+                    raise e2
 
             items = results.get('files', [])
+
+            if folder_path == "" and not items:  # Only debug for root folder
+                print(f"📂 Google Drive API returned 0 items for folder {folder_id}")
+
+                # Try to get folder info to see if it exists
+                try:
+                    # Try regular access first
+                    folder_info = self.service.files().get(fileId=folder_id, fields="id,name,mimeType,permissions").execute()
+                    print(f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
+                    permissions = folder_info.get('permissions', [])
+                    print(f"🔐 Folder has {len(permissions)} permission entries")
+                except HttpError as e:
+                    # Try with shared drive support
+                    try:
+                        folder_info = self.service.files().get(
+                            fileId=folder_id,
+                            fields="id,name,mimeType,permissions",
+                            supportsAllDrives=True
+                        ).execute()
+                        print(f"📁 Shared Drive folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
+                        permissions = folder_info.get('permissions', [])
+                        print(f"🔐 Folder has {len(permissions)} permission entries")
+                    except HttpError as e2:
+                        print(f"❌ Cannot access folder {folder_id}: {e2}")
+                        print("💡 This might be a permission issue, invalid folder ID, or shared drive access issue")
+                        print("💡 For shared drives, make sure your OAuth app has domain-wide delegation or proper permissions")
 
             for item in items:
                 # Build full path
@@ -141,7 +263,8 @@ class GoogleDriveIngester:
                 try:
                     file_permissions = self.service.files().get(
                         fileId=item['id'],
-                        fields="permissions"
+                        fields="permissions",
+                        supportsAllDrives=True
                     ).execute()
                     item['detailed_permissions'] = file_permissions.get('permissions', [])
                 except HttpError as perm_error:
@@ -262,11 +385,63 @@ class GoogleDriveIngester:
 
         return formatted
 
-    async def init_vector_service(self):
-        """Initialize the vector service for document storage."""
-        if not self.vector_service:
-            settings = Settings()
-            self.vector_service = await get_vector_service(settings)
+    def _get_permissions_summary(self, permissions: List[Dict]) -> str:
+        """
+        Get a simple string summary of Google Drive permissions for Pinecone metadata.
+
+        Args:
+            permissions: Raw permissions from Google Drive API
+
+        Returns:
+            Simple string summary of permissions
+        """
+        if not permissions:
+            return "no_permissions"
+
+        summary_parts = []
+        anyone_access = False
+        user_count = 0
+
+        for perm in permissions:
+            role = perm.get('role', 'reader')
+            perm_type = perm.get('type', 'user')
+
+            if perm_type == 'anyone':
+                anyone_access = True
+                summary_parts.append(f"anyone_{role}")
+            elif perm_type in ['user', 'group']:
+                user_count += 1
+
+        if anyone_access and user_count > 0:
+            return f"public_plus_{user_count}_users"
+        elif anyone_access:
+            return "public_access"
+        elif user_count > 0:
+            return f"private_{user_count}_users"
+        else:
+            return "restricted"
+
+    def _get_owner_emails(self, owners: List[Dict]) -> str:
+        """
+        Get a simple string of owner emails for Pinecone metadata.
+
+        Args:
+            owners: Raw owners from Google Drive API
+
+        Returns:
+            Comma-separated string of owner emails
+        """
+        if not owners:
+            return "unknown"
+
+        emails = []
+        for owner in owners:
+            email = owner.get('emailAddress', '')
+            if email:
+                emails.append(email)
+
+        return ', '.join(emails) if emails else "unknown"
+
 
     async def ingest_files(self, files: List[Dict], metadata: Optional[Dict] = None) -> Tuple[int, int]:
         """
@@ -279,7 +454,11 @@ class GoogleDriveIngester:
         Returns:
             Tuple of (success_count, error_count)
         """
-        await self.init_vector_service()
+        # Check that services are properly initialized
+        if not self.vector_service:
+            raise RuntimeError("Vector service not initialized. Services must be set before calling ingest_files.")
+        if not self.embedding_service:
+            raise RuntimeError("Embedding service not initialized. Services must be set before calling ingest_files.")
 
         success_count = 0
         error_count = 0
@@ -311,8 +490,8 @@ class GoogleDriveIngester:
                     'created_time': file_info.get('createdTime'),
                     'size': file_info.get('size'),
                     'web_view_link': file_info.get('webViewLink'),
-                    'owners': file_info.get('owners', []),
-                    'permissions': self._format_permissions(file_info.get('detailed_permissions', [])),
+                    'owner_emails': self._get_owner_emails(file_info.get('owners', [])),
+                    'permissions_summary': self._get_permissions_summary(file_info.get('detailed_permissions', [])),
                     'ingested_at': datetime.utcnow().isoformat()
                 }
 
@@ -320,11 +499,28 @@ class GoogleDriveIngester:
                 if metadata:
                     doc_metadata.update(metadata)
 
-                # Upsert document to vector database
-                await self.vector_service.upsert_document(
-                    doc_id=file_info['id'],
-                    content=content,
-                    metadata=doc_metadata
+                # Chunk the content and generate embeddings
+                chunks = chunk_text(content,
+                                   chunk_size=self.embedding_service.settings.chunk_size,
+                                   chunk_overlap=self.embedding_service.settings.chunk_overlap)
+
+                # Generate embeddings for chunks
+                embeddings = await self.embedding_service.get_embeddings(chunks)
+
+                # Prepare metadata for each chunk
+                chunk_metadata = []
+                for i, chunk in enumerate(chunks):
+                    chunk_meta = doc_metadata.copy()
+                    chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
+                    chunk_meta['chunk_index'] = i
+                    chunk_meta['total_chunks'] = len(chunks)
+                    chunk_metadata.append(chunk_meta)
+
+                # Add documents to vector store
+                await self.vector_service.add_documents(
+                    texts=chunks,
+                    embeddings=embeddings,
+                    metadata=chunk_metadata
                 )
 
                 print(f" Successfully ingested: {file_info['name']}")
@@ -349,9 +545,33 @@ class GoogleDriveIngester:
         Returns:
             Tuple of (success_count, error_count)
         """
-        print(f"Scanning folder: {folder_id}")
+        print(f"Scanning folder: {folder_id} (recursive: {recursive})")
         files = self.list_folder_contents(folder_id, recursive, folder_path="")
-        print(f"Found {len(files)} items")
+
+        # Debug output
+        if not files:
+            print("Found 0 items - folder appears to be empty or inaccessible")
+        else:
+            folders = [f for f in files if f['mimeType'] == 'application/vnd.google-apps.folder']
+            documents = [f for f in files if f['mimeType'] != 'application/vnd.google-apps.folder']
+
+            print(f"Found {len(files)} total items:")
+            print(f"  📁 {len(folders)} folders")
+            print(f"  📄 {len(documents)} documents")
+
+            if folders:
+                print("  Folders found:")
+                for folder in folders[:5]:  # Show first 5 folders
+                    print(f"    - {folder['full_path']}")
+                if len(folders) > 5:
+                    print(f"    ... and {len(folders) - 5} more folders")
+
+            if documents:
+                print("  Documents found:")
+                for doc in documents[:5]:  # Show first 5 documents
+                    print(f"    - {doc['full_path']} ({doc['mimeType']})")
+                if len(documents) > 5:
+                    print(f"    ... and {len(documents) - 5} more documents")
 
         return await self.ingest_files(files, metadata)
 
@@ -365,6 +585,8 @@ async def main():
     parser.add_argument("--recursive", action="store_true", default=True,
                        help="Include subfolders (default: True)")
     parser.add_argument("--metadata", help="Additional metadata as JSON string")
+    parser.add_argument("--reauth", action="store_true",
+                       help="Force re-authentication (useful for shared drive access)")
 
     args = parser.parse_args()
 
@@ -377,6 +599,13 @@ async def main():
             print(f"Error parsing metadata JSON: {e}")
             sys.exit(1)
 
+    # Handle re-authentication if requested
+    if args.reauth:
+        token_file = args.token or 'token.json'
+        if os.path.exists(token_file):
+            print(f"🔄 Removing existing token file: {token_file}")
+            os.remove(token_file)
+
     # Initialize ingester
     ingester = GoogleDriveIngester(args.credentials, args.token)
 
@@ -387,6 +616,30 @@ async def main():
         sys.exit(1)
 
     print(" Authentication successful")
+
+    # Initialize services
+    print("Initializing vector database and embedding service...")
+    try:
+        from config.settings import VectorSettings, EmbeddingSettings, LLMSettings
+
+        # Initialize only the settings we need (not full Settings which requires Slack)
+        vector_settings = VectorSettings()
+        embedding_settings = EmbeddingSettings()
+        llm_settings = LLMSettings()
+
+        # Initialize vector store
+        vector_store = create_vector_store(vector_settings)
+        await vector_store.initialize()
+        ingester.vector_service = vector_store
+
+        # Initialize embedding service
+        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+        ingester.embedding_service = embedding_provider
+
+        print("✅ Services initialized successfully")
+    except Exception as e:
+        print(f"❌ Service initialization failed: {e}")
+        sys.exit(1)
 
     # Ingest folder
     try:

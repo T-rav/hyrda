@@ -129,6 +129,7 @@ async def handle_message(
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
+            current_query=text,  # Pass the actual user message directly
         )
 
         # Clean up thinking message
