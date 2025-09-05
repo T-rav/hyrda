@@ -68,11 +68,18 @@ class SlackService:
         return await delete_message(self.client, channel, ts)
 
     async def get_thread_history(
-        self, channel: str, thread_ts: str, limit: int = 20
+        self, channel: str, thread_ts: str | None, limit: int = 20
     ) -> tuple[list[dict[str, str]], bool]:
         """Get message history from a thread"""
         messages = []
         success = False
+
+        # If no thread_ts, this is a new conversation - return empty history
+        if thread_ts is None:
+            logger.info(
+                "No thread_ts provided - starting new conversation with empty history"
+            )
+            return messages, True
 
         try:
             logger.info(f"Retrieving thread history for thread {thread_ts}")

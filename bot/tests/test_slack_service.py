@@ -257,6 +257,23 @@ class TestSlackService:
         slack_service.client.auth_test.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_get_thread_history_none_thread_ts(self, slack_service):
+        """Test thread history with None thread_ts (new conversation)"""
+        channel = "C12345"
+        thread_ts = None
+
+        messages, success = await slack_service.get_thread_history(channel, thread_ts)
+
+        assert success is True
+        assert messages == []
+
+        # Ensure no API call was made since thread_ts is None
+        assert (
+            not hasattr(slack_service.client, "conversations_replies")
+            or not slack_service.client.conversations_replies.called
+        )
+
+    @pytest.mark.asyncio
     async def test_get_thread_info_success(self, slack_service):
         """Test successful thread info retrieval"""
         channel = "C12345"
