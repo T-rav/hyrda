@@ -5,16 +5,17 @@ import os
 import signal
 import traceback
 
-from config.settings import Settings
 from dotenv import load_dotenv
+from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
+from slack_bolt.async_app import AsyncApp
+from slack_sdk import WebClient
+
+from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
 from services.conversation_cache import ConversationCache
 from services.llm_service import LLMService
 from services.slack_service import SlackService
-from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
-from slack_bolt.async_app import AsyncApp
-from slack_sdk import WebClient
 from utils.logging import configure_logging
 
 # Load environment variables

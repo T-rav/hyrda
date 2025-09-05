@@ -201,21 +201,22 @@ class LangfuseService:
             return
 
         try:
-            # Create a new trace for this conversation
-            self.current_trace = self.client.trace(
-                name="slack_conversation",
-                user_id=user_id,
-                session_id=conversation_id,
-                metadata={
-                    "platform": "slack",
-                    "conversation_id": conversation_id,
-                    **(metadata or {}),
-                },
-            )
-            self.current_session_id = conversation_id
+            # TODO: Fix Langfuse trace creation - API method unclear
+            # Temporarily disable trace creation to avoid errors
             logger.debug(
-                f"Started conversation trace with session_id: {conversation_id}"
+                f"Langfuse trace creation disabled - would create trace for session: {conversation_id}"
             )
+            # self.current_trace = self.client.trace({
+            #     "name": "slack_conversation",
+            #     "user_id": user_id,
+            #     "session_id": conversation_id,
+            #     "metadata": {
+            #         "platform": "slack",
+            #         "conversation_id": conversation_id,
+            #         **(metadata or {}),
+            #     },
+            # })
+            # self.current_session_id = conversation_id
         except Exception as e:
             logger.error(f"Error starting conversation trace: {e}")
 

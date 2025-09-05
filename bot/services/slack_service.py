@@ -3,9 +3,10 @@ import re
 import traceback
 from typing import Any
 
-from config.settings import SlackSettings
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+
+from config.settings import SlackSettings
 from utils.errors import delete_message
 
 logger = logging.getLogger(__name__)

@@ -35,13 +35,13 @@ help:
 	@echo "  clean           Remove caches and build artifacts"
 
 install:
-	$(PIP) install -r $(PROJECT_ROOT)/requirements.txt
+	cd $(PROJECT_ROOT) && $(PIP) install -e .
 
-install-test:
-	$(PIP) install -r $(PROJECT_ROOT)/requirements-test.txt
+install-test: install
+	cd $(PROJECT_ROOT) && $(PIP) install -e .[test]
 
-install-dev: install install-test
-	$(PIP) install -r requirements-dev.txt
+install-dev: install
+	cd $(PROJECT_ROOT) && $(PIP) install -e .[dev,test]
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \

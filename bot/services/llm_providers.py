@@ -8,8 +8,9 @@ from abc import ABC, abstractmethod
 
 import aiohttp
 from anthropic import AsyncAnthropic
-from config.settings import LLMSettings
 from langfuse.openai import AsyncOpenAI
+
+from config.settings import LLMSettings
 from services.langfuse_service import get_langfuse_service, observe
 
 logger = logging.getLogger(__name__)
