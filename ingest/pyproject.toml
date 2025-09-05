@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "google-drive-ingester"
 version = "1.0.0"
-description = "Google Drive document ingester for RAG systems - THE ONLY SUPPORTED INGESTION METHOD"
+description = "Google Drive document ingester for RAG systems"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    # Google Drive API - THE ONLY SUPPORTED INGESTION METHOD
+    # Google Drive API
     "google-api-python-client==2.108.0",
     "google-auth-httplib2==0.2.0",
     "google-auth-oauthlib==1.1.0",
@@ -22,9 +22,14 @@ dependencies = [
     "requests==2.31.0",
     "asyncpg==0.29.0",
 
-    # Minimal dependencies for vector database compatibility
+    # Vector database compatibility
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "chromadb>=0.4.0",
+    "pinecone-client==2.2.4",
+    "openai>=1.35.0",  # For embeddings
+    "anthropic>=0.25.0",  # Alternative embedding provider
+    "numpy>=1.24.0",
 ]
 
 [project.scripts]
@@ -32,8 +37,13 @@ google-drive-ingester = "google_drive_ingester:main"
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.12.0",
-    "pyright>=1.1.390",
+    "ruff==0.8.4",
+    "pyright==1.1.390",
+    "black==25.1.0",
+]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
 ]
 
 # Ruff configuration

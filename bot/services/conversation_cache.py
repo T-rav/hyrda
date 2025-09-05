@@ -3,6 +3,7 @@ import logging
 from datetime import UTC, datetime
 
 import redis.asyncio as redis
+
 from services.slack_service import SlackService
 
 logger = logging.getLogger(__name__)

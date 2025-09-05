@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 from aiohttp import ClientSession, ClientTimeout, web
 from aiohttp.web_runner import AppRunner, TCPSite
+
 from config.settings import Settings
 
 logger = logging.getLogger(__name__)

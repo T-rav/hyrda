@@ -45,11 +45,8 @@ async def handle_message(
     thinking_message_ts = None
 
     try:
-        # Show typing indicator
-        try:
-            await slack_service.post_typing(channel)
-        except Exception as e:
-            logger.warning(f"Error posting typing indicator: {e}")
+        # Show typing indicator (skip if method doesn't exist)
+        # Note: Typing indicators are handled by Slack automatically in most cases
 
         # Handle agent process commands
         if text.strip().lower().startswith("start "):
@@ -59,7 +56,7 @@ async def handle_message(
 
                 try:
                     # First send thinking message
-                    thinking_message_ts = await slack_service.post_thinking_message(
+                    thinking_message_ts = await slack_service.send_thinking_indicator(
                         channel, thread_ts
                     )
 
@@ -74,7 +71,7 @@ async def handle_message(
                     # Clean up thinking message before sending response
                     if thinking_message_ts:
                         try:
-                            await slack_service.delete_message(
+                            await slack_service.delete_thinking_indicator(
                                 channel, thinking_message_ts
                             )
                             thinking_message_ts = None
@@ -82,7 +79,7 @@ async def handle_message(
                             logger.warning(f"Error deleting thinking message: {e}")
 
                     # Send response with agent blocks
-                    formatted_response = MessageFormatter.format_response(response)
+                    formatted_response = await MessageFormatter.format_message(response)
                     agent_blocks = get_agent_blocks()
 
                     await slack_service.send_message(
@@ -96,7 +93,7 @@ async def handle_message(
                     # Clean up thinking message on error
                     if thinking_message_ts:
                         with contextlib.suppress(Exception):
-                            await slack_service.delete_message(
+                            await slack_service.delete_thinking_indicator(
                                 channel, thinking_message_ts
                             )
 
@@ -112,7 +109,7 @@ async def handle_message(
         # Regular LLM response handling
         try:
             # First send thinking message
-            thinking_message_ts = await slack_service.post_thinking_message(
+            thinking_message_ts = await slack_service.send_thinking_indicator(
                 channel, thread_ts
             )
         except Exception as e:
@@ -137,13 +134,15 @@ async def handle_message(
         # Clean up thinking message
         if thinking_message_ts:
             try:
-                await slack_service.delete_message(channel, thinking_message_ts)
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
             except Exception as e:
                 logger.warning(f"Error deleting thinking message: {e}")
 
         # Format and send the response
         if response:
-            formatted_response = MessageFormatter.format_response(response)
+            formatted_response = await MessageFormatter.format_message(response)
             await slack_service.send_message(
                 channel=channel, text=formatted_response, thread_ts=thread_ts
             )
@@ -158,7 +157,9 @@ async def handle_message(
         # Clean up thinking message on error
         if thinking_message_ts:
             with contextlib.suppress(Exception):
-                await slack_service.delete_message(channel, thinking_message_ts)
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
 
         await handle_error(
             slack_service.client,
