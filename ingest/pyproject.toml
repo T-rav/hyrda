@@ -26,7 +26,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "chromadb>=0.4.0",
-    "pinecone-client==2.2.4",
+    "pinecone>=3.0.0",
     "openai>=1.35.0",  # For embeddings
     "anthropic>=0.25.0",  # Alternative embedding provider
     "numpy>=1.24.0",

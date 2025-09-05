@@ -189,3 +189,4 @@ venv311/
 dagster_project/dagster_venv/
 slack-bot/slackbot_venv/
 .weave/tools/*
+token.json
