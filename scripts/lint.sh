@@ -6,7 +6,7 @@
 
 set -e
 
-PROJECT_ROOT="src"
+PROJECT_ROOT="bot"
 FIX_MODE=false
 
 # Parse arguments

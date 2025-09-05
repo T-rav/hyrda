@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "google-drive-ingester"
+version = "1.0.0"
+description = "Google Drive document ingester for RAG systems - THE ONLY SUPPORTED INGESTION METHOD"
+authors = [
+    {name = "Travis Frisinger", email = "travis@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    # Google Drive API - THE ONLY SUPPORTED INGESTION METHOD
+    "google-api-python-client==2.108.0",
+    "google-auth-httplib2==0.2.0",
+    "google-auth-oauthlib==1.1.0",
+
+    # Core dependencies
+    "python-dotenv==1.0.0",
+    "requests==2.31.0",
+    "asyncpg==0.29.0",
+
+    # Minimal dependencies for vector database compatibility
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.scripts]
+google-drive-ingester = "google_drive_ingester:main"
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.12.0",
+    "pyright>=1.1.390",
+]
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["."]
+exclude = [
+    ".git",
+    "__pycache__",
+    "venv",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+
+# Pyright configuration
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["."]
+exclude = ["__pycache__"]
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false

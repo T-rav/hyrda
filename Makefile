@@ -2,11 +2,11 @@
 
 PYTHON ?= python3
 PIP ?= pip3
-PROJECT_ROOT := $(CURDIR)/src
+PROJECT_ROOT := $(CURDIR)/bot
 ENV_FILE := $(CURDIR)/.env
 IMAGE ?= insight-mesh-slack-bot
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit lint lint-check typecheck quality migrate-status migrate migrate-rollback docker-build docker-run docker-monitor docker-prod docker-stop clean setup-dev ci pre-commit security
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean setup-dev ci pre-commit security
 
 help:
 	@echo "Available targets:"
@@ -23,9 +23,6 @@ help:
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
 	@echo "  quality         Run all quality checks"
-	@echo "  migrate-status  Show database migration status"
-	@echo "  migrate         Apply database migrations"
-	@echo "  migrate-rollback Rollback migration (use VERSION=001)"
 	@echo "  docker-build    Build Docker image"
 	@echo "  docker-run      Run Docker container with .env"
 	@echo "  docker-monitor  Run full monitoring stack"
@@ -60,7 +57,7 @@ test:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
 
 test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. python3.11 -m coverage run --source=. --omit="ingest_documents.py,migrate.py,app.py" -m pytest && python3.11 -m coverage report
+	cd $(PROJECT_ROOT) && PYTHONPATH=. python3.11 -m coverage run --source=. --omit="app.py" -m pytest && python3.11 -m coverage report
 
 test-file:
 	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
@@ -82,14 +79,6 @@ typecheck:
 
 quality: lint-check test
 
-migrate-status:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py status
-
-migrate:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py migrate
-
-migrate-rollback:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py rollback $(VERSION)
 
 docker-build:
 	docker build -f $(PROJECT_ROOT)/Dockerfile -t $(IMAGE) $(PROJECT_ROOT)
