@@ -30,6 +30,9 @@ dependencies = [
     "openai>=1.35.0",  # For embeddings
     "anthropic>=0.25.0",  # Alternative embedding provider
     "numpy>=1.24.0",
+
+    # Document processing
+    "pymupdf>=1.23.0",  # PDF text extraction
 ]
 
 [project.scripts]

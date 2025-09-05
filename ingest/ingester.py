@@ -15,6 +15,10 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
+from io import BytesIO
+
+# PDF processing
+import fitz  # PyMuPDF
 
 # Google Drive API imports
 from google.auth.transport.requests import Request
@@ -179,28 +183,60 @@ class GoogleDriveIngester:
             if folder_path == "":  # Only debug for root folder to avoid spam
                 print(f"🔍 Querying Google Drive with: {query}")
 
-            # For shared drives, use a broader query that we know works
+            # For shared drives, we need different approaches for root vs subfolders
             results = None
             try:
-                # Try the broader shared drive query first (we know this works from debug)
                 if folder_path == "":
-                    print("🔄 Using broad shared drive query...")
+                    # For root folder, use the broader query approach
+                    print("🔄 Using broad shared drive query for root folder...")
+                    all_results = self.service.files().list(
+                        q="trashed=false",
+                        pageSize=1000,
+                        includeItemsFromAllDrives=True,
+                        supportsAllDrives=True,
+                        fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+                    ).execute()
 
-                all_results = self.service.files().list(
-                    q="trashed=false",
-                    pageSize=1000,
-                    includeItemsFromAllDrives=True,
-                    supportsAllDrives=True,
-                    fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
-                ).execute()
+                    # Filter to only files that have our folder_id as parent
+                    all_files = all_results.get('files', [])
+                    filtered_files = [f for f in all_files if folder_id in f.get('parents', [])]
+                    results = {'files': filtered_files}
+                else:
+                    # For subfolders, use the specific parent query with shared drive support
+                    print(f"🔄 Using specific parent query for subfolder: {folder_path}")
+                    results = self.service.files().list(
+                        q=query,
+                        pageSize=1000,
+                        includeItemsFromAllDrives=True,
+                        supportsAllDrives=True,
+                        fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+                    ).execute()
 
-                # Filter to only files that have our folder_id as parent
-                all_files = all_results.get('files', [])
-                filtered_files = [f for f in all_files if folder_id in f.get('parents', [])]
-                results = {'files': filtered_files}
+                # Get files from results (different handling for root vs subfolder)
+                if folder_path == "":
+                    # Root folder: we already have filtered_files
+                    pass
+                else:
+                    # Subfolder: get files directly from results
+                    filtered_files = results.get('files', [])
+
+                # Debug: if no items found for subfolders
+                if len(filtered_files) == 0 and folder_path != "":
+                    print(f"🔍 DEBUG: No items found for folder_id '{folder_id}' in folder_path '{folder_path}'")
+                    print(f"🔍 DEBUG: Query used: {query}")
+                    print(f"🔍 DEBUG: This suggests the folder may be empty or there's a permissions issue")
 
                 if folder_path == "":
                     print(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
+                    # Debug: let's see a sample of all accessible files to understand the structure
+                    print("🔍 DEBUG: Sample of all accessible files (first 10):")
+                    for i, f in enumerate(all_files[:10]):
+                        parents_str = ', '.join(f.get('parents', []))
+                        print(f"   {i+1}. {f.get('name')} (parents: {parents_str})")
+                    if len(all_files) > 10:
+                        print(f"   ... and {len(all_files) - 10} more files")
+                else:
+                    print(f"🔍 Subfolder '{folder_path}': Found {len(filtered_files)} items")
 
             except HttpError as e:
                 # Fallback to original query approach
@@ -222,7 +258,7 @@ class GoogleDriveIngester:
                         print(f"❌ All query methods failed: {e2}")
                     raise e2
 
-            items = results.get('files', [])
+            items = filtered_files
 
             if folder_path == "" and not items:  # Only debug for root folder
                 print(f"📂 Google Drive API returned 0 items for folder {folder_id}")
@@ -312,23 +348,26 @@ class GoogleDriveIngester:
             elif mime_type == 'application/vnd.google-apps.presentation':
                 request = self.service.files().export_media(
                     fileId=file_id, mimeType='text/plain')
-            # Handle regular files
-            elif mime_type.startswith('text/') or mime_type == 'application/pdf':
+            # Handle PDF files with text extraction
+            elif mime_type == 'application/pdf':
                 request = self.service.files().get_media(fileId=file_id)
+                pdf_content = request.execute()
+                return self._extract_pdf_text(pdf_content)
+            # Handle regular text files
+            elif mime_type.startswith('text/'):
+                request = self.service.files().get_media(fileId=file_id)
+                content = request.execute()
+                # Decode content based on type
+                if isinstance(content, bytes):
+                    try:
+                        return content.decode('utf-8')
+                    except UnicodeDecodeError:
+                        return content.decode('latin-1', errors='ignore')
+                else:
+                    return str(content)
             else:
                 print(f"Unsupported file type: {mime_type}")
                 return None
-
-            content = request.execute()
-
-            # Decode content based on type
-            if isinstance(content, bytes):
-                try:
-                    return content.decode('utf-8')
-                except UnicodeDecodeError:
-                    return content.decode('latin-1', errors='ignore')
-            else:
-                return str(content)
 
         except HttpError as error:
             print(f"An error occurred downloading file {file_id}: {error}")
@@ -442,6 +481,38 @@ class GoogleDriveIngester:
 
         return ', '.join(emails) if emails else "unknown"
 
+    def _extract_pdf_text(self, pdf_content: bytes) -> Optional[str]:
+        """
+        Extract text content from PDF bytes using PyMuPDF.
+
+        Args:
+            pdf_content: PDF file content as bytes
+
+        Returns:
+            Extracted text content, or None if extraction fails
+        """
+        try:
+            # Open PDF from bytes
+            pdf_stream = BytesIO(pdf_content)
+            pdf_document = fitz.open(stream=pdf_stream, filetype="pdf")
+
+            # Extract text from all pages
+            text_content = []
+            for page_num in range(pdf_document.page_count):
+                page = pdf_document.load_page(page_num)
+                text = page.get_text()
+                if text.strip():  # Only add non-empty pages
+                    text_content.append(text)
+
+            pdf_document.close()
+
+            # Join all pages with double newlines
+            full_text = "\n\n".join(text_content)
+            return full_text if full_text.strip() else None
+
+        except Exception as e:
+            print(f"Error extracting PDF text: {e}")
+            return None
 
     async def ingest_files(self, files: List[Dict], metadata: Optional[Dict] = None) -> Tuple[int, int]:
         """
