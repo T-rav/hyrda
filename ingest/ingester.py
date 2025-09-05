@@ -356,18 +356,21 @@ class GoogleDriveIngester:
             # Handle regular text files
             elif mime_type.startswith('text/'):
                 request = self.service.files().get_media(fileId=file_id)
-                content = request.execute()
-                # Decode content based on type
-                if isinstance(content, bytes):
-                    try:
-                        return content.decode('utf-8')
-                    except UnicodeDecodeError:
-                        return content.decode('latin-1', errors='ignore')
-                else:
-                    return str(content)
             else:
                 print(f"Unsupported file type: {mime_type}")
                 return None
+
+            # Execute request for Google Apps and text files
+            content = request.execute()
+
+            # Decode content based on type
+            if isinstance(content, bytes):
+                try:
+                    return content.decode('utf-8')
+                except UnicodeDecodeError:
+                    return content.decode('latin-1', errors='ignore')
+            else:
+                return str(content)
 
         except HttpError as error:
             print(f"An error occurred downloading file {file_id}: {error}")
