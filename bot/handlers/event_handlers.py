@@ -72,7 +72,6 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 "I'm sorry, I encountered an error while processing your request.",
             )
 
-    @app.event({"type": "message", "subtype": None})
     @app.event("message")
     async def handle_message_event(body, client):
         """Handle all message events including those in threads"""

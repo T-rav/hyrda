@@ -73,6 +73,9 @@ class VectorSettings(BaseSettings):
     collection_name: str = Field(
         default="knowledge_base", description="Collection/index name"
     )
+    environment: str | None = Field(
+        default=None, description="Pinecone environment (e.g., us-east-1-aws)"
+    )
     enabled: bool = Field(default=True, description="Enable RAG functionality")
 
     model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]

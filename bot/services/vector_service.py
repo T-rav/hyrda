@@ -215,25 +215,62 @@ class PineconeVectorStore(VectorStore):
     async def initialize(self):
         """Initialize Pinecone client and index"""
         try:
-            import pinecone  # noqa: PLC0415
+            from pinecone import Pinecone  # noqa: PLC0415
 
             if not self.settings.api_key:
                 raise ValueError("Pinecone API key is required")
 
-            # Initialize Pinecone
-            pinecone.init(api_key=self.settings.api_key.get_secret_value())
+            # Initialize Pinecone client (v3.x API)
+            pc = Pinecone(api_key=self.settings.api_key.get_secret_value())
 
             # Connect to existing index
-            self.index = pinecone.Index(self.collection_name)
+            self.index = pc.Index(self.collection_name)
 
             logger.info(f"Pinecone initialized with index: {self.collection_name}")
 
         except ImportError:
             raise ImportError(
-                "pinecone package not installed. Run: pip install pinecone-client"
+                "pinecone package not installed. Run: pip install pinecone"
             ) from None
         except Exception as e:
+            error_msg = str(e)
             logger.error(f"Failed to initialize Pinecone: {e}")
+            logger.error(
+                f"Debug info - API key provided: {'Yes' if self.settings.api_key else 'No'}"
+            )
+            logger.error(
+                f"Debug info - Environment provided: {'Yes' if self.settings.environment else 'No'}"
+            )
+            logger.error(f"Debug info - Index name: '{self.collection_name}'")
+            logger.error(f"Debug info - Error type: {type(e).__name__}")
+
+            # Provide helpful guidance based on error
+            if "index" in error_msg.lower() and (
+                "not found" in error_msg.lower()
+                or "does not exist" in error_msg.lower()
+            ):
+                logger.error(
+                    f"→ The Pinecone index '{self.collection_name}' does not exist."
+                )
+                logger.error(
+                    "→ Please create this index in your Pinecone console first."
+                )
+            elif "api key" in error_msg.lower() or "unauthorized" in error_msg.lower():
+                logger.error("→ Invalid or missing Pinecone API key.")
+                logger.error("→ Check your VECTOR_API_KEY environment variable.")
+            elif "environment" in error_msg.lower() or not self.settings.environment:
+                logger.error("→ Pinecone environment not specified or invalid.")
+                logger.error(
+                    "→ For Pinecone v2.2.4, you need to set VECTOR_ENVIRONMENT (e.g., us-east-1-aws)"
+                )
+                logger.error(
+                    "→ Check your Pinecone console for the correct environment name."
+                )
+            else:
+                logger.error(
+                    "→ Check your Pinecone configuration (API key, index name, environment)."
+                )
+
             raise
 
     async def add_documents(
@@ -314,6 +351,20 @@ class PineconeVectorStore(VectorStore):
 
         except Exception as e:
             logger.error(f"Failed to search Pinecone: {e}")
+            logger.error(
+                f"Debug info - Index initialized: {'Yes' if self.index else 'No'}"
+            )
+            logger.error(f"Debug info - Collection name: '{self.collection_name}'")
+
+            if "connect" in str(e).lower():
+                logger.error(
+                    "→ Connection failed - check if Pinecone index exists and API credentials are correct"
+                )
+            elif "index" in str(e).lower():
+                logger.error(
+                    f"→ Index '{self.collection_name}' issue - verify it exists in Pinecone console"
+                )
+
             return []
 
     async def delete_documents(self, document_ids: list[str]):

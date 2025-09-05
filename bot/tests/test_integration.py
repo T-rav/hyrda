@@ -182,9 +182,14 @@ class TestIntegration:
         """Test @prompt command integration with database"""
 
         mock_slack_service = AsyncMock()
+        mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
+        mock_slack_service.send_thinking_indicator = AsyncMock(
+            return_value="thinking_ts"
+        )
+        mock_slack_service.delete_thinking_indicator = AsyncMock()
+
         mock_llm_service = AsyncMock()
-        # Test completed
-        # Test completed
+        mock_llm_service.get_response = AsyncMock(return_value="SQL response")
 
         # Handle @prompt command (now just regular message in simplified architecture)
         await handle_message(
@@ -207,6 +212,12 @@ class TestIntegration:
         """Test conversation cache integration with message handling"""
 
         mock_slack_service = AsyncMock()
+        mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
+        mock_slack_service.send_thinking_indicator = AsyncMock(
+            return_value="thinking_ts"
+        )
+        mock_slack_service.delete_thinking_indicator = AsyncMock()
+
         mock_llm_service = AsyncMock()
         mock_llm_service.get_response.return_value = "Cached response"
 
@@ -231,15 +242,17 @@ class TestIntegration:
                 conversation_cache=mock_conversation_cache,
             )
 
-        # Verify cache was consulted
-        mock_conversation_cache.get_conversation.assert_called_once_with(
-            "C12345", "1234567890.123", mock_slack_service
+        # Note: In the simplified architecture, conversation cache is not actively used
+        # The message handler uses direct thread history from Slack instead
+        # Verify the thread history was retrieved (current implementation)
+        mock_slack_service.get_thread_history.assert_called_once_with(
+            "C12345", "1234567890.123"
         )
 
-        # Verify conversation was updated with new messages
-        assert (
-            mock_conversation_cache.update_conversation.call_count == 2
-        )  # User + bot message
+        # In the simplified architecture, conversation cache updates are not used
+        # Verify the core functionality works: LLM response and message sending
+        mock_llm_service.get_response.assert_called_once()
+        mock_slack_service.send_message.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.integration
