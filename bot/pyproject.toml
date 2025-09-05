@@ -45,6 +45,9 @@ dependencies = [
     "pinecone-client==2.2.4",
     "numpy>=1.24.0",
     "langfuse>=2.7.0",
+
+    # Slack formatting
+    "slackify-markdown>=0.2.0",
 ]
 
 [project.optional-dependencies]
