@@ -1,13 +1,37 @@
 # Google Drive Document Ingestion - THE ONLY SUPPORTED METHOD
 
-This is the sole document ingestion system for the RAG pipeline. It provides comprehensive Google Drive authentication and ingests documents with rich metadata including file paths and permissions.
+This is the sole document ingestion system for the RAG pipeline. **Now refactored into modular services** for better maintainability and testability.
+
+## 🏗️ New Architecture
+
+The ingestion system is now split into focused services:
+
+- **`services/document_processor.py`** - Text extraction from various document formats
+- **`services/google_drive_client.py`** - Google Drive API operations and authentication  
+- **`services/ingestion_orchestrator.py`** - Main workflow coordination
+- **`main.py`** - Clean CLI entry point
+
+## 📋 Supported Document Formats
+
+✅ **PDF files** (`.pdf`) - Text extraction with PyMuPDF  
+✅ **Microsoft Word** (`.docx`) - Full text and table extraction  
+✅ **Microsoft Excel** (`.xlsx`) - Multi-sheet data extraction  
+✅ **Microsoft PowerPoint** (`.pptx`) - Slide text and table extraction  
+✅ **Google Docs** - Exported as plain text  
+✅ **Google Sheets** - Exported as CSV  
+✅ **Google Slides** - Exported as plain text  
+✅ **Text files** (`.txt`, `.md`, etc.) - Direct content reading
+
+Provides comprehensive metadata including file paths, permissions, and access control information.
 
 ## Setup
 
 1. **Install dependencies:**
    ```bash
    cd ingest
-   pip install -r requirements.txt
+   pip install python-docx openpyxl python-pptx pymupdf
+   # Or install from pyproject.toml
+   pip install -e .
    ```
 
 2. **Google Drive API Setup:**
@@ -29,32 +53,43 @@ This is the sole document ingestion system for the RAG pipeline. It provides com
 
 ## Usage
 
-### Basic Usage
+### 🚀 New Recommended Method
 
-Ingest all documents from a Google Drive folder:
-
+**Basic Usage:**
 ```bash
-python google_drive_ingester.py --folder-id "1ABC123DEF456GHI789"
+python main.py --folder-id "1ABC123DEF456GHI789"
 ```
 
-### Advanced Usage
-
+**Advanced Usage:**
 ```bash
 # Ingest with custom metadata
-python google_drive_ingester.py \
+python main.py \
   --folder-id "1ABC123DEF456GHI789" \
   --metadata '{"department": "engineering", "project": "docs"}'
 
 # Use custom credentials file
-python google_drive_ingester.py \
+python main.py \
   --folder-id "1ABC123DEF456GHI789" \
   --credentials "./my-credentials.json" \
   --token "./my-token.json"
 
 # Non-recursive (only top-level folder)
-python google_drive_ingester.py \
+python main.py \
   --folder-id "1ABC123DEF456GHI789" \
   --recursive false
+
+# Force re-authentication
+python main.py \
+  --folder-id "1ABC123DEF456GHI789" \
+  --reauth
+```
+
+### 🔄 Legacy Method (Deprecated)
+
+The old command still works but shows deprecation warnings:
+```bash
+# Still works, but deprecated
+python ingester.py --folder-id "1ABC123DEF456GHI789"
 ```
 
 ## Finding Folder IDs

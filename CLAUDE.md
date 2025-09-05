@@ -54,12 +54,16 @@ make docker-run   # Run Docker container with .env
 ### Document Ingestion - Google Drive Only
 ```bash
 # THE ONLY SUPPORTED INGESTION METHOD
-# Ingest documents from Google Drive with comprehensive metadata
-cd ingest && python google_drive_ingester.py --folder-id "1ABC123DEF456GHI789"
-cd ingest && python google_drive_ingester.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
+# Ingest documents from Google Drive with comprehensive metadata using the new modular architecture
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
+
+# Legacy command still works with deprecation warnings
+cd ingest && python ingester.py --folder-id "1ABC123DEF456GHI789"
 
 # First-time setup requires Google OAuth2 credentials
 # See ingest/README.md for detailed setup instructions
+# Now supports comprehensive document formats: PDF, Word, Excel, PowerPoint, Google Workspace files
 # Includes file paths, permissions, and access control metadata
 ```
 
