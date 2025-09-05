@@ -1,12 +1,11 @@
 [run]
-source = src
-omit = 
+source = bot
+omit =
     # CLI scripts - not covered by unit tests
-    src/ingest_documents.py
-    src/migrate.py
-    src/app.py
+    bot/app.py
+    ingest/google_drive_ingester.py
     # Test files
-    src/tests/*
+    bot/tests/*
     # External libraries
     */site-packages/*
     */venv/*
@@ -22,15 +21,15 @@ show_missing = True
 exclude_lines =
     # Have to re-enable the standard pragma
     pragma: no cover
-    
+
     # Don't complain about missing debug-only code
     def __repr__
     if self\.debug
-    
+
     # Don't complain if tests don't hit defensive assertion code
     raise AssertionError
     raise NotImplementedError
-    
+
     # Don't complain if non-runnable code isn't run
     if 0:
     if __name__ == .__main__.:

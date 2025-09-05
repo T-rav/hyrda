@@ -47,7 +47,7 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('src/requirements-test.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('bot/requirements-test.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
