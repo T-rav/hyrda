@@ -129,11 +129,9 @@ async def handle_message(
             )
 
         # Generate response using LLM service
-        response = await llm_service.generate_response(
+        response = await llm_service.get_response(
             messages=history,
-            system_message=DEFAULT_SYSTEM_MESSAGE,
             user_id=user_id,
-            channel_id=channel,
         )
 
         # Clean up thinking message
@@ -162,11 +160,10 @@ async def handle_message(
             with contextlib.suppress(Exception):
                 await slack_service.delete_message(channel, thinking_message_ts)
 
-        error_context = {
-            "user_id": user_id,
-            "channel": channel,
-            "thread_ts": thread_ts,
-            "text_preview": text[:100],
-        }
-
-        await handle_error(e, slack_service, channel, error_context, thread_ts)
+        await handle_error(
+            slack_service.client,
+            channel,
+            thread_ts,
+            e,
+            "I'm sorry, I encountered an error while processing your message.",
+        )
