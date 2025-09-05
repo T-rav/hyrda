@@ -11,6 +11,7 @@ authors = [
 ]
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
+
 dependencies = [
     # Slack SDK
     "slack-bolt>=1.23.0",
@@ -69,6 +70,10 @@ dev = [
 
 [project.scripts]
 slack-bot = "app:main"
+
+# Package discovery configuration
+[tool.setuptools]
+packages = ["config", "handlers", "services", "utils", "tests"]
 
 # Ruff configuration
 [tool.ruff]
