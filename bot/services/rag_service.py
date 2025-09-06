@@ -128,7 +128,7 @@ class RAGService:
     @observe(name="rag_retrieval", as_type="retrieval")
     async def retrieve_context(self, query: str) -> list[dict[str, Any]]:
         """
-        Retrieve relevant context for a query
+        Retrieve relevant context for a query with hybrid search (semantic + keyword)
 
         Args:
             query: User query
@@ -146,29 +146,80 @@ class RAGService:
             # Generate query embedding
             query_embedding = await self.embedding_provider.get_embedding(query)
 
-            # Search vector store
+            # Search vector store with higher limit to get more candidates for reranking
             results = await self.vector_store.search(
                 query_embedding=query_embedding,
-                limit=self.settings.rag.max_chunks,
-                similarity_threshold=self.settings.rag.similarity_threshold,
+                limit=100,  # Get many more candidates for reranking
+                similarity_threshold=0.05,  # Even lower threshold to capture all potential matches
             )
+
+            # Apply hybrid search: boost documents with exact entity matches
+            enhanced_results = self._apply_hybrid_search_boosting(query, results)
+
+            # Two-pass filtering system:
+            # Pass 1: Lower threshold to allow entity-boosted documents through
+            pass1_threshold = self.settings.rag.similarity_threshold  # 0.5
+            pass1_filtered = [
+                result
+                for result in enhanced_results
+                if result.get("similarity", 0) >= pass1_threshold
+            ]
+
+            # Pass 2: Higher threshold for final high-quality results
+            pass2_threshold = self.settings.rag.results_similarity_threshold  # 0.7
+            final_results = [
+                result
+                for result in pass1_filtered
+                if result.get("similarity", 0) >= pass2_threshold
+            ][: self.settings.rag.max_results]  # Use max_results instead of max_chunks
+
+            # Debug logging
+            pass1_filtered_out = len(enhanced_results) - len(pass1_filtered)
+            pass2_filtered_out = len(pass1_filtered) - len(final_results)
+
+            if pass1_filtered_out > 0:
+                logger.info(
+                    f"📊 PASS 1 FILTER: Filtered out {pass1_filtered_out} results below {pass1_threshold} threshold"
+                )
+
+            if pass2_filtered_out > 0:
+                logger.info(
+                    f"📊 PASS 2 FILTER: Filtered out {pass2_filtered_out} results below {pass2_threshold} threshold"
+                )
+                # Show what got filtered in pass 2
+                pass2_filtered_out_results = [
+                    r
+                    for r in pass1_filtered
+                    if r.get("similarity", 0) < pass2_threshold
+                ][:3]
+                for result in pass2_filtered_out_results:
+                    metadata = result.get("metadata", {})
+                    file_name = metadata.get("file_name", "unknown")
+                    similarity = result.get("similarity", 0)
+                    logger.info(
+                        f"   • {file_name[:60]}... (similarity: {similarity:.3f})"
+                    )
 
             # Trace retrieval with Langfuse
             if langfuse_service:
                 langfuse_service.trace_retrieval(
                     query=query,
-                    results=results,
+                    results=final_results,
                     metadata={
                         "vector_provider": self.settings.vector.provider,
                         "embedding_provider": self.settings.embedding.provider,
                         "embedding_model": self.settings.embedding.model,
                         "max_chunks": self.settings.rag.max_chunks,
                         "similarity_threshold": self.settings.rag.similarity_threshold,
+                        "hybrid_search": True,
+                        "candidates_retrieved": len(results),
                     },
                 )
 
-            logger.info(f"Retrieved {len(results)} relevant chunks for query")
-            return results
+            logger.info(
+                f"Retrieved {len(final_results)} relevant chunks for query (from {len(results)} candidates)"
+            )
+            return final_results
 
         except Exception as e:
             logger.error(f"Error during context retrieval: {e}")
@@ -393,6 +444,185 @@ class RAGService:
             citations.append(citation)
 
         return response + "\n".join(citations)
+
+    def _apply_hybrid_search_boosting(
+        self, query: str, results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """
+        Apply hybrid search boosting to prioritize exact entity matches
+
+        Args:
+            query: Original user query
+            results: Vector search results
+
+        Returns:
+            Results with boosted similarity scores for exact matches
+        """
+        # Extract entities using simple but effective regex patterns
+        entities = self._extract_entities_simple(query)
+
+        logger.info(
+            f"🔍 ENTITY DETECTION: Query='{query}', Detected entities={entities}"
+        )
+
+        if not entities:
+            logger.info(
+                f"❌ NO ENTITIES DETECTED - returning {len(results)} original results"
+            )
+            return results
+
+        logger.info(
+            f"🚀 HYBRID SEARCH ACTIVE: Applying boosting for entities: {entities}"
+        )
+
+        enhanced_results = []
+        for result in results:
+            boosted_result = result.copy()
+
+            # Check content and metadata for entity mentions
+            content = result.get("content", "").lower()
+            metadata = result.get("metadata", {})
+            file_name = metadata.get("file_name", "").lower()
+            folder_path = metadata.get("folder_path", "").lower()
+
+            # Search text includes content, filename, and path
+            search_text = f"{content} {file_name} {folder_path}"
+
+            # Calculate boost factor based on entity matches
+            boost_factor = 1.0
+            matches_found = []
+
+            for entity in entities:
+                # Exact match boost (higher priority)
+                if (
+                    f" {entity} " in f" {search_text} "
+                    or search_text.startswith(entity)
+                    or search_text.endswith(entity)
+                ):
+                    boost_factor *= 2.0  # 2x boost per exact match - reasonable boost
+                    matches_found.append(f"{entity}(exact)")
+                # Partial match boost (lower priority)
+                elif entity in search_text:
+                    boost_factor *= 1.5  # 1.5x boost per partial match
+                    matches_found.append(f"{entity}(partial)")
+
+            # Extra boost for short/unique entity names (avoid false positives)
+            for entity in entities:
+                if (
+                    len(entity) <= 5  # Short names are more unique
+                    and entity in search_text
+                    and entity not in ["video", "audio", "media"]
+                ):  # Avoid common false positives
+                    boost_factor *= 1.0  # No extra boost - just the 2x is enough
+                    matches_found.append(f"{entity}(unique)")
+
+            # Apply boost to similarity score (cap at 0.95 to maintain relative ordering)
+            original_similarity = result.get("similarity", 0)
+            boosted_similarity = min(0.95, original_similarity * boost_factor)
+            boosted_result["similarity"] = boosted_similarity
+
+            # Add debug info
+            if boost_factor > 1.0:
+                boosted_result["boost_info"] = {
+                    "boost_factor": boost_factor,
+                    "matches": matches_found,
+                    "original_similarity": original_similarity,
+                }
+                logger.debug(
+                    f"Boosted document '{file_name}' from {original_similarity:.3f} to {boosted_similarity:.3f} (factor: {boost_factor:.2f}, matches: {matches_found})"
+                )
+
+            enhanced_results.append(boosted_result)
+
+        # Sort by boosted similarity scores
+        enhanced_results.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+
+        # Deduplicate by document title - return max 1 chunk per unique document
+        seen_documents = set()
+        deduplicated_results = []
+
+        for result in enhanced_results:
+            metadata = result.get("metadata", {})
+            file_name = metadata.get("file_name", "Unknown")
+
+            if file_name not in seen_documents:
+                seen_documents.add(file_name)
+                deduplicated_results.append(result)
+
+                # Stop when we have enough unique documents
+                if len(deduplicated_results) >= len(enhanced_results):
+                    break
+
+        logger.debug(
+            f"Deduplicated results: {len(enhanced_results)} chunks → {len(deduplicated_results)} unique documents"
+        )
+
+        # Temporary debug: Add debug info to first result to verify hybrid search is working
+        if deduplicated_results and entities:
+            first_result = deduplicated_results[0]
+            boost_info = first_result.get("boost_info")
+            if boost_info:
+                # Add temporary debug info to the content (will be visible in Slack response)
+                original_content = first_result.get("content", "")
+                debug_info = f"[HYBRID-SEARCH-DEBUG: Entities={entities}, Boost={boost_info.get('boost_factor', 1.0):.2f}] {original_content}"
+                first_result["content"] = debug_info
+
+        return deduplicated_results
+
+    def _extract_entities_simple(self, query: str) -> set[str]:
+        """
+        Extract entities from query - just get every meaningful word
+        """
+        entities = set()
+
+        # Super simple stop words
+        stop_words = {
+            "has",
+            "have",
+            "is",
+            "are",
+            "was",
+            "were",
+            "with",
+            "the",
+            "and",
+            "or",
+            "but",
+            "to",
+            "of",
+            "in",
+            "on",
+            "for",
+            "at",
+            "by",
+            "from",
+            "how",
+            "what",
+            "when",
+            "where",
+            "why",
+            "who",
+            "which",
+            "this",
+            "that",
+            "i",
+            "we",
+            "you",
+            "they",
+            "8th",
+            "light",
+            "worked",
+            "work",
+        }
+
+        # Just split and clean
+        words = query.lower().split()
+        for word in words:
+            clean_word = word.strip('.,!?();:"')
+            if clean_word not in stop_words and len(clean_word) > 2:
+                entities.add(clean_word)
+
+        return entities
 
 
 class DocumentProcessor:
