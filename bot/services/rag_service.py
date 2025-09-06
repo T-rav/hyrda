@@ -227,6 +227,8 @@ class RAGService:
                     context_section = "\n\n".join(context_texts)
                     rag_instruction = (
                         "Use the following context to answer the user's question. "
+                        "When you reference information from the context, you can mention the document names naturally in your response. "
+                        "Source citations with clickable links will be automatically added at the end of your response. "
                         "If the context doesn't contain relevant information, "
                         "say so and provide a general response based on your knowledge.\n\n"
                         f"Context:\n{context_section}\n\n"
@@ -254,6 +256,10 @@ class RAGService:
             )
 
             if response:
+                # Add source citations to the response if RAG was used
+                if use_rag and context_chunks:
+                    response = self._add_source_citations(response, context_chunks)
+
                 # Trace the complete RAG generation
                 if langfuse_service:
                     metadata = {
@@ -313,6 +319,80 @@ class RAGService:
             await self.llm_provider.close()
 
         logger.info("RAG service shutdown complete")
+
+    def _add_source_citations(
+        self, response: str, context_chunks: list[dict[str, Any]]
+    ) -> str:
+        """
+        Add source citations with Google Drive links to the response
+
+        Args:
+            response: The generated response from the LLM
+            context_chunks: List of context chunks used for generation
+
+        Returns:
+            Response with source citations appended
+        """
+        # Extract unique sources from context chunks
+        sources = {}
+        for chunk in context_chunks:
+            metadata = chunk.get("metadata", {})
+
+            # Use file_id as the key to avoid duplicates
+            file_id = metadata.get("file_id")
+            if not file_id:
+                continue
+
+            file_name = metadata.get("file_name", "Unknown Document")
+            web_view_link = metadata.get("web_view_link")
+            folder_path = metadata.get("folder_path", "")
+
+            if file_id not in sources:
+                sources[file_id] = {
+                    "name": file_name,
+                    "link": web_view_link,
+                    "path": folder_path,
+                    "similarity": chunk.get("similarity", 0),
+                }
+            else:
+                # Keep the highest similarity score if we see the same document multiple times
+                sources[file_id]["similarity"] = max(
+                    sources[file_id]["similarity"], chunk.get("similarity", 0)
+                )
+
+        if not sources:
+            return response
+
+        # Build citations section
+        citations = ["\n\n📚 **Sources:**"]
+
+        # Sort sources by similarity score (highest first)
+        sorted_sources = sorted(
+            sources.items(), key=lambda x: x[1]["similarity"], reverse=True
+        )
+
+        for i, (_file_id, source_info) in enumerate(sorted_sources, 1):
+            name = source_info["name"]
+            link = source_info["link"]
+            path = source_info["path"]
+            similarity = source_info["similarity"]
+
+            if link:
+                # Create clickable link for Slack
+                citation = f"{i}. [{name}]({link})"
+                if path:
+                    citation += f" (📁 {path})"
+                citation += f" - *Relevance: {similarity:.1%}*"
+            else:
+                # Fallback if no link available
+                citation = f"{i}. {name}"
+                if path:
+                    citation += f" (📁 {path})"
+                citation += f" - *Relevance: {similarity:.1%}*"
+
+            citations.append(citation)
+
+        return response + "\n".join(citations)
 
 
 class DocumentProcessor:
