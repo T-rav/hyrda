@@ -156,11 +156,11 @@ class RAGService:
                     query_embedding, entities
                 )
 
-            # Run regular semantic search with broad parameters
+            # Run regular semantic search with very broad parameters to capture all Apple docs
             semantic_results = await self.vector_store.search(
                 query_embedding=query_embedding,
-                limit=100,  # Get many more candidates for reranking
-                similarity_threshold=0.05,  # Even lower threshold to capture all potential matches
+                limit=200,  # Get even more candidates for reranking
+                similarity_threshold=0.01,  # Very low threshold to capture all potential matches
             )
 
             # Combine results (entity results get priority)
@@ -506,13 +506,17 @@ class RAGService:
             matches_found = []
 
             for entity in entities:
-                # Exact match boost (higher priority)
-                if (
+                # Exact match in title gets highest boost
+                if entity in file_name:
+                    boost_factor *= 5.0  # 5x boost for title matches - ensure all Apple docs get through
+                    matches_found.append(f"{entity}(title)")
+                # Exact match in content or path
+                elif (
                     f" {entity} " in f" {search_text} "
                     or search_text.startswith(entity)
                     or search_text.endswith(entity)
                 ):
-                    boost_factor *= 2.0  # 2x boost per exact match - reasonable boost
+                    boost_factor *= 2.5  # 2.5x boost per exact match
                     matches_found.append(f"{entity}(exact)")
                 # Partial match boost (lower priority)
                 elif entity in search_text:
@@ -570,15 +574,8 @@ class RAGService:
             f"Deduplicated results: {len(enhanced_results)} chunks → {len(deduplicated_results)} unique documents"
         )
 
-        # Temporary debug: Add debug info to first result to verify hybrid search is working
-        if deduplicated_results and entities:
-            first_result = deduplicated_results[0]
-            boost_info = first_result.get("boost_info")
-            if boost_info:
-                # Add temporary debug info to the content (will be visible in Slack response)
-                original_content = first_result.get("content", "")
-                debug_info = f"[HYBRID-SEARCH-DEBUG: Entities={entities}, Boost={boost_info.get('boost_factor', 1.0):.2f}] {original_content}"
-                first_result["content"] = debug_info
+        # Remove debug info for cleaner results
+        # Debug info removed to clean up output
 
         return deduplicated_results
 
@@ -636,6 +633,82 @@ class RAGService:
                 entities.add(clean_word)
 
         return entities
+
+    async def _search_with_entity_filtering(
+        self, query_embedding: list[float], entities: set[str]
+    ) -> list[dict[str, Any]]:
+        """
+        Search with entity-based metadata filtering for Pinecone
+
+        Args:
+            query_embedding: Query embedding vector
+            entities: Set of entities to filter by
+
+        Returns:
+            List of search results filtered by entities
+        """
+        if not self.vector_store or not entities:
+            return []
+
+        # Only use metadata filtering for Pinecone
+        if self.settings.vector.provider.lower() != "pinecone":
+            return []
+
+        try:
+            # Create metadata filter for entities
+            # Pinecone doesn't support $contains, so we'll skip metadata filtering
+            # and rely on the hybrid boosting system instead
+            logger.info(
+                "🔍 Skipping Pinecone metadata filtering (not supported), relying on hybrid boosting"
+            )
+            return []  # Return empty, let hybrid boosting handle entity prioritization
+
+        except Exception as e:
+            logger.error(f"Error in entity-filtered search: {e}")
+            return []
+
+    def _combine_search_results(
+        self,
+        entity_results: list[dict[str, Any]],
+        semantic_results: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Combine entity-filtered and semantic search results
+
+        Args:
+            entity_results: Results from entity-filtered search
+            semantic_results: Results from regular semantic search
+
+        Returns:
+            Combined and deduplicated results with entity results prioritized
+        """
+        # Use document ID to track duplicates
+        seen_docs = set()
+        combined_results = []
+
+        # Add entity results first (higher priority)
+        for result in entity_results:
+            doc_id = result.get("id")
+            if doc_id and doc_id not in seen_docs:
+                seen_docs.add(doc_id)
+                combined_results.append(result)
+
+        # Add semantic results that weren't already included
+        for result in semantic_results:
+            doc_id = result.get("id")
+            if doc_id and doc_id not in seen_docs:
+                seen_docs.add(doc_id)
+                result["source"] = "semantic"  # Mark as semantic result
+                combined_results.append(result)
+
+        # Sort by similarity score (entity-boosted results should naturally rank higher)
+        combined_results.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+
+        logger.info(
+            f"🔄 Combined results: {len(entity_results)} entity + {len(semantic_results)} semantic = {len(combined_results)} total"
+        )
+
+        return combined_results
 
 
 class DocumentProcessor:
