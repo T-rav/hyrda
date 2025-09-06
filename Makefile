@@ -27,7 +27,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -45,6 +45,7 @@ help:
 	@echo "  test-file       Run specific test file (use FILE=filename)"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-unit       Run unit tests only"
+	@echo "  test-ingest     Run ingestion service tests"
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
@@ -114,6 +115,10 @@ test-integration: $(VENV)
 test-unit: $(VENV)
 	@echo "$(BLUE)Running unit tests...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
+
+test-ingest: $(VENV)
+	@echo "$(BLUE)Running ingestion service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)ingest && PYTHONPATH=. $(PYTHON) -m pytest -v
 
 lint:
 	@echo "$(BLUE)🔍 Running unified linting with ruff (using $(PYTHON_LINT))...$(RESET)"
