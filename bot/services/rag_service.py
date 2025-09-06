@@ -146,12 +146,25 @@ class RAGService:
             # Generate query embedding
             query_embedding = await self.embedding_provider.get_embedding(query)
 
-            # Search vector store with higher limit to get more candidates for reranking
-            results = await self.vector_store.search(
+            # Extract entities for potential metadata filtering
+            entities = self._extract_entities_simple(query)
+
+            # Try entity-focused search first if entities detected
+            entity_results = []
+            if entities:
+                entity_results = await self._search_with_entity_filtering(
+                    query_embedding, entities
+                )
+
+            # Run regular semantic search with broad parameters
+            semantic_results = await self.vector_store.search(
                 query_embedding=query_embedding,
                 limit=100,  # Get many more candidates for reranking
                 similarity_threshold=0.05,  # Even lower threshold to capture all potential matches
             )
+
+            # Combine results (entity results get priority)
+            results = self._combine_search_results(entity_results, semantic_results)
 
             # Apply hybrid search: boost documents with exact entity matches
             enhanced_results = self._apply_hybrid_search_boosting(query, results)
