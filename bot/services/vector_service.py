@@ -316,6 +316,7 @@ class PineconeVectorStore(VectorStore):
         query_embedding: list[float],
         limit: int = 5,
         similarity_threshold: float = 0.7,
+        filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Search Pinecone for similar documents"""
         try:
@@ -329,6 +330,7 @@ class PineconeVectorStore(VectorStore):
                     top_k=limit,
                     include_metadata=True,
                     include_values=False,
+                    filter=filter,
                 ),
             )
 
