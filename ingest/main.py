@@ -40,7 +40,7 @@ find_and_load_env()
 # Local imports (assuming we'll use the existing ingestion logic)
 sys.path.append(str(Path(__file__).parent.parent / "bot"))
 
-from services.ingestion_orchestrator import IngestionOrchestrator
+from services import IngestionOrchestrator
 
 
 async def main():
