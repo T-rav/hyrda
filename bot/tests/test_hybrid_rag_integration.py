@@ -188,7 +188,7 @@ class TestHybridRAGServiceInitialization:
 
         service = HybridRAGService(test_settings)
 
-        with pytest.raises(Exception):  # Should fail due to missing API key
+        with pytest.raises(ValueError, match="API key"):  # Should fail due to missing API key
             await service.initialize()
 
     @pytest.mark.asyncio
