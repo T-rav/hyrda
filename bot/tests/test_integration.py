@@ -11,6 +11,7 @@ from app import create_app
 from config.settings import Settings
 from handlers.message_handlers import handle_message
 from health import HealthChecker
+from services.retrieval_service import RetrievalService
 
 
 class TestIntegration:
@@ -301,6 +302,74 @@ class TestIntegration:
             assert settings.slack.app_token == "xapp-test"
             assert settings.llm.provider == "openai"
             assert settings.llm.base_url == "https://api.test.com"
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_results_similarity_threshold_filtering(self):
+        """Test that results_similarity_threshold properly filters low-relevance results"""
+
+        # Create settings with specific threshold
+        settings = Settings()
+        settings.rag.results_similarity_threshold = 0.7
+        settings.rag.max_results = 5
+        settings.vector.provider = "elasticsearch"
+        settings.rag.enable_hybrid_search = False
+
+        retrieval_service = RetrievalService(settings)
+
+        # Mock vector service and embedding service
+        mock_vector_service = AsyncMock()
+        mock_embedding_service = AsyncMock()
+        mock_embedding_service.get_embedding.return_value = [0.1] * 1536
+
+        # Mock search results with varying similarity scores
+        mock_results = [
+            {
+                "similarity": 0.95,
+                "content": "High relevance",
+                "metadata": {"file_name": "doc1"},
+            },
+            {
+                "similarity": 0.924,
+                "content": "High relevance 2",
+                "metadata": {"file_name": "doc2"},
+            },
+            {
+                "similarity": 0.751,
+                "content": "Above threshold",
+                "metadata": {"file_name": "doc3"},
+            },
+            {
+                "similarity": 0.689,
+                "content": "Below threshold",
+                "metadata": {"file_name": "doc4"},
+            },  # Should be filtered
+            {
+                "similarity": 0.663,
+                "content": "Below threshold 2",
+                "metadata": {"file_name": "doc5"},
+            },  # Should be filtered
+        ]
+        mock_vector_service.search.return_value = mock_results
+
+        # Test retrieval with threshold filtering
+        results = await retrieval_service.retrieve_context(
+            "test query",
+            vector_service=mock_vector_service,
+            embedding_service=mock_embedding_service,
+        )
+
+        # Should only return 3 results (above 0.7 threshold)
+        assert len(results) == 3
+        assert all(result["similarity"] >= 0.7 for result in results)
+
+        # Verify the filtered results
+        similarities = [result["similarity"] for result in results]
+        assert 0.95 in similarities
+        assert 0.924 in similarities
+        assert 0.751 in similarities
+        assert 0.689 not in similarities  # Should be filtered out
+        assert 0.663 not in similarities  # Should be filtered out
 
     @pytest.mark.asyncio
     @pytest.mark.integration
