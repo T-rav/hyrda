@@ -145,26 +145,8 @@ class TitleInjectionService:
     def _clean_filename_patterns(self, title: str) -> str:
         """Clean common filename patterns to create readable titles"""
 
-        # First, remove common prefixes that are not meaningful
-        # Pattern: "CompanyName - Document Title" -> "Document Title"
-        if " - " in title:
-            parts = title.split(" - ", 1)
-            if len(parts) > 1 and len(parts[1].strip()) > 3:
-                # Check if first part looks like a company/prefix
-                first_part = parts[0].strip()
-                if len(first_part) < 20 and not any(
-                    word in first_part.lower()
-                    for word in [
-                        "guide",
-                        "manual",
-                        "document",
-                        "report",
-                        "analysis",
-                        "study",
-                        "overview",
-                    ]
-                ):
-                    title = parts[1].strip()
+        # Keep the full filename - don't remove company prefixes
+        # Just clean up formatting while preserving full content
 
         # Replace underscores with spaces
         title = re.sub(r"[_]+", " ", title)

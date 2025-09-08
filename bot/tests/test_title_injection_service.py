@@ -143,7 +143,10 @@ class TestTitleInjectionService:
         """Test enhanced title extraction from filenames"""
         test_cases = [
             # Basic PDF files
-            ({"file_name": "Apple - Project Details File.pdf"}, "Project Details File"),
+            (
+                {"file_name": "Apple - Project Details File.pdf"},
+                "Apple Project Details File",
+            ),
             ({"file_name": "Machine Learning Guide.pdf"}, "Machine Learning Guide"),
             ({"file_name": "user_manual_v2.pdf"}, "User Manual V2"),
             # Different file types
@@ -154,13 +157,13 @@ class TestTitleInjectionService:
             # Company prefix patterns
             (
                 {"file_name": "Microsoft - Azure Documentation.pdf"},
-                "Azure Documentation",
+                "Microsoft Azure Documentation",
             ),
             (
                 {"file_name": "Google - Cloud Security Guide.docx"},
-                "Cloud Security Guide",
+                "Google Cloud Security Guide",
             ),
-            ({"file_name": "Slack - API Reference.pdf"}, "API Reference"),
+            ({"file_name": "Slack - API Reference.pdf"}, "Slack API Reference"),
             # Complex patterns
             ({"file_name": "2023_Annual_Report_Final.pdf"}, "2023 Annual Report Final"),
             ({"file_name": "AI_ML_Best_Practices.docx"}, "AI ML Best Practices"),
@@ -205,7 +208,7 @@ class TestTitleInjectionService:
     def test_extract_title_from_filename(self):
         """Test direct filename to title conversion"""
         test_cases = [
-            ("Apple - Project Details File.pdf", "Project Details File"),
+            ("Apple - Project Details File.pdf", "Apple Project Details File"),
             ("Machine_Learning_Guide.pdf", "Machine Learning Guide"),
             ("quarterly-report-2023.docx", "Quarterly Report 2023"),
             ("API_REFERENCE_v2.1.pdf", "API Reference V2.1"),
@@ -224,8 +227,8 @@ class TestTitleInjectionService:
     def test_clean_filename_patterns(self):
         """Test filename pattern cleaning"""
         test_cases = [
-            ("Apple - Project Details File", "Project Details File"),
-            ("Microsoft - Azure Documentation", "Azure Documentation"),
+            ("Apple - Project Details File", "Apple Project Details File"),
+            ("Microsoft - Azure Documentation", "Microsoft Azure Documentation"),
             ("user_manual_v2", "User Manual V2"),
             ("API_REFERENCE_final", "API Reference Final"),
             ("machine_learning_guide", "Machine Learning Guide"),
