@@ -31,15 +31,14 @@ jobs:
       uses: actions/cache@v3
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('bot/requirements-test.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('bot/pyproject.toml') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
-        make install
+        make install-dev
 
     - name: Set up test environment
       env:
@@ -103,8 +102,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements-dev.txt
-        make install
+        make install-dev
 
     - name: Run integration tests
       env:
