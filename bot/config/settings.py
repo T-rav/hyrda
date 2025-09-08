@@ -64,9 +64,9 @@ class VectorSettings(BaseSettings):
     """Vector database settings for RAG"""
 
     provider: str = Field(
-        default="chroma", description="Vector DB provider (chroma, pinecone, pgvector)"
+        default="elasticsearch", description="Vector DB provider (elasticsearch only)"
     )
-    url: str = Field(default="http://localhost:8000", description="Vector database URL")
+    url: str = Field(default="http://localhost:9200", description="Vector database URL")
     api_key: SecretStr | None = Field(
         default=None, description="Vector DB API key (if required)"
     )
