@@ -71,9 +71,9 @@ class TestTitleInjectionService:
         test_cases = [
             ({"title": "Main Title"}, "Main Title"),
             ({"document_title": "Doc Title"}, "Doc Title"),
-            ({"file_name": "file.pdf"}, "file.pdf"),
-            ({"filename": "report.docx"}, "report.docx"),
-            ({"name": "Analysis"}, "Analysis"),
+            ({"file_name": "file.pdf"}, "File"),  # Filename processed
+            ({"filename": "report.docx"}, "Report"),  # Filename processed
+            ({"name": "Analysis"}, "Analysis"),  # Not a filename
             ({"doc_title": "Research"}, "Research"),
             ({"heading": "Chapter 1"}, "Chapter 1"),
             ({"header": "Section A"}, "Section A"),
@@ -132,6 +132,108 @@ class TestTitleInjectionService:
         expected = "<TITLE> Custom Title </TITLE> | Content here."
         assert result[0] == expected
 
+    def test_filename_title_extraction(self):
+        """Test enhanced title extraction from filenames"""
+        test_cases = [
+            # Basic PDF files
+            ({"file_name": "Apple - Project Details File.pdf"}, "Project Details File"),
+            ({"file_name": "Machine Learning Guide.pdf"}, "Machine Learning Guide"),
+            ({"file_name": "user_manual_v2.pdf"}, "User Manual V2"),
+            # Different file types
+            ({"file_name": "quarterly_report.docx"}, "Quarterly Report"),
+            ({"file_name": "data_analysis.xlsx"}, "Data Analysis"),
+            ({"file_name": "presentation_slides.pptx"}, "Presentation Slides"),
+            ({"file_name": "meeting_notes.txt"}, "Meeting Notes"),
+            # Company prefix patterns
+            (
+                {"file_name": "Microsoft - Azure Documentation.pdf"},
+                "Azure Documentation",
+            ),
+            (
+                {"file_name": "Google - Cloud Security Guide.docx"},
+                "Cloud Security Guide",
+            ),
+            ({"file_name": "Slack - API Reference.pdf"}, "API Reference"),
+            # Complex patterns
+            ({"file_name": "2023_Annual_Report_Final.pdf"}, "2023 Annual Report Final"),
+            ({"file_name": "AI_ML_Best_Practices.docx"}, "AI ML Best Practices"),
+            # Non-filename text (should not be processed)
+            (
+                {"file_name": "Simple Title Without Extension"},
+                "Simple Title Without Extension",
+            ),
+            ({"title": "Regular Title"}, "Regular Title"),
+            # Edge cases
+            ({"file_name": "a.pdf"}, "a.pdf"),  # Too short, keep original
+            ({"file_name": ".hidden.pdf"}, ".hidden.pdf"),  # Hidden file, keep original
+        ]
+
+        for metadata, expected in test_cases:
+            result = self.service._extract_title(metadata)
+            assert result == expected, (
+                f"Failed for {metadata}, got {result}, expected {expected}"
+            )
+
+    def test_is_filename(self):
+        """Test filename detection logic"""
+        test_cases = [
+            ("document.pdf", True),
+            ("spreadsheet.xlsx", True),
+            ("presentation.pptx", True),
+            ("text_file.txt", True),
+            ("webpage.html", True),
+            ("config.json", True),
+            ("Regular Title", False),
+            ("Title With Spaces", False),
+            ("123456", False),
+            ("", False),
+        ]
+
+        for text, expected in test_cases:
+            result = self.service._is_filename(text)
+            assert result == expected, (
+                f"Failed for '{text}', got {result}, expected {expected}"
+            )
+
+    def test_extract_title_from_filename(self):
+        """Test direct filename to title conversion"""
+        test_cases = [
+            ("Apple - Project Details File.pdf", "Project Details File"),
+            ("Machine_Learning_Guide.pdf", "Machine Learning Guide"),
+            ("quarterly-report-2023.docx", "Quarterly Report 2023"),
+            ("API_REFERENCE_v2.1.pdf", "API Reference V2.1"),
+            ("ml_basics.txt", "ML Basics"),
+            ("user_interface_design.pptx", "User Interface Design"),
+            ("simple.pdf", "Simple"),
+            ("a.pdf", "a.pdf"),  # Too short, keep original
+        ]
+
+        for filename, expected in test_cases:
+            result = self.service._extract_title_from_filename(filename)
+            assert result == expected, (
+                f"Failed for '{filename}', got {result}, expected {expected}"
+            )
+
+    def test_clean_filename_patterns(self):
+        """Test filename pattern cleaning"""
+        test_cases = [
+            ("Apple - Project Details File", "Project Details File"),
+            ("Microsoft - Azure Documentation", "Azure Documentation"),
+            ("user_manual_v2", "User Manual V2"),
+            ("API_REFERENCE_final", "API Reference Final"),
+            ("machine_learning_guide", "Machine Learning Guide"),
+            ("quarterly  report   2023", "Quarterly Report 2023"),
+            ("ai_ml_basics", "AI ML Basics"),
+            ("ios_development", "iOS Development"),
+            ("json_api_guide", "JSON API Guide"),
+        ]
+
+        for input_text, expected in test_cases:
+            result = self.service._clean_filename_patterns(input_text)
+            assert result == expected, (
+                f"Failed for '{input_text}', got {result}, expected {expected}"
+            )
+
 
 class TestEnhancedChunkProcessor:
     """Test the document processing with title injection"""
@@ -166,10 +268,10 @@ class TestEnhancedChunkProcessor:
         assert result[0]["original_content"] == "This is about machine learning."
         assert result[0]["metadata"]["author"] == "John Doe"
 
-        # Second document
+        # Second document - filename should be processed to clean title
         assert (
             result[1]["content"]
-            == "[TITLE] deep_learning.pdf [/TITLE]\nDeep learning fundamentals."
+            == "[TITLE] Deep Learning [/TITLE]\nDeep learning fundamentals."
         )
         assert result[1]["original_content"] == "Deep learning fundamentals."
 
