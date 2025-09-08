@@ -13,12 +13,17 @@ PIP := $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 
-# Find Python command with ruff installed (for linting)
-PYTHON_LINT := $(shell for cmd in python3.11 python3 python; do \
-    if command -v $$cmd >/dev/null 2>&1 && $$cmd -m ruff --version >/dev/null 2>&1; then \
-        echo $$cmd; break; \
-    fi; \
-done)
+# Find Python command with ruff installed (for linting) - prioritize venv
+PYTHON_LINT := $(shell \
+    if [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
+        echo "$(VENV)/bin/python"; \
+    else \
+        for cmd in python3.11 python3 python; do \
+            if command -v $$cmd >/dev/null 2>&1 && $$cmd -m ruff --version >/dev/null 2>&1; then \
+                echo $$cmd; break; \
+            fi; \
+        done; \
+    fi)
 
 # Colors for output
 RED := \033[0;31m
