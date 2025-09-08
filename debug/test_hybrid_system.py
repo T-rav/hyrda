@@ -66,7 +66,7 @@ class HybridSystemTester:
             metadata = [{"title": "ML Introduction", "author": "Jane Doe"}]
 
             enhanced = self.title_service.inject_titles(texts, metadata)
-            expected = "[TITLE] ML Introduction [/TITLE]\nMachine learning is powerful."
+            expected = "[FILENAME] ML Introduction [/FILENAME]\nMachine learning is powerful."
 
             assert enhanced[0] == expected, f"Expected '{expected}', got '{enhanced[0]}'"
 
@@ -206,7 +206,7 @@ class HybridSystemTester:
 
             # Verify title injection in dense store
             dense_doc = dense_store.ingested_docs[0]
-            assert "[TITLE] AI Revolution [/TITLE]" in dense_doc["content"], "Title injection missing in dense store"
+            assert "[FILENAME] AI Revolution [/FILENAME]" in dense_doc["content"], "Title injection missing in dense store"
             assert "Artificial intelligence is transforming" in dense_doc["content"], "Original content missing"
 
             # Verify separate title in sparse store
@@ -292,7 +292,7 @@ class HybridSystemTester:
             assert original_embedding != enhanced_embedding, "Title injection should change embeddings"
 
             # Enhanced text should contain title
-            assert "[TITLE] Neural Networks Guide [/TITLE]" in enhanced_texts[0], "Title injection failed"
+            assert "[FILENAME] Neural Networks Guide [/FILENAME]" in enhanced_texts[0], "Title injection failed"
 
             duration = time.time() - start
             self.add_result("Embedding + Title Injection", True, "Title injection affects embeddings correctly", duration)

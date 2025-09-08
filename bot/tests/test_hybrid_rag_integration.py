@@ -273,7 +273,7 @@ class TestHybridRAGServiceIngestion:
 
         # Verify title injection in dense store
         dense_doc = mock_dense_store.documents[0]
-        assert "[TITLE] ML Introduction [/TITLE]" in dense_doc["content"]
+        assert "[FILENAME] ML Introduction [/FILENAME]" in dense_doc["content"]
         assert "Machine learning is a subset" in dense_doc["content"]
 
         # Verify separate title field in sparse store

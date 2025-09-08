@@ -4,7 +4,7 @@ Title Injection Service for Enhanced RAG
 Implements the expert's recommendation to inject titles into chunk text
 at embed time for better semantic understanding.
 
-Pattern: "[TITLE] <title> [/TITLE]\n<content>"
+Pattern: "[FILENAME] <title> [/FILENAME]\n<content>"
 """
 
 import logging
@@ -22,8 +22,8 @@ class TitleInjectionService:
 
     def __init__(  # nosec B107
         self,
-        title_start_token: str = "[TITLE]",
-        title_end_token: str = "[/TITLE]",
+        title_start_token: str = "[FILENAME]",
+        title_end_token: str = "[/FILENAME]",
         separator: str = "\n",
     ):
         self.title_start_token = title_start_token
