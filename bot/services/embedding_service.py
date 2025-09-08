@@ -237,6 +237,10 @@ def chunk_text(
     Returns:
         List of text chunks
     """
+    # Clean text by normalizing line endings and removing excessive whitespace
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = " ".join(text.split())  # Normalize whitespace
+
     if separators is None:
         separators = ["\n\n", "\n", ". ", " ", ""]
 
