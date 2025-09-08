@@ -23,16 +23,14 @@ class TitleInjectionService:
         self,
         title_start_token: str = "[TITLE]",
         title_end_token: str = "[/TITLE]",
-        separator: str = "\n"
+        separator: str = "\n",
     ):
         self.title_start_token = title_start_token
         self.title_end_token = title_end_token
         self.separator = separator
 
     def inject_titles(
-        self,
-        texts: list[str],
-        metadata: list[dict[str, Any]]
+        self, texts: list[str], metadata: list[dict[str, Any]]
     ) -> list[str]:
         """
         Inject titles into text chunks for better embeddings
@@ -64,8 +62,14 @@ class TitleInjectionService:
     def _extract_title(self, metadata: dict[str, Any]) -> str | None:
         """Extract title from metadata using various possible keys"""
         possible_title_keys = [
-            'title', 'document_title', 'file_name', 'filename',
-            'name', 'doc_title', 'heading', 'header'
+            "title",
+            "document_title",
+            "file_name",
+            "filename",
+            "name",
+            "doc_title",
+            "heading",
+            "header",
         ]
 
         for key in possible_title_keys:
@@ -130,8 +134,7 @@ class EnhancedChunkProcessor:
         self.title_injection = title_injection_service
 
     def process_documents_for_embedding(
-        self,
-        documents: list[dict[str, Any]]
+        self, documents: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
         """
         Process documents with title injection before embedding
@@ -145,16 +148,18 @@ class EnhancedChunkProcessor:
         processed_docs = []
 
         for doc in documents:
-            content = doc.get('content', '')
-            metadata = doc.get('metadata', {})
+            content = doc.get("content", "")
+            metadata = doc.get("metadata", {})
 
             # Create enhanced content with title injection
-            enhanced_content = self.title_injection.inject_titles([content], [metadata])[0]
+            enhanced_content = self.title_injection.inject_titles(
+                [content], [metadata]
+            )[0]
 
             # Create new document with enhanced content
             enhanced_doc = doc.copy()
-            enhanced_doc['content'] = enhanced_content
-            enhanced_doc['original_content'] = content  # Keep original for reference
+            enhanced_doc["content"] = enhanced_content
+            enhanced_doc["original_content"] = content  # Keep original for reference
 
             processed_docs.append(enhanced_doc)
 
@@ -162,8 +167,7 @@ class EnhancedChunkProcessor:
         return processed_docs
 
     def prepare_for_dual_indexing(
-        self,
-        documents: list[dict[str, Any]]
+        self, documents: list[dict[str, Any]]
     ) -> dict[str, list[dict[str, Any]]]:
         """
         Prepare documents for dual indexing (Pinecone + Elasticsearch)
@@ -178,23 +182,22 @@ class EnhancedChunkProcessor:
         sparse_docs = []
 
         for doc in documents:
-            content = doc.get('content', '')
-            metadata = doc.get('metadata', {})
+            content = doc.get("content", "")
+            metadata = doc.get("metadata", {})
 
             # For dense indexing: use enhanced content
-            enhanced_content = self.title_injection.inject_titles([content], [metadata])[0]
+            enhanced_content = self.title_injection.inject_titles(
+                [content], [metadata]
+            )[0]
             dense_doc = doc.copy()
-            dense_doc['content'] = enhanced_content
+            dense_doc["content"] = enhanced_content
             dense_docs.append(dense_doc)
 
             # For sparse indexing: separate title and content fields
             sparse_doc = doc.copy()
-            sparse_doc['content'] = content  # Original content
-            sparse_doc['title'] = self.title_injection._extract_title(metadata) or ""
+            sparse_doc["content"] = content  # Original content
+            sparse_doc["title"] = self.title_injection._extract_title(metadata) or ""
             sparse_docs.append(sparse_doc)
 
         logger.info(f"Prepared {len(dense_docs)} documents for dual indexing")
-        return {
-            'dense': dense_docs,
-            'sparse': sparse_docs
-        }
+        return {"dense": dense_docs, "sparse": sparse_docs}

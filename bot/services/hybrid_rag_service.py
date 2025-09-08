@@ -84,7 +84,7 @@ class HybridRAGService:
                 provider="pinecone",
                 api_key=self.vector_settings.api_key,
                 collection_name=self.vector_settings.collection_name,
-                environment=self.vector_settings.environment
+                environment=self.vector_settings.environment,
             )
             self.dense_store = create_vector_store(pinecone_settings)
             await self.dense_store.initialize()
@@ -94,7 +94,7 @@ class HybridRAGService:
             es_settings = VectorSettings(
                 provider="elasticsearch",
                 url=self.vector_settings.url,
-                collection_name=f"{self.vector_settings.collection_name}_sparse"
+                collection_name=f"{self.vector_settings.collection_name}_sparse",
             )
             self.sparse_store = create_vector_store(es_settings)
             await self.sparse_store.initialize()
@@ -102,15 +102,18 @@ class HybridRAGService:
 
             # Initialize reranker if enabled
             reranker = None
-            if self.hybrid_settings.reranker_enabled and self.hybrid_settings.reranker_provider == "cohere":
-                    if not self.hybrid_settings.reranker_api_key:
-                        logger.warning("Cohere API key not provided, reranking disabled")
-                    else:
-                        reranker = CohereReranker(
-                            api_key=self.hybrid_settings.reranker_api_key.get_secret_value(),
-                            model=self.hybrid_settings.reranker_model
-                        )
-                        logger.info("✅ Cohere reranker initialized")
+            if (
+                self.hybrid_settings.reranker_enabled
+                and self.hybrid_settings.reranker_provider == "cohere"
+            ):
+                if not self.hybrid_settings.reranker_api_key:
+                    logger.warning("Cohere API key not provided, reranking disabled")
+                else:
+                    reranker = CohereReranker(
+                        api_key=self.hybrid_settings.reranker_api_key.get_secret_value(),
+                        model=self.hybrid_settings.reranker_model,
+                    )
+                    logger.info("✅ Cohere reranker initialized")
 
             # Initialize hybrid retrieval orchestrator
             self.hybrid_retrieval = HybridRetrievalService(
@@ -121,7 +124,7 @@ class HybridRAGService:
                 sparse_top_k=self.hybrid_settings.sparse_top_k,
                 fusion_top_k=self.hybrid_settings.fusion_top_k,
                 final_top_k=self.hybrid_settings.final_top_k,
-                rrf_k=self.hybrid_settings.rrf_k
+                rrf_k=self.hybrid_settings.rrf_k,
             )
 
             self._initialized = True
@@ -135,7 +138,7 @@ class HybridRAGService:
         self,
         texts: list[str],
         embeddings: list[list[float]],
-        metadata: list[dict[str, Any]]
+        metadata: list[dict[str, Any]],
     ) -> bool:
         """
         Ingest documents into both dense and sparse stores with title injection
@@ -168,21 +171,22 @@ class HybridRAGService:
 
             # Parallel ingestion into both stores
             dense_task = self.dense_store.add_documents(
-                texts=dense_texts,
-                embeddings=embeddings,
-                metadata=dense_metadata
+                texts=dense_texts, embeddings=embeddings, metadata=dense_metadata
             )
 
             # For sparse store, pass empty embeddings (won't be used)
             sparse_task = self.sparse_store.add_documents(
                 texts=sparse_texts,
-                embeddings=[[]] * len(sparse_texts),  # Empty embeddings for sparse store
-                metadata=sparse_metadata
+                embeddings=[[]]
+                * len(sparse_texts),  # Empty embeddings for sparse store
+                metadata=sparse_metadata,
             )
 
             await asyncio.gather(dense_task, sparse_task)
 
-            logger.info(f"✅ Successfully ingested {len(texts)} documents into hybrid system")
+            logger.info(
+                f"✅ Successfully ingested {len(texts)} documents into hybrid system"
+            )
             return True
 
         except Exception as e:
@@ -194,7 +198,7 @@ class HybridRAGService:
         query: str,
         query_embedding: list[float],
         top_k: int | None = None,
-        similarity_threshold: float = 0.0
+        similarity_threshold: float = 0.0,
     ) -> list[dict[str, Any]]:
         """
         Perform hybrid search with the complete pipeline:
@@ -209,7 +213,7 @@ class HybridRAGService:
             return await self.dense_store.search(
                 query_embedding=query_embedding,
                 limit=top_k or 10,
-                similarity_threshold=similarity_threshold
+                similarity_threshold=similarity_threshold,
             )
 
         # Use hybrid retrieval pipeline
@@ -217,7 +221,7 @@ class HybridRAGService:
             query=query,
             query_embedding=query_embedding,
             top_k=top_k,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold,
         )
 
         # Convert RetrievalResult objects back to dict format for compatibility
@@ -228,7 +232,7 @@ class HybridRAGService:
                 "metadata": result.metadata,
                 "id": result.id,
                 "_hybrid_source": result.source,  # Track source for debugging
-                "_hybrid_rank": result.rank
+                "_hybrid_rank": result.rank,
             }
             for result in results
         ]
@@ -275,7 +279,7 @@ class HybridRAGService:
                     query=query,
                     query_embedding=query_embedding,
                     top_k=self.hybrid_settings.final_top_k,
-                    similarity_threshold=0.0  # Let reranking handle quality
+                    similarity_threshold=0.0,  # Let reranking handle quality
                 )
 
                 if context_chunks:
@@ -294,26 +298,31 @@ class HybridRAGService:
                                 f"[Source: {source_doc}, Score: {similarity:.2f}, Via: {source}]\n{content}"
                             )
                         else:
-                            context_texts.append(f"[Score: {similarity:.2f}, Via: {source}]\n{content}")
+                            context_texts.append(
+                                f"[Score: {similarity:.2f}, Via: {source}]\n{content}"
+                            )
 
                     # Create RAG system message
                     context_section = "\n\n".join(context_texts)
                     rag_instruction = (
                         "Use the following context retrieved via hybrid search (dense + sparse + reranking) to answer the user's question. "
-                        "The context includes relevance scores and retrieval methods for transparency. "
-                        "When you reference information, you can mention document names naturally. "
-                        "Source citations with clickable links will be automatically added at the end. "
+                        "Answer naturally without adding inline source citations like '[Source: ...]' since "
+                        "complete source citations will be automatically added at the end of your response. "
                         "If the context doesn't contain relevant information, "
                         "say so and provide a general response based on your knowledge.\n\n"
                         f"Context:\n{context_section}\n\n"
                     )
 
                     if final_system_message:
-                        final_system_message = f"{final_system_message}\n\n{rag_instruction}"
+                        final_system_message = (
+                            f"{final_system_message}\n\n{rag_instruction}"
+                        )
                     else:
                         final_system_message = rag_instruction
 
-                    logger.info(f"🔍 Using hybrid RAG with {len(context_chunks)} context chunks")
+                    logger.info(
+                        f"🔍 Using hybrid RAG with {len(context_chunks)} context chunks"
+                    )
 
             # Prepare messages for LLM
             messages = conversation_history.copy()
@@ -365,7 +374,9 @@ class HybridRAGService:
             seen_sources.add(source_key)
 
             # Build citation with hybrid search info
-            citation = f"{i}. **{file_name}** (Score: {similarity:.1%}, Via: {source_type})"
+            citation = (
+                f"{i}. **{file_name}** (Score: {similarity:.1%}, Via: {source_type})"
+            )
 
             # Add path if available
             folder_path = metadata.get("folder_path")
@@ -390,7 +401,7 @@ class HybridRAGService:
         status = {
             "initialized": self._initialized,
             "hybrid_enabled": self.hybrid_settings.enabled,
-            "components": {}
+            "components": {},
         }
 
         if self._initialized:
@@ -407,11 +418,11 @@ class HybridRAGService:
                 status["components"]["sparse_store"] = f"error: {e}"
 
             status["components"]["reranker"] = (
-                "enabled" if self.hybrid_settings.reranker_enabled
-                else "disabled"
+                "enabled" if self.hybrid_settings.reranker_enabled else "disabled"
             )
             status["components"]["title_injection"] = (
-                "enabled" if self.hybrid_settings.title_injection_enabled
+                "enabled"
+                if self.hybrid_settings.title_injection_enabled
                 else "disabled"
             )
 

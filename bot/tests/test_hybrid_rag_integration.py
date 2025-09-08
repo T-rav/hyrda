@@ -20,7 +20,9 @@ class MockEmbeddingService:
         self.embed_documents = AsyncMock()
         self.embed_query = AsyncMock()
 
-    def setup_responses(self, document_embeddings: list[list[float]], query_embedding: list[float]):
+    def setup_responses(
+        self, document_embeddings: list[list[float]], query_embedding: list[float]
+    ):
         """Setup mock responses"""
         self.embed_documents.return_value = document_embeddings
         self.embed_query.return_value = query_embedding
@@ -35,20 +37,35 @@ class MockVectorStore:
         self.initialize = AsyncMock()
         self.close = AsyncMock()
 
-    async def add_documents(self, texts: list[str], embeddings: list[list[float]], metadata: list[dict[str, Any]]):
+    async def add_documents(
+        self,
+        texts: list[str],
+        embeddings: list[list[float]],
+        metadata: list[dict[str, Any]],
+    ):
         """Mock document ingestion"""
-        for i, (text, embedding, meta) in enumerate(zip(texts, embeddings, metadata, strict=False)):
+        for i, (text, embedding, meta) in enumerate(
+            zip(texts, embeddings, metadata, strict=False)
+        ):
             doc_id = f"{self.store_type}_{i}"
-            self.documents.append({
-                "id": doc_id,
-                "content": text,
-                "embedding": embedding,
-                "metadata": meta,
-                "similarity": 0.0  # Will be set during search
-            })
+            self.documents.append(
+                {
+                    "id": doc_id,
+                    "content": text,
+                    "embedding": embedding,
+                    "metadata": meta,
+                    "similarity": 0.0,  # Will be set during search
+                }
+            )
         return True
 
-    async def search(self, query_embedding: list[float], limit: int = 10, similarity_threshold: float = 0.0, **kwargs):
+    async def search(
+        self,
+        query_embedding: list[float],
+        limit: int = 10,
+        similarity_threshold: float = 0.0,
+        **kwargs,
+    ):
         """Mock dense vector search with cosine similarity simulation"""
         if self.store_type != "dense":
             return []
@@ -56,19 +73,27 @@ class MockVectorStore:
         results = []
         for doc in self.documents[:limit]:
             # Simulate cosine similarity (simplified)
-            similarity = self._simulate_cosine_similarity(query_embedding, doc["embedding"])
+            similarity = self._simulate_cosine_similarity(
+                query_embedding, doc["embedding"]
+            )
             if similarity >= similarity_threshold:
                 result = {
                     "id": doc["id"],
                     "content": doc["content"],
                     "similarity": similarity,
-                    "metadata": doc["metadata"]
+                    "metadata": doc["metadata"],
                 }
                 results.append(result)
 
         return sorted(results, key=lambda x: x["similarity"], reverse=True)
 
-    async def bm25_search(self, query: str, limit: int = 10, field_boosts: dict[str, float] = None, **kwargs):
+    async def bm25_search(
+        self,
+        query: str,
+        limit: int = 10,
+        field_boosts: dict[str, float] = None,
+        **kwargs,
+    ):
         """Mock BM25 search"""
         if self.store_type != "sparse":
             return []
@@ -91,22 +116,28 @@ class MockVectorStore:
             if score > 0:
                 # Normalize score
                 similarity = min(score / 10.0, 1.0)
-                results.append({
-                    "id": doc["id"],
-                    "content": doc["content"],
-                    "similarity": similarity,
-                    "metadata": doc["metadata"]
-                })
+                results.append(
+                    {
+                        "id": doc["id"],
+                        "content": doc["content"],
+                        "similarity": similarity,
+                        "metadata": doc["metadata"],
+                    }
+                )
 
         return sorted(results, key=lambda x: x["similarity"], reverse=True)
 
-    def _simulate_cosine_similarity(self, query_embedding: list[float], doc_embedding: list[float]) -> float:
+    def _simulate_cosine_similarity(
+        self, query_embedding: list[float], doc_embedding: list[float]
+    ) -> float:
         """Simple cosine similarity simulation"""
         if not query_embedding or not doc_embedding:
             return 0.0
 
         # Simple dot product simulation
-        dot_product = sum(q * d for q, d in zip(query_embedding[:5], doc_embedding[:5], strict=False))  # Use first 5 dims
+        dot_product = sum(
+            q * d for q, d in zip(query_embedding[:5], doc_embedding[:5], strict=False)
+        )  # Use first 5 dims
         # Normalize to 0-1 range
         return max(0.0, min(1.0, (dot_product + 5) / 10))
 
@@ -118,7 +149,7 @@ def test_settings():
         vector=VectorSettings(
             provider="pinecone",
             api_key="test-pinecone-key",
-            collection_name="test_index"
+            collection_name="test_index",
         ),
         hybrid=HybridSettings(
             enabled=True,
@@ -126,8 +157,8 @@ def test_settings():
             sparse_top_k=5,
             fusion_top_k=3,
             final_top_k=2,
-            reranker_enabled=False  # Disable for most tests
-        )
+            reranker_enabled=False,  # Disable for most tests
+        ),
     )
 
 
@@ -137,20 +168,20 @@ def sample_documents():
     return [
         {
             "text": "Machine learning is a subset of artificial intelligence.",
-            "metadata": {"title": "ML Introduction", "category": "AI"}
+            "metadata": {"title": "ML Introduction", "category": "AI"},
         },
         {
             "text": "Deep learning uses neural networks with multiple layers.",
-            "metadata": {"title": "Deep Learning Basics", "category": "AI"}
+            "metadata": {"title": "Deep Learning Basics", "category": "AI"},
         },
         {
             "text": "Natural language processing enables computers to understand text.",
-            "metadata": {"title": "NLP Overview", "category": "AI"}
+            "metadata": {"title": "NLP Overview", "category": "AI"},
         },
         {
             "text": "Computer vision allows machines to interpret visual information.",
-            "metadata": {"title": "Computer Vision", "category": "AI"}
-        }
+            "metadata": {"title": "Computer Vision", "category": "AI"},
+        },
     ]
 
 
@@ -158,7 +189,7 @@ class TestHybridRAGServiceInitialization:
     """Test initialization of hybrid RAG service"""
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_initialization_success(self, mock_create_store, test_settings):
         """Test successful initialization"""
         # Setup mocks
@@ -188,11 +219,13 @@ class TestHybridRAGServiceInitialization:
 
         service = HybridRAGService(test_settings)
 
-        with pytest.raises(ValueError, match="API key"):  # Should fail due to missing API key
+        with pytest.raises(
+            ValueError, match="API key"
+        ):  # Should fail due to missing API key
             await service.initialize()
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_initialization_with_reranker(self, mock_create_store, test_settings):
         """Test initialization with reranker enabled"""
         test_settings.hybrid.reranker_enabled = True
@@ -212,8 +245,10 @@ class TestHybridRAGServiceIngestion:
     """Test document ingestion pipeline"""
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
-    async def test_dual_ingestion_success(self, mock_create_store, test_settings, sample_documents):
+    @patch("services.hybrid_rag_service.create_vector_store")
+    async def test_dual_ingestion_success(
+        self, mock_create_store, test_settings, sample_documents
+    ):
         """Test successful dual ingestion into both stores"""
         # Setup mock stores
         mock_dense_store = MockVectorStore("dense")
@@ -247,7 +282,7 @@ class TestHybridRAGServiceIngestion:
         assert sparse_doc["metadata"]["title"] == "ML Introduction"
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_ingestion_without_titles(self, mock_create_store, test_settings):
         """Test ingestion with documents without titles"""
         mock_dense_store = MockVectorStore("dense")
@@ -287,8 +322,10 @@ class TestHybridRAGServiceSearch:
     """Test hybrid search functionality"""
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
-    async def test_hybrid_search_success(self, mock_create_store, test_settings, sample_documents):
+    @patch("services.hybrid_rag_service.create_vector_store")
+    async def test_hybrid_search_success(
+        self, mock_create_store, test_settings, sample_documents
+    ):
         """Test successful hybrid search"""
         # Setup mock stores with data
         mock_dense_store = MockVectorStore("dense")
@@ -309,9 +346,7 @@ class TestHybridRAGServiceSearch:
         query_embedding = [0.15, 0.25, 0.35] * 512  # Similar to first doc
 
         results = await service.hybrid_search(
-            query=query,
-            query_embedding=query_embedding,
-            top_k=3
+            query=query, query_embedding=query_embedding, top_k=3
         )
 
         assert len(results) >= 0  # Should return some results
@@ -326,8 +361,10 @@ class TestHybridRAGServiceSearch:
             assert "_hybrid_source" in result
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
-    async def test_search_with_similarity_threshold(self, mock_create_store, test_settings, sample_documents):
+    @patch("services.hybrid_rag_service.create_vector_store")
+    async def test_search_with_similarity_threshold(
+        self, mock_create_store, test_settings, sample_documents
+    ):
         """Test search with similarity threshold filtering"""
         mock_dense_store = MockVectorStore("dense")
         mock_sparse_store = MockVectorStore("sparse")
@@ -346,7 +383,7 @@ class TestHybridRAGServiceSearch:
         results = await service.hybrid_search(
             query="test query",
             query_embedding=[0.5] * 1536,
-            similarity_threshold=0.9  # Very high threshold
+            similarity_threshold=0.9,  # Very high threshold
         )
 
         # Should filter out low similarity results
@@ -354,8 +391,10 @@ class TestHybridRAGServiceSearch:
             assert result["similarity"] >= 0.9
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
-    async def test_search_hybrid_disabled_fallback(self, mock_create_store, test_settings):
+    @patch("services.hybrid_rag_service.create_vector_store")
+    async def test_search_hybrid_disabled_fallback(
+        self, mock_create_store, test_settings
+    ):
         """Test search fallback when hybrid is disabled"""
         test_settings.hybrid.enabled = False
 
@@ -373,8 +412,7 @@ class TestHybridRAGServiceSearch:
 
         # Search should fallback to dense-only
         results = await service.hybrid_search(
-            query="test",
-            query_embedding=[0.1] * 1536
+            query="test", query_embedding=[0.1] * 1536
         )
 
         # Should get results from dense store only
@@ -393,7 +431,7 @@ class TestHybridRAGServiceSystemStatus:
     """Test system status and health checks"""
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_system_status_healthy(self, mock_create_store, test_settings):
         """Test system status when healthy"""
         mock_dense_store = MockVectorStore("dense")
@@ -424,7 +462,7 @@ class TestHybridRAGServiceSystemStatus:
         assert status["hybrid_enabled"] is True  # From settings
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_resource_cleanup(self, mock_create_store, test_settings):
         """Test resource cleanup on close"""
         mock_dense_store = MockVectorStore("dense")
@@ -445,7 +483,7 @@ class TestEndToEndScenarios:
     """End-to-end integration test scenarios"""
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_complete_rag_pipeline(self, mock_create_store, test_settings):
         """Test complete RAG pipeline: ingest → search → results"""
         # Setup
@@ -458,17 +496,31 @@ class TestEndToEndScenarios:
 
         # Ingest diverse documents
         documents = [
-            ("Python is a programming language", {"title": "Python Intro", "lang": "python"}),
-            ("Machine learning models need training data", {"title": "ML Training", "domain": "ai"}),
-            ("Elasticsearch is a search engine", {"title": "Search Systems", "type": "database"}),
-            ("Neural networks have multiple layers", {"title": "Deep Learning", "domain": "ai"})
+            (
+                "Python is a programming language",
+                {"title": "Python Intro", "lang": "python"},
+            ),
+            (
+                "Machine learning models need training data",
+                {"title": "ML Training", "domain": "ai"},
+            ),
+            (
+                "Elasticsearch is a search engine",
+                {"title": "Search Systems", "type": "database"},
+            ),
+            (
+                "Neural networks have multiple layers",
+                {"title": "Deep Learning", "domain": "ai"},
+            ),
         ]
 
         texts, metadata = zip(*documents, strict=False)
-        embeddings = [[0.1 + i*0.1] * 1536 for i in range(len(texts))]
+        embeddings = [[0.1 + i * 0.1] * 1536 for i in range(len(texts))]
 
         # Ingest
-        ingest_success = await service.ingest_documents(list(texts), embeddings, list(metadata))
+        ingest_success = await service.ingest_documents(
+            list(texts), embeddings, list(metadata)
+        )
         assert ingest_success is True
 
         # Search for AI-related content
@@ -476,9 +528,7 @@ class TestEndToEndScenarios:
         query_embedding = [0.2] * 1536  # Close to ML document
 
         results = await service.hybrid_search(
-            query=query,
-            query_embedding=query_embedding,
-            top_k=2
+            query=query, query_embedding=query_embedding, top_k=2
         )
 
         assert len(results) >= 0  # Should get some results
@@ -489,7 +539,7 @@ class TestEndToEndScenarios:
             assert "_hybrid_rank" in results[0]
 
     @pytest.mark.asyncio
-    @patch('services.hybrid_rag_service.create_vector_store')
+    @patch("services.hybrid_rag_service.create_vector_store")
     async def test_entity_search_scenario(self, mock_create_store, test_settings):
         """Test scenario where entity appears in title (expert's recommendation)"""
         mock_dense_store = MockVectorStore("dense")
@@ -503,12 +553,12 @@ class TestEndToEndScenarios:
         texts = [
             "This document discusses various topics in technology.",
             "General information about software development practices.",
-            "An overview of different programming paradigms."
+            "An overview of different programming paradigms.",
         ]
         metadata = [
             {"title": "TensorFlow Guide"},  # Entity in title
             {"title": "Development Best Practices"},
-            {"title": "Programming Concepts"}
+            {"title": "Programming Concepts"},
         ]
         embeddings = [[0.1] * 1536, [0.2] * 1536, [0.3] * 1536]
 
@@ -519,9 +569,7 @@ class TestEndToEndScenarios:
         query_embedding = [0.15] * 1536
 
         results = await service.hybrid_search(
-            query=query,
-            query_embedding=query_embedding,
-            top_k=3
+            query=query, query_embedding=query_embedding, top_k=3
         )
 
         # The document with "TensorFlow" in title should rank highly due to:

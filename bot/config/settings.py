@@ -84,7 +84,9 @@ class VectorSettings(BaseSettings):
 class HybridSettings(BaseSettings):
     """Hybrid retrieval settings"""
 
-    enabled: bool = Field(default=True, description="Enable hybrid dense+sparse retrieval")
+    enabled: bool = Field(
+        default=True, description="Enable hybrid dense+sparse retrieval"
+    )
     dense_top_k: int = Field(default=100, description="Dense retrieval top-k")
     sparse_top_k: int = Field(default=200, description="Sparse retrieval top-k")
     fusion_top_k: int = Field(default=50, description="Post-fusion candidates")
@@ -92,15 +94,23 @@ class HybridSettings(BaseSettings):
     rrf_k: int = Field(default=60, description="RRF parameter k")
 
     # Reranker settings
-    reranker_enabled: bool = Field(default=True, description="Enable cross-encoder reranking")
-    reranker_provider: str = Field(default="cohere", description="Reranker provider (cohere)")
-    reranker_model: str = Field(default="rerank-english-v3.0", description="Reranker model")
+    reranker_enabled: bool = Field(
+        default=True, description="Enable cross-encoder reranking"
+    )
+    reranker_provider: str = Field(
+        default="cohere", description="Reranker provider (cohere)"
+    )
+    reranker_model: str = Field(
+        default="rerank-english-v3.0", description="Reranker model"
+    )
     reranker_api_key: SecretStr | None = Field(
         default=None, description="Reranker API key"
     )
 
     # Title injection
-    title_injection_enabled: bool = Field(default=True, description="Enable title injection")
+    title_injection_enabled: bool = Field(
+        default=True, description="Enable title injection"
+    )
 
     model_config = ConfigDict(env_prefix="HYBRID_")  # type: ignore[assignment,typeddict-unknown-key]
 
