@@ -109,8 +109,12 @@ class HybridRAGService:
                 if not self.hybrid_settings.reranker_api_key:
                     logger.warning("Cohere API key not provided, reranking disabled")
                 else:
+                    # Handle both SecretStr and plain string
+                    api_key = self.hybrid_settings.reranker_api_key
+                    if hasattr(api_key, "get_secret_value"):
+                        api_key = api_key.get_secret_value()
                     reranker = CohereReranker(
-                        api_key=self.hybrid_settings.reranker_api_key.get_secret_value(),
+                        api_key=api_key,
                         model=self.hybrid_settings.reranker_model,
                     )
                     logger.info("✅ Cohere reranker initialized")
@@ -434,12 +438,7 @@ class HybridRAGService:
 
         if self.hybrid_retrieval:
             await self.hybrid_retrieval.close()
-
-        if self.dense_store:
-            await self.dense_store.close()
-
-        if self.sparse_store:
-            await self.sparse_store.close()
+            # Note: hybrid_retrieval.close() already closes dense_store and sparse_store
 
         logger.info("✅ Hybrid RAG service shut down complete")
 
