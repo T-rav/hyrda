@@ -4,26 +4,24 @@ services:
   # Test runner
   test-runner:
     build:
-      context: ./src
+      context: ./bot
       dockerfile: Dockerfile
     container_name: slack-bot-test-runner
     environment:
       - ENVIRONMENT=test
       - LOG_LEVEL=WARNING
-      - DATABASE_URL=postgresql+asyncpg://test:test@test-postgres:5432/test_db
       - CACHE_REDIS_URL=redis://test-redis:6379/0
       - SLACK_BOT_TOKEN=xoxb-test-token
       - SLACK_APP_TOKEN=xapp-test-token
       - LLM_API_URL=https://api.test.com/v1
       - LLM_API_KEY=test-api-key
     depends_on:
-      test-postgres:
         condition: service_healthy
       test-redis:
         condition: service_healthy
     volumes:
       - .:/workspace
-      - ./src:/app
+      - ./bot:/app
     working_dir: /app
     command: >
       sh -c "

@@ -1,50 +1,95 @@
 # Improved Makefile for Insight Mesh Slack Bot
+# This Makefile automatically detects the project root and works from any subdirectory
 
-PYTHON ?= python3
-PIP ?= pip3
-PROJECT_ROOT := $(CURDIR)/src
-ENV_FILE := $(CURDIR)/.env
+# Determine project root directory (where this Makefile is located)
+MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+PROJECT_ROOT_DIR := $(MAKEFILE_DIR)
+BOT_DIR := $(PROJECT_ROOT_DIR)bot
+
+# Virtual environment settings
+VENV := $(PROJECT_ROOT_DIR)venv
+PYTHON := $(VENV)/bin/python3.11
+PIP := $(VENV)/bin/pip
+ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit lint lint-check typecheck quality migrate-status migrate migrate-rollback docker-build docker-run docker-monitor docker-prod docker-stop clean setup-dev ci pre-commit security
+# Find Python command with ruff installed (for linting) - prioritize venv
+PYTHON_LINT := $(shell \
+    if [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
+        echo "$(VENV)/bin/python"; \
+    else \
+        for cmd in python3.11 python3 python; do \
+            if command -v $$cmd >/dev/null 2>&1 && $$cmd -m ruff --version >/dev/null 2>&1; then \
+                echo $$cmd; break; \
+            fi; \
+        done; \
+    fi)
+
+# Colors for output
+RED := \033[0;31m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+BLUE := \033[0;34m
+RESET := \033[0m
+
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version
 
 help:
-	@echo "Available targets:"
-	@echo "  install         Install Python dependencies"
-	@echo "  install-test    Install test dependencies"
-	@echo "  install-dev     Install all dependencies (dev + test)"
+	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
+	@echo ""
+	@echo "$(GREEN)Environment Setup:$(RESET)"
+	@echo "  install         Install Python dependencies in virtual environment"
+	@echo "  install-test    Install with test dependencies"
+	@echo "  install-dev     Install with dev and test dependencies"
+	@echo "  python-version  Show Python and pip versions"
+	@echo ""
+	@echo "$(GREEN)Development:$(RESET)"
 	@echo "  run             Run the bot (standalone)"
 	@echo "  test            Run test suite"
 	@echo "  test-coverage   Run tests with coverage report"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-unit       Run unit tests only"
+	@echo "  test-ingest     Run ingestion service tests"
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
 	@echo "  quality         Run all quality checks"
-	@echo "  migrate-status  Show database migration status"
-	@echo "  migrate         Apply database migrations"
-	@echo "  migrate-rollback Rollback migration (use VERSION=001)"
+	@echo ""
+	@echo "$(GREEN)Docker:$(RESET)"
 	@echo "  docker-build    Build Docker image"
 	@echo "  docker-run      Run Docker container with .env"
 	@echo "  docker-monitor  Run full monitoring stack"
 	@echo "  docker-prod     Run production stack"
 	@echo "  docker-stop     Stop all containers"
+	@echo ""
+	@echo "$(GREEN)Maintenance:$(RESET)"
 	@echo "  setup-dev       Setup development environment with pre-commit"
 	@echo "  pre-commit      Run pre-commit hooks on all files"
 	@echo "  security        Run security scanning with bandit"
 	@echo "  ci              Run all CI checks locally"
 	@echo "  clean           Remove caches and build artifacts"
+	@echo "  clean-all       Remove caches and virtual environment"
 
-install:
-	$(PIP) install -r $(PROJECT_ROOT)/requirements.txt
+$(VENV):
+	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
+	python3.11 -m venv $(VENV)
+	@echo "$(GREEN)Virtual environment created at $(VENV)$(RESET)"
 
-install-test:
-	$(PIP) install -r $(PROJECT_ROOT)/requirements-test.txt
+install: $(VENV)
+	@echo "$(BLUE)Installing project dependencies...$(RESET)"
+	cd $(BOT_DIR) && $(PIP) install -e .
+	@echo "$(GREEN)Dependencies installed successfully$(RESET)"
 
-install-dev: install install-test
-	$(PIP) install -r requirements-dev.txt
+install-test: $(VENV)
+	@echo "$(BLUE)Installing project with test dependencies...$(RESET)"
+	cd $(BOT_DIR) && $(PIP) install -e .[test]
+	@echo "$(GREEN)Test dependencies installed successfully$(RESET)"
+
+install-dev: $(VENV)
+	@echo "$(BLUE)Installing project with dev and test dependencies...$(RESET)"
+	cd $(BOT_DIR) && $(PIP) install -e .[dev,test]
+	@echo "$(GREEN)Development dependencies installed successfully$(RESET)"
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -54,62 +99,92 @@ check-env:
 	fi
 
 run: check-env
-	cd $(PROJECT_ROOT) && $(PYTHON) app.py
+	cd $(BOT_DIR) && $(PYTHON) app.py
 
-test:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v
+test: $(VENV)
+	@echo "$(BLUE)Running test suite...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -v
 
-test-coverage:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. python3.11 -m coverage run --source=. --omit="ingest_documents.py,migrate.py,app.py" -m pytest && python3.11 -m coverage report
+test-coverage: $(VENV)
+	@echo "$(BLUE)Running tests with coverage...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest && $(PYTHON) -m coverage report
 
-test-file:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -v tests/$(FILE)
+test-file: $(VENV)
+	@echo "$(BLUE)Running specific test file: $(FILE)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -v tests/$(FILE)
 
-test-integration:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m integration --maxfail=5 -v
+test-integration: $(VENV)
+	@echo "$(BLUE)Running integration tests...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m integration --maxfail=5 -v
 
-test-unit:
-	cd $(PROJECT_ROOT) && PYTHONPATH=. pytest -m "not integration" -v
+test-unit: $(VENV)
+	@echo "$(BLUE)Running unit tests...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
+
+test-ingest: $(VENV)
+	@echo "$(BLUE)Running ingestion service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)ingest && PYTHONPATH=. $(PYTHON) -m pytest -v
 
 lint:
-	./scripts/lint.sh --fix
+	@echo "$(BLUE)🔍 Running unified linting with ruff (using $(PYTHON_LINT))...$(RESET)"
+	@if [ -z "$(PYTHON_LINT)" ]; then \
+		echo "$(RED)❌ Error: No Python interpreter with ruff found. Please install ruff:$(RESET)"; \
+		echo "   python -m pip install ruff pyright bandit"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)📝 Running ruff linting with auto-fix...$(RESET)"
+	$(PYTHON_LINT) -m ruff check $(BOT_DIR) --fix
+	@echo "$(BLUE)🎨 Running ruff formatting...$(RESET)"
+	$(PYTHON_LINT) -m ruff format $(BOT_DIR)
+	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
+	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
+	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
+	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c ../pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
+	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
 
 lint-check:
-	./scripts/lint.sh
+	@echo "$(BLUE)🔍 Running unified linting checks (using $(PYTHON_LINT))...$(RESET)"
+	@if [ -z "$(PYTHON_LINT)" ]; then \
+		echo "$(RED)❌ Error: No Python interpreter with ruff found. Please install ruff:$(RESET)"; \
+		echo "   python -m pip install ruff pyright bandit"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)🔍 Running ruff check (no fixes)...$(RESET)"
+	$(PYTHON_LINT) -m ruff check $(BOT_DIR)
+	@echo "$(BLUE)🎨 Checking ruff formatting...$(RESET)"
+	$(PYTHON_LINT) -m ruff format $(BOT_DIR) --check
+	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
+	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
+	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
+	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c ../pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
+	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
 
-typecheck:
-	cd $(PROJECT_ROOT) && pyright
+typecheck: $(VENV)
+	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
+	cd $(BOT_DIR) && $(VENV)/bin/pyright || $(PYTHON) -m pyright
 
 quality: lint-check test
 
-migrate-status:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py status
-
-migrate:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py migrate
-
-migrate-rollback:
-	cd $(PROJECT_ROOT) && $(PYTHON) migrate.py rollback $(VERSION)
 
 docker-build:
-	docker build -f $(PROJECT_ROOT)/Dockerfile -t $(IMAGE) $(PROJECT_ROOT)
+	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
 
 docker-run: check-env
 	docker run --rm --env-file $(ENV_FILE) --name $(IMAGE) $(IMAGE)
 
 docker-monitor:
-	docker-compose -f docker-compose.monitoring.yml up -d
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.monitoring.yml up -d
 
 docker-prod:
-	docker-compose -f docker-compose.prod.yml up -d
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.prod.yml up -d
 
 docker-stop:
-	docker-compose -f docker-compose.monitoring.yml down
-	docker-compose -f docker-compose.prod.yml down
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.monitoring.yml down
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.prod.yml down
 
 setup-dev: install-dev
-	@if [ ! -f .env.test ]; then cp $(PROJECT_ROOT)/tests/.env.test .env.test; fi
-	pre-commit install
+	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi
+	cd $(PROJECT_ROOT_DIR) && pre-commit install
 	@echo "✅ Development environment set up!"
 	@echo "✅ Pre-commit hooks installed!"
 	@echo "Run 'make test' to run tests"
@@ -118,16 +193,29 @@ ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
 
 pre-commit:
-	pre-commit run --all-files
+	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files
 
-security:
-	cd $(PROJECT_ROOT) && bandit -r . -f json -o ../security-report.json || bandit -r . -f txt
+security: $(VENV)
+	@echo "$(BLUE)Running security scan with bandit...$(RESET)"
+	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json || $(PYTHON) -m bandit -r . -f txt
 
 clean:
-	find . -type f -name "*.pyc" -delete
-	find . -type d -name "__pycache__" -delete
-	rm -rf .coverage htmlcov/ $(PROJECT_ROOT)/htmlcov_slack-bot/
-	rm -rf .pytest_cache $(PROJECT_ROOT)/.pytest_cache
-	rm -rf .ruff_cache $(PROJECT_ROOT)/.ruff_cache
-	rm -rf .pyright_cache $(PROJECT_ROOT)/.pyright_cache
-	rm -f security-report.json
+	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"
+	find $(PROJECT_ROOT_DIR) -type f -name "*.pyc" -delete
+	find $(PROJECT_ROOT_DIR) -type d -name "__pycache__" -delete
+	rm -rf $(PROJECT_ROOT_DIR).coverage $(PROJECT_ROOT_DIR)htmlcov/ $(BOT_DIR)/htmlcov_slack-bot/
+	rm -rf $(PROJECT_ROOT_DIR).pytest_cache $(BOT_DIR)/.pytest_cache
+	rm -rf $(PROJECT_ROOT_DIR).ruff_cache $(BOT_DIR)/.ruff_cache
+	rm -rf $(PROJECT_ROOT_DIR).pyright_cache $(BOT_DIR)/.pyright_cache
+	rm -f $(PROJECT_ROOT_DIR)security-report.json
+	@echo "$(GREEN)Cleanup completed$(RESET)"
+
+clean-all: clean
+	@echo "$(YELLOW)Removing virtual environment...$(RESET)"
+	rm -rf $(VENV)
+	@echo "$(GREEN)Virtual environment removed$(RESET)"
+
+python-version: $(VENV)
+	@echo "$(BLUE)Python version information:$(RESET)"
+	@$(PYTHON) --version
+	@$(PIP) --version

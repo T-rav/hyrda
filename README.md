@@ -74,9 +74,8 @@ make run
 ```bash
 # Ingest documentation
 cd src
-python ingest_documents.py --directory ../docs/
-python ingest_documents.py --url https://docs.yourcompany.com/api.md
-python ingest_documents.py --status  # Check system status
+cd ingest && python main.py --folder-id "YOUR_GOOGLE_DRIVE_FOLDER_ID"
+cd ingest && python main.py --folder-id "YOUR_FOLDER_ID" --metadata '{"department": "engineering"}'
 ```
 
 That's it! Your RAG-enabled Slack bot is now running with your custom knowledge base. 🎉
@@ -229,7 +228,9 @@ slack-bot/
 ├── utils/             # Utilities
 │   ├── errors.py           # Error handling
 │   ├── logging.py          # Logging configuration
-├── ingest_documents.py     # CLI tool for document ingestion
+├── ingest/                 # Document ingestion services
+│   ├── main.py            # CLI entry point for Google Drive ingestion
+│   └── services/          # Modular ingestion services
 ├── app.py             # Main application entry point
 ├── Dockerfile         # Docker configuration
 └── requirements.txt   # Python dependencies
@@ -312,7 +313,7 @@ To add a new agent process:
 - **handlers/**: Event and message handling with RAG integration
 - **services/**: RAG pipeline, vector storage, embedding generation, and direct LLM providers
 - **utils/**: Utility functions and helpers
-- **ingest_documents.py**: CLI tool for loading your knowledge base
+- **ingest/**: Modular document ingestion system supporting PDF, Office docs, and Google Workspace files
 - **app.py**: Main application entry point
 
 ## Troubleshooting
@@ -325,7 +326,7 @@ If you're experiencing issues:
 4. **Vector Database**:
    - **Pinecone**: Check your index exists and API key is correct
    - **ChromaDB**: Ensure the directory is writable
-5. **Document Ingestion**: Use `python ingest_documents.py --status` to check your knowledge base
+5. **Document Ingestion**: Use `cd ingest && python main.py --folder-id YOUR_ID` to ingest from Google Drive
 6. **Bot Logs**: Look for specific error messages in the application logs
 7. **RAG Pipeline**: Test with `VECTOR_ENABLED=false` to isolate LLM vs vector DB issues
 

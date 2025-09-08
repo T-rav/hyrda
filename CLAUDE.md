@@ -51,24 +51,22 @@ make docker-build # Build Docker image
 make docker-run   # Run Docker container with .env
 ```
 
-### RAG System
+### Document Ingestion - Google Drive Only
 ```bash
-# Ingest documents into knowledge base
-cd src && python ingest_documents.py --file path/to/doc.txt
-cd src && python ingest_documents.py --directory path/to/docs/
-cd src && python ingest_documents.py --url https://example.com/doc.md
-cd src && python ingest_documents.py --status  # Show system status
+# THE ONLY SUPPORTED INGESTION METHOD
+# Ingest documents from Google Drive with comprehensive metadata using the new modular architecture
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
 
-# Example: Ingest project documentation
-cd src && python ingest_documents.py --directory ../docs/ --metadata '{"source": "project_docs"}'
+# Legacy command still works with deprecation warnings
+cd ingest && python ingester.py --folder-id "1ABC123DEF456GHI789"
+
+# First-time setup requires Google OAuth2 credentials
+# See ingest/README.md for detailed setup instructions
+# Now supports comprehensive document formats: PDF, Word, Excel, PowerPoint, Google Workspace files
+# Includes file paths, permissions, and access control metadata
 ```
 
-### Database Migrations
-```bash
-cd src && python migrate.py status    # Show migration status
-cd src && python migrate.py migrate   # Apply pending migrations
-cd src && python migrate.py rollback 001  # Rollback specific migration
-```
 
 ### Utilities
 ```bash
@@ -90,8 +88,7 @@ LLM_PROVIDER=openai  # openai, anthropic, ollama
 LLM_API_KEY=your-api-key
 LLM_MODEL=gpt-4o-mini
 
-# Database & Cache
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/slack_bot
+# Cache
 CACHE_REDIS_URL=redis://localhost:6379
 ```
 
@@ -151,11 +148,12 @@ This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Gene
 - **Document Ingestion**: CLI tool for knowledge base management
 
 #### Core Structure
-- **src/app.py**: Main application entry point with async Socket Mode handler
-- **src/config/**: Pydantic settings with environment-based configuration
-- **src/handlers/**: Event and message handling, including agent process management
-- **src/services/**: Core services including RAG, LLM providers, and vector storage
-- **src/utils/**: Error handling and logging utilities
+- **bot/app.py**: Main application entry point with async Socket Mode handler
+- **bot/config/**: Pydantic settings with environment-based configuration
+- **bot/handlers/**: Event and message handling, including agent process management
+- **bot/services/**: Core services including RAG, LLM providers, and vector storage
+- **bot/utils/**: Error handling and logging utilities
+- **ingest/**: Google Drive document ingestion system with OAuth2 authentication
 
 ### Key Components
 
@@ -166,14 +164,21 @@ Uses Pydantic with environment variable prefixes:
 - `AgentSettings` (AGENT_*)
 
 #### Message Flow
-1. Slack events → `handlers/event_handlers.py`
-2. Message processing → `handlers/message_handlers.py`
-3. LLM API calls → `services/llm_service.py`
-4. Response formatting → `services/formatting.py`
-5. Slack response → `services/slack_service.py`
+1. Slack events → `bot/handlers/event_handlers.py`
+2. Message processing → `bot/handlers/message_handlers.py`
+3. LLM API calls → `bot/services/llm_service.py`
+4. Response formatting → `bot/services/formatting.py`
+5. Slack response → `bot/services/slack_service.py`
+
+#### Document Ingestion Flow (Google Drive Only)
+1. OAuth2 authentication → `ingest/google_drive_ingester.py`
+2. Comprehensive metadata extraction → File paths, permissions, owners
+3. Document download and processing → Google Drive API
+4. Content chunking and embedding → `bot/services/vector_service.py`
+5. Vector storage with rich metadata → ChromaDB or Pinecone
 
 #### Agent Processes
-Defined in `handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. Users can trigger data processing jobs through natural language requests.
+Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. Users can trigger data processing jobs through natural language requests.
 
 ### Threading and Context
 - Automatically creates and maintains Slack threads
@@ -254,7 +259,7 @@ make ci                   # Run complete CI pipeline locally
 
 #### 2. Test Types & Structure
 ```
-src/tests/
+bot/tests/
 ├── test_app.py              # Application initialization
 ├── test_config.py           # Configuration management  
 ├── test_conversation_cache.py  # Redis caching
@@ -264,11 +269,11 @@ src/tests/
 ├── test_integration.py      # End-to-end workflows
 ├── test_llm_service.py      # LLM API integration
 ├── test_message_handlers.py # Message processing
-├── test_migrations.py       # Database migrations
-├── test_prompt_commands.py  # User prompt commands
 ├── test_slack_service.py    # Slack API integration
-├── test_user_prompt_service.py  # Database operations
-└── test_utils.py           # Utilities and helpers
+└── test_utils.py            # Utilities and helpers
+
+ingest/
+└── tests/                   # Google Drive ingestion tests (future)
 ```
 
 #### 3. Test Patterns (Follow These Examples)
@@ -340,7 +345,7 @@ def process_message(text, user_id, service):
 1. **Write Tests First** (TDD approach preferred)
    ```bash
    # Create test file for new feature
-   touch src/tests/test_new_feature.py
+   touch bot/tests/test_new_feature.py
    # Write failing tests
    # Implement feature to make tests pass
    ```
@@ -401,7 +406,7 @@ def process_message(text, user_id, service):
 #### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)
 - **Current Coverage**: ~72% (excluding CLI scripts)
-- **Coverage Exclusions**: `ingest_documents.py`, `migrate.py`, `app.py` (CLI scripts)
+- **Coverage Exclusions**: `bot/app.py`, `ingest/google_drive_ingester.py` (CLI scripts)
 - **Coverage Command**: `make test-coverage`
 - **Configuration**: `.coveragerc` with realistic production thresholds
 
@@ -417,20 +422,17 @@ def process_message(text, user_id, service):
 
 #### Test Configuration
 ```bash
-# Test database (automatic setup)
-DATABASE_URL=postgresql://test:test@localhost:5432/test_db
-
 # Test Redis (optional, uses fakeredis if unavailable)  
 CACHE_REDIS_URL=redis://localhost:6379/1
 
 # Test environment file
-cp src/tests/.env.test .env.test
+cp bot/tests/.env.test .env.test
 ```
 
 #### Test Data Management
 - **Use fixtures for consistent test data**
 - **Mock external services (Slack, LLM APIs)**
-- **Clean up after tests (database, cache)**
+- **Clean up after tests (cache)**
 - **Isolate tests (no shared state)**
 
 ### Performance Testing
@@ -490,7 +492,6 @@ HEALTH_PORT=8080              # Health check server port
 - `GET /health` - Basic health check
 - `GET /ready` - Readiness probe (checks LLM API)
 - `GET /metrics` - Basic metrics
-- `GET /migrations` - Database migration status
 
 **Docker Monitoring:**
 - Built-in health checks with Docker and Docker Compose
