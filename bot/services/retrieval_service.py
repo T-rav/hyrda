@@ -81,10 +81,18 @@ class RetrievalService:
             if self.settings.rag.enable_hybrid_search and results:
                 results = self._apply_hybrid_search_boosting(query, results)
 
-            # Limit to final result count
-            final_results = results[: self.settings.rag.max_results]
+            # Apply final similarity threshold filter and limit to max results
+            filtered_results = [
+                result
+                for result in results
+                if result.get("similarity", 0)
+                >= self.settings.rag.results_similarity_threshold
+            ]
+            final_results = filtered_results[: self.settings.rag.max_results]
 
-            logger.info(f"📄 Retrieved {len(final_results)} context chunks")
+            logger.info(
+                f"📄 Retrieved {len(final_results)} context chunks (filtered by {self.settings.rag.results_similarity_threshold:.0%} threshold)"
+            )
             return final_results
 
         except Exception as e:
