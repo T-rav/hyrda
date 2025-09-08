@@ -291,8 +291,8 @@ class RAGService:
                     context_section = "\n\n".join(context_texts)
                     rag_instruction = (
                         "Use the following context to answer the user's question. "
-                        "When you reference information from the context, you can mention the document names naturally in your response. "
-                        "Source citations with clickable links will be automatically added at the end of your response. "
+                        "Answer naturally without adding inline source citations like '[Source: ...]' since "
+                        "complete source citations will be automatically added at the end of your response. "
                         "If the context doesn't contain relevant information, "
                         "say so and provide a general response based on your knowledge.\n\n"
                         f"Context:\n{context_section}\n\n"
@@ -570,7 +570,10 @@ class RAGService:
                     break
 
             # Add chunk if it's from one of our selected documents
-            if file_name in seen_documents and len(seen_documents) <= self.settings.rag.max_results:
+            if (
+                file_name in seen_documents
+                and len(seen_documents) <= self.settings.rag.max_results
+            ):
                 final_results.append(result)
 
         logger.debug(

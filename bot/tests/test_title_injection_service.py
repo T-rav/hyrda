@@ -51,12 +51,12 @@ class TestTitleInjectionService:
         texts = [
             "First document content.",
             "Second document content.",
-            "Third document content."
+            "Third document content.",
         ]
         metadata = [
             {"title": "Document One"},
             {},  # No title
-            {"title": "Document Three"}
+            {"title": "Document Three"},
         ]
 
         results = self.service.inject_titles(texts, metadata)
@@ -121,9 +121,7 @@ class TestTitleInjectionService:
     def test_custom_tokens(self):
         """Test title injection with custom tokens"""
         service = TitleInjectionService(
-            title_start_token="<TITLE>",
-            title_end_token="</TITLE>",
-            separator=" | "
+            title_start_token="<TITLE>", title_end_token="</TITLE>", separator=" | "
         )
 
         texts = ["Content here."]
@@ -148,12 +146,12 @@ class TestEnhancedChunkProcessor:
         documents = [
             {
                 "content": "This is about machine learning.",
-                "metadata": {"title": "ML Basics", "author": "John Doe"}
+                "metadata": {"title": "ML Basics", "author": "John Doe"},
             },
             {
                 "content": "Deep learning fundamentals.",
-                "metadata": {"filename": "deep_learning.pdf"}
-            }
+                "metadata": {"filename": "deep_learning.pdf"},
+            },
         ]
 
         result = self.processor.process_documents_for_embedding(documents)
@@ -161,12 +159,18 @@ class TestEnhancedChunkProcessor:
         assert len(result) == 2
 
         # First document
-        assert result[0]["content"] == "[TITLE] ML Basics [/TITLE]\nThis is about machine learning."
+        assert (
+            result[0]["content"]
+            == "[TITLE] ML Basics [/TITLE]\nThis is about machine learning."
+        )
         assert result[0]["original_content"] == "This is about machine learning."
         assert result[0]["metadata"]["author"] == "John Doe"
 
         # Second document
-        assert result[1]["content"] == "[TITLE] deep_learning.pdf [/TITLE]\nDeep learning fundamentals."
+        assert (
+            result[1]["content"]
+            == "[TITLE] deep_learning.pdf [/TITLE]\nDeep learning fundamentals."
+        )
         assert result[1]["original_content"] == "Deep learning fundamentals."
 
     def test_prepare_for_dual_indexing(self):
@@ -174,7 +178,7 @@ class TestEnhancedChunkProcessor:
         documents = [
             {
                 "content": "Content about AI safety.",
-                "metadata": {"title": "AI Safety Guide", "category": "safety"}
+                "metadata": {"title": "AI Safety Guide", "category": "safety"},
             }
         ]
 
@@ -187,7 +191,10 @@ class TestEnhancedChunkProcessor:
 
         # Dense version (for Pinecone) - enhanced content
         dense_doc = result["dense"][0]
-        assert dense_doc["content"] == "[TITLE] AI Safety Guide [/TITLE]\nContent about AI safety."
+        assert (
+            dense_doc["content"]
+            == "[TITLE] AI Safety Guide [/TITLE]\nContent about AI safety."
+        )
 
         # Sparse version (for Elasticsearch) - separate title field
         sparse_doc = result["sparse"][0]
@@ -199,7 +206,7 @@ class TestEnhancedChunkProcessor:
         documents = [
             {
                 "content": "Some content without title.",
-                "metadata": {"author": "Jane Smith"}
+                "metadata": {"author": "Jane Smith"},
             }
         ]
 
@@ -266,7 +273,7 @@ class TestTitleInjectionEdgeCases:
             "[TITLE] No closing tag\nContent",
             "No opening tag [/TITLE]\nContent",
             "[TITLE][/TITLE]\nEmpty title",
-            "Regular text without any tags"
+            "Regular text without any tags",
         ]
 
         for text in malformed_cases:

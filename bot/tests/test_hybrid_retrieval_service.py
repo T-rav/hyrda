@@ -36,7 +36,7 @@ class TestRetrievalResult:
             metadata={"source": "test"},
             id="doc_1",
             source="dense",
-            rank=1
+            rank=1,
         )
 
         assert result.content == "Test content"
@@ -49,11 +49,7 @@ class TestRetrievalResult:
     def test_retrieval_result_optional_rank(self):
         """Test RetrievalResult with optional rank"""
         result = RetrievalResult(
-            content="Content",
-            similarity=0.5,
-            metadata={},
-            id="doc_2",
-            source="sparse"
+            content="Content", similarity=0.5, metadata={}, id="doc_2", source="sparse"
         )
 
         assert result.rank is None
@@ -72,7 +68,7 @@ class TestCohereReranker:
         assert reranker._client is None
 
     @pytest.mark.asyncio
-    @patch('cohere.AsyncClient')
+    @patch("cohere.AsyncClient")
     async def test_cohere_rerank_success(self, mock_cohere):
         """Test successful Cohere reranking"""
         # Setup mock response
@@ -95,7 +91,7 @@ class TestCohereReranker:
         reranker = CohereReranker(api_key="test-key")
         documents = [
             RetrievalResult("Doc 1", 0.5, {}, "1", "dense"),
-            RetrievalResult("Doc 2", 0.6, {}, "2", "dense")
+            RetrievalResult("Doc 2", 0.6, {}, "2", "dense"),
         ]
 
         # Execute
@@ -118,7 +114,7 @@ class TestCohereReranker:
         assert call_args[1]["top_k"] == 2
 
     @pytest.mark.asyncio
-    @patch('cohere.AsyncClient')
+    @patch("cohere.AsyncClient")
     async def test_cohere_rerank_failure_fallback(self, mock_cohere):
         """Test Cohere reranking failure fallback"""
         mock_client = AsyncMock()
@@ -128,7 +124,7 @@ class TestCohereReranker:
         reranker = CohereReranker(api_key="test-key")
         documents = [
             RetrievalResult("Doc 1", 0.8, {}, "1", "dense"),
-            RetrievalResult("Doc 2", 0.6, {}, "2", "dense")
+            RetrievalResult("Doc 2", 0.6, {}, "2", "dense"),
         ]
 
         # Should fallback to original ranking
@@ -152,7 +148,7 @@ class TestHybridRetrievalService:
             sparse_top_k=5,
             fusion_top_k=3,
             final_top_k=2,
-            rrf_k=60
+            rrf_k=60,
         )
 
     @pytest.mark.asyncio
@@ -161,7 +157,7 @@ class TestHybridRetrievalService:
         # Setup mock results
         self.dense_store.search.return_value = [
             {"content": "Dense doc 1", "similarity": 0.9, "metadata": {}, "id": "d1"},
-            {"content": "Dense doc 2", "similarity": 0.8, "metadata": {}, "id": "d2"}
+            {"content": "Dense doc 2", "similarity": 0.8, "metadata": {}, "id": "d2"},
         ]
 
         results = await self.service._dense_retrieval([0.1] * 1536)
@@ -190,18 +186,18 @@ class TestHybridRetrievalService:
         self.sparse_store.bm25_search.assert_called_once_with(
             query="test query",
             limit=5,  # sparse_top_k
-            field_boosts={"title": 8.0, "content": 1.0}
+            field_boosts={"title": 8.0, "content": 1.0},
         )
 
     def test_reciprocal_rank_fusion_no_overlap(self):
         """Test RRF with no overlapping documents"""
         dense_results = [
             RetrievalResult("Dense 1", 0.9, {}, "d1", "dense"),
-            RetrievalResult("Dense 2", 0.8, {}, "d2", "dense")
+            RetrievalResult("Dense 2", 0.8, {}, "d2", "dense"),
         ]
         sparse_results = [
             RetrievalResult("Sparse 1", 0.7, {}, "s1", "sparse"),
-            RetrievalResult("Sparse 2", 0.6, {}, "s2", "sparse")
+            RetrievalResult("Sparse 2", 0.6, {}, "s2", "sparse"),
         ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
@@ -222,11 +218,11 @@ class TestHybridRetrievalService:
         # Same document appears in both dense and sparse results
         dense_results = [
             RetrievalResult("Overlap doc", 0.9, {}, "overlap", "dense"),
-            RetrievalResult("Dense only", 0.8, {}, "dense_only", "dense")
+            RetrievalResult("Dense only", 0.8, {}, "dense_only", "dense"),
         ]
         sparse_results = [
             RetrievalResult("Sparse only", 0.7, {}, "sparse_only", "sparse"),
-            RetrievalResult("Overlap doc", 0.6, {}, "overlap", "sparse")  # Same ID
+            RetrievalResult("Overlap doc", 0.6, {}, "overlap", "sparse"),  # Same ID
         ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
@@ -237,7 +233,7 @@ class TestHybridRetrievalService:
         overlap_doc = next(doc for doc in fused if doc.id == "overlap")
 
         # Should have combined RRF score: 1/(60+1) + 1/(60+2)
-        expected_score = 1.0/(60+1) + 1.0/(60+2)
+        expected_score = 1.0 / (60 + 1) + 1.0 / (60 + 2)
         assert abs(overlap_doc.similarity - expected_score) < 0.001
         assert overlap_doc.source == "hybrid"
 
@@ -254,9 +250,7 @@ class TestHybridRetrievalService:
 
         # No reranker in this test
         results = await self.service.hybrid_search(
-            query="test query",
-            query_embedding=[0.1] * 1536,
-            top_k=2
+            query="test query", query_embedding=[0.1] * 1536, top_k=2
         )
 
         assert len(results) <= 2
@@ -278,7 +272,7 @@ class TestHybridRetrievalService:
             dense_store=self.dense_store,
             sparse_store=self.sparse_store,
             reranker=mock_reranker,
-            final_top_k=1
+            final_top_k=1,
         )
 
         # Setup store results
@@ -288,8 +282,7 @@ class TestHybridRetrievalService:
         self.sparse_store.bm25_search.return_value = []
 
         results = await service_with_reranker.hybrid_search(
-            query="test",
-            query_embedding=[0.1] * 1536
+            query="test", query_embedding=[0.1] * 1536
         )
 
         assert len(results) == 1
@@ -301,14 +294,14 @@ class TestHybridRetrievalService:
         """Test hybrid search with similarity threshold"""
         self.dense_store.search.return_value = [
             {"content": "High sim", "similarity": 0.9, "metadata": {}, "id": "h1"},
-            {"content": "Low sim", "similarity": 0.3, "metadata": {}, "id": "l1"}
+            {"content": "Low sim", "similarity": 0.3, "metadata": {}, "id": "l1"},
         ]
         self.sparse_store.bm25_search.return_value = []
 
         results = await self.service.hybrid_search(
             query="test",
             query_embedding=[0.1] * 1536,
-            similarity_threshold=0.5  # Should filter out low similarity
+            similarity_threshold=0.5,  # Should filter out low similarity
         )
 
         # RRF will change similarities, but high sim doc should still be above threshold
@@ -327,8 +320,7 @@ class TestHybridRetrievalService:
 
         # Should handle gracefully
         results = await self.service.hybrid_search(
-            query="test",
-            query_embedding=[0.1] * 1536
+            query="test", query_embedding=[0.1] * 1536
         )
 
         # Should get sparse results only
@@ -348,16 +340,14 @@ class TestRRFAlgorithm:
 
     def setup_method(self):
         self.service = HybridRetrievalService(
-            dense_store=MockVectorStore(),
-            sparse_store=MockVectorStore(),
-            rrf_k=60
+            dense_store=MockVectorStore(), sparse_store=MockVectorStore(), rrf_k=60
         )
 
     def test_rrf_single_list(self):
         """Test RRF with only dense results"""
         dense_results = [
             RetrievalResult("Doc 1", 0.9, {}, "d1", "dense"),
-            RetrievalResult("Doc 2", 0.8, {}, "d2", "dense")
+            RetrievalResult("Doc 2", 0.8, {}, "d2", "dense"),
         ]
         sparse_results = []
 
@@ -377,7 +367,7 @@ class TestRRFAlgorithm:
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
 
         # Same document in both lists: rank 1 in both
-        expected_score = 1.0/(k+1) + 1.0/(k+1)  # 2/(k+1)
+        expected_score = 1.0 / (k + 1) + 1.0 / (k + 1)  # 2/(k+1)
         actual_score = fused[0].similarity
 
         assert abs(actual_score - expected_score) < 0.0001

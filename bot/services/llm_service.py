@@ -27,7 +27,7 @@ class LLMService:
     def __init__(self, settings: Settings):
         self.settings = settings
         # Use hybrid RAG service if enabled, otherwise fallback to single vector
-        if getattr(settings, 'hybrid', None) and settings.hybrid.enabled:
+        if getattr(settings, "hybrid", None) and settings.hybrid.enabled:
             self.rag_service = None  # Will be initialized in async initialize method
             self.use_hybrid = True
             logger.info("Using hybrid RAG service (Pinecone + Elasticsearch)")

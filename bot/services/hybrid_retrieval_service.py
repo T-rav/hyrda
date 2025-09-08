@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RetrievalResult:
     """Unified result format for all retrieval stages"""
+
     content: str
     similarity: float
     metadata: dict[str, Any]
@@ -38,10 +39,7 @@ class Reranker(ABC):
 
     @abstractmethod
     async def rerank(
-        self,
-        query: str,
-        documents: list[RetrievalResult],
-        top_k: int = 10
+        self, query: str, documents: list[RetrievalResult], top_k: int = 10
     ) -> list[RetrievalResult]:
         """Rerank documents using cross-encoder"""
         pass
@@ -63,10 +61,7 @@ class CohereReranker(Reranker):
         return self._client
 
     async def rerank(
-        self,
-        query: str,
-        documents: list[RetrievalResult],
-        top_k: int = 10
+        self, query: str, documents: list[RetrievalResult], top_k: int = 10
     ) -> list[RetrievalResult]:
         """Rerank using Cohere API"""
         try:
@@ -80,7 +75,7 @@ class CohereReranker(Reranker):
                 query=query,
                 documents=doc_texts,
                 top_k=min(top_k, len(documents)),
-                return_documents=False  # We already have the docs
+                return_documents=False,  # We already have the docs
             )
 
             # Map reranked results back to our format
@@ -91,7 +86,9 @@ class CohereReranker(Reranker):
                 original_doc.rank = len(reranked_results) + 1
                 reranked_results.append(original_doc)
 
-            logger.info(f"Reranked {len(doc_texts)} documents to top {len(reranked_results)}")
+            logger.info(
+                f"Reranked {len(doc_texts)} documents to top {len(reranked_results)}"
+            )
             return reranked_results
 
         except Exception as e:
@@ -120,7 +117,7 @@ class HybridRetrievalService:
         sparse_top_k: int = 200,
         fusion_top_k: int = 50,
         final_top_k: int = 10,
-        rrf_k: int = 60
+        rrf_k: int = 60,
     ):
         self.dense_store = dense_store
         self.sparse_store = sparse_store
@@ -136,7 +133,7 @@ class HybridRetrievalService:
         query: str,
         query_embedding: list[float],
         top_k: int | None = None,
-        similarity_threshold: float = 0.0
+        similarity_threshold: float = 0.0,
     ) -> list[RetrievalResult]:
         """
         Perform hybrid retrieval with the full pipeline:
@@ -162,41 +159,48 @@ class HybridRetrievalService:
             logger.error(f"Sparse retrieval failed: {sparse_results}")
             sparse_results = []
 
-        logger.info(f"Retrieved {len(dense_results)} dense + {len(sparse_results)} sparse results")
+        logger.info(
+            f"Retrieved {len(dense_results)} dense + {len(sparse_results)} sparse results"
+        )
 
         # Step 2: Reciprocal Rank Fusion
-        fused_results = self._reciprocal_rank_fusion(
-            dense_results, sparse_results
-        )[:self.fusion_top_k]
+        fused_results = self._reciprocal_rank_fusion(dense_results, sparse_results)[
+            : self.fusion_top_k
+        ]
 
         logger.info(f"Fused to {len(fused_results)} candidates")
 
         # Step 3: Cross-encoder reranking (if available)
         if self.reranker and len(fused_results) > 0:
-            final_results = await self.reranker.rerank(
-                query, fused_results, final_k
-            )
+            final_results = await self.reranker.rerank(query, fused_results, final_k)
             logger.info(f"Reranked to final {len(final_results)} results")
         else:
             final_results = fused_results[:final_k]
-            logger.info(f"No reranker, returning top {len(final_results)} fused results")
+            logger.info(
+                f"No reranker, returning top {len(final_results)} fused results"
+            )
 
         # Apply similarity threshold
         filtered_results = [
-            result for result in final_results
+            result
+            for result in final_results
             if result.similarity >= similarity_threshold
         ]
 
-        logger.info(f"Final results after threshold {similarity_threshold}: {len(filtered_results)}")
+        logger.info(
+            f"Final results after threshold {similarity_threshold}: {len(filtered_results)}"
+        )
         return filtered_results
 
-    async def _dense_retrieval(self, query_embedding: list[float]) -> list[RetrievalResult]:
+    async def _dense_retrieval(
+        self, query_embedding: list[float]
+    ) -> list[RetrievalResult]:
         """Dense vector retrieval via Pinecone"""
         try:
             results = await self.dense_store.search(
                 query_embedding=query_embedding,
                 limit=self.dense_top_k,
-                similarity_threshold=0.0  # No threshold at this stage
+                similarity_threshold=0.0,  # No threshold at this stage
             )
 
             return [
@@ -205,8 +209,9 @@ class HybridRetrievalService:
                     similarity=r["similarity"],
                     metadata=r["metadata"],
                     id=r["id"],
-                    source="dense"
-                ) for r in results
+                    source="dense",
+                )
+                for r in results
             ]
         except Exception as e:
             logger.error(f"Dense retrieval failed: {e}")
@@ -219,7 +224,7 @@ class HybridRetrievalService:
             results = await self.sparse_store.bm25_search(
                 query=query,
                 limit=self.sparse_top_k,
-                field_boosts={"title": 8.0, "content": 1.0}  # Boost titles 8x
+                field_boosts={"title": 8.0, "content": 1.0},  # Boost titles 8x
             )
 
             return [
@@ -228,8 +233,9 @@ class HybridRetrievalService:
                     similarity=r["similarity"],
                     metadata=r["metadata"],
                     id=r["id"],
-                    source="sparse"
-                ) for r in results
+                    source="sparse",
+                )
+                for r in results
             ]
         except Exception as e:
             logger.error(f"Sparse retrieval failed: {e}")
@@ -238,7 +244,7 @@ class HybridRetrievalService:
     def _reciprocal_rank_fusion(
         self,
         dense_results: list[RetrievalResult],
-        sparse_results: list[RetrievalResult]
+        sparse_results: list[RetrievalResult],
     ) -> list[RetrievalResult]:
         """
         Reciprocal Rank Fusion as described in the expert's advice
@@ -247,8 +253,12 @@ class HybridRetrievalService:
         Default k=60 from research
         """
         # Create lookup for dense results by ID
-        dense_lookup = {result.id: (i + 1, result) for i, result in enumerate(dense_results)}
-        sparse_lookup = {result.id: (i + 1, result) for i, result in enumerate(sparse_results)}
+        dense_lookup = {
+            result.id: (i + 1, result) for i, result in enumerate(dense_results)
+        }
+        sparse_lookup = {
+            result.id: (i + 1, result) for i, result in enumerate(sparse_results)
+        }
 
         # Get all unique document IDs
         all_ids = set(dense_lookup.keys()) | set(sparse_lookup.keys())
@@ -279,7 +289,9 @@ class HybridRetrievalService:
             fused_docs[doc_id] = doc
 
         # Sort by RRF score (higher is better)
-        sorted_ids = sorted(fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True)
+        sorted_ids = sorted(
+            fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True
+        )
 
         # Create final fused results with RRF scores as similarity
         fused_results = []
@@ -289,7 +301,9 @@ class HybridRetrievalService:
             doc.rank = i + 1
             fused_results.append(doc)
 
-        logger.info(f"RRF fused {len(dense_results)} dense + {len(sparse_results)} sparse → {len(fused_results)} results")
+        logger.info(
+            f"RRF fused {len(dense_results)} dense + {len(sparse_results)} sparse → {len(fused_results)} results"
+        )
         return fused_results
 
     async def close(self):

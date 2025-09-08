@@ -72,7 +72,9 @@ class PineconeVectorStore(VectorStore):
         """Initialize Pinecone client and index"""
         try:
             if Pinecone is None:
-                raise ImportError("pinecone package is required for Pinecone vector store")
+                raise ImportError(
+                    "pinecone package is required for Pinecone vector store"
+                )
 
             if not self.settings.api_key:
                 raise ValueError("Pinecone API key is required")
@@ -169,7 +171,9 @@ class PineconeVectorStore(VectorStore):
                         }
                     )
 
-            logger.info(f"Pinecone returned {len(documents)} documents above threshold {similarity_threshold}")
+            logger.info(
+                f"Pinecone returned {len(documents)} documents above threshold {similarity_threshold}"
+            )
             return documents
 
         except Exception as e:
@@ -432,17 +436,14 @@ class ElasticsearchVectorStore(VectorStore):
                     "multi_match": {
                         "query": query,
                         "fields": boosted_fields,
-                        "type": "most_fields"
+                        "type": "most_fields",
                     }
                 },
                 "size": limit,
-                "_source": ["content", "metadata", "timestamp"]
+                "_source": ["content", "metadata", "timestamp"],
             }
 
-            response = await self.client.search(
-                index=self.index_name,
-                **es_query
-            )
+            response = await self.client.search(index=self.index_name, **es_query)
 
             documents = []
             for hit in response["hits"]["hits"]:
@@ -450,12 +451,14 @@ class ElasticsearchVectorStore(VectorStore):
                 similarity = hit["_score"] / 10.0  # Normalize ES score
 
                 if similarity >= similarity_threshold:
-                    documents.append({
-                        "content": hit["_source"]["content"],
-                        "similarity": similarity,
-                        "metadata": hit["_source"].get("metadata", {}),
-                        "id": hit["_id"],
-                    })
+                    documents.append(
+                        {
+                            "content": hit["_source"]["content"],
+                            "similarity": similarity,
+                            "metadata": hit["_source"].get("metadata", {}),
+                            "id": hit["_id"],
+                        }
+                    )
 
             logger.info(f"BM25 search returned {len(documents)} documents")
             return documents
@@ -480,6 +483,8 @@ def create_vector_store(settings: VectorSettings) -> VectorStore:
     store_class = store_map.get(settings.provider.lower())
     if not store_class:
         supported = ", ".join(store_map.keys())
-        raise ValueError(f"Unsupported vector store provider: {settings.provider}. Supported: {supported}")
+        raise ValueError(
+            f"Unsupported vector store provider: {settings.provider}. Supported: {supported}"
+        )
 
     return store_class(settings)
