@@ -8,6 +8,7 @@ Pattern: "[TITLE] <title> [/TITLE]\n<content>"
 """
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -76,9 +77,128 @@ class TitleInjectionService:
             if key in metadata and metadata[key]:
                 title = str(metadata[key]).strip()
                 if title:
+                    # If this is a filename (contains extension), clean it up
+                    if key in ["file_name", "filename", "name"] and self._is_filename(
+                        title
+                    ):
+                        return self._extract_title_from_filename(title)
                     return title
 
         return None
+
+    def _is_filename(self, text: str) -> bool:
+        """Check if text appears to be a filename (contains file extension)"""
+        common_extensions = [
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".txt",
+            ".md",
+            ".rtf",
+            ".ppt",
+            ".pptx",
+            ".xls",
+            ".xlsx",
+            ".csv",
+            ".html",
+            ".htm",
+            ".xml",
+            ".json",
+        ]
+        text_lower = text.lower()
+        return any(text_lower.endswith(ext) for ext in common_extensions)
+
+    def _extract_title_from_filename(self, filename: str) -> str:
+        """Extract a clean, readable title from a filename"""
+        # Remove file extension
+        title = filename
+        for ext in [
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".txt",
+            ".md",
+            ".rtf",
+            ".ppt",
+            ".pptx",
+            ".xls",
+            ".xlsx",
+            ".csv",
+            ".html",
+            ".htm",
+            ".xml",
+            ".json",
+        ]:
+            if title.lower().endswith(ext.lower()):
+                title = title[: -len(ext)]
+                break
+
+        # Clean up common patterns
+        title = self._clean_filename_patterns(title)
+
+        # If still looks like a filename or is empty or starts with dot, return original
+        if not title or len(title.strip()) < 3 or title.strip().startswith("."):
+            return filename
+
+        return title.strip()
+
+    def _clean_filename_patterns(self, title: str) -> str:
+        """Clean common filename patterns to create readable titles"""
+
+        # First, remove common prefixes that are not meaningful
+        # Pattern: "CompanyName - Document Title" -> "Document Title"
+        if " - " in title:
+            parts = title.split(" - ", 1)
+            if len(parts) > 1 and len(parts[1].strip()) > 3:
+                # Check if first part looks like a company/prefix
+                first_part = parts[0].strip()
+                if len(first_part) < 20 and not any(
+                    word in first_part.lower()
+                    for word in [
+                        "guide",
+                        "manual",
+                        "document",
+                        "report",
+                        "analysis",
+                        "study",
+                        "overview",
+                    ]
+                ):
+                    title = parts[1].strip()
+
+        # Replace underscores with spaces
+        title = re.sub(r"[_]+", " ", title)
+
+        # Replace remaining hyphens with spaces (for word separation, not compound words)
+        title = re.sub(r"-", " ", title)
+
+        # Replace multiple spaces with single space
+        title = re.sub(r"\s+", " ", title)
+
+        # Capitalize first letter of each word for readability
+        title = title.title()
+
+        # Fix common acronyms and abbreviations
+        acronym_fixes = {
+            "Ai": "AI",
+            "Api": "API",
+            "Ui": "UI",
+            "Ux": "UX",
+            "Ml": "ML",
+            "Ios": "iOS",
+            "Css": "CSS",
+            "Html": "HTML",
+            "Json": "JSON",
+            "Pdf": "PDF",
+            "Csv": "CSV",
+            "Xml": "XML",
+            "Sql": "SQL",
+        }
+
+        for wrong, correct in acronym_fixes.items():
+            title = re.sub(r"\b" + wrong + r"\b", correct, title)
+
+        return title
 
     def _create_enhanced_text(self, title: str, content: str) -> str:
         """Create enhanced text with title injection"""
