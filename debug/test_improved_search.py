@@ -6,7 +6,6 @@ Test script for the improved hybrid search functionality
 import asyncio
 import os
 import sys
-from typing import Any
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -29,7 +28,7 @@ async def test_improved_search():
         print("❌ Vector search is not enabled in settings")
         return
 
-    print(f"🔧 Testing improved hybrid search")
+    print("🔧 Testing improved hybrid search")
     print(f"🔧 Similarity Threshold: {settings.rag.similarity_threshold}")
     print(f"🔧 Max Chunks: {settings.rag.max_chunks}")
     print()
@@ -53,8 +52,8 @@ async def test_improved_search():
 
             # Use the improved retrieve_context method with debug info
             print(f"   Current similarity threshold: {settings.rag.similarity_threshold}")
-            print(f"   Candidate threshold: 0.05")
-            print(f"   Candidates retrieved: 100")
+            print("   Candidate threshold: 0.05")
+            print("   Candidates retrieved: 100")
             print()
 
             results = await rag_service.retrieve_context(test_query)

@@ -12,16 +12,13 @@ import asyncio
 import json
 import os
 import sys
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 
 # Document processing
 import fitz  # PyMuPDF for PDF
 from docx import Document  # python-docx for Word documents
-from openpyxl import load_workbook  # openpyxl for Excel
-from pptx import Presentation  # python-pptx for PowerPoint
 
 # Google Drive API imports
 from google.auth.transport.requests import Request
@@ -29,13 +26,16 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-import requests
+from openpyxl import load_workbook  # openpyxl for Excel
+from pptx import Presentation  # python-pptx for PowerPoint
 
 # Local imports (assuming we'll use the existing ingestion logic)
 sys.path.append(str(Path(__file__).parent.parent / "bot"))
 
 # Load .env file from current directory or parent directories
 from dotenv import load_dotenv
+
+
 def find_and_load_env():
     """Find and load .env file from current directory or parent directories"""
     current_path = Path.cwd()
@@ -51,9 +51,9 @@ def find_and_load_env():
 # Load environment variables
 find_and_load_env()
 
+
+from services.embedding_service import chunk_text, create_embedding_provider
 from services.vector_service import create_vector_store
-from services.embedding_service import create_embedding_provider, chunk_text
-from config.settings import Settings
 
 
 class GoogleDriveIngester:
@@ -65,7 +65,7 @@ class GoogleDriveIngester:
         'https://www.googleapis.com/auth/drive.metadata.readonly'
     ]
 
-    def __init__(self, credentials_file: Optional[str] = None, token_file: Optional[str] = None):
+    def __init__(self, credentials_file: str | None = None, token_file: str | None = None):
         """
         Initialize the Google Drive ingester.
 
@@ -162,7 +162,7 @@ class GoogleDriveIngester:
             print(f"Error building Drive service: {e}")
             return False
 
-    def list_folder_contents(self, folder_id: str, recursive: bool = True, folder_path: str = "") -> List[Dict]:
+    def list_folder_contents(self, folder_id: str, recursive: bool = True, folder_path: str = "") -> list[dict]:
         """
         List all files in a Google Drive folder with comprehensive metadata.
 
@@ -227,7 +227,7 @@ class GoogleDriveIngester:
                 if len(filtered_files) == 0 and folder_path != "":
                     print(f"🔍 DEBUG: No items found for folder_id '{folder_id}' in folder_path '{folder_path}'")
                     print(f"🔍 DEBUG: Query used: {query}")
-                    print(f"🔍 DEBUG: This suggests the folder may be empty or there's a permissions issue")
+                    print("🔍 DEBUG: This suggests the folder may be empty or there's a permissions issue")
 
                 if folder_path == "":
                     print(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
@@ -273,7 +273,7 @@ class GoogleDriveIngester:
                     print(f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
                     permissions = folder_info.get('permissions', [])
                     print(f"🔐 Folder has {len(permissions)} permission entries")
-                except HttpError as e:
+                except HttpError:
                     # Try with shared drive support
                     try:
                         folder_info = self.service.files().get(
@@ -326,7 +326,7 @@ class GoogleDriveIngester:
 
         return files
 
-    def download_file_content(self, file_id: str, mime_type: str) -> Optional[str]:
+    def download_file_content(self, file_id: str, mime_type: str) -> str | None:
         """
         Download the content of a file from Google Drive.
 
@@ -392,7 +392,7 @@ class GoogleDriveIngester:
             print(f"An error occurred downloading file {file_id}: {error}")
             return None
 
-    def _format_permissions(self, permissions: List[Dict]) -> Dict:
+    def _format_permissions(self, permissions: list[dict]) -> dict:
         """
         Format Google Drive permissions into a structured format.
 
@@ -443,7 +443,7 @@ class GoogleDriveIngester:
 
         return formatted
 
-    def _get_permissions_summary(self, permissions: List[Dict]) -> str:
+    def _get_permissions_summary(self, permissions: list[dict]) -> str:
         """
         Get a simple string summary of Google Drive permissions for Pinecone metadata.
 
@@ -479,7 +479,7 @@ class GoogleDriveIngester:
         else:
             return "restricted"
 
-    def _get_owner_emails(self, owners: List[Dict]) -> str:
+    def _get_owner_emails(self, owners: list[dict]) -> str:
         """
         Get a simple string of owner emails for Pinecone metadata.
 
@@ -500,7 +500,7 @@ class GoogleDriveIngester:
 
         return ', '.join(emails) if emails else "unknown"
 
-    def _extract_pdf_text(self, pdf_content: bytes) -> Optional[str]:
+    def _extract_pdf_text(self, pdf_content: bytes) -> str | None:
         """
         Extract text content from PDF bytes using PyMuPDF.
 
@@ -533,7 +533,7 @@ class GoogleDriveIngester:
             print(f"Error extracting PDF text: {e}")
             return None
 
-    def _extract_docx_text(self, docx_content: bytes) -> Optional[str]:
+    def _extract_docx_text(self, docx_content: bytes) -> str | None:
         """
         Extract text content from Word document bytes using python-docx.
 
@@ -574,7 +574,7 @@ class GoogleDriveIngester:
             print(f"Error extracting Word document text: {e}")
             return None
 
-    def _extract_xlsx_text(self, xlsx_content: bytes) -> Optional[str]:
+    def _extract_xlsx_text(self, xlsx_content: bytes) -> str | None:
         """
         Extract text content from Excel spreadsheet bytes using openpyxl.
 
@@ -622,7 +622,7 @@ class GoogleDriveIngester:
             print(f"Error extracting Excel spreadsheet text: {e}")
             return None
 
-    def _extract_pptx_text(self, pptx_content: bytes) -> Optional[str]:
+    def _extract_pptx_text(self, pptx_content: bytes) -> str | None:
         """
         Extract text content from PowerPoint presentation bytes using python-pptx.
 
@@ -673,7 +673,7 @@ class GoogleDriveIngester:
             print(f"Error extracting PowerPoint presentation text: {e}")
             return None
 
-    async def ingest_files(self, files: List[Dict], metadata: Optional[Dict] = None) -> Tuple[int, int]:
+    async def ingest_files(self, files: list[dict], metadata: dict | None = None) -> tuple[int, int]:
         """
         Ingest files into the vector database.
 
@@ -763,7 +763,7 @@ class GoogleDriveIngester:
         return success_count, error_count
 
     async def ingest_folder(self, folder_id: str, recursive: bool = True,
-                          metadata: Optional[Dict] = None) -> Tuple[int, int]:
+                          metadata: dict | None = None) -> tuple[int, int]:
         """
         Ingest all files from a Google Drive folder.
 
@@ -850,7 +850,7 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        from config.settings import VectorSettings, EmbeddingSettings, LLMSettings
+        from config.settings import EmbeddingSettings, LLMSettings, VectorSettings
 
         # Initialize only the settings we need (not full Settings which requires Slack)
         vector_settings = VectorSettings()
@@ -879,7 +879,7 @@ async def main():
             metadata=metadata
         )
 
-        print(f"\n=� Ingestion Summary:")
+        print("\n=� Ingestion Summary:")
         print(f" Successfully processed: {success_count}")
         print(f"L Errors: {error_count}")
         print(f"=� Total items: {success_count + error_count}")

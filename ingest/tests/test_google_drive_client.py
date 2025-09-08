@@ -2,8 +2,10 @@
 Tests for GoogleDriveClient service - Fixed version matching actual implementation.
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from services.google_drive_client import GoogleDriveClient
 
 

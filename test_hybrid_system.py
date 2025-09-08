@@ -16,7 +16,7 @@ import asyncio
 import os
 import sys
 import logging
-from typing import List, Dict, Any
+from typing import List
 from dataclasses import dataclass
 
 # Add bot directory to path
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Test imports
 from services.title_injection_service import TitleInjectionService, EnhancedChunkProcessor
-from services.hybrid_retrieval_service import HybridRetrievalService, CohereReranker, RetrievalResult
+from services.hybrid_retrieval_service import HybridRetrievalService, RetrievalResult
 from config.settings import VectorSettings, HybridSettings
 
 
@@ -307,13 +307,10 @@ class HybridSystemTester:
             start = time.time()
 
             # Test core service imports
-            from services.hybrid_rag_service import HybridRAGService, create_hybrid_rag_service
-            from services.hybrid_retrieval_service import HybridRetrievalService, CohereReranker, RetrievalResult
+            from services.hybrid_retrieval_service import RetrievalResult
             from services.title_injection_service import TitleInjectionService, EnhancedChunkProcessor
-            from services.vector_service import PineconeVectorStore, ElasticsearchVectorStore, create_vector_store
 
             # Test config imports
-            from config.settings import VectorSettings, HybridSettings, Settings
 
             # Verify classes can be instantiated (without actual initialization)
             title_service = TitleInjectionService()

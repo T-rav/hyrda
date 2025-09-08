@@ -4,10 +4,9 @@ Tests for Title Injection Service
 Validates title injection logic for enhanced RAG embeddings
 """
 
-import pytest
 from services.title_injection_service import (
+    EnhancedChunkProcessor,
     TitleInjectionService,
-    EnhancedChunkProcessor
 )
 
 

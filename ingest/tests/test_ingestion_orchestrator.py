@@ -2,8 +2,10 @@
 Tests for IngestionOrchestrator service - Fixed version matching actual implementation.
 """
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+
 from services.ingestion_orchestrator import IngestionOrchestrator
 
 

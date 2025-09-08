@@ -5,12 +5,12 @@ LLM Service with RAG support - backward compatible interface
 import logging
 
 from config.settings import Settings
+from services.hybrid_rag_service import create_hybrid_rag_service
 from services.langfuse_service import (
     get_langfuse_service,
     initialize_langfuse_service,
     observe,
 )
-from services.hybrid_rag_service import HybridRAGService, create_hybrid_rag_service
 from services.rag_service import RAGService  # Fallback for non-hybrid mode
 
 logger = logging.getLogger(__name__)

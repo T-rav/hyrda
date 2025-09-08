@@ -9,7 +9,6 @@ Handles text extraction from various document formats including:
 """
 
 from io import BytesIO
-from typing import Optional
 
 # Document processing libraries
 import fitz  # PyMuPDF for PDF
@@ -21,7 +20,7 @@ from pptx import Presentation  # python-pptx for PowerPoint
 class DocumentProcessor:
     """Service for extracting text content from various document formats."""
 
-    def extract_text(self, content: bytes, mime_type: str) -> Optional[str]:
+    def extract_text(self, content: bytes, mime_type: str) -> str | None:
         """
         Extract text from document bytes based on MIME type.
 
@@ -46,14 +45,14 @@ class DocumentProcessor:
             print(f"Unsupported MIME type for text extraction: {mime_type}")
             return None
 
-    def _extract_text_content(self, content: bytes) -> Optional[str]:
+    def _extract_text_content(self, content: bytes) -> str | None:
         """Extract text from plain text content."""
         try:
             return content.decode('utf-8')
         except UnicodeDecodeError:
             return content.decode('latin-1', errors='ignore')
 
-    def _extract_pdf_text(self, pdf_content: bytes) -> Optional[str]:
+    def _extract_pdf_text(self, pdf_content: bytes) -> str | None:
         """
         Extract text content from PDF bytes using PyMuPDF.
 
@@ -86,7 +85,7 @@ class DocumentProcessor:
             print(f"Error extracting PDF text: {e}")
             return None
 
-    def _extract_docx_text(self, docx_content: bytes) -> Optional[str]:
+    def _extract_docx_text(self, docx_content: bytes) -> str | None:
         """
         Extract text content from Word document bytes using python-docx.
 
@@ -127,7 +126,7 @@ class DocumentProcessor:
             print(f"Error extracting Word document text: {e}")
             return None
 
-    def _extract_xlsx_text(self, xlsx_content: bytes) -> Optional[str]:
+    def _extract_xlsx_text(self, xlsx_content: bytes) -> str | None:
         """
         Extract text content from Excel spreadsheet bytes using openpyxl.
 
@@ -175,7 +174,7 @@ class DocumentProcessor:
             print(f"Error extracting Excel spreadsheet text: {e}")
             return None
 
-    def _extract_pptx_text(self, pptx_content: bytes) -> Optional[str]:
+    def _extract_pptx_text(self, pptx_content: bytes) -> str | None:
         """
         Extract text content from PowerPoint presentation bytes using python-pptx.
 
