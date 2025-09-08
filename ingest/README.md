@@ -71,7 +71,7 @@ python main.py \
 python main.py \
   --folder-id "1ABC123DEF456GHI789" \
   --credentials "./my-credentials.json" \
-  --token "./my-token.json"
+  --token "./auth/my-token.json"
 
 # Non-recursive (only top-level folder)
 python main.py \
@@ -111,7 +111,7 @@ python ingester.py --folder-id "1ABC123DEF456GHI789"
 
 1. On first run, the script will open a browser for OAuth2 authentication
 2. Grant the requested permissions
-3. The token will be saved locally for future runs
+3. The token will be saved in the `auth/` directory for future runs
 4. Token will be automatically refreshed when needed
 
 ## Comprehensive Metadata
@@ -155,7 +155,7 @@ Each permission entry includes:
 
 ## Security Notes
 
-- Keep `credentials.json` and `token.json` secure and never commit to version control
+- Keep `credentials.json` and the `auth/` directory secure and never commit to version control
 - Add them to your `.gitignore` file
 - The ingester only requests read-only access to your Google Drive
 - All document content is processed locally before being stored in your vector database

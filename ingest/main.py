@@ -69,7 +69,7 @@ async def main():
 
     # Handle re-authentication if requested
     if args.reauth:
-        token_file = args.token or 'token.json'
+        token_file = args.token or 'auth/token.json'
         if os.path.exists(token_file):
             print(f"🔄 Removing existing token file: {token_file}")
             os.remove(token_file)
