@@ -6,7 +6,7 @@
 
 set -e
 
-PROJECT_ROOT="src"
+PROJECT_ROOT="bot"
 FIX_MODE=false
 
 # Parse arguments
@@ -24,14 +24,23 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Determine Python command - find one that has ruff installed
+# Determine Python command - prioritize venv, then find one that has ruff installed
 PYTHON_CMD=""
-for candidate in "python3.11" "python3" "python"; do
-    if command -v $candidate &> /dev/null && $candidate -m ruff --version &> /dev/null; then
-        PYTHON_CMD=$candidate
-        break
-    fi
-done
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV_PYTHON="$SCRIPT_DIR/../venv/bin/python"
+
+# Check venv first
+if [ -f "$VENV_PYTHON" ] && $VENV_PYTHON -m ruff --version &> /dev/null; then
+    PYTHON_CMD=$VENV_PYTHON
+else
+    # Fallback to system Python with ruff
+    for candidate in "python3.11" "python3" "python"; do
+        if command -v $candidate &> /dev/null && $candidate -m ruff --version &> /dev/null; then
+            PYTHON_CMD=$candidate
+            break
+        fi
+    done
+fi
 
 if [ -z "$PYTHON_CMD" ]; then
     echo "❌ Error: No Python interpreter with ruff found. Please install ruff:"

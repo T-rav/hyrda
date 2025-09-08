@@ -1,0 +1,194 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-slack-bot"
+version = "1.0.0"
+description = "Production-ready AI Slack bot with comprehensive monitoring and RAG capabilities"
+authors = [
+    {name = "Travis Frisinger", email = "travis@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+    # Slack SDK
+    "slack-bolt>=1.23.0",
+    "slack-sdk>=3.35.0",
+
+    # Core async/web
+    "aiohttp>=3.8.0",
+    "asyncio>=3.4.3",
+
+    # Configuration & environment
+    "python-dotenv>=1.0.0",
+    "pydantic>=1.9.0",
+    "pydantic-settings>=2.0.0",
+
+    # Logging & monitoring
+    "loguru>=0.7.0",
+
+    # HTTP & requests
+    "requests>=2.28.0",
+
+    # Database & caching
+    "redis>=5.0.0",
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+
+    # RAG and LLM dependencies
+    "openai>=1.35.0",
+    "anthropic>=0.25.0",
+    "chromadb>=0.4.0",
+    "sentence-transformers>=2.2.0",
+    "pinecone>=3.0.0",
+    "numpy>=1.24.0",
+    "langfuse>=2.7.0",
+
+    # Slack formatting
+    "slackify-markdown>=0.2.0",
+]
+
+[project.optional-dependencies]
+# Test dependencies
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "aioresponses>=0.7.4",
+    "fakeredis>=2.20.0",
+]
+
+# Development tools with exact versions for reproducibility
+dev = [
+    "ruff==0.8.4",
+    "isort==5.13.2",
+    "pyright==1.1.390",
+    "bandit[toml]==1.8.0",
+    "pre-commit==4.0.1",
+    "black==25.1.0",  # Legacy support (gradually being replaced by Ruff)
+]
+
+[project.scripts]
+slack-bot = "app:main"
+
+# Package discovery configuration
+[tool.setuptools]
+packages = ["config", "handlers", "services", "utils", "tests"]
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["."]
+exclude = [
+    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg",
+    ".mypy_cache", ".nox", ".pants.d", ".pytype", ".ruff_cache",
+    ".svn", ".tox", ".venv", "__pypackages__", "_build",
+    "buck-out", "build", "dist", "node_modules", "venv", "htmlcov",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "PL",   # pylint
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long, handled by ruff format
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+    "PLR2004", # magic value used in comparison
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "B011", "F811"]  # Allow tests to use asserts, etc.
+
+[tool.ruff.lint.isort]
+known-first-party = ["."]
+
+# Ruff formatting configuration (replaces black and isort)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# Pyright configuration
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["."]
+exclude = ["tests", "**/__pycache__", "**/node_modules"]
+stubPath = "./typings"
+venvPath = "."
+venv = "venv"
+typeCheckingMode = "standard"
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportGeneralTypeIssues = true
+reportOptionalMemberAccess = true
+reportOptionalSubscript = true
+reportPrivateImportUsage = true
+
+# Bandit security configuration
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv"]
+skips = ["B101"]  # Skip assert_used test
+
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_paths = ["."]
+asyncio_mode = "auto"
+addopts = [
+    "--verbose",
+    "--cov=.",
+    "--cov-fail-under=65",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "*/__init__.py",
+    "venv/*",
+    ".venv/*",
+    "migrate.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

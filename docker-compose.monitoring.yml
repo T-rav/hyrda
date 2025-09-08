@@ -4,7 +4,7 @@ services:
   # Main Slack bot
   slack-bot:
     build:
-      context: ./src
+      context: ./bot
       dockerfile: Dockerfile
     container_name: insight-mesh-slack-bot
     restart: unless-stopped

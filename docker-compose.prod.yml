@@ -3,7 +3,7 @@ version: '3.8'
 services:
   slack-bot:
     build:
-      context: ./src
+      context: ./bot
       dockerfile: Dockerfile
     container_name: insight-mesh-slack-bot
     restart: unless-stopped
@@ -14,14 +14,12 @@ services:
       - LOG_LEVEL=INFO
       - HEALTH_PORT=8080
       - CACHE_REDIS_URL=redis://redis:6379
-      - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/slackbot
     ports:
       - "8080:8080"  # Health check port
     volumes:
       - ./logs:/app/logs  # Persistent logs
     depends_on:
       - redis
-      - postgres
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -67,31 +65,6 @@ services:
     networks:
       - bot-network
 
-  # PostgreSQL for user prompt storage
-  postgres:
-    image: postgres:15-alpine
-    container_name: slack-bot-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=slackbot
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-    networks:
-      - bot-network
 
 networks:
   bot-network:
@@ -99,7 +72,6 @@ networks:
 
 volumes:
   redis-data:
-  postgres-data:
 
 # Optional: Add monitoring stack
   # prometheus:
