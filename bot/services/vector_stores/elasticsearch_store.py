@@ -94,10 +94,9 @@ class ElasticsearchVectorStore(VectorStore):
                 doc_metadata = metadata[i] if metadata else {}
 
                 if is_sparse_index:
-                    # Sparse index: no embeddings, extract title from metadata
+                    # Sparse index: no embeddings
                     doc = {
                         "content": text,
-                        "title": doc_metadata.get("title", ""),
                         "metadata": doc_metadata,
                         "timestamp": datetime.utcnow(),
                     }
@@ -156,11 +155,7 @@ class ElasticsearchVectorStore(VectorStore):
                     "query": {
                         "multi_match": {
                             "query": query_text,
-                            "fields": [
-                                "content",
-                                "metadata.file_name^2.0",
-                                "metadata.title^2.0",
-                            ],
+                            "fields": ["content", "metadata.file_name^2.0"],
                             "type": "most_fields",
                         }
                     },
@@ -279,12 +274,8 @@ class ElasticsearchVectorStore(VectorStore):
             if self.client is None:
                 raise RuntimeError("Elasticsearch client not initialized")
 
-            # Default field boosts: title 8x, file_name 4x, content 1x
-            boosts = field_boosts or {
-                "metadata.title": 8.0,
-                "metadata.file_name": 4.0,
-                "content": 1.0,
-            }
+            # Default field boosts: file_name 4x, content 1x
+            boosts = field_boosts or {"metadata.file_name": 4.0, "content": 1.0}
 
             # Build boosted fields list
             boosted_fields = []
