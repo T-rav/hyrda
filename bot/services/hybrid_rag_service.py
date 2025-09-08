@@ -24,10 +24,10 @@ from services.title_injection_service import (
     EnhancedChunkProcessor,
     TitleInjectionService,
 )
-from services.vector_service import (
+from services.vector_service import create_vector_store
+from services.vector_stores import (
     ElasticsearchVectorStore,
     PineconeVectorStore,
-    create_vector_store,
 )
 
 logger = logging.getLogger(__name__)
