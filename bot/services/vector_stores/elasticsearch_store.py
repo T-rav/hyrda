@@ -195,7 +195,7 @@ class ElasticsearchVectorStore(VectorStore):
             logger.info(f"🔍 Elasticsearch query for '{query_text}': {query_copy}")
 
             # Get more results initially for diversification
-            diverse_limit = min(limit * 3, 50)  # Get 3x more results for diversity
+            diverse_limit = 50  # Fixed higher limit to find diverse documents
             diverse_query = query.copy()
             diverse_query["size"] = diverse_limit
 
@@ -296,7 +296,7 @@ class ElasticsearchVectorStore(VectorStore):
             }
 
             # Get more results initially for diversification
-            diverse_limit = min(limit * 3, 50)
+            diverse_limit = 50  # Fixed higher limit to find diverse documents
             diverse_es_query = es_query.copy()
             diverse_es_query["size"] = diverse_limit
 
