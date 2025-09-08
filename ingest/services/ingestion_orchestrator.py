@@ -97,7 +97,6 @@ class IngestionOrchestrator:
                     'source': 'google_drive',
                     'file_id': file_info['id'],
                     'file_name': file_info['name'],
-                    'title': file_info['name'],  # Use filename as title for searchability
                     'full_path': file_info.get('full_path', file_info['name']),
                     'folder_path': file_info.get('folder_path', ''),
                     'mime_type': file_info['mimeType'],
