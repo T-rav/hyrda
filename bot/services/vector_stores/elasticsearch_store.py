@@ -194,8 +194,8 @@ class ElasticsearchVectorStore(VectorStore):
                 }
             logger.info(f"🔍 Elasticsearch query for '{query_text}': {query_copy}")
 
-            # Get more results initially for diversification
-            diverse_limit = 50  # Fixed higher limit to find diverse documents
+            # Get more results initially for diversification - use at least 50
+            diverse_limit = max(limit, 50)  # Ensure at least 50 for diversification
             diverse_query = query.copy()
             diverse_query["size"] = diverse_limit
 
@@ -295,8 +295,8 @@ class ElasticsearchVectorStore(VectorStore):
                 "_source": ["content", "metadata", "timestamp"],
             }
 
-            # Get more results initially for diversification
-            diverse_limit = 50  # Fixed higher limit to find diverse documents
+            # Get more results initially for diversification - use at least 50
+            diverse_limit = max(limit, 50)  # Ensure at least 50 for diversification
             diverse_es_query = es_query.copy()
             diverse_es_query["size"] = diverse_limit
 
@@ -401,9 +401,9 @@ class ElasticsearchVectorStore(VectorStore):
             file_names, 0
         )  # Track position in each file's chunks
 
-        # Round-robin selection with max 2 chunks per file in top results
+        # Round-robin selection starting with 1 chunk per file for diversity
         rounds = 0
-        max_per_file_per_round = 2  # Allow up to 2 chunks per file per round
+        max_per_file_per_round = 1  # Start with 1 chunk per file for maximum diversity
 
         while (
             len(diversified) < limit and rounds < 5

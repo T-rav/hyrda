@@ -59,15 +59,21 @@ class RetrievalService:
                 results = await vector_service.search(
                     query_embedding=query_embedding,
                     query_text=query,  # Pass query text for BM25 + vector boost
-                    limit=self.settings.rag.max_results * 2,  # Get more for filtering
+                    limit=50,  # Higher limit for Elasticsearch diversification
                     similarity_threshold=self.settings.rag.similarity_threshold,
                 )
             else:
                 # Pure vector similarity search (Pinecone or Elasticsearch without text)
                 logger.info("🔍 Using pure vector similarity search")
+                # Use higher limit for Elasticsearch diversification
+                search_limit = (
+                    50
+                    if self.settings.vector.provider.lower() == "elasticsearch"
+                    else self.settings.rag.max_results * 2
+                )
                 results = await vector_service.search(
                     query_embedding=query_embedding,
-                    limit=self.settings.rag.max_results * 2,  # Get more for filtering
+                    limit=search_limit,  # Higher limit for Elasticsearch diversification
                     similarity_threshold=self.settings.rag.similarity_threshold,
                 )
 
@@ -166,9 +172,15 @@ class RetrievalService:
             logger.debug(f"🔍 Extracted entities: {entities}")
 
             # Get broader results for entity filtering
+            # Use higher limit for Elasticsearch diversification
+            entity_limit = (
+                50
+                if self.settings.vector.provider.lower() == "elasticsearch"
+                else self.settings.rag.max_results * 3
+            )
             base_results = await vector_service.search(
                 query_embedding=query_embedding,
-                limit=self.settings.rag.max_results * 3,  # Get more for filtering
+                limit=entity_limit,  # Higher limit for Elasticsearch diversification
                 similarity_threshold=max(
                     0.1, self.settings.rag.similarity_threshold - 0.2
                 ),
