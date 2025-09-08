@@ -7,6 +7,7 @@ Supports various file formats and text extraction methods.
 
 import json
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -268,3 +269,170 @@ class DocumentProcessor:
             issues.append("High ratio of non-printable characters")
 
         return {"valid": len(issues) == 0, "issues": issues, "metrics": metrics}
+
+    def chunk_large_text(
+        self, text: str, chunk_size: int = 1000, overlap: int = 100
+    ) -> list[str]:
+        """
+        Chunk large text into smaller pieces with optional overlap.
+
+        Args:
+            text: Text to chunk
+            chunk_size: Maximum size of each chunk
+            overlap: Number of characters to overlap between chunks
+
+        Returns:
+            List of text chunks
+        """
+        if not text:
+            return [""]
+
+        if len(text) <= chunk_size:
+            return [text]
+
+        chunks = []
+        start = 0
+
+        while start < len(text):
+            end = start + chunk_size
+
+            # If this isn't the last chunk, try to break at word boundary
+            if end < len(text):
+                # Look for word boundary within the last 100 characters
+                word_boundary = text.rfind(" ", max(start, end - 100), end)
+                if word_boundary > start:
+                    end = word_boundary
+
+            chunk = text[start:end]
+            chunks.append(chunk)
+
+            # Move start forward, accounting for overlap
+            start = end - overlap if overlap > 0 else end
+
+            # Prevent infinite loop
+            if start >= len(text):
+                break
+
+        return chunks
+
+    def extract_metadata_from_content(
+        self, content: str, content_type: str
+    ) -> dict[str, Any]:
+        """
+        Extract metadata from document content.
+
+        Args:
+            content: Document content
+            content_type: Type of content (text, markdown, etc.)
+
+        Returns:
+            Extracted metadata
+        """
+        metadata = {"content_type": content_type}
+
+        if content_type == "markdown":
+            # Extract title from first header
+            lines = content.split("\n")
+            for original_line in lines:
+                stripped_line = original_line.strip()
+                if stripped_line.startswith("#"):
+                    # Remove # symbols and get title
+                    title = stripped_line.lstrip("#").strip()
+                    if title:
+                        metadata["extracted_title"] = title
+                        break
+        else:
+            # Look for title patterns in text
+            lines = content.split("\n")
+            for original_line in lines:
+                stripped_line = original_line.strip()
+                if stripped_line.lower().startswith("title:"):
+                    title = stripped_line[6:].strip()  # Remove 'title:' prefix
+                    if title:
+                        metadata["extracted_title"] = title
+                        break
+
+        return metadata
+
+    def clean_text_content(self, text: str) -> str:
+        """
+        Clean and normalize text content.
+
+        Args:
+            text: Raw text content
+
+        Returns:
+            Cleaned text
+        """
+        if not text:
+            return ""
+
+        # Replace tabs and carriage returns with spaces
+        text = text.replace("\t", " ").replace("\r", "")
+
+        # Remove null characters and other control characters
+        text = "".join(char for char in text if char.isprintable() or char in "\n ")
+
+        # Normalize multiple spaces to single spaces, but preserve line breaks
+        text = re.sub(r"[ ]+", " ", text)
+
+        # Strip leading/trailing whitespace
+        text = text.strip()
+
+        return text
+
+    def get_content_summary(self, content: str, max_length: int = 200) -> str:
+        """
+        Generate a summary of content.
+
+        Args:
+            content: Content to summarize
+            max_length: Maximum length of summary
+
+        Returns:
+            Content summary
+        """
+        if not content:
+            return ""
+
+        if len(content) <= max_length:
+            return content
+
+        # Try to break at sentence boundary
+        sentences = content.split(". ")
+        summary = ""
+
+        for sentence in sentences:
+            if len(summary + sentence + ". ") <= max_length - 3:
+                summary += sentence + ". "
+            else:
+                break
+
+        if not summary:
+            # Fallback to simple truncation
+            summary = content[: max_length - 3]
+
+        return summary.strip() + "..."
+
+    def validate_document_structure(self, document: dict[str, Any]) -> bool:
+        """
+        Validate document structure.
+
+        Args:
+            document: Document to validate
+
+        Returns:
+            True if document is valid
+        """
+        if not isinstance(document, dict):
+            return False
+
+        if "content" not in document:
+            return False
+
+        content = document["content"]
+        if not content or not isinstance(content, str):
+            return False
+
+        # Check minimum content length
+        return len(content.strip()) >= 10
