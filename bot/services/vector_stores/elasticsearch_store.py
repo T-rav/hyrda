@@ -52,64 +52,6 @@ class ElasticsearchVectorStore(VectorStore):
             logger.error(f"Failed to initialize Elasticsearch: {e}")
             raise
 
-    def _build_term_queries(self, query_text: str) -> list[dict]:
-        """Build targeted term queries filtering stopwords and boosting important terms"""
-        # Common stopwords to filter out
-        stopwords = {
-            "has", "have", "had", "is", "are", "was", "were", "be", "been", "being",
-            "do", "does", "did", "will", "would", "could", "should", "may", "might",
-            "can", "must", "shall", "to", "of", "in", "for", "on", "with", "at",
-            "by", "from", "up", "about", "into", "through", "during", "before",
-            "after", "above", "below", "between", "among", "throughout", "within",
-            "the", "a", "an", "and", "or", "but", "if", "then", "else", "when",
-            "where", "how", "what", "which", "who", "whom", "whose", "why", "how"
-        }
-        
-        # Extract meaningful terms (filter stopwords, keep length > 2)
-        import re
-        terms = re.findall(r'\b\w+\b', query_text.lower())
-        important_terms = [term for term in terms if term not in stopwords and len(term) > 2]
-        
-        if not important_terms:
-            # Fallback if no important terms found
-            return [{"match_all": {"boost": 0.1}}]
-        
-        queries = []
-        
-        # Debug logging
-        logger.info(f"🔍 Extracted terms from '{query_text}': {important_terms}")
-        
-        # Build individual term queries with boosting
-        for term in important_terms:
-            # Content match
-            queries.append({
-                "match": {
-                    "content": {
-                        "query": term,
-                        "boost": 1.0,
-                    }
-                }
-            })
-            
-            # File name match (single boost for filename/title since they're often the same)
-            queries.append({
-                "match": {
-                    "metadata.file_name": {
-                        "query": term,
-                        "boost": 2.5,  # Single boost instead of double-boosting
-                    }
-                }
-            })
-        
-        # Add fallback for vector similarity
-        queries.append({
-            "match_all": {
-                "boost": 0.1,
-            }
-        })
-        
-        return queries
-
     def _get_index_mapping(self) -> dict:
         """Get Elasticsearch index mapping configuration"""
         return {
@@ -215,7 +157,7 @@ class ElasticsearchVectorStore(VectorStore):
                         "multi_match": {
                             "query": query_text,
                             "fields": ["content", "metadata.file_name^2.0"],
-                            "type": "most_fields"
+                            "type": "most_fields",
                         }
                     },
                     "size": limit,
@@ -239,21 +181,39 @@ class ElasticsearchVectorStore(VectorStore):
 
             # Log the actual query being sent to Elasticsearch (without vector data)
             query_copy = query.copy()
-            if 'query' in query_copy and 'script_score' in query_copy['query'] and 'script' in query_copy['query']['script_score']:
-                if 'params' in query_copy['query']['script_score']['script']:
-                    query_copy['query']['script_score']['script']['params'] = {'query_vector': '[VECTOR_HIDDEN]', 'vector_boost': query['query']['script_score']['script']['params'].get('vector_boost', 'N/A')}
+            if (
+                "query" in query_copy
+                and "script_score" in query_copy["query"]
+                and "script" in query_copy["query"]["script_score"]
+                and "params" in query_copy["query"]["script_score"]["script"]
+            ):
+                query_copy["query"]["script_score"]["script"]["params"] = {
+                    "query_vector": "[VECTOR_HIDDEN]",
+                    "vector_boost": query["query"]["script_score"]["script"][
+                        "params"
+                    ].get("vector_boost", "N/A"),
+                }
             logger.info(f"🔍 Elasticsearch query for '{query_text}': {query_copy}")
-            
+
             response = await self.client.search(index=self.index_name, **query)
 
             documents = []
+            max_score = (
+                response["hits"]["max_score"] or 1.0
+            )  # Get max score for normalization
+
             for hit in response["hits"]["hits"]:
                 # Use raw Elasticsearch score (combines BM25 + vector boost)
                 raw_score = hit["_score"]
 
                 if query_text:
-                    # For pure BM25, use ES score directly (normalize to reasonable range)
-                    similarity = min(raw_score / 10.0, 1.0)  # BM25 scores are usually 1-10
+                    # For BM25: normalize against max score to get relative relevance
+                    # This gives us a 0.0-1.0 range where 1.0 is the best match in this result set
+                    similarity = raw_score / max_score
+
+                    # Apply a gentle curve to spread out scores more
+                    # This prevents everything from being too close to 100%
+                    similarity = similarity**0.7  # Gentle power curve
                 else:
                     # For pure vector search, convert to similarity
                     similarity = raw_score - 1.0  # Convert back to cosine similarity
@@ -269,6 +229,7 @@ class ElasticsearchVectorStore(VectorStore):
                             "search_type": "bm25_vector_boost"
                             if query_text
                             else "pure_vector",
+                            "raw_score": raw_score,  # Keep raw score for debugging
                         }
                     )
 
@@ -276,11 +237,16 @@ class ElasticsearchVectorStore(VectorStore):
             logger.debug(
                 f"Found {len(documents)} documents using {search_type} (threshold: {similarity_threshold})"
             )
-            
-            # Log raw scores for debugging
+
+            # Log scores for debugging
             if documents:
-                score_info = [f"{d.get('metadata', {}).get('file_name', 'Unknown')}: raw={d.get('raw_score', 'N/A')}, norm={d['similarity']:.3f}" for d in documents[:3]]
-                logger.debug(f"Score details: {'; '.join(score_info)}")
+                score_info = [
+                    f"{d.get('metadata', {}).get('file_name', 'Unknown')}: raw={d.get('raw_score', 'N/A'):.2f}, rel={d['similarity']:.1%}"
+                    for d in documents[:3]
+                ]
+                logger.debug(
+                    f"Score details (max_score={max_score:.2f}): {'; '.join(score_info)}"
+                )
             return documents
 
         except Exception as e:
@@ -323,9 +289,15 @@ class ElasticsearchVectorStore(VectorStore):
             response = await self.client.search(index=self.index_name, **es_query)
 
             documents = []
+            max_score = (
+                response["hits"]["max_score"] or 1.0
+            )  # Get max score for normalization
+
             for hit in response["hits"]["hits"]:
-                # Use Elasticsearch score as similarity
-                similarity = hit["_score"] / 10.0  # Normalize ES score
+                # Use same improved scoring as main search method
+                raw_score = hit["_score"]
+                similarity = raw_score / max_score
+                similarity = similarity**0.7  # Gentle power curve to spread scores
 
                 if similarity >= similarity_threshold:
                     documents.append(
@@ -334,6 +306,7 @@ class ElasticsearchVectorStore(VectorStore):
                             "similarity": similarity,
                             "metadata": hit["_source"].get("metadata", {}),
                             "id": hit["_id"],
+                            "raw_score": raw_score,
                         }
                     )
 

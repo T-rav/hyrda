@@ -17,26 +17,26 @@ from services.vector_service import create_vector_store
 async def test_elasticsearch():
     """Test basic Elasticsearch functionality"""
     settings = Settings()
-    
+
     print(f"🔍 Testing Elasticsearch...")
     print(f"Provider: {settings.vector.provider}")
     print(f"URL: {settings.vector.url}")
     print(f"Index: {settings.vector.collection_name}")
-    
+
     try:
         # Create vector store
         vector_store = create_vector_store(settings.vector)
         await vector_store.initialize()
         print("✅ Vector store initialized")
-        
+
         # Test 1: Check if index exists and has documents
         stats = await vector_store.get_stats()
         print(f"📊 Index stats: {stats}")
-        
+
         if stats['document_count'] == 0:
             print("❌ Index is empty! No documents to search.")
             return
-        
+
         # Test 2: Simple match_all query to see if we can get any documents
         print(f"\n1️⃣ Testing basic match_all query...")
         if hasattr(vector_store, 'client'):
@@ -54,7 +54,7 @@ async def test_elasticsearch():
                 metadata = hit["_source"].get("metadata", {})
                 file_name = metadata.get("file_name", "Unknown")
                 print(f"  Doc {i+1}: {file_name} - {content}...")
-        
+
         # Test 3: Simple term search for "apple"
         print(f"\n2️⃣ Testing simple term search for 'apple'...")
         if hasattr(vector_store, 'client'):
@@ -78,7 +78,7 @@ async def test_elasticsearch():
                 file_name = metadata.get("file_name", "Unknown")
                 score = hit["_score"]
                 print(f"  Result {i+1}: {file_name} (score: {score:.2f}) - {content}...")
-                
+
         # Test 4: Test the actual method we're using
         print(f"\n3️⃣ Testing our actual search method...")
         # Create dummy embedding
@@ -92,9 +92,9 @@ async def test_elasticsearch():
         print(f"Our search method results: {len(results)} documents")
         for i, result in enumerate(results):
             print(f"  Result {i+1}: similarity={result['similarity']:.3f} - {result['content'][:100]}...")
-        
+
         await vector_store.close()
-        
+
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback

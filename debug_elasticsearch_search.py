@@ -20,40 +20,40 @@ async def debug_elasticsearch():
     env_path = os.path.join(os.path.dirname(os.getcwd()), '.env')
     print(f"Loading .env from: {env_path}")
     load_dotenv(env_path)
-    
+
     # Check what we loaded
     print(f"VECTOR_PROVIDER from env: {os.getenv('VECTOR_PROVIDER')}")
-    
+
     # Load settings
     settings = Settings()
-    
+
     print(f"🔍 Debugging Elasticsearch search...")
     print(f"Vector provider: {settings.vector.provider}")
     print(f"Vector URL: {settings.vector.url}")
     print(f"Index name: {settings.vector.collection_name}")
     print(f"Hybrid search enabled: {settings.rag.enable_hybrid_search}")
-    
+
     try:
         # Create vector store
         vector_store = create_vector_store(settings.vector)
         embedding_provider = create_embedding_provider(settings.embedding, settings.llm)
-        
+
         # Initialize
         await vector_store.initialize()
         print("✅ Vector store initialized")
-        
+
         # Get index stats
         stats = await vector_store.get_stats()
         print(f"📊 Index stats: {stats}")
-        
+
         # Test query
         test_query = "has 8th light worked with apple"
         print(f"\n🔍 Testing query: '{test_query}'")
-        
+
         # Get embedding
         query_embedding = await embedding_provider.get_embedding(test_query)
         print(f"✅ Query embedding generated: {len(query_embedding)} dimensions")
-        
+
         # Test 1: Pure vector search (no text)
         print(f"\n1️⃣ Testing pure vector search...")
         results1 = await vector_store.search(
@@ -68,7 +68,7 @@ async def debug_elasticsearch():
                 print(f"  - Result {i+1}: similarity={result['similarity']:.3f}")
                 print(f"    Content preview: {result['content'][:100]}...")
                 print(f"    Search type: {result.get('search_type', 'unknown')}")
-        
+
         # Test 2: BM25 + vector boost
         print(f"\n2️⃣ Testing BM25 + vector boost...")
         results2 = await vector_store.search(
@@ -83,7 +83,7 @@ async def debug_elasticsearch():
                 print(f"  - Result {i+1}: similarity={result['similarity']:.3f}")
                 print(f"    Content preview: {result['content'][:100]}...")
                 print(f"    Search type: {result.get('search_type', 'unknown')}")
-        
+
         # Test 3: Simple BM25 only
         print(f"\n3️⃣ Testing simple BM25...")
         try:
@@ -99,7 +99,7 @@ async def debug_elasticsearch():
                     print(f"    Content preview: {result['content'][:100]}...")
         except Exception as e:
             print(f"BM25 search failed: {e}")
-        
+
         # Test 4: Match all documents (just to see what's in the index)
         print(f"\n4️⃣ Testing match_all to see index contents...")
         try:
@@ -122,9 +122,9 @@ async def debug_elasticsearch():
                     print(f"    Metadata: {list(metadata.keys())}")
         except Exception as e:
             print(f"Match all failed: {e}")
-            
+
         await vector_store.close()
-        
+
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
