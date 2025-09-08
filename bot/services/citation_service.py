@@ -42,13 +42,23 @@ class CitationService:
                 continue
             seen_sources.add(source_key)
 
-            # Build citation with metadata
-            citation = f"{len(sources) + 1}. **{file_name}** (Score: {similarity:.1%})"
-
-            # Add folder path if available
-            folder_path = metadata.get("folder_path")
-            if folder_path:
-                citation += f" - *📁 {folder_path}*"
+            # Build citation with improved formatting
+            # Extract document title from file_name (remove file extension)
+            doc_title = file_name.replace('.pdf', '').replace('.docx', '').replace('.txt', '')
+            
+            # Format: Title • Subtitle (if available) (:file_folder: Knowledge Base) • Relevance: XX.X%
+            citation = f"{len(sources) + 1}. {doc_title}"
+            
+            # Add subtitle/description if available in metadata
+            subtitle = metadata.get("title") or metadata.get("description")
+            if subtitle and subtitle != doc_title:
+                citation += f" • {subtitle}"
+            
+            # Add folder indication
+            citation += " (:file_folder: Knowledge Base)"
+            
+            # Add relevance score
+            citation += f" • Relevance: {similarity:.1%}"
 
             # Add web view link if available (Google Drive)
             web_view_link = metadata.get("web_view_link")

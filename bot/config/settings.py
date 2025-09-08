@@ -149,6 +149,10 @@ class RAGSettings(BaseSettings):
     include_metadata: bool = Field(
         default=True, description="Include document metadata in context"
     )
+    enable_hybrid_search: bool = Field(
+        default=False,
+        description="Enable hybrid dense+sparse search (requires hybrid service)",
+    )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
 

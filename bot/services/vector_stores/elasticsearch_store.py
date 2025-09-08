@@ -52,6 +52,64 @@ class ElasticsearchVectorStore(VectorStore):
             logger.error(f"Failed to initialize Elasticsearch: {e}")
             raise
 
+    def _build_term_queries(self, query_text: str) -> list[dict]:
+        """Build targeted term queries filtering stopwords and boosting important terms"""
+        # Common stopwords to filter out
+        stopwords = {
+            "has", "have", "had", "is", "are", "was", "were", "be", "been", "being",
+            "do", "does", "did", "will", "would", "could", "should", "may", "might",
+            "can", "must", "shall", "to", "of", "in", "for", "on", "with", "at",
+            "by", "from", "up", "about", "into", "through", "during", "before",
+            "after", "above", "below", "between", "among", "throughout", "within",
+            "the", "a", "an", "and", "or", "but", "if", "then", "else", "when",
+            "where", "how", "what", "which", "who", "whom", "whose", "why", "how"
+        }
+        
+        # Extract meaningful terms (filter stopwords, keep length > 2)
+        import re
+        terms = re.findall(r'\b\w+\b', query_text.lower())
+        important_terms = [term for term in terms if term not in stopwords and len(term) > 2]
+        
+        if not important_terms:
+            # Fallback if no important terms found
+            return [{"match_all": {"boost": 0.1}}]
+        
+        queries = []
+        
+        # Debug logging
+        logger.info(f"🔍 Extracted terms from '{query_text}': {important_terms}")
+        
+        # Build individual term queries with boosting
+        for term in important_terms:
+            # Content match
+            queries.append({
+                "match": {
+                    "content": {
+                        "query": term,
+                        "boost": 1.0,
+                    }
+                }
+            })
+            
+            # File name match (single boost for filename/title since they're often the same)
+            queries.append({
+                "match": {
+                    "metadata.file_name": {
+                        "query": term,
+                        "boost": 2.5,  # Single boost instead of double-boosting
+                    }
+                }
+            })
+        
+        # Add fallback for vector similarity
+        queries.append({
+            "match_all": {
+                "boost": 0.1,
+            }
+        })
+        
+        return queries
+
     def _get_index_mapping(self) -> dict:
         """Get Elasticsearch index mapping configuration"""
         return {
@@ -143,35 +201,63 @@ class ElasticsearchVectorStore(VectorStore):
         query_embedding: list[float],
         limit: int = 5,
         similarity_threshold: float = 0.7,
+        query_text: str = "",
     ) -> list[dict[str, Any]]:
-        """Search Elasticsearch for similar documents using vector similarity"""
+        """Search Elasticsearch using traditional BM25 boosted by vector similarity"""
         try:
             if self.client is None:
                 raise RuntimeError("Elasticsearch client not initialized")
 
-            # Use script_score query for vector similarity
-            query = {
-                "query": {
-                    "script_score": {
-                        "query": {"match_all": {}},
-                        "script": {
-                            "source": "cosineSimilarity(params.query_vector, 'embedding') + 1.0",
-                            "params": {"query_vector": query_embedding},
-                        },
-                    }
-                },
-                "size": limit,
-                "_source": ["content", "metadata", "timestamp"],
-            }
+            if query_text:
+                # Start with pure BM25 search - no vector complications
+                query = {
+                    "query": {
+                        "multi_match": {
+                            "query": query_text,
+                            "fields": ["content", "metadata.file_name^2.0"],
+                            "type": "most_fields"
+                        }
+                    },
+                    "size": limit,
+                    "_source": ["content", "metadata", "timestamp"],
+                }
+            else:
+                # Fallback to pure vector search if no query text provided
+                query = {
+                    "query": {
+                        "script_score": {
+                            "query": {"match_all": {}},
+                            "script": {
+                                "source": "cosineSimilarity(params.query_vector, 'embedding') + 1.0",
+                                "params": {"query_vector": query_embedding},
+                            },
+                        }
+                    },
+                    "size": limit,
+                    "_source": ["content", "metadata", "timestamp"],
+                }
 
+            # Log the actual query being sent to Elasticsearch (without vector data)
+            query_copy = query.copy()
+            if 'query' in query_copy and 'script_score' in query_copy['query'] and 'script' in query_copy['query']['script_score']:
+                if 'params' in query_copy['query']['script_score']['script']:
+                    query_copy['query']['script_score']['script']['params'] = {'query_vector': '[VECTOR_HIDDEN]', 'vector_boost': query['query']['script_score']['script']['params'].get('vector_boost', 'N/A')}
+            logger.info(f"🔍 Elasticsearch query for '{query_text}': {query_copy}")
+            
             response = await self.client.search(index=self.index_name, **query)
 
             documents = []
             for hit in response["hits"]["hits"]:
-                # Convert Elasticsearch score to similarity (0-1 range)
+                # Use raw Elasticsearch score (combines BM25 + vector boost)
                 raw_score = hit["_score"]
-                similarity = raw_score - 1.0  # Convert back to cosine similarity
-                similarity = (similarity + 1) / 2  # Normalize to (0, 1)
+
+                if query_text:
+                    # For pure BM25, use ES score directly (normalize to reasonable range)
+                    similarity = min(raw_score / 10.0, 1.0)  # BM25 scores are usually 1-10
+                else:
+                    # For pure vector search, convert to similarity
+                    similarity = raw_score - 1.0  # Convert back to cosine similarity
+                    similarity = (similarity + 1) / 2  # Normalize to (0, 1)
 
                 if similarity >= similarity_threshold:
                     documents.append(
@@ -180,12 +266,21 @@ class ElasticsearchVectorStore(VectorStore):
                             "similarity": similarity,
                             "metadata": hit["_source"].get("metadata", {}),
                             "id": hit["_id"],
+                            "search_type": "bm25_vector_boost"
+                            if query_text
+                            else "pure_vector",
                         }
                     )
 
+            search_type = "BM25 + vector boost" if query_text else "pure vector"
             logger.debug(
-                f"Found {len(documents)} documents above similarity threshold {similarity_threshold}"
+                f"Found {len(documents)} documents using {search_type} (threshold: {similarity_threshold})"
             )
+            
+            # Log raw scores for debugging
+            if documents:
+                score_info = [f"{d.get('metadata', {}).get('file_name', 'Unknown')}: raw={d.get('raw_score', 'N/A')}, norm={d['similarity']:.3f}" for d in documents[:3]]
+                logger.debug(f"Score details: {'; '.join(score_info)}")
             return documents
 
         except Exception as e:

@@ -100,6 +100,7 @@ class PineconeVectorStore(VectorStore):
         limit: int = 100,  # Higher default for hybrid retrieval
         similarity_threshold: float = 0.0,  # No threshold for intermediate results
         filter: dict[str, Any] | None = None,
+        query_text: str = "",  # Ignored for Pinecone (compatibility with Elasticsearch)
     ) -> list[dict[str, Any]]:
         """Search Pinecone for similar documents"""
         try:
