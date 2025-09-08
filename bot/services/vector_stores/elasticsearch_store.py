@@ -156,7 +156,11 @@ class ElasticsearchVectorStore(VectorStore):
                     "query": {
                         "multi_match": {
                             "query": query_text,
-                            "fields": ["content", "metadata.file_name^2.0"],
+                            "fields": [
+                                "content",
+                                "metadata.file_name^2.0",
+                                "metadata.title^2.0",
+                            ],
                             "type": "most_fields",
                         }
                     },
@@ -195,9 +199,15 @@ class ElasticsearchVectorStore(VectorStore):
                 }
             logger.info(f"🔍 Elasticsearch query for '{query_text}': {query_copy}")
 
-            response = await self.client.search(index=self.index_name, **query)
+            # Get more results initially for diversification
+            diverse_limit = min(limit * 3, 50)  # Get 3x more results for diversity
+            diverse_query = query.copy()
+            diverse_query["size"] = diverse_limit
 
-            documents = []
+            response = await self.client.search(index=self.index_name, **diverse_query)
+
+            # Process all hits first
+            all_documents = []
             max_score = (
                 response["hits"]["max_score"] or 1.0
             )  # Get max score for normalization
@@ -221,7 +231,7 @@ class ElasticsearchVectorStore(VectorStore):
                     similarity = (similarity + 1) / 2  # Normalize to (0, 1)
 
                 if similarity >= similarity_threshold:
-                    documents.append(
+                    all_documents.append(
                         {
                             "content": hit["_source"]["content"],
                             "similarity": similarity,
@@ -233,6 +243,9 @@ class ElasticsearchVectorStore(VectorStore):
                             "raw_score": raw_score,  # Keep raw score for debugging
                         }
                     )
+
+            # Apply diversification to ensure variety across documents
+            documents = self._diversify_results(all_documents, limit)
 
             search_type = "BM25 + vector boost" if query_text else "pure vector"
             logger.debug(
@@ -266,8 +279,12 @@ class ElasticsearchVectorStore(VectorStore):
             if self.client is None:
                 raise RuntimeError("Elasticsearch client not initialized")
 
-            # Default field boosts: title 8x, content 1x
-            boosts = field_boosts or {"title": 8.0, "content": 1.0}
+            # Default field boosts: title 8x, file_name 4x, content 1x
+            boosts = field_boosts or {
+                "metadata.title": 8.0,
+                "metadata.file_name": 4.0,
+                "content": 1.0,
+            }
 
             # Build boosted fields list
             boosted_fields = []
@@ -287,9 +304,16 @@ class ElasticsearchVectorStore(VectorStore):
                 "_source": ["content", "metadata", "timestamp"],
             }
 
-            response = await self.client.search(index=self.index_name, **es_query)
+            # Get more results initially for diversification
+            diverse_limit = min(limit * 3, 50)
+            diverse_es_query = es_query.copy()
+            diverse_es_query["size"] = diverse_limit
 
-            documents = []
+            response = await self.client.search(
+                index=self.index_name, **diverse_es_query
+            )
+
+            all_documents = []
             max_score = (
                 response["hits"]["max_score"] or 1.0
             )  # Get max score for normalization
@@ -302,7 +326,7 @@ class ElasticsearchVectorStore(VectorStore):
                 similarity = 0.6 + (similarity * 0.35)  # Scale to 0.6-0.95 range
 
                 if similarity >= similarity_threshold:
-                    documents.append(
+                    all_documents.append(
                         {
                             "content": hit["_source"]["content"],
                             "similarity": similarity,
@@ -311,6 +335,9 @@ class ElasticsearchVectorStore(VectorStore):
                             "raw_score": raw_score,
                         }
                     )
+
+            # Apply diversification
+            documents = self._diversify_results(all_documents, limit)
 
             logger.debug(f"BM25 search returned {len(documents)} documents")
             return documents
@@ -355,6 +382,71 @@ class ElasticsearchVectorStore(VectorStore):
         if self.client:
             await self.client.close()
             logger.debug("Elasticsearch connection closed")
+
+    def _diversify_results(self, documents: list[dict], limit: int) -> list[dict]:
+        """
+        Diversify results to ensure variety across different documents.
+        Uses a round-robin approach to select chunks from different files.
+        """
+        if not documents or limit <= 0:
+            return []
+
+        # Group documents by file_name
+        file_groups = {}
+        for doc in documents:
+            file_name = doc.get("metadata", {}).get("file_name", "unknown")
+            if file_name not in file_groups:
+                file_groups[file_name] = []
+            file_groups[file_name].append(doc)
+
+        # Sort each group by similarity (highest first)
+        for _file_name, docs in file_groups.items():
+            docs.sort(key=lambda x: x["similarity"], reverse=True)
+
+        # Use round-robin to select diverse results
+        diversified = []
+        file_names = list(file_groups.keys())
+        file_indices = dict.fromkeys(
+            file_names, 0
+        )  # Track position in each file's chunks
+
+        # Round-robin selection with max 2 chunks per file in top results
+        rounds = 0
+        max_per_file_per_round = 2  # Allow up to 2 chunks per file per round
+
+        while (
+            len(diversified) < limit and rounds < 5
+        ):  # Max 5 rounds to prevent infinite loop
+            added_this_round = False
+
+            for file_name in file_names:
+                if len(diversified) >= limit:
+                    break
+
+                file_docs = file_groups[file_name]
+                start_idx = file_indices[file_name]
+
+                # Add up to max_per_file_per_round chunks from this file
+                for chunks_added, i in enumerate(range(start_idx, len(file_docs))):
+                    if (
+                        len(diversified) >= limit
+                        or chunks_added >= max_per_file_per_round
+                    ):
+                        break
+
+                    diversified.append(file_docs[i])
+                    added_this_round = True
+                    file_indices[file_name] = i + 1
+
+            if not added_this_round:
+                break  # No more documents to add
+
+            rounds += 1
+
+        logger.debug(
+            f"Diversified {len(documents)} results to {len(diversified)} across {len(file_groups)} files"
+        )
+        return diversified
 
     async def get_stats(self) -> dict[str, Any]:
         """Get Elasticsearch index statistics"""
