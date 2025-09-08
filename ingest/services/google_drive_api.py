@@ -1,0 +1,204 @@
+"""
+Google Drive API Service
+
+Handles raw Google Drive API calls and folder operations.
+Separated for better organization and testability.
+"""
+
+import logging
+from typing import Any
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+logger = logging.getLogger(__name__)
+
+
+class GoogleDriveAPI:
+    """Service for Google Drive API operations"""
+
+    def __init__(self, credentials):
+        """
+        Initialize Google Drive API service.
+
+        Args:
+            credentials: Google OAuth2 credentials object
+        """
+        self.service = build('drive', 'v3', credentials=credentials)
+
+    def get_folder_info(self, folder_id: str) -> dict | None:
+        """
+        Get information about a folder.
+
+        Args:
+            folder_id: Google Drive folder ID
+
+        Returns:
+            Folder information dictionary or None if error
+        """
+        try:
+            # Try regular access first
+            folder_info = self.service.files().get(
+                fileId=folder_id,
+                fields="id,name,mimeType,permissions",
+                supportsAllDrives=True
+            ).execute()
+            return folder_info
+        except HttpError as e:
+            logger.error(f"Cannot access folder {folder_id}: {e}")
+            return None
+
+    def list_files_in_folder(
+        self, folder_id: str, folder_path: str = ""
+    ) -> list[dict]:
+        """
+        List files in a specific folder using various query strategies.
+
+        Args:
+            folder_id: Google Drive folder ID
+            folder_path: Current folder path for debugging
+
+        Returns:
+            List of file items
+        """
+        try:
+            if folder_path == "":  # Root folder - use broad query
+                return self._list_files_broad_query(folder_id)
+            else:  # Subfolder - use specific query
+                return self._list_files_specific_query(folder_id)
+        except HttpError as e:
+            logger.error(f"Error listing folder contents: {e}")
+            return []
+
+    def _list_files_broad_query(self, folder_id: str) -> list[dict]:
+        """Use broad query for root folder access"""
+        logger.info("🔄 Using broad shared drive query for root folder...")
+
+        all_results = self.service.files().list(
+            q="trashed=false",
+            pageSize=1000,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+        ).execute()
+
+        # Filter to only files that have our folder_id as parent
+        all_files = all_results.get('files', [])
+        filtered_files = [f for f in all_files if folder_id in f.get('parents', [])]
+
+        logger.info(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
+        return filtered_files
+
+    def _list_files_specific_query(self, folder_id: str) -> list[dict]:
+        """Use specific parent query for subfolders"""
+        query = f"'{folder_id}' in parents and trashed=false"
+
+        results = self.service.files().list(
+            q=query,
+            pageSize=1000,
+            includeItemsFromAllDrives=True,
+            supportsAllDrives=True,
+            fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
+        ).execute()
+
+        return results.get('files', [])
+
+    def get_detailed_permissions(self, file_id: str) -> list[dict]:
+        """
+        Get detailed permissions for a specific file.
+
+        Args:
+            file_id: Google Drive file ID
+
+        Returns:
+            List of permission dictionaries
+        """
+        try:
+            file_permissions = self.service.files().get(
+                fileId=file_id,
+                fields="permissions",
+                supportsAllDrives=True
+            ).execute()
+            return file_permissions.get('permissions', [])
+        except HttpError as e:
+            logger.warning(f"Could not fetch detailed permissions for {file_id}: {e}")
+            return []
+
+    def download_file_content(self, file_id: str, mime_type: str) -> bytes | None:
+        """
+        Download raw file content from Google Drive.
+
+        Args:
+            file_id: Google Drive file ID
+            mime_type: MIME type of the file
+
+        Returns:
+            Raw file content as bytes or None if failed
+        """
+        try:
+            # Handle Google Docs files (need export)
+            if mime_type == 'application/vnd.google-apps.document':
+                request = self.service.files().export_media(
+                    fileId=file_id, mimeType='text/plain')
+            elif mime_type == 'application/vnd.google-apps.spreadsheet':
+                request = self.service.files().export_media(
+                    fileId=file_id, mimeType='text/csv')
+            elif mime_type == 'application/vnd.google-apps.presentation':
+                request = self.service.files().export_media(
+                    fileId=file_id, mimeType='text/plain')
+            else:
+                # Handle regular files (need download)
+                request = self.service.files().get_media(fileId=file_id)
+
+            content = request.execute()
+            return content
+
+        except HttpError as e:
+            logger.error(f"Error downloading file {file_id}: {e}")
+            return None
+
+    def debug_folder_access(self, folder_id: str) -> dict[str, Any]:
+        """
+        Debug folder access issues with detailed logging.
+
+        Args:
+            folder_id: Google Drive folder ID
+
+        Returns:
+            Debug information dictionary
+        """
+        debug_info = {
+            "folder_id": folder_id,
+            "folder_exists": False,
+            "folder_info": None,
+            "query_methods_tried": [],
+            "files_found": 0,
+            "errors": []
+        }
+
+        # Try to get folder info
+        try:
+            folder_info = self.get_folder_info(folder_id)
+            if folder_info:
+                debug_info["folder_exists"] = True
+                debug_info["folder_info"] = folder_info
+                logger.info(f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
+        except Exception as e:
+            debug_info["errors"].append(f"Folder info error: {e}")
+
+        # Try different query methods
+        try:
+            files = self._list_files_specific_query(folder_id)
+            debug_info["query_methods_tried"].append("specific_parent_query")
+            debug_info["files_found"] = len(files)
+        except Exception as e:
+            debug_info["errors"].append(f"Specific query error: {e}")
+
+        if debug_info["files_found"] == 0:
+            try:
+                files = self._list_files_broad_query(folder_id)
+                debug_info["query_methods_tried"].append("broad_query")
+                debug_info["files_found"] = len(files)
+            except Exception as e:
+                debug_info["errors"].append(f"Broad query error: {e}")
+
+        return debug_info
