@@ -554,30 +554,34 @@ class RAGService:
         # Sort by boosted similarity scores
         enhanced_results.sort(key=lambda x: x.get("similarity", 0), reverse=True)
 
-        # Deduplicate by document title - return max 1 chunk per unique document
+        # Group chunks by document and return all chunks from top 5 documents
         seen_documents = set()
-        deduplicated_results = []
+        final_results = []
 
         for result in enhanced_results:
             metadata = result.get("metadata", {})
             file_name = metadata.get("file_name", "Unknown")
 
+            # If we haven't seen this document OR we already included it, add this chunk
             if file_name not in seen_documents:
                 seen_documents.add(file_name)
-                deduplicated_results.append(result)
-
-                # Stop when we have enough unique documents
-                if len(deduplicated_results) >= len(enhanced_results):
+                # Stop if we already have 5 unique documents
+                if len(seen_documents) > self.settings.rag.max_results:
                     break
 
+            # Add chunk if it's from one of our selected documents
+            if file_name in seen_documents and len(seen_documents) <= self.settings.rag.max_results:
+                final_results.append(result)
+
         logger.debug(
-            f"Deduplicated results: {len(enhanced_results)} chunks → {len(deduplicated_results)} unique documents"
+            f"Returning {len(final_results)} chunks from {len(seen_documents)} documents"
         )
 
         # Remove debug info for cleaner results
-        # Debug info removed to clean up output
+        for result in final_results:
+            result.pop("boost_info", None)
 
-        return deduplicated_results
+        return final_results
 
     def _extract_entities_simple(self, query: str) -> set[str]:
         """
