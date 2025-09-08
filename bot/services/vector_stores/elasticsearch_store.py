@@ -211,9 +211,10 @@ class ElasticsearchVectorStore(VectorStore):
                     # This gives us a 0.0-1.0 range where 1.0 is the best match in this result set
                     similarity = raw_score / max_score
 
-                    # Apply a gentle curve to spread out scores more
-                    # This prevents everything from being too close to 100%
-                    similarity = similarity**0.7  # Gentle power curve
+                    # Apply stronger curve and scaling to match Pinecone's 0.7-0.95 range
+                    # This creates more spread like cosine similarity scores
+                    similarity = similarity**1.5  # Stronger power curve
+                    similarity = 0.6 + (similarity * 0.35)  # Scale to 0.6-0.95 range
                 else:
                     # For pure vector search, convert to similarity
                     similarity = raw_score - 1.0  # Convert back to cosine similarity
@@ -297,7 +298,8 @@ class ElasticsearchVectorStore(VectorStore):
                 # Use same improved scoring as main search method
                 raw_score = hit["_score"]
                 similarity = raw_score / max_score
-                similarity = similarity**0.7  # Gentle power curve to spread scores
+                similarity = similarity**1.5  # Stronger power curve to spread scores
+                similarity = 0.6 + (similarity * 0.35)  # Scale to 0.6-0.95 range
 
                 if similarity >= similarity_threshold:
                     documents.append(
