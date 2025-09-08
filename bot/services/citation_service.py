@@ -27,10 +27,18 @@ class CitationService:
         if not context_chunks:
             return response
 
-        # Extract unique sources with their metadata
+        # Extract sources with enhanced deduplication logic
         sources = []
-        seen_sources = set()
+        file_chunk_counts = {}  # Track chunks per file
 
+        # First pass: count chunks per file
+        for chunk in context_chunks:
+            metadata = chunk.get("metadata", {})
+            file_name = metadata.get("file_name", "Unknown")
+            file_chunk_counts[file_name] = file_chunk_counts.get(file_name, 0) + 1
+
+        # Second pass: build citations with chunk info when needed
+        seen_sources = set()
         for i, chunk in enumerate(context_chunks, 1):
             metadata = chunk.get("metadata", {})
             file_name = metadata.get("file_name", f"Document {i}")
@@ -50,6 +58,11 @@ class CitationService:
 
             # Format: Title • Subtitle (if available) (:file_folder: Knowledge Base) • Relevance: XX.X%
             citation = f"{len(sources) + 1}. {doc_title}"
+
+            # Add chunk count if multiple chunks from same file
+            chunk_count = file_chunk_counts.get(file_name, 1)
+            if chunk_count > 1:
+                citation += f" • {chunk_count} sections"
 
             # Add subtitle/description if available in metadata
             subtitle = metadata.get("title") or metadata.get("description")
