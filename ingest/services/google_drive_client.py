@@ -37,7 +37,7 @@ class GoogleDriveClient:
             token_file: Path to store/retrieve OAuth2 token
         """
         self.credentials_file = credentials_file or 'credentials.json'
-        self.token_file = token_file or 'token.json'
+        self.token_file = token_file or 'auth/token.json'
         self.service = None
         self.document_processor = DocumentProcessor()
 
@@ -106,6 +106,8 @@ class GoogleDriveClient:
 
             # Save the credentials for the next run
             try:
+                # Create auth directory if it doesn't exist
+                os.makedirs(os.path.dirname(self.token_file), exist_ok=True)
                 with open(self.token_file, 'w') as token:
                     token.write(creds.to_json())
             except Exception as e:
