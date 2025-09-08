@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Load environment
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -31,7 +32,7 @@ def clear_pinecone():
             print("❌ VECTOR_API_KEY not found in .env file")
             return False
 
-        print(f"🔄 Connecting to Pinecone...")
+        print("🔄 Connecting to Pinecone...")
         print(f"   Index: {index_name}")
 
         # Initialize Pinecone

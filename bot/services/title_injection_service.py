@@ -8,7 +8,7 @@ Pattern: "[TITLE] <title> [/TITLE]\n<content>"
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,9 @@ class TitleInjectionService:
 
     def inject_titles(
         self,
-        texts: List[str],
-        metadata: List[Dict[str, Any]]
-    ) -> List[str]:
+        texts: list[str],
+        metadata: list[dict[str, Any]]
+    ) -> list[str]:
         """
         Inject titles into text chunks for better embeddings
 
@@ -46,7 +46,7 @@ class TitleInjectionService:
         """
         enhanced_texts = []
 
-        for i, (text, meta) in enumerate(zip(texts, metadata)):
+        for i, (text, meta) in enumerate(zip(texts, metadata, strict=False)):
             title = self._extract_title(meta)
 
             if title:
@@ -61,7 +61,7 @@ class TitleInjectionService:
         logger.info(f"Enhanced {len(enhanced_texts)} chunks with title injection")
         return enhanced_texts
 
-    def _extract_title(self, metadata: Dict[str, Any]) -> Optional[str]:
+    def _extract_title(self, metadata: dict[str, Any]) -> str | None:
         """Extract title from metadata using various possible keys"""
         possible_title_keys = [
             'title', 'document_title', 'file_name', 'filename',
@@ -83,7 +83,7 @@ class TitleInjectionService:
             f"{self.separator}{content}"
         )
 
-    def extract_title_from_enhanced_text(self, enhanced_text: str) -> Optional[str]:
+    def extract_title_from_enhanced_text(self, enhanced_text: str) -> str | None:
         """Extract title from enhanced text (for debugging/analysis)"""
         try:
             start_idx = enhanced_text.find(self.title_start_token)
@@ -131,8 +131,8 @@ class EnhancedChunkProcessor:
 
     def process_documents_for_embedding(
         self,
-        documents: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
+        documents: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Process documents with title injection before embedding
 
@@ -163,8 +163,8 @@ class EnhancedChunkProcessor:
 
     def prepare_for_dual_indexing(
         self,
-        documents: List[Dict[str, Any]]
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        documents: list[dict[str, Any]]
+    ) -> dict[str, list[dict[str, Any]]]:
         """
         Prepare documents for dual indexing (Pinecone + Elasticsearch)
 

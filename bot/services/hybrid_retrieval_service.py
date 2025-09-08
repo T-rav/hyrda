@@ -10,10 +10,9 @@ Based on the expert recommendations for modern RAG:
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import math
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +22,10 @@ class RetrievalResult:
     """Unified result format for all retrieval stages"""
     content: str
     similarity: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
     id: str
     source: str  # "dense", "sparse", or "hybrid"
-    rank: Optional[int] = None
+    rank: int | None = None
 
 
 class Reranker(ABC):
@@ -36,9 +35,9 @@ class Reranker(ABC):
     async def rerank(
         self,
         query: str,
-        documents: List[RetrievalResult],
+        documents: list[RetrievalResult],
         top_k: int = 10
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Rerank documents using cross-encoder"""
         pass
 
@@ -60,9 +59,9 @@ class CohereReranker(Reranker):
     async def rerank(
         self,
         query: str,
-        documents: List[RetrievalResult],
+        documents: list[RetrievalResult],
         top_k: int = 10
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Rerank using Cohere API"""
         try:
             client = await self._get_client()
@@ -110,7 +109,7 @@ class HybridRetrievalService:
         self,
         dense_store,  # PineconeVectorStore
         sparse_store,  # ElasticsearchVectorStore (for BM25)
-        reranker: Optional[Reranker] = None,
+        reranker: Reranker | None = None,
         dense_top_k: int = 100,
         sparse_top_k: int = 200,
         fusion_top_k: int = 50,
@@ -129,10 +128,10 @@ class HybridRetrievalService:
     async def hybrid_search(
         self,
         query: str,
-        query_embedding: List[float],
-        top_k: Optional[int] = None,
+        query_embedding: list[float],
+        top_k: int | None = None,
         similarity_threshold: float = 0.0
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """
         Perform hybrid retrieval with the full pipeline:
         Dense + Sparse → RRF → Cross-encoder reranking
@@ -185,7 +184,7 @@ class HybridRetrievalService:
         logger.info(f"Final results after threshold {similarity_threshold}: {len(filtered_results)}")
         return filtered_results
 
-    async def _dense_retrieval(self, query_embedding: List[float]) -> List[RetrievalResult]:
+    async def _dense_retrieval(self, query_embedding: list[float]) -> list[RetrievalResult]:
         """Dense vector retrieval via Pinecone"""
         try:
             results = await self.dense_store.search(
@@ -207,7 +206,7 @@ class HybridRetrievalService:
             logger.error(f"Dense retrieval failed: {e}")
             return []
 
-    async def _sparse_retrieval(self, query: str) -> List[RetrievalResult]:
+    async def _sparse_retrieval(self, query: str) -> list[RetrievalResult]:
         """Sparse BM25 retrieval via Elasticsearch"""
         try:
             # Use Elasticsearch's BM25 with field boosting
@@ -232,9 +231,9 @@ class HybridRetrievalService:
 
     def _reciprocal_rank_fusion(
         self,
-        dense_results: List[RetrievalResult],
-        sparse_results: List[RetrievalResult]
-    ) -> List[RetrievalResult]:
+        dense_results: list[RetrievalResult],
+        sparse_results: list[RetrievalResult]
+    ) -> list[RetrievalResult]:
         """
         Reciprocal Rank Fusion as described in the expert's advice
 

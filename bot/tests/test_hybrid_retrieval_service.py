@@ -4,12 +4,14 @@ Tests for Hybrid Retrieval Service
 Tests RRF fusion, reranking, and hybrid search orchestration
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from services.hybrid_retrieval_service import (
+    CohereReranker,
     HybridRetrievalService,
     RetrievalResult,
-    CohereReranker
 )
 
 

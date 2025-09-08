@@ -9,7 +9,6 @@ Handles Google Drive API authentication and file operations including:
 """
 
 import os
-from typing import Dict, List, Optional
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -29,7 +28,7 @@ class GoogleDriveClient:
         'https://www.googleapis.com/auth/drive.metadata.readonly'
     ]
 
-    def __init__(self, credentials_file: Optional[str] = None, token_file: Optional[str] = None):
+    def __init__(self, credentials_file: str | None = None, token_file: str | None = None):
         """
         Initialize the Google Drive client.
 
@@ -120,7 +119,7 @@ class GoogleDriveClient:
             print(f"Error building Drive service: {e}")
             return False
 
-    def list_folder_contents(self, folder_id: str, recursive: bool = True, folder_path: str = "") -> List[Dict]:
+    def list_folder_contents(self, folder_id: str, recursive: bool = True, folder_path: str = "") -> list[dict]:
         """
         List all files in a Google Drive folder with comprehensive metadata.
 
@@ -185,7 +184,7 @@ class GoogleDriveClient:
                 if len(filtered_files) == 0 and folder_path != "":
                     print(f"🔍 DEBUG: No items found for folder_id '{folder_id}' in folder_path '{folder_path}'")
                     print(f"🔍 DEBUG: Query used: {query}")
-                    print(f"🔍 DEBUG: This suggests the folder may be empty or there's a permissions issue")
+                    print("🔍 DEBUG: This suggests the folder may be empty or there's a permissions issue")
 
                 if folder_path == "":
                     print(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
@@ -231,7 +230,7 @@ class GoogleDriveClient:
                     print(f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
                     permissions = folder_info.get('permissions', [])
                     print(f"🔐 Folder has {len(permissions)} permission entries")
-                except HttpError as e:
+                except HttpError:
                     # Try with shared drive support
                     try:
                         folder_info = self.service.files().get(
@@ -284,7 +283,7 @@ class GoogleDriveClient:
 
         return files
 
-    def download_file_content(self, file_id: str, mime_type: str) -> Optional[str]:
+    def download_file_content(self, file_id: str, mime_type: str) -> str | None:
         """
         Download the content of a file from Google Drive and extract text.
 
@@ -340,7 +339,7 @@ class GoogleDriveClient:
             return None
 
     @staticmethod
-    def format_permissions(permissions: List[Dict]) -> Dict:
+    def format_permissions(permissions: list[dict]) -> dict:
         """
         Format Google Drive permissions into a structured format.
 
@@ -392,7 +391,7 @@ class GoogleDriveClient:
         return formatted
 
     @staticmethod
-    def get_permissions_summary(permissions: List[Dict]) -> str:
+    def get_permissions_summary(permissions: list[dict]) -> str:
         """
         Get a simple string summary of Google Drive permissions for Pinecone metadata.
 
@@ -429,7 +428,7 @@ class GoogleDriveClient:
             return "restricted"
 
     @staticmethod
-    def get_owner_emails(owners: List[Dict]) -> str:
+    def get_owner_emails(owners: list[dict]) -> str:
         """
         Get a simple string of owner emails for Pinecone metadata.
 

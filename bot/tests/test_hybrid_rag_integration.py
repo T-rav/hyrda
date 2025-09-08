@@ -4,11 +4,12 @@ Integration tests for Hybrid RAG Service
 Tests the complete end-to-end pipeline with real-like scenarios
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import List, Dict, Any
+from typing import Any
+from unittest.mock import AsyncMock, patch
 
-from config.settings import Settings, VectorSettings, HybridSettings
+import pytest
+
+from config.settings import HybridSettings, Settings, VectorSettings
 from services.hybrid_rag_service import HybridRAGService
 
 
@@ -19,7 +20,7 @@ class MockEmbeddingService:
         self.embed_documents = AsyncMock()
         self.embed_query = AsyncMock()
 
-    def setup_responses(self, document_embeddings: List[List[float]], query_embedding: List[float]):
+    def setup_responses(self, document_embeddings: list[list[float]], query_embedding: list[float]):
         """Setup mock responses"""
         self.embed_documents.return_value = document_embeddings
         self.embed_query.return_value = query_embedding
@@ -34,9 +35,9 @@ class MockVectorStore:
         self.initialize = AsyncMock()
         self.close = AsyncMock()
 
-    async def add_documents(self, texts: List[str], embeddings: List[List[float]], metadata: List[Dict[str, Any]]):
+    async def add_documents(self, texts: list[str], embeddings: list[list[float]], metadata: list[dict[str, Any]]):
         """Mock document ingestion"""
-        for i, (text, embedding, meta) in enumerate(zip(texts, embeddings, metadata)):
+        for i, (text, embedding, meta) in enumerate(zip(texts, embeddings, metadata, strict=False)):
             doc_id = f"{self.store_type}_{i}"
             self.documents.append({
                 "id": doc_id,
@@ -47,7 +48,7 @@ class MockVectorStore:
             })
         return True
 
-    async def search(self, query_embedding: List[float], limit: int = 10, similarity_threshold: float = 0.0, **kwargs):
+    async def search(self, query_embedding: list[float], limit: int = 10, similarity_threshold: float = 0.0, **kwargs):
         """Mock dense vector search with cosine similarity simulation"""
         if self.store_type != "dense":
             return []
@@ -67,7 +68,7 @@ class MockVectorStore:
 
         return sorted(results, key=lambda x: x["similarity"], reverse=True)
 
-    async def bm25_search(self, query: str, limit: int = 10, field_boosts: Dict[str, float] = None, **kwargs):
+    async def bm25_search(self, query: str, limit: int = 10, field_boosts: dict[str, float] = None, **kwargs):
         """Mock BM25 search"""
         if self.store_type != "sparse":
             return []
@@ -99,13 +100,13 @@ class MockVectorStore:
 
         return sorted(results, key=lambda x: x["similarity"], reverse=True)
 
-    def _simulate_cosine_similarity(self, query_embedding: List[float], doc_embedding: List[float]) -> float:
+    def _simulate_cosine_similarity(self, query_embedding: list[float], doc_embedding: list[float]) -> float:
         """Simple cosine similarity simulation"""
         if not query_embedding or not doc_embedding:
             return 0.0
 
         # Simple dot product simulation
-        dot_product = sum(q * d for q, d in zip(query_embedding[:5], doc_embedding[:5]))  # Use first 5 dims
+        dot_product = sum(q * d for q, d in zip(query_embedding[:5], doc_embedding[:5], strict=False))  # Use first 5 dims
         # Normalize to 0-1 range
         return max(0.0, min(1.0, (dot_product + 5) / 10))
 
@@ -463,7 +464,7 @@ class TestEndToEndScenarios:
             ("Neural networks have multiple layers", {"title": "Deep Learning", "domain": "ai"})
         ]
 
-        texts, metadata = zip(*documents)
+        texts, metadata = zip(*documents, strict=False)
         embeddings = [[0.1 + i*0.1] * 1536 for i in range(len(texts))]
 
         # Ingest

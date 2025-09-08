@@ -13,15 +13,22 @@ Based on the expert's recommendations for modern RAG architecture.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from config.settings import Settings, VectorSettings, HybridSettings
-from services.vector_service import create_vector_store, PineconeVectorStore, ElasticsearchVectorStore
-from services.hybrid_retrieval_service import HybridRetrievalService, CohereReranker
-from services.title_injection_service import TitleInjectionService, EnhancedChunkProcessor
+from config.settings import Settings, VectorSettings
 from services.embedding_service import create_embedding_provider
-from services.llm_providers import create_llm_provider
+from services.hybrid_retrieval_service import CohereReranker, HybridRetrievalService
 from services.langfuse_service import get_langfuse_service, observe
+from services.llm_providers import create_llm_provider
+from services.title_injection_service import (
+    EnhancedChunkProcessor,
+    TitleInjectionService,
+)
+from services.vector_service import (
+    ElasticsearchVectorStore,
+    PineconeVectorStore,
+    create_vector_store,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +49,11 @@ class HybridRAGService:
         self.hybrid_settings = settings.hybrid
 
         # Core services
-        self.dense_store: Optional[PineconeVectorStore] = None
-        self.sparse_store: Optional[ElasticsearchVectorStore] = None
-        self.hybrid_retrieval: Optional[HybridRetrievalService] = None
-        self.title_injection: Optional[TitleInjectionService] = None
-        self.chunk_processor: Optional[EnhancedChunkProcessor] = None
+        self.dense_store: PineconeVectorStore | None = None
+        self.sparse_store: ElasticsearchVectorStore | None = None
+        self.hybrid_retrieval: HybridRetrievalService | None = None
+        self.title_injection: TitleInjectionService | None = None
+        self.chunk_processor: EnhancedChunkProcessor | None = None
         self.embedding_service = None
         self.llm_provider = None
 
@@ -127,9 +134,9 @@ class HybridRAGService:
 
     async def ingest_documents(
         self,
-        texts: List[str],
-        embeddings: List[List[float]],
-        metadata: List[Dict[str, Any]]
+        texts: list[str],
+        embeddings: list[list[float]],
+        metadata: list[dict[str, Any]]
     ) -> bool:
         """
         Ingest documents into both dense and sparse stores with title injection
@@ -143,7 +150,7 @@ class HybridRAGService:
             # Prepare documents for dual indexing
             documents = [
                 {"content": text, "metadata": meta}
-                for text, meta in zip(texts, metadata)
+                for text, meta in zip(texts, metadata, strict=False)
             ]
 
             dual_docs = self.chunk_processor.prepare_for_dual_indexing(documents)
@@ -186,10 +193,10 @@ class HybridRAGService:
     async def hybrid_search(
         self,
         query: str,
-        query_embedding: List[float],
-        top_k: Optional[int] = None,
+        query_embedding: list[float],
+        top_k: int | None = None,
         similarity_threshold: float = 0.0
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Perform hybrid search with the complete pipeline:
         Dense + Sparse → RRF → Cross-encoder reranking
@@ -337,7 +344,7 @@ class HybridRAGService:
             return "I'm sorry, I encountered an error while generating a response."
 
     def _add_citations_to_response(
-        self, response: str, context_chunks: List[Dict[str, Any]]
+        self, response: str, context_chunks: list[dict[str, Any]]
     ) -> str:
         """Add source citations to the response"""
         if not context_chunks:
@@ -380,7 +387,7 @@ class HybridRAGService:
 
         return response
 
-    async def get_system_status(self) -> Dict[str, Any]:
+    async def get_system_status(self) -> dict[str, Any]:
         """Get comprehensive system status"""
         status = {
             "initialized": self._initialized,

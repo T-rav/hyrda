@@ -48,7 +48,7 @@ class IndexManager:
                 print("❌ VECTOR_API_KEY not found in .env file")
                 return False
 
-            print(f"🔄 Initializing Pinecone index...")
+            print("🔄 Initializing Pinecone index...")
             print(f"   Index: {self.index_name}")
             print(f"   Environment: {self.environment}")
             print(f"   Model: {self.embedding_model} ({self.get_embedding_dimensions()} dimensions)")
@@ -95,7 +95,7 @@ class IndexManager:
         try:
             from elasticsearch import AsyncElasticsearch
 
-            print(f"🔄 Initializing Elasticsearch indices...")
+            print("🔄 Initializing Elasticsearch indices...")
             print(f"   URL: {self.es_url}")
             print(f"   Base name: {self.index_name}")
 

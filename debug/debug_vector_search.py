@@ -6,7 +6,6 @@ Debug script to investigate IDEO vs viedo vector search issue
 import asyncio
 import os
 import sys
-from typing import Any
 
 # Load environment variables from .env file
 from dotenv import load_dotenv

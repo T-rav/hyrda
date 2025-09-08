@@ -22,6 +22,7 @@ from pathlib import Path
 # Load .env file from current directory or parent directories
 from dotenv import load_dotenv
 
+
 def find_and_load_env():
     """Find and load .env file from current directory or parent directories"""
     current_path = Path.cwd()
@@ -87,7 +88,12 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        from config.settings import VectorSettings, EmbeddingSettings, LLMSettings, HybridSettings, Settings
+        from config.settings import (
+            EmbeddingSettings,
+            LLMSettings,
+            Settings,
+            VectorSettings,
+        )
 
         # Try to use full settings first to detect hybrid mode
         try:
@@ -143,7 +149,7 @@ async def main():
             metadata=metadata
         )
 
-        print(f"\n📊 Ingestion Summary:")
+        print("\n📊 Ingestion Summary:")
         print(f"✅ Successfully processed: {success_count}")
         print(f"❌ Errors: {error_count}")
         print(f"📊 Total items: {success_count + error_count}")

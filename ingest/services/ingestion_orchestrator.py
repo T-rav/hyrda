@@ -9,7 +9,6 @@ Main service that coordinates the ingestion process by:
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
 
 from .google_drive_client import GoogleDriveClient
 
@@ -17,7 +16,7 @@ from .google_drive_client import GoogleDriveClient
 class IngestionOrchestrator:
     """Main orchestrator for the document ingestion process."""
 
-    def __init__(self, credentials_file: Optional[str] = None, token_file: Optional[str] = None):
+    def __init__(self, credentials_file: str | None = None, token_file: str | None = None):
         """
         Initialize the ingestion orchestrator.
 
@@ -53,7 +52,7 @@ class IngestionOrchestrator:
         if hasattr(vector_service, 'embedding_service'):
             self.embedding_service = vector_service.embedding_service
 
-    async def ingest_files(self, files: List[Dict], metadata: Optional[Dict] = None) -> Tuple[int, int]:
+    async def ingest_files(self, files: list[dict], metadata: dict | None = None) -> tuple[int, int]:
         """
         Ingest files into the vector database.
 
@@ -183,7 +182,7 @@ class IngestionOrchestrator:
                         embeddings=embeddings,
                         metadata=chunk_metadata
                     )
-                    print(f"   📊 Used single vector store ingestion")
+                    print("   📊 Used single vector store ingestion")
 
                 print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
@@ -195,7 +194,7 @@ class IngestionOrchestrator:
         return success_count, error_count
 
     async def ingest_folder(self, folder_id: str, recursive: bool = True,
-                          metadata: Optional[Dict] = None) -> Tuple[int, int]:
+                          metadata: dict | None = None) -> tuple[int, int]:
         """
         Ingest all files from a Google Drive folder.
 
