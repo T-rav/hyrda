@@ -18,7 +18,7 @@ from typing import Any
 from config.settings import Settings, VectorSettings
 from services.embedding_service import create_embedding_provider
 from services.hybrid_retrieval_service import CohereReranker, HybridRetrievalService
-from services.langfuse_service import get_langfuse_service, observe
+from services.langfuse_service import observe
 from services.llm_providers import create_llm_provider
 from services.title_injection_service import (
     EnhancedChunkProcessor,
@@ -102,8 +102,7 @@ class HybridRAGService:
 
             # Initialize reranker if enabled
             reranker = None
-            if self.hybrid_settings.reranker_enabled:
-                if self.hybrid_settings.reranker_provider == "cohere":
+            if self.hybrid_settings.reranker_enabled and self.hybrid_settings.reranker_provider == "cohere":
                     if not self.hybrid_settings.reranker_api_key:
                         logger.warning("Cohere API key not provided, reranking disabled")
                     else:
@@ -261,7 +260,6 @@ class HybridRAGService:
         if not self._initialized:
             raise RuntimeError("HybridRAGService not initialized")
 
-        langfuse_service = get_langfuse_service()
         context_chunks = []
 
         try:

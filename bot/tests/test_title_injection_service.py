@@ -272,4 +272,4 @@ class TestTitleInjectionEdgeCases:
         for text in malformed_cases:
             result = self.service.extract_title_from_enhanced_text(text)
             # Should handle gracefully, might return None or empty string
-            assert isinstance(result, (str, type(None)))
+            assert isinstance(result, str | type(None))

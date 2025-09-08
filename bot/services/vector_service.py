@@ -10,6 +10,11 @@ from typing import Any
 
 from config.settings import VectorSettings
 
+try:
+    from pinecone import Pinecone
+except ImportError:
+    Pinecone = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +71,8 @@ class PineconeVectorStore(VectorStore):
     async def initialize(self):
         """Initialize Pinecone client and index"""
         try:
-            from pinecone import Pinecone
+            if Pinecone is None:
+                raise ImportError("pinecone package is required for Pinecone vector store")
 
             if not self.settings.api_key:
                 raise ValueError("Pinecone API key is required")

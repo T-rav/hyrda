@@ -14,6 +14,11 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
+try:
+    import cohere
+except ImportError:
+    cohere = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +57,8 @@ class CohereReranker(Reranker):
 
     async def _get_client(self):
         if self._client is None:
-            import cohere
+            if cohere is None:
+                raise ImportError("cohere package is required for reranking")
             self._client = cohere.AsyncClient(api_key=self.api_key)
         return self._client
 
