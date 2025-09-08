@@ -50,9 +50,21 @@ class RetrievalService:
                 results = await self._search_with_entity_filtering(
                     query, query_embedding, vector_service
                 )
+            # Check if we're using Elasticsearch for traditional BM25 + vector boost
+            elif (
+                hasattr(vector_service, "bm25_search")
+                and self.settings.vector.provider.lower() == "elasticsearch"
+            ):
+                logger.info("🔍 Using Elasticsearch BM25 + vector boost search")
+                results = await vector_service.search(
+                    query_embedding=query_embedding,
+                    query_text=query,  # Pass query text for BM25 + vector boost
+                    limit=self.settings.rag.max_results * 2,  # Get more for filtering
+                    similarity_threshold=self.settings.rag.similarity_threshold,
+                )
             else:
-                # Standard vector similarity search
-                logger.info("🔍 Using standard vector similarity search")
+                # Pure vector similarity search (Pinecone or Elasticsearch without text)
+                logger.info("🔍 Using pure vector similarity search")
                 results = await vector_service.search(
                     query_embedding=query_embedding,
                     limit=self.settings.rag.max_results * 2,  # Get more for filtering
