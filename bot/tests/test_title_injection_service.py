@@ -25,7 +25,9 @@ class TestTitleInjectionService:
 
         result = self.service.inject_titles(texts, metadata)
 
-        expected = "[TITLE] Introduction to AI [/TITLE]\nThis is some content about AI."
+        expected = (
+            "[FILENAME] Introduction to AI [/FILENAME]\nThis is some content about AI."
+        )
         assert result[0] == expected
 
     def test_inject_titles_no_title(self):
@@ -62,9 +64,14 @@ class TestTitleInjectionService:
         results = self.service.inject_titles(texts, metadata)
 
         assert len(results) == 3
-        assert results[0] == "[TITLE] Document One [/TITLE]\nFirst document content."
+        assert (
+            results[0] == "[FILENAME] Document One [/FILENAME]\nFirst document content."
+        )
         assert results[1] == "Second document content."  # No change
-        assert results[2] == "[TITLE] Document Three [/TITLE]\nThird document content."
+        assert (
+            results[2]
+            == "[FILENAME] Document Three [/FILENAME]\nThird document content."
+        )
 
     def test_extract_title_various_keys(self):
         """Test title extraction from different metadata keys"""
@@ -88,7 +95,7 @@ class TestTitleInjectionService:
 
     def test_extract_title_from_enhanced_text(self):
         """Test extracting title from enhanced text"""
-        enhanced_text = "[TITLE] Test Title [/TITLE]\nSome content here."
+        enhanced_text = "[FILENAME] Test Title [/FILENAME]\nSome content here."
 
         result = self.service.extract_title_from_enhanced_text(enhanced_text)
 
@@ -104,7 +111,7 @@ class TestTitleInjectionService:
 
     def test_remove_title_injection(self):
         """Test removing title injection to get original content"""
-        enhanced_text = "[TITLE] Test Title [/TITLE]\nOriginal content here."
+        enhanced_text = "[FILENAME] Test Title [/FILENAME]\nOriginal content here."
 
         result = self.service.remove_title_injection(enhanced_text)
 
@@ -263,7 +270,7 @@ class TestEnhancedChunkProcessor:
         # First document
         assert (
             result[0]["content"]
-            == "[TITLE] ML Basics [/TITLE]\nThis is about machine learning."
+            == "[FILENAME] ML Basics [/FILENAME]\nThis is about machine learning."
         )
         assert result[0]["original_content"] == "This is about machine learning."
         assert result[0]["metadata"]["author"] == "John Doe"
@@ -271,7 +278,7 @@ class TestEnhancedChunkProcessor:
         # Second document - filename should be processed to clean title
         assert (
             result[1]["content"]
-            == "[TITLE] Deep Learning [/TITLE]\nDeep learning fundamentals."
+            == "[FILENAME] Deep Learning [/FILENAME]\nDeep learning fundamentals."
         )
         assert result[1]["original_content"] == "Deep learning fundamentals."
 
@@ -295,7 +302,7 @@ class TestEnhancedChunkProcessor:
         dense_doc = result["dense"][0]
         assert (
             dense_doc["content"]
-            == "[TITLE] AI Safety Guide [/TITLE]\nContent about AI safety."
+            == "[FILENAME] AI Safety Guide [/FILENAME]\nContent about AI safety."
         )
 
         # Sparse version (for Elasticsearch) - separate title field
@@ -355,7 +362,9 @@ class TestTitleInjectionEdgeCases:
 
         result = self.service.inject_titles(texts, metadata)
 
-        expected = "[TITLE] Título con acentos 中文 🚀 [/TITLE]\nContent with unicode."
+        expected = (
+            "[FILENAME] Título con acentos 中文 🚀 [/FILENAME]\nContent with unicode."
+        )
         assert result[0] == expected
 
     def test_very_long_title(self):
@@ -372,9 +381,9 @@ class TestTitleInjectionEdgeCases:
     def test_malformed_enhanced_text_extraction(self):
         """Test extracting title from malformed enhanced text"""
         malformed_cases = [
-            "[TITLE] No closing tag\nContent",
+            "[FILENAME] No closing tag\nContent",
             "No opening tag [/TITLE]\nContent",
-            "[TITLE][/TITLE]\nEmpty title",
+            "[FILENAME][/FILENAME]\nEmpty title",
             "Regular text without any tags",
         ]
 
