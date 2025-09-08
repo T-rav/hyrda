@@ -87,26 +87,50 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        from config.settings import VectorSettings, EmbeddingSettings, LLMSettings
+        from config.settings import VectorSettings, EmbeddingSettings, LLMSettings, HybridSettings, Settings
 
-        # Initialize only the settings we need (not full Settings which requires Slack)
-        vector_settings = VectorSettings()
-        embedding_settings = EmbeddingSettings()
-        llm_settings = LLMSettings()
+        # Try to use full settings first to detect hybrid mode
+        try:
+            # This will work if minimal .env is configured
+            settings = Settings()
+            use_hybrid = settings.hybrid.enabled and settings.vector.enabled
+            if use_hybrid:
+                print("🔄 Hybrid RAG mode detected - using title injection and dual indexing")
+        except:
+            # Fallback to individual settings if full Settings fails
+            use_hybrid = False
+            print("🔄 Single vector mode - using basic ingestion")
 
-        # Initialize vector store
-        from services.vector_service import create_vector_store
-        vector_store = create_vector_store(vector_settings)
-        await vector_store.initialize()
+        if use_hybrid:
+            # Use hybrid RAG service with title injection
+            from services.hybrid_rag_service import create_hybrid_rag_service
+            hybrid_service = await create_hybrid_rag_service(settings)
 
-        # Initialize embedding service
-        from services.embedding_service import create_embedding_provider
-        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+            # Set hybrid service in orchestrator (no separate embedding service needed)
+            orchestrator.set_services(hybrid_service)
 
-        # Set services in orchestrator
-        orchestrator.set_services(vector_store, embedding_provider)
+        else:
+            # Fallback to single vector store
+            vector_settings = VectorSettings()
+            embedding_settings = EmbeddingSettings()
+            llm_settings = LLMSettings()
 
-        print("✅ Services initialized successfully")
+            # Initialize vector store
+            from services.vector_service import create_vector_store
+            vector_store = create_vector_store(vector_settings)
+            await vector_store.initialize()
+
+            # Initialize embedding service
+            from services.embedding_service import create_embedding_provider
+            embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+
+            # Set services in orchestrator
+            orchestrator.set_services(vector_store, embedding_provider)
+
+        if use_hybrid:
+            print("✅ Hybrid RAG services initialized successfully (Pinecone + Elasticsearch + Title Injection)")
+        else:
+            print("✅ Single vector services initialized successfully")
     except Exception as e:
         print(f"❌ Service initialization failed: {e}")
         sys.exit(1)

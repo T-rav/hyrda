@@ -64,11 +64,11 @@ class VectorSettings(BaseSettings):
     """Vector database settings for RAG"""
 
     provider: str = Field(
-        default="elasticsearch", description="Vector DB provider (elasticsearch only)"
+        default="pinecone", description="Vector DB provider (pinecone, elasticsearch)"
     )
     url: str = Field(default="http://localhost:9200", description="Vector database URL")
     api_key: SecretStr | None = Field(
-        default=None, description="Vector DB API key (if required)"
+        default=None, description="Vector DB API key (required for Pinecone)"
     )
     collection_name: str = Field(
         default="knowledge_base", description="Collection/index name"
@@ -78,7 +78,31 @@ class VectorSettings(BaseSettings):
     )
     enabled: bool = Field(default=True, description="Enable RAG functionality")
 
-    model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]
+    model_config = ConfigDict(env_prefix="VECTOR_")
+
+
+class HybridSettings(BaseSettings):
+    """Hybrid retrieval settings"""
+
+    enabled: bool = Field(default=True, description="Enable hybrid dense+sparse retrieval")
+    dense_top_k: int = Field(default=100, description="Dense retrieval top-k")
+    sparse_top_k: int = Field(default=200, description="Sparse retrieval top-k")
+    fusion_top_k: int = Field(default=50, description="Post-fusion candidates")
+    final_top_k: int = Field(default=10, description="Final results after reranking")
+    rrf_k: int = Field(default=60, description="RRF parameter k")
+
+    # Reranker settings
+    reranker_enabled: bool = Field(default=True, description="Enable cross-encoder reranking")
+    reranker_provider: str = Field(default="cohere", description="Reranker provider (cohere)")
+    reranker_model: str = Field(default="rerank-english-v3.0", description="Reranker model")
+    reranker_api_key: SecretStr | None = Field(
+        default=None, description="Reranker API key"
+    )
+
+    # Title injection
+    title_injection_enabled: bool = Field(default=True, description="Enable title injection")
+
+    model_config = ConfigDict(env_prefix="HYBRID_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class EmbeddingSettings(BaseSettings):
@@ -144,6 +168,7 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)  # type: ignore[arg-type]
     vector: VectorSettings = Field(default_factory=VectorSettings)
+    hybrid: HybridSettings = Field(default_factory=HybridSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)

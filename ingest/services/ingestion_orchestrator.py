@@ -38,16 +38,20 @@ class IngestionOrchestrator:
         """
         return self.google_drive_client.authenticate()
 
-    def set_services(self, vector_service, embedding_service):
+    def set_services(self, vector_service, embedding_service=None):
         """
         Set the vector database and embedding services.
 
         Args:
-            vector_service: Vector database service instance
-            embedding_service: Embedding service instance
+            vector_service: Vector database service instance (could be hybrid or single)
+            embedding_service: Embedding service instance (optional for hybrid service)
         """
         self.vector_service = vector_service
         self.embedding_service = embedding_service
+
+        # For hybrid RAG service, embedding service is built-in
+        if hasattr(vector_service, 'embedding_service'):
+            self.embedding_service = vector_service.embedding_service
 
     async def ingest_files(self, files: List[Dict], metadata: Optional[Dict] = None) -> Tuple[int, int]:
         """
@@ -63,7 +67,12 @@ class IngestionOrchestrator:
         # Check that services are properly initialized
         if not self.vector_service:
             raise RuntimeError("Vector service not initialized. Services must be set before calling ingest_files.")
-        if not self.embedding_service:
+
+        # For hybrid services, embedding service is built-in
+        if hasattr(self.vector_service, 'embedding_service'):
+            # Hybrid service has built-in embedding service
+            pass
+        elif not self.embedding_service:
             raise RuntimeError("Embedding service not initialized. Services must be set before calling ingest_files.")
 
         success_count = 0
@@ -105,36 +114,76 @@ class IngestionOrchestrator:
                 if metadata:
                     doc_metadata.update(metadata)
 
-                # Import chunk_text function - this is a bit awkward but necessary for now
-                # TODO: Consider moving this to a proper service
-                import sys
-                from pathlib import Path
-                sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
-                from services.embedding_service import chunk_text
+                # Check if we're using hybrid RAG service with title injection
+                if hasattr(self.vector_service, 'ingest_documents'):
+                    # For hybrid service, we need to chunk and generate embeddings first
+                    import sys
+                    from pathlib import Path
+                    sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
+                    from services.embedding_service import chunk_text
 
-                # Chunk the content and generate embeddings
-                chunks = chunk_text(content,
-                                   chunk_size=self.embedding_service.settings.chunk_size,
-                                   chunk_overlap=self.embedding_service.settings.chunk_overlap)
+                    # Chunk the content
+                    chunk_size = getattr(self.vector_service, 'embedding_service', None)
+                    if chunk_size and hasattr(chunk_size, 'settings'):
+                        chunks = chunk_text(content,
+                                           chunk_size=chunk_size.settings.chunk_size,
+                                           chunk_overlap=chunk_size.settings.chunk_overlap)
+                    else:
+                        # Use default chunking
+                        chunks = chunk_text(content, chunk_size=1000, chunk_overlap=200)
 
-                # Generate embeddings for chunks
-                embeddings = await self.embedding_service.get_embeddings(chunks)
+                    # Generate embeddings using hybrid service's embedding service
+                    embeddings = await self.vector_service.embedding_service.get_embeddings(chunks)
 
-                # Prepare metadata for each chunk
-                chunk_metadata = []
-                for i, chunk in enumerate(chunks):
-                    chunk_meta = doc_metadata.copy()
-                    chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
-                    chunk_meta['chunk_index'] = i
-                    chunk_meta['total_chunks'] = len(chunks)
-                    chunk_metadata.append(chunk_meta)
+                    # Prepare metadata for each chunk
+                    chunk_metadata = []
+                    for i, chunk in enumerate(chunks):
+                        chunk_meta = doc_metadata.copy()
+                        chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
+                        chunk_meta['chunk_index'] = i
+                        chunk_meta['total_chunks'] = len(chunks)
+                        chunk_metadata.append(chunk_meta)
 
-                # Add documents to vector store
-                await self.vector_service.add_documents(
-                    texts=chunks,
-                    embeddings=embeddings,
-                    metadata=chunk_metadata
-                )
+                    # Use hybrid ingestion with proper parameters
+                    await self.vector_service.ingest_documents(
+                        texts=chunks,
+                        embeddings=embeddings,
+                        metadata=chunk_metadata
+                    )
+                    print(f"   📊 Used hybrid ingestion with title injection ({len(chunks)} chunks)")
+
+                else:
+                    # Fallback to single vector store ingestion
+                    # Import chunk_text function
+                    import sys
+                    from pathlib import Path
+                    sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
+                    from services.embedding_service import chunk_text
+
+                    # Chunk the content and generate embeddings
+                    chunks = chunk_text(content,
+                                       chunk_size=self.embedding_service.settings.chunk_size,
+                                       chunk_overlap=self.embedding_service.settings.chunk_overlap)
+
+                    # Generate embeddings for chunks
+                    embeddings = await self.embedding_service.get_embeddings(chunks)
+
+                    # Prepare metadata for each chunk
+                    chunk_metadata = []
+                    for i, chunk in enumerate(chunks):
+                        chunk_meta = doc_metadata.copy()
+                        chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
+                        chunk_meta['chunk_index'] = i
+                        chunk_meta['total_chunks'] = len(chunks)
+                        chunk_metadata.append(chunk_meta)
+
+                    # Add documents to vector store
+                    await self.vector_service.add_documents(
+                        texts=chunks,
+                        embeddings=embeddings,
+                        metadata=chunk_metadata
+                    )
+                    print(f"   📊 Used single vector store ingestion")
 
                 print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
