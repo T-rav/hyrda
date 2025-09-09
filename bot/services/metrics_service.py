@@ -8,6 +8,7 @@ Integrates with the existing Prometheus monitoring stack.
 import logging
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,12 @@ class MetricsService:
 
     def __init__(self, enabled: bool = True):
         self.enabled = enabled and _prometheus_available
+
+        # Track active conversations with timestamps
+        self._active_conversations = {}  # conversation_id -> last_activity_time
+        self._conversation_timeout = timedelta(
+            minutes=30
+        )  # Consider inactive after 30 minutes
 
         if not self.enabled:
             return
@@ -191,8 +198,54 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error updating cache hit rate: {e}")
 
+    def record_conversation_activity(self, conversation_id: str):
+        """Record activity in a conversation"""
+        if not self.enabled:
+            return
+
+        try:
+            # Update conversation activity timestamp
+            self._active_conversations[conversation_id] = datetime.now()
+
+            # Clean up old conversations and update metric
+            self._cleanup_inactive_conversations()
+
+        except Exception as e:
+            logger.error(f"Error recording conversation activity: {e}")
+
+    def _cleanup_inactive_conversations(self):
+        """Remove inactive conversations and update the metric"""
+        if not self.enabled:
+            return
+
+        try:
+            now = datetime.now()
+            cutoff_time = now - self._conversation_timeout
+
+            # Remove conversations older than timeout
+            inactive_conversations = [
+                conv_id
+                for conv_id, last_activity in self._active_conversations.items()
+                if last_activity < cutoff_time
+            ]
+
+            for conv_id in inactive_conversations:
+                del self._active_conversations[conv_id]
+
+            # Update Prometheus metric with current active count
+            active_count = len(self._active_conversations)
+            self.active_conversations.set(active_count)
+
+            if inactive_conversations:
+                logger.debug(
+                    f"Cleaned up {len(inactive_conversations)} inactive conversations. Active: {active_count}"
+                )
+
+        except Exception as e:
+            logger.error(f"Error cleaning up conversations: {e}")
+
     def update_active_conversations(self, count: int):
-        """Update the number of active conversations"""
+        """Update the number of active conversations (legacy method)"""
         if not self.enabled:
             return
 
@@ -200,6 +253,14 @@ class MetricsService:
             self.active_conversations.set(count)
         except Exception as e:
             logger.error(f"Error updating active conversations: {e}")
+
+    def get_active_conversation_count(self) -> int:
+        """Get current active conversation count"""
+        if not self.enabled:
+            return 0
+
+        self._cleanup_inactive_conversations()
+        return len(self._active_conversations)
 
     @asynccontextmanager
     async def time_request(self, endpoint: str, method: str = "POST"):

@@ -190,3 +190,13 @@ dagster_project/dagster_venv/
 slack-bot/slackbot_venv/
 .weave/tools/*
 token.json
+
+# Node.js (for health UI)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Health UI build artifacts
+bot/health_ui/dist/
+bot/health_ui/node_modules/
