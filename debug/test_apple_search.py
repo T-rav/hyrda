@@ -13,8 +13,6 @@ load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bot'))
 
 from services.rag_service import RAGService
-from services.vector_service import create_vector_store
-from services.embedding_service import create_embedding_provider
 from config.settings import Settings
 
 async def test_apple_search():
@@ -55,7 +53,7 @@ async def test_apple_search():
             print()
 
         print("=" * 60)
-        print(f"EXPECTED: Should see 'Apple - Frontend Engineering' document")
+        print("EXPECTED: Should see 'Apple - Frontend Engineering' document")
         print(f"ACTUAL: {len(results)} results returned")
 
     except Exception as e:

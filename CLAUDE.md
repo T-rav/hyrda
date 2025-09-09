@@ -96,8 +96,8 @@ CACHE_REDIS_URL=redis://localhost:6379
 ```bash
 # Vector Database
 VECTOR_ENABLED=true
-VECTOR_PROVIDER=chroma  # chroma, pinecone
-VECTOR_URL=http://localhost:8000
+VECTOR_PROVIDER=elasticsearch
+VECTOR_URL=http://localhost:9200
 
 # Embeddings
 EMBEDDING_PROVIDER=openai
@@ -110,20 +110,20 @@ RAG_SIMILARITY_THRESHOLD=0.7
 
 ### Quick Setup Examples
 
-**OpenAI + ChromaDB (Local):**
+**OpenAI + Elasticsearch (Recommended):**
 ```bash
 LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-key
-VECTOR_PROVIDER=chroma
-VECTOR_URL=./chroma_db
+VECTOR_PROVIDER=elasticsearch
+VECTOR_URL=http://localhost:9200
 ```
 
-**Anthropic + Pinecone (Cloud):**
+**Anthropic + Elasticsearch:**
 ```bash
 LLM_PROVIDER=anthropic
 LLM_API_KEY=your-anthropic-key
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-key
+VECTOR_PROVIDER=elasticsearch
+VECTOR_URL=http://localhost:9200
 ```
 
 **Ollama (Local, No RAG):**
@@ -193,9 +193,8 @@ Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictiona
 - **Anthropic**: Claude 3 (Haiku, Sonnet, Opus)  
 - **Ollama**: Local models (Llama 2, Code Llama, etc.)
 
-#### Vector Database Options
-- **ChromaDB**: Local or server deployment
-- **Pinecone**: Cloud-hosted vector database
+#### Vector Database
+- **Elasticsearch**: Local or cloud deployment for vector search
 
 #### RAG Pipeline Features
 - **Document Chunking**: Configurable size and overlap

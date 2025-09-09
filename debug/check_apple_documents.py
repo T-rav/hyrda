@@ -6,7 +6,6 @@ Debug script to check Apple documents in the vector database
 import asyncio
 import os
 import sys
-from typing import Any
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
@@ -30,7 +29,7 @@ async def check_apple_documents():
         print("❌ Vector search is not enabled in settings")
         return
 
-    print(f"🔍 Checking Apple documents in vector database")
+    print("🔍 Checking Apple documents in vector database")
     print(f"🔧 Vector Provider: {settings.vector.provider}")
     print(f"🔧 Collection: {settings.vector.collection_name}")
     print()

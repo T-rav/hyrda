@@ -2,9 +2,10 @@
 Tests for DocumentProcessor service.
 """
 
-import io
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, mock_open
+
 from services.document_processor import DocumentProcessor
 
 
@@ -24,7 +25,7 @@ class TestDocumentProcessor:
 
     def test_extract_text_content_utf8(self, processor):
         """Test text extraction from UTF-8 content."""
-        content = "Hello, world! 🌍".encode('utf-8')
+        content = "Hello, world! 🌍".encode()
         result = processor.extract_text(content, "text/plain")
         assert result == "Hello, world! 🌍"
 

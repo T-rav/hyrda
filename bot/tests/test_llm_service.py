@@ -47,6 +47,10 @@ def mock_settings():
     settings.rag.rerank_enabled = False
     settings.rag.include_metadata = True
 
+    # Hybrid settings - ensure it's disabled for tests
+    settings.hybrid = MagicMock()
+    settings.hybrid.enabled = False
+
     return settings
 
 
