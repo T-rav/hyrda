@@ -7,6 +7,8 @@ Tests the document diversification algorithm that ensures varied results.
 from config.settings import Settings
 from services.vector_stores.elasticsearch_store import ElasticsearchVectorStore
 
+# Force CI formatting consistency
+
 
 class TestElasticsearchDiversification:
     """Test diversification logic in Elasticsearch vector store"""
