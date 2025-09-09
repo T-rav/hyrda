@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Activity, Server, Database, Zap, Clock, Users } from 'lucide-react'
 import StatusCard from './components/StatusCard'
-import MetricsCard from './components/MetricsCard'
 import './App.css'
 
 function App() {
@@ -101,7 +100,7 @@ function App() {
                 status={readyData?.checks?.cache?.status || 'unknown'}
                 details={
                   readyData?.checks?.cache?.status === 'healthy'
-                    ? `${readyData.checks.cache.cached_conversations || 0} conversations • ${readyData.checks.cache.memory_used || 'N/A'} memory`
+                    ? `${readyData.checks.cache.cached_conversations || 0} conversations • ${metricsData?.cache?.memory_used || readyData.checks.cache.memory_used || 'N/A'} memory`
                     : readyData?.checks?.cache?.message || readyData?.checks?.cache?.error || 'Not configured'
                 }
                 icon={<Database size={20} />}
@@ -123,7 +122,7 @@ function App() {
                 status={readyData?.checks?.metrics?.status || 'unknown'}
                 details={
                   readyData?.checks?.metrics?.status === 'healthy'
-                    ? `Prometheus enabled • ${readyData.checks.metrics.active_conversations || 0} active conversations`
+                    ? `Prometheus enabled • ${metricsData?.active_conversations?.total || readyData.checks.metrics.active_conversations || 0} active conversations`
                     : readyData?.checks?.metrics?.message || 'Disabled'
                 }
                 icon={<Activity size={20} />}
@@ -131,30 +130,14 @@ function App() {
             </div>
           </div>
 
-          {/* Metrics */}
+          {/* System Metrics */}
           <div className="grid-section">
-            <h2><Users size={20} /> Application Metrics</h2>
+            <h2><Clock size={20} /> System Overview</h2>
             <div className="cards-row">
-              <MetricsCard
-                title="Cache Performance"
-                value={metricsData?.cache?.memory_used || 'N/A'}
-                label="Memory Used"
-                icon={<Database size={20} />}
-              />
-              <MetricsCard
-                title="Active Conversations"
-                value={metricsData?.active_conversations?.total || metricsData?.cache?.cached_conversations || '0'}
-                label={
-                  metricsData?.active_conversations?.total
-                    ? `${metricsData.active_conversations.tracked_by_metrics || 0} tracked, ${metricsData.active_conversations.cached_conversations || 0} cached`
-                    : 'Total Active'
-                }
-                icon={<Users size={20} />}
-              />
-              <MetricsCard
-                title="Uptime"
-                value={uptimeFormatted}
-                label="System Uptime"
+              <StatusCard
+                title="System Uptime"
+                status="healthy"
+                details={`Running for ${uptimeFormatted} • Last updated: ${lastUpdate?.toLocaleTimeString()}`}
                 icon={<Clock size={20} />}
               />
             </div>
