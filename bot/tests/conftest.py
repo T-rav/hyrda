@@ -43,7 +43,6 @@ def mock_langfuse():
             ),
             patch("services.langfuse_service.get_langfuse_service", return_value=None),
             patch("services.langfuse_service.observe", side_effect=mock_observe),
-            patch("services.langfuse_service.langfuse_context", MagicMock()),
         ):
             yield
 
@@ -169,6 +168,23 @@ def sample_thread_messages():
         {"role": "user", "content": "What is Python?"},
         {"role": "assistant", "content": "Python is a programming language."},
     ]
+
+
+# Clean up Prometheus metrics registry to prevent conflicts in tests
+@pytest.fixture(autouse=True)
+def clean_prometheus_registry():
+    """Clean up Prometheus metrics registry before and after each test."""
+    import prometheus_client
+
+    # Clear registry before test
+    prometheus_client.REGISTRY._names_to_collectors.clear()
+    prometheus_client.REGISTRY._collector_to_names.clear()
+
+    yield
+
+    # Clear registry after test
+    prometheus_client.REGISTRY._names_to_collectors.clear()
+    prometheus_client.REGISTRY._collector_to_names.clear()
 
 
 # Auto-mock external APIs to prevent real API calls in tests
