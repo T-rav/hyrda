@@ -2,10 +2,10 @@
 Pytest configuration and fixtures for ingest tests.
 """
 
-import pytest
 import sys
-import os
 from pathlib import Path
+
+import pytest
 
 # Add the ingest directory to Python path so we can import services
 ingest_dir = Path(__file__).parent.parent

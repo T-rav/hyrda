@@ -5,12 +5,13 @@ LLM Service with RAG support - backward compatible interface
 import logging
 
 from config.settings import Settings
+from services.hybrid_rag_service import create_hybrid_rag_service
 from services.langfuse_service import (
     get_langfuse_service,
     initialize_langfuse_service,
     observe,
 )
-from services.rag_service import RAGService
+from services.rag_service import RAGService  # Fallback for non-hybrid mode
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,15 @@ class LLMService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.rag_service = RAGService(settings)
+        # Use hybrid RAG service if enabled, otherwise fallback to single vector
+        if getattr(settings, "hybrid", None) and settings.hybrid.enabled:
+            self.rag_service = None  # Will be initialized in async initialize method
+            self.use_hybrid = True
+            logger.info("Using hybrid RAG service (Pinecone + Elasticsearch)")
+        else:
+            self.rag_service = RAGService(settings)
+            self.use_hybrid = False
+            logger.info("Using single vector RAG service")
 
         # Initialize Langfuse service
         self.langfuse_service = initialize_langfuse_service(settings.langfuse)
@@ -42,7 +51,10 @@ class LLMService:
 
     async def initialize(self):
         """Initialize RAG service"""
-        await self.rag_service.initialize()
+        if self.use_hybrid:
+            self.rag_service = await create_hybrid_rag_service(self.settings)
+        else:
+            await self.rag_service.initialize()
 
     @observe(name="llm_service_response", as_type="generation")
     async def get_response(

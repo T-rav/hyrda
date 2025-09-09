@@ -12,7 +12,8 @@ DEPRECATED: Use the new modular services or main.py entry point instead.
 """
 
 import warnings
-from services import DocumentProcessor, GoogleDriveClient, IngestionOrchestrator
+
+from services import GoogleDriveClient, IngestionOrchestrator
 
 # Issue deprecation warning
 warnings.warn(
