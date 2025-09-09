@@ -52,6 +52,10 @@ async def handle_message(
             user_id=user_id, channel_type="dm" if channel.startswith("D") else "channel"
         )
 
+        # Track active conversations with proper conversation ID
+        conversation_id = thread_ts or channel
+        metrics_service.record_conversation_activity(conversation_id)
+
     # For tracking the thinking indicator message
     thinking_message_ts = None
 

@@ -149,10 +149,25 @@ class HealthChecker:
 
         # Check Langfuse connectivity
         if self.langfuse_service:
-            checks["langfuse"] = {
-                "status": "healthy" if self.langfuse_service.enabled else "disabled",
-                "enabled": self.langfuse_service.enabled,
-            }
+            if self.langfuse_service.enabled and self.langfuse_service.client:
+                checks["langfuse"] = {
+                    "status": "healthy",
+                    "enabled": True,
+                    "client_initialized": True,
+                }
+            elif self.langfuse_service.enabled:
+                checks["langfuse"] = {
+                    "status": "unhealthy",
+                    "enabled": True,
+                    "client_initialized": False,
+                    "message": "Enabled but client failed to initialize",
+                }
+            else:
+                checks["langfuse"] = {
+                    "status": "disabled",
+                    "enabled": False,
+                    "message": "Disabled in configuration or missing credentials",
+                }
         else:
             checks["langfuse"] = {
                 "status": "disabled",
@@ -195,10 +210,15 @@ class HealthChecker:
 
                 # Update metrics service with cache data
                 metrics_service = get_metrics_service()
-                if metrics_service and cache_stats.get("cached_conversations"):
-                    metrics_service.update_active_conversations(
-                        int(cache_stats["cached_conversations"])
-                    )
+                if metrics_service:
+                    # Use our conversation tracking instead of cache count for more accuracy
+                    active_count = metrics_service.get_active_conversation_count()
+                    # Also include cached conversations if available
+                    if cache_stats.get("cached_conversations"):
+                        cache_count = int(cache_stats["cached_conversations"])
+                        # Use the higher of the two counts
+                        active_count = max(active_count, cache_count)
+                        metrics_service.update_active_conversations(active_count)
             except Exception as e:
                 metrics["cache"] = {"status": "error", "error": str(e)}
 
