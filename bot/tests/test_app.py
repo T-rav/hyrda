@@ -43,9 +43,11 @@ class TestApp:
 
             result = create_app()
 
-            # Should return 4 components (no prompt service anymore)
-            assert len(result) == 4
-            app, slack_service, llm_service, conversation_cache = result
+            # Should return 5 components (app, slack, llm, cache, metrics)
+            assert len(result) == 5
+            app, slack_service, llm_service, conversation_cache, metrics_service = (
+                result
+            )
 
             # Verify basic creation
             assert app == mock_app
