@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # Optional import to handle cases where langfuse isn't installed
 try:
     from langfuse import Langfuse  # type: ignore[import-untyped]
+    from langfuse.decorators import observe  # type: ignore[import-untyped]
 
     _langfuse_available = True
     logger.info("Langfuse client available")
@@ -22,35 +23,14 @@ except ImportError:
     logger.warning("Langfuse not available - tracing will be disabled")
     _langfuse_available = False
 
+    # Provide no-op decorator if langfuse is not available
+    def observe(name: str = None, as_type: str = None, **kwargs):
+        """No-op decorator when Langfuse is not available"""
 
-# Provide no-op decorator if langfuse is not available or decorators are missing
-def observe(name: str = None, as_type: str = None, **kwargs):
-    """Simple no-op decorator since langfuse.openai handles tracing automatically"""
+        def decorator(func):
+            return func
 
-    def decorator(func):
-        return func
-
-    return decorator
-
-
-class MockLangfuseContext:
-    """Mock context for compatibility"""
-
-    def update_current_trace(self, **kwargs):
-        pass
-
-    def update_current_observation(self, **kwargs):
-        pass
-
-    def score_current_trace(self, **kwargs):
-        pass
-
-    def score_current_observation(self, **kwargs):
-        pass
-
-
-# Use mock context since decorators aren't available in this langfuse version
-langfuse_context = MockLangfuseContext()
+        return decorator
 
 
 class LangfuseService:
@@ -117,8 +97,11 @@ class LangfuseService:
             return
 
         try:
-            # Update current observation with LLM details
-            langfuse_context.update_current_observation(
+            if not self.client:
+                return
+
+            # Create generation observation for LLM call
+            generation = self.client.generation(
                 name=f"{provider}_llm_call",
                 model=model,
                 input=messages,
@@ -129,11 +112,10 @@ class LangfuseService:
                     **(metadata or {}),
                 },
                 usage=usage,
-                level="ERROR" if error else "DEFAULT",
             )
 
             if error:
-                langfuse_context.update_current_observation(status_message=error)
+                generation.update(status_message=error, level="ERROR")
 
         except Exception as e:
             logger.error(f"Error tracing LLM call: {e}")
@@ -156,7 +138,11 @@ class LangfuseService:
             return
 
         try:
-            langfuse_context.update_current_observation(
+            if not self.client:
+                return
+
+            # Create span for RAG retrieval
+            self.client.span(
                 name="rag_retrieval",
                 input={"query": query},
                 output={
@@ -201,22 +187,19 @@ class LangfuseService:
             return
 
         try:
-            # TODO: Fix Langfuse trace creation - API method unclear
-            # Temporarily disable trace creation to avoid errors
-            logger.debug(
-                f"Langfuse trace creation disabled - would create trace for session: {conversation_id}"
+            # Create new trace using correct Langfuse 2.7+ API
+            self.current_trace = self.client.trace(
+                name="slack_conversation",
+                user_id=user_id,
+                session_id=conversation_id,
+                metadata={
+                    "platform": "slack",
+                    "conversation_id": conversation_id,
+                    **(metadata or {}),
+                },
             )
-            # self.current_trace = self.client.trace({
-            #     "name": "slack_conversation",
-            #     "user_id": user_id,
-            #     "session_id": conversation_id,
-            #     "metadata": {
-            #         "platform": "slack",
-            #         "conversation_id": conversation_id,
-            #         **(metadata or {}),
-            #     },
-            # })
-            # self.current_session_id = conversation_id
+            self.current_session_id = conversation_id
+            logger.debug(f"Created Langfuse trace for session: {conversation_id}")
         except Exception as e:
             logger.error(f"Error starting conversation trace: {e}")
 
@@ -284,12 +267,13 @@ class LangfuseService:
             return
 
         try:
-            langfuse_context.score_current_trace(
-                name=score_name,
-                value=value,
-                comment=comment,
-                metadata=metadata,
-            )
+            if self.current_trace:
+                self.current_trace.score(
+                    name=score_name,
+                    value=value,
+                    comment=comment,
+                    metadata=metadata,
+                )
         except Exception as e:
             logger.error(f"Error adding score: {e}")
 

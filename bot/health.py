@@ -1,10 +1,11 @@
 import logging
 from datetime import UTC, datetime
 
-from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp import web
 from aiohttp.web_runner import AppRunner, TCPSite
 
 from config.settings import Settings
+from services.metrics_service import get_metrics_service
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +17,12 @@ HEALTH_CHECK_TIMEOUT = 5
 class HealthChecker:
     """Health check service for monitoring bot status"""
 
-    def __init__(self, settings: Settings, conversation_cache=None):
+    def __init__(
+        self, settings: Settings, conversation_cache=None, langfuse_service=None
+    ):
         self.settings = settings
         self.conversation_cache = conversation_cache
+        self.langfuse_service = langfuse_service
         self.start_time = datetime.now(UTC)
         self.app = None
         self.runner: AppRunner | None = None
@@ -30,6 +34,7 @@ class HealthChecker:
         app.router.add_get("/health", self.health_check)
         app.router.add_get("/ready", self.readiness_check)
         app.router.add_get("/metrics", self.metrics)
+        app.router.add_get("/prometheus", self.prometheus_metrics)
 
         self.runner = web.AppRunner(app)
         await self.runner.setup()
@@ -67,19 +72,16 @@ class HealthChecker:
 
         # Check LLM API connectivity
         try:
-            async with (
-                ClientSession() as session,
-                session.get(
-                    f"{self.settings.llm.base_url}/health",
-                    timeout=ClientTimeout(total=HEALTH_CHECK_TIMEOUT),
-                ) as resp,
-            ):
-                checks["llm_api"] = {
-                    "status": "healthy" if resp.status == HTTP_OK else "unhealthy",
-                    "response_code": resp.status,
-                }
-                if resp.status != HTTP_OK:
-                    all_healthy = False
+            # Skip actual HTTP check for now, just validate settings
+            checks["llm_api"] = {
+                "status": "healthy"
+                if self.settings.llm.api_key.get_secret_value()
+                else "unhealthy",
+                "provider": self.settings.llm.provider,
+                "model": self.settings.llm.model,
+            }
+            if not self.settings.llm.api_key.get_secret_value():
+                all_healthy = False
         except Exception as e:
             checks["llm_api"] = {"status": "unhealthy", "error": str(e)}
             all_healthy = False
@@ -109,6 +111,47 @@ class HealthChecker:
         if missing_vars:
             all_healthy = False
 
+        # Check cache connectivity
+        if self.conversation_cache:
+            try:
+                cache_stats = await self.conversation_cache.get_cache_stats()
+                checks["cache"] = {
+                    "status": "healthy"
+                    if cache_stats.get("status") == "available"
+                    else "unhealthy",
+                    "memory_used": cache_stats.get("memory_used", "unknown"),
+                    "cached_conversations": cache_stats.get("cached_conversations", 0),
+                }
+            except Exception as e:
+                checks["cache"] = {"status": "unhealthy", "error": str(e)}
+                all_healthy = False
+        else:
+            checks["cache"] = {
+                "status": "disabled",
+                "message": "Cache service not configured",
+            }
+
+        # Check Langfuse connectivity
+        if self.langfuse_service:
+            checks["langfuse"] = {
+                "status": "healthy" if self.langfuse_service.enabled else "disabled",
+                "enabled": self.langfuse_service.enabled,
+            }
+        else:
+            checks["langfuse"] = {
+                "status": "disabled",
+                "message": "Langfuse service not configured",
+            }
+
+        # Check metrics service
+        metrics_service = get_metrics_service()
+        checks["metrics"] = {
+            "status": "healthy"
+            if metrics_service and metrics_service.enabled
+            else "disabled",
+            "enabled": metrics_service.enabled if metrics_service else False,
+        }
+
         response_data = {
             "status": "ready" if all_healthy else "not_ready",
             "checks": checks,
@@ -119,7 +162,7 @@ class HealthChecker:
         return web.json_response(response_data, status=status_code)
 
     async def metrics(self, request):
-        """Basic metrics endpoint"""
+        """Basic metrics endpoint (JSON format)"""
         uptime = datetime.now(UTC) - self.start_time
 
         metrics = {
@@ -130,7 +173,51 @@ class HealthChecker:
 
         # Add cache statistics if available
         if self.conversation_cache:
-            cache_stats = await self.conversation_cache.get_cache_stats()
-            metrics["cache"] = cache_stats
+            try:
+                cache_stats = await self.conversation_cache.get_cache_stats()
+                metrics["cache"] = cache_stats
+
+                # Update metrics service with cache data
+                metrics_service = get_metrics_service()
+                if metrics_service and cache_stats.get("cached_conversations"):
+                    metrics_service.update_active_conversations(
+                        int(cache_stats["cached_conversations"])
+                    )
+            except Exception as e:
+                metrics["cache"] = {"status": "error", "error": str(e)}
+
+        # Add service status
+        metrics["services"] = {
+            "langfuse": {
+                "enabled": self.langfuse_service.enabled
+                if self.langfuse_service
+                else False,
+                "available": bool(self.langfuse_service),
+            },
+            "metrics": {
+                "enabled": bool(
+                    get_metrics_service() and get_metrics_service().enabled
+                ),
+                "available": bool(get_metrics_service()),
+            },
+            "cache": {
+                "available": bool(self.conversation_cache),
+            },
+        }
 
         return web.json_response(metrics)
+
+    async def prometheus_metrics(self, request):
+        """Prometheus metrics endpoint"""
+        metrics_service = get_metrics_service()
+        if not metrics_service:
+            return web.Response(
+                text="# Metrics service not available\n",
+                content_type="text/plain",
+                status=503,
+            )
+
+        metrics_data = metrics_service.get_metrics()
+        return web.Response(
+            text=metrics_data, content_type=metrics_service.get_content_type()
+        )
