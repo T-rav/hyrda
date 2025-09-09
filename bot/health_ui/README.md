@@ -4,11 +4,13 @@ A React-based health monitoring dashboard for the AI Slack Bot.
 
 ## Features
 
-- **Real-time Status Monitoring**: Live updates every 10 seconds
-- **Service Health Checks**: Monitor LLM API, cache, metrics, and configuration
-- **Responsive Design**: Works on desktop and mobile devices
-- **Fallback Mode**: Simple HTML dashboard when React app isn't built
-- **API Integration**: Connects to `/api/*` endpoints for health data
+- **Real-time Status Monitoring**: Live updates every 10 seconds with auto-refresh
+- **Service Health Checks**: Monitor LLM API, cache, Langfuse, and metrics services
+- **Big Metrics Display**: Prominent display of key metrics (memory usage, active conversations, uptime)
+- **Dynamic Versioning**: Reads version directly from pyproject.toml
+- **Responsive Design**: Clean, mobile-friendly interface
+- **Smart Status Handling**: Shows metrics when healthy, error details when issues occur
+- **API Integration**: Connects to comprehensive `/api/*` health endpoints
 
 ## Quick Start
 
@@ -69,15 +71,15 @@ The dashboard connects to these health endpoints:
 ## Monitoring Features
 
 ### System Status
-- Application uptime and version
-- Overall health status indicator
+- **Application**: Version (dynamic from pyproject.toml) and health status
+- **LLM API**: Provider and model information with connection status  
+- **System Uptime**: Big, prominent uptime display with last update time
 
 ### Service Health
-- **LLM API**: Connection status and model info
-- **Cache**: Redis availability and conversation count
-- **Langfuse**: Observability service status  
-- **Metrics**: Prometheus metrics collection
-- **Configuration**: Environment variable validation
+- **LLM API**: Connection status and model information
+- **Cache**: Redis availability with memory usage metrics
+- **Langfuse**: Observability service status and configuration
+- **Metrics**: Prometheus metrics with active conversation count
 
 ### Real-time Updates
 - Auto-refresh every 10 seconds

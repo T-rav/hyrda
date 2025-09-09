@@ -21,6 +21,28 @@ Both pre-commit hooks and CI use the **same script** (`./scripts/lint.sh`) and *
 3. **Common Configuration**: `pyproject.toml`
    - Single configuration file for all tools
    - Shared between local and CI environments
+   - **Single source of truth for versioning**
+
+## Version Management
+
+The bot uses **dynamic versioning** from `pyproject.toml`:
+
+### Updating Version
+1. **Edit `bot/pyproject.toml`** (line 7):
+   ```toml
+   version = "1.2.3"  # ← Change this
+   ```
+
+2. **Restart the bot** - version automatically appears in:
+   - Health dashboard at `http://localhost:8080/ui`
+   - Footer of the dashboard
+   - `/api/health` endpoint response
+
+### Benefits
+- ✅ **Single source of truth** - no hardcoded versions
+- ✅ **Automatic propagation** - appears everywhere instantly  
+- ✅ **Standard Python packaging** - follows PEP 440
+- ✅ **Health monitoring integration** - visible in dashboard
 
 ## Setup Instructions
 
