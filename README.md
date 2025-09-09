@@ -17,15 +17,18 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capab
 - **Typing Indicators**: Shows typing states while generating responses
 - **Online Presence**: Shows as "online" with a green status indicator
 - **Custom User Prompts**: Users can customize bot behavior with `@prompt` commands
+- **Health Dashboard**: Real-time monitoring UI at `http://localhost:8080/ui`
 - **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
+- **Prometheus Metrics**: Native metrics collection for infrastructure monitoring
 - **Comprehensive Testing**: 154 tests with 100% reliability
-- **Unified Development**: Identical linting/testing between local and CI environments
+- **Dynamic Versioning**: Single source of truth via `pyproject.toml`
 
-### 🚀 **Easy Setup**
+### 🚀 **Easy Setup & Monitoring**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
 - **Flexible Configuration**: Support for multiple LLM and vector database providers
 - **Document Ingestion**: CLI tool for loading your knowledge base
-- **Docker Deployment**: Full production deployment with monitoring
+- **Health Monitoring**: Beautiful dashboard with real-time service status
+- **Docker Deployment**: Full production deployment with comprehensive monitoring
 
 ## 🚀 Quick Start
 
@@ -401,6 +404,35 @@ To add a new agent process:
    make install
    make run
    ```
+
+3. **Monitor your bot** at `http://localhost:8080/ui` - the health dashboard shows:
+   - Real-time service status (LLM API, cache, metrics)
+   - System uptime and version
+   - Memory usage and active conversations
+   - API endpoints and configuration status
+
+## 📊 Monitoring & Observability
+
+### Health Dashboard (`http://localhost:8080/ui`)
+- **🟢 Real-time status** of all services (LLM, cache, Langfuse, metrics)
+- **📈 Big metrics display** showing memory usage, active conversations, system uptime
+- **⚡ Smart error handling** with detailed troubleshooting information
+- **🔄 Auto-refresh** every 10 seconds with manual refresh option
+- **📱 Mobile-friendly** responsive design
+
+### Prometheus Integration
+- **Native metrics collection** for infrastructure monitoring
+- **Standard /metrics endpoint** at `http://localhost:8080/api/prometheus`
+- **Grafana-compatible** metrics for advanced dashboards
+- **Active conversation tracking** and performance metrics
+
+### LLM Observability with Langfuse
+- **Cost tracking** per user, conversation, and model
+- **Performance analytics** and prompt optimization insights
+- **Conversation analytics** and user behavior patterns
+- **Error tracking** with detailed LLM debugging information
+
+See [`docs/LANGFUSE_SETUP.md`](docs/LANGFUSE_SETUP.md) for complete setup instructions.
 
 ### Code Organization
 

@@ -3,6 +3,7 @@ LLM Service with RAG support - backward compatible interface
 """
 
 import logging
+import time
 
 from config.settings import Settings
 from services.hybrid_rag_service import create_hybrid_rag_service
@@ -11,6 +12,7 @@ from services.langfuse_service import (
     initialize_langfuse_service,
     observe,
 )
+from services.metrics_service import get_metrics_service
 from services.rag_service import RAGService  # Fallback for non-hybrid mode
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,8 @@ class LLMService:
             Generated response or None if failed
         """
         langfuse_service = get_langfuse_service()
+        metrics_service = get_metrics_service()
+        start_time = time.time()
 
         try:
             # No custom system prompts - using default only
@@ -130,10 +134,31 @@ class LLMService:
                     },
                 )
 
+            # Record metrics
+            if metrics_service and response:
+                duration = time.time() - start_time
+                token_count = len(response.split()) * 1.3  # Rough estimate
+                metrics_service.record_llm_request(
+                    provider=self.settings.llm.provider,
+                    model=self.settings.llm.model,
+                    status="success",
+                    duration=duration,
+                    tokens=int(token_count),
+                )
+
             return response
 
         except Exception as e:
             logger.error(f"Error in LLM service: {e}")
+
+            # Record error metric
+            if metrics_service:
+                metrics_service.record_llm_request(
+                    provider=self.settings.llm.provider,
+                    model=self.settings.llm.model,
+                    status="error",
+                )
+
             return None
 
     async def get_response_without_rag(
