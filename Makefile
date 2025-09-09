@@ -70,6 +70,9 @@ help:
 	@echo "  ci              Run all CI checks locally"
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
+	@echo ""
+	@echo "$(GREEN)Health Dashboard:$(RESET)"
+	@echo "  health-ui       Build React health dashboard UI"
 
 $(VENV):
 	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
@@ -189,6 +192,12 @@ setup-dev: install-dev
 	@echo "✅ Pre-commit hooks installed!"
 	@echo "Run 'make test' to run tests"
 
+health-ui:
+	@echo "$(BLUE)Building React health dashboard...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm install && npm run build
+	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
+	@echo "$(BLUE)🌐 Access at: http://localhost:8080/ui$(RESET)"
+
 ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
 
@@ -208,6 +217,8 @@ clean:
 	rm -rf $(PROJECT_ROOT_DIR).ruff_cache $(BOT_DIR)/.ruff_cache
 	rm -rf $(PROJECT_ROOT_DIR).pyright_cache $(BOT_DIR)/.pyright_cache
 	rm -f $(PROJECT_ROOT_DIR)security-report.json
+	rm -rf $(BOT_DIR)/health_ui/node_modules
+	rm -rf $(BOT_DIR)/health_ui/dist
 	@echo "$(GREEN)Cleanup completed$(RESET)"
 
 clean-all: clean
