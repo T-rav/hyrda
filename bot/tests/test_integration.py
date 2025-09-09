@@ -52,6 +52,7 @@ class TestIntegration:
                 slack_service,
                 llm_service,
                 conversation_cache,
+                metrics_service,
             ) = create_app()
 
             # Verify all services were created
@@ -93,6 +94,7 @@ class TestIntegration:
                 slack_service,
                 llm_service,
                 conversation_cache,
+                metrics_service,
             ) = create_app()
 
             # Verify disabled services are None

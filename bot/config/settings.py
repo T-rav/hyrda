@@ -189,4 +189,6 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    model_config = ConfigDict(env_file="../.env", extra="ignore")  # type: ignore[assignment,typeddict-unknown-key]
+    model_config = ConfigDict(
+        env_file="../.env", extra="ignore", env_file_encoding="utf-8"
+    )  # type: ignore[assignment,typeddict-unknown-key]

@@ -1,62 +1,147 @@
-Great question! You actually want to keep both - they serve different but complementary purposes. Let me break down why:
-Langfuse vs Prometheus/Grafana/Loki - Different Jobs
-Keep Your Existing Stack For:
-Infrastructure monitoring (CPU, memory, disk, network)
-Application health (uptime, health checks, container status)
-System-level alerts (service down, high memory usage)
-Request patterns (HTTP response codes, endpoint performance)
-General application logs (errors, startup, shutdown)
-Langfuse Adds AI-Specific Insights:
-LLM costs & token usage (per user, conversation, model)
-Prompt engineering (which prompts work best)
-RAG quality (retrieval relevance, context usage)
-Conversation analytics (user behavior, popular features)
-AI debugging (why did this response fail?)
-Perfect Together: Complete Observability
-Here's how they complement each other:
-Incident Response Example:
-Grafana alert: "High response latency detected"
-Prometheus: Shows which service/endpoint is slow
-Loki: Shows application logs and errors
-Langfuse: Shows if the issue is LLM-related (slow model, expensive prompts, RAG problems)
-Cost Optimization Example:
-Prometheus: Shows overall resource usage
-Langfuse: Shows LLM token costs are 80% of expenses
-Langfuse: Identifies that user X is using expensive models heavily
-Combined insight: Need to optimize LLM usage, not infrastructure
-Optional: Reduce Some Overlap
-You could simplify by removing some redundant monitoring:
-Looking at your current monitoring setup, keep both! Here's why:
-Your Current Stack is Infrastructure-Focused:
-Prometheus/Grafana/Loki tracks:
-✅ Bot uptime/downtime
-✅ Memory & CPU usage
-✅ Container restarts
-✅ Disk space
-✅ Basic health check endpoints
-Langfuse tracks:
-🧠 LLM costs & token usage
-🧠 Conversation quality
-🧠 RAG retrieval effectiveness
-🧠 User interaction patterns
-🧠 Prompt engineering insights
-Zero Overlap = Both Needed
-Your existing monitoring is infrastructure health - it tells you if your bot is running.
-Langfuse is AI intelligence - it tells you how well your bot is working.
-Real-World Scenarios:
-Scenario 1: Bot is Slow
-Grafana: "High CPU usage detected"
-Langfuse: "Ah, it's because User X is running expensive RAG queries"
-Action: Optimize RAG or set user limits
-Scenario 2: High Costs
-Prometheus: "All systems normal"
-Langfuse: "OpenAI costs spiked 300% - users are using GPT-4 for simple questions"
-Action: Switch simple queries to cheaper models
-Scenario 3: User Complaints
-Grafana: "Response times normal"
-Langfuse: "RAG is returning irrelevant documents 40% of the time"
-Action: Improve document embedding or retrieval logic
-Recommendation: Keep Both
-Your current setup is lean and focused - just infrastructure essentials. Adding Langfuse gives you AI-specific insights you can't get anywhere else.
-The only thing you might consider removing is basic request logging if you're getting that from both, but even then, they serve different analysis purposes.
-TL;DR: Your Prometheus stack monitors the plumbing, Langfuse monitors the intelligence. You need both! 🚰🧠
+# Langfuse Setup Guide
+
+Langfuse provides LLM observability, tracing, analytics, and cost monitoring for your AI Slack Bot.
+
+## 🚀 Quick Setup
+
+### 1. Get Langfuse Credentials
+
+**Option A: Langfuse Cloud (Recommended)**
+1. Sign up at [cloud.langfuse.com](https://cloud.langfuse.com)
+2. Create a new project
+3. Copy your API keys from the project settings
+
+**Option B: Self-Hosted**
+1. Deploy Langfuse using their [self-hosting guide](https://langfuse.com/docs/deployment/self-host)
+2. Use your custom host URL
+
+### 2. Configure Environment Variables
+
+Add to your `.env` file:
+
+```bash
+# Langfuse Configuration
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-your-public-key-here
+LANGFUSE_SECRET_KEY=sk-lf-your-secret-key-here
+LANGFUSE_HOST=https://cloud.langfuse.com  # or your self-hosted URL
+LANGFUSE_DEBUG=false
+```
+
+### 3. Install Dependencies
+
+Langfuse is already included in the project dependencies:
+
+```bash
+# Already in requirements
+langfuse>=3.3.0
+```
+
+### 4. Verify Setup
+
+1. **Restart your bot** to pick up the new configuration
+2. **Check the health dashboard** at `http://localhost:8080/ui`
+3. **Langfuse service** should show as "Healthy" with "Observability enabled"
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**❌ "Langfuse not available - tracing will be disabled"**
+- **Cause**: Missing `langfuse` package
+- **Fix**: Run `pip install langfuse>=3.3.0` or `make install`
+
+**❌ "ImportError: No module named 'langfuse.decorators'"**
+- **Cause**: Outdated Langfuse version (fixed in v3.3+)
+- **Fix**: Update to `langfuse>=3.3.0` - the bot now imports from `langfuse` directly
+
+**❌ "Enabled but client failed to initialize"**
+- **Cause**: Invalid credentials or network issues
+- **Fix**: Verify your `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST`
+
+**❌ "Disabled in configuration"**
+- **Cause**: `LANGFUSE_ENABLED=false` or missing credentials
+- **Fix**: Set `LANGFUSE_ENABLED=true` and provide valid keys
+
+### Health Dashboard Status Meanings
+
+- **🟢 Healthy**: Langfuse is configured and working
+  - Shows: "Observability enabled • [host URL]"
+
+- **🔴 Unhealthy**: Configuration issues
+  - Shows specific error message for troubleshooting
+
+- **⚪ Disabled**: Not configured or intentionally disabled
+  - Shows reason (missing keys, disabled setting, etc.)
+
+## 📊 What Gets Tracked
+
+### LLM Calls
+- **Provider & Model**: OpenAI GPT-4, Anthropic Claude, etc.
+- **Token Usage**: Input/output tokens and costs
+- **Latency**: Response generation time
+- **Status**: Success/failure with error details
+
+### RAG Operations  
+- **Retrieval**: Vector search queries and results
+- **Context**: Which documents were retrieved
+- **Quality**: Relevance scores and reranking
+
+### Conversations
+- **User Sessions**: Grouped by Slack thread
+- **User Behavior**: Message patterns and popular features
+- **Bot Performance**: Response quality and user satisfaction
+
+### Costs & Analytics
+- **Token Costs**: Per user, conversation, and model
+- **Usage Patterns**: Peak times, heavy users
+- **Model Performance**: Which models work best
+- **Prompt Engineering**: Optimize prompts based on data
+
+## 🔗 Integration Details
+
+### Automatic Tracing
+The bot automatically traces all LLM interactions with:
+- **Conversation context**: Slack user and thread info
+- **RAG context**: Retrieved documents and search queries  
+- **Custom metadata**: Bot configuration and feature usage
+- **Error tracking**: Failed requests and debugging info
+
+### Dashboard Integration
+- **Health monitoring**: Status visible in bot health dashboard
+- **Real-time status**: Updates every 10 seconds
+- **Configuration validation**: Checks credentials and connectivity
+
+## 🎯 Best Practices
+
+### Development
+- Set `LANGFUSE_DEBUG=true` for detailed logging during development
+- Use separate Langfuse projects for dev/staging/prod environments
+
+### Production
+- Monitor costs through Langfuse dashboard
+- Set up alerts for high token usage
+- Review conversation analytics monthly
+- Use insights to optimize prompts and reduce costs
+
+### Privacy
+- Langfuse stores conversation data for analytics
+- Review their [privacy policy](https://langfuse.com/privacy)
+- Consider self-hosting for sensitive data
+
+## 📈 Complementary Monitoring
+
+Langfuse works alongside your existing monitoring stack:
+
+### Your Current Stack (Keep!)
+- **Prometheus/Grafana**: Infrastructure metrics
+- **Loki**: Application logs  
+- **Health dashboard**: Service status
+
+### Langfuse Adds
+- **LLM-specific insights**: Token costs, model performance
+- **Conversation analytics**: User behavior, popular features
+- **AI debugging**: Why responses succeed/fail
+- **Cost optimization**: Identify expensive usage patterns
+
+Together they provide complete observability for your AI Slack Bot! 🚀

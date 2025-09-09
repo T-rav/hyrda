@@ -1,9 +1,11 @@
 import contextlib
 import logging
+import time
 
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
+from services.metrics_service import get_metrics_service
 from services.slack_service import SlackService
 from utils.errors import handle_error
 
@@ -30,6 +32,8 @@ async def handle_message(
     conversation_cache=None,
 ):
     """Handle an incoming message from Slack"""
+    start_time = time.time()
+
     logger.info(
         "Processing user message",
         extra={
@@ -40,6 +44,17 @@ async def handle_message(
             "event_type": "user_message",
         },
     )
+
+    # Record message processing metric
+    metrics_service = get_metrics_service()
+    if metrics_service:
+        metrics_service.record_message_processed(
+            user_id=user_id, channel_type="dm" if channel.startswith("D") else "channel"
+        )
+
+        # Track active conversations with proper conversation ID
+        conversation_id = thread_ts or channel
+        metrics_service.record_conversation_activity(conversation_id)
 
     # For tracking the thinking indicator message
     thinking_message_ts = None
@@ -153,6 +168,13 @@ async def handle_message(
                 text="I apologize, but I couldn't generate a response. Please try again.",
                 thread_ts=thread_ts,
             )
+
+        # Record successful request timing
+        if metrics_service:
+            duration = time.time() - start_time
+            metrics_service.request_duration.labels(
+                endpoint="message_handler", method="POST"
+            ).observe(duration)
 
     except Exception as e:
         # Clean up thinking message on error

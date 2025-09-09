@@ -32,10 +32,13 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
+	@echo ""
+	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
+	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run the bot (recommended)"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -70,6 +73,9 @@ help:
 	@echo "  ci              Run all CI checks locally"
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
+	@echo ""
+	@echo "$(GREEN)Health Dashboard:$(RESET)"
+	@echo "  health-ui       Build React health dashboard UI"
 
 $(VENV):
 	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
@@ -189,6 +195,12 @@ setup-dev: install-dev
 	@echo "✅ Pre-commit hooks installed!"
 	@echo "Run 'make test' to run tests"
 
+health-ui:
+	@echo "$(BLUE)Building React health dashboard...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm install && npm run build
+	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
+	@echo "$(BLUE)🌐 Access at: http://localhost:8080/ui$(RESET)"
+
 ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
 
@@ -208,6 +220,8 @@ clean:
 	rm -rf $(PROJECT_ROOT_DIR).ruff_cache $(BOT_DIR)/.ruff_cache
 	rm -rf $(PROJECT_ROOT_DIR).pyright_cache $(BOT_DIR)/.pyright_cache
 	rm -f $(PROJECT_ROOT_DIR)security-report.json
+	rm -rf $(BOT_DIR)/health_ui/node_modules
+	rm -rf $(BOT_DIR)/health_ui/dist
 	@echo "$(GREEN)Cleanup completed$(RESET)"
 
 clean-all: clean
@@ -219,3 +233,23 @@ python-version: $(VENV)
 	@echo "$(BLUE)Python version information:$(RESET)"
 	@$(PYTHON) --version
 	@$(PIP) --version
+
+# 🚀 THE ONE COMMAND TO RULE THEM ALL
+start: install-dev health-ui check-env
+	@echo "$(GREEN)🎯 ================================$(RESET)"
+	@echo "$(GREEN)🚀 STARTING AI SLACK BOT WITH FULL STACK$(RESET)"
+	@echo "$(GREEN)🎯 ================================$(RESET)"
+	@echo ""
+	@echo "$(BLUE)✅ Dependencies installed$(RESET)"
+	@echo "$(BLUE)✅ Health UI built and ready$(RESET)"
+	@echo "$(BLUE)✅ Environment validated$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🌐 Access points:$(RESET)"
+	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:8080/ui$(RESET)"
+	@echo "$(YELLOW)   Prometheus Metrics:   http://localhost:8080/prometheus$(RESET)"
+	@echo "$(YELLOW)   API Endpoints:        http://localhost:8080/api/*$(RESET)"
+	@echo ""
+	@echo "$(GREEN)🤖 Starting the AI Slack Bot...$(RESET)"
+	@echo "$(GREEN)Press Ctrl+C to stop$(RESET)"
+	@echo ""
+	cd $(BOT_DIR) && $(PYTHON) app.py
