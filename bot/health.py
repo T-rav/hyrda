@@ -131,20 +131,35 @@ class HealthChecker:
         if self.conversation_cache:
             try:
                 cache_stats = await self.conversation_cache.get_cache_stats()
-                checks["cache"] = {
-                    "status": "healthy"
-                    if cache_stats.get("status") == "available"
-                    else "unhealthy",
-                    "memory_used": cache_stats.get("memory_used", "unknown"),
-                    "cached_conversations": cache_stats.get("cached_conversations", 0),
-                }
+                if cache_stats.get("status") == "available":
+                    checks["cache"] = {
+                        "status": "healthy",
+                        "memory_used": cache_stats.get("memory_used", "unknown"),
+                        "cached_conversations": cache_stats.get(
+                            "cached_conversations", 0
+                        ),
+                        "redis_url": cache_stats.get("redis_url", "unknown"),
+                    }
+                elif cache_stats.get("status") == "unavailable":
+                    checks["cache"] = {
+                        "status": "unhealthy",
+                        "message": f"Configured but Redis unavailable at {cache_stats.get('redis_url', 'unknown')}",
+                        "error": "Redis connection failed",
+                    }
+                    all_healthy = False
+                else:
+                    checks["cache"] = {
+                        "status": "unhealthy",
+                        "error": cache_stats.get("error", "Unknown cache error"),
+                    }
+                    all_healthy = False
             except Exception as e:
                 checks["cache"] = {"status": "unhealthy", "error": str(e)}
                 all_healthy = False
         else:
             checks["cache"] = {
                 "status": "disabled",
-                "message": "Cache service not configured",
+                "message": "Cache service not configured - using Slack API only",
             }
 
         # Check Langfuse connectivity
@@ -154,34 +169,84 @@ class HealthChecker:
                     "status": "healthy",
                     "enabled": True,
                     "client_initialized": True,
+                    "configured": True,
+                    "host": self.langfuse_service.settings.host,
                 }
             elif self.langfuse_service.enabled:
                 checks["langfuse"] = {
                     "status": "unhealthy",
-                    "enabled": True,
-                    "client_initialized": False,
-                    "message": "Enabled but client failed to initialize",
+                    "enabled": False,  # Service disabled due to initialization failure
+                    "configured": True,
+                    "message": "Enabled but client failed to initialize - check credentials and host",
+                    "host": self.langfuse_service.settings.host,
                 }
+                all_healthy = False
             else:
                 checks["langfuse"] = {
                     "status": "disabled",
                     "enabled": False,
-                    "message": "Disabled in configuration or missing credentials",
+                    "configured": True,
+                    "message": "Configured but disabled (check LANGFUSE_ENABLED or credentials)",
+                    "host": self.langfuse_service.settings.host,
                 }
         else:
+            # Check if langfuse package is available
+            try:
+                import langfuse  # noqa: F401
+
+                langfuse_available = True
+                message = "Langfuse package available but service not initialized"
+            except ImportError:
+                langfuse_available = False
+                message = "Langfuse package not installed (pip install langfuse)"
+
             checks["langfuse"] = {
                 "status": "disabled",
-                "message": "Langfuse service not configured",
+                "enabled": False,
+                "configured": False,
+                "package_available": langfuse_available,
+                "message": message,
             }
 
         # Check metrics service
         metrics_service = get_metrics_service()
-        checks["metrics"] = {
-            "status": "healthy"
-            if metrics_service and metrics_service.enabled
-            else "disabled",
-            "enabled": metrics_service.enabled if metrics_service else False,
-        }
+        if metrics_service and metrics_service.enabled:
+            active_conversations = metrics_service.get_active_conversation_count()
+            checks["metrics"] = {
+                "status": "healthy",
+                "enabled": True,
+                "prometheus_available": True,
+                "active_conversations": active_conversations,
+                "endpoints": {
+                    "metrics_json": "/api/metrics",
+                    "prometheus": "/api/prometheus",
+                },
+                "description": "Prometheus metrics collection active",
+            }
+        elif metrics_service and not metrics_service.enabled:
+            checks["metrics"] = {
+                "status": "disabled",
+                "enabled": False,
+                "prometheus_available": True,
+                "message": "Metrics service available but disabled",
+            }
+        else:
+            # Check if prometheus client is actually available
+            try:
+                import prometheus_client  # noqa: F401
+
+                prometheus_available = True
+                message = "Metrics service not initialized - check app startup"
+            except ImportError:
+                prometheus_available = False
+                message = "Prometheus client not available - install prometheus-client package"
+
+            checks["metrics"] = {
+                "status": "disabled",
+                "enabled": False,
+                "prometheus_available": prometheus_available,
+                "message": message,
+            }
 
         response_data = {
             "status": "ready" if all_healthy else "not_ready",
@@ -207,20 +272,37 @@ class HealthChecker:
             try:
                 cache_stats = await self.conversation_cache.get_cache_stats()
                 metrics["cache"] = cache_stats
-
-                # Update metrics service with cache data
-                metrics_service = get_metrics_service()
-                if metrics_service:
-                    # Use our conversation tracking instead of cache count for more accuracy
-                    active_count = metrics_service.get_active_conversation_count()
-                    # Also include cached conversations if available
-                    if cache_stats.get("cached_conversations"):
-                        cache_count = int(cache_stats["cached_conversations"])
-                        # Use the higher of the two counts
-                        active_count = max(active_count, cache_count)
-                        metrics_service.update_active_conversations(active_count)
             except Exception as e:
                 metrics["cache"] = {"status": "error", "error": str(e)}
+
+        # Add metrics service data
+        metrics_service = get_metrics_service()
+        if metrics_service and metrics_service.enabled:
+            # Get active conversation count from metrics service
+            active_count = metrics_service.get_active_conversation_count()
+
+            # If we have cache stats, compare with cached conversations
+            if (
+                self.conversation_cache
+                and "cache" in metrics
+                and metrics["cache"].get("cached_conversations") is not None
+            ):
+                cache_count = int(metrics["cache"]["cached_conversations"])
+                # Use the higher of the two counts as active conversations might not all be cached
+                final_active_count = max(active_count, cache_count)
+            else:
+                final_active_count = active_count
+
+            metrics["active_conversations"] = {
+                "total": final_active_count,
+                "tracked_by_metrics": active_count,
+                "cached_conversations": metrics.get("cache", {}).get(
+                    "cached_conversations", 0
+                )
+                if self.conversation_cache
+                else 0,
+                "description": "Active conversations being tracked",
+            }
 
         # Add service status
         metrics["services"] = {
@@ -254,8 +336,14 @@ class HealthChecker:
             )
 
         metrics_data = metrics_service.get_metrics()
+        content_type = metrics_service.get_content_type()
+
+        # aiohttp doesn't want charset in content_type, so strip it
+        if ";" in content_type:
+            content_type = content_type.split(";")[0].strip()
+
         return web.Response(
-            text=metrics_data, content_type=metrics_service.get_content_type()
+            text=metrics_data, content_type=content_type, charset="utf-8"
         )
 
     def _get_ui_assets_path(self) -> str:

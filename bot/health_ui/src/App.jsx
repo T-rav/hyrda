@@ -99,22 +99,33 @@ function App() {
               <StatusCard
                 title="Cache"
                 status={readyData?.checks?.cache?.status || 'unknown'}
-                details={readyData?.checks?.cache?.cached_conversations ?
-                  `${readyData.checks.cache.cached_conversations} conversations` :
-                  readyData?.checks?.cache?.message || 'Not configured'
+                details={
+                  readyData?.checks?.cache?.status === 'healthy'
+                    ? `${readyData.checks.cache.cached_conversations || 0} conversations • ${readyData.checks.cache.memory_used || 'N/A'} memory`
+                    : readyData?.checks?.cache?.message || readyData?.checks?.cache?.error || 'Not configured'
                 }
                 icon={<Database size={20} />}
               />
               <StatusCard
                 title="Langfuse"
                 status={readyData?.checks?.langfuse?.status || 'unknown'}
-                details={readyData?.checks?.langfuse?.enabled ? 'Observability enabled' : 'Disabled'}
+                details={
+                  readyData?.checks?.langfuse?.status === 'healthy'
+                    ? `Observability enabled • ${readyData.checks.langfuse.host || 'cloud.langfuse.com'}`
+                    : readyData?.checks?.langfuse?.status === 'unhealthy'
+                    ? `${readyData.checks.langfuse.message || 'Configuration error'}`
+                    : `${readyData.checks.langfuse.message || 'Disabled'}`
+                }
                 icon={<Activity size={20} />}
               />
               <StatusCard
                 title="Metrics"
                 status={readyData?.checks?.metrics?.status || 'unknown'}
-                details={readyData?.checks?.metrics?.enabled ? 'Prometheus enabled' : 'Disabled'}
+                details={
+                  readyData?.checks?.metrics?.status === 'healthy'
+                    ? `Prometheus enabled • ${readyData.checks.metrics.active_conversations || 0} active conversations`
+                    : readyData?.checks?.metrics?.message || 'Disabled'
+                }
                 icon={<Activity size={20} />}
               />
             </div>
@@ -132,8 +143,12 @@ function App() {
               />
               <MetricsCard
                 title="Active Conversations"
-                value={metricsData?.cache?.cached_conversations || '0'}
-                label="Cached Sessions"
+                value={metricsData?.active_conversations?.total || metricsData?.cache?.cached_conversations || '0'}
+                label={
+                  metricsData?.active_conversations?.total
+                    ? `${metricsData.active_conversations.tracked_by_metrics || 0} tracked, ${metricsData.active_conversations.cached_conversations || 0} cached`
+                    : 'Total Active'
+                }
                 icon={<Users size={20} />}
               />
               <MetricsCard
@@ -159,6 +174,47 @@ function App() {
               fullWidth
             />
           </div>
+
+          {/* API Endpoints */}
+          {readyData?.checks?.metrics?.endpoints && (
+            <div className="grid-section">
+              <h2>API Endpoints</h2>
+              <div className="api-links">
+                <a
+                  href={readyData.checks.metrics.endpoints.metrics_json}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="api-link"
+                >
+                  📊 Metrics (JSON)
+                </a>
+                <a
+                  href={readyData.checks.metrics.endpoints.prometheus}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="api-link"
+                >
+                  📈 Prometheus Metrics
+                </a>
+                <a
+                  href="/api/health"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="api-link"
+                >
+                  💚 Health Check
+                </a>
+                <a
+                  href="/api/ready"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="api-link"
+                >
+                  ✅ Readiness Check
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

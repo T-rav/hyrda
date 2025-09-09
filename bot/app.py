@@ -116,6 +116,9 @@ async def run():
 
         # Start health check server
         langfuse_service = get_langfuse_service()
+        # If global langfuse service is None, get it directly from LLM service
+        if langfuse_service is None:
+            langfuse_service = llm_service.langfuse_service
         health_checker = HealthChecker(settings, conversation_cache, langfuse_service)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
