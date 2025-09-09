@@ -56,10 +56,9 @@ class ContextBuilder:
             context_section = "\n\n".join(context_texts)
             rag_instruction = (
                 "Use the following context to answer the user's question. "
-                "Answer naturally without adding inline source citations like '[Source: ...]' since "
-                "complete source citations will be automatically added at the end of your response. "
-                "If the context doesn't contain relevant information, "
-                "say so and provide a general response based on your knowledge.\n\n"
+                "At the end of your response, list only the sources you actually used by including: "
+                "SOURCES_USED: [list the source document names you referenced, separated by commas] "
+                "If you didn't use any sources, write: SOURCES_USED: none\n\n"
                 f"Context:\n{context_section}\n\n"
             )
 
