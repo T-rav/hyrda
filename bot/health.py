@@ -1,5 +1,6 @@
 import logging
 import os
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,6 +15,18 @@ logger = logging.getLogger(__name__)
 # Constants
 HTTP_OK = 200
 HEALTH_CHECK_TIMEOUT = 5
+
+
+def get_app_version() -> str:
+    """Get application version from pyproject.toml"""
+    try:
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            pyproject_data = tomllib.load(f)
+        return pyproject_data["project"]["version"]
+    except Exception as e:
+        logger.warning(f"Failed to read version from pyproject.toml: {e}")
+        return "unknown"
 
 
 class HealthChecker:
@@ -77,7 +90,7 @@ class HealthChecker:
                 "status": "healthy",
                 "uptime_seconds": int(uptime.total_seconds()),
                 "timestamp": datetime.now(UTC).isoformat(),
-                "version": "1.0.0",
+                "version": get_app_version(),
             }
         )
 
