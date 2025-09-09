@@ -20,7 +20,7 @@ HEALTH_CHECK_TIMEOUT = 5
 def get_app_version() -> str:
     """Get application version from pyproject.toml"""
     try:
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).parent / "pyproject.toml"
         with open(pyproject_path, "rb") as f:
             pyproject_data = tomllib.load(f)
         return pyproject_data["project"]["version"]
