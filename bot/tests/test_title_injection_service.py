@@ -9,8 +9,6 @@ from services.title_injection_service import (
     TitleInjectionService,
 )
 
-# Force CI formatting consistency
-
 
 class TestTitleInjectionService:
     """Test the core title injection functionality"""
