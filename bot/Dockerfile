@@ -18,12 +18,12 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Copy requirements first to leverage Docker cache
-COPY --chown=appuser:appuser requirements.txt .
+# Copy pyproject.toml first to leverage Docker cache
+COPY --chown=appuser:appuser pyproject.toml .
 
-# Install Python dependencies
+# Install Python dependencies from pyproject.toml
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -e .
 
 # Copy application code
 COPY --chown=appuser:appuser . .
