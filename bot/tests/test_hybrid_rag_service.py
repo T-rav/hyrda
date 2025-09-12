@@ -335,7 +335,7 @@ class TestHybridRAGService:
 
         assert "RAG enhanced response" in response
         assert "**📚 Sources:**" in response  # Citations added
-        assert "test.pdf" in response
+        assert "test" in response  # Citations remove file extensions
         hybrid_rag_service.embedding_service.get_embedding.assert_called_once_with(
             "query"
         )
@@ -370,75 +370,11 @@ class TestHybridRAGService:
             response == "I'm sorry, I encountered an error while generating a response."
         )
 
-    def test_add_citations_to_response(self, hybrid_rag_service):
-        """Test adding citations to response"""
-        response = "This is a response."
-        context_chunks = [
-            {
-                "content": "chunk 1",
-                "similarity": 0.85,
-                "metadata": {
-                    "file_name": "doc1.pdf",
-                    "folder_path": "/docs",
-                    "web_view_link": "https://example.com",
-                },
-                "_hybrid_source": "dense",
-            },
-            {
-                "content": "chunk 2",
-                "similarity": 0.75,
-                "metadata": {"file_name": "doc2.pdf"},
-                "_hybrid_source": "sparse",
-            },
-        ]
+    # Citation functionality is handled by the CitationService, not a private method
 
-        result = hybrid_rag_service._add_citations_to_response(response, context_chunks)
+    # Citation functionality is handled by the CitationService
 
-        assert "This is a response." in result
-        assert "**📚 Sources:**" in result
-        assert "doc1.pdf" in result
-        assert "doc2.pdf" in result
-        assert "85.0%" in result  # Similarity as percentage
-        assert "Via: dense" in result
-        assert "Via: sparse" in result
-        assert "📁 /docs" in result
-        assert "[" in result and "](https://example.com)" in result  # Web link
-
-    def test_add_citations_empty_chunks(self, hybrid_rag_service):
-        """Test adding citations with no chunks"""
-        response = "This is a response."
-        result = hybrid_rag_service._add_citations_to_response(response, [])
-        assert result == response
-
-    def test_add_citations_duplicate_sources(self, hybrid_rag_service):
-        """Test citations with duplicate source files"""
-        response = "Response"
-        chunks = [
-            {
-                "metadata": {"file_name": "doc1.pdf"},
-                "similarity": 0.8,
-                "_hybrid_source": "dense",
-            },
-            {
-                "metadata": {"file_name": "doc1.pdf"},
-                "similarity": 0.7,
-                "_hybrid_source": "sparse",
-            },  # Duplicate
-            {
-                "metadata": {"file_name": "doc2.pdf"},
-                "similarity": 0.6,
-                "_hybrid_source": "dense",
-            },
-        ]
-
-        result = hybrid_rag_service._add_citations_to_response(response, chunks)
-
-        # Should only have 2 citations (duplicates removed)
-        citations = (
-            result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
-        )
-        assert citations.count("doc1.pdf") == 1  # Only one citation for doc1
-        assert "doc2.pdf" in citations
+    # Citation functionality is handled by the CitationService
 
     @pytest.mark.asyncio
     async def test_get_system_status_not_initialized(self, hybrid_rag_service):
