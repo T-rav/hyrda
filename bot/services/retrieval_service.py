@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from config.settings import Settings
+
 from .retrieval import ElasticsearchRetrieval, PineconeRetrieval
 
 logger = logging.getLogger(__name__)

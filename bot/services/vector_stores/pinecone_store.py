@@ -139,7 +139,7 @@ class PineconeVectorStore(VectorStore):
             diversified_documents = self._diversify_results(documents, limit)
 
             logger.debug(
-                f"Pinecone diversified to {len(diversified_documents)} documents from {len(set(d.get('metadata', {}).get('file_name', 'Unknown') for d in documents))} unique files"
+                f"Pinecone diversified to {len(diversified_documents)} documents from {len({d.get('metadata', {}).get('file_name', 'Unknown') for d in documents})} unique files"
             )
 
             return diversified_documents
@@ -176,10 +176,8 @@ class PineconeVectorStore(VectorStore):
             documents_by_file[file_name].append(doc)
 
         # Sort chunks within each document by similarity (highest first)
-        for file_name in documents_by_file:
-            documents_by_file[file_name].sort(
-                key=lambda x: x.get("similarity", 0), reverse=True
-            )
+        for _file_name, chunks in documents_by_file.items():
+            chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
 
         result = []
         file_names = list(documents_by_file.keys())
