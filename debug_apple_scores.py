@@ -21,8 +21,8 @@ logging.basicConfig(level=logging.INFO)
 
 async def check_apple_scores():
     """Check exact Apple document scores with entity boosting"""
-    
-    # Load environment 
+
+    # Load environment
     env_file = os.path.join(os.path.dirname(__file__), '.env')
     if os.path.exists(env_file):
         with open(env_file, 'r') as f:
@@ -32,36 +32,36 @@ async def check_apple_scores():
                     key, value = line.split('=', 1)
                     value = value.split('#')[0].strip()
                     os.environ.setdefault(key.strip(), value)
-    
+
     settings = Settings()
     query = "has 8th light worked with apple?"
-    
+
     print("🔍 Apple Document Similarity Scores with Entity Boosting")
     print("=" * 60)
     print(f"Query: '{query}'")
     print()
-    
+
     # Initialize services
     vector_store = create_vector_store(settings.vector)
     await vector_store.initialize()
-    
+
     embedding_service = create_embedding_provider(settings.embedding, settings.llm)
     retrieval_service = RetrievalService(settings)
-    
+
     # Get query embedding
     query_embedding = await embedding_service.get_embedding(query)
-    
+
     # Do the entity filtering search (which includes boosting)
     enhanced_results = await retrieval_service._search_with_entity_filtering(
         query=query,
-        query_embedding=query_embedding, 
+        query_embedding=query_embedding,
         vector_service=vector_store
     )
-    
+
     print(f"📊 Results from entity-enhanced search:")
     print(f"   Total results: {len(enhanced_results)}")
     print()
-    
+
     apple_results = []
     for i, result in enumerate(enhanced_results[:15]):  # Top 15
         file_name = result.get("metadata", {}).get("file_name", "Unknown")
@@ -69,23 +69,23 @@ async def check_apple_scores():
         original_similarity = result.get("_original_similarity", similarity)
         entity_boost = result.get("_entity_boost", 0)
         matching_entities = result.get("_matching_entities", 0)
-        
+
         is_apple = "apple" in file_name.lower()
         if is_apple:
             apple_results.append((file_name, similarity, original_similarity, entity_boost))
-        
+
         status = "🍎 APPLE" if is_apple else "📄"
         print(f"{status} [{i:2}] {file_name[:70]}...")
         print(f"         Similarity: {similarity:.3f} (original: {original_similarity:.3f}, boost: +{entity_boost:.3f})")
         print(f"         Matching entities: {matching_entities}")
         print()
-    
+
     print("🎯 Apple Document Summary:")
     print(f"   Found {len(apple_results)} Apple documents")
     print(f"   Similarity threshold: {settings.rag.similarity_threshold}")
     print(f"   Results threshold: {settings.rag.results_similarity_threshold}")
     print()
-    
+
     for name, sim, orig_sim, boost in apple_results:
         passes_rag = sim >= settings.rag.similarity_threshold
         passes_results = sim >= settings.rag.results_similarity_threshold

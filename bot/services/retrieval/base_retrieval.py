@@ -249,17 +249,15 @@ class BaseRetrieval:
             docs_by_file[file_name].append(result)
 
         # Sort chunks within each document by similarity (highest first)
-        for file_name in docs_by_file:
-            docs_by_file[file_name].sort(
-                key=lambda x: x.get("similarity", 0), reverse=True
-            )
+        for _file_name, chunks in docs_by_file.items():
+            chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
 
         # Phase 1: Get 1 chunk per document (up to max_unique_docs)
         selected_results = []
         selected_docs = []
 
         # Sort documents by their best chunk similarity
-        doc_items = [(name, chunks) for name, chunks in docs_by_file.items()]
+        doc_items = list(docs_by_file.items())
         doc_items.sort(key=lambda x: x[1][0].get("similarity", 0), reverse=True)
 
         for file_name, chunks in doc_items[:max_unique_docs]:
@@ -312,10 +310,8 @@ class BaseRetrieval:
             documents_by_file[file_name].append(doc)
 
         # Sort chunks within each document by similarity (highest first)
-        for file_name in documents_by_file:
-            documents_by_file[file_name].sort(
-                key=lambda x: x.get("similarity", 0), reverse=True
-            )
+        for _file_name, chunks in documents_by_file.items():
+            chunks.sort(key=lambda x: x.get("similarity", 0), reverse=True)
 
         result = []
         file_names = list(documents_by_file.keys())

@@ -16,8 +16,8 @@ from services.embedding_service import create_embedding_provider
 
 async def find_unique_apple_docs():
     """Find all unique Apple documents"""
-    
-    # Load environment 
+
+    # Load environment
     env_file = os.path.join(os.path.dirname(__file__), '.env')
     if os.path.exists(env_file):
         with open(env_file, 'r') as f:
@@ -27,28 +27,28 @@ async def find_unique_apple_docs():
                     key, value = line.split('=', 1)
                     value = value.split('#')[0].strip()
                     os.environ.setdefault(key.strip(), value)
-    
+
     settings = Settings()
-    
+
     print("🔍 Finding All Unique Apple Documents")
     print("=" * 50)
-    
+
     # Initialize services
     vector_store = create_vector_store(settings.vector)
     await vector_store.initialize()
-    
+
     embedding_service = create_embedding_provider(settings.embedding, settings.llm)
-    
+
     # Search with a very broad Apple-related query
     apple_query = await embedding_service.get_embedding("apple company project")
-    
+
     # Get lots of results with no threshold
     results = await vector_store.search(
         query_embedding=apple_query,
         limit=200,  # Large limit
         similarity_threshold=0.0,  # No threshold
     )
-    
+
     # Find all unique Apple documents
     apple_docs = {}
     for result in results:
@@ -60,20 +60,20 @@ async def find_unique_apple_docs():
                 "similarity": result.get("similarity", 0),
                 "content_preview": result.get("content", "")[:100] + "..."
             })
-    
+
     print(f"📊 Found {len(apple_docs)} unique Apple documents:")
     print()
-    
+
     for i, (doc_name, chunks) in enumerate(sorted(apple_docs.items())):
         print(f"{i+1}. **{doc_name}**")
         print(f"   - Chunks: {len(chunks)}")
         print(f"   - Best similarity: {max(chunk['similarity'] for chunk in chunks):.3f}")
         print(f"   - Sample content: {chunks[0]['content_preview']}")
         print()
-    
+
     print("🎯 Test Query: 'has 8th light worked with apple?'")
     print("-" * 50)
-    
+
     # Now test the specific query
     test_query = await embedding_service.get_embedding("has 8th light worked with apple?")
     test_results = await vector_store.search(
@@ -81,10 +81,10 @@ async def find_unique_apple_docs():
         limit=15,
         similarity_threshold=0.0,
     )
-    
+
     print(f"Query returned {len(test_results)} results:")
     print()
-    
+
     # Show unique documents from test query
     seen_docs = set()
     unique_count = 0
@@ -92,7 +92,7 @@ async def find_unique_apple_docs():
         file_name = result.get("metadata", {}).get("file_name", "Unknown")
         similarity = result.get("similarity", 0)
         is_apple = "apple" in file_name.lower()
-        
+
         if file_name not in seen_docs:
             seen_docs.add(file_name)
             unique_count += 1
@@ -100,9 +100,9 @@ async def find_unique_apple_docs():
             print(f"{status} {unique_count:2}. {file_name} (sim: {similarity:.3f})")
         else:
             # Show duplicate chunks
-            status = "🍎" if is_apple else "📄" 
+            status = "🍎" if is_apple else "📄"
             print(f"{status}     └─ Additional chunk (sim: {similarity:.3f})")
-    
+
     print()
     print(f"📈 Summary: {len(seen_docs)} unique documents, {len(test_results)} total chunks")
 

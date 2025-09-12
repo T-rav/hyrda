@@ -155,19 +155,19 @@ class RAGSettings(BaseSettings):
     )
     entity_content_boost: float = Field(
         default=0.05,
-        description="Similarity boost per entity found in document content (0.05 = 5%)"
+        description="Similarity boost per entity found in document content (0.05 = 5%)",
     )
     entity_title_boost: float = Field(
         default=0.1,
-        description="Similarity boost per entity found in document title/filename (0.1 = 10%)"
+        description="Similarity boost per entity found in document title/filename (0.1 = 10%)",
     )
     diversification_mode: str = Field(
         default="balanced",
-        description="Document diversification strategy: 'balanced' (round-robin), 'document_first' (1 per doc then all), 'similarity_first' (pure similarity order)"
+        description="Document diversification strategy: 'balanced' (round-robin), 'document_first' (1 per doc then all), 'similarity_first' (pure similarity order)",
     )
     max_unique_documents: int = Field(
         default=5,
-        description="Maximum number of unique documents to include in results"
+        description="Maximum number of unique documents to include in results",
     )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
