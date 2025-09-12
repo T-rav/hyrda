@@ -134,11 +134,79 @@ class PineconeVectorStore(VectorStore):
             logger.debug(
                 f"Pinecone returned {len(documents)} documents above threshold {similarity_threshold}"
             )
-            return documents
+
+            # Apply diversification to ensure variety across documents
+            diversified_documents = self._diversify_results(documents, limit)
+
+            logger.debug(
+                f"Pinecone diversified to {len(diversified_documents)} documents from {len(set(d.get('metadata', {}).get('file_name', 'Unknown') for d in documents))} unique files"
+            )
+
+            return diversified_documents
 
         except Exception as e:
             logger.error(f"Failed to search Pinecone: {e}")
             return []
+
+    def _diversify_results(
+        self, documents: list[dict[str, Any]], limit: int
+    ) -> list[dict[str, Any]]:
+        """
+        Diversify search results to ensure variety across different documents.
+
+        Uses round-robin selection to get chunks from different documents first,
+        then fills remaining slots with additional chunks from the same documents.
+
+        Args:
+            documents: List of document chunks sorted by similarity
+            limit: Maximum number of results to return
+
+        Returns:
+            Diversified list of documents with variety across different files
+        """
+        if not documents or limit <= 0:
+            return []
+
+        # Group documents by file_name
+        documents_by_file = {}
+        for doc in documents:
+            file_name = doc.get("metadata", {}).get("file_name", "Unknown")
+            if file_name not in documents_by_file:
+                documents_by_file[file_name] = []
+            documents_by_file[file_name].append(doc)
+
+        # Sort chunks within each document by similarity (highest first)
+        for file_name in documents_by_file:
+            documents_by_file[file_name].sort(
+                key=lambda x: x.get("similarity", 0), reverse=True
+            )
+
+        result = []
+        file_names = list(documents_by_file.keys())
+
+        # Round-robin through documents to get one chunk from each first
+        round_num = 0
+        while len(result) < limit and file_names:
+            for file_name in file_names[
+                :
+            ]:  # Copy list to avoid modification during iteration
+                if len(result) >= limit:
+                    break
+
+                # Check if this document has more chunks available
+                if round_num < len(documents_by_file[file_name]):
+                    result.append(documents_by_file[file_name][round_num])
+                else:
+                    # This document is exhausted, remove from rotation
+                    file_names.remove(file_name)
+
+            round_num += 1
+
+        logger.debug(
+            f"Diversification: Selected {len(result)} chunks from {len(documents_by_file)} unique documents"
+        )
+
+        return result
 
     async def delete_documents(self, document_ids: list[str]):
         """Delete documents from Pinecone"""
