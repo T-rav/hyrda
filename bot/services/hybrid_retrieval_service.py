@@ -302,11 +302,19 @@ class HybridRetrievalService:
             fused_scores.keys(), key=lambda x: fused_scores[x], reverse=True
         )
 
-        # Create final fused results with RRF scores as similarity
+        # Create final fused results with scaled RRF scores
         fused_results = []
+        max_rrf_score = max(fused_scores.values()) if fused_scores else 1.0
+
         for i, doc_id in enumerate(sorted_ids):
             doc = fused_docs[doc_id]
-            doc.similarity = fused_scores[doc_id]  # Use RRF score
+            # Scale RRF scores to meaningful similarity range (0.3-0.95)
+            # Normalize against max score, then scale with a power curve for good spread
+            normalized_score = fused_scores[doc_id] / max_rrf_score
+            scaled_score = (
+                normalized_score**0.8
+            )  # Gentle power curve for better distribution
+            doc.similarity = 0.3 + (scaled_score * 0.65)  # Scale to 0.3-0.95 range
             doc.rank = i + 1
             fused_results.append(doc)
 

@@ -313,8 +313,10 @@ class ElasticsearchVectorStore(VectorStore):
                 # Use same improved scoring as main search method
                 raw_score = hit["_score"]
                 similarity = raw_score / max_score
-                similarity = similarity**1.5  # Stronger power curve to spread scores
-                similarity = 0.6 + (similarity * 0.35)  # Scale to 0.6-0.95 range
+                similarity = (
+                    similarity**1.2
+                )  # Moderate power curve for better distribution
+                similarity = 0.3 + (similarity * 0.6)  # Scale to 0.3-0.9 range
 
                 if similarity >= similarity_threshold:
                     all_documents.append(
