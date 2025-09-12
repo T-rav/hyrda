@@ -45,7 +45,7 @@ dependencies = [
     "pinecone>=3.0.0",
     "cohere>=5.0.0",  # For cross-encoder reranking
     "numpy>=1.24.0",
-    "langfuse>=2.7.0",
+    "langfuse>=3.3.0",
 
     # Slack formatting
     "slackify-markdown>=0.2.0",

@@ -16,6 +16,7 @@ import logging
 from typing import Any
 
 from config.settings import Settings, VectorSettings
+from services.citation_service import CitationService
 from services.embedding_service import create_embedding_provider
 from services.hybrid_retrieval_service import CohereReranker, HybridRetrievalService
 from services.langfuse_service import observe
@@ -56,6 +57,7 @@ class HybridRAGService:
         self.chunk_processor: EnhancedChunkProcessor | None = None
         self.embedding_service = None
         self.llm_provider = None
+        self.citation_service = CitationService()
 
         # Track initialization
         self._initialized = False
@@ -346,7 +348,7 @@ class HybridRAGService:
 
             # Add citations if we used RAG
             if context_chunks and use_rag:
-                response = self._add_citations_to_response(response, context_chunks)
+                response = self.citation_service.add_source_citations(response, context_chunks)
 
             return response
 
@@ -354,51 +356,6 @@ class HybridRAGService:
             logger.error(f"Error generating hybrid RAG response: {e}")
             return "I'm sorry, I encountered an error while generating a response."
 
-    def _add_citations_to_response(
-        self, response: str, context_chunks: list[dict[str, Any]]
-    ) -> str:
-        """Add source citations to the response"""
-        if not context_chunks:
-            return response
-
-        # Extract unique sources
-        sources = []
-        seen_sources = set()
-
-        for i, chunk in enumerate(context_chunks, 1):
-            metadata = chunk.get("metadata", {})
-            file_name = metadata.get("file_name", f"Document {i}")
-            similarity = chunk.get("similarity", 0)
-            source_type = chunk.get("_hybrid_source", "hybrid")
-
-            # Create unique identifier
-            source_key = file_name.lower()
-            if source_key in seen_sources:
-                continue
-            seen_sources.add(source_key)
-
-            # Build citation with hybrid search info
-            citation = (
-                f"{i}. **{file_name}** (Score: {similarity:.1%}, Via: {source_type})"
-            )
-
-            # Add path if available
-            folder_path = metadata.get("folder_path")
-            if folder_path:
-                citation += f" - *📁 {folder_path}*"
-
-            # Add link if available
-            web_view_link = metadata.get("web_view_link")
-            if web_view_link:
-                citation = f"[{citation}]({web_view_link})"
-
-            sources.append(citation)
-
-        if sources:
-            citations_section = "\n\n**📚 Sources:**\n" + "\n".join(sources)
-            return response + citations_section
-
-        return response
 
     async def get_system_status(self) -> dict[str, Any]:
         """Get comprehensive system status"""

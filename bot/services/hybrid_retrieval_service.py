@@ -270,21 +270,29 @@ class HybridRetrievalService:
         for doc_id in all_ids:
             rrf_score = 0.0
             doc = None
+            appears_in_dense = doc_id in dense_lookup
+            appears_in_sparse = doc_id in sparse_lookup
 
             # Add dense contribution
-            if doc_id in dense_lookup:
+            if appears_in_dense:
                 dense_rank, dense_doc = dense_lookup[doc_id]
                 rrf_score += 1.0 / (self.rrf_k + dense_rank)
                 doc = dense_doc
-                doc.source = "hybrid"  # Mark as hybrid
 
             # Add sparse contribution
-            if doc_id in sparse_lookup:
+            if appears_in_sparse:
                 sparse_rank, sparse_doc = sparse_lookup[doc_id]
                 rrf_score += 1.0 / (self.rrf_k + sparse_rank)
                 if doc is None:  # Sparse-only result
                     doc = sparse_doc
-                    doc.source = "hybrid"
+
+            # Set source based on where the document appears
+            if appears_in_dense and appears_in_sparse:
+                doc.source = "hybrid"  # Appears in both - true hybrid
+            elif appears_in_sparse:
+                doc.source = "elastic"  # Sparse/Elasticsearch only
+            else:
+                doc.source = "dense"  # Dense/Pinecone only
 
             fused_scores[doc_id] = rrf_score
             fused_docs[doc_id] = doc
