@@ -357,13 +357,20 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_get_response_success(self, provider):
         """Test successful response generation"""
-        mock_session = AsyncMock()
-        mock_response = AsyncMock()
+        # Create the mock response
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={"message": {"content": "Ollama response"}}
         )
-        mock_session.post.return_value.__aenter__.return_value = mock_response
+
+        # Create async context manager mock
+        async_context_mock = AsyncMock()
+        async_context_mock.__aenter__ = AsyncMock(return_value=mock_response)
+        async_context_mock.__aexit__ = AsyncMock(return_value=None)
+
+        mock_session = AsyncMock()
+        mock_session.post = Mock(return_value=async_context_mock)
 
         with (
             patch.object(provider, "ensure_session", return_value=mock_session),
