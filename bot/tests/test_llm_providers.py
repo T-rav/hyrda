@@ -25,9 +25,7 @@ class TestLLMProvider:
     def test_llm_provider_is_abstract(self):
         """Test that LLMProvider cannot be instantiated directly"""
         settings = LLMSettings(
-            provider="test",
-            api_key=SecretStr("key"),
-            model="test-model"
+            provider="test", api_key=SecretStr("key"), model="test-model"
         )
         with pytest.raises(TypeError):
             LLMProvider(settings)
@@ -44,18 +42,18 @@ class TestOpenAIProvider:
             api_key=SecretStr("test-openai-key"),
             model="gpt-4",
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=1000,
         )
 
     @pytest.fixture
     def provider(self, settings):
         """Create OpenAI provider for testing"""
-        with patch('bot.services.llm_providers.AsyncOpenAI'):
+        with patch("bot.services.llm_providers.AsyncOpenAI"):
             return OpenAIProvider(settings)
 
     def test_init_basic(self, settings):
         """Test basic initialization"""
-        with patch('bot.services.llm_providers.AsyncOpenAI') as mock_openai:
+        with patch("bot.services.llm_providers.AsyncOpenAI") as mock_openai:
             provider = OpenAIProvider(settings)
 
             mock_openai.assert_called_once_with(api_key="test-openai-key")
@@ -69,15 +67,14 @@ class TestOpenAIProvider:
             provider="openai",
             api_key=SecretStr("key"),
             model="gpt-4",
-            base_url="https://custom.openai.com"
+            base_url="https://custom.openai.com",
         )
 
-        with patch('bot.services.llm_providers.AsyncOpenAI') as mock_openai:
+        with patch("bot.services.llm_providers.AsyncOpenAI") as mock_openai:
             OpenAIProvider(settings)
 
             mock_openai.assert_called_once_with(
-                api_key="key",
-                base_url="https://custom.openai.com"
+                api_key="key", base_url="https://custom.openai.com"
             )
 
     @pytest.mark.asyncio
@@ -120,7 +117,7 @@ class TestOpenAIProvider:
         await provider.get_response(
             [{"role": "user", "content": "Hello"}],
             session_id="session123",
-            user_id="user456"
+            user_id="user456",
         )
 
         call_args = provider.client.chat.completions.create.call_args[1]
@@ -131,7 +128,9 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_get_response_error(self, provider):
         """Test error handling in response generation"""
-        provider.client.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
+        provider.client.chat.completions.create = AsyncMock(
+            side_effect=Exception("API Error")
+        )
 
         response = await provider.get_response([{"role": "user", "content": "Hello"}])
 
@@ -173,18 +172,18 @@ class TestAnthropicProvider:
             api_key=SecretStr("test-anthropic-key"),
             model="claude-3-haiku-20240307",
             temperature=0.5,
-            max_tokens=2000
+            max_tokens=2000,
         )
 
     @pytest.fixture
     def provider(self, settings):
         """Create Anthropic provider for testing"""
-        with patch('bot.services.llm_providers.AsyncAnthropic'):
+        with patch("bot.services.llm_providers.AsyncAnthropic"):
             return AnthropicProvider(settings)
 
     def test_init(self, settings):
         """Test initialization"""
-        with patch('bot.services.llm_providers.AsyncAnthropic') as mock_anthropic:
+        with patch("bot.services.llm_providers.AsyncAnthropic") as mock_anthropic:
             provider = AnthropicProvider(settings)
 
             mock_anthropic.assert_called_once_with(api_key="test-anthropic-key")
@@ -205,7 +204,9 @@ class TestAnthropicProvider:
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
-        with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
+        with patch(
+            "bot.services.llm_providers.get_langfuse_service", return_value=None
+        ):
             messages = [{"role": "user", "content": "Hello"}]
             response = await provider.get_response(messages, "You are Claude")
 
@@ -226,12 +227,14 @@ class TestAnthropicProvider:
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
-        with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
+        with patch(
+            "bot.services.llm_providers.get_langfuse_service", return_value=None
+        ):
             messages = [
                 {"role": "system", "content": "System message"},  # Should be filtered
                 {"role": "user", "content": "User message"},
                 {"role": "assistant", "content": "Assistant message"},
-                {"role": "tool", "content": "Tool message"}  # Should be filtered
+                {"role": "tool", "content": "Tool message"},  # Should be filtered
             ]
 
             await provider.get_response(messages)
@@ -255,7 +258,10 @@ class TestAnthropicProvider:
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
         mock_langfuse = Mock()
-        with patch('bot.services.llm_providers.get_langfuse_service', return_value=mock_langfuse):
+        with patch(
+            "bot.services.llm_providers.get_langfuse_service",
+            return_value=mock_langfuse,
+        ):
             await provider.get_response([{"role": "user", "content": "Hello"}])
 
             mock_langfuse.trace_llm_call.assert_called_once()
@@ -269,8 +275,12 @@ class TestAnthropicProvider:
         """Test error handling"""
         provider.client.messages.create = AsyncMock(side_effect=Exception("API Error"))
 
-        with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
-            response = await provider.get_response([{"role": "user", "content": "Hello"}])
+        with patch(
+            "bot.services.llm_providers.get_langfuse_service", return_value=None
+        ):
+            response = await provider.get_response(
+                [{"role": "user", "content": "Hello"}]
+            )
 
             assert response is None
 
@@ -297,7 +307,7 @@ class TestOllamaProvider:
             model="llama2",
             base_url="http://localhost:11434",
             temperature=0.8,
-            max_tokens=500
+            max_tokens=500,
         )
 
     @pytest.fixture
@@ -315,9 +325,7 @@ class TestOllamaProvider:
     def test_init_default_base_url(self):
         """Test initialization with default base URL"""
         settings = LLMSettings(
-            provider="ollama",
-            api_key=SecretStr("not-used"),
-            model="llama2"
+            provider="ollama", api_key=SecretStr("not-used"), model="llama2"
         )
         provider = OllamaProvider(settings)
         assert provider.base_url == "http://localhost:11434"
@@ -325,7 +333,7 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_ensure_session_creates_new(self, provider):
         """Test session creation"""
-        with patch('aiohttp.ClientSession') as mock_session_class:
+        with patch("aiohttp.ClientSession") as mock_session_class:
             mock_session = Mock()
             mock_session_class.return_value = mock_session
 
@@ -352,31 +360,30 @@ class TestOllamaProvider:
         mock_session = AsyncMock()
         mock_response = AsyncMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
-            "message": {"content": "Ollama response"}
-        })
+        mock_response.json = AsyncMock(
+            return_value={"message": {"content": "Ollama response"}}
+        )
         mock_session.post.return_value.__aenter__.return_value = mock_response
 
-        with patch.object(provider, 'ensure_session', return_value=mock_session):
-            with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
-                messages = [{"role": "user", "content": "Hello"}]
-                response = await provider.get_response(messages, "You are helpful")
+        with (
+            patch.object(provider, "ensure_session", return_value=mock_session),
+            patch("bot.services.llm_providers.get_langfuse_service", return_value=None),
+        ):
+            messages = [{"role": "user", "content": "Hello"}]
+            response = await provider.get_response(messages, "You are helpful")
 
-                assert response == "Ollama response"
-                mock_session.post.assert_called_once_with(
-                    "http://localhost:11434/api/chat",
-                    json={
-                        "model": "llama2",
-                        "messages": [
-                            {"role": "system", "content": "You are helpful"},
-                            {"role": "user", "content": "Hello"}
-                        ],
-                        "options": {
-                            "temperature": 0.8,
-                            "num_predict": 500
-                        }
-                    }
-                )
+            assert response == "Ollama response"
+            mock_session.post.assert_called_once_with(
+                "http://localhost:11434/api/chat",
+                json={
+                    "model": "llama2",
+                    "messages": [
+                        {"role": "system", "content": "You are helpful"},
+                        {"role": "user", "content": "Hello"},
+                    ],
+                    "options": {"temperature": 0.8, "num_predict": 500},
+                },
+            )
 
     @pytest.mark.asyncio
     async def test_get_response_http_error(self, provider):
@@ -387,20 +394,30 @@ class TestOllamaProvider:
         mock_response.text = AsyncMock(return_value="Internal server error")
         mock_session.post.return_value.__aenter__.return_value = mock_response
 
-        with patch.object(provider, 'ensure_session', return_value=mock_session):
-            with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
-                response = await provider.get_response([{"role": "user", "content": "Hello"}])
+        with (
+            patch.object(provider, "ensure_session", return_value=mock_session),
+            patch("bot.services.llm_providers.get_langfuse_service", return_value=None),
+        ):
+            response = await provider.get_response(
+                [{"role": "user", "content": "Hello"}]
+            )
 
-                assert response is None
+            assert response is None
 
     @pytest.mark.asyncio
     async def test_get_response_exception(self, provider):
         """Test exception handling"""
-        with patch.object(provider, 'ensure_session', side_effect=Exception("Network error")):
-            with patch('bot.services.llm_providers.get_langfuse_service', return_value=None):
-                response = await provider.get_response([{"role": "user", "content": "Hello"}])
+        with (
+            patch.object(
+                provider, "ensure_session", side_effect=Exception("Network error")
+            ),
+            patch("bot.services.llm_providers.get_langfuse_service", return_value=None),
+        ):
+            response = await provider.get_response(
+                [{"role": "user", "content": "Hello"}]
+            )
 
-                assert response is None
+            assert response is None
 
     @pytest.mark.asyncio
     async def test_get_response_with_langfuse(self, provider):
@@ -408,21 +425,26 @@ class TestOllamaProvider:
         mock_session = AsyncMock()
         mock_response = AsyncMock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(return_value={
-            "message": {"content": "Response"}
-        })
+        mock_response.json = AsyncMock(
+            return_value={"message": {"content": "Response"}}
+        )
         mock_session.post.return_value.__aenter__.return_value = mock_response
 
         mock_langfuse = Mock()
 
-        with patch.object(provider, 'ensure_session', return_value=mock_session):
-            with patch('bot.services.llm_providers.get_langfuse_service', return_value=mock_langfuse):
-                await provider.get_response([{"role": "user", "content": "Hello"}])
+        with (
+            patch.object(provider, "ensure_session", return_value=mock_session),
+            patch(
+                "bot.services.llm_providers.get_langfuse_service",
+                return_value=mock_langfuse,
+            ),
+        ):
+            await provider.get_response([{"role": "user", "content": "Hello"}])
 
-                mock_langfuse.trace_llm_call.assert_called_once()
-                call_args = mock_langfuse.trace_llm_call.call_args[1]
-                assert call_args["provider"] == "ollama"
-                assert call_args["model"] == "llama2"
+            mock_langfuse.trace_llm_call.assert_called_once()
+            call_args = mock_langfuse.trace_llm_call.call_args[1]
+            assert call_args["provider"] == "ollama"
+            assert call_args["model"] == "llama2"
 
     @pytest.mark.asyncio
     async def test_close_with_session(self, provider):
@@ -449,12 +471,10 @@ class TestCreateLLMProvider:
     def test_create_openai_provider(self):
         """Test creating OpenAI provider"""
         settings = LLMSettings(
-            provider="openai",
-            api_key=SecretStr("key"),
-            model="gpt-4"
+            provider="openai", api_key=SecretStr("key"), model="gpt-4"
         )
 
-        with patch('bot.services.llm_providers.AsyncOpenAI'):
+        with patch("bot.services.llm_providers.AsyncOpenAI"):
             provider = create_llm_provider(settings)
 
             assert isinstance(provider, OpenAIProvider)
@@ -464,10 +484,10 @@ class TestCreateLLMProvider:
         settings = LLMSettings(
             provider="anthropic",
             api_key=SecretStr("key"),
-            model="claude-3-haiku-20240307"
+            model="claude-3-haiku-20240307",
         )
 
-        with patch('bot.services.llm_providers.AsyncAnthropic'):
+        with patch("bot.services.llm_providers.AsyncAnthropic"):
             provider = create_llm_provider(settings)
 
             assert isinstance(provider, AnthropicProvider)
@@ -475,9 +495,7 @@ class TestCreateLLMProvider:
     def test_create_ollama_provider(self):
         """Test creating Ollama provider"""
         settings = LLMSettings(
-            provider="ollama",
-            api_key=SecretStr("not-used"),
-            model="llama2"
+            provider="ollama", api_key=SecretStr("not-used"), model="llama2"
         )
 
         provider = create_llm_provider(settings)
@@ -487,9 +505,7 @@ class TestCreateLLMProvider:
     def test_create_unsupported_provider(self):
         """Test creating unsupported provider"""
         settings = LLMSettings(
-            provider="unsupported",
-            api_key=SecretStr("key"),
-            model="model"
+            provider="unsupported", api_key=SecretStr("key"), model="model"
         )
 
         with pytest.raises(ValueError, match="Unsupported LLM provider"):
@@ -500,10 +516,10 @@ class TestCreateLLMProvider:
         settings = LLMSettings(
             provider="OPENAI",  # Uppercase
             api_key=SecretStr("key"),
-            model="gpt-4"
+            model="gpt-4",
         )
 
-        with patch('bot.services.llm_providers.AsyncOpenAI'):
+        with patch("bot.services.llm_providers.AsyncOpenAI"):
             provider = create_llm_provider(settings)
 
             assert isinstance(provider, OpenAIProvider)
