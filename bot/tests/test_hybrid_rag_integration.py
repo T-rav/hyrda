@@ -449,7 +449,7 @@ class TestHybridRAGServiceSystemStatus:
         assert status["components"]["dense_store"] == "healthy"
         assert status["components"]["sparse_store"] == "healthy"
         assert status["components"]["reranker"] == "disabled"  # Default in test
-        assert status["components"]["title_injection"] == "enabled"  # Default
+        assert status["components"]["title_injection"] == "always_enabled"  # Default
 
     @pytest.mark.asyncio
     async def test_system_status_not_initialized(self, test_settings):

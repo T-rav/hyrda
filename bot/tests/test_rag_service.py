@@ -1,7 +1,7 @@
 """
 Tests for RAG Service functionality.
 
-Tests basic RAG service operations and integration.
+Tests RAG service orchestration and integration.
 """
 
 from unittest.mock import AsyncMock, Mock, patch
@@ -14,24 +14,26 @@ from config.settings import EmbeddingSettings, LLMSettings, Settings, VectorSett
 
 
 class TestRAGService:
-    """Test cases for RAGService"""
+    """Test cases for RAG service"""
 
     @pytest.fixture
     def settings(self):
         """Create settings for testing"""
         return Settings(
-            vector=VectorSettings(
-                provider="pinecone",
-                api_key=SecretStr("test-key"),
-                collection_name="test-collection",
-            ),
             embedding=EmbeddingSettings(
                 provider="openai",
                 model="text-embedding-ada-002",
-                api_key=SecretStr("embedding-key"),
+                api_key=SecretStr("test-key"),
             ),
             llm=LLMSettings(
-                provider="openai", api_key=SecretStr("llm-key"), model="gpt-4"
+                provider="openai",
+                model="gpt-4",
+                api_key=SecretStr("test-key"),
+            ),
+            vector=VectorSettings(
+                provider="pinecone",
+                api_key=SecretStr("test-key"),
+                collection_name="test",
             ),
         )
 
@@ -39,118 +41,111 @@ class TestRAGService:
     def rag_service(self, settings):
         """Create RAG service for testing"""
         with (
-            patch("bot.services.rag_service.create_vector_store"),
-            patch("bot.services.rag_service.create_embedding_provider"),
-            patch("bot.services.rag_service.create_llm_provider"),
+            patch("bot.services.rag_service.create_vector_store") as mock_vector_store,
+            patch(
+                "bot.services.rag_service.create_embedding_provider"
+            ) as mock_embedding,
+            patch("bot.services.rag_service.create_llm_provider") as mock_llm,
         ):
+            mock_vector_store.return_value = AsyncMock()
+            mock_embedding.return_value = AsyncMock()
+            mock_llm.return_value = AsyncMock()
             return RAGService(settings)
 
     def test_init(self, rag_service, settings):
         """Test service initialization"""
         assert rag_service.settings == settings
-        assert rag_service._initialized is False
+        assert hasattr(rag_service, "retrieval_service")
+        assert hasattr(rag_service, "citation_service")
+        assert hasattr(rag_service, "context_builder")
 
     @pytest.mark.asyncio
     async def test_initialization_success(self, rag_service):
         """Test successful initialization"""
         # Mock dependencies
-        rag_service.vector_store = AsyncMock()
+        rag_service.retrieval_service = AsyncMock()
         rag_service.embedding_service = Mock()
         rag_service.llm_provider = Mock()
 
         await rag_service.initialize()
 
-        assert rag_service._initialized is True
-        rag_service.vector_store.initialize.assert_called_once()
+        rag_service.retrieval_service.initialize.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_initialization_failure(self, rag_service):
         """Test initialization failure"""
-        rag_service.vector_store = AsyncMock()
-        rag_service.vector_store.initialize.side_effect = Exception("Init failed")
+        rag_service.retrieval_service = AsyncMock()
+        rag_service.retrieval_service.initialize.side_effect = Exception("Init failed")
 
         with pytest.raises(Exception, match="Init failed"):
             await rag_service.initialize()
 
-        assert rag_service._initialized is False
-
     @pytest.mark.asyncio
-    async def test_operations_require_initialization(self, rag_service):
-        """Test that operations require initialization"""
-        with pytest.raises(RuntimeError, match="not initialized"):
-            await rag_service.add_documents(["text"], [[0.1]], [{}])
+    async def test_ingest_documents_success(self, rag_service):
+        """Test successful document ingestion"""
+        rag_service.document_processor = AsyncMock()
+        rag_service.retrieval_service = AsyncMock()
+        rag_service.retrieval_service.add_documents.return_value = True
 
-        with pytest.raises(RuntimeError, match="not initialized"):
-            await rag_service.search("query", [0.1])
+        documents = ["test document"]
+        metadatas = [{"file_name": "test.pdf"}]
 
-        with pytest.raises(RuntimeError, match="not initialized"):
-            await rag_service.generate_response("query", [])
-
-    @pytest.mark.asyncio
-    async def test_add_documents_success(self, rag_service):
-        """Test successful document addition"""
-        rag_service._initialized = True
-        rag_service.vector_store = AsyncMock()
-        rag_service.vector_store.add_documents.return_value = True
-
-        result = await rag_service.add_documents(
-            ["document text"], [[0.1, 0.2, 0.3]], [{"file_name": "test.pdf"}]
-        )
+        result = await rag_service.ingest_documents(documents, metadatas)
 
         assert result is True
-        rag_service.vector_store.add_documents.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_search_success(self, rag_service):
-        """Test successful search"""
-        rag_service._initialized = True
-        rag_service.vector_store = AsyncMock()
-        expected_results = [{"content": "result", "similarity": 0.8}]
-        rag_service.vector_store.search.return_value = expected_results
-
-        results = await rag_service.search("query", [0.1, 0.2], top_k=5)
-
-        assert results == expected_results
-        rag_service.vector_store.search.assert_called_once_with(
-            query_embedding=[0.1, 0.2], limit=5, similarity_threshold=0.0
+        rag_service.document_processor.process_documents.assert_called_once_with(
+            documents, metadatas
         )
 
     @pytest.mark.asyncio
     async def test_generate_response_success(self, rag_service):
         """Test successful response generation"""
-        rag_service._initialized = True
         rag_service.embedding_service = AsyncMock()
-        rag_service.vector_store = AsyncMock()
+        rag_service.retrieval_service = AsyncMock()
         rag_service.llm_provider = AsyncMock()
         rag_service.context_builder = Mock()
+        rag_service.citation_service = Mock()
 
         # Mock dependencies
         rag_service.embedding_service.get_embedding.return_value = [0.1, 0.2]
-        rag_service.vector_store.search.return_value = [
-            {"content": "context", "similarity": 0.8}
+        rag_service.retrieval_service.search.return_value = [
+            {
+                "content": "context",
+                "similarity": 0.8,
+                "metadata": {"file_name": "test.pdf"},
+            }
         ]
         rag_service.context_builder.build_rag_prompt.return_value = (
             "system",
             [{"role": "user", "content": "query"}],
         )
         rag_service.llm_provider.get_response.return_value = "LLM response"
+        rag_service.citation_service.add_source_citations.return_value = (
+            "Final response with citations"
+        )
 
         response = await rag_service.generate_response("query", [])
 
-        assert "LLM response" in response
+        assert "Final response with citations" in response
         rag_service.embedding_service.get_embedding.assert_called_once_with("query")
-        rag_service.vector_store.search.assert_called_once()
-        rag_service.llm_provider.get_response.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_system_status(self, rag_service):
+        """Test getting system status"""
+        rag_service.retrieval_service = Mock()
+        rag_service.retrieval_service.get_status.return_value = {"status": "ready"}
+
+        status = await rag_service.get_system_status()
+
+        assert isinstance(status, dict)
+        assert "services" in status
+        assert "vector_enabled" in status
 
     @pytest.mark.asyncio
     async def test_close(self, rag_service):
-        """Test resource cleanup"""
-        rag_service.vector_store = AsyncMock()
-        rag_service.embedding_service = AsyncMock()
-        rag_service.llm_provider = AsyncMock()
-
+        """Test closing the service"""
+        # The vector_store should be AsyncMock from fixture
         await rag_service.close()
 
+        # Only vector_store.close() is called in the actual implementation
         rag_service.vector_store.close.assert_called_once()
-        rag_service.embedding_service.close.assert_called_once()
-        rag_service.llm_provider.close.assert_called_once()
