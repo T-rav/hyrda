@@ -216,10 +216,10 @@ class ElasticsearchVectorStore(VectorStore):
                     # This gives us a 0.0-1.0 range where 1.0 is the best match in this result set
                     similarity = raw_score / max_score
 
-                    # Apply stronger curve and scaling to match Pinecone's 0.7-0.95 range
-                    # This creates more spread like cosine similarity scores
-                    similarity = similarity**1.5  # Stronger power curve
-                    similarity = 0.6 + (similarity * 0.35)  # Scale to 0.6-0.95 range
+                    # Apply moderate scaling to create meaningful score spread
+                    # Use a more natural curve that doesn't artificially inflate scores
+                    similarity = similarity**1.2  # Moderate power curve
+                    similarity = 0.3 + (similarity * 0.6)  # Scale to 0.3-0.9 range
                 else:
                     # For pure vector search, convert to similarity
                     similarity = raw_score - 1.0  # Convert back to cosine similarity

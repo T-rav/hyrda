@@ -72,8 +72,8 @@ class CitationService:
             # Add folder indication
             citation += " (:file_folder: Knowledge Base)"
 
-            # Add relevance score
-            citation += f" • Relevance: {similarity:.1%}"
+            # Add similarity score
+            citation += f" • Match: {similarity:.1%}"
 
             # Add web view link if available (Google Drive)
             web_view_link = metadata.get("web_view_link")
