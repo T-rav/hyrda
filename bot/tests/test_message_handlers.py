@@ -19,7 +19,7 @@ class TestMessageHandlers:
         assert DEFAULT_SYSTEM_MESSAGE is not None
         assert isinstance(DEFAULT_SYSTEM_MESSAGE, str)
         assert len(DEFAULT_SYSTEM_MESSAGE) > 0
-        assert "helpful assistant" in DEFAULT_SYSTEM_MESSAGE
+        assert "Insight Mesh" in DEFAULT_SYSTEM_MESSAGE
 
     def test_get_user_system_prompt(self):
         """Test get_user_system_prompt function"""
