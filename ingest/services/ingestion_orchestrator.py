@@ -152,22 +152,23 @@ class IngestionOrchestrator:
                     print(f"   📊 Used hybrid ingestion with title injection ({len(chunks)} chunks)")
 
                 else:
-                    # Fallback to single vector store ingestion
-                    # Import chunk_text function
+                    # Fallback to single vector store ingestion with title injection
+                    # Import required functions
                     import sys
                     from pathlib import Path
                     sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
                     from services.embedding_service import chunk_text
+                    from services.title_injection_service import TitleInjectionService
+
+                    # Initialize title injection service
+                    title_injection = TitleInjectionService()
 
                     # Chunk the content and generate embeddings
                     chunks = chunk_text(content,
                                        chunk_size=self.embedding_service.settings.chunk_size,
                                        chunk_overlap=self.embedding_service.settings.chunk_overlap)
 
-                    # Generate embeddings for chunks
-                    embeddings = await self.embedding_service.get_embeddings(chunks)
-
-                    # Prepare metadata for each chunk
+                    # Apply title injection to chunks for better semantic search
                     chunk_metadata = []
                     for i, chunk in enumerate(chunks):
                         chunk_meta = doc_metadata.copy()
@@ -176,13 +177,19 @@ class IngestionOrchestrator:
                         chunk_meta['total_chunks'] = len(chunks)
                         chunk_metadata.append(chunk_meta)
 
+                    # Inject titles into chunk text for better embedding semantic understanding
+                    enhanced_chunks = title_injection.inject_titles(chunks, chunk_metadata)
+
+                    # Generate embeddings for enhanced chunks (with title injection)
+                    embeddings = await self.embedding_service.get_embeddings(enhanced_chunks)
+
                     # Add documents to vector store
                     await self.vector_service.add_documents(
-                        texts=chunks,
+                        texts=enhanced_chunks,  # Use enhanced chunks with title injection
                         embeddings=embeddings,
                         metadata=chunk_metadata
                     )
-                    print("   📊 Used single vector store ingestion")
+                    print(f"   📊 Used single vector store ingestion with title injection ({len(enhanced_chunks)} chunks)")
 
                 print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1

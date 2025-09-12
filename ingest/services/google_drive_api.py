@@ -23,7 +23,7 @@ class GoogleDriveAPI:
         Args:
             credentials: Google OAuth2 credentials object
         """
-        self.service = build('drive', 'v3', credentials=credentials)
+        self.service = build("drive", "v3", credentials=credentials)
 
     def get_folder_info(self, folder_id: str) -> dict | None:
         """
@@ -37,19 +37,21 @@ class GoogleDriveAPI:
         """
         try:
             # Try regular access first
-            folder_info = self.service.files().get(
-                fileId=folder_id,
-                fields="id,name,mimeType,permissions",
-                supportsAllDrives=True
-            ).execute()
+            folder_info = (
+                self.service.files()
+                .get(
+                    fileId=folder_id,
+                    fields="id,name,mimeType,permissions",
+                    supportsAllDrives=True,
+                )
+                .execute()
+            )
             return folder_info
         except HttpError as e:
             logger.error(f"Cannot access folder {folder_id}: {e}")
             return None
 
-    def list_files_in_folder(
-        self, folder_id: str, folder_path: str = ""
-    ) -> list[dict]:
+    def list_files_in_folder(self, folder_id: str, folder_path: str = "") -> list[dict]:
         """
         List files in a specific folder using various query strategies.
 
@@ -73,34 +75,44 @@ class GoogleDriveAPI:
         """Use broad query for root folder access"""
         logger.info("🔄 Using broad shared drive query for root folder...")
 
-        all_results = self.service.files().list(
-            q="trashed=false",
-            pageSize=1000,
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-            fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
-        ).execute()
+        all_results = (
+            self.service.files()
+            .list(
+                q="trashed=false",
+                pageSize=1000,
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+                fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)",
+            )
+            .execute()
+        )
 
         # Filter to only files that have our folder_id as parent
-        all_files = all_results.get('files', [])
-        filtered_files = [f for f in all_files if folder_id in f.get('parents', [])]
+        all_files = all_results.get("files", [])
+        filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
-        logger.info(f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder")
+        logger.info(
+            f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder"
+        )
         return filtered_files
 
     def _list_files_specific_query(self, folder_id: str) -> list[dict]:
         """Use specific parent query for subfolders"""
         query = f"'{folder_id}' in parents and trashed=false"
 
-        results = self.service.files().list(
-            q=query,
-            pageSize=1000,
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-            fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)"
-        ).execute()
+        results = (
+            self.service.files()
+            .list(
+                q=query,
+                pageSize=1000,
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True,
+                fields="nextPageToken, files(id, name, mimeType, modifiedTime, size, parents, permissions, owners, createdTime, webViewLink)",
+            )
+            .execute()
+        )
 
-        return results.get('files', [])
+        return results.get("files", [])
 
     def get_detailed_permissions(self, file_id: str) -> list[dict]:
         """
@@ -113,19 +125,19 @@ class GoogleDriveAPI:
             List of permission dictionaries
         """
         try:
-            file_permissions = self.service.files().get(
-                fileId=file_id,
-                fields="permissions",
-                supportsAllDrives=True
-            ).execute()
-            return file_permissions.get('permissions', [])
+            file_permissions = (
+                self.service.files()
+                .get(fileId=file_id, fields="permissions", supportsAllDrives=True)
+                .execute()
+            )
+            return file_permissions.get("permissions", [])
         except HttpError as e:
             logger.warning(f"Could not fetch detailed permissions for {file_id}: {e}")
             return []
 
     def download_file_content(self, file_id: str, mime_type: str) -> bytes | None:
         """
-        Download raw file content from Google Drive.
+        Download raw file content from Google Drive with retry logic for transient errors.
 
         Args:
             file_id: Google Drive file ID
@@ -134,27 +146,57 @@ class GoogleDriveAPI:
         Returns:
             Raw file content as bytes or None if failed
         """
-        try:
-            # Handle Google Docs files (need export)
-            if mime_type == 'application/vnd.google-apps.document':
-                request = self.service.files().export_media(
-                    fileId=file_id, mimeType='text/plain')
-            elif mime_type == 'application/vnd.google-apps.spreadsheet':
-                request = self.service.files().export_media(
-                    fileId=file_id, mimeType='text/csv')
-            elif mime_type == 'application/vnd.google-apps.presentation':
-                request = self.service.files().export_media(
-                    fileId=file_id, mimeType='text/plain')
-            else:
-                # Handle regular files (need download)
-                request = self.service.files().get_media(fileId=file_id)
+        import time
 
-            content = request.execute()
-            return content
+        max_retries = 3
+        base_delay = 1.0  # seconds
 
-        except HttpError as e:
-            logger.error(f"Error downloading file {file_id}: {e}")
-            return None
+        for attempt in range(max_retries):
+            try:
+                # Handle Google Docs files (need export)
+                if mime_type == "application/vnd.google-apps.document":
+                    request = self.service.files().export_media(
+                        fileId=file_id, mimeType="text/plain"
+                    )
+                elif mime_type == "application/vnd.google-apps.spreadsheet":
+                    request = self.service.files().export_media(
+                        fileId=file_id, mimeType="text/csv"
+                    )
+                elif mime_type == "application/vnd.google-apps.presentation":
+                    request = self.service.files().export_media(
+                        fileId=file_id, mimeType="text/plain"
+                    )
+                else:
+                    # Handle regular files (need download)
+                    request = self.service.files().get_media(fileId=file_id)
+
+                content = request.execute()
+                return content
+
+            except HttpError as e:
+                error_code = e.resp.status
+                is_retryable = error_code in [
+                    500,
+                    502,
+                    503,
+                    504,
+                    429,
+                ]  # Server errors + rate limit
+
+                if is_retryable and attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt)  # Exponential backoff
+                    logger.warning(
+                        f"Retryable error {error_code} for file {file_id}, "
+                        f"retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})"
+                    )
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"Error downloading file {file_id}: {e}")
+                    return None
+
+        # If we get here, all retries failed
+        return None
 
     def debug_folder_access(self, folder_id: str) -> dict[str, Any]:
         """
@@ -172,7 +214,7 @@ class GoogleDriveAPI:
             "folder_info": None,
             "query_methods_tried": [],
             "files_found": 0,
-            "errors": []
+            "errors": [],
         }
 
         # Try to get folder info
@@ -181,7 +223,9 @@ class GoogleDriveAPI:
             if folder_info:
                 debug_info["folder_exists"] = True
                 debug_info["folder_info"] = folder_info
-                logger.info(f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})")
+                logger.info(
+                    f"📁 Folder exists: '{folder_info.get('name')}' (Type: {folder_info.get('mimeType')})"
+                )
         except Exception as e:
             debug_info["errors"].append(f"Folder info error: {e}")
 
