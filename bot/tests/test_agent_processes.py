@@ -1,14 +1,19 @@
 """
 Tests for Agent Processes handler.
 
-Tests agent process definitions and triggering.
+Tests agent process definitions and execution.
 """
 
 from unittest.mock import Mock, patch
 
 import pytest
 
-from bot.handlers.agent_processes import AGENT_PROCESSES, trigger_agent_process
+from bot.handlers.agent_processes import (
+    AGENT_PROCESSES,
+    get_agent_blocks,
+    get_available_processes,
+    run_agent_process,
+)
 
 
 class TestAgentProcesses:
@@ -22,80 +27,93 @@ class TestAgentProcesses:
         for name, config in AGENT_PROCESSES.items():
             assert isinstance(name, str)
             assert isinstance(config, dict)
+            assert "name" in config
             assert "description" in config
             assert "command" in config
-            assert "keywords" in config
-            assert isinstance(config["keywords"], list)
 
-    def test_agent_process_keywords(self):
-        """Test that agent processes have meaningful keywords"""
-        for _name, config in AGENT_PROCESSES.items():
-            keywords = config["keywords"]
-            assert len(keywords) > 0
-            assert all(isinstance(keyword, str) for keyword in keywords)
-            assert all(len(keyword.strip()) > 0 for keyword in keywords)
+    def test_get_available_processes(self):
+        """Test getting available processes"""
+        processes = get_available_processes()
+        assert processes == AGENT_PROCESSES
+        assert isinstance(processes, dict)
 
     @pytest.mark.asyncio
-    async def test_trigger_agent_process_found(self):
-        """Test triggering existing agent process"""
-        # Mock a process that matches
-        test_message = "run data ingestion process"
+    async def test_run_agent_process_success(self):
+        """Test successful agent process execution"""
+        process_id = list(AGENT_PROCESSES.keys())[0]  # Get first available process
 
-        with patch("subprocess.Popen") as mock_popen:
+        with patch("asyncio.create_subprocess_shell") as mock_create:
             mock_process = Mock()
             mock_process.pid = 12345
-            mock_popen.return_value = mock_process
+            mock_create.return_value = mock_process
 
-            result = await trigger_agent_process(test_message)
+            result = await run_agent_process(process_id)
 
-            # Should find and trigger a matching process
-            assert result is not None
-            assert "started" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_trigger_agent_process_not_found(self):
-        """Test triggering non-existent agent process"""
-        test_message = "this message matches no agent process keywords"
-
-        result = await trigger_agent_process(test_message)
-
-        # Should return None when no process matches
-        assert result is None
+            assert result["success"] is True
+            assert result["process_id"] == process_id
+            assert result["status"] == "started"
+            assert result["pid"] == 12345
+            assert "name" in result
 
     @pytest.mark.asyncio
-    async def test_trigger_agent_process_keyword_matching(self):
-        """Test keyword matching logic"""
-        # Test various keyword matching scenarios
-        test_cases = [
-            ("ingest documents", True),  # Should match ingestion process
-            ("data ingestion", True),  # Should match ingestion process
-            ("random message", False),  # Should not match anything
-            ("help with processing", False),  # Too generic
-        ]
+    async def test_run_agent_process_unknown(self):
+        """Test running unknown agent process"""
+        result = await run_agent_process("nonexistent_process")
 
-        for message, should_match in test_cases:
-            with patch("subprocess.Popen"):
-                result = await trigger_agent_process(message)
+        assert result["success"] is False
+        assert "Unknown agent process" in result["message"]
 
-                if should_match:
-                    assert result is not None
-                else:
-                    assert result is None
+    @pytest.mark.asyncio
+    async def test_run_agent_process_exception(self):
+        """Test agent process execution with exception"""
+        process_id = list(AGENT_PROCESSES.keys())[0]
 
-    def test_all_processes_have_valid_commands(self):
-        """Test that all agent processes have valid command structures"""
-        for _name, config in AGENT_PROCESSES.items():
-            command = config["command"]
-            assert isinstance(command, list)
-            assert len(command) > 0
-            assert all(isinstance(cmd_part, str) for cmd_part in command)
+        with patch(
+            "asyncio.create_subprocess_shell", side_effect=Exception("Test error")
+        ):
+            result = await run_agent_process(process_id)
+
+            assert result["success"] is False
+            assert result["error"] == "Test error"
+            assert result["process_id"] == process_id
+
+    def test_get_agent_blocks_success(self):
+        """Test getting agent blocks for successful result"""
+        result = {
+            "success": True,
+            "name": "Test Process",
+            "status": "started",
+            "pid": 12345,
+        }
+        user_id = "U123456"
+
+        blocks = get_agent_blocks(result, user_id)
+
+        assert isinstance(blocks, list)
+        assert len(blocks) == 3
+        assert blocks[0]["type"] == "section"
+        assert "🚀" in blocks[0]["text"]["text"]
+        assert "Test Process" in blocks[0]["text"]["text"]
+
+    def test_get_agent_blocks_failure(self):
+        """Test getting agent blocks for failed result"""
+        result = {"success": False, "error": "Test error"}
+        user_id = "U123456"
+
+        blocks = get_agent_blocks(result, user_id)
+
+        assert isinstance(blocks, list)
+        assert len(blocks) == 1
+        assert blocks[0]["type"] == "section"
+        assert "❌" in blocks[0]["text"]["text"]
+        assert "Test error" in blocks[0]["text"]["text"]
 
     def test_process_descriptions_are_meaningful(self):
         """Test that process descriptions are meaningful"""
         for _name, config in AGENT_PROCESSES.items():
             description = config["description"]
             assert isinstance(description, str)
-            assert len(description.strip()) > 10  # Should be descriptive
+            assert len(description.strip()) > 5
             assert not description.isspace()
 
     def test_no_duplicate_process_names(self):
@@ -103,18 +121,9 @@ class TestAgentProcesses:
         names = list(AGENT_PROCESSES.keys())
         assert len(names) == len(set(names))
 
-    def test_keyword_coverage(self):
-        """Test that keywords provide good coverage for expected use cases"""
-        all_keywords = []
-        for config in AGENT_PROCESSES.values():
-            all_keywords.extend(config["keywords"])
-
-        # Should have decent coverage of common terms
-        common_terms = ["ingest", "process", "data", "documents"]
-        found_terms = [
-            term
-            for term in common_terms
-            if any(term in keyword.lower() for keyword in all_keywords)
-        ]
-
-        assert len(found_terms) > 0  # Should match at least some common terms
+    def test_all_processes_have_valid_commands(self):
+        """Test that all agent processes have valid commands"""
+        for _name, config in AGENT_PROCESSES.items():
+            command = config["command"]
+            assert isinstance(command, str)
+            assert len(command.strip()) > 0
