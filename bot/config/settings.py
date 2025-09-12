@@ -107,10 +107,7 @@ class HybridSettings(BaseSettings):
         default=None, description="Reranker API key"
     )
 
-    # Title injection
-    title_injection_enabled: bool = Field(
-        default=True, description="Enable title injection"
-    )
+    # Note: Title injection is now always enabled for better semantic search
 
     model_config = ConfigDict(env_prefix="HYBRID_")  # type: ignore[assignment,typeddict-unknown-key]
 

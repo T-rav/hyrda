@@ -47,8 +47,7 @@ HYBRID_RERANKER_PROVIDER=cohere
 HYBRID_RERANKER_MODEL=rerank-english-v3.0
 HYBRID_RERANKER_API_KEY=your-cohere-api-key
 
-# Title Injection
-HYBRID_TITLE_INJECTION_ENABLED=true
+# Note: Title injection is now always enabled for optimal search performance
 ```
 
 ### Docker Services

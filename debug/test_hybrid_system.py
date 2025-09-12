@@ -242,14 +242,14 @@ class HybridSystemTester:
                 sparse_top_k=200,
                 reranker_enabled=True,
                 reranker_provider="cohere",
-                title_injection_enabled=True
+# Title injection is always enabled
             )
 
             assert hybrid_settings.enabled is True, "Hybrid not enabled"
             assert hybrid_settings.dense_top_k == 100, "Dense top-k incorrect"
             assert hybrid_settings.sparse_top_k == 200, "Sparse top-k incorrect"
             assert hybrid_settings.reranker_enabled is True, "Reranker not enabled"
-            assert hybrid_settings.title_injection_enabled is True, "Title injection not enabled"
+# Title injection is always enabled (no longer a setting)
 
             duration = time.time() - start
             self.add_result("Settings Integration", True, "All settings working correctly", duration)

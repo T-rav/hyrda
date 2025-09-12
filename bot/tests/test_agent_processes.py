@@ -22,15 +22,15 @@ class TestAgentProcesses:
         for name, config in AGENT_PROCESSES.items():
             assert isinstance(name, str)
             assert isinstance(config, dict)
-            assert 'description' in config
-            assert 'command' in config
-            assert 'keywords' in config
-            assert isinstance(config['keywords'], list)
+            assert "description" in config
+            assert "command" in config
+            assert "keywords" in config
+            assert isinstance(config["keywords"], list)
 
     def test_agent_process_keywords(self):
         """Test that agent processes have meaningful keywords"""
         for _name, config in AGENT_PROCESSES.items():
-            keywords = config['keywords']
+            keywords = config["keywords"]
             assert len(keywords) > 0
             assert all(isinstance(keyword, str) for keyword in keywords)
             assert all(len(keyword.strip()) > 0 for keyword in keywords)
@@ -41,7 +41,7 @@ class TestAgentProcesses:
         # Mock a process that matches
         test_message = "run data ingestion process"
 
-        with patch('subprocess.Popen') as mock_popen:
+        with patch("subprocess.Popen") as mock_popen:
             mock_process = Mock()
             mock_process.pid = 12345
             mock_popen.return_value = mock_process
@@ -68,13 +68,13 @@ class TestAgentProcesses:
         # Test various keyword matching scenarios
         test_cases = [
             ("ingest documents", True),  # Should match ingestion process
-            ("data ingestion", True),    # Should match ingestion process
-            ("random message", False),   # Should not match anything
+            ("data ingestion", True),  # Should match ingestion process
+            ("random message", False),  # Should not match anything
             ("help with processing", False),  # Too generic
         ]
 
         for message, should_match in test_cases:
-            with patch('subprocess.Popen'):
+            with patch("subprocess.Popen"):
                 result = await trigger_agent_process(message)
 
                 if should_match:
@@ -85,7 +85,7 @@ class TestAgentProcesses:
     def test_all_processes_have_valid_commands(self):
         """Test that all agent processes have valid command structures"""
         for _name, config in AGENT_PROCESSES.items():
-            command = config['command']
+            command = config["command"]
             assert isinstance(command, list)
             assert len(command) > 0
             assert all(isinstance(cmd_part, str) for cmd_part in command)
@@ -93,7 +93,7 @@ class TestAgentProcesses:
     def test_process_descriptions_are_meaningful(self):
         """Test that process descriptions are meaningful"""
         for _name, config in AGENT_PROCESSES.items():
-            description = config['description']
+            description = config["description"]
             assert isinstance(description, str)
             assert len(description.strip()) > 10  # Should be descriptive
             assert not description.isspace()
@@ -107,10 +107,14 @@ class TestAgentProcesses:
         """Test that keywords provide good coverage for expected use cases"""
         all_keywords = []
         for config in AGENT_PROCESSES.values():
-            all_keywords.extend(config['keywords'])
+            all_keywords.extend(config["keywords"])
 
         # Should have decent coverage of common terms
-        common_terms = ['ingest', 'process', 'data', 'documents']
-        found_terms = [term for term in common_terms if any(term in keyword.lower() for keyword in all_keywords)]
+        common_terms = ["ingest", "process", "data", "documents"]
+        found_terms = [
+            term
+            for term in common_terms
+            if any(term in keyword.lower() for keyword in all_keywords)
+        ]
 
         assert len(found_terms) > 0  # Should match at least some common terms
