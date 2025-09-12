@@ -22,10 +22,12 @@ class TestMetricsService:
     def metrics_service(self):
         """Create metrics service for testing"""
         # Mock Prometheus client to avoid import issues
-        with patch('bot.services.metrics_service._prometheus_available', True), \
-             patch('bot.services.metrics_service.Counter'), \
-             patch('bot.services.metrics_service.Gauge'), \
-             patch('bot.services.metrics_service.Histogram'):
+        with (
+            patch("bot.services.metrics_service._prometheus_available", True),
+            patch("bot.services.metrics_service.Counter"),
+            patch("bot.services.metrics_service.Gauge"),
+            patch("bot.services.metrics_service.Histogram"),
+        ):
             return MetricsService(enabled=True)
 
     @pytest.fixture
@@ -36,9 +38,9 @@ class TestMetricsService:
     def test_init_enabled(self, metrics_service):
         """Test service initialization when enabled"""
         assert metrics_service.enabled is True
-        assert hasattr(metrics_service, 'messages_processed')
-        assert hasattr(metrics_service, 'rag_retrievals')
-        assert hasattr(metrics_service, 'llm_requests')
+        assert hasattr(metrics_service, "messages_processed")
+        assert hasattr(metrics_service, "rag_retrievals")
+        assert hasattr(metrics_service, "llm_requests")
 
     def test_init_disabled(self, disabled_metrics_service):
         """Test service initialization when disabled"""
@@ -59,7 +61,7 @@ class TestMetricsService:
             provider="elasticsearch",
             entity_filter="apple",
             chunks_found=5,
-            avg_similarity=0.85
+            avg_similarity=0.85,
         )
 
         # With disabled service
@@ -69,11 +71,7 @@ class TestMetricsService:
     def test_record_llm_request(self, metrics_service):
         """Test recording LLM requests"""
         metrics_service.record_llm_request(
-            provider="openai",
-            model="gpt-4",
-            status="success",
-            duration=1.5,
-            tokens=150
+            provider="openai", model="gpt-4", status="success", duration=1.5, tokens=150
         )
 
         # With disabled service
@@ -142,7 +140,9 @@ class TestMetricsService:
 
     def test_get_metrics_enabled(self, metrics_service):
         """Test getting metrics when enabled"""
-        with patch('bot.services.metrics_service.generate_latest', return_value=b'test metrics'):
+        with patch(
+            "bot.services.metrics_service.generate_latest", return_value=b"test metrics"
+        ):
             metrics_text = metrics_service.get_metrics()
             assert metrics_text == "test metrics"
 
@@ -154,9 +154,11 @@ class TestMetricsService:
     def test_get_content_type(self, metrics_service, disabled_metrics_service):
         """Test getting content type for metrics"""
         # Enabled service should return Prometheus content type
-        with patch('bot.services.metrics_service.CONTENT_TYPE_LATEST', 'application/test'):
+        with patch(
+            "bot.services.metrics_service.CONTENT_TYPE_LATEST", "application/test"
+        ):
             content_type = metrics_service.get_content_type()
-            assert content_type == 'application/test'
+            assert content_type == "application/test"
 
         # Disabled service should return plain text
         content_type = disabled_metrics_service.get_content_type()
@@ -189,11 +191,12 @@ class TestGlobalMetricsService:
 
     def test_initialize_metrics_service(self):
         """Test initializing global metrics service"""
-        with patch('bot.services.metrics_service._prometheus_available', True), \
-             patch('bot.services.metrics_service.Counter'), \
-             patch('bot.services.metrics_service.Gauge'), \
-             patch('bot.services.metrics_service.Histogram'):
-
+        with (
+            patch("bot.services.metrics_service._prometheus_available", True),
+            patch("bot.services.metrics_service.Counter"),
+            patch("bot.services.metrics_service.Gauge"),
+            patch("bot.services.metrics_service.Histogram"),
+        ):
             service = initialize_metrics_service(enabled=True)
             assert isinstance(service, MetricsService)
             assert service.enabled is True

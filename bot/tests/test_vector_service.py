@@ -22,10 +22,10 @@ class TestCreateVectorStore:
             provider="pinecone",
             api_key=SecretStr("test-key"),
             collection_name="test-collection",
-            environment="test-env"
+            environment="test-env",
         )
 
-        with patch('bot.services.vector_service.PineconeVectorStore') as mock_pinecone:
+        with patch("bot.services.vector_service.PineconeVectorStore") as mock_pinecone:
             mock_store = Mock()
             mock_pinecone.return_value = mock_store
 
@@ -39,10 +39,10 @@ class TestCreateVectorStore:
         settings = VectorSettings(
             provider="elasticsearch",
             url="http://localhost:9200",
-            collection_name="test-collection"
+            collection_name="test-collection",
         )
 
-        with patch('bot.services.vector_service.ElasticsearchVectorStore') as mock_es:
+        with patch("bot.services.vector_service.ElasticsearchVectorStore") as mock_es:
             mock_store = Mock()
             mock_es.return_value = mock_store
 
@@ -53,10 +53,7 @@ class TestCreateVectorStore:
 
     def test_unsupported_provider(self):
         """Test creating unsupported vector store"""
-        settings = VectorSettings(
-            provider="unsupported",
-            collection_name="test"
-        )
+        settings = VectorSettings(provider="unsupported", collection_name="test")
 
         with pytest.raises(ValueError, match="Unsupported vector store provider"):
             create_vector_store(settings)
@@ -64,11 +61,9 @@ class TestCreateVectorStore:
     def test_case_insensitive_provider(self):
         """Test provider names are case-insensitive"""
         settings = VectorSettings(
-            provider="PINECONE",
-            api_key=SecretStr("key"),
-            collection_name="test"
+            provider="PINECONE", api_key=SecretStr("key"), collection_name="test"
         )
 
-        with patch('bot.services.vector_service.PineconeVectorStore') as mock_pinecone:
+        with patch("bot.services.vector_service.PineconeVectorStore") as mock_pinecone:
             create_vector_store(settings)
             mock_pinecone.assert_called_once()

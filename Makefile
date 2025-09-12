@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -54,6 +54,7 @@ help:
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-unit       Run unit tests only"
 	@echo "  test-ingest     Run ingestion service tests"
+	@echo "  ingest          Run document ingestion (use ARGS='--folder-id YOUR_ID')"
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
@@ -130,6 +131,43 @@ test-unit: $(VENV)
 test-ingest: $(VENV)
 	@echo "$(BLUE)Running ingestion service tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)ingest && PYTHONPATH=. $(PYTHON) -m pytest -v
+
+# Check if Elasticsearch is running and healthy
+ingest-check-es:
+	@echo "$(BLUE)Checking if Elasticsearch is available...$(RESET)"
+	@if curl -sf http://localhost:9200/_cluster/health > /dev/null 2>&1; then \
+		echo "$(GREEN)✅ Elasticsearch is running and healthy$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Elasticsearch not running. Starting...$(RESET)"; \
+		docker compose -f docker-compose.elasticsearch.yml up -d; \
+		echo "$(BLUE)Waiting for Elasticsearch to be ready...$(RESET)"; \
+		timeout=60; \
+		while [ $$timeout -gt 0 ]; do \
+			if curl -sf http://localhost:9200/_cluster/health > /dev/null 2>&1; then \
+				echo "$(GREEN)✅ Elasticsearch is now healthy$(RESET)"; \
+				break; \
+			fi; \
+			echo "$(YELLOW)Waiting... ($$timeout seconds remaining)$(RESET)"; \
+			sleep 2; \
+			timeout=$$((timeout-2)); \
+		done; \
+		if [ $$timeout -le 0 ]; then \
+			echo "$(RED)❌ Elasticsearch failed to start within 60 seconds$(RESET)"; \
+			exit 1; \
+		fi; \
+	fi
+
+ingest: $(VENV) ingest-check-es
+	@echo "$(BLUE)Running document ingestion...$(RESET)"
+	@if [ -z "$(ARGS)" ]; then \
+		echo "$(RED)❌ Error: Please provide arguments. Example:$(RESET)"; \
+		echo "   make ingest ARGS='--folder-id YOUR_GOOGLE_DRIVE_FOLDER_ID'"; \
+		echo "   make ingest ARGS='--folder-id ABC123 --metadata \"{\\\"department\\\": \\\"engineering\\\"}'"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)🚀 Starting ingestion with Elasticsearch dependency handled...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)ingest && $(PYTHON) main.py $(ARGS)
+	@echo "$(GREEN)✅ Ingestion completed!$(RESET)"
 
 lint:
 	@echo "$(BLUE)🔍 Running unified linting with ruff (using $(PYTHON_LINT))...$(RESET)"

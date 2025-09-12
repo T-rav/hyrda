@@ -32,7 +32,7 @@ class TestHybridRAGService:
                 api_key=SecretStr("test-key"),
                 collection_name="test-collection",
                 environment="test-env",
-                url="http://localhost:9200"
+                url="http://localhost:9200",
             ),
             hybrid=HybridSettings(
                 enabled=True,
@@ -45,18 +45,15 @@ class TestHybridRAGService:
                 reranker_provider="cohere",
                 reranker_api_key=SecretStr("cohere-key"),
                 reranker_model="rerank-english-v2.0",
-                title_injection_enabled=True
             ),
             embedding=EmbeddingSettings(
                 provider="openai",
                 model="text-embedding-ada-002",
-                api_key=SecretStr("openai-key")
+                api_key=SecretStr("openai-key"),
             ),
             llm=LLMSettings(
-                provider="openai",
-                api_key=SecretStr("openai-key"),
-                model="gpt-4"
-            )
+                provider="openai", api_key=SecretStr("openai-key"), model="gpt-4"
+            ),
         )
 
     @pytest.fixture
@@ -77,14 +74,25 @@ class TestHybridRAGService:
     async def test_initialize_success(self, hybrid_rag_service):
         """Test successful initialization of all components"""
         # Mock all dependencies
-        with patch('bot.services.hybrid_rag_service.create_embedding_provider') as mock_embedding, \
-             patch('bot.services.hybrid_rag_service.create_llm_provider') as mock_llm, \
-             patch('bot.services.hybrid_rag_service.TitleInjectionService') as mock_title, \
-             patch('bot.services.hybrid_rag_service.EnhancedChunkProcessor') as mock_processor, \
-             patch('bot.services.hybrid_rag_service.create_vector_store') as mock_vector_store, \
-             patch('bot.services.hybrid_rag_service.CohereReranker') as mock_reranker, \
-             patch('bot.services.hybrid_rag_service.HybridRetrievalService') as mock_hybrid_retrieval:
-
+        with (
+            patch(
+                "bot.services.hybrid_rag_service.create_embedding_provider"
+            ) as mock_embedding,
+            patch("bot.services.hybrid_rag_service.create_llm_provider") as mock_llm,
+            patch(
+                "bot.services.hybrid_rag_service.TitleInjectionService"
+            ) as mock_title,
+            patch(
+                "bot.services.hybrid_rag_service.EnhancedChunkProcessor"
+            ) as mock_processor,
+            patch(
+                "bot.services.hybrid_rag_service.create_vector_store"
+            ) as mock_vector_store,
+            patch("bot.services.hybrid_rag_service.CohereReranker") as mock_reranker,
+            patch(
+                "bot.services.hybrid_rag_service.HybridRetrievalService"
+            ) as mock_hybrid_retrieval,
+        ):
             # Setup mocks
             mock_embedding.return_value = Mock()
             mock_llm.return_value = Mock()
@@ -121,13 +129,20 @@ class TestHybridRAGService:
         settings.hybrid.reranker_api_key = None
         service = HybridRAGService(settings)
 
-        with patch('bot.services.hybrid_rag_service.create_embedding_provider') as mock_embedding, \
-             patch('bot.services.hybrid_rag_service.create_llm_provider') as mock_llm, \
-             patch('bot.services.hybrid_rag_service.TitleInjectionService'), \
-             patch('bot.services.hybrid_rag_service.EnhancedChunkProcessor'), \
-             patch('bot.services.hybrid_rag_service.create_vector_store') as mock_vector_store, \
-             patch('bot.services.hybrid_rag_service.HybridRetrievalService') as mock_hybrid_retrieval:
-
+        with (
+            patch(
+                "bot.services.hybrid_rag_service.create_embedding_provider"
+            ) as mock_embedding,
+            patch("bot.services.hybrid_rag_service.create_llm_provider") as mock_llm,
+            patch("bot.services.hybrid_rag_service.TitleInjectionService"),
+            patch("bot.services.hybrid_rag_service.EnhancedChunkProcessor"),
+            patch(
+                "bot.services.hybrid_rag_service.create_vector_store"
+            ) as mock_vector_store,
+            patch(
+                "bot.services.hybrid_rag_service.HybridRetrievalService"
+            ) as mock_hybrid_retrieval,
+        ):
             mock_embedding.return_value = Mock()
             mock_llm.return_value = Mock()
             mock_dense_store = AsyncMock()
@@ -139,12 +154,15 @@ class TestHybridRAGService:
             # Verify reranker was passed as None to HybridRetrievalService
             mock_hybrid_retrieval.assert_called_once()
             call_kwargs = mock_hybrid_retrieval.call_args[1]
-            assert call_kwargs['reranker'] is None
+            assert call_kwargs["reranker"] is None
 
     @pytest.mark.asyncio
     async def test_initialize_failure(self, hybrid_rag_service):
         """Test initialization failure handling"""
-        with patch('bot.services.hybrid_rag_service.create_embedding_provider', side_effect=Exception("Init failed")):
+        with patch(
+            "bot.services.hybrid_rag_service.create_embedding_provider",
+            side_effect=Exception("Init failed"),
+        ):
             with pytest.raises(Exception, match="Init failed"):
                 await hybrid_rag_service.initialize()
 
@@ -154,7 +172,9 @@ class TestHybridRAGService:
     async def test_ingest_documents_not_initialized(self, hybrid_rag_service):
         """Test document ingestion when service not initialized"""
         with pytest.raises(RuntimeError, match="HybridRAGService not initialized"):
-            await hybrid_rag_service.ingest_documents(["text"], [[0.1, 0.2]], [{"key": "value"}])
+            await hybrid_rag_service.ingest_documents(
+                ["text"], [[0.1, 0.2]], [{"key": "value"}]
+            )
 
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, hybrid_rag_service):
@@ -168,9 +188,17 @@ class TestHybridRAGService:
         # Mock chunk processor output
         mock_dual_docs = {
             "dense": [{"content": "dense content", "metadata": {"key": "value"}}],
-            "sparse": [{"content": "sparse content", "title": "test title", "metadata": {"key": "value"}}]
+            "sparse": [
+                {
+                    "content": "sparse content",
+                    "title": "test title",
+                    "metadata": {"key": "value"},
+                }
+            ],
         }
-        hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.return_value = mock_dual_docs
+        hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.return_value = (
+            mock_dual_docs
+        )
 
         # Mock store operations
         hybrid_rag_service.dense_store.add_documents.return_value = AsyncMock()
@@ -192,9 +220,13 @@ class TestHybridRAGService:
         """Test document ingestion failure handling"""
         hybrid_rag_service._initialized = True
         hybrid_rag_service.chunk_processor = Mock()
-        hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.side_effect = Exception("Processing failed")
+        hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.side_effect = (
+            Exception("Processing failed")
+        )
 
-        result = await hybrid_rag_service.ingest_documents(["text"], [[0.1]], [{"key": "value"}])
+        result = await hybrid_rag_service.ingest_documents(
+            ["text"], [[0.1]], [{"key": "value"}]
+        )
 
         assert result is False
 
@@ -220,9 +252,7 @@ class TestHybridRAGService:
 
         assert results == expected_results
         service.dense_store.search.assert_called_once_with(
-            query_embedding=[0.1, 0.2],
-            limit=5,
-            similarity_threshold=0.0
+            query_embedding=[0.1, 0.2], limit=5, similarity_threshold=0.0
         )
 
     @pytest.mark.asyncio
@@ -261,12 +291,12 @@ class TestHybridRAGService:
         """Test response generation without RAG"""
         hybrid_rag_service._initialized = True
         hybrid_rag_service.llm_provider = AsyncMock()
-        hybrid_rag_service.llm_provider.get_response.return_value = "Direct LLM response"
+        hybrid_rag_service.llm_provider.get_response.return_value = (
+            "Direct LLM response"
+        )
 
         response = await hybrid_rag_service.generate_response(
-            "query",
-            [{"role": "user", "content": "previous"}],
-            use_rag=False
+            "query", [{"role": "user", "content": "previous"}], use_rag=False
         )
 
         assert response == "Direct LLM response"
@@ -281,7 +311,11 @@ class TestHybridRAGService:
         hybrid_rag_service.hybrid_retrieval = AsyncMock()
 
         # Mock embedding
-        hybrid_rag_service.embedding_service.get_embedding.return_value = [0.1, 0.2, 0.3]
+        hybrid_rag_service.embedding_service.get_embedding.return_value = [
+            0.1,
+            0.2,
+            0.3,
+        ]
 
         # Mock search results
         mock_result = Mock()
@@ -293,14 +327,18 @@ class TestHybridRAGService:
         hybrid_rag_service.hybrid_retrieval.hybrid_search.return_value = [mock_result]
 
         # Mock LLM response
-        hybrid_rag_service.llm_provider.get_response.return_value = "RAG enhanced response"
+        hybrid_rag_service.llm_provider.get_response.return_value = (
+            "RAG enhanced response"
+        )
 
         response = await hybrid_rag_service.generate_response("query", [])
 
         assert "RAG enhanced response" in response
         assert "**📚 Sources:**" in response  # Citations added
         assert "test.pdf" in response
-        hybrid_rag_service.embedding_service.get_embedding.assert_called_once_with("query")
+        hybrid_rag_service.embedding_service.get_embedding.assert_called_once_with(
+            "query"
+        )
 
     @pytest.mark.asyncio
     async def test_generate_response_empty_llm_response(self, hybrid_rag_service):
@@ -309,7 +347,9 @@ class TestHybridRAGService:
         hybrid_rag_service.llm_provider = AsyncMock()
         hybrid_rag_service.llm_provider.get_response.return_value = ""
 
-        response = await hybrid_rag_service.generate_response("query", [], use_rag=False)
+        response = await hybrid_rag_service.generate_response(
+            "query", [], use_rag=False
+        )
 
         assert response == "I'm sorry, I couldn't generate a response right now."
 
@@ -318,11 +358,17 @@ class TestHybridRAGService:
         """Test error handling in response generation"""
         hybrid_rag_service._initialized = True
         hybrid_rag_service.llm_provider = AsyncMock()
-        hybrid_rag_service.llm_provider.get_response.side_effect = Exception("LLM error")
+        hybrid_rag_service.llm_provider.get_response.side_effect = Exception(
+            "LLM error"
+        )
 
-        response = await hybrid_rag_service.generate_response("query", [], use_rag=False)
+        response = await hybrid_rag_service.generate_response(
+            "query", [], use_rag=False
+        )
 
-        assert response == "I'm sorry, I encountered an error while generating a response."
+        assert (
+            response == "I'm sorry, I encountered an error while generating a response."
+        )
 
     def test_add_citations_to_response(self, hybrid_rag_service):
         """Test adding citations to response"""
@@ -331,15 +377,19 @@ class TestHybridRAGService:
             {
                 "content": "chunk 1",
                 "similarity": 0.85,
-                "metadata": {"file_name": "doc1.pdf", "folder_path": "/docs", "web_view_link": "https://example.com"},
-                "_hybrid_source": "dense"
+                "metadata": {
+                    "file_name": "doc1.pdf",
+                    "folder_path": "/docs",
+                    "web_view_link": "https://example.com",
+                },
+                "_hybrid_source": "dense",
             },
             {
                 "content": "chunk 2",
                 "similarity": 0.75,
                 "metadata": {"file_name": "doc2.pdf"},
-                "_hybrid_source": "sparse"
-            }
+                "_hybrid_source": "sparse",
+            },
         ]
 
         result = hybrid_rag_service._add_citations_to_response(response, context_chunks)
@@ -364,15 +414,29 @@ class TestHybridRAGService:
         """Test citations with duplicate source files"""
         response = "Response"
         chunks = [
-            {"metadata": {"file_name": "doc1.pdf"}, "similarity": 0.8, "_hybrid_source": "dense"},
-            {"metadata": {"file_name": "doc1.pdf"}, "similarity": 0.7, "_hybrid_source": "sparse"},  # Duplicate
-            {"metadata": {"file_name": "doc2.pdf"}, "similarity": 0.6, "_hybrid_source": "dense"}
+            {
+                "metadata": {"file_name": "doc1.pdf"},
+                "similarity": 0.8,
+                "_hybrid_source": "dense",
+            },
+            {
+                "metadata": {"file_name": "doc1.pdf"},
+                "similarity": 0.7,
+                "_hybrid_source": "sparse",
+            },  # Duplicate
+            {
+                "metadata": {"file_name": "doc2.pdf"},
+                "similarity": 0.6,
+                "_hybrid_source": "dense",
+            },
         ]
 
         result = hybrid_rag_service._add_citations_to_response(response, chunks)
 
         # Should only have 2 citations (duplicates removed)
-        citations = result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        citations = (
+            result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        )
         assert citations.count("doc1.pdf") == 1  # Only one citation for doc1
         assert "doc2.pdf" in citations
 
@@ -418,22 +482,20 @@ class TestCreateHybridRAGService:
             vector=VectorSettings(
                 provider="pinecone",
                 api_key=SecretStr("test-key"),
-                collection_name="test"
+                collection_name="test",
             ),
             hybrid=HybridSettings(enabled=True),
             embedding=EmbeddingSettings(
                 provider="openai",
                 model="text-embedding-ada-002",
-                api_key=SecretStr("key")
-            ),
-            llm=LLMSettings(
-                provider="openai",
                 api_key=SecretStr("key"),
-                model="gpt-4"
-            )
+            ),
+            llm=LLMSettings(provider="openai", api_key=SecretStr("key"), model="gpt-4"),
         )
 
-        with patch.object(HybridRAGService, 'initialize', new_callable=AsyncMock) as mock_init:
+        with patch.object(
+            HybridRAGService, "initialize", new_callable=AsyncMock
+        ) as mock_init:
             service = await create_hybrid_rag_service(settings)
 
             assert isinstance(service, HybridRAGService)

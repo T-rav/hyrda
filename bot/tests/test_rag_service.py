@@ -23,26 +23,26 @@ class TestRAGService:
             vector=VectorSettings(
                 provider="pinecone",
                 api_key=SecretStr("test-key"),
-                collection_name="test-collection"
+                collection_name="test-collection",
             ),
             embedding=EmbeddingSettings(
                 provider="openai",
                 model="text-embedding-ada-002",
-                api_key=SecretStr("embedding-key")
+                api_key=SecretStr("embedding-key"),
             ),
             llm=LLMSettings(
-                provider="openai",
-                api_key=SecretStr("llm-key"),
-                model="gpt-4"
-            )
+                provider="openai", api_key=SecretStr("llm-key"), model="gpt-4"
+            ),
         )
 
     @pytest.fixture
     def rag_service(self, settings):
         """Create RAG service for testing"""
-        with patch('bot.services.rag_service.create_vector_store'), \
-             patch('bot.services.rag_service.create_embedding_provider'), \
-             patch('bot.services.rag_service.create_llm_provider'):
+        with (
+            patch("bot.services.rag_service.create_vector_store"),
+            patch("bot.services.rag_service.create_embedding_provider"),
+            patch("bot.services.rag_service.create_llm_provider"),
+        ):
             return RAGService(settings)
 
     def test_init(self, rag_service, settings):
@@ -94,9 +94,7 @@ class TestRAGService:
         rag_service.vector_store.add_documents.return_value = True
 
         result = await rag_service.add_documents(
-            ["document text"],
-            [[0.1, 0.2, 0.3]],
-            [{"file_name": "test.pdf"}]
+            ["document text"], [[0.1, 0.2, 0.3]], [{"file_name": "test.pdf"}]
         )
 
         assert result is True
@@ -114,9 +112,7 @@ class TestRAGService:
 
         assert results == expected_results
         rag_service.vector_store.search.assert_called_once_with(
-            query_embedding=[0.1, 0.2],
-            limit=5,
-            similarity_threshold=0.0
+            query_embedding=[0.1, 0.2], limit=5, similarity_threshold=0.0
         )
 
     @pytest.mark.asyncio
@@ -130,8 +126,13 @@ class TestRAGService:
 
         # Mock dependencies
         rag_service.embedding_service.get_embedding.return_value = [0.1, 0.2]
-        rag_service.vector_store.search.return_value = [{"content": "context", "similarity": 0.8}]
-        rag_service.context_builder.build_rag_prompt.return_value = ("system", [{"role": "user", "content": "query"}])
+        rag_service.vector_store.search.return_value = [
+            {"content": "context", "similarity": 0.8}
+        ]
+        rag_service.context_builder.build_rag_prompt.return_value = (
+            "system",
+            [{"role": "user", "content": "query"}],
+        )
         rag_service.llm_provider.get_response.return_value = "LLM response"
 
         response = await rag_service.generate_response("query", [])

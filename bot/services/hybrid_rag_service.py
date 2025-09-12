@@ -348,14 +348,15 @@ class HybridRAGService:
 
             # Add citations if we used RAG
             if context_chunks and use_rag:
-                response = self.citation_service.add_source_citations(response, context_chunks)
+                response = self.citation_service.add_source_citations(
+                    response, context_chunks
+                )
 
             return response
 
         except Exception as e:
             logger.error(f"Error generating hybrid RAG response: {e}")
             return "I'm sorry, I encountered an error while generating a response."
-
 
     async def get_system_status(self) -> dict[str, Any]:
         """Get comprehensive system status"""
@@ -381,11 +382,7 @@ class HybridRAGService:
             status["components"]["reranker"] = (
                 "enabled" if self.hybrid_settings.reranker_enabled else "disabled"
             )
-            status["components"]["title_injection"] = (
-                "enabled"
-                if self.hybrid_settings.title_injection_enabled
-                else "disabled"
-            )
+            status["components"]["title_injection"] = "always_enabled"
 
         return status
 
