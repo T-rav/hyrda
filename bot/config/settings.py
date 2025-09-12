@@ -143,7 +143,7 @@ class RAGSettings(BaseSettings):
     )
     max_results: int = Field(default=5, description="Maximum final results to return")
     results_similarity_threshold: float = Field(
-        default=0.7, description="Final results minimum similarity threshold"
+        default=0.5, description="Final results minimum similarity threshold"
     )
     rerank_enabled: bool = Field(default=False, description="Enable result reranking")
     include_metadata: bool = Field(

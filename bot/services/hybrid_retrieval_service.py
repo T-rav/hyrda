@@ -78,11 +78,12 @@ class CohereReranker(Reranker):
                 return_documents=False,  # We already have the docs
             )
 
-            # Map reranked results back to our format
+            # Map reranked results back to our format with normalized scores
             reranked_results = []
             for result in response.results:
                 original_doc = documents[result.index]
-                original_doc.similarity = result.relevance_score
+                # Normalize Cohere relevance score to 0-1 range and ensure valid bounds
+                original_doc.similarity = min(1.0, max(0.0, result.relevance_score))
                 original_doc.rank = len(reranked_results) + 1
                 reranked_results.append(original_doc)
 

@@ -35,7 +35,7 @@ class TestCitationService:
 
         assert "**📚 Sources:**" in result
         assert "1. Apple - Project Details File" in result
-        assert "Relevance: 95.0%" in result
+        assert "Match: 95.0%" in result
         assert "(:file_folder: Knowledge Base)" in result
 
     def test_add_source_citations_multiple_chunks_same_file(self):
@@ -59,7 +59,7 @@ class TestCitationService:
         # Should only have one citation but mention multiple sections
         assert result.count("1. Apple - Project Details File") == 1
         assert "2 sections" in result
-        assert "Relevance: 95.0%" in result  # Should use highest similarity
+        assert "Match: 95.0%" in result  # Should use highest similarity
 
     def test_add_source_citations_multiple_different_files(self):
         """Test citation with chunks from different files"""
@@ -81,8 +81,8 @@ class TestCitationService:
 
         assert "1. Apple - Project Details File" in result
         assert "2. 3Step - Scheduler Case Study" in result
-        assert "Relevance: 95.0%" in result
-        assert "Relevance: 88.0%" in result
+        assert "Match: 95.0%" in result
+        assert "Match: 88.0%" in result
 
     def test_add_source_citations_with_subtitle(self):
         """Test citation with subtitle in metadata"""
@@ -215,7 +215,7 @@ class TestCitationService:
 
         result = self.citation_service.add_source_citations(response, context_chunks)
 
-        assert "Relevance: 0.0%" in result
+        assert "Match: 0.0%" in result
 
     def test_format_context_for_llm_empty_chunks(self):
         """Test LLM context formatting with empty chunks"""
@@ -346,8 +346,8 @@ class TestCitationService:
         assert "2 sections" in cited_response  # Multiple chunks from Apple doc
         assert "Corporate Information" in cited_response
         assert "2. 3Step - Product Overview" in cited_response
-        assert "Relevance: 95.0%" in cited_response
-        assert "Relevance: 85.0%" in cited_response
+        assert "Match: 95.0%" in cited_response
+        assert "Match: 85.0%" in cited_response
         assert "[1. Apple" in cited_response  # Should have web link
         assert "](https://drive.google.com/file/d/apple123/view)" in cited_response
 
