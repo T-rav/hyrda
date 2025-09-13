@@ -47,10 +47,30 @@ class TestRAGService:
             ) as mock_embedding,
             patch("bot.services.rag_service.create_llm_provider") as mock_llm,
         ):
-            mock_vector_store.return_value = AsyncMock()
-            mock_embedding.return_value = AsyncMock()
-            mock_llm.return_value = AsyncMock()
-            return RAGService(settings)
+            # Create mock instances
+            mock_vector_store_instance = AsyncMock()
+            mock_vector_store_instance.initialize = AsyncMock()
+            mock_vector_store_instance.close = AsyncMock()
+            mock_vector_store_instance.add_documents = AsyncMock()
+
+            mock_embedding_instance = AsyncMock()
+            mock_llm_instance = AsyncMock()
+
+            mock_vector_store.return_value = mock_vector_store_instance
+            mock_embedding.return_value = mock_embedding_instance
+            mock_llm.return_value = mock_llm_instance
+
+            # Ensure vector is enabled for testing
+            settings.vector.enabled = True
+
+            service = RAGService(settings)
+
+            # Ensure the service has the expected attributes even if settings change
+            service.vector_store = mock_vector_store_instance
+            service.embedding_provider = mock_embedding_instance
+            service.llm_provider = mock_llm_instance
+
+            return service
 
     def test_init(self, rag_service, settings):
         """Test service initialization"""
@@ -124,7 +144,7 @@ class TestRAGService:
         )
         rag_service.llm_provider.get_response = AsyncMock(return_value="LLM response")
         rag_service.citation_service.add_source_citations = Mock(
-            return_value=("Final response with citations")
+            return_value="Final response with citations"
         )
 
         response = await rag_service.generate_response("query", [])
