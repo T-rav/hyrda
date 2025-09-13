@@ -103,7 +103,7 @@ class LangfuseService:
                 return
 
             # Create generation observation for LLM call
-            generation = self.client.generation(
+            generation = self.client.start_generation(
                 name=f"{provider}_llm_call",
                 model=model,
                 input=messages,
@@ -117,7 +117,7 @@ class LangfuseService:
             )
 
             if error:
-                generation.update(status_message=error, level="ERROR")
+                generation.end(status_message=error, level="ERROR")
 
         except Exception as e:
             logger.error(f"Error tracing LLM call: {e}")
@@ -144,7 +144,7 @@ class LangfuseService:
                 return
 
             # Create span for RAG retrieval
-            self.client.span(
+            span = self.client.start_span(
                 name="rag_retrieval",
                 input={"query": query},
                 output={
@@ -168,6 +168,7 @@ class LangfuseService:
                     **(metadata or {}),
                 },
             )
+            span.end()
         except Exception as e:
             logger.error(f"Error tracing retrieval: {e}")
 
@@ -189,14 +190,14 @@ class LangfuseService:
             return
 
         try:
-            # Create new trace using correct Langfuse 2.7+ API
-            self.current_trace = self.client.trace(
+            # Create new trace using Langfuse v3.x API
+            self.current_trace = self.client.start_span(
                 name="slack_conversation",
-                user_id=user_id,
-                session_id=conversation_id,
                 metadata={
                     "platform": "slack",
+                    "user_id": user_id,
                     "conversation_id": conversation_id,
+                    "session_id": conversation_id,
                     **(metadata or {}),
                 },
             )
@@ -232,19 +233,25 @@ class LangfuseService:
                 self.start_conversation_trace(user_id, conversation_id, metadata)
 
             if self.current_trace:
-                # Update the trace with conversation data
-                self.current_trace.update(
-                    input={"user_message": user_message},
-                    output={"bot_response": bot_response},
-                    metadata={
-                        "platform": "slack",
-                        "conversation_id": conversation_id,
-                        **(metadata or {}),
-                    },
-                )
-                logger.debug(
-                    f"Updated conversation trace for session: {conversation_id}"
-                )
+                # Update the trace with conversation data using v3.x API
+                try:
+                    # Create a new generation within the trace for this conversation turn
+                    generation = self.client.start_generation(
+                        name="conversation_turn",
+                        input={"user_message": user_message},
+                        output={"bot_response": bot_response},
+                        metadata={
+                            "platform": "slack",
+                            "conversation_id": conversation_id,
+                            **(metadata or {}),
+                        },
+                    )
+                    generation.end()
+                    logger.debug(
+                        f"Updated conversation trace for session: {conversation_id}"
+                    )
+                except Exception as e:
+                    logger.error(f"Error updating conversation generation: {e}")
 
         except Exception as e:
             logger.error(f"Error tracing conversation: {e}")
@@ -269,8 +276,9 @@ class LangfuseService:
             return
 
         try:
-            if self.current_trace:
-                self.current_trace.score(
+            if self.enabled and self.client:
+                # Use v3.x API for scoring current trace
+                self.client.score_current_trace(
                     name=score_name,
                     value=value,
                     comment=comment,

@@ -107,10 +107,7 @@ class HybridSettings(BaseSettings):
         default=None, description="Reranker API key"
     )
 
-    # Title injection
-    title_injection_enabled: bool = Field(
-        default=True, description="Enable title injection"
-    )
+    # Note: Title injection is now always enabled for better semantic search
 
     model_config = ConfigDict(env_prefix="HYBRID_")  # type: ignore[assignment,typeddict-unknown-key]
 
@@ -143,7 +140,7 @@ class RAGSettings(BaseSettings):
     )
     max_results: int = Field(default=5, description="Maximum final results to return")
     results_similarity_threshold: float = Field(
-        default=0.7, description="Final results minimum similarity threshold"
+        default=0.5, description="Final results minimum similarity threshold"
     )
     rerank_enabled: bool = Field(default=False, description="Enable result reranking")
     include_metadata: bool = Field(
@@ -152,6 +149,22 @@ class RAGSettings(BaseSettings):
     enable_hybrid_search: bool = Field(
         default=False,
         description="Enable hybrid dense+sparse search (requires hybrid service)",
+    )
+    entity_content_boost: float = Field(
+        default=0.05,
+        description="Similarity boost per entity found in document content (0.05 = 5%)",
+    )
+    entity_title_boost: float = Field(
+        default=0.1,
+        description="Similarity boost per entity found in document title/filename (0.1 = 10%)",
+    )
+    diversification_mode: str = Field(
+        default="balanced",
+        description="Document diversification strategy: 'balanced' (round-robin), 'document_first' (1 per doc then all), 'similarity_first' (pure similarity order)",
+    )
+    max_unique_documents: int = Field(
+        default=5,
+        description="Maximum number of unique documents to include in results",
     )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]

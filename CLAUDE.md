@@ -7,10 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
 
 ### 🔄 Unified Linting System
-Pre-commit hooks and CI now use **identical scripts and tool versions** to prevent environment mismatches:
-- **Same Script**: `./scripts/lint.sh` used by both local and CI  
-- **Same Versions**: `requirements-dev.txt` pins exact tool versions
+Pre-commit hooks and CI now use **identical Makefile commands and tool versions** to prevent environment mismatches:
+- **Same Commands**: `make lint-check` used by pre-commit hooks, local dev, and CI
+- **Same Versions**: `requirements-dev.txt` pins exact tool versions  
 - **Same Config**: `pyproject.toml` shared across environments
+- **Unified Tools**: Ruff + Pyright + Bandit via Makefile
 
 This eliminates the "works locally but fails in CI" problem!
 
@@ -40,9 +41,12 @@ make install      # Install Python dependencies
 make run          # Run the Slack bot (requires .env file)
 ```
 
-### Testing
+### Testing and Code Quality
 ```bash
-make test         # Run test suite with pytest
+make test         # Run test suite with pytest (245 tests)
+make lint         # Auto-fix linting, formatting, and import issues
+make lint-check   # Check code quality without fixing (used by pre-commit)
+make quality      # Run complete pipeline: linting + type checking + tests
 ```
 
 ### Docker
@@ -216,24 +220,20 @@ Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictiona
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **155/155 test success rate (100%)** - this standard must be preserved.
+The project maintains a **245/245 test success rate (100%)** - this standard must be preserved.
 
 #### Test Commands
 ```bash
 # Run all tests (REQUIRED before any commit)
-make test                    # Full test suite (155 tests)
+make test                    # Full test suite (245 tests)
 make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
 make test-file FILE=test_name.py  # Run specific test file
 
 # Quality checks (REQUIRED before commit)  
-make lint                   # Auto-fix with ruff + pyright + bandit (unified script)
-make lint-check            # Check-only mode with ruff + pyright + bandit (unified script)
+make lint                   # Auto-fix with ruff + pyright + bandit (unified Makefile)
+make lint-check            # Check-only mode with ruff + pyright + bandit (unified Makefile)
 make typecheck             # Run pyright type checking only (legacy, use lint-check instead)
 make quality               # Run complete pipeline: linting + type checking + tests
-
-# Direct unified script usage (identical to CI behavior)
-./scripts/lint.sh --fix     # Auto-fix mode: ruff format + ruff check --fix + pyright + bandit
-./scripts/lint.sh           # Check mode: ruff format --check + ruff check + pyright + bandit
 ```
 
 #### Pre-commit Requirements
@@ -303,7 +303,7 @@ def mock_service():
 - **Pyright**: Type checking (strict mode, replaces MyPy for better performance)
 - **Bandit**: Security vulnerability scanning
 
-**🎯 Unified Script**: `./scripts/lint.sh` ensures identical behavior across:
+**🎯 Unified Makefile**: `make lint-check` ensures identical behavior across:
 - Local development (`make lint`, `make lint-check`)
 - Pre-commit hooks (automatic on git commit)
 - CI pipeline (GitHub Actions)
@@ -311,13 +311,13 @@ def mock_service():
 **Benefits**: Single modern toolchain, faster execution, zero conflicts between tools.
 
 #### Consistency Guarantees
-The unified `./scripts/lint.sh` script ensures **identical behavior** across all environments:
+The unified `make lint-check` command ensures **identical behavior** across all environments:
 
 | Environment | Tools | Consistency |
 |-------------|-------|-------------|
-| Local dev (`make lint-check`) | Ruff + Pyright + Bandit | ✅ Same script |
-| Pre-commit hooks | Ruff + Pyright + Bandit | ✅ Same script |
-| CI pipeline | Ruff + Pyright + Bandit | ✅ Same script |
+| Local dev (`make lint-check`) | Ruff + Pyright + Bandit | ✅ Same Makefile |
+| Pre-commit hooks | Ruff + Pyright + Bandit | ✅ Same Makefile |
+| CI pipeline | Ruff + Pyright + Bandit | ✅ Same Makefile |
 
 **No more "works locally but fails in CI"** - all environments use identical tooling and configuration.
 
@@ -336,6 +336,130 @@ async def process_message(
 def process_message(text, user_id, service):
     return True
 ```
+
+## 🛠️ Code Modification Workflow
+
+### **MANDATORY: Before Making ANY Code Changes**
+
+When modifying existing files or creating new ones, **ALWAYS** follow this exact workflow:
+
+#### 1. **Read and Understand Current Code**
+```bash
+# Always read the file you're about to modify
+cat path/to/file.py
+
+# Understand the existing patterns, imports, and structure
+# Check related files and tests
+```
+
+#### 2. **Run Tests Before Changes**
+```bash
+# Establish baseline - ensure current tests pass
+make test
+
+# If modifying a specific service, run related tests
+make test-file FILE=test_your_service.py
+```
+
+#### 3. **Make Your Changes**
+- Follow existing code patterns and conventions
+- Add proper type annotations
+- Include docstrings for new functions
+- Import sorting will be handled automatically
+
+#### 4. **Run Linter Immediately After Changes**
+```bash
+# CRITICAL: Run linter after every significant change
+make lint              # Auto-fix formatting, imports, and common issues
+make lint-check        # Verify everything passes (what pre-commit uses)
+```
+
+#### 5. **Run Related Tests**
+```bash
+# Test the specific functionality you changed
+make test-file FILE=test_your_modified_service.py
+
+# Run full test suite to ensure no regressions
+make test              # Must show 245/245 tests passing
+```
+
+#### 6. **Verify Complete Quality Pipeline**
+```bash
+# Run the complete quality pipeline before committing
+make quality           # Combines: linting + type checking + all tests
+```
+
+### **File-Specific Workflows**
+
+#### When Modifying Services (`bot/services/`)
+```bash
+# 1. Read the service file
+cat bot/services/your_service.py
+
+# 2. Check existing tests  
+cat bot/tests/test_your_service.py
+
+# 3. Make changes with proper typing
+# 4. Auto-fix code quality
+make lint
+
+# 5. Run specific tests
+make test-file FILE=test_your_service.py
+
+# 6. Run full test suite
+make test
+```
+
+#### When Modifying Tests (`bot/tests/`)
+```bash
+# 1. Understand what you're testing
+cat bot/services/service_being_tested.py
+
+# 2. Make test changes following existing patterns
+# 3. Auto-fix formatting
+make lint
+
+# 4. Run the specific test
+make test-file FILE=test_your_test.py
+
+# 5. Verify all tests still pass
+make test
+```
+
+#### When Adding New Features
+```bash
+# 1. Create tests first (TDD approach)
+touch bot/tests/test_new_feature.py
+
+# 2. Write failing tests
+# 3. Implement feature to make tests pass
+# 4. Run linter
+make lint
+
+# 5. Verify tests pass
+make test-file FILE=test_new_feature.py
+make test
+
+# 6. Full quality check
+make quality
+```
+
+### **Quick Reference: When to Run What**
+
+| Situation | Commands to Run | Purpose |
+|-----------|-----------------|---------|
+| **Before any changes** | `make test` | Establish baseline |
+| **After editing any `.py` file** | `make lint` | Auto-fix formatting/imports |
+| **After significant changes** | `make lint-check` | Verify code quality |
+| **After modifying a service** | `make test-file FILE=test_service.py` | Test specific functionality |
+| **Before committing** | `make quality` | Complete pipeline |
+| **If pre-commit fails** | `make lint` → fix issues → try commit again | Fix quality issues |
+
+### **Remember**
+- 🚨 **245/245 tests must always pass** - never commit with failing tests
+- 🔧 **Always run `make lint` after code changes** - fixes most issues automatically  
+- ✅ **Use `make quality` before commits** - runs everything (linting + tests)
+- 🚫 **Never use `git commit --no-verify`** - quality gates exist for good reason
 
 ### Development Workflow (MANDATORY)
 
@@ -410,7 +534,7 @@ def process_message(text, user_id, service):
 - **Configuration**: `.coveragerc` with realistic production thresholds
 
 #### Pre-commit Hooks (Local)
-- **Unified Quality Checks**: Uses `./scripts/lint.sh` (same as CI)
+- **Unified Quality Checks**: Uses `make lint-check` (same as CI)
 - **Ruff**: Linting, formatting, and import sorting
 - **Pyright**: Type checking with strict mode
 - **Bandit**: Security vulnerability scanning
