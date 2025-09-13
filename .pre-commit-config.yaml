@@ -3,12 +3,12 @@
 # Run manually: pre-commit run --all-files
 
 repos:
-  # Unified linting script - ensures identical behavior with CI
+  # Unified linting via Makefile - ensures identical behavior with CI
   - repo: local
     hooks:
       - id: unified-lint-check
         name: Unified Quality Checks (Ruff + Pyright + Bandit)
-        entry: ./scripts/lint.sh
+        entry: make lint-check
         language: system
         files: ^bot/.*\.py$
         pass_filenames: false
