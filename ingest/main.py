@@ -111,17 +111,17 @@ async def main():
             # Use hybrid RAG service with title injection
             from services.hybrid_rag_service import create_hybrid_rag_service
             hybrid_service = await create_hybrid_rag_service(settings)
-            
+
             # Initialize LLM service for contextual retrieval if enabled
             llm_service = None
             if settings.rag.enable_contextual_retrieval:
                 from services.llm_service import create_llm_service
-                llm_service = create_llm_service(settings.llm)
+                llm_service = await create_llm_service(settings.llm)
                 print("✅ Contextual retrieval enabled - chunks will be enhanced with context")
 
             # Set hybrid service in orchestrator
             orchestrator.set_services(
-                hybrid_service, 
+                hybrid_service,
                 llm_service=llm_service,
                 enable_contextual_retrieval=settings.rag.enable_contextual_retrieval
             )
@@ -140,7 +140,7 @@ async def main():
             # Initialize embedding service
             from services.embedding_service import create_embedding_provider
             embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
-            
+
             # Initialize LLM service for contextual retrieval if enabled
             llm_service = None
             try:
@@ -148,15 +148,15 @@ async def main():
                 rag_settings = RAGSettings()
                 if rag_settings.enable_contextual_retrieval:
                     from services.llm_service import create_llm_service
-                    llm_service = create_llm_service(llm_settings)
+                    llm_service = await create_llm_service(llm_settings)
                     print("✅ Contextual retrieval enabled - chunks will be enhanced with context")
             except:
                 pass  # Contextual retrieval settings not available
 
             # Set services in orchestrator
             orchestrator.set_services(
-                vector_store, 
-                embedding_provider, 
+                vector_store,
+                embedding_provider,
                 llm_service=llm_service,
                 enable_contextual_retrieval=llm_service is not None
             )
