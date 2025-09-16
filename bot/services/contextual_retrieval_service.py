@@ -28,25 +28,27 @@ class ContextualRetrievalService:
     ) -> list[str]:
         """
         Add contextual descriptions to document chunks.
-        
+
         Args:
             chunks: List of text chunks from a document
             document_metadata: Metadata about the source document
             batch_size: Number of chunks to process in parallel
-            
+
         Returns:
             List of contextualized chunks with prepended context
         """
         if not chunks:
             return []
 
-        logger.info(f"Adding context to {len(chunks)} chunks from {document_metadata.get('file_name', 'unknown')}")
+        logger.info(
+            f"Adding context to {len(chunks)} chunks from {document_metadata.get('file_name', 'unknown')}"
+        )
 
         # Process chunks in batches to avoid overwhelming the LLM
         contextualized_chunks = []
 
         for i in range(0, len(chunks), batch_size):
-            batch = chunks[i:i + batch_size]
+            batch = chunks[i : i + batch_size]
             batch_contexts = await self._process_chunk_batch(batch, document_metadata)
             contextualized_chunks.extend(batch_contexts)
 
@@ -103,7 +105,7 @@ Provide only the contextual description without any preamble. The description sh
             # Clean and validate the response
             context = response.strip()
             if len(context) > 200:  # Limit context length
-                context = context[:200].rsplit(' ', 1)[0] + "..."
+                context = context[:200].rsplit(" ", 1)[0] + "..."
 
             return context
 
@@ -116,48 +118,54 @@ Provide only the contextual description without any preamble. The description sh
         context_parts = []
 
         # File information
-        file_name = metadata.get('file_name', '')
+        file_name = metadata.get("file_name", "")
         if file_name:
             context_parts.append(f"File: {file_name}")
 
         # File path for additional context
-        full_path = metadata.get('full_path', '')
+        full_path = metadata.get("full_path", "")
         if full_path and full_path != file_name:
             context_parts.append(f"Path: {full_path}")
 
         # MIME type information
-        mime_type = metadata.get('mimeType', '')
+        mime_type = metadata.get("mimeType", "")
         doc_type = self._mime_to_document_type(mime_type)
         if doc_type:
             context_parts.append(f"Type: {doc_type}")
 
         # Creation/modification dates
-        created_time = metadata.get('createdTime', '')
+        created_time = metadata.get("createdTime", "")
         if created_time:
             # Extract just the date part
-            date = created_time.split('T')[0] if 'T' in created_time else created_time
+            date = created_time.split("T")[0] if "T" in created_time else created_time
             context_parts.append(f"Created: {date}")
 
         # Owners/authors
-        owners = metadata.get('owners', [])
+        owners = metadata.get("owners", [])
         if owners:
-            owner_names = [owner.get('displayName', '') for owner in owners[:2]]  # Limit to 2 owners
+            owner_names = [
+                owner.get("displayName", "") for owner in owners[:2]
+            ]  # Limit to 2 owners
             if owner_names:
                 context_parts.append(f"Authors: {', '.join(filter(None, owner_names))}")
 
-        return "This chunk is from a document with the following context: " + "; ".join(context_parts) + "."
+        return (
+            "This chunk is from a document with the following context: "
+            + "; ".join(context_parts)
+            + "."
+        )
 
     def _mime_to_document_type(self, mime_type: str) -> str:
         """Convert MIME type to human-readable document type"""
         mime_map = {
-            'application/pdf': 'PDF document',
-            'application/vnd.google-apps.document': 'Google Doc',
-            'application/vnd.google-apps.spreadsheet': 'Google Sheet',
-            'application/vnd.google-apps.presentation': 'Google Slides',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word document',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel spreadsheet',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint presentation',
-            'text/plain': 'text file',
-            'text/markdown': 'Markdown document',
+            "application/pdf": "PDF document",
+            "application/vnd.google-apps.document": "Google Doc",
+            "application/vnd.google-apps.spreadsheet": "Google Sheet",
+            "application/vnd.google-apps.presentation": "Google Slides",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "Word document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Excel spreadsheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation": "PowerPoint presentation",
+            "text/plain": "text file",
+            "text/markdown": "Markdown document",
         }
-        return mime_map.get(mime_type, '')
+        return mime_map.get(mime_type, "")
