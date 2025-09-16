@@ -1,6 +1,8 @@
-# Contextual Retrieval
+# Contextual Retrieval (Pinecone Only)
 
 This implementation includes **Anthropic's Contextual Retrieval** technique, which significantly improves RAG performance by adding contextual descriptions to document chunks before embedding.
+
+> **⚠️ Current Limitation**: Contextual retrieval is currently implemented for **Pinecone only**. Elasticsearch support is not yet available.
 
 ## Overview
 
@@ -28,14 +30,22 @@ This chunk is from a document with the following context: File: Q2_earnings.pdf;
 
 ## Configuration
 
+**Prerequisites:**
+- Vector database must be set to Pinecone (`VECTOR_PROVIDER=pinecone`)
+- Contextual retrieval will be ignored if using Elasticsearch
+
 Add these settings to your `.env` file:
 
 ```bash
-# Enable contextual retrieval
+# Enable contextual retrieval (Pinecone only)
 RAG_ENABLE_CONTEXTUAL_RETRIEVAL=true
 
 # Number of chunks to process in parallel (default: 10)
 RAG_CONTEXTUAL_BATCH_SIZE=10
+
+# Required: Pinecone configuration
+VECTOR_PROVIDER=pinecone
+VECTOR_API_KEY=your-pinecone-api-key
 ```
 
 ## Usage
@@ -122,11 +132,13 @@ Based on Anthropic's research:
 
 ## Integration with Existing Features
 
-Contextual retrieval works seamlessly with:
-- **Title Injection**: Both techniques can be used together
-- **Hybrid Search**: Enhances both dense and sparse retrieval
-- **Entity Boosting**: Improved entity recognition in contextualized chunks
-- **Result Diversification**: Better variety across document sources
+Contextual retrieval works seamlessly with Pinecone-based features:
+- **Title Injection**: Both techniques can be used together (Pinecone)
+- **Hybrid Search**: Enhances dense retrieval in hybrid mode (Pinecone + Elasticsearch)
+- **Entity Boosting**: Improved entity recognition in contextualized chunks (Pinecone)
+- **Result Diversification**: Better variety across document sources (Pinecone)
+
+> **Note**: When using hybrid search (Pinecone + Elasticsearch), contextual retrieval only applies to the Pinecone dense retrieval component.
 
 ## Troubleshooting
 
