@@ -9,6 +9,8 @@ Main service that coordinates the ingestion process by:
 """
 
 from datetime import datetime
+import sys
+from pathlib import Path
 
 from .google_drive_client import GoogleDriveClient
 
@@ -27,6 +29,9 @@ class IngestionOrchestrator:
         self.google_drive_client = GoogleDriveClient(credentials_file, token_file)
         self.vector_service = None
         self.embedding_service = None
+        self.contextual_retrieval_service = None
+        self.llm_service = None
+        self.enable_contextual_retrieval = False
 
     def authenticate(self) -> bool:
         """
@@ -37,20 +42,31 @@ class IngestionOrchestrator:
         """
         return self.google_drive_client.authenticate()
 
-    def set_services(self, vector_service, embedding_service=None):
+    def set_services(self, vector_service, embedding_service=None, llm_service=None, enable_contextual_retrieval=False):
         """
         Set the vector database and embedding services.
 
         Args:
             vector_service: Vector database service instance (could be hybrid or single)
             embedding_service: Embedding service instance (optional for hybrid service)
+            llm_service: LLM service for contextual retrieval
+            enable_contextual_retrieval: Whether to use contextual retrieval
         """
         self.vector_service = vector_service
         self.embedding_service = embedding_service
+        self.llm_service = llm_service
+        self.enable_contextual_retrieval = enable_contextual_retrieval
 
         # For hybrid RAG service, embedding service is built-in
         if hasattr(vector_service, 'embedding_service'):
             self.embedding_service = vector_service.embedding_service
+            
+        # Initialize contextual retrieval service if enabled
+        if enable_contextual_retrieval and llm_service:
+            # Import here to avoid circular dependencies
+            sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
+            from services.contextual_retrieval_service import ContextualRetrievalService
+            self.contextual_retrieval_service = ContextualRetrievalService(llm_service)
 
     async def ingest_files(self, files: list[dict], metadata: dict | None = None) -> tuple[int, int]:
         """
@@ -131,6 +147,20 @@ class IngestionOrchestrator:
                         # Use default chunking
                         chunks = chunk_text(content, chunk_size=1000, chunk_overlap=200)
 
+                    # Add contextual descriptions if enabled
+                    if self.enable_contextual_retrieval and self.contextual_retrieval_service:
+                        print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                        chunks = await self.contextual_retrieval_service.add_context_to_chunks(
+                            chunks, 
+                            {
+                                'file_name': file_info['name'],
+                                'full_path': file_info.get('full_path', file_info['name']),
+                                'mimeType': file_info['mimeType'],
+                                'createdTime': file_info.get('createdTime'),
+                                'owners': file_info.get('owners', [])
+                            }
+                        )
+
                     # Generate embeddings using hybrid service's embedding service
                     embeddings = await self.vector_service.embedding_service.get_embeddings(chunks)
 
@@ -167,6 +197,20 @@ class IngestionOrchestrator:
                     chunks = chunk_text(content,
                                        chunk_size=self.embedding_service.settings.chunk_size,
                                        chunk_overlap=self.embedding_service.settings.chunk_overlap)
+
+                    # Add contextual descriptions if enabled
+                    if self.enable_contextual_retrieval and self.contextual_retrieval_service:
+                        print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                        chunks = await self.contextual_retrieval_service.add_context_to_chunks(
+                            chunks, 
+                            {
+                                'file_name': file_info['name'],
+                                'full_path': file_info.get('full_path', file_info['name']),
+                                'mimeType': file_info['mimeType'],
+                                'createdTime': file_info.get('createdTime'),
+                                'owners': file_info.get('owners', [])
+                            }
+                        )
 
                     # Apply title injection to chunks for better semantic search
                     chunk_metadata = []
