@@ -100,9 +100,20 @@ Text Chunk:
 
 Provide only the contextual description without any preamble. The description should be concise and factual, helping to understand what this chunk is about within the document's context."""
 
-            response = await self.llm_service.get_response(prompt)
+            # Format prompt as messages for LLM service
+            messages = [{"role": "user", "content": prompt}]
+            response = await self.llm_service.get_response(
+                messages=messages,
+                use_rag=False,  # Don't use RAG for generating context descriptions
+                user_id=None,
+                conversation_id=None,
+            )
 
             # Clean and validate the response
+            if response is None:
+                logger.warning("LLM service returned None response")
+                return ""
+
             context = response.strip()
             if len(context) > 200:  # Limit context length
                 context = context[:200].rsplit(" ", 1)[0] + "..."
