@@ -2,8 +2,9 @@
 Tests for ContextualRetrievalService
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from services.contextual_retrieval_service import ContextualRetrievalService
 
@@ -15,7 +16,9 @@ class TestContextualRetrievalService:
     def mock_llm_service(self):
         """Mock LLM service fixture"""
         service = AsyncMock()
-        service.get_response.return_value = "This chunk discusses user authentication in the login system."
+        service.get_response.return_value = (
+            "This chunk discusses user authentication in the login system."
+        )
         return service
 
     @pytest.fixture
@@ -27,15 +30,17 @@ class TestContextualRetrievalService:
     def sample_metadata(self):
         """Sample document metadata fixture"""
         return {
-            'file_name': 'authentication.md',
-            'full_path': 'docs/security/authentication.md',
-            'mimeType': 'text/markdown',
-            'createdTime': '2024-01-01T12:00:00.000Z',
-            'owners': [{'displayName': 'John Doe'}]
+            "file_name": "authentication.md",
+            "full_path": "docs/security/authentication.md",
+            "mimeType": "text/markdown",
+            "createdTime": "2024-01-01T12:00:00.000Z",
+            "owners": [{"displayName": "John Doe"}],
         }
 
     @pytest.mark.asyncio
-    async def test_add_context_to_chunks_success(self, contextual_service, mock_llm_service, sample_metadata):
+    async def test_add_context_to_chunks_success(
+        self, contextual_service, mock_llm_service, sample_metadata
+    ):
         """Test successful context addition to chunks"""
         chunks = [
             "Users can log in using their email and password.",
@@ -45,17 +50,24 @@ class TestContextualRetrievalService:
         result = await contextual_service.add_context_to_chunks(chunks, sample_metadata)
 
         assert len(result) == 2
-        assert all(chunk.startswith("This chunk discusses user authentication") for chunk in result)
+        assert all(
+            chunk.startswith("This chunk discusses user authentication")
+            for chunk in result
+        )
         assert mock_llm_service.get_response.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_add_context_to_chunks_empty_list(self, contextual_service, sample_metadata):
+    async def test_add_context_to_chunks_empty_list(
+        self, contextual_service, sample_metadata
+    ):
         """Test handling of empty chunks list"""
         result = await contextual_service.add_context_to_chunks([], sample_metadata)
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_add_context_to_chunks_with_batch_size(self, contextual_service, mock_llm_service, sample_metadata):
+    async def test_add_context_to_chunks_with_batch_size(
+        self, contextual_service, mock_llm_service, sample_metadata
+    ):
         """Test batch processing of chunks"""
         chunks = ["chunk1", "chunk2", "chunk3", "chunk4", "chunk5"]
 
@@ -68,26 +80,32 @@ class TestContextualRetrievalService:
         assert mock_llm_service.get_response.call_count == 5
 
     @pytest.mark.asyncio
-    async def test_generate_chunk_context_error_handling(self, contextual_service, sample_metadata):
+    async def test_generate_chunk_context_error_handling(
+        self, contextual_service, sample_metadata
+    ):
         """Test error handling in context generation"""
         # Mock LLM service to raise an exception
         contextual_service.llm_service.get_response.side_effect = Exception("API Error")
 
         chunk = "Test chunk content"
-        result = await contextual_service._generate_chunk_context(chunk, sample_metadata)
+        result = await contextual_service._generate_chunk_context(
+            chunk, sample_metadata
+        )
 
         # Should return empty string on error
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_process_chunk_batch_with_errors(self, contextual_service, mock_llm_service, sample_metadata):
+    async def test_process_chunk_batch_with_errors(
+        self, contextual_service, mock_llm_service, sample_metadata
+    ):
         """Test batch processing with some errors"""
         chunks = ["chunk1", "chunk2"]
-        
+
         # Make the second call fail
         mock_llm_service.get_response.side_effect = [
-            "Context for chunk1", 
-            Exception("API Error")
+            "Context for chunk1",
+            Exception("API Error"),
         ]
 
         result = await contextual_service._process_chunk_batch(chunks, sample_metadata)
@@ -102,34 +120,38 @@ class TestContextualRetrievalService:
 
         expected_parts = [
             "File: authentication.md",
-            "Path: docs/security/authentication.md", 
+            "Path: docs/security/authentication.md",
             "Type: Markdown document",
             "Created: 2024-01-01",
-            "Authors: John Doe"
+            "Authors: John Doe",
         ]
-        
+
         for part in expected_parts:
             assert part in result
 
-        assert result.startswith("This chunk is from a document with the following context:")
+        assert result.startswith(
+            "This chunk is from a document with the following context:"
+        )
         assert result.endswith(".")
 
     def test_build_document_context_minimal(self, contextual_service):
         """Test document context building with minimal metadata"""
-        minimal_metadata = {'file_name': 'test.txt'}
-        
+        minimal_metadata = {"file_name": "test.txt"}
+
         result = contextual_service._build_document_context(minimal_metadata)
-        
+
         assert "File: test.txt" in result
-        assert result.startswith("This chunk is from a document with the following context:")
+        assert result.startswith(
+            "This chunk is from a document with the following context:"
+        )
 
     def test_mime_to_document_type(self, contextual_service):
         """Test MIME type to document type conversion"""
         test_cases = [
-            ('application/pdf', 'PDF document'),
-            ('application/vnd.google-apps.document', 'Google Doc'),
-            ('text/markdown', 'Markdown document'),
-            ('application/unknown', ''),
+            ("application/pdf", "PDF document"),
+            ("application/vnd.google-apps.document", "Google Doc"),
+            ("text/markdown", "Markdown document"),
+            ("application/unknown", ""),
         ]
 
         for mime_type, expected in test_cases:
@@ -144,7 +166,9 @@ class TestContextualRetrievalService:
         contextual_service.llm_service.get_response.return_value = long_response
 
         chunk = "Test chunk"
-        result = await contextual_service._generate_chunk_context(chunk, sample_metadata)
+        result = await contextual_service._generate_chunk_context(
+            chunk, sample_metadata
+        )
 
         # Should be truncated
         assert len(result) <= 203  # 200 + "..."
