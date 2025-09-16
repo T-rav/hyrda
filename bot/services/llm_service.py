@@ -205,3 +205,41 @@ class LLMService:
             await self.langfuse_service.close()
 
         logger.info("LLM service closed")
+
+
+async def create_llm_service(llm_settings) -> LLMService:
+    """
+    Factory function to create and initialize an LLM service instance
+
+    Args:
+        llm_settings: LLM settings object
+
+    Returns:
+        Initialized LLMService instance
+    """
+    # Create a minimal settings object with just the LLM settings
+    # This is needed for contextual retrieval functionality
+    from config.settings import Settings
+
+    # Create a full settings object to ensure all dependencies are available
+    try:
+        settings = Settings()
+        # Override with provided LLM settings if different
+        if hasattr(llm_settings, "model"):
+            settings.llm = llm_settings
+    except Exception:
+        # Fallback: create minimal settings structure
+        class MinimalSettings:
+            def __init__(self):
+                self.llm = llm_settings
+                # Add minimal required attributes
+                self.langfuse = type("obj", (object,), {"enabled": False})()
+                self.hybrid = type("obj", (object,), {"enabled": False})()
+                self.vector = type("obj", (object,), {"enabled": True})()
+
+        settings = MinimalSettings()
+
+    # Create and initialize the service
+    service = LLMService(settings)
+    await service.initialize()
+    return service
