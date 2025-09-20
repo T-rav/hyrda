@@ -1,0 +1,538 @@
+{% extends "base.html" %}
+
+{% block title %}Jobs - APScheduler WebUI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-tasks text-primary me-2"></i>Jobs Management</h1>
+    <div>
+        <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createJobModal">
+            <i class="fas fa-plus me-1"></i>Create Job
+        </button>
+        <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
+            <i class="fas fa-play me-1"></i>Auto-refresh
+        </button>
+        <button class="btn btn-outline-secondary" onclick="refreshData()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Jobs Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="fas fa-list me-2"></i>All Jobs
+            <span class="badge bg-primary ms-2" id="jobs-count">0</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Name</th>
+                        <th>Function</th>
+                        <th>Trigger</th>
+                        <th>Next Run</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-table">
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create Job Modal -->
+<div class="modal fade" id="createJobModal" tabindex="-1" aria-labelledby="createJobModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createJobModalLabel">Create New Job</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createJobForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="jobType" class="form-label">Job Type</label>
+                                <select class="form-select" id="jobType" required>
+                                    <option value="">Select job type...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="jobId" class="form-label">Job ID (Optional)</label>
+                                <input type="text" class="form-control" id="jobId" placeholder="Auto-generated if empty">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Schedule</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <select class="form-select" id="triggerType" required>
+                                    <option value="interval">Interval</option>
+                                    <option value="cron">Cron</option>
+                                    <option value="date">Date</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <div id="scheduleParams">
+                                    <!-- Dynamic schedule parameters will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="jobParameters">
+                        <label class="form-label">Job Parameters</label>
+                        <div class="alert alert-info">
+                            <small>Parameters will appear here based on the selected job type</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createJob()">Create Job</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Job Details Modal -->
+<div class="modal fade" id="jobDetailsModal" tabindex="-1" aria-labelledby="jobDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="jobDetailsModalLabel">Job Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="jobDetailsContent">
+                <!-- Job details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let jobsData = [];
+    let jobTypesData = [];
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadJobTypes();
+        refreshData();
+        setupScheduleParametersHandler();
+    });
+
+    async function refreshData() {
+        try {
+            await loadJobs();
+            updateJobsTable();
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+            showToast('Error refreshing data: ' + error.message, 'danger');
+        }
+    }
+
+    async function loadJobs() {
+        try {
+            const response = await apiCall('/api/jobs');
+            jobsData = response.jobs || [];
+            document.getElementById('jobs-count').textContent = jobsData.length;
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+            jobsData = [];
+        }
+    }
+
+    async function loadJobTypes() {
+        try {
+            const response = await apiCall('/api/job-types');
+            jobTypesData = response.job_types || [];
+            populateJobTypeSelect();
+        } catch (error) {
+            console.error('Error loading job types:', error);
+        }
+    }
+
+    function populateJobTypeSelect() {
+        const select = document.getElementById('jobType');
+        select.innerHTML = '<option value="">Select job type...</option>';
+
+        jobTypesData.forEach(jobType => {
+            const option = document.createElement('option');
+            option.value = jobType.type;
+            option.textContent = `${jobType.name} - ${jobType.description}`;
+            select.appendChild(option);
+        });
+
+        // Add event listener to handle job type selection
+        select.addEventListener('change', updateJobParameters);
+    }
+
+    function setupScheduleParametersHandler() {
+        document.getElementById('triggerType').addEventListener('change', updateScheduleParameters);
+        updateScheduleParameters(); // Initialize with default
+    }
+
+    function updateScheduleParameters() {
+        const triggerType = document.getElementById('triggerType').value;
+        const container = document.getElementById('scheduleParams');
+
+        switch (triggerType) {
+            case 'interval':
+                container.innerHTML = `
+                    <div class="row">
+                        <div class="col-4">
+                            <input type="number" class="form-control" id="hours" placeholder="Hours" value="1">
+                        </div>
+                        <div class="col-4">
+                            <input type="number" class="form-control" id="minutes" placeholder="Minutes" value="0">
+                        </div>
+                        <div class="col-4">
+                            <input type="number" class="form-control" id="seconds" placeholder="Seconds" value="0">
+                        </div>
+                    </div>
+                `;
+                break;
+            case 'cron':
+                container.innerHTML = `
+                    <input type="text" class="form-control" id="cronExpression"
+                           placeholder="0 0 * * *" title="Cron expression (minute hour day month day_of_week)">
+                `;
+                break;
+            case 'date':
+                container.innerHTML = `
+                    <input type="datetime-local" class="form-control" id="runDate">
+                `;
+                break;
+        }
+    }
+
+    function updateJobParameters() {
+        const jobType = document.getElementById('jobType').value;
+        const container = document.getElementById('jobParameters');
+
+        if (!jobType) {
+            container.innerHTML = `
+                <label class="form-label">Job Parameters</label>
+                <div class="alert alert-info">
+                    <small>Parameters will appear here based on the selected job type</small>
+                </div>
+            `;
+            return;
+        }
+
+        const selectedJobType = jobTypesData.find(jt => jt.type === jobType);
+        if (!selectedJobType) return;
+
+        let parametersHTML = '<label class="form-label">Job Parameters</label>';
+
+        // Required parameters
+        if (selectedJobType.required_params && selectedJobType.required_params.length > 0) {
+            parametersHTML += '<div class="mb-3"><strong>Required Parameters:</strong></div>';
+            selectedJobType.required_params.forEach(param => {
+                parametersHTML += `
+                    <div class="mb-2">
+                        <label for="param_${param}" class="form-label">${param} *</label>
+                        <input type="text" class="form-control" id="param_${param}" required>
+                    </div>
+                `;
+            });
+        }
+
+        // Optional parameters
+        if (selectedJobType.optional_params && selectedJobType.optional_params.length > 0) {
+            parametersHTML += '<div class="mb-3 mt-3"><strong>Optional Parameters:</strong></div>';
+            selectedJobType.optional_params.forEach(param => {
+                parametersHTML += `
+                    <div class="mb-2">
+                        <label for="param_${param}" class="form-label">${param}</label>
+                        <input type="text" class="form-control" id="param_${param}">
+                    </div>
+                `;
+            });
+        }
+
+        container.innerHTML = parametersHTML;
+    }
+
+    function updateJobsTable() {
+        const tbody = document.getElementById('jobs-table');
+
+        if (jobsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No jobs scheduled</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = jobsData.map(job => `
+            <tr>
+                <td><code>${job.id}</code></td>
+                <td>${job.name || 'Unnamed Job'}</td>
+                <td><small class="text-muted">${job.func || 'Unknown'}</small></td>
+                <td><span class="badge bg-secondary">${job.trigger || 'Unknown'}</span></td>
+                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
+                <td>
+                    <span class="badge status-badge ${job.pending ? 'bg-warning' : 'bg-success'}">
+                        <i class="fas ${job.pending ? 'fa-pause' : 'fa-play'} me-1"></i>
+                        ${job.pending ? 'Paused' : 'Active'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewJobDetails('${job.id}')" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeJob' : 'pauseJob'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
+                            <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="runJobOnce('${job.id}')" title="Run Once">
+                            <i class="fas fa-play-circle"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="retryJob('${job.id}')" title="Retry">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteJob('${job.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function createJob() {
+        try {
+            const jobType = document.getElementById('jobType').value;
+            const jobId = document.getElementById('jobId').value;
+            const triggerType = document.getElementById('triggerType').value;
+
+            if (!jobType) {
+                showToast('Please select a job type', 'warning');
+                return;
+            }
+
+            // Build schedule object
+            const schedule = { trigger: triggerType };
+
+            switch (triggerType) {
+                case 'interval':
+                    const hours = parseInt(document.getElementById('hours').value) || 0;
+                    const minutes = parseInt(document.getElementById('minutes').value) || 0;
+                    const seconds = parseInt(document.getElementById('seconds').value) || 0;
+
+                    if (hours === 0 && minutes === 0 && seconds === 0) {
+                        showToast('Please specify at least one time unit for interval', 'warning');
+                        return;
+                    }
+
+                    if (hours > 0) schedule.hours = hours;
+                    if (minutes > 0) schedule.minutes = minutes;
+                    if (seconds > 0) schedule.seconds = seconds;
+                    break;
+
+                case 'cron':
+                    const cronExpression = document.getElementById('cronExpression').value;
+                    if (!cronExpression) {
+                        showToast('Please enter a cron expression', 'warning');
+                        return;
+                    }
+                    schedule.cron = cronExpression;
+                    break;
+
+                case 'date':
+                    const runDate = document.getElementById('runDate').value;
+                    if (!runDate) {
+                        showToast('Please select a run date', 'warning');
+                        return;
+                    }
+                    schedule.run_date = runDate;
+                    break;
+            }
+
+            // Collect job parameters
+            const parameters = {};
+            const selectedJobType = jobTypesData.find(jt => jt.type === jobType);
+
+            if (selectedJobType) {
+                // Collect required parameters
+                selectedJobType.required_params?.forEach(param => {
+                    const element = document.getElementById(`param_${param}`);
+                    if (element && element.value) {
+                        parameters[param] = element.value;
+                    }
+                });
+
+                // Collect optional parameters
+                selectedJobType.optional_params?.forEach(param => {
+                    const element = document.getElementById(`param_${param}`);
+                    if (element && element.value) {
+                        parameters[param] = element.value;
+                    }
+                });
+            }
+
+            const jobData = {
+                job_type: jobType,
+                job_id: jobId || undefined,
+                schedule: schedule,
+                parameters: parameters
+            };
+
+            const response = await apiCall('/api/jobs', {
+                method: 'POST',
+                body: JSON.stringify(jobData)
+            });
+
+            showToast('Job created successfully!', 'success');
+
+            // Close modal and refresh
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createJobModal'));
+            modal.hide();
+
+            // Reset form
+            document.getElementById('createJobForm').reset();
+            updateScheduleParameters();
+            updateJobParameters();
+
+            refreshData();
+
+        } catch (error) {
+            console.error('Error creating job:', error);
+            showToast('Error creating job: ' + error.message, 'danger');
+        }
+    }
+
+    async function viewJobDetails(jobId) {
+        try {
+            const job = await apiCall(`/api/jobs/${jobId}`);
+
+            const content = document.getElementById('jobDetailsContent');
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>ID:</strong></td><td><code>${job.id}</code></td></tr>
+                            <tr><td><strong>Name:</strong></td><td>${job.name || 'Unnamed'}</td></tr>
+                            <tr><td><strong>Function:</strong></td><td><code>${job.func || 'Unknown'}</code></td></tr>
+                            <tr><td><strong>Status:</strong></td><td>
+                                <span class="badge ${job.pending ? 'bg-warning' : 'bg-success'}">
+                                    ${job.pending ? 'Paused' : 'Active'}
+                                </span>
+                            </td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Schedule Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Trigger:</strong></td><td>${job.trigger || 'Unknown'}</td></tr>
+                            <tr><td><strong>Next Run:</strong></td><td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                ${job.args && job.args.length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Arguments</h6>
+                        <pre class="bg-light p-2 rounded">${JSON.stringify(job.args, null, 2)}</pre>
+                    </div>
+                ` : ''}
+                ${job.kwargs && Object.keys(job.kwargs).length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Keyword Arguments</h6>
+                        <pre class="bg-light p-2 rounded">${JSON.stringify(job.kwargs, null, 2)}</pre>
+                    </div>
+                ` : ''}
+            `;
+
+            const modal = new bootstrap.Modal(document.getElementById('jobDetailsModal'));
+            modal.show();
+
+        } catch (error) {
+            showToast('Error loading job details: ' + error.message, 'danger');
+        }
+    }
+
+    // Job action functions (same as dashboard)
+    async function pauseJob(jobId) {
+        try {
+            await apiCall(`/api/jobs/${jobId}/pause`, { method: 'POST' });
+            showToast(`Job ${jobId} paused successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error pausing job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function resumeJob(jobId) {
+        try {
+            await apiCall(`/api/jobs/${jobId}/resume`, { method: 'POST' });
+            showToast(`Job ${jobId} resumed successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error resuming job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function deleteJob(jobId) {
+        if (!confirm(`Are you sure you want to delete job ${jobId}?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/jobs/${jobId}`, { method: 'DELETE' });
+            showToast(`Job ${jobId} deleted successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error deleting job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function runJobOnce(jobId) {
+        if (!confirm(`Run job ${jobId} once immediately?`)) {
+            return;
+        }
+
+        try {
+            const response = await apiCall(`/api/jobs/${jobId}/run-once`, { method: 'POST' });
+            showToast(`Job ${jobId} queued for immediate execution`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error running job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function retryJob(jobId) {
+        if (!confirm(`Retry/re-queue job ${jobId}?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/jobs/${jobId}/retry`, { method: 'POST' });
+            showToast(`Job ${jobId} queued for retry`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error retrying job: ${error.message}`, 'danger');
+        }
+    }
+</script>
+{% endblock %}

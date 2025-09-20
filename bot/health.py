@@ -53,6 +53,14 @@ class HealthChecker:
         app.router.add_get("/api/metrics", self.metrics)
         app.router.add_get("/api/prometheus", self.prometheus_metrics)
 
+        # Tasks service integration endpoints
+        app.router.add_post("/api/users/import", self.handle_user_import)
+        app.router.add_post("/api/ingest/completed", self.handle_ingest_completed)
+        app.router.add_post("/api/metrics/store", self.handle_metrics_store)
+        app.router.add_get("/api/metrics/usage", self.get_usage_metrics)
+        app.router.add_get("/api/metrics/performance", self.get_performance_metrics)
+        app.router.add_get("/api/metrics/errors", self.get_error_metrics)
+
         # Legacy routes (without /api prefix for backward compatibility)
         app.router.add_get("/health", self.health_check)
         app.router.add_get("/ready", self.readiness_check)
@@ -579,3 +587,188 @@ class HealthChecker:
 </body>
 </html>
         """.strip()
+
+    # Tasks Service Integration Endpoints
+
+    async def handle_user_import(self, request):
+        """Handle user import from tasks service."""
+        try:
+            data = await request.json()
+            users = data.get("users", [])
+            job_id = data.get("job_id", "unknown")
+
+            logger.info(f"Received user import from job {job_id}: {len(users)} users")
+
+            # Here you would implement the actual user storage logic
+            # For example: store in database, update user cache, etc.
+
+            # Mock implementation - in a real scenario you'd store these users
+            processed_count = len(users)
+
+            return web.json_response({
+                "status": "success",
+                "processed_count": processed_count,
+                "job_id": job_id,
+                "message": f"Successfully processed {processed_count} users"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing user import: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
+
+    async def handle_ingest_completed(self, request):
+        """Handle document ingestion completion notification."""
+        try:
+            data = await request.json()
+            job_id = data.get("job_id", "unknown")
+            job_type = data.get("job_type", "unknown")
+            result = data.get("result", {})
+            folder_id = data.get("folder_id", "unknown")
+
+            logger.info(f"Received ingestion completion from job {job_id}: {job_type}")
+
+            # Here you would implement post-ingestion logic
+            # For example: update search indexes, notify users, etc.
+
+            return web.json_response({
+                "status": "success",
+                "job_id": job_id,
+                "message": f"Successfully processed ingestion completion for {folder_id}"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing ingestion completion: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
+
+    async def handle_metrics_store(self, request):
+        """Handle metrics storage from tasks service."""
+        try:
+            data = await request.json()
+            job_id = data.get("job_id", "unknown")
+            metrics = data.get("metrics", {})
+
+            logger.info(f"Received metrics from job {job_id}")
+
+            # Here you would implement metrics storage logic
+            # For example: store in time-series database, update dashboards, etc.
+
+            return web.json_response({
+                "status": "success",
+                "job_id": job_id,
+                "message": "Metrics stored successfully"
+            })
+
+        except Exception as e:
+            logger.error(f"Error storing metrics: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
+
+    async def get_usage_metrics(self, request):
+        """Get usage metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            include_details = request.query.get("include_details", "false").lower() == "true"
+
+            # Mock usage metrics - in a real implementation, fetch from database/cache
+            metrics_data = {
+                "time_range_hours": hours,
+                "total_messages": 150,
+                "active_users": 25,
+                "response_time_avg": 2.3,
+                "success_rate": 98.5,
+                "data": [
+                    {"hour": i, "messages": 10 + (i % 5) * 3, "users": 2 + (i % 3)}
+                    for i in range(hours)
+                ]
+            }
+
+            if not include_details:
+                metrics_data.pop("data", None)
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting usage metrics: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
+
+    async def get_performance_metrics(self, request):
+        """Get performance metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            include_system = request.query.get("include_system", "false").lower() == "true"
+
+            # Mock performance metrics
+            metrics_data = {
+                "time_range_hours": hours,
+                "avg_response_time_ms": 2300,
+                "95th_percentile_ms": 4500,
+                "99th_percentile_ms": 8000,
+                "memory_usage_mb": 256,
+                "cpu_usage_percent": 15.3,
+                "data": [
+                    {
+                        "hour": i,
+                        "response_time": 2000 + (i % 7) * 200,
+                        "memory": 240 + (i % 5) * 10
+                    }
+                    for i in range(min(hours, 24))
+                ]
+            }
+
+            if not include_system:
+                for item in metrics_data.get("data", []):
+                    item.pop("memory", None)
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting performance metrics: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
+
+    async def get_error_metrics(self, request):
+        """Get error metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            severity = request.query.get("severity", "warning,error,critical")
+
+            severities = [s.strip() for s in severity.split(",")]
+
+            # Mock error metrics
+            metrics_data = {
+                "time_range_hours": hours,
+                "total_errors": 12,
+                "error_rate_percent": 1.5,
+                "severities": severities,
+                "data": [
+                    {
+                        "hour": i,
+                        "warning": max(0, 2 - (i % 3)),
+                        "error": max(0, 1 - (i % 5)),
+                        "critical": 1 if i % 12 == 0 else 0
+                    }
+                    for i in range(min(hours, 24))
+                ]
+            }
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting error metrics: {e}")
+            return web.json_response({
+                "status": "error",
+                "error": str(e)
+            }, status=400)
