@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - APScheduler WebUI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-tachometer-alt text-primary me-2"></i>Dashboard</h1>
+    <div>
+        <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
+            <i class="fas fa-play me-1"></i>Auto-refresh
+        </button>
+        <button class="btn btn-outline-secondary" onclick="refreshData()">
+            <i class="fas fa-sync-alt me-1"></i>Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Scheduler Status -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-server me-2"></i>Scheduler Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row" id="scheduler-info">
+                    <div class="col-12 text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="total-jobs">-</h4>
+                        <p class="card-text">Total Jobs</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-tasks fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="running-jobs">-</h4>
+                        <p class="card-text">Running Jobs</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-play-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="paused-jobs">-</h4>
+                        <p class="card-text">Paused Jobs</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-pause-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="next-run">-</h4>
+                        <p class="card-text">Next Run</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Jobs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Jobs
+                </h5>
+                <a href="/jobs" class="btn btn-sm btn-outline-primary">
+                    View All <i class="fas fa-arrow-right ms-1"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Name</th>
+                                <th>Trigger</th>
+                                <th>Next Run</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-jobs-table">
+                            <tr>
+                                <td colspan="6" class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let schedulerData = {};
+    let jobsData = [];
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        refreshData();
+    });
+
+    async function refreshData() {
+        try {
+            await Promise.all([
+                loadSchedulerInfo(),
+                loadJobs()
+            ]);
+            updateDashboard();
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+            showToast('Error refreshing data: ' + error.message, 'danger');
+        }
+    }
+
+    async function loadSchedulerInfo() {
+        try {
+            schedulerData = await apiCall('/api/scheduler/info');
+        } catch (error) {
+            console.error('Error loading scheduler info:', error);
+            schedulerData = { running: false, jobs_count: 0 };
+        }
+    }
+
+    async function loadJobs() {
+        try {
+            const response = await apiCall('/api/jobs');
+            jobsData = response.jobs || [];
+        } catch (error) {
+            console.error('Error loading jobs:', error);
+            jobsData = [];
+        }
+    }
+
+    function updateDashboard() {
+        updateSchedulerInfo();
+        updateStatistics();
+        updateRecentJobsTable();
+    }
+
+    function updateSchedulerInfo() {
+        const container = document.getElementById('scheduler-info');
+
+        container.innerHTML = `
+            <div class="col-md-2">
+                <strong>Status:</strong>
+                <span class="badge ${schedulerData.running ? 'bg-success' : 'bg-danger'} ms-2">
+                    <i class="fas ${schedulerData.running ? 'fa-play' : 'fa-stop'} me-1"></i>
+                    ${schedulerData.running ? 'Running' : 'Stopped'}
+                </span>
+            </div>
+            <div class="col-md-2">
+                <strong>Jobs Count:</strong>
+                <span class="badge bg-primary ms-2">${schedulerData.jobs_count || 0}</span>
+            </div>
+            <div class="col-md-2">
+                <strong>Timezone:</strong>
+                <span class="text-muted ms-2">${schedulerData.timezone || 'Unknown'}</span>
+            </div>
+            <div class="col-md-3">
+                <strong>Job Stores:</strong>
+                <span class="text-muted ms-2">${schedulerData.job_stores ? schedulerData.job_stores.join(', ') : 'Unknown'}</span>
+            </div>
+            <div class="col-md-3">
+                <strong>Executors:</strong>
+                <span class="text-muted ms-2">${schedulerData.executors ? schedulerData.executors.join(', ') : 'Unknown'}</span>
+            </div>
+        `;
+    }
+
+    function updateStatistics() {
+        const totalJobs = jobsData.length;
+        const runningJobs = jobsData.filter(job => !job.pending && job.next_run_time).length;
+        const pausedJobs = jobsData.filter(job => job.pending).length;
+
+        // Find next run time
+        const nextRuns = jobsData
+            .filter(job => job.next_run_time && !job.pending)
+            .map(job => new Date(job.next_run_time))
+            .sort((a, b) => a - b);
+
+        const nextRun = nextRuns.length > 0 ? nextRuns[0] : null;
+
+        document.getElementById('total-jobs').textContent = totalJobs;
+        document.getElementById('running-jobs').textContent = runningJobs;
+        document.getElementById('paused-jobs').textContent = pausedJobs;
+
+        if (nextRun) {
+            const now = new Date();
+            const diff = nextRun - now;
+            const minutes = Math.floor(diff / 60000);
+            document.getElementById('next-run').textContent = minutes > 0 ? `${minutes}m` : 'Now';
+        } else {
+            document.getElementById('next-run').textContent = 'None';
+        }
+    }
+
+    function updateRecentJobsTable() {
+        const tbody = document.getElementById('recent-jobs-table');
+
+        if (jobsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No jobs scheduled</td></tr>';
+            return;
+        }
+
+        // Show last 5 jobs
+        const recentJobs = jobsData.slice(0, 5);
+
+        tbody.innerHTML = recentJobs.map(job => `
+            <tr>
+                <td><code>${job.id}</code></td>
+                <td>${job.name || 'Unnamed Job'}</td>
+                <td><small class="text-muted">${job.trigger || 'Unknown'}</small></td>
+                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
+                <td>
+                    <span class="badge status-badge ${job.pending ? 'bg-warning' : 'bg-success'}">
+                        <i class="fas ${job.pending ? 'fa-pause' : 'fa-play'} me-1"></i>
+                        ${job.pending ? 'Paused' : 'Active'}
+                    </span>
+                </td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewJob('${job.id}')" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeJob' : 'pauseJob'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
+                            <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteJob('${job.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Job action functions
+    function viewJob(jobId) {
+        window.location.href = `/jobs?job=${jobId}`;
+    }
+
+    async function pauseJob(jobId) {
+        try {
+            await apiCall(`/api/jobs/${jobId}/pause`, { method: 'POST' });
+            showToast(`Job ${jobId} paused successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error pausing job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function resumeJob(jobId) {
+        try {
+            await apiCall(`/api/jobs/${jobId}/resume`, { method: 'POST' });
+            showToast(`Job ${jobId} resumed successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error resuming job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function deleteJob(jobId) {
+        if (!confirm(`Are you sure you want to delete job ${jobId}?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/jobs/${jobId}`, { method: 'DELETE' });
+            showToast(`Job ${jobId} deleted successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error deleting job: ${error.message}`, 'danger');
+        }
+    }
+</script>
+{% endblock %}
