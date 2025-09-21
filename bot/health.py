@@ -628,7 +628,7 @@ class HealthChecker:
             result = data.get("result", {})
             folder_id = data.get("folder_id", "unknown")
 
-            logger.info(f"Received ingestion completion from job {job_id}: {job_type}")
+            logger.info(f"Received ingestion completion from job {job_id}: {job_type} with result: {result}")
 
             # Here you would implement post-ingestion logic
             # For example: update search indexes, notify users, etc.
@@ -653,7 +653,7 @@ class HealthChecker:
             job_id = data.get("job_id", "unknown")
             metrics = data.get("metrics", {})
 
-            logger.info(f"Received metrics from job {job_id}")
+            logger.info(f"Received metrics from job {job_id}: {metrics}")
 
             # Here you would implement metrics storage logic
             # For example: store in time-series database, update dashboards, etc.
