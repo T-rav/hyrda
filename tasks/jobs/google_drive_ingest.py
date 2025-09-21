@@ -3,12 +3,13 @@
 import logging
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any
 
 import requests
 
 from config.settings import TasksSettings
+
 from .base_job import BaseJob
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class GoogleDriveIngestJob(BaseJob):
 
         return True
 
-    async def _execute_job(self) -> Dict[str, Any]:
+    async def _execute_job(self) -> dict[str, Any]:
         """Execute the Google Drive ingest job."""
         folder_id = self.params["folder_id"]
         metadata = self.params.get("metadata", {})
@@ -77,10 +78,10 @@ class GoogleDriveIngestJob(BaseJob):
     async def _run_ingest_process(
         self,
         folder_id: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
         force_update: bool,
-        file_types: List[str],
-    ) -> Dict[str, Any]:
+        file_types: list[str],
+    ) -> dict[str, Any]:
         """Run the actual document ingestion process."""
         try:
             # Get the project root directory (assuming tasks is a subdirectory)
@@ -116,7 +117,7 @@ class GoogleDriveIngestJob(BaseJob):
             # Run the ingestion process
             result = subprocess.run(
                 cmd,
-                cwd=str(ingest_path),
+                check=False, cwd=str(ingest_path),
                 capture_output=True,
                 text=True,
                 timeout=3600,  # 1 hour timeout
@@ -131,7 +132,9 @@ class GoogleDriveIngestJob(BaseJob):
                     "stderr": result.stderr[-1000:] if result.stderr else "",
                 }
             else:
-                logger.error(f"Ingestion process failed with return code: {result.returncode}")
+                logger.error(
+                    f"Ingestion process failed with return code: {result.returncode}"
+                )
                 return {
                     "status": "error",
                     "return_code": result.returncode,
@@ -149,10 +152,14 @@ class GoogleDriveIngestJob(BaseJob):
             logger.error(f"Error running ingestion process: {str(e)}")
             raise
 
-    async def _send_results_to_bot_api(self, ingest_result: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_results_to_bot_api(
+        self, ingest_result: dict[str, Any]
+    ) -> dict[str, Any]:
         """Send ingestion results to the main bot API."""
         if not self.settings.slack_bot_api_url:
-            logger.warning("No bot API URL configured, results will not be sent to main bot")
+            logger.warning(
+                "No bot API URL configured, results will not be sent to main bot"
+            )
             return {"message": "No API endpoint configured"}
 
         try:

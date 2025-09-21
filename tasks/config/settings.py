@@ -16,7 +16,9 @@ class TasksSettings(BaseSettings):
     # Server configuration
     port: int = Field(default=5001, alias="TASKS_PORT")
     host: str = Field(default="0.0.0.0", alias="TASKS_HOST")
-    secret_key: str = Field(default="dev-secret-key-change-in-production", alias="SECRET_KEY")
+    secret_key: str = Field(
+        default="dev-secret-key-change-in-production", alias="SECRET_KEY"
+    )
     flask_env: str = Field(default="production", alias="FLASK_ENV")
 
     # Database configuration
@@ -24,7 +26,9 @@ class TasksSettings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
 
     # Main Slack Bot API integration
-    slack_bot_api_url: str = Field(default="http://localhost:8080", alias="SLACK_BOT_API_URL")
+    slack_bot_api_url: str = Field(
+        default="http://localhost:8080", alias="SLACK_BOT_API_URL"
+    )
     slack_bot_api_key: Optional[str] = Field(default=None, alias="SLACK_BOT_API_KEY")
 
     # Slack API credentials (for direct Slack operations)

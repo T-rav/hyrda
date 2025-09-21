@@ -1,12 +1,13 @@
 """Slack user import job for synchronizing user data."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 from slack_sdk import WebClient
 
 from config.settings import TasksSettings
+
 from .base_job import BaseJob
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class SlackUserImportJob(BaseJob):
 
         return True
 
-    async def _execute_job(self) -> Dict[str, Any]:
+    async def _execute_job(self) -> dict[str, Any]:
         """Execute the Slack user import job."""
         if not self.slack_client:
             raise RuntimeError("Slack client not initialized")
@@ -72,7 +73,9 @@ class SlackUserImportJob(BaseJob):
             logger.error(f"Error in Slack user import: {str(e)}")
             raise
 
-    async def _fetch_slack_users(self, include_deactivated: bool) -> List[Dict[str, Any]]:
+    async def _fetch_slack_users(
+        self, include_deactivated: bool
+    ) -> list[dict[str, Any]]:
         """Fetch users from Slack API."""
         users = []
         cursor = None
@@ -91,7 +94,9 @@ class SlackUserImportJob(BaseJob):
 
                 # Filter out deactivated users if not included
                 if not include_deactivated:
-                    batch_users = [user for user in batch_users if not user.get("deleted", False)]
+                    batch_users = [
+                        user for user in batch_users if not user.get("deleted", False)
+                    ]
 
                 users.extend(batch_users)
 
@@ -107,7 +112,9 @@ class SlackUserImportJob(BaseJob):
             logger.error(f"Error fetching users from Slack: {str(e)}")
             raise
 
-    def _filter_users(self, users: List[Dict[str, Any]], user_types: List[str]) -> List[Dict[str, Any]]:
+    def _filter_users(
+        self, users: list[dict[str, Any]], user_types: list[str]
+    ) -> list[dict[str, Any]]:
         """Filter users based on user types and other criteria."""
         filtered = []
 
@@ -117,11 +124,10 @@ class SlackUserImportJob(BaseJob):
                 continue
 
             # Check user type
-            if user.get("is_admin", False) and "admin" not in user_types:
-                continue
-            elif user.get("is_owner", False) and "owner" not in user_types:
-                continue
-            elif not any([user.get("is_admin", False), user.get("is_owner", False)]) and "member" not in user_types:
+            if user.get("is_admin", False) and "admin" not in user_types or user.get("is_owner", False) and "owner" not in user_types or (
+                not any([user.get("is_admin", False), user.get("is_owner", False)])
+                and "member" not in user_types
+            ):
                 continue
 
             # Extract relevant user data
@@ -145,10 +151,14 @@ class SlackUserImportJob(BaseJob):
         logger.info(f"Filtered to {len(filtered)} users")
         return filtered
 
-    async def _send_users_to_bot_api(self, users: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def _send_users_to_bot_api(
+        self, users: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         """Send users to the main bot API for processing/storage."""
         if not self.settings.slack_bot_api_url:
-            logger.warning("No bot API URL configured, users will not be sent to main bot")
+            logger.warning(
+                "No bot API URL configured, users will not be sent to main bot"
+            )
             return {"processed_count": 0, "message": "No API endpoint configured"}
 
         try:
@@ -164,7 +174,7 @@ class SlackUserImportJob(BaseJob):
             processed_count = 0
 
             for i in range(0, len(users), batch_size):
-                batch = users[i:i + batch_size]
+                batch = users[i : i + batch_size]
 
                 response = requests.post(
                     api_url,
@@ -176,10 +186,12 @@ class SlackUserImportJob(BaseJob):
                 if response.status_code == 200:
                     batch_result = response.json()
                     processed_count += batch_result.get("processed_count", len(batch))
-                    logger.info(f"Processed batch {i//batch_size + 1}: {len(batch)} users")
+                    logger.info(
+                        f"Processed batch {i // batch_size + 1}: {len(batch)} users"
+                    )
                 else:
                     logger.error(
-                        f"API request failed for batch {i//batch_size + 1}: "
+                        f"API request failed for batch {i // batch_size + 1}: "
                         f"{response.status_code} - {response.text}"
                     )
 

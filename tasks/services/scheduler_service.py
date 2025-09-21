@@ -1,7 +1,7 @@
 """APScheduler service with WebUI integration."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
@@ -81,9 +81,7 @@ class SchedulerService:
         if not self.scheduler or not self.scheduler.running:
             raise RuntimeError("Scheduler not initialized or not running")
 
-        job = self.scheduler.add_job(
-            func=func, trigger=trigger, id=job_id, **kwargs
-        )
+        job = self.scheduler.add_job(func=func, trigger=trigger, id=job_id, **kwargs)
         logger.info(f"Added job: {job.id}")
         return job
 
@@ -134,7 +132,7 @@ class SchedulerService:
         logger.info(f"Modified job: {job_id}")
         return job
 
-    def get_job_info(self, job_id: str) -> Optional[Dict[str, Any]]:
+    def get_job_info(self, job_id: str) -> Optional[dict[str, Any]]:
         """Get detailed job information."""
         job = self.get_job(job_id)
         if not job:
@@ -153,7 +151,7 @@ class SchedulerService:
             "args": job.args,
         }
 
-    def get_scheduler_info(self) -> Dict[str, Any]:
+    def get_scheduler_info(self) -> dict[str, Any]:
         """Get scheduler information."""
         if not self.scheduler:
             return {"running": False, "jobs_count": 0}

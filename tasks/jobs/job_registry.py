@@ -1,16 +1,16 @@
 """Job registry for managing different types of scheduled jobs."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 from apscheduler.job import Job
 
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
-from .slack_user_import import SlackUserImportJob
 from .google_drive_ingest import GoogleDriveIngestJob
 from .metrics_collection import MetricsCollectionJob
+from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class JobRegistry:
             "metrics_collection": MetricsCollectionJob,
         }
 
-    def get_available_job_types(self) -> List[Dict[str, Any]]:
+    def get_available_job_types(self) -> List[dict[str, Any]]:
         """Get available job types with their descriptions."""
         job_types = []
 
@@ -51,7 +51,7 @@ class JobRegistry:
         self,
         job_type: str,
         job_id: Optional[str] = None,
-        schedule: Optional[Dict[str, Any]] = None,
+        schedule: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Job:
         """Create a new job of the specified type."""
