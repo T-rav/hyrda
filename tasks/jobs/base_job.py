@@ -1,9 +1,10 @@
 """Base class for all scheduled jobs."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
 from config.settings import TasksSettings
 
@@ -34,13 +35,12 @@ class BaseJob(ABC):
         return self.job_id
 
     @abstractmethod
-    async def _execute_job(self) -> Dict[str, Any]:
+    async def _execute_job(self) -> dict[str, Any]:
         """Execute the actual job logic. Must be implemented by subclasses."""
         pass
 
-    def execute(self) -> Dict[str, Any]:
+    def execute(self) -> dict[str, Any]:
         """Execute the job with error handling and logging."""
-        import asyncio
         start_time = datetime.utcnow()
         logger.info(f"Starting job: {self.JOB_NAME} (ID: {self.job_id})")
 

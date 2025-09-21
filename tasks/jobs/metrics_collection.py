@@ -1,12 +1,13 @@
 """Metrics collection job for gathering system and usage metrics."""
 
 import logging
-from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Any
 
 import requests
 
 from config.settings import TasksSettings
+
 from .base_job import BaseJob
 
 logger = logging.getLogger(__name__)
@@ -30,9 +31,11 @@ class MetricsCollectionJob(BaseJob):
         super().validate_params()
         return True
 
-    async def _execute_job(self) -> Dict[str, Any]:
+    async def _execute_job(self) -> dict[str, Any]:
         """Execute the metrics collection job."""
-        metric_types = self.params.get("metric_types", ["usage", "performance", "errors"])
+        metric_types = self.params.get(
+            "metric_types", ["usage", "performance", "errors"]
+        )
         time_range_hours = self.params.get("time_range_hours", 24)
         aggregate_level = self.params.get("aggregate_level", "hourly")
 
@@ -43,22 +46,32 @@ class MetricsCollectionJob(BaseJob):
 
             # Collect different types of metrics
             if "usage" in metric_types:
-                metrics_data["usage"] = await self._collect_usage_metrics(time_range_hours)
+                metrics_data["usage"] = await self._collect_usage_metrics(
+                    time_range_hours
+                )
 
             if "performance" in metric_types:
-                metrics_data["performance"] = await self._collect_performance_metrics(time_range_hours)
+                metrics_data["performance"] = await self._collect_performance_metrics(
+                    time_range_hours
+                )
 
             if "errors" in metric_types:
-                metrics_data["errors"] = await self._collect_error_metrics(time_range_hours)
+                metrics_data["errors"] = await self._collect_error_metrics(
+                    time_range_hours
+                )
 
             if "slack" in metric_types:
-                metrics_data["slack"] = await self._collect_slack_metrics(time_range_hours)
+                metrics_data["slack"] = await self._collect_slack_metrics(
+                    time_range_hours
+                )
 
             # Aggregate metrics
             aggregated_metrics = self._aggregate_metrics(metrics_data, aggregate_level)
 
             # Send metrics to external API if configured
-            external_result = await self._send_metrics_to_external_api(aggregated_metrics)
+            external_result = await self._send_metrics_to_external_api(
+                aggregated_metrics
+            )
 
             # Send metrics to main bot API
             bot_result = await self._send_metrics_to_bot_api(aggregated_metrics)
@@ -83,7 +96,7 @@ class MetricsCollectionJob(BaseJob):
             logger.error(f"Error in metrics collection: {str(e)}")
             raise
 
-    async def _collect_usage_metrics(self, time_range_hours: int) -> Dict[str, Any]:
+    async def _collect_usage_metrics(self, time_range_hours: int) -> dict[str, Any]:
         """Collect usage metrics from the main bot API."""
         try:
             if not self.settings.slack_bot_api_url:
@@ -109,17 +122,23 @@ class MetricsCollectionJob(BaseJob):
 
             if response.status_code == 200:
                 usage_data = response.json()
-                logger.info(f"Collected usage metrics: {len(usage_data.get('data', []))} data points")
+                logger.info(
+                    f"Collected usage metrics: {len(usage_data.get('data', []))} data points"
+                )
                 return usage_data
             else:
-                logger.warning(f"Failed to collect usage metrics: {response.status_code}")
+                logger.warning(
+                    f"Failed to collect usage metrics: {response.status_code}"
+                )
                 return {"error": f"API returned {response.status_code}"}
 
         except requests.RequestException as e:
             logger.error(f"Error collecting usage metrics: {str(e)}")
             return {"error": str(e)}
 
-    async def _collect_performance_metrics(self, time_range_hours: int) -> Dict[str, Any]:
+    async def _collect_performance_metrics(
+        self, time_range_hours: int
+    ) -> dict[str, Any]:
         """Collect performance metrics from the main bot API."""
         try:
             if not self.settings.slack_bot_api_url:
@@ -145,17 +164,21 @@ class MetricsCollectionJob(BaseJob):
 
             if response.status_code == 200:
                 perf_data = response.json()
-                logger.info(f"Collected performance metrics: {len(perf_data.get('data', []))} data points")
+                logger.info(
+                    f"Collected performance metrics: {len(perf_data.get('data', []))} data points"
+                )
                 return perf_data
             else:
-                logger.warning(f"Failed to collect performance metrics: {response.status_code}")
+                logger.warning(
+                    f"Failed to collect performance metrics: {response.status_code}"
+                )
                 return {"error": f"API returned {response.status_code}"}
 
         except requests.RequestException as e:
             logger.error(f"Error collecting performance metrics: {str(e)}")
             return {"error": str(e)}
 
-    async def _collect_error_metrics(self, time_range_hours: int) -> Dict[str, Any]:
+    async def _collect_error_metrics(self, time_range_hours: int) -> dict[str, Any]:
         """Collect error metrics from the main bot API."""
         try:
             if not self.settings.slack_bot_api_url:
@@ -181,17 +204,21 @@ class MetricsCollectionJob(BaseJob):
 
             if response.status_code == 200:
                 error_data = response.json()
-                logger.info(f"Collected error metrics: {len(error_data.get('data', []))} data points")
+                logger.info(
+                    f"Collected error metrics: {len(error_data.get('data', []))} data points"
+                )
                 return error_data
             else:
-                logger.warning(f"Failed to collect error metrics: {response.status_code}")
+                logger.warning(
+                    f"Failed to collect error metrics: {response.status_code}"
+                )
                 return {"error": f"API returned {response.status_code}"}
 
         except requests.RequestException as e:
             logger.error(f"Error collecting error metrics: {str(e)}")
             return {"error": str(e)}
 
-    async def _collect_slack_metrics(self, time_range_hours: int) -> Dict[str, Any]:
+    async def _collect_slack_metrics(self, time_range_hours: int) -> dict[str, Any]:
         """Collect Slack-specific metrics."""
         try:
             # This would collect metrics like message counts, user activity, etc.
@@ -209,7 +236,9 @@ class MetricsCollectionJob(BaseJob):
             logger.error(f"Error collecting Slack metrics: {str(e)}")
             return {"error": str(e)}
 
-    def _aggregate_metrics(self, metrics_data: Dict[str, Any], level: str) -> Dict[str, Any]:
+    def _aggregate_metrics(
+        self, metrics_data: dict[str, Any], level: str
+    ) -> dict[str, Any]:
         """Aggregate collected metrics based on the specified level."""
         aggregated = {
             "aggregation_level": level,
@@ -233,7 +262,9 @@ class MetricsCollectionJob(BaseJob):
 
         return aggregated
 
-    async def _send_metrics_to_external_api(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_metrics_to_external_api(
+        self, metrics: dict[str, Any]
+    ) -> dict[str, Any]:
         """Send metrics to external metrics API (e.g., metrics.ai)."""
         if not self.settings.metrics_api_url:
             return {"message": "No external metrics API configured"}
@@ -276,7 +307,7 @@ class MetricsCollectionJob(BaseJob):
             logger.error(f"Error sending metrics to external API: {str(e)}")
             return {"status": "error", "error": str(e)}
 
-    async def _send_metrics_to_bot_api(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+    async def _send_metrics_to_bot_api(self, metrics: dict[str, Any]) -> dict[str, Any]:
         """Send aggregated metrics to the main bot API for storage."""
         if not self.settings.slack_bot_api_url:
             return {"message": "No bot API URL configured"}

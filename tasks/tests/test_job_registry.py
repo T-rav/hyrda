@@ -1,7 +1,7 @@
 """Tests for job registry."""
 
+
 import pytest
-from unittest.mock import Mock, patch
 
 from jobs.job_registry import JobRegistry
 from services.scheduler_service import SchedulerService
@@ -53,7 +53,7 @@ class TestJobRegistry:
             job_type="slack_user_import",
             job_id="test_slack_import",
             schedule={"trigger": "interval", "hours": 1},
-            user_types=["member", "admin"]
+            user_types=["member", "admin"],
         )
 
         assert job.id == "test_slack_import"
@@ -72,7 +72,7 @@ class TestJobRegistry:
             job_type="google_drive_ingest",
             job_id="test_drive_ingest",
             schedule={"trigger": "interval", "hours": 6},
-            folder_id="test_folder_123"
+            folder_id="test_folder_123",
         )
 
         assert job.id == "test_drive_ingest"
@@ -91,7 +91,7 @@ class TestJobRegistry:
             job_type="metrics_collection",
             job_id="test_metrics",
             schedule={"trigger": "interval", "minutes": 30},
-            metric_types=["usage", "performance"]
+            metric_types=["usage", "performance"],
         )
 
         assert job.id == "test_metrics"
@@ -107,8 +107,7 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metrics_collection",
-            job_id="test_default_schedule"
+            job_type="metrics_collection", job_id="test_default_schedule"
         )
 
         assert job.id == "test_default_schedule"
@@ -123,10 +122,7 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         with pytest.raises(ValueError, match="Unknown job type"):
-            registry.create_job(
-                job_type="invalid_job_type",
-                job_id="test_invalid"
-            )
+            registry.create_job(job_type="invalid_job_type", job_id="test_invalid")
 
     def test_get_job_class(self, test_settings):
         """Test getting job class by type."""
@@ -156,11 +152,7 @@ class TestJobRegistry:
         job = registry.create_job(
             job_type="metrics_collection",
             job_id="test_cron_job",
-            schedule={
-                "trigger": "cron",
-                "hour": 0,
-                "minute": 0
-            }
+            schedule={"trigger": "cron", "hour": 0, "minute": 0},
         )
 
         assert job.id == "test_cron_job"
@@ -177,7 +169,7 @@ class TestJobRegistry:
         job = registry.create_job(
             job_type="metrics_collection",
             # No job_id provided, should be auto-generated
-            schedule={"trigger": "interval", "minutes": 15}
+            schedule={"trigger": "interval", "minutes": 15},
         )
 
         assert job.id.startswith("metrics_collection_")

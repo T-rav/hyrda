@@ -1,7 +1,7 @@
 """Tests for scheduler service - fixed version."""
 
+
 import pytest
-from unittest.mock import Mock, patch
 
 from services.scheduler_service import SchedulerService
 
@@ -44,7 +44,7 @@ class TestSchedulerService:
             trigger="interval",
             job_id="test_job",
             seconds=10,
-            args=["test result"]
+            args=["test result"],
         )
 
         assert job.id == "test_job"
@@ -64,7 +64,7 @@ class TestSchedulerService:
             trigger="interval",
             job_id="test_job_1",
             seconds=10,
-            args=["test result"]
+            args=["test result"],
         )
 
         jobs = service.get_jobs()

@@ -1,13 +1,14 @@
 """Tests for job implementations."""
 
+import asyncio
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
-import json
 
 from jobs.base_job import BaseJob
-from jobs.slack_user_import import SlackUserImportJob
 from jobs.google_drive_ingest import GoogleDriveIngestJob
 from jobs.metrics_collection import MetricsCollectionJob
+from jobs.slack_user_import import SlackUserImportJob
 
 
 class TestBaseJob:
@@ -15,6 +16,7 @@ class TestBaseJob:
 
     def test_base_job_initialization(self, test_settings):
         """Test base job initialization."""
+
         class TestJob(BaseJob):
             JOB_NAME = "Test Job"
             JOB_DESCRIPTION = "A test job"
@@ -30,6 +32,7 @@ class TestBaseJob:
 
     def test_base_job_validation(self, test_settings):
         """Test job parameter validation."""
+
         class TestJob(BaseJob):
             REQUIRED_PARAMS = ["required_param"]
 
@@ -47,6 +50,7 @@ class TestBaseJob:
 
     def test_base_job_execution_success(self, test_settings):
         """Test successful job execution."""
+
         class TestJob(BaseJob):
             JOB_NAME = "Test Job"
 
@@ -63,6 +67,7 @@ class TestBaseJob:
 
     def test_base_job_execution_error(self, test_settings):
         """Test job execution with error."""
+
         class TestJob(BaseJob):
             JOB_NAME = "Test Job"
 
@@ -94,16 +99,18 @@ class TestSlackUserImportJob:
         with pytest.raises(ValueError, match="SLACK_BOT_TOKEN is required"):
             SlackUserImportJob(test_settings)
 
-    @patch('jobs.slack_user_import.requests')
-    @patch('slack_sdk.WebClient')
-    def test_slack_user_import_execution(self, mock_web_client, mock_requests, test_settings, sample_slack_users):
+    @patch("jobs.slack_user_import.requests")
+    @patch("slack_sdk.WebClient")
+    def test_slack_user_import_execution(
+        self, mock_web_client, mock_requests, test_settings, sample_slack_users
+    ):
         """Test Slack user import execution."""
         # Mock Slack client
         mock_client_instance = Mock()
         mock_client_instance.users_list.return_value = {
             "ok": True,
             "members": sample_slack_users,
-            "response_metadata": {}
+            "response_metadata": {},
         }
         mock_web_client.return_value = mock_client_instance
 
@@ -117,9 +124,13 @@ class TestSlackUserImportJob:
         job.slack_client = mock_client_instance
 
         # Execute job (synchronous wrapper for async method)
-        with patch.object(job, '_fetch_slack_users', return_value=sample_slack_users):
-            with patch.object(job, '_send_users_to_bot_api', return_value={"processed_count": 2}):
-                result = job.execute()
+        with (
+            patch.object(job, "_fetch_slack_users", return_value=sample_slack_users),
+            patch.object(
+                job, "_send_users_to_bot_api", return_value={"processed_count": 2}
+            ),
+        ):
+            result = job.execute()
 
         assert result["status"] == "success"
         assert result["result"]["total_users_fetched"] == 2
@@ -158,9 +169,11 @@ class TestGoogleDriveIngestJob:
         with pytest.raises(ValueError, match="Required parameter missing: folder_id"):
             GoogleDriveIngestJob(test_settings)
 
-    @patch('jobs.google_drive_ingest.subprocess.run')
-    @patch('jobs.google_drive_ingest.requests')
-    def test_google_drive_ingest_execution(self, mock_requests, mock_subprocess, test_settings):
+    @patch("jobs.google_drive_ingest.subprocess.run")
+    @patch("jobs.google_drive_ingest.requests")
+    def test_google_drive_ingest_execution(
+        self, mock_requests, mock_subprocess, test_settings
+    ):
         """Test Google Drive ingest execution."""
         # Mock subprocess
         mock_result = Mock()
@@ -177,13 +190,15 @@ class TestGoogleDriveIngestJob:
 
         job = GoogleDriveIngestJob(test_settings, folder_id="test_folder_123")
 
-        with patch.object(job, '_send_results_to_bot_api', return_value={"status": "success"}):
+        with patch.object(
+            job, "_send_results_to_bot_api", return_value={"status": "success"}
+        ):
             result = job.execute()
 
         assert result["status"] == "success"
         assert result["result"]["folder_id"] == "test_folder_123"
 
-    @patch('jobs.google_drive_ingest.subprocess.run')
+    @patch("jobs.google_drive_ingest.subprocess.run")
     def test_google_drive_ingest_process_failure(self, mock_subprocess, test_settings):
         """Test handling of failed ingestion process."""
         # Mock failed subprocess
@@ -195,7 +210,9 @@ class TestGoogleDriveIngestJob:
 
         job = GoogleDriveIngestJob(test_settings, folder_id="invalid_folder")
 
-        with patch.object(job, '_send_results_to_bot_api', return_value={"status": "success"}):
+        with patch.object(
+            job, "_send_results_to_bot_api", return_value={"status": "success"}
+        ):
             result = job.execute()
 
         assert result["status"] == "success"
@@ -210,7 +227,7 @@ class TestMetricsCollectionJob:
         job = MetricsCollectionJob(test_settings)
         assert job.JOB_NAME == "Metrics Collection"
 
-    @patch('jobs.metrics_collection.requests')
+    @patch("jobs.metrics_collection.requests")
     def test_metrics_collection_execution(self, mock_requests, test_settings):
         """Test metrics collection execution."""
         # Mock API responses
@@ -233,7 +250,7 @@ class TestMetricsCollectionJob:
 
         sample_metrics = {
             "usage": {"data": [1, 2, 3]},
-            "performance": {"error": "API unavailable"}
+            "performance": {"error": "API unavailable"},
         }
 
         aggregated = job._aggregate_metrics(sample_metrics, "hourly")
@@ -242,7 +259,7 @@ class TestMetricsCollectionJob:
         assert aggregated["summary"]["usage"]["status"] == "success"
         assert aggregated["summary"]["performance"]["status"] == "error"
 
-    @patch('jobs.metrics_collection.requests.get')
+    @patch("jobs.metrics_collection.requests.get")
     def test_collect_usage_metrics_no_api(self, mock_get, test_settings):
         """Test collecting usage metrics without API URL."""
         # Remove API URL
@@ -251,7 +268,6 @@ class TestMetricsCollectionJob:
         job = MetricsCollectionJob(test_settings)
 
         # Use asyncio.run to run the async method
-        import asyncio
         result = asyncio.run(job._collect_usage_metrics(24))
 
         assert "error" in result

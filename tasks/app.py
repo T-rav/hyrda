@@ -1,9 +1,8 @@
 """APScheduler WebUI Flask application."""
 
 import logging
-import os
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
@@ -67,7 +66,7 @@ def jobs_page() -> str:
 
 # API Routes
 @app.route("/api/scheduler/info")
-def scheduler_info() -> Dict[str, Any]:
+def scheduler_info() -> dict[str, Any]:
     """Get scheduler information."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -76,7 +75,7 @@ def scheduler_info() -> Dict[str, Any]:
 
 
 @app.route("/api/jobs")
-def list_jobs() -> Dict[str, Any]:
+def list_jobs() -> dict[str, Any]:
     """List all jobs."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -93,7 +92,7 @@ def list_jobs() -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>")
-def get_job(job_id: str) -> Dict[str, Any]:
+def get_job(job_id: str) -> dict[str, Any]:
     """Get specific job details."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -106,7 +105,7 @@ def get_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/pause", methods=["POST"])
-def pause_job(job_id: str) -> Dict[str, Any]:
+def pause_job(job_id: str) -> dict[str, Any]:
     """Pause a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -119,7 +118,7 @@ def pause_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/resume", methods=["POST"])
-def resume_job(job_id: str) -> Dict[str, Any]:
+def resume_job(job_id: str) -> dict[str, Any]:
     """Resume a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -132,7 +131,7 @@ def resume_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>", methods=["DELETE"])
-def delete_job(job_id: str) -> Dict[str, Any]:
+def delete_job(job_id: str) -> dict[str, Any]:
     """Delete a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -145,7 +144,7 @@ def delete_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs", methods=["POST"])
-def create_job() -> Dict[str, Any]:
+def create_job() -> dict[str, Any]:
     """Create a new job."""
     if not scheduler_service or not job_registry:
         return jsonify({"error": "Services not initialized"}), 500
@@ -178,7 +177,7 @@ def create_job() -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>", methods=["PUT"])
-def update_job(job_id: str) -> Dict[str, Any]:
+def update_job(job_id: str) -> dict[str, Any]:
     """Update an existing job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -199,7 +198,7 @@ def update_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/retry", methods=["POST"])
-def retry_job(job_id: str) -> Dict[str, Any]:
+def retry_job(job_id: str) -> dict[str, Any]:
     """Retry/re-queue a failed job immediately."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -210,8 +209,7 @@ def retry_job(job_id: str) -> Dict[str, Any]:
             return jsonify({"error": "Job not found"}), 404
 
         # Force job to run immediately by modifying next run time
-        from datetime import datetime, timezone
-        scheduler_service.modify_job(job_id, next_run_time=datetime.now(timezone.utc))
+        scheduler_service.modify_job(job_id, next_run_time=datetime.now(UTC))
 
         return jsonify({"message": f"Job {job_id} queued for immediate retry"})
 
@@ -220,7 +218,7 @@ def retry_job(job_id: str) -> Dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/run-once", methods=["POST"])
-def run_job_once(job_id: str) -> Dict[str, Any]:
+def run_job_once(job_id: str) -> dict[str, Any]:
     """Run a job once immediately (ad-hoc execution)."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -236,23 +234,25 @@ def run_job_once(job_id: str) -> Dict[str, Any]:
         scheduler_service.add_job(
             func=job.func,
             trigger="date",
-            run_date=datetime.now(timezone.utc),
+            run_date=datetime.now(UTC),
             job_id=one_time_id,
             name=f"{job.name} (Manual Run)",
-            **job.kwargs
+            **job.kwargs,
         )
 
-        return jsonify({
-            "message": f"Created one-time job {one_time_id}",
-            "one_time_job_id": one_time_id
-        })
+        return jsonify(
+            {
+                "message": f"Created one-time job {one_time_id}",
+                "one_time_job_id": one_time_id,
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/jobs/<job_id>/history")
-def get_job_history(job_id: str) -> Dict[str, Any]:
+def get_job_history(job_id: str) -> dict[str, Any]:
     """Get job execution history."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -260,37 +260,39 @@ def get_job_history(job_id: str) -> Dict[str, Any]:
     try:
         # This would need to be implemented with a custom job listener
         # For now, return mock data structure
-        return jsonify({
-            "job_id": job_id,
-            "executions": [
-                {
-                    "id": f"{job_id}_exec_1",
-                    "start_time": "2024-01-20T10:00:00Z",
-                    "end_time": "2024-01-20T10:02:30Z",
-                    "status": "success",
-                    "duration_seconds": 150,
-                    "result": {"processed": 25}
-                },
-                {
-                    "id": f"{job_id}_exec_2",
-                    "start_time": "2024-01-20T11:00:00Z",
-                    "end_time": "2024-01-20T11:00:15Z",
-                    "status": "failed",
-                    "duration_seconds": 15,
-                    "error": "Connection timeout"
-                }
-            ],
-            "total_executions": 2,
-            "success_rate": 50.0,
-            "avg_duration_seconds": 82.5
-        })
+        return jsonify(
+            {
+                "job_id": job_id,
+                "executions": [
+                    {
+                        "id": f"{job_id}_exec_1",
+                        "start_time": "2024-01-20T10:00:00Z",
+                        "end_time": "2024-01-20T10:02:30Z",
+                        "status": "success",
+                        "duration_seconds": 150,
+                        "result": {"processed": 25},
+                    },
+                    {
+                        "id": f"{job_id}_exec_2",
+                        "start_time": "2024-01-20T11:00:00Z",
+                        "end_time": "2024-01-20T11:00:15Z",
+                        "status": "failed",
+                        "duration_seconds": 15,
+                        "error": "Connection timeout",
+                    },
+                ],
+                "total_executions": 2,
+                "success_rate": 50.0,
+                "avg_duration_seconds": 82.5,
+            }
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/job-types")
-def list_job_types() -> Dict[str, Any]:
+def list_job_types() -> dict[str, Any]:
     """List available job types."""
     if not job_registry:
         return jsonify({"error": "Job registry not initialized"}), 500
@@ -299,7 +301,7 @@ def list_job_types() -> Dict[str, Any]:
 
 
 @app.route("/health")
-def health_check() -> Dict[str, Any]:
+def health_check() -> dict[str, Any]:
     """Health check endpoint."""
     return jsonify(
         {
