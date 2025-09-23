@@ -484,7 +484,7 @@ class HealthChecker:
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 InsightMesh System Health Dashboard</h1>
+            <h1>🤖 InsightMesh Health Dashboard</h1>
             <p class="auto-refresh">Auto-refreshing every 10 seconds...</p>
         </div>
 
