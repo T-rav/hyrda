@@ -30,7 +30,7 @@ The bot uses **dynamic versioning** from `pyproject.toml`:
 ### Updating Version
 1. **Edit `bot/pyproject.toml`** (line 7):
    ```toml
-   version = "1.2.3"  # ← Change this
+   version = "1.2.5"  # ← Change this
    ```
 
 2. **Restart the bot** - version automatically appears in:
