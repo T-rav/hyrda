@@ -144,6 +144,14 @@ function App() {
                   >
                     ✅ Readiness Check
                   </a>
+                  <a
+                    href="http://localhost:5001"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="api-link"
+                  >
+                    📅 Task Scheduler
+                  </a>
                 </div>
               </div>
             )}
