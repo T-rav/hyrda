@@ -12,60 +12,98 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
-        /* Override Bootstrap's primary color to purple */
+        /* Professional color palette inspired by governance framework */
         :root {
-            --bs-primary: #8b5cf6;
-            --bs-primary-rgb: 139, 92, 246;
-            --bs-btn-color: #fff;
-            --bs-btn-bg: #8b5cf6;
-            --bs-btn-border-color: #8b5cf6;
-            --bs-btn-hover-color: #fff;
-            --bs-btn-hover-bg: #7c3aed;
-            --bs-btn-hover-border-color: #7c3aed;
-            --bs-btn-focus-shadow-rgb: 139, 92, 246;
-            --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #6d28d9;
-            --bs-btn-active-border-color: #6d28d9;
+            --bs-primary: #9f7aea;
+            --bs-primary-rgb: 159, 122, 234;
+            --bs-secondary: #64748b;
+            --bs-secondary-rgb: 100, 116, 139;
+            --bs-success: #10b981;
+            --bs-success-rgb: 16, 185, 129;
+            --bs-info: #3b82f6;
+            --bs-info-rgb: 59, 130, 246;
+            --bs-warning: #f59e0b;
+            --bs-warning-rgb: 245, 158, 11;
+            --bs-danger: #ef4444;
+            --bs-danger-rgb: 239, 68, 68;
         }
 
-        /* Force primary color override for all primary elements */
+        /* Primary button styling */
         .btn-primary {
             --bs-btn-color: #fff;
-            --bs-btn-bg: #8b5cf6;
-            --bs-btn-border-color: #8b5cf6;
-            --bs-btn-hover-color: #fff;
-            --bs-btn-hover-bg: #7c3aed;
-            --bs-btn-hover-border-color: #7c3aed;
-            --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #6d28d9;
-            --bs-btn-active-border-color: #6d28d9;
-        }
-
-        .btn-outline-primary {
-            --bs-btn-color: #8b5cf6;
-            --bs-btn-border-color: #8b5cf6;
+            --bs-btn-bg: #9f7aea;
+            --bs-btn-border-color: #9f7aea;
             --bs-btn-hover-color: #fff;
             --bs-btn-hover-bg: #8b5cf6;
             --bs-btn-hover-border-color: #8b5cf6;
             --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #8b5cf6;
-            --bs-btn-active-border-color: #8b5cf6;
+            --bs-btn-active-bg: #7c3aed;
+            --bs-btn-active-border-color: #7c3aed;
+            --bs-btn-focus-shadow-rgb: 159, 122, 234;
         }
 
+        .btn-outline-primary {
+            --bs-btn-color: #9f7aea;
+            --bs-btn-border-color: #9f7aea;
+            --bs-btn-hover-color: #fff;
+            --bs-btn-hover-bg: #9f7aea;
+            --bs-btn-hover-border-color: #9f7aea;
+            --bs-btn-active-color: #fff;
+            --bs-btn-active-bg: #9f7aea;
+            --bs-btn-active-border-color: #9f7aea;
+        }
+
+        /* Utility classes */
         .bg-primary {
-            background-color: #8b5cf6 !important;
+            background-color: #9f7aea !important;
         }
 
         .text-primary {
-            color: #8b5cf6 !important;
+            color: #9f7aea !important;
         }
 
         .badge.bg-primary {
-            background-color: #8b5cf6 !important;
+            background-color: #9f7aea !important;
         }
 
         .spinner-border.text-primary {
-            color: #8b5cf6 !important;
+            color: #9f7aea !important;
+        }
+
+        /* Success/Green color overrides */
+        .btn-success {
+            --bs-btn-color: #fff;
+            --bs-btn-bg: #10b981;
+            --bs-btn-border-color: #10b981;
+            --bs-btn-hover-color: #fff;
+            --bs-btn-hover-bg: #059669;
+            --bs-btn-hover-border-color: #059669;
+            --bs-btn-active-color: #fff;
+            --bs-btn-active-bg: #047857;
+            --bs-btn-active-border-color: #047857;
+        }
+
+        .bg-success {
+            background-color: #10b981 !important;
+        }
+
+        .text-success {
+            color: #10b981 !important;
+        }
+
+        .badge.bg-success {
+            background-color: #10b981 !important;
+        }
+
+        /* Enhanced card styling */
+        .card {
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+        }
+
+        .card-header {
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
         }
 
         .sidebar {
