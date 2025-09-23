@@ -36,7 +36,7 @@ function App() {
           <div className="header-content">
             <div className="header-title">
               <Activity className="header-icon" size={28} />
-              <h1>AI Slack Bot Health Dashboard</h1>
+              <h1>InsightMesh Health Dashboard</h1>
             </div>
             <div className="header-info">
               <span className={`status-badge ${overallStatus}`}>
@@ -159,7 +159,7 @@ function App() {
         </main>
 
         <footer className="footer">
-          <p>AI Slack Bot v{health?.version || '1.0.0'} • Auto-refresh every 10 seconds</p>
+          <p>InsightMesh v{health?.version || '1.0.0'} • Auto-refresh every 10 seconds</p>
           <button onClick={refetch} className="refresh-button" disabled={loading}>
             {loading ? 'Refreshing...' : 'Refresh Now'}
           </button>
