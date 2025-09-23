@@ -59,30 +59,40 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="createTaskModalLabel">Create New Task</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="createTaskModalLabel">
+                    <i data-lucide="plus-circle" class="icon me-2"></i>Create New Task
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    <i data-lucide="x" class="icon-sm"></i>
+                </button>
             </div>
             <div class="modal-body">
                 <form id="createJobForm">
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="taskType" class="form-label">Task Type</label>
+                            <div class="mb-4">
+                                <label for="taskType" class="form-label">
+                                    <i data-lucide="settings" class="icon-sm me-1"></i>Task Type
+                                </label>
                                 <select class="form-select" id="taskType" required>
                                     <option value="">Select task type...</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="taskId" class="form-label">Task ID (Optional)</label>
+                            <div class="mb-4">
+                                <label for="taskId" class="form-label">
+                                    <i data-lucide="tag" class="icon-sm me-1"></i>Task ID (Optional)
+                                </label>
                                 <input type="text" class="form-control" id="taskId" placeholder="Auto-generated if empty">
                             </div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Schedule</label>
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i data-lucide="calendar" class="icon-sm me-1"></i>Schedule
+                        </label>
                         <div class="row">
                             <div class="col-md-4">
                                 <select class="form-select" id="triggerType" required>
@@ -99,17 +109,24 @@
                         </div>
                     </div>
 
-                    <div class="mb-3" id="taskParameters">
-                        <label class="form-label">Task Parameters</label>
+                    <div class="mb-4" id="taskParameters">
+                        <label class="form-label">
+                            <i data-lucide="sliders" class="icon-sm me-1"></i>Task Parameters
+                        </label>
                         <div class="alert alert-info">
+                            <i data-lucide="info" class="icon-sm me-2"></i>
                             <small>Parameters will appear here based on the selected task type</small>
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="createTask()">Create Task</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i data-lucide="x" class="icon-sm me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-success" onclick="createTask()">
+                    <i data-lucide="check" class="icon-sm me-1"></i>Create Task
+                </button>
             </div>
         </div>
     </div>
@@ -120,8 +137,12 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="taskDetailsModalLabel">Task Details</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title" id="taskDetailsModalLabel">
+                    <i data-lucide="info" class="icon me-2"></i>Task Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    <i data-lucide="x" class="icon-sm"></i>
+                </button>
             </div>
             <div class="modal-body" id="taskDetailsContent">
                 <!-- Task details will be loaded here -->
@@ -228,17 +249,24 @@
         }
     }
 
-    function updateJobParameters() {
-        const jobType = document.getElementById('jobType').value;
-        const container = document.getElementById('jobParameters');
+    function updateTaskParameters() {
+        const taskType = document.getElementById('taskType').value;
+        const container = document.getElementById('taskParameters');
 
-        if (!jobType) {
+        if (!taskType) {
             container.innerHTML = `
-                <label class="form-label">Job Parameters</label>
+                <label class="form-label">
+                    <i data-lucide="sliders" class="icon-sm me-1"></i>Task Parameters
+                </label>
                 <div class="alert alert-info">
-                    <small>Parameters will appear here based on the selected job type</small>
+                    <i data-lucide="info" class="icon-sm me-2"></i>
+                    <small>Parameters will appear here based on the selected task type</small>
                 </div>
             `;
+            // Re-initialize icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
             return;
         }
 
@@ -412,7 +440,7 @@
             // Reset form
             document.getElementById('createJobForm').reset();
             updateScheduleParameters();
-            updateJobParameters();
+            updateTaskParameters();
 
             refreshData();
 
