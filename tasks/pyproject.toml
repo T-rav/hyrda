@@ -35,6 +35,8 @@ dependencies = [
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",
+    "pymysql>=1.1.0",
+    "alembic>=1.13.0",
 
     # Google Drive API (for scheduled ingestion)
     "google-api-python-client>=2.0.0",
@@ -69,7 +71,7 @@ tasks-server = "app:main"
 
 # Package discovery configuration
 [tool.setuptools]
-packages = ["config", "jobs", "services", "utils", "tests"]
+packages = ["config", "jobs", "services", "models", "tests"]
 
 # Ruff configuration
 [tool.ruff]

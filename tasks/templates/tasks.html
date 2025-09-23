@@ -104,10 +104,10 @@
                         </div>
                         <div class="col-md-6">
                             <div class="mb-4">
-                                <label for="taskId" class="form-label">
-                                    <i data-lucide="tag" class="icon-sm me-1"></i>Task ID (Optional)
+                                <label for="taskName" class="form-label">
+                                    <i data-lucide="type" class="icon-sm me-1"></i>Task Name/Description
                                 </label>
-                                <input type="text" class="form-control" id="taskId" placeholder="Auto-generated if empty">
+                                <input type="text" class="form-control" id="taskName" placeholder="Enter a descriptive name for this task" required>
                             </div>
                         </div>
                     </div>
@@ -245,21 +245,21 @@
         switch (triggerType) {
             case 'interval':
                 container.innerHTML = `
-                    <div class="row">
+                    <div class="row g-3">
                         <div class="col-4">
-                            <label for="hours" class="form-label">
+                            <label for="hours" class="form-label d-flex align-items-center">
                                 <i data-lucide="clock" class="icon-sm me-1"></i>Hours
                             </label>
                             <input type="number" class="form-control" id="hours" placeholder="0" value="1" min="0">
                         </div>
                         <div class="col-4">
-                            <label for="minutes" class="form-label">
+                            <label for="minutes" class="form-label d-flex align-items-center">
                                 <i data-lucide="clock" class="icon-sm me-1"></i>Minutes
                             </label>
                             <input type="number" class="form-control" id="minutes" placeholder="0" value="0" min="0" max="59">
                         </div>
                         <div class="col-4">
-                            <label for="seconds" class="form-label">
+                            <label for="seconds" class="form-label d-flex align-items-center">
                                 <i data-lucide="clock" class="icon-sm me-1"></i>Seconds
                             </label>
                             <input type="number" class="form-control" id="seconds" placeholder="0" value="0" min="0" max="59">
@@ -330,15 +330,15 @@
             return;
         }
 
-        const selectedJobType = jobTypesData.find(jt => jt.type === jobType);
-        if (!selectedJobType) return;
+        const selectedTaskType = taskTypesData.find(tt => tt.type === taskType);
+        if (!selectedTaskType) return;
 
-        let parametersHTML = '<label class="form-label">Job Parameters</label>';
+        let parametersHTML = '<label class="form-label">Task Parameters</label>';
 
         // Required parameters
-        if (selectedJobType.required_params && selectedJobType.required_params.length > 0) {
+        if (selectedTaskType.required_params && selectedTaskType.required_params.length > 0) {
             parametersHTML += '<div class="mb-3"><strong>Required Parameters:</strong></div>';
-            selectedJobType.required_params.forEach(param => {
+            selectedTaskType.required_params.forEach(param => {
                 parametersHTML += `
                     <div class="mb-2">
                         <label for="param_${param}" class="form-label">${param} *</label>
@@ -349,13 +349,49 @@
         }
 
         // Optional parameters
-        if (selectedJobType.optional_params && selectedJobType.optional_params.length > 0) {
+        if (selectedTaskType.optional_params && selectedTaskType.optional_params.length > 0) {
             parametersHTML += '<div class="mb-3 mt-3"><strong>Optional Parameters:</strong></div>';
-            selectedJobType.optional_params.forEach(param => {
+
+            selectedTaskType.optional_params.forEach(param => {
+                // Add specific help text and input types for known parameters
+                let inputHTML = '';
+                let helpText = '';
+
+                switch(param) {
+                    case 'workspace_filter':
+                        inputHTML = `<input type="text" class="form-control" id="param_${param}" placeholder="e.g., my-workspace-id">`;
+                        helpText = 'Filter users by specific workspace ID (leave empty for all workspaces)';
+                        break;
+                    case 'user_types':
+                        inputHTML = `
+                            <select class="form-select" id="param_${param}" multiple>
+                                <option value="member" selected>Member</option>
+                                <option value="admin" selected>Admin</option>
+                                <option value="owner">Owner</option>
+                                <option value="bot">Bot</option>
+                            </select>`;
+                        helpText = 'Select which types of users to import (hold Ctrl/Cmd to select multiple)';
+                        break;
+                    case 'include_deactivated':
+                        inputHTML = `
+                            <select class="form-select" id="param_${param}">
+                                <option value="false" selected>No - Active users only</option>
+                                <option value="true">Yes - Include deactivated users</option>
+                            </select>`;
+                        helpText = 'Whether to include deactivated/deleted users in the import';
+                        break;
+                    default:
+                        inputHTML = `<input type="text" class="form-control" id="param_${param}">`;
+                        helpText = `Optional parameter: ${param}`;
+                }
+
                 parametersHTML += `
-                    <div class="mb-2">
+                    <div class="mb-3">
                         <label for="param_${param}" class="form-label">${param}</label>
-                        <input type="text" class="form-control" id="param_${param}">
+                        ${inputHTML}
+                        <div class="form-text">
+                            <small class="text-muted">${helpText}</small>
+                        </div>
                     </div>
                 `;
             });
@@ -410,12 +446,17 @@
 
     async function createTask() {
         try {
-            const jobType = document.getElementById('jobType').value;
-            const jobId = document.getElementById('jobId').value;
+            const taskType = document.getElementById('taskType').value;
+            const taskName = document.getElementById('taskName').value;
             const triggerType = document.getElementById('triggerType').value;
 
-            if (!jobType) {
-                showToast('Please select a job type', 'warning');
+            if (!taskType) {
+                showToast('Please select a task type', 'warning');
+                return;
+            }
+
+            if (!taskName) {
+                showToast('Please enter a task name', 'warning');
                 return;
             }
 
@@ -457,13 +498,13 @@
                     break;
             }
 
-            // Collect job parameters
+            // Collect task parameters
             const parameters = {};
-            const selectedJobType = jobTypesData.find(jt => jt.type === jobType);
+            const selectedTaskType = taskTypesData.find(tt => tt.type === taskType);
 
-            if (selectedJobType) {
+            if (selectedTaskType) {
                 // Collect required parameters
-                selectedJobType.required_params?.forEach(param => {
+                selectedTaskType.required_params?.forEach(param => {
                     const element = document.getElementById(`param_${param}`);
                     if (element && element.value) {
                         parameters[param] = element.value;
@@ -471,24 +512,48 @@
                 });
 
                 // Collect optional parameters
-                selectedJobType.optional_params?.forEach(param => {
+                selectedTaskType.optional_params?.forEach(param => {
                     const element = document.getElementById(`param_${param}`);
-                    if (element && element.value) {
-                        parameters[param] = element.value;
+                    if (element) {
+                        // Handle different input types
+                        if (element.multiple) {
+                            // Multi-select dropdown
+                            const selectedValues = Array.from(element.selectedOptions).map(option => option.value);
+                            if (selectedValues.length > 0) {
+                                parameters[param] = selectedValues;
+                            }
+                        } else if (element.tagName === 'SELECT') {
+                            // Single select dropdown
+                            if (element.value) {
+                                // Convert boolean strings to actual booleans
+                                if (element.value === 'true') {
+                                    parameters[param] = true;
+                                } else if (element.value === 'false') {
+                                    parameters[param] = false;
+                                } else {
+                                    parameters[param] = element.value;
+                                }
+                            }
+                        } else {
+                            // Regular text input
+                            if (element.value) {
+                                parameters[param] = element.value;
+                            }
+                        }
                     }
                 });
             }
 
-            const jobData = {
-                job_type: jobType,
-                job_id: jobId || undefined,
+            const taskData = {
+                job_type: taskType,
+                name: taskName,
                 schedule: schedule,
                 parameters: parameters
             };
 
             const response = await apiCall('/api/jobs', {
                 method: 'POST',
-                body: JSON.stringify(jobData)
+                body: JSON.stringify(taskData)
             });
 
             showToast('Job created successfully!', 'success');

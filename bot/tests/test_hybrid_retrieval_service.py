@@ -378,9 +378,9 @@ class TestRRFAlgorithm:
 
         # With our scaling, the top RRF result should be close to 0.95
         assert actual_score > 0.9, f"Expected scaled score > 0.9, got {actual_score}"
-        assert (
-            actual_score <= 0.95
-        ), f"Expected scaled score <= 0.95, got {actual_score}"
+        assert actual_score <= 0.95, (
+            f"Expected scaled score <= 0.95, got {actual_score}"
+        )
 
     def test_rrf_rank_order(self):
         """Test that RRF produces correct ranking"""

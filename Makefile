@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-tasks-only
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-tasks-only db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -80,6 +80,15 @@ help:
 	@echo ""
 	@echo "$(GREEN)Health Dashboard:$(RESET)"
 	@echo "  health-ui       Build React health dashboard UI"
+	@echo ""
+	@echo "$(GREEN)Database Management:$(RESET)"
+	@echo "  db-start        🐳 Start MySQL databases in Docker"
+	@echo "  db-stop         🛑 Stop MySQL databases"
+	@echo "  db-migrate      📋 Generate new migration files"
+	@echo "  db-upgrade      ⬆️  Apply pending migrations"
+	@echo "  db-downgrade    ⬇️  Rollback last migration"
+	@echo "  db-reset        🔄 Reset databases (WARNING: destroys data)"
+	@echo "  db-status       📊 Show migration status"
 
 $(VENV):
 	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
@@ -122,7 +131,7 @@ start-redis:
 	fi
 	@echo "$(GREEN)✅ Redis service started$(RESET)"
 
-run: check-env start-redis
+run: check-env db-start start-redis
 	@echo "$(GREEN)🤖 Starting AI Slack Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
@@ -235,14 +244,42 @@ docker-run: check-env
 	docker run --rm --env-file $(ENV_FILE) --name $(IMAGE) $(IMAGE)
 
 docker-monitor:
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.monitoring.yml up -d
+	@echo "❌ Monitoring docker-compose file not found. Use 'make start' to run services."
 
 docker-prod:
 	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.prod.yml up -d
 
 docker-stop:
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.monitoring.yml down
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.prod.yml down
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.elasticsearch.yml down
+	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.mysql.yml down
+
+# Full Docker Stack Commands
+docker-up: check-env
+	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker-compose up -d
+	@echo "$(GREEN)✅ Stack started! Services available at:$(RESET)"
+	@echo "$(BLUE)  - Bot API: http://localhost:8080$(RESET)"
+	@echo "$(BLUE)  - Task Scheduler: http://localhost:5001$(RESET)"
+	@echo "$(BLUE)  - phpMyAdmin: http://localhost:8081$(RESET)"
+	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
+
+docker-down:
+	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker-compose down
+	@echo "$(GREEN)✅ Stack stopped!$(RESET)"
+
+docker-logs:
+	cd $(PROJECT_ROOT_DIR) && docker-compose logs -f
+
+docker-restart: docker-down docker-up
+
+docker-build:
+	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker-compose build
+	@echo "$(GREEN)✅ Images built!$(RESET)"
+
+# Main stop command
+stop: docker-down
 
 setup-dev: install-dev
 	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi
@@ -291,7 +328,14 @@ python-version: $(VENV)
 	@$(PIP) --version
 
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
-start: install-dev health-ui check-env start-redis
+# Main start command (uses Docker)
+start: docker-build docker-up
+
+# Docker-based start (same as start)
+start-docker: start
+
+# Legacy local start
+start-local: install-dev health-ui check-env db-start start-redis
 	@echo "$(GREEN)🎯 ================================$(RESET)"
 	@echo "$(GREEN)🚀 STARTING AI SLACK BOT WITH FULL STACK$(RESET)"
 	@echo "$(GREEN)🎯 ================================$(RESET)"
@@ -299,11 +343,13 @@ start: install-dev health-ui check-env start-redis
 	@echo "$(BLUE)✅ Dependencies installed$(RESET)"
 	@echo "$(BLUE)✅ Health UI built and ready$(RESET)"
 	@echo "$(BLUE)✅ Environment validated$(RESET)"
+	@echo "$(BLUE)✅ MySQL databases started$(RESET)"
 	@echo "$(BLUE)✅ Redis service started$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)🌐 Access points:$(RESET)"
 	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:8080/ui$(RESET)"
 	@echo "$(YELLOW)   Task Scheduler:       http://localhost:5001$(RESET)"
+	@echo "$(YELLOW)   Database Admin:       http://localhost:8081$(RESET)"
 	@echo "$(YELLOW)   Prometheus Metrics:   http://localhost:8080/prometheus$(RESET)"
 	@echo "$(YELLOW)   API Endpoints:        http://localhost:8080/api/*$(RESET)"
 	@echo ""
@@ -328,3 +374,88 @@ start-with-tasks:
 start-tasks-only:
 	@echo "$(GREEN)📅 Starting Task Scheduler only...$(RESET)"
 	cd tasks && $(PYTHON) app.py
+
+# ===== DATABASE MANAGEMENT =====
+
+# Start MySQL databases in Docker
+db-start:
+	@echo "$(BLUE)🐳 Starting MySQL databases...$(RESET)"
+	docker compose -f docker-compose.mysql.yml up -d
+	@echo "$(BLUE)Waiting for MySQL to be ready...$(RESET)"
+	@timeout=60; \
+	while [ $$timeout -gt 0 ]; do \
+		if docker exec insightmesh-mysql mysqladmin ping -h localhost --silent; then \
+			echo "$(GREEN)✅ MySQL is ready!$(RESET)"; \
+			break; \
+		fi; \
+		echo "$(YELLOW)Waiting... ($$timeout seconds remaining)$(RESET)"; \
+		sleep 2; \
+		timeout=$$((timeout-2)); \
+	done; \
+	if [ $$timeout -le 0 ]; then \
+		echo "$(RED)❌ MySQL failed to start within 60 seconds$(RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(GREEN)🎉 MySQL databases are running!$(RESET)"
+	@echo "$(YELLOW)📊 phpMyAdmin available at: http://localhost:8081$(RESET)"
+
+# Stop MySQL databases
+db-stop:
+	@echo "$(YELLOW)🛑 Stopping MySQL databases...$(RESET)"
+	docker compose -f docker-compose.mysql.yml down
+	@echo "$(GREEN)✅ MySQL databases stopped$(RESET)"
+
+# Generate new migration files
+db-migrate: $(VENV)
+	@echo "$(BLUE)📋 Generating migration files...$(RESET)"
+	@read -p "Enter migration message: " message; \
+	echo "$(BLUE)Generating bot service migration...$(RESET)"; \
+	cd $(BOT_DIR) && $(PYTHON) -m alembic revision --autogenerate -m "$$message"; \
+	echo "$(BLUE)Generating tasks service migration...$(RESET)"; \
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic revision --autogenerate -m "$$message"
+	@echo "$(GREEN)✅ Migration files generated!$(RESET)"
+
+# Apply pending migrations
+db-upgrade: $(VENV) db-start
+	@echo "$(BLUE)⬆️  Applying migrations...$(RESET)"
+	@echo "$(BLUE)Upgrading bot database...$(RESET)"
+	cd $(BOT_DIR) && $(PYTHON) -m alembic upgrade head
+	@echo "$(BLUE)Upgrading tasks database...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic upgrade head
+	@echo "$(GREEN)✅ All migrations applied successfully!$(RESET)"
+
+# Rollback last migration
+db-downgrade: $(VENV)
+	@echo "$(YELLOW)⬇️  Rolling back last migration...$(RESET)"
+	@echo "$(YELLOW)Rolling back bot database...$(RESET)"
+	cd $(BOT_DIR) && $(PYTHON) -m alembic downgrade -1
+	@echo "$(YELLOW)Rolling back tasks database...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic downgrade -1
+	@echo "$(GREEN)✅ Rollback completed$(RESET)"
+
+# Reset databases (WARNING: destroys data)
+db-reset: db-stop
+	@echo "$(RED)🚨 WARNING: This will destroy all data!$(RESET)"
+	@read -p "Are you sure? Type 'yes' to continue: " confirm; \
+	if [ "$$confirm" = "yes" ]; then \
+		echo "$(YELLOW)🔄 Resetting databases...$(RESET)"; \
+		docker volume rm ai-slack-bot_mysql_data 2>/dev/null || true; \
+		$(MAKE) db-start; \
+		$(MAKE) db-upgrade; \
+		echo "$(GREEN)✅ Databases reset and migrations applied$(RESET)"; \
+	else \
+		echo "$(BLUE)❌ Reset cancelled$(RESET)"; \
+	fi
+
+# Show migration status
+db-status: $(VENV)
+	@echo "$(BLUE)📊 Database migration status:$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Bot Database (bot):$(RESET)"
+	@cd $(BOT_DIR) && $(PYTHON) -m alembic current -v || echo "$(RED)No migrations applied$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)Tasks Database (task):$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic current -v || echo "$(RED)No migrations applied$(RESET)"
+	@echo ""
+	@echo "$(BLUE)Pending migrations:$(RESET)"
+	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
