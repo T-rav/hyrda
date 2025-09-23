@@ -409,7 +409,7 @@ class HealthChecker:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Slack Bot - Health Dashboard</title>
+    <title>InsightMesh - Health Dashboard</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -484,7 +484,7 @@ class HealthChecker:
 <body>
     <div class="container">
         <div class="header">
-            <h1>🤖 AI Slack Bot Health Dashboard</h1>
+            <h1>🤖 InsightMesh System Health Dashboard</h1>
             <p class="auto-refresh">Auto-refreshing every 10 seconds...</p>
         </div>
 
