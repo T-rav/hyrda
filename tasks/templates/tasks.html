@@ -22,35 +22,58 @@
 
 <!-- Tasks Table -->
 <div class="glass-card">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <h3 class="mb-0">
             <i data-lucide="list" class="icon me-2"></i>All Tasks
             <span class="badge bg-primary ms-2" id="tasks-count">0</span>
         </h3>
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+            <i data-lucide="plus" class="icon me-1"></i>Create Task
+        </button>
     </div>
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th>Task ID</th>
-                    <th>Name</th>
-                    <th>Function</th>
-                    <th>Trigger</th>
-                    <th>Next Run</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="tasks-table">
-                <tr>
-                    <td colspan="7" class="text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>
+                            <i data-lucide="tag" class="icon-sm me-1"></i>Task ID
+                        </th>
+                        <th>
+                            <i data-lucide="type" class="icon-sm me-1"></i>Name
+                        </th>
+                        <th>
+                            <i data-lucide="code" class="icon-sm me-1"></i>Function
+                        </th>
+                        <th>
+                            <i data-lucide="calendar" class="icon-sm me-1"></i>Trigger
+                        </th>
+                        <th>
+                            <i data-lucide="clock" class="icon-sm me-1"></i>Next Run
+                        </th>
+                        <th>
+                            <i data-lucide="activity" class="icon-sm me-1"></i>Status
+                        </th>
+                        <th>
+                            <i data-lucide="settings" class="icon-sm me-1"></i>Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tasks-table">
+                    <tr>
+                        <td colspan="7" class="text-center py-5">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="spinner-border text-primary mb-3" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="text-muted mb-0">Loading tasks...</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
