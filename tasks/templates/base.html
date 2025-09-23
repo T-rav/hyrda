@@ -11,6 +11,9 @@
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
+    <!-- Lucide Icons (Modern alternative) -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
     <style>
         /* Design System - Color Tokens */
         :root {
@@ -193,6 +196,49 @@
 
         .header-icon {
             color: var(--color-primary);
+            width: 24px;
+            height: 24px;
+            stroke-width: 2;
+        }
+
+        /* Modern Icon Styling */
+        .icon {
+            width: 20px;
+            height: 20px;
+            stroke-width: 2;
+            vertical-align: middle;
+        }
+
+        .icon-sm {
+            width: 16px;
+            height: 16px;
+            stroke-width: 2;
+        }
+
+        .icon-lg {
+            width: 28px;
+            height: 28px;
+            stroke-width: 2;
+        }
+
+        /* Navigation Pills Styling */
+        .nav-pills .nav-link {
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            margin: 0 0.25rem;
+            transition: all 0.2s ease;
+            color: #64748b;
+            font-weight: 500;
+        }
+
+        .nav-pills .nav-link:hover {
+            background-color: rgba(139, 92, 246, 0.1);
+            color: var(--color-primary);
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: var(--color-primary);
+            color: white;
         }
 
         /* Main Content */
@@ -263,19 +309,19 @@
         <header class="app-header">
             <div class="header-content">
                 <div class="header-title">
-                    <i class="fas fa-clock header-icon" size="28"></i>
+                    <i data-lucide="calendar-clock" class="header-icon"></i>
                     <h1>InsightMesh Tasks</h1>
                 </div>
                 <div class="header-info">
                     <nav class="nav nav-pills">
                         <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="/">
-                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                            <i data-lucide="layout-dashboard" class="icon me-2"></i>Dashboard
                         </a>
                         <a class="nav-link {% if request.endpoint == 'tasks_page' %}active{% endif %}" href="/tasks">
-                            <i class="fas fa-tasks me-1"></i>Tasks
+                            <i data-lucide="list-checks" class="icon me-2"></i>Tasks
                         </a>
                         <a class="nav-link" href="http://localhost:8080/ui" target="_blank">
-                            <i class="fas fa-heart me-1"></i>Health
+                            <i data-lucide="activity" class="icon me-2"></i>Health
                         </a>
                     </nav>
                 </div>
@@ -373,6 +419,15 @@
             }
         }
 
+    </script>
+
+    <!-- Initialize Lucide Icons -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        });
     </script>
 
     {% block scripts %}{% endblock %}

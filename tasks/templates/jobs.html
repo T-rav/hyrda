@@ -5,16 +5,16 @@
 {% block content %}
 <div class="glass-card mb-4">
     <div class="d-flex justify-content-between align-items-center">
-        <h2 class="mb-0"><i class="fas fa-tasks text-primary me-2"></i>Task Management</h2>
+        <h2 class="mb-0"><i data-lucide="settings" class="icon text-primary me-2"></i>Task Management</h2>
         <div>
             <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createTaskModal">
-                <i class="fas fa-plus me-1"></i>Create Task
+                <i data-lucide="plus" class="icon-sm me-1"></i>Create Task
             </button>
             <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
-                <i class="fas fa-play me-1"></i>Auto-refresh
+                <i data-lucide="play" class="icon-sm me-1"></i>Auto-refresh
             </button>
             <button class="btn btn-outline-secondary" onclick="refreshData()">
-                <i class="fas fa-sync-alt me-1"></i>Refresh
+                <i data-lucide="refresh-cw" class="icon-sm me-1"></i>Refresh
             </button>
         </div>
     </div>
@@ -24,7 +24,7 @@
 <div class="glass-card">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">
-            <i class="fas fa-list me-2"></i>All Tasks
+            <i data-lucide="list" class="icon me-2"></i>All Tasks
             <span class="badge bg-primary ms-2" id="tasks-count">0</span>
         </h3>
     </div>
