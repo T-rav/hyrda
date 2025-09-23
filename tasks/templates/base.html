@@ -241,6 +241,86 @@
             color: white;
         }
 
+        /* Modern Modal Styling */
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .modal-header {
+            border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+            padding: 1.5rem;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(167, 139, 250, 0.05) 100%);
+            border-radius: 16px 16px 0 0;
+        }
+
+        .modal-title {
+            font-weight: 600;
+            color: #1a202c;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .modal-footer {
+            border-top: 1px solid rgba(139, 92, 246, 0.1);
+            padding: 1.5rem;
+            background: rgba(248, 250, 252, 0.5);
+            border-radius: 0 0 16px 16px;
+        }
+
+        /* Modern Form Controls */
+        .form-control, .form-select {
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 0.2rem rgba(139, 92, 246, 0.15);
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Modern Alert Styling */
+        .alert-info {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 8px;
+            color: #1e40af;
+        }
+
+        /* Close Button Styling */
+        .btn-close {
+            background: none;
+            border: none;
+            font-size: 1.25rem;
+            color: #6b7280;
+            opacity: 0.7;
+            transition: all 0.2s ease;
+        }
+
+        .btn-close:hover {
+            opacity: 1;
+            color: var(--color-primary);
+        }
+
         /* Main Content */
         .main-content {
             max-width: 1200px;
