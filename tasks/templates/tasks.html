@@ -559,7 +559,7 @@
             showToast('Job created successfully!', 'success');
 
             // Close modal and refresh
-            const modal = bootstrap.Modal.getInstance(document.getElementById('createJobModal'));
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTaskModal'));
             modal.hide();
 
             // Reset form
@@ -577,9 +577,9 @@
 
     async function viewTaskDetails(taskId) {
         try {
-            const job = await apiCall(`/api/jobs/${jobId}`);
+            const job = await apiCall(`/api/jobs/${taskId}`);
 
-            const content = document.getElementById('jobDetailsContent');
+            const content = document.getElementById('taskDetailsContent');
             content.innerHTML = `
                 <div class="row">
                     <div class="col-md-6">
@@ -617,7 +617,7 @@
                 ` : ''}
             `;
 
-            const modal = new bootstrap.Modal(document.getElementById('jobDetailsModal'));
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
             modal.show();
 
         } catch (error) {
@@ -628,8 +628,8 @@
     // Task action functions (same as dashboard)
     async function pauseTask(taskId) {
         try {
-            await apiCall(`/api/jobs/${jobId}/pause`, { method: 'POST' });
-            showToast(`Job ${jobId} paused successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}/pause`, { method: 'POST' });
+            showToast(`Job ${taskId} paused successfully`, 'success');
             refreshData();
         } catch (error) {
             showToast(`Error pausing job: ${error.message}`, 'danger');
@@ -638,8 +638,8 @@
 
     async function resumeTask(taskId) {
         try {
-            await apiCall(`/api/jobs/${jobId}/resume`, { method: 'POST' });
-            showToast(`Job ${jobId} resumed successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}/resume`, { method: 'POST' });
+            showToast(`Job ${taskId} resumed successfully`, 'success');
             refreshData();
         } catch (error) {
             showToast(`Error resuming job: ${error.message}`, 'danger');
@@ -647,13 +647,13 @@
     }
 
     async function deleteTask(taskId) {
-        if (!confirm(`Are you sure you want to delete job ${jobId}?`)) {
+        if (!confirm(`Are you sure you want to delete job ${taskId}?`)) {
             return;
         }
 
         try {
-            await apiCall(`/api/jobs/${jobId}`, { method: 'DELETE' });
-            showToast(`Job ${jobId} deleted successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}`, { method: 'DELETE' });
+            showToast(`Job ${taskId} deleted successfully`, 'success');
             refreshData();
         } catch (error) {
             showToast(`Error deleting job: ${error.message}`, 'danger');
@@ -661,13 +661,13 @@
     }
 
     async function runTaskOnce(taskId) {
-        if (!confirm(`Run job ${jobId} once immediately?`)) {
+        if (!confirm(`Run job ${taskId} once immediately?`)) {
             return;
         }
 
         try {
-            const response = await apiCall(`/api/jobs/${jobId}/run-once`, { method: 'POST' });
-            showToast(`Job ${jobId} queued for immediate execution`, 'success');
+            const response = await apiCall(`/api/jobs/${taskId}/run-once`, { method: 'POST' });
+            showToast(`Job ${taskId} queued for immediate execution`, 'success');
             refreshData();
         } catch (error) {
             showToast(`Error running job: ${error.message}`, 'danger');
@@ -675,13 +675,13 @@
     }
 
     async function retryTask(taskId) {
-        if (!confirm(`Retry/re-queue job ${jobId}?`)) {
+        if (!confirm(`Retry/re-queue job ${taskId}?`)) {
             return;
         }
 
         try {
-            await apiCall(`/api/jobs/${jobId}/retry`, { method: 'POST' });
-            showToast(`Job ${jobId} queued for retry`, 'success');
+            await apiCall(`/api/jobs/${taskId}/retry`, { method: 'POST' });
+            showToast(`Job ${taskId} queued for retry`, 'success');
             refreshData();
         } catch (error) {
             showToast(`Error retrying job: ${error.message}`, 'danger');
