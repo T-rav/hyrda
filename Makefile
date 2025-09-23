@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-bot-only start-tasks-only
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-tasks-only
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -41,9 +41,7 @@ help:
 	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run bot + task scheduler (recommended)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
-	@echo "  start-bot-only   🤖 Run only the AI Slack Bot (with Redis)"
 	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
-	@echo "  start-redis      🔴 Start Redis service"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -110,7 +108,7 @@ check-env:
 		exit 1; \
 	fi
 
-# Start Redis service (required for conversation caching)
+# Start Redis service (required for conversation caching) - internal target
 start-redis:
 	@echo "$(BLUE)Starting Redis service...$(RESET)"
 	@if command -v brew >/dev/null 2>&1; then \
@@ -325,10 +323,6 @@ start-with-tasks:
 	echo "$(YELLOW)Stopping Task Scheduler...$(RESET)"; \
 	kill $$TASKS_PID 2>/dev/null || true
 
-# Start only the bot (original behavior)
-start-bot-only: install-dev health-ui check-env start-redis
-	@echo "$(GREEN)🤖 Starting AI Slack Bot only...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) app.py
 
 # Start only the tasks service
 start-tasks-only:
