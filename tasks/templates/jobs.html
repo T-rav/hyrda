@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Jobs - APScheduler WebUI{% endblock %}
+{% block title %}Tasks - InsightMesh Tasks WebUI{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="fas fa-tasks text-primary me-2"></i>Jobs Management</h1>
+    <h1><i class="fas fa-tasks text-primary me-2"></i>InsightMesh Tasks</h1>
     <div>
-        <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createJobModal">
-            <i class="fas fa-plus me-1"></i>Create Job
+        <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+            <i class="fas fa-plus me-1"></i>Create Task
         </button>
         <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
             <i class="fas fa-play me-1"></i>Auto-refresh
@@ -18,12 +18,12 @@
     </div>
 </div>
 
-<!-- Jobs Table -->
+<!-- Tasks Table -->
 <div class="card">
     <div class="card-header">
         <h5 class="card-title mb-0">
-            <i class="fas fa-list me-2"></i>All Jobs
-            <span class="badge bg-primary ms-2" id="jobs-count">0</span>
+            <i class="fas fa-list me-2"></i>All Tasks
+            <span class="badge bg-primary ms-2" id="tasks-count">0</span>
         </h5>
     </div>
     <div class="card-body">
@@ -31,7 +31,7 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>Job ID</th>
+                        <th>Task ID</th>
                         <th>Name</th>
                         <th>Function</th>
                         <th>Trigger</th>
@@ -40,7 +40,7 @@
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody id="jobs-table">
+                <tbody id="tasks-table">
                     <tr>
                         <td colspan="7" class="text-center">
                             <div class="spinner-border text-primary" role="status">
@@ -54,12 +54,12 @@
     </div>
 </div>
 
-<!-- Create Job Modal -->
-<div class="modal fade" id="createJobModal" tabindex="-1" aria-labelledby="createJobModalLabel" aria-hidden="true">
+<!-- Create Task Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="createJobModalLabel">Create New Job</h5>
+                <h5 class="modal-title" id="createTaskModalLabel">Create New Task</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -67,16 +67,16 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="jobType" class="form-label">Job Type</label>
-                                <select class="form-select" id="jobType" required>
-                                    <option value="">Select job type...</option>
+                                <label for="taskType" class="form-label">Task Type</label>
+                                <select class="form-select" id="taskType" required>
+                                    <option value="">Select task type...</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3">
-                                <label for="jobId" class="form-label">Job ID (Optional)</label>
-                                <input type="text" class="form-control" id="jobId" placeholder="Auto-generated if empty">
+                                <label for="taskId" class="form-label">Task ID (Optional)</label>
+                                <input type="text" class="form-control" id="taskId" placeholder="Auto-generated if empty">
                             </div>
                         </div>
                     </div>
@@ -99,32 +99,32 @@
                         </div>
                     </div>
 
-                    <div class="mb-3" id="jobParameters">
-                        <label class="form-label">Job Parameters</label>
+                    <div class="mb-3" id="taskParameters">
+                        <label class="form-label">Task Parameters</label>
                         <div class="alert alert-info">
-                            <small>Parameters will appear here based on the selected job type</small>
+                            <small>Parameters will appear here based on the selected task type</small>
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="createJob()">Create Job</button>
+                <button type="button" class="btn btn-primary" onclick="createTask()">Create Task</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Job Details Modal -->
-<div class="modal fade" id="jobDetailsModal" tabindex="-1" aria-labelledby="jobDetailsModalLabel" aria-hidden="true">
+<!-- Task Details Modal -->
+<div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="jobDetailsModalLabel">Job Details</h5>
+                <h5 class="modal-title" id="taskDetailsModalLabel">Task Details</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="jobDetailsContent">
-                <!-- Job details will be loaded here -->
+            <div class="modal-body" id="taskDetailsContent">
+                <!-- Task details will be loaded here -->
             </div>
         </div>
     </div>
@@ -133,60 +133,60 @@
 
 {% block scripts %}
 <script>
-    let jobsData = [];
-    let jobTypesData = [];
+    let tasksData = [];
+    let taskTypesData = [];
 
     // Load data on page load
     document.addEventListener('DOMContentLoaded', function() {
-        loadJobTypes();
+        loadTaskTypes();
         refreshData();
         setupScheduleParametersHandler();
     });
 
     async function refreshData() {
         try {
-            await loadJobs();
-            updateJobsTable();
+            await loadTasks();
+            updateTasksTable();
         } catch (error) {
             console.error('Error refreshing data:', error);
             showToast('Error refreshing data: ' + error.message, 'danger');
         }
     }
 
-    async function loadJobs() {
+    async function loadTasks() {
         try {
             const response = await apiCall('/api/jobs');
-            jobsData = response.jobs || [];
-            document.getElementById('jobs-count').textContent = jobsData.length;
+            tasksData = response.jobs || [];
+            document.getElementById('tasks-count').textContent = tasksData.length;
         } catch (error) {
-            console.error('Error loading jobs:', error);
-            jobsData = [];
+            console.error('Error loading tasks:', error);
+            tasksData = [];
         }
     }
 
-    async function loadJobTypes() {
+    async function loadTaskTypes() {
         try {
             const response = await apiCall('/api/job-types');
-            jobTypesData = response.job_types || [];
-            populateJobTypeSelect();
+            taskTypesData = response.job_types || [];
+            populateTaskTypeSelect();
         } catch (error) {
-            console.error('Error loading job types:', error);
+            console.error('Error loading task types:', error);
         }
     }
 
-    function populateJobTypeSelect() {
-        const select = document.getElementById('jobType');
-        select.innerHTML = '<option value="">Select job type...</option>';
+    function populateTaskTypeSelect() {
+        const select = document.getElementById('taskType');
+        select.innerHTML = '<option value="">Select task type...</option>';
 
-        jobTypesData.forEach(jobType => {
+        taskTypesData.forEach(taskType => {
             const option = document.createElement('option');
-            option.value = jobType.type;
-            option.textContent = `${jobType.name} - ${jobType.description}`;
+            option.value = taskType.type;
+            option.textContent = `${taskType.name} - ${taskType.description}`;
             select.appendChild(option);
         });
 
-        // Add event listener to handle job type selection
-        select.addEventListener('change', updateJobParameters);
+        // Add event listener to handle task type selection
+        select.addEventListener('change', updateTaskParameters);
     }
 
     function setupScheduleParametersHandler() {
@@ -276,18 +276,18 @@
         container.innerHTML = parametersHTML;
     }
 
-    function updateJobsTable() {
-        const tbody = document.getElementById('jobs-table');
+    function updateTasksTable() {
+        const tbody = document.getElementById('tasks-table');
 
-        if (jobsData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No jobs scheduled</td></tr>';
+        if (tasksData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No tasks scheduled</td></tr>';
             return;
         }
 
-        tbody.innerHTML = jobsData.map(job => `
+        tbody.innerHTML = tasksData.map(job => `
             <tr>
                 <td><code>${job.id}</code></td>
-                <td>${job.name || 'Unnamed Job'}</td>
+                <td>${job.name || 'Unnamed Task'}</td>
                 <td><small class="text-muted">${job.func || 'Unknown'}</small></td>
                 <td><span class="badge bg-secondary">${job.trigger || 'Unknown'}</span></td>
                 <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
@@ -299,19 +299,19 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-sm" onclick="viewJobDetails('${job.id}')" title="View Details">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewTaskDetails('${job.id}')" title="View Details">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeJob' : 'pauseJob'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
+                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
                             <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
                         </button>
-                        <button class="btn btn-outline-info btn-sm" onclick="runJobOnce('${job.id}')" title="Run Once">
+                        <button class="btn btn-outline-info btn-sm" onclick="runTaskOnce('${job.id}')" title="Run Once">
                             <i class="fas fa-play-circle"></i>
                         </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="retryJob('${job.id}')" title="Retry">
+                        <button class="btn btn-outline-warning btn-sm" onclick="retryTask('${job.id}')" title="Retry">
                             <i class="fas fa-redo"></i>
                         </button>
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteJob('${job.id}')" title="Delete">
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${job.id}')" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -320,7 +320,7 @@
         `).join('');
     }
 
-    async function createJob() {
+    async function createTask() {
         try {
             const jobType = document.getElementById('jobType').value;
             const jobId = document.getElementById('jobId').value;
@@ -422,7 +422,7 @@
         }
     }
 
-    async function viewJobDetails(jobId) {
+    async function viewTaskDetails(taskId) {
         try {
             const job = await apiCall(`/api/jobs/${jobId}`);
 
@@ -472,8 +472,8 @@
         }
     }
 
-    // Job action functions (same as dashboard)
-    async function pauseJob(jobId) {
+    // Task action functions (same as dashboard)
+    async function pauseTask(taskId) {
         try {
             await apiCall(`/api/jobs/${jobId}/pause`, { method: 'POST' });
             showToast(`Job ${jobId} paused successfully`, 'success');
@@ -483,7 +483,7 @@
         }
     }
 
-    async function resumeJob(jobId) {
+    async function resumeTask(taskId) {
         try {
             await apiCall(`/api/jobs/${jobId}/resume`, { method: 'POST' });
             showToast(`Job ${jobId} resumed successfully`, 'success');
@@ -493,7 +493,7 @@
         }
     }
 
-    async function deleteJob(jobId) {
+    async function deleteTask(taskId) {
         if (!confirm(`Are you sure you want to delete job ${jobId}?`)) {
             return;
         }
@@ -507,7 +507,7 @@
         }
     }
 
-    async function runJobOnce(jobId) {
+    async function runTaskOnce(taskId) {
         if (!confirm(`Run job ${jobId} once immediately?`)) {
             return;
         }
@@ -521,7 +521,7 @@
         }
     }
 
-    async function retryJob(jobId) {
+    async function retryTask(taskId) {
         if (!confirm(`Retry/re-queue job ${jobId}?`)) {
             return;
         }

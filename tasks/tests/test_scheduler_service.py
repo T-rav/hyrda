@@ -1,6 +1,5 @@
 """Tests for scheduler service - fixed version."""
 
-
 import pytest
 
 from services.scheduler_service import SchedulerService

@@ -117,7 +117,8 @@ class GoogleDriveIngestJob(BaseJob):
             # Run the ingestion process
             result = subprocess.run(
                 cmd,
-                check=False, cwd=str(ingest_path),
+                check=False,
+                cwd=str(ingest_path),
                 capture_output=True,
                 text=True,
                 timeout=3600,  # 1 hour timeout
