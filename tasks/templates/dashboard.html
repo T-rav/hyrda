@@ -3,35 +3,27 @@
 {% block title %}Dashboard - InsightMesh Tasks{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="fas fa-tachometer-alt text-primary me-2"></i>Dashboard</h1>
-    <div>
-        <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
-            <i class="fas fa-play me-1"></i>Auto-refresh
-        </button>
-        <button class="btn btn-outline-secondary" onclick="refreshData()">
-            <i class="fas fa-sync-alt me-1"></i>Refresh
-        </button>
+<div class="glass-card mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h2 class="mb-0"><i class="fas fa-tachometer-alt text-primary me-2"></i>Dashboard</h2>
+        <div>
+            <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
+                <i class="fas fa-play me-1"></i>Auto-refresh
+            </button>
+            <button class="btn btn-outline-secondary" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh
+            </button>
+        </div>
     </div>
 </div>
 
 <!-- Scheduler Status -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-server me-2"></i>Scheduler Status
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row" id="scheduler-info">
-                    <div class="col-12 text-center">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                </div>
+<div class="glass-card mb-4">
+    <h3 class="mb-3"><i class="fas fa-server me-2"></i>Scheduler Status</h3>
+    <div class="row" id="scheduler-info">
+        <div class="col-12 text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
             </div>
         </div>
     </div>
@@ -102,43 +94,37 @@
 </div>
 
 <!-- Recent Tasks -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Recent Tasks
-                </h5>
-                <a href="/tasks" class="btn btn-sm btn-outline-primary">
-                    View All <i class="fas fa-arrow-right ms-1"></i>
-                </a>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Task ID</th>
-                                <th>Name</th>
-                                <th>Trigger</th>
-                                <th>Next Run</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="recent-tasks-table">
-                            <tr>
-                                <td colspan="6" class="text-center">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Loading...</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+<div class="glass-card">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">
+            <i class="fas fa-history me-2"></i>Recent Tasks
+        </h3>
+        <a href="/tasks" class="btn btn-sm btn-outline-primary">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Task ID</th>
+                    <th>Name</th>
+                    <th>Trigger</th>
+                    <th>Next Run</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="recent-tasks-table">
+                <tr>
+                    <td colspan="6" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}
