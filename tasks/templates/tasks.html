@@ -247,27 +247,64 @@
                 container.innerHTML = `
                     <div class="row">
                         <div class="col-4">
-                            <input type="number" class="form-control" id="hours" placeholder="Hours" value="1">
+                            <label for="hours" class="form-label">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Hours
+                            </label>
+                            <input type="number" class="form-control" id="hours" placeholder="0" value="1" min="0">
                         </div>
                         <div class="col-4">
-                            <input type="number" class="form-control" id="minutes" placeholder="Minutes" value="0">
+                            <label for="minutes" class="form-label">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Minutes
+                            </label>
+                            <input type="number" class="form-control" id="minutes" placeholder="0" value="0" min="0" max="59">
                         </div>
                         <div class="col-4">
-                            <input type="number" class="form-control" id="seconds" placeholder="Seconds" value="0">
+                            <label for="seconds" class="form-label">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Seconds
+                            </label>
+                            <input type="number" class="form-control" id="seconds" placeholder="0" value="0" min="0" max="59">
                         </div>
                     </div>
                 `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
                 break;
             case 'cron':
                 container.innerHTML = `
-                    <input type="text" class="form-control" id="cronExpression"
-                           placeholder="0 0 * * *" title="Cron expression (minute hour day month day_of_week)">
+                    <div>
+                        <label for="cronExpression" class="form-label">
+                            <i data-lucide="terminal" class="icon-sm me-1"></i>Cron Expression
+                        </label>
+                        <input type="text" class="form-control" id="cronExpression"
+                               placeholder="0 0 * * *" title="Cron expression (minute hour day month day_of_week)">
+                        <div class="form-text">
+                            <small>Format: minute hour day month day_of_week (e.g., "0 0 * * *" for daily at midnight)</small>
+                        </div>
+                    </div>
                 `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
                 break;
             case 'date':
                 container.innerHTML = `
-                    <input type="datetime-local" class="form-control" id="runDate">
+                    <div>
+                        <label for="runDate" class="form-label">
+                            <i data-lucide="calendar-days" class="icon-sm me-1"></i>Run Date & Time
+                        </label>
+                        <input type="datetime-local" class="form-control" id="runDate">
+                        <div class="form-text">
+                            <small>Select the specific date and time to run this task</small>
+                        </div>
+                    </div>
                 `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
                 break;
         }
     }
