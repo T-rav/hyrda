@@ -61,7 +61,7 @@ def index() -> str:
 @app.route("/tasks")
 def tasks_page() -> str:
     """Tasks management page."""
-    return render_template("jobs.html")
+    return render_template("tasks.html")
 
 
 # API Routes
