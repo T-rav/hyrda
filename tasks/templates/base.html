@@ -12,87 +12,124 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 
     <style>
-        /* Professional color palette inspired by governance framework */
+        /* Design System - Color Tokens */
         :root {
-            --bs-primary: #9f7aea;
-            --bs-primary-rgb: 159, 122, 234;
-            --bs-secondary: #64748b;
-            --bs-secondary-rgb: 100, 116, 139;
-            --bs-success: #10b981;
-            --bs-success-rgb: 16, 185, 129;
-            --bs-info: #3b82f6;
-            --bs-info-rgb: 59, 130, 246;
-            --bs-warning: #f59e0b;
-            --bs-warning-rgb: 245, 158, 11;
-            --bs-danger: #ef4444;
-            --bs-danger-rgb: 239, 68, 68;
+            /* Base Color Palette - Single source of truth */
+            --purple-400: #a78bfa;
+            --purple-500: #9f7aea;
+            --purple-600: #8b5cf6;
+            --purple-700: #7c3aed;
+
+            --emerald-500: #10b981;
+            --emerald-600: #059669;
+            --emerald-700: #047857;
+
+            --slate-600: #64748b;
+            --blue-500: #3b82f6;
+            --amber-400: #fbbf24;
+            --amber-500: #f59e0b;
+            --red-500: #ef4444;
+
+            /* Semantic Color Tokens - Reference base colors */
+            --color-primary: var(--purple-500);
+            --color-primary-hover: var(--purple-600);
+            --color-primary-active: var(--purple-700);
+            --color-primary-rgb: 159, 122, 234;
+
+            --color-success: var(--emerald-500);
+            --color-success-hover: var(--emerald-600);
+            --color-success-active: var(--emerald-700);
+            --color-success-rgb: 16, 185, 129;
+
+            --color-secondary: var(--slate-600);
+            --color-secondary-rgb: 100, 116, 139;
+            --color-info: var(--blue-500);
+            --color-info-rgb: 59, 130, 246;
+            --color-warning: var(--amber-400);
+            --color-warning-rgb: 251, 191, 36;
+            --color-danger: var(--red-500);
+            --color-danger-rgb: 239, 68, 68;
+
+            /* Bootstrap Integration Layer */
+            --bs-primary: var(--color-primary);
+            --bs-primary-rgb: var(--color-primary-rgb);
+            --bs-secondary: var(--color-secondary);
+            --bs-secondary-rgb: var(--color-secondary-rgb);
+            --bs-success: var(--color-success);
+            --bs-success-rgb: var(--color-success-rgb);
+            --bs-info: var(--color-info);
+            --bs-info-rgb: var(--color-info-rgb);
+            --bs-warning: var(--color-warning);
+            --bs-warning-rgb: var(--color-warning-rgb);
+            --bs-danger: var(--color-danger);
+            --bs-danger-rgb: var(--color-danger-rgb);
         }
 
-        /* Primary button styling */
+        /* Primary button styling using centralized variables */
         .btn-primary {
             --bs-btn-color: #fff;
-            --bs-btn-bg: #9f7aea;
-            --bs-btn-border-color: #9f7aea;
+            --bs-btn-bg: var(--color-primary);
+            --bs-btn-border-color: var(--color-primary);
             --bs-btn-hover-color: #fff;
-            --bs-btn-hover-bg: #8b5cf6;
-            --bs-btn-hover-border-color: #8b5cf6;
+            --bs-btn-hover-bg: var(--color-primary-hover);
+            --bs-btn-hover-border-color: var(--color-primary-hover);
             --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #7c3aed;
-            --bs-btn-active-border-color: #7c3aed;
-            --bs-btn-focus-shadow-rgb: 159, 122, 234;
+            --bs-btn-active-bg: var(--color-primary-active);
+            --bs-btn-active-border-color: var(--color-primary-active);
+            --bs-btn-focus-shadow-rgb: var(--color-primary-rgb);
         }
 
         .btn-outline-primary {
-            --bs-btn-color: #9f7aea;
-            --bs-btn-border-color: #9f7aea;
+            --bs-btn-color: var(--color-primary);
+            --bs-btn-border-color: var(--color-primary);
             --bs-btn-hover-color: #fff;
-            --bs-btn-hover-bg: #9f7aea;
-            --bs-btn-hover-border-color: #9f7aea;
+            --bs-btn-hover-bg: var(--color-primary);
+            --bs-btn-hover-border-color: var(--color-primary);
             --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #9f7aea;
-            --bs-btn-active-border-color: #9f7aea;
+            --bs-btn-active-bg: var(--color-primary);
+            --bs-btn-active-border-color: var(--color-primary);
         }
 
-        /* Utility classes */
+        /* Primary utility classes */
         .bg-primary {
-            background-color: #9f7aea !important;
+            background-color: var(--color-primary) !important;
         }
 
         .text-primary {
-            color: #9f7aea !important;
+            color: var(--color-primary) !important;
         }
 
         .badge.bg-primary {
-            background-color: #9f7aea !important;
+            background-color: var(--color-primary) !important;
         }
 
         .spinner-border.text-primary {
-            color: #9f7aea !important;
+            color: var(--color-primary) !important;
         }
 
-        /* Success/Green color overrides */
+        /* Success/Green styling using centralized variables */
         .btn-success {
             --bs-btn-color: #fff;
-            --bs-btn-bg: #10b981;
-            --bs-btn-border-color: #10b981;
+            --bs-btn-bg: var(--color-success);
+            --bs-btn-border-color: var(--color-success);
             --bs-btn-hover-color: #fff;
-            --bs-btn-hover-bg: #059669;
-            --bs-btn-hover-border-color: #059669;
+            --bs-btn-hover-bg: var(--color-success-hover);
+            --bs-btn-hover-border-color: var(--color-success-hover);
             --bs-btn-active-color: #fff;
-            --bs-btn-active-bg: #047857;
-            --bs-btn-active-border-color: #047857;
+            --bs-btn-active-bg: var(--color-success-active);
+            --bs-btn-active-border-color: var(--color-success-active);
         }
 
         .bg-success {
-            background-color: #10b981 !important;
+            background-color: var(--color-success) !important;
         }
 
         .text-success {
-            color: #10b981 !important;
+            color: var(--color-success) !important;
         }
 
         .badge.bg-success {
-            background-color: #10b981 !important;
+            background-color: var(--color-success) !important;
         }
 
         /* Enhanced card styling */
