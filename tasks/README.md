@@ -284,7 +284,7 @@ tasks/
 ├── templates/             # Web UI templates
 │   ├── base.html
 │   ├── dashboard.html
-│   └── jobs.html
+│   └── tasks.html
 ├── tests/                 # Test suite
 └── static/                # Static assets
 ```
