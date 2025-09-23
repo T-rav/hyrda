@@ -125,6 +125,27 @@ include = ["."]
 exclude = ["tests", "**/__pycache__", "**/node_modules"]
 typeCheckingMode = "standard"
 
+# Coverage configuration (centralized)
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "*/tests/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "setup.py",
+    "app.py",  # Flask entry point - difficult to test without integration tests
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+skip_covered = false
+
+[tool.coverage.html]
+directory = "htmlcov"
+
 # Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -133,7 +154,7 @@ asyncio_mode = "auto"
 addopts = [
     "--verbose",
     "--cov=.",
-    "--cov-fail-under=40",
+    "--cov-fail-under=70",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
 ]

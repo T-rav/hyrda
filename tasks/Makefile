@@ -1,5 +1,9 @@
 # AI Slack Bot - Tasks Service Makefile
 
+# Coverage configuration (centralized)
+COVERAGE_MIN = 70
+COVERAGE_ARGS = --cov=. --cov-fail-under=$(COVERAGE_MIN) --cov-report=term-missing --cov-report=html:htmlcov
+
 .PHONY: help install install-dev test test-coverage lint lint-check typecheck quality clean run docker-build docker-run pre-commit ci setup-dev
 
 # Default target
@@ -7,8 +11,8 @@ help:
 	@echo "Available targets:"
 	@echo "  install       Install Python dependencies"
 	@echo "  install-dev   Install development dependencies"
-	@echo "  test          Run test suite"
-	@echo "  test-coverage Run tests with coverage report"
+	@echo "  test          Run test suite with $(COVERAGE_MIN)% coverage enforcement"
+	@echo "  test-coverage Run test suite with $(COVERAGE_MIN)% coverage enforcement"
 	@echo "  lint          Auto-fix linting, formatting, and import issues"
 	@echo "  lint-check    Check code quality without fixing"
 	@echo "  typecheck     Run type checking"
@@ -30,10 +34,10 @@ install-dev:
 
 # Testing
 test:
-	python3 -m pytest tests/ -v
+	python3 -m pytest tests/ -v $(COVERAGE_ARGS)
 
 test-coverage:
-	python3 -m pytest tests/ -v --cov=. --cov-report=html --cov-report=term-missing
+	python3 -m pytest tests/ -v $(COVERAGE_ARGS)
 
 # Code Quality - Unified tooling
 lint:
