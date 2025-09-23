@@ -131,6 +131,25 @@ class SchedulerService:
         if not job:
             return None
 
+        # Simple serialization - only include basic serializable data
+        safe_kwargs = {}
+        safe_args = []
+
+        # Only include simple serializable types
+        if job.kwargs:
+            for key, value in job.kwargs.items():
+                if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                    safe_kwargs[key] = value
+                else:
+                    safe_kwargs[key] = str(value)
+
+        if job.args:
+            for arg in job.args:
+                if isinstance(arg, (str, int, float, bool, list, dict, type(None))):
+                    safe_args.append(arg)
+                else:
+                    safe_args.append(str(arg))
+
         return {
             "id": job.id,
             "name": job.name,
@@ -140,8 +159,8 @@ class SchedulerService:
             if job.next_run_time
             else None,
             "pending": job.pending,
-            "kwargs": job.kwargs,
-            "args": job.args,
+            "kwargs": safe_kwargs,
+            "args": safe_args,
         }
 
     def get_scheduler_info(self) -> dict[str, Any]:

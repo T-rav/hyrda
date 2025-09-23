@@ -67,15 +67,15 @@ class TestElasticsearchDiversification:
 
         # Should have results from multiple different documents
         unique_files = set(file_names)
-        assert len(unique_files) >= 3, (
-            f"Expected 3+ unique files, got {len(unique_files)}: {unique_files}"
-        )
+        assert (
+            len(unique_files) >= 3
+        ), f"Expected 3+ unique files, got {len(unique_files)}: {unique_files}"
 
         # Should include Apple Doc 1, Apple Doc 2, Apple Doc 3, and Other Doc
         expected_files = {"Apple Doc 1", "Apple Doc 2", "Other Doc", "Apple Doc 3"}
-        assert unique_files.issubset(expected_files), (
-            f"Unexpected files: {unique_files - expected_files}"
-        )
+        assert unique_files.issubset(
+            expected_files
+        ), f"Unexpected files: {unique_files - expected_files}"
 
     def test_diversify_results_prioritizes_one_per_document(self):
         """Test that diversification takes 1 chunk per document before duplicating"""
@@ -116,9 +116,9 @@ class TestElasticsearchDiversification:
         file_names = [r["metadata"]["file_name"] for r in result]
         unique_files = set(file_names)
 
-        assert len(unique_files) == 4, (
-            f"Expected 4 unique files, got {len(unique_files)}: {unique_files}"
-        )
+        assert (
+            len(unique_files) == 4
+        ), f"Expected 4 unique files, got {len(unique_files)}: {unique_files}"
         assert unique_files == {"Doc A", "Doc B", "Doc C", "Doc D"}
 
         # Order should prioritize by similarity within the round-robin
@@ -262,9 +262,9 @@ class TestElasticsearchDiversification:
         unique_apple_files = set(apple_files)
 
         # Should have 4 different Apple documents represented
-        assert len(unique_apple_files) == 4, (
-            f"Expected 4 Apple documents, got {len(unique_apple_files)}: {unique_apple_files}"
-        )
+        assert (
+            len(unique_apple_files) == 4
+        ), f"Expected 4 Apple documents, got {len(unique_apple_files)}: {unique_apple_files}"
 
         # Should include the specific Apple documents we expect
         expected_apple_docs = {
