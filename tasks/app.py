@@ -2,7 +2,7 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 # Global instances
 app = Flask(__name__)
-scheduler_service: Optional[SchedulerService] = None
-job_registry: Optional[JobRegistry] = None
+scheduler_service: SchedulerService | None = None
+job_registry: JobRegistry | None = None
 
 
 def create_app() -> Flask:
@@ -58,9 +58,9 @@ def index() -> str:
     return render_template("dashboard.html")
 
 
-@app.route("/jobs")
-def jobs_page() -> str:
-    """Jobs management page."""
+@app.route("/tasks")
+def tasks_page() -> str:
+    """Tasks management page."""
     return render_template("jobs.html")
 
 

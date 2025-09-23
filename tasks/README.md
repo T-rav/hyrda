@@ -128,9 +128,9 @@ Collects and aggregates system metrics from various sources.
 
 - `GET /api/job-types` - List available job types with parameters
 
-## Creating Jobs via API
+## Creating Tasks via API
 
-### Example: Create Slack User Import Job
+### Example: Create Slack User Import Task
 
 ```bash
 curl -X POST http://localhost:5001/api/jobs \
@@ -198,7 +198,7 @@ The web interface provides:
 - Quick job actions (pause, resume, delete)
 - Auto-refresh capability
 
-### Jobs Management (`/jobs`)
+### Tasks Management (`/tasks`)
 - Complete job listing with details
 - Create new jobs with form wizard
 - Job details modal with full information
@@ -210,7 +210,7 @@ The service uses:
 - **SQLAlchemy**: Primary job store for persistence
 - **Redis**: Optional secondary job store for high-performance scenarios
 
-Jobs are stored with full metadata including:
+Tasks are stored with full metadata including:
 - Execution history
 - Parameter validation
 - Error tracking
@@ -386,7 +386,7 @@ SLACK_BOT_API_KEY=your-api-authentication-key
 
 ### Common Issues
 
-1. **Jobs not executing**
+1. **Tasks not executing**
    - Check scheduler status at `/api/scheduler/info`
    - Verify database connectivity
    - Review job parameters and trigger configuration

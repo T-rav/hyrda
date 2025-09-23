@@ -1,7 +1,7 @@
 """Job registry for managing different types of scheduled jobs."""
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from apscheduler.job import Job
 
@@ -30,7 +30,7 @@ class JobRegistry:
             "metrics_collection": MetricsCollectionJob,
         }
 
-    def get_available_job_types(self) -> List[dict[str, Any]]:
+    def get_available_job_types(self) -> list[dict[str, Any]]:
         """Get available job types with their descriptions."""
         job_types = []
 
@@ -50,8 +50,8 @@ class JobRegistry:
     def create_job(
         self,
         job_type: str,
-        job_id: Optional[str] = None,
-        schedule: Optional[dict[str, Any]] = None,
+        job_id: str | None = None,
+        schedule: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Job:
         """Create a new job of the specified type."""
@@ -82,6 +82,6 @@ class JobRegistry:
         logger.info(f"Created {job_type} job: {job.id}")
         return job
 
-    def get_job_class(self, job_type: str) -> Optional[type]:
+    def get_job_class(self, job_type: str) -> type | None:
         """Get job class for a given job type."""
         return self.job_types.get(job_type)

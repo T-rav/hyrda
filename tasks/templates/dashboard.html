@@ -44,8 +44,8 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title" id="total-jobs">-</h4>
-                        <p class="card-text">Total Jobs</p>
+                        <h4 class="card-title" id="total-tasks">-</h4>
+                        <p class="card-text">Total Tasks</p>
                     </div>
                     <div class="align-self-center">
                         <i class="fas fa-tasks fa-2x"></i>
@@ -59,8 +59,8 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title" id="running-jobs">-</h4>
-                        <p class="card-text">Running Jobs</p>
+                        <h4 class="card-title" id="running-tasks">-</h4>
+                        <p class="card-text">Running Tasks</p>
                     </div>
                     <div class="align-self-center">
                         <i class="fas fa-play-circle fa-2x"></i>
@@ -74,8 +74,8 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h4 class="card-title" id="paused-jobs">-</h4>
-                        <p class="card-text">Paused Jobs</p>
+                        <h4 class="card-title" id="paused-tasks">-</h4>
+                        <p class="card-text">Paused Tasks</p>
                     </div>
                     <div class="align-self-center">
                         <i class="fas fa-pause-circle fa-2x"></i>
@@ -101,15 +101,15 @@
     </div>
 </div>
 
-<!-- Recent Jobs -->
+<!-- Recent Tasks -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Recent Jobs
+                    <i class="fas fa-history me-2"></i>Recent Tasks
                 </h5>
-                <a href="/jobs" class="btn btn-sm btn-outline-primary">
+                <a href="/tasks" class="btn btn-sm btn-outline-primary">
                     View All <i class="fas fa-arrow-right ms-1"></i>
                 </a>
             </div>
@@ -118,7 +118,7 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Job ID</th>
+                                <th>Task ID</th>
                                 <th>Name</th>
                                 <th>Trigger</th>
                                 <th>Next Run</th>
@@ -126,7 +126,7 @@
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="recent-jobs-table">
+                        <tbody id="recent-tasks-table">
                             <tr>
                                 <td colspan="6" class="text-center">
                                     <div class="spinner-border text-primary" role="status">
@@ -146,7 +146,7 @@
 {% block scripts %}
 <script>
     let schedulerData = {};
-    let jobsData = [];
+    let tasksData = [];
 
     // Load data on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -157,7 +157,7 @@
         try {
             await Promise.all([
                 loadSchedulerInfo(),
-                loadJobs()
+                loadTasks()
             ]);
             updateDashboard();
         } catch (error) {
@@ -171,24 +171,24 @@
             schedulerData = await apiCall('/api/scheduler/info');
         } catch (error) {
             console.error('Error loading scheduler info:', error);
-            schedulerData = { running: false, jobs_count: 0 };
+            schedulerData = { running: false, tasks_count: 0 };
         }
     }
 
-    async function loadJobs() {
+    async function loadTasks() {
         try {
             const response = await apiCall('/api/jobs');
-            jobsData = response.jobs || [];
+            tasksData = response.jobs || [];
         } catch (error) {
-            console.error('Error loading jobs:', error);
-            jobsData = [];
+            console.error('Error loading tasks:', error);
+            tasksData = [];
         }
     }
 
     function updateDashboard() {
         updateSchedulerInfo();
         updateStatistics();
-        updateRecentJobsTable();
+        updateRecentTasksTable();
     }
 
     function updateSchedulerInfo() {
@@ -203,7 +203,7 @@
                 </span>
             </div>
             <div class="col-md-2">
-                <strong>Jobs Count:</strong>
+                <strong>Tasks Count:</strong>
                 <span class="badge bg-primary ms-2">${schedulerData.jobs_count || 0}</span>
             </div>
             <div class="col-md-2">
@@ -211,7 +211,7 @@
                 <span class="text-muted ms-2">${schedulerData.timezone || 'Unknown'}</span>
             </div>
             <div class="col-md-3">
-                <strong>Job Stores:</strong>
+                <strong>Task Stores:</strong>
                 <span class="text-muted ms-2">${schedulerData.job_stores ? schedulerData.job_stores.join(', ') : 'Unknown'}</span>
             </div>
             <div class="col-md-3">
@@ -222,21 +222,21 @@
     }
 
     function updateStatistics() {
-        const totalJobs = jobsData.length;
-        const runningJobs = jobsData.filter(job => !job.pending && job.next_run_time).length;
-        const pausedJobs = jobsData.filter(job => job.pending).length;
+        const totalTasks = tasksData.length;
+        const runningTasks = tasksData.filter(job => !job.pending && job.next_run_time).length;
+        const pausedTasks = tasksData.filter(job => job.pending).length;
 
         // Find next run time
-        const nextRuns = jobsData
+        const nextRuns = tasksData
             .filter(job => job.next_run_time && !job.pending)
             .map(job => new Date(job.next_run_time))
             .sort((a, b) => a - b);
 
         const nextRun = nextRuns.length > 0 ? nextRuns[0] : null;
 
-        document.getElementById('total-jobs').textContent = totalJobs;
-        document.getElementById('running-jobs').textContent = runningJobs;
-        document.getElementById('paused-jobs').textContent = pausedJobs;
+        document.getElementById('total-tasks').textContent = totalTasks;
+        document.getElementById('running-tasks').textContent = runningTasks;
+        document.getElementById('paused-tasks').textContent = pausedTasks;
 
         if (nextRun) {
             const now = new Date();
@@ -248,21 +248,21 @@
         }
     }
 
-    function updateRecentJobsTable() {
-        const tbody = document.getElementById('recent-jobs-table');
+    function updateRecentTasksTable() {
+        const tbody = document.getElementById('recent-tasks-table');
 
-        if (jobsData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No jobs scheduled</td></tr>';
+        if (tasksData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No tasks scheduled</td></tr>';
             return;
         }
 
-        // Show last 5 jobs
-        const recentJobs = jobsData.slice(0, 5);
+        // Show last 5 tasks
+        const recentTasks = tasksData.slice(0, 5);
 
-        tbody.innerHTML = recentJobs.map(job => `
+        tbody.innerHTML = recentTasks.map(job => `
             <tr>
                 <td><code>${job.id}</code></td>
-                <td>${job.name || 'Unnamed Job'}</td>
+                <td>${job.name || 'Unnamed Task'}</td>
                 <td><small class="text-muted">${job.trigger || 'Unknown'}</small></td>
                 <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
                 <td>
@@ -273,13 +273,13 @@
                 </td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-sm" onclick="viewJob('${job.id}')" title="View Details">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewTask('${job.id}')" title="View Details">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeJob' : 'pauseJob'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
+                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
                             <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
                         </button>
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteJob('${job.id}')" title="Delete">
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${job.id}')" title="Delete">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -288,42 +288,42 @@
         `).join('');
     }
 
-    // Job action functions
-    function viewJob(jobId) {
-        window.location.href = `/jobs?job=${jobId}`;
+    // Task action functions
+    function viewTask(taskId) {
+        window.location.href = `/tasks?task=${taskId}`;
     }
 
-    async function pauseJob(jobId) {
+    async function pauseTask(taskId) {
         try {
-            await apiCall(`/api/jobs/${jobId}/pause`, { method: 'POST' });
-            showToast(`Job ${jobId} paused successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}/pause`, { method: 'POST' });
+            showToast(`Task ${taskId} paused successfully`, 'success');
             refreshData();
         } catch (error) {
-            showToast(`Error pausing job: ${error.message}`, 'danger');
+            showToast(`Error pausing task: ${error.message}`, 'danger');
         }
     }
 
-    async function resumeJob(jobId) {
+    async function resumeTask(taskId) {
         try {
-            await apiCall(`/api/jobs/${jobId}/resume`, { method: 'POST' });
-            showToast(`Job ${jobId} resumed successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}/resume`, { method: 'POST' });
+            showToast(`Task ${taskId} resumed successfully`, 'success');
             refreshData();
         } catch (error) {
-            showToast(`Error resuming job: ${error.message}`, 'danger');
+            showToast(`Error resuming task: ${error.message}`, 'danger');
         }
     }
 
-    async function deleteJob(jobId) {
-        if (!confirm(`Are you sure you want to delete job ${jobId}?`)) {
+    async function deleteTask(taskId) {
+        if (!confirm(`Are you sure you want to delete task ${taskId}?`)) {
             return;
         }
 
         try {
-            await apiCall(`/api/jobs/${jobId}`, { method: 'DELETE' });
-            showToast(`Job ${jobId} deleted successfully`, 'success');
+            await apiCall(`/api/jobs/${taskId}`, { method: 'DELETE' });
+            showToast(`Task ${taskId} deleted successfully`, 'success');
             refreshData();
         } catch (error) {
-            showToast(`Error deleting job: ${error.message}`, 'danger');
+            showToast(`Error deleting task: ${error.message}`, 'danger');
         }
     }
 </script>

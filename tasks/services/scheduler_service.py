@@ -1,11 +1,10 @@
 """APScheduler service with WebUI integration."""
 
 import logging
-from typing import Any, List, Optional
+from typing import Any
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
-from apscheduler.jobstores.redis import RedisJobStore
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import timezone as pytz_timezone
@@ -21,21 +20,15 @@ class SchedulerService:
     def __init__(self, settings: TasksSettings):
         """Initialize the scheduler service."""
         self.settings = settings
-        self.scheduler: Optional[BackgroundScheduler] = None
+        self.scheduler: BackgroundScheduler | None = None
         self._setup_scheduler()
 
     def _setup_scheduler(self) -> None:
         """Set up the APScheduler instance."""
-        # Job stores configuration - only use SQLAlchemy for tests to avoid Redis dependency
+        # Job stores configuration - using SQLite only
         jobstores = {
             "default": SQLAlchemyJobStore(url=self.settings.database_url),
         }
-
-        # Only add Redis if not in test mode
-        if not self.settings.database_url.startswith("sqlite:///:memory:"):
-            jobstores["redis"] = RedisJobStore(
-                host="localhost", port=6379, db=2, password=None
-            )
 
         # Executors configuration
         executors = {
@@ -74,7 +67,7 @@ class SchedulerService:
         self,
         func: Any,
         trigger: str,
-        job_id: Optional[str] = None,
+        job_id: str | None = None,
         **kwargs: Any,
     ) -> Job:
         """Add a job to the scheduler."""
@@ -93,14 +86,14 @@ class SchedulerService:
         self.scheduler.remove_job(job_id)
         logger.info(f"Removed job: {job_id}")
 
-    def get_jobs(self) -> List[Job]:
+    def get_jobs(self) -> list[Job]:
         """Get all jobs from the scheduler."""
         if not self.scheduler or not self.scheduler.running:
             return []
 
         return self.scheduler.get_jobs()
 
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Job | None:
         """Get a specific job by ID."""
         if not self.scheduler:
             return None
@@ -132,7 +125,7 @@ class SchedulerService:
         logger.info(f"Modified job: {job_id}")
         return job
 
-    def get_job_info(self, job_id: str) -> Optional[dict[str, Any]]:
+    def get_job_info(self, job_id: str) -> dict[str, Any] | None:
         """Get detailed job information."""
         job = self.get_job(job_id)
         if not job:

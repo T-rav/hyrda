@@ -27,7 +27,7 @@ This guide covers deploying the APScheduler WebUI Tasks Service alongside your A
 
 5. **Access the WebUI:**
    - Dashboard: http://localhost:5001/
-   - Jobs: http://localhost:5001/jobs
+   - Tasks: http://localhost:5001/tasks
 
 ## Production Deployment
 
@@ -96,11 +96,11 @@ REDIS_URL=redis://localhost:6379/2
 SLACK_BOT_API_URL=http://localhost:8080
 SLACK_BOT_API_KEY=your-api-key
 
-# For Slack User Import Jobs
+# For Slack User Import Tasks
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
 
-# For Google Drive Ingest Jobs
+# For Google Drive Ingest Tasks
 GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json
 GOOGLE_TOKEN_PATH=/path/to/token.json
 ```
@@ -147,7 +147,7 @@ Receives aggregated metrics from metrics collection jobs.
 #### **GET /api/metrics/{type}**
 Provides metrics data for collection jobs.
 
-## Creating Scheduled Jobs
+## Creating Scheduled Tasks
 
 ### Via Web Interface
 
@@ -243,7 +243,7 @@ docker logs -f ai-slack-bot-tasks
 
 ### Common Issues
 
-1. **Jobs not executing**
+1. **Tasks not executing**
    - Check scheduler status: `curl http://localhost:5001/api/scheduler/info`
    - Verify database connectivity
    - Check job parameters

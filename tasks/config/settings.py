@@ -1,7 +1,5 @@
 """Configuration settings for the tasks service."""
 
-from typing import Optional
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -23,27 +21,26 @@ class TasksSettings(BaseSettings):
 
     # Database configuration
     database_url: str = Field(default="sqlite:///tasks.db", alias="DATABASE_URL")
-    redis_url: str = Field(default="redis://localhost:6379/2", alias="REDIS_URL")
 
     # Main Slack Bot API integration
     slack_bot_api_url: str = Field(
         default="http://localhost:8080", alias="SLACK_BOT_API_URL"
     )
-    slack_bot_api_key: Optional[str] = Field(default=None, alias="SLACK_BOT_API_KEY")
+    slack_bot_api_key: str | None = Field(default=None, alias="SLACK_BOT_API_KEY")
 
     # Slack API credentials (for direct Slack operations)
-    slack_bot_token: Optional[str] = Field(default=None, alias="SLACK_BOT_TOKEN")
-    slack_app_token: Optional[str] = Field(default=None, alias="SLACK_APP_TOKEN")
+    slack_bot_token: str | None = Field(default=None, alias="SLACK_BOT_TOKEN")
+    slack_app_token: str | None = Field(default=None, alias="SLACK_APP_TOKEN")
 
     # Google Drive API
-    google_credentials_path: Optional[str] = Field(
+    google_credentials_path: str | None = Field(
         default=None, alias="GOOGLE_CREDENTIALS_PATH"
     )
-    google_token_path: Optional[str] = Field(default=None, alias="GOOGLE_TOKEN_PATH")
+    google_token_path: str | None = Field(default=None, alias="GOOGLE_TOKEN_PATH")
 
     # Metrics API
-    metrics_api_url: Optional[str] = Field(default=None, alias="METRICS_API_URL")
-    metrics_api_key: Optional[str] = Field(default=None, alias="METRICS_API_KEY")
+    metrics_api_url: str | None = Field(default=None, alias="METRICS_API_URL")
+    metrics_api_key: str | None = Field(default=None, alias="METRICS_API_KEY")
 
     # Scheduler configuration
     scheduler_timezone: str = Field(default="UTC", alias="SCHEDULER_TIMEZONE")

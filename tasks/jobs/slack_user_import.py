@@ -124,9 +124,15 @@ class SlackUserImportJob(BaseJob):
                 continue
 
             # Check user type
-            if user.get("is_admin", False) and "admin" not in user_types or user.get("is_owner", False) and "owner" not in user_types or (
-                not any([user.get("is_admin", False), user.get("is_owner", False)])
-                and "member" not in user_types
+            if (
+                user.get("is_admin", False)
+                and "admin" not in user_types
+                or user.get("is_owner", False)
+                and "owner" not in user_types
+                or (
+                    not any([user.get("is_admin", False), user.get("is_owner", False)])
+                    and "member" not in user_types
+                )
             ):
                 continue
 

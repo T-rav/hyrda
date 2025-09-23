@@ -1,6 +1,5 @@
 """Tests for job registry."""
 
-
 import pytest
 
 from jobs.job_registry import JobRegistry
