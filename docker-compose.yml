@@ -1,0 +1,172 @@
+name: insightmesh
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: insightmesh-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - insightmesh
+
+  # phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: insightmesh-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: password
+    ports:
+      - "8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - insightmesh
+
+  # Elasticsearch for vector search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: insightmesh-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - cluster.name=insightmesh-knowledge-base
+      - node.name=insightmesh-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - insightmesh
+
+  # Task Scheduler Service
+  tasks:
+    build:
+      context: ./tasks
+      dockerfile: Dockerfile
+    image: insightmesh-tasks:latest
+    container_name: insightmesh-tasks
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
+      - SLACK_BOT_API_URL=http://bot:8080
+      - ENVIRONMENT=production
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./tasks/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      sh -c "
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        alembic upgrade head &&
+        python -u app.py
+      "
+    networks:
+      - insightmesh
+
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: insightmesh-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - insightmesh
+
+  # AI Slack Bot Service
+  bot:
+    build:
+      context: ./bot
+      dockerfile: Dockerfile
+    image: insightmesh-bot:latest
+    container_name: insightmesh-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_bot
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - VECTOR_URL=http://elasticsearch:9200
+      - VECTOR_ENABLED=true
+      - VECTOR_PROVIDER=elasticsearch
+      - VECTOR_COLLECTION_NAME=knowledge_base
+      - HYBRID_ENABLED=false
+      - CACHE_ENABLED=true
+      - CACHE_REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=production
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./bot/logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        alembic upgrade head &&
+        python -u app.py
+      "
+    networks:
+      - insightmesh
+
+volumes:
+  mysql_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  insightmesh:
+    name: insightmesh
+    driver: bridge

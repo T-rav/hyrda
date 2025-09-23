@@ -152,6 +152,14 @@ function App() {
                   >
                     📅 Task Scheduler
                   </a>
+                  <a
+                    href="http://localhost:8081"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="api-link"
+                  >
+                    🗄️ Database Admin
+                  </a>
                 </div>
               </div>
             )}

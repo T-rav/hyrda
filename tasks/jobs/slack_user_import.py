@@ -3,12 +3,33 @@
 import logging
 from typing import Any
 
-import requests
 from slack_sdk import WebClient
+
+# Define SlackUser model locally since we're in a separate container
+from sqlalchemy import Column, DateTime, Integer, String, create_engine, func, select
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 from config.settings import TasksSettings
 
 from .base_job import BaseJob
+
+Base = declarative_base()
+
+
+class SlackUser(Base):
+    """Slack user model for cross-container compatibility."""
+
+    __tablename__ = "slack_users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slack_user_id = Column(String(50), unique=True, nullable=False)
+    email_address = Column(String(255))
+    display_name = Column(String(255))
+    real_name = Column(String(255))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +52,17 @@ class SlackUserImportJob(BaseJob):
         if self.settings.slack_bot_token:
             self.slack_client = WebClient(token=self.settings.slack_bot_token)
 
+        # Store bot database URL for later use (don't create engine in __init__)
+        self.bot_db_url = self.settings.database_url.replace(
+            "insightmesh_task", "insightmesh_bot"
+        )
+        self.bot_db_url = self.bot_db_url.replace(
+            "insightmesh_tasks:", "insightmesh_bot:"
+        )
+        self.bot_db_url = self.bot_db_url.replace(
+            "insightmesh_tasks_password", "insightmesh_bot_password"
+        )
+
     def validate_params(self) -> bool:
         """Validate job parameters."""
         super().validate_params()
@@ -39,6 +71,12 @@ class SlackUserImportJob(BaseJob):
             raise ValueError("SLACK_BOT_TOKEN is required for Slack user import")
 
         return True
+
+    def _get_bot_session(self):
+        """Create database session for bot database when needed."""
+        bot_engine = create_engine(self.bot_db_url)
+        BotSession = sessionmaker(bind=bot_engine)
+        return BotSession()
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the Slack user import job."""
@@ -59,13 +97,15 @@ class SlackUserImportJob(BaseJob):
             # Filter users based on parameters
             filtered_users = self._filter_users(users_data, user_types)
 
-            # Send users to main bot API for processing
-            result = await self._send_users_to_bot_api(filtered_users)
+            # Store users directly in database
+            result = await self._store_users_in_database(filtered_users)
 
             return {
                 "total_users_fetched": len(users_data),
                 "filtered_users_count": len(filtered_users),
                 "processed_users_count": result.get("processed_count", 0),
+                "new_users_count": result.get("new_users_count", 0),
+                "updated_users_count": result.get("updated_users_count", 0),
                 "users_sample": filtered_users[:5],  # First 5 users for debugging
             }
 
@@ -157,59 +197,55 @@ class SlackUserImportJob(BaseJob):
         logger.info(f"Filtered to {len(filtered)} users")
         return filtered
 
-    async def _send_users_to_bot_api(
+    async def _store_users_in_database(
         self, users: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Send users to the main bot API for processing/storage."""
-        if not self.settings.slack_bot_api_url:
-            logger.warning(
-                "No bot API URL configured, users will not be sent to main bot"
-            )
-            return {"processed_count": 0, "message": "No API endpoint configured"}
+        """Store users directly in the bot database."""
+        processed_count = 0
+        new_users_count = 0
+        updated_users_count = 0
 
         try:
-            # Prepare API request
-            api_url = f"{self.settings.slack_bot_api_url}/api/users/import"
-            headers = {"Content-Type": "application/json"}
+            with self._get_bot_session() as session:
+                for user_data in users:
+                    # Check if user already exists
+                    existing_user = session.execute(
+                        select(SlackUser).where(
+                            SlackUser.slack_user_id == user_data["id"]
+                        )
+                    ).scalar_one_or_none()
 
-            if self.settings.slack_bot_api_key:
-                headers["Authorization"] = f"Bearer {self.settings.slack_bot_api_key}"
+                    if existing_user:
+                        # Update existing user
+                        existing_user.email_address = user_data.get("email")
+                        existing_user.display_name = user_data.get("display_name")
+                        existing_user.real_name = user_data.get("real_name")
+                        updated_users_count += 1
+                        logger.debug(f"Updated user: {user_data['id']}")
+                    else:
+                        # Create new user
+                        new_user = SlackUser(
+                            slack_user_id=user_data["id"],
+                            email_address=user_data.get("email"),
+                            display_name=user_data.get("display_name"),
+                            real_name=user_data.get("real_name"),
+                        )
+                        session.add(new_user)
+                        new_users_count += 1
+                        logger.debug(f"Created new user: {user_data['id']}")
 
-            # Send users in batches to avoid large payloads
-            batch_size = 50
-            processed_count = 0
+                    processed_count += 1
 
-            for i in range(0, len(users), batch_size):
-                batch = users[i : i + batch_size]
-
-                response = requests.post(
-                    api_url,
-                    json={"users": batch, "job_id": self.job_id},
-                    headers=headers,
-                    timeout=30,
-                )
-
-                if response.status_code == 200:
-                    batch_result = response.json()
-                    processed_count += batch_result.get("processed_count", len(batch))
-                    logger.info(
-                        f"Processed batch {i // batch_size + 1}: {len(batch)} users"
-                    )
-                else:
-                    logger.error(
-                        f"API request failed for batch {i // batch_size + 1}: "
-                        f"{response.status_code} - {response.text}"
-                    )
+                # Commit all changes
+                session.commit()
+                logger.info(f"Successfully stored {processed_count} users in database")
 
             return {
                 "processed_count": processed_count,
-                "total_batches": (len(users) + batch_size - 1) // batch_size,
-                "api_endpoint": api_url,
+                "new_users_count": new_users_count,
+                "updated_users_count": updated_users_count,
             }
 
-        except requests.RequestException as e:
-            logger.error(f"Error sending users to bot API: {str(e)}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error in API communication: {str(e)}")
+            logger.error(f"Error storing users in database: {str(e)}")
             raise

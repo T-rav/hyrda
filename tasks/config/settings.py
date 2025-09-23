@@ -20,7 +20,10 @@ class TasksSettings(BaseSettings):
     flask_env: str = Field(default="production", alias="FLASK_ENV")
 
     # Database configuration
-    database_url: str = Field(default="sqlite:///tasks.db", alias="DATABASE_URL")
+    database_url: str = Field(
+        default="mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@localhost:3306/insightmesh_task",
+        alias="DATABASE_URL",
+    )
 
     # Main Slack Bot API integration
     slack_bot_api_url: str = Field(
