@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-bot-only start-tasks-only
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-bot-only start-tasks-only
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -41,8 +41,9 @@ help:
 	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run bot + task scheduler (recommended)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
-	@echo "  start-bot-only   🤖 Run only the AI Slack Bot"
+	@echo "  start-bot-only   🤖 Run only the AI Slack Bot (with Redis)"
 	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
+	@echo "  start-redis      🔴 Start Redis service"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -109,7 +110,22 @@ check-env:
 		exit 1; \
 	fi
 
-run: check-env
+# Start Redis service (required for conversation caching)
+start-redis:
+	@echo "$(BLUE)Starting Redis service...$(RESET)"
+	@if command -v brew >/dev/null 2>&1; then \
+		brew services start redis || echo "$(YELLOW)Redis may already be running$(RESET)"; \
+	elif command -v systemctl >/dev/null 2>&1; then \
+		sudo systemctl start redis || echo "$(YELLOW)Redis may already be running$(RESET)"; \
+	elif command -v service >/dev/null 2>&1; then \
+		sudo service redis-server start || echo "$(YELLOW)Redis may already be running$(RESET)"; \
+	else \
+		echo "$(YELLOW)Please start Redis manually: redis-server$(RESET)"; \
+	fi
+	@echo "$(GREEN)✅ Redis service started$(RESET)"
+
+run: check-env start-redis
+	@echo "$(GREEN)🤖 Starting AI Slack Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
 test: $(VENV)
@@ -277,7 +293,7 @@ python-version: $(VENV)
 	@$(PIP) --version
 
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
-start: install-dev health-ui check-env
+start: install-dev health-ui check-env start-redis
 	@echo "$(GREEN)🎯 ================================$(RESET)"
 	@echo "$(GREEN)🚀 STARTING AI SLACK BOT WITH FULL STACK$(RESET)"
 	@echo "$(GREEN)🎯 ================================$(RESET)"
@@ -285,6 +301,7 @@ start: install-dev health-ui check-env
 	@echo "$(BLUE)✅ Dependencies installed$(RESET)"
 	@echo "$(BLUE)✅ Health UI built and ready$(RESET)"
 	@echo "$(BLUE)✅ Environment validated$(RESET)"
+	@echo "$(BLUE)✅ Redis service started$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)🌐 Access points:$(RESET)"
 	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:8080/ui$(RESET)"
@@ -309,7 +326,7 @@ start-with-tasks:
 	kill $$TASKS_PID 2>/dev/null || true
 
 # Start only the bot (original behavior)
-start-bot-only: install-dev health-ui check-env
+start-bot-only: install-dev health-ui check-env start-redis
 	@echo "$(GREEN)🤖 Starting AI Slack Bot only...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
