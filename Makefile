@@ -32,13 +32,17 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start
+.PHONY: help install install-test install-dev check-env run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-bot-only start-tasks-only
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
-	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run the bot (recommended)"
+	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run bot + task scheduler (recommended)"
+	@echo ""
+	@echo "$(GREEN)Service Management:$(RESET)"
+	@echo "  start-bot-only   🤖 Run only the AI Slack Bot"
+	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -284,10 +288,32 @@ start: install-dev health-ui check-env
 	@echo ""
 	@echo "$(YELLOW)🌐 Access points:$(RESET)"
 	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:8080/ui$(RESET)"
+	@echo "$(YELLOW)   Task Scheduler:       http://localhost:5001$(RESET)"
 	@echo "$(YELLOW)   Prometheus Metrics:   http://localhost:8080/prometheus$(RESET)"
 	@echo "$(YELLOW)   API Endpoints:        http://localhost:8080/api/*$(RESET)"
 	@echo ""
-	@echo "$(GREEN)🤖 Starting the AI Slack Bot...$(RESET)"
-	@echo "$(GREEN)Press Ctrl+C to stop$(RESET)"
+	@echo "$(GREEN)🤖 Starting the AI Slack Bot with Task Scheduler...$(RESET)"
+	@echo "$(GREEN)Press Ctrl+C to stop both services$(RESET)"
 	@echo ""
+	@$(MAKE) start-with-tasks
+
+# Start both bot and tasks service in parallel
+start-with-tasks:
+	@echo "$(BLUE)Starting Task Scheduler in background...$(RESET)"
+	@cd tasks && $(PYTHON) app.py & \
+	TASKS_PID=$$!; \
+	echo "$(BLUE)Task Scheduler started (PID: $$TASKS_PID)$(RESET)"; \
+	echo "$(BLUE)Starting AI Slack Bot...$(RESET)"; \
+	cd $(BOT_DIR) && $(PYTHON) app.py; \
+	echo "$(YELLOW)Stopping Task Scheduler...$(RESET)"; \
+	kill $$TASKS_PID 2>/dev/null || true
+
+# Start only the bot (original behavior)
+start-bot-only: install-dev health-ui check-env
+	@echo "$(GREEN)🤖 Starting AI Slack Bot only...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
+
+# Start only the tasks service
+start-tasks-only:
+	@echo "$(GREEN)📅 Starting Task Scheduler only...$(RESET)"
+	cd tasks && $(PYTHON) app.py
