@@ -85,8 +85,6 @@ services:
       - TASKS_PORT=8081
     ports:
       - "5001:5001"
-    volumes:
-      - ./tasks/logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -141,8 +139,6 @@ services:
       - ENVIRONMENT=production
     ports:
       - "8080:8080"
-    volumes:
-      - ./bot/logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
