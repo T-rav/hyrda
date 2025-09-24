@@ -100,12 +100,24 @@ class SlackUserImportJob(BaseJob):
             # Store users directly in database
             result = await self._store_users_in_database(filtered_users)
 
+            # Standardized result structure
+            processed_count = result.get("processed_count", 0)
+            new_count = result.get("new_users_count", 0)
+            updated_count = result.get("updated_users_count", 0)
+            success_count = new_count + updated_count
+            failed_count = max(0, processed_count - success_count)
+
             return {
+                # Standardized fields for task run tracking
+                "records_processed": processed_count,
+                "records_success": success_count,
+                "records_failed": failed_count,
+
+                # Job-specific details for debugging/logging
                 "total_users_fetched": len(users_data),
                 "filtered_users_count": len(filtered_users),
-                "processed_users_count": result.get("processed_count", 0),
-                "new_users_count": result.get("new_users_count", 0),
-                "updated_users_count": result.get("updated_users_count", 0),
+                "new_users_count": new_count,
+                "updated_users_count": updated_count,
                 "users_sample": filtered_users[:5],  # First 5 users for debugging
             }
 

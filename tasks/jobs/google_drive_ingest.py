@@ -60,7 +60,16 @@ class GoogleDriveIngestJob(BaseJob):
             # Send results to main bot API if configured
             api_result = await self._send_results_to_bot_api(ingest_result)
 
+            # Determine success/failure from ingest result
+            ingest_success = ingest_result.get("status") == "success"
+
             return {
+                # Standardized fields for task run tracking
+                "records_processed": 1,  # One folder processed
+                "records_success": 1 if ingest_success else 0,
+                "records_failed": 0 if ingest_success else 1,
+
+                # Job-specific details for debugging/logging
                 "folder_id": folder_id,
                 "ingestion_result": ingest_result,
                 "api_result": api_result,

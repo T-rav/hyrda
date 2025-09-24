@@ -27,9 +27,6 @@
             <i data-lucide="list" class="icon me-2"></i>All Tasks
             <span class="badge bg-primary ms-2" id="tasks-count">0</span>
         </h3>
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createTaskModal">
-            <i data-lucide="plus" class="icon me-1"></i>Create Task
-        </button>
     </div>
 
     <div class="table-container">
@@ -38,13 +35,7 @@
                 <thead>
                     <tr>
                         <th>
-                            <i data-lucide="tag" class="icon-sm me-1"></i>Task ID
-                        </th>
-                        <th>
                             <i data-lucide="type" class="icon-sm me-1"></i>Name
-                        </th>
-                        <th>
-                            <i data-lucide="code" class="icon-sm me-1"></i>Function
                         </th>
                         <th>
                             <i data-lucide="calendar" class="icon-sm me-1"></i>Trigger
@@ -53,16 +44,13 @@
                             <i data-lucide="clock" class="icon-sm me-1"></i>Next Run
                         </th>
                         <th>
-                            <i data-lucide="activity" class="icon-sm me-1"></i>Status
-                        </th>
-                        <th>
                             <i data-lucide="settings" class="icon-sm me-1"></i>Actions
                         </th>
                     </tr>
                 </thead>
                 <tbody id="tasks-table">
                     <tr>
-                        <td colspan="7" class="text-center py-5">
+                        <td colspan="4" class="text-center py-5">
                             <div class="d-flex flex-column align-items-center">
                                 <div class="spinner-border text-primary mb-3" role="status">
                                     <span class="visually-hidden">Loading...</span>
@@ -404,36 +392,33 @@
         const tbody = document.getElementById('tasks-table');
 
         if (tasksData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No tasks scheduled</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No tasks scheduled</td></tr>';
             return;
         }
 
-        tbody.innerHTML = tasksData.map(job => `
+        tbody.innerHTML = tasksData.map(job => {
+            const isPaused = !job.next_run_time;
+            return `
             <tr>
-                <td><code>${job.id}</code></td>
-                <td>${job.name || 'Unnamed Task'}</td>
-                <td><small class="text-muted">${job.func || 'Unknown'}</small></td>
-                <td><span class="badge bg-secondary">${job.trigger || 'Unknown'}</span></td>
-                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
                 <td>
-                    <span class="badge status-badge ${job.pending ? 'bg-warning' : 'bg-success'}">
-                        <i class="fas ${job.pending ? 'fa-pause' : 'fa-play'} me-1"></i>
-                        ${job.pending ? 'Paused' : 'Active'}
-                    </span>
+                    <div>
+                        <strong>${job.name || 'Unnamed Task'}</strong>
+                        ${isPaused ? '<span class="badge bg-warning ms-2">Paused</span>' : '<span class="badge bg-success ms-2">Active</span>'}
+                    </div>
+                    <small class="text-muted">${job.id}</small>
                 </td>
+                <td><span class="badge bg-secondary">${job.trigger || 'Unknown'}</span></td>
+                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'Paused'}</td>
                 <td>
                     <div class="btn-group btn-group-sm" role="group">
                         <button class="btn btn-outline-primary btn-sm" onclick="viewTaskDetails('${job.id}')" title="View Details">
                             <i class="fas fa-eye"></i>
                         </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
-                            <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
+                        <button class="btn btn-outline-warning btn-sm" onclick="${isPaused ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${isPaused ? 'Resume' : 'Pause'}">
+                            <i class="fas ${isPaused ? 'fa-play' : 'fa-pause'}"></i>
                         </button>
                         <button class="btn btn-outline-info btn-sm" onclick="runTaskOnce('${job.id}')" title="Run Once">
                             <i class="fas fa-play-circle"></i>
-                        </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="retryTask('${job.id}')" title="Retry">
-                            <i class="fas fa-redo"></i>
                         </button>
                         <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${job.id}')" title="Delete">
                             <i class="fas fa-trash"></i>
@@ -441,7 +426,8 @@
                     </div>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     async function createTask() {

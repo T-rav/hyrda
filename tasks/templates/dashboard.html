@@ -49,7 +49,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h3 class="stat-number" id="running-tasks">-</h3>
-                    <p class="stat-label">Running Tasks</p>
+                    <p class="stat-label">ACTIVE Tasks</p>
                 </div>
                 <div class="stat-icon">
                     <i data-lucide="play-circle" class="icon-lg"></i>
@@ -85,11 +85,11 @@
     </div>
 </div>
 
-<!-- Recent Tasks -->
+<!-- Recent Runs -->
 <div class="glass-card">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">
-            <i data-lucide="history" class="icon me-2"></i>Recent Tasks
+            <i data-lucide="history" class="icon me-2"></i>Recent Runs
         </h3>
         <a href="/tasks" class="btn btn-sm btn-outline-primary">
             View All <i data-lucide="arrow-right" class="icon-sm ms-1"></i>
@@ -99,17 +99,15 @@
         <table class="table table-hover">
             <thead>
                 <tr>
-                    <th>Task ID</th>
                     <th>Name</th>
-                    <th>Trigger</th>
-                    <th>Next Run</th>
+                    <th>Started</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th>Details</th>
                 </tr>
             </thead>
             <tbody id="recent-tasks-table">
                 <tr>
-                    <td colspan="6" class="text-center">
+                    <td colspan="4" class="text-center">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
@@ -125,6 +123,7 @@
 <script>
     let schedulerData = {};
     let tasksData = [];
+    let taskRunsData = [];
 
     // Load data on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -135,7 +134,8 @@
         try {
             await Promise.all([
                 loadSchedulerInfo(),
-                loadTasks()
+                loadTasks(),
+                loadTaskRuns()
             ]);
             updateDashboard();
         } catch (error) {
@@ -160,6 +160,16 @@
         } catch (error) {
             console.error('Error loading tasks:', error);
             tasksData = [];
+        }
+    }
+
+    async function loadTaskRuns() {
+        try {
+            const response = await apiCall('/api/task-runs');
+            taskRunsData = response.task_runs || [];
+        } catch (error) {
+            console.error('Error loading task runs:', error);
+            taskRunsData = [];
         }
     }
 
@@ -201,12 +211,12 @@
 
     function updateStatistics() {
         const totalTasks = tasksData.length;
-        const runningTasks = tasksData.filter(job => !job.pending && job.next_run_time).length;
-        const pausedTasks = tasksData.filter(job => job.pending).length;
+        const runningTasks = tasksData.filter(job => job.next_run_time).length;
+        const pausedTasks = tasksData.filter(job => !job.next_run_time).length;
 
         // Find next run time
         const nextRuns = tasksData
-            .filter(job => job.next_run_time && !job.pending)
+            .filter(job => job.next_run_time)
             .map(job => new Date(job.next_run_time))
             .sort((a, b) => a - b);
 
@@ -229,41 +239,55 @@
     function updateRecentTasksTable() {
         const tbody = document.getElementById('recent-tasks-table');
 
-        if (tasksData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No tasks scheduled</td></tr>';
+        if (taskRunsData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent runs</td></tr>';
             return;
         }
 
-        // Show last 5 tasks
-        const recentTasks = tasksData.slice(0, 5);
+        // Show last 5 task runs
+        const recentRuns = taskRunsData.slice(0, 5);
 
-        tbody.innerHTML = recentTasks.map(job => `
+        tbody.innerHTML = recentRuns.map(run => {
+            const statusBadge = {
+                'running': 'bg-primary',
+                'success': 'bg-success',
+                'failed': 'bg-danger',
+                'cancelled': 'bg-secondary'
+            }[run.status] || 'bg-secondary';
+
+            const statusIcon = {
+                'running': 'fa-spinner fa-spin',
+                'success': 'fa-check',
+                'failed': 'fa-times',
+                'cancelled': 'fa-ban'
+            }[run.status] || 'fa-question';
+
+            const duration = run.duration_seconds ?
+                `${run.duration_seconds.toFixed(1)}s` :
+                (run.status === 'running' ? 'Running...' : 'N/A');
+
+            return `
             <tr>
-                <td><code>${job.id}</code></td>
-                <td>${job.name || 'Unnamed Task'}</td>
-                <td><small class="text-muted">${job.trigger || 'Unknown'}</small></td>
-                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td>
                 <td>
-                    <span class="badge status-badge ${job.pending ? 'bg-warning' : 'bg-success'}">
-                        <i class="fas ${job.pending ? 'fa-pause' : 'fa-play'} me-1"></i>
-                        ${job.pending ? 'Paused' : 'Active'}
+                    <strong>${run.job_name || 'Unknown Job'}</strong>
+                    ${run.triggered_by === 'manual' ? '<span class="badge bg-info ms-2">Manual</span>' : ''}
+                </td>
+                <td>${run.started_at ? formatDate(run.started_at) : 'N/A'}</td>
+                <td>
+                    <span class="badge ${statusBadge}">
+                        <i class="fas ${statusIcon} me-1"></i>
+                        ${run.status.charAt(0).toUpperCase() + run.status.slice(1)}
                     </span>
                 </td>
                 <td>
-                    <div class="btn-group btn-group-sm" role="group">
-                        <button class="btn btn-outline-primary btn-sm" onclick="viewTask('${job.id}')" title="View Details">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-outline-warning btn-sm" onclick="${job.pending ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${job.pending ? 'Resume' : 'Pause'}">
-                            <i class="fas ${job.pending ? 'fa-play' : 'fa-pause'}"></i>
-                        </button>
-                        <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${job.id}')" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
+                    <small class="text-muted">
+                        ${duration}
+                        ${run.records_processed ? ` • ${run.records_processed} records` : ''}
+                    </small>
                 </td>
             </tr>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // Task action functions
