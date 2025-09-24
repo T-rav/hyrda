@@ -1,7 +1,7 @@
 {
-  "name": "slack-bot-health-ui",
+  "name": "insightmesh-health-ui",
   "version": "1.0.0",
-  "description": "Health dashboard for AI Slack Bot",
+  "description": "Health dashboard for InsightMesh",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",

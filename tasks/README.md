@@ -1,6 +1,6 @@
-# AI Slack Bot - Tasks Service
+# InsightMesh - Tasks Service
 
-A standalone APScheduler WebUI service for managing scheduled tasks in the AI Slack Bot ecosystem. This service provides a web interface for creating, managing, and monitoring scheduled jobs like Slack user imports, Google Drive document ingestion, and metrics collection.
+A standalone APScheduler WebUI service for managing scheduled tasks in the InsightMesh ecosystem. This service provides a web interface for creating, managing, and monitoring scheduled jobs like Slack user imports, Google Drive document ingestion, and metrics collection.
 
 ## Features
 
@@ -347,7 +347,7 @@ Create `/etc/systemd/system/tasks-service.service`:
 
 ```ini
 [Unit]
-Description=AI Slack Bot Tasks Service
+Description=InsightMesh Tasks Service
 After=network.target
 
 [Service]
@@ -416,4 +416,4 @@ This enables:
 
 ## License
 
-This project is part of the AI Slack Bot ecosystem. See the main project repository for license information.
+This project is part of the InsightMesh ecosystem. See the main project repository for license information.
