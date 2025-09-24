@@ -409,121 +409,213 @@ class HealthChecker:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InsightMesh - Health Dashboard</title>
+    <title>Health Dashboard - InsightMesh</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
     <style>
+        /* Design System - Color Tokens */
+        :root {
+            --purple-400: #a78bfa;
+            --purple-500: #9f7aea;
+            --purple-600: #8b5cf6;
+            --purple-700: #7c3aed;
+            --emerald-500: #10b981;
+            --emerald-600: #059669;
+            --emerald-700: #047857;
+            --slate-600: #64748b;
+            --blue-500: #3b82f6;
+            --amber-400: #fbbf24;
+            --amber-500: #f59e0b;
+            --red-500: #ef4444;
+
+            --color-primary: var(--purple-500);
+            --color-primary-hover: var(--purple-600);
+            --color-success: var(--emerald-500);
+            --color-info: var(--blue-500);
+            --color-warning: var(--amber-400);
+            --color-danger: var(--red-500);
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
             min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
+
+        .glass-card {
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            padding: 2rem;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .header h1 {
-            color: #1a202c;
-            margin: 0 0 0.5rem 0;
-        }
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .status-card {
-            background: white;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .api-links {
-            background: #f8fafc;
-            border-radius: 8px;
             padding: 1.5rem;
         }
-        .api-links h3 {
-            margin: 0 0 1rem 0;
+
+        .stat-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-card-primary { border-left-color: var(--color-primary); }
+        .stat-card-success { border-left-color: var(--color-success); }
+        .stat-card-info { border-left-color: var(--color-info); }
+        .stat-card-warning { border-left-color: var(--color-warning); }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
             color: #1a202c;
         }
-        .api-links a {
-            display: inline-block;
-            margin: 0.25rem 0.5rem;
-            padding: 0.5rem 1rem;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
+
+        .stat-label {
             font-size: 0.875rem;
+            color: #64748b;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        .api-links a:hover {
-            background: #5a67d8;
+
+        .stat-icon {
+            opacity: 0.7;
+            color: var(--color-primary);
         }
-        .build-info {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: #fef3cd;
-            border-radius: 4px;
-            font-size: 0.875rem;
+
+        .icon { width: 20px; height: 20px; }
+        .icon-sm { width: 16px; height: 16px; }
+        .icon-lg { width: 32px; height: 32px; }
+
+        .text-primary { color: var(--color-primary) !important; }
+        .text-success { color: var(--color-success) !important; }
+        .text-danger { color: var(--color-danger) !important; }
+
+        .btn-outline-primary {
+            color: var(--color-primary);
+            border-color: var(--color-primary);
         }
-        .status-healthy { color: #10b981; }
-        .status-error { color: #ef4444; }
-        .auto-refresh { font-size: 0.875rem; color: #666; }
+        .btn-outline-primary:hover {
+            background-color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 InsightMesh Health Dashboard</h1>
-            <p class="auto-refresh">Auto-refreshing every 10 seconds...</p>
-        </div>
-
-        <div class="status-grid">
-            <div class="status-card">
-                <h3>System Status</h3>
-                <div id="system-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>LLM Service</h3>
-                <div id="llm-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>Cache Service</h3>
-                <div id="cache-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>Metrics</h3>
-                <div id="metrics-status" class="status-error">Loading...</div>
+    <div class="container-fluid py-4">
+        <!-- Header -->
+        <div class="glass-card mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="mb-0">
+                    <i data-lucide="activity" class="icon text-primary me-2"></i>Health Dashboard
+                </h2>
+                <div>
+                    <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
+                        <i data-lucide="play" class="icon-sm me-1"></i>Auto-refresh
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="refreshData()">
+                        <i data-lucide="refresh-cw" class="icon-sm me-1"></i>Refresh
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="api-links">
-            <h3>API Endpoints</h3>
-            <a href="/api/health" target="_blank">Health Check</a>
-            <a href="/api/ready" target="_blank">Readiness Check</a>
-            <a href="/api/metrics" target="_blank">Metrics (JSON)</a>
-            <a href="/api/prometheus" target="_blank">Prometheus Metrics</a>
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="glass-card stat-card stat-card-primary">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="stat-number" id="system-status">-</h3>
+                            <p class="stat-label">System Status</p>
+                        </div>
+                        <div class="stat-icon">
+                            <i data-lucide="server" class="icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="glass-card stat-card stat-card-success">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="stat-number" id="llm-status">-</h3>
+                            <p class="stat-label">LLM Service</p>
+                        </div>
+                        <div class="stat-icon">
+                            <i data-lucide="brain" class="icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="glass-card stat-card stat-card-info">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="stat-number" id="cache-status">-</h3>
+                            <p class="stat-label">Cache Service</p>
+                        </div>
+                        <div class="stat-icon">
+                            <i data-lucide="database" class="icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="glass-card stat-card stat-card-warning">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="stat-number" id="metrics-status">-</h3>
+                            <p class="stat-label">Metrics</p>
+                        </div>
+                        <div class="stat-icon">
+                            <i data-lucide="bar-chart-3" class="icon-lg"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="build-info">
-            <strong>ℹ️ Development Mode:</strong>
-            This is a simple fallback UI. For the full React dashboard, run:
-            <br><br>
-            <code>cd bot/health_ui && npm install && npm run build</code>
+        <!-- API Endpoints -->
+        <div class="glass-card">
+            <h3 class="mb-3">
+                <i data-lucide="link" class="icon text-primary me-2"></i>API Endpoints
+            </h3>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="/api/health" class="btn btn-outline-primary btn-sm">
+                    <i data-lucide="heart" class="icon-sm me-1"></i>Health Check
+                </a>
+                <a href="/api/ready" class="btn btn-outline-primary btn-sm">
+                    <i data-lucide="check-circle" class="icon-sm me-1"></i>Readiness Check
+                </a>
+                <a href="/api/metrics" class="btn btn-outline-primary btn-sm">
+                    <i data-lucide="bar-chart" class="icon-sm me-1"></i>Metrics (JSON)
+                </a>
+                <a href="/api/prometheus" class="btn btn-outline-primary btn-sm">
+                    <i data-lucide="trending-up" class="icon-sm me-1"></i>Prometheus Metrics
+                </a>
+            </div>
         </div>
     </div>
 
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
+        let autoRefreshInterval = null;
+        let isAutoRefreshing = false;
+
         async function updateStatus() {
             try {
                 // Fetch health data
@@ -534,55 +626,72 @@ class HealthChecker:
 
                 // Update system status
                 const systemEl = document.getElementById('system-status');
-                systemEl.textContent = health.status === 'healthy' ? '✅ Healthy' : '❌ Unhealthy';
-                systemEl.className = health.status === 'healthy' ? 'status-healthy' : 'status-error';
+                systemEl.innerHTML = health.status === 'healthy' ?
+                    '<span class="text-success">✅ Healthy</span>' :
+                    '<span class="text-danger">❌ Unhealthy</span>';
 
                 // Update LLM status
                 const llmEl = document.getElementById('llm-status');
                 const llmStatus = ready.checks?.llm_api?.status;
-                llmEl.textContent = llmStatus === 'healthy' ? '✅ Connected' : '❌ Error';
-                llmEl.className = llmStatus === 'healthy' ? 'status-healthy' : 'status-error';
+                llmEl.innerHTML = llmStatus === 'healthy' ?
+                    '<span class="text-success">✅ Connected</span>' :
+                    '<span class="text-danger">❌ Error</span>';
 
                 // Update cache status
                 const cacheEl = document.getElementById('cache-status');
                 const cacheStatus = ready.checks?.cache?.status;
                 if (cacheStatus === 'healthy') {
-                    cacheEl.textContent = '✅ Available';
-                    cacheEl.className = 'status-healthy';
+                    cacheEl.innerHTML = '<span class="text-success">✅ Available</span>';
                 } else if (cacheStatus === 'disabled') {
-                    cacheEl.textContent = '⚪ Disabled';
-                    cacheEl.className = 'status-healthy';
+                    cacheEl.innerHTML = '<span class="text-success">⚪ Disabled</span>';
                 } else {
-                    cacheEl.textContent = '❌ Error';
-                    cacheEl.className = 'status-error';
+                    cacheEl.innerHTML = '<span class="text-danger">❌ Error</span>';
                 }
 
                 // Update metrics status
                 const metricsEl = document.getElementById('metrics-status');
                 const metricsStatus = ready.checks?.metrics?.status;
                 if (metricsStatus === 'healthy') {
-                    metricsEl.textContent = '✅ Enabled';
-                    metricsEl.className = 'status-healthy';
+                    metricsEl.innerHTML = '<span class="text-success">✅ Enabled</span>';
                 } else if (metricsStatus === 'disabled') {
-                    metricsEl.textContent = '⚪ Disabled';
-                    metricsEl.className = 'status-healthy';
+                    metricsEl.innerHTML = '<span class="text-success">⚪ Disabled</span>';
                 } else {
-                    metricsEl.textContent = '❌ Error';
-                    metricsEl.className = 'status-error';
+                    metricsEl.innerHTML = '<span class="text-danger">❌ Error</span>';
                 }
 
             } catch (error) {
                 console.error('Error updating status:', error);
                 document.querySelectorAll('[id$="-status"]').forEach(el => {
-                    el.textContent = '❌ Error';
-                    el.className = 'status-error';
+                    el.innerHTML = '<span class="text-danger">❌ Error</span>';
                 });
             }
         }
 
-        // Initial load and auto-refresh
+        function toggleAutoRefresh() {
+            const btn = document.getElementById('auto-refresh-btn');
+            const icon = btn.querySelector('i');
+
+            if (isAutoRefreshing) {
+                clearInterval(autoRefreshInterval);
+                isAutoRefreshing = false;
+                icon.setAttribute('data-lucide', 'play');
+                btn.innerHTML = '<i data-lucide="play" class="icon-sm me-1"></i>Auto-refresh';
+            } else {
+                autoRefreshInterval = setInterval(updateStatus, 10000);
+                isAutoRefreshing = true;
+                icon.setAttribute('data-lucide', 'pause');
+                btn.innerHTML = '<i data-lucide="pause" class="icon-sm me-1"></i>Auto-refresh';
+            }
+            lucide.createIcons();
+        }
+
+        function refreshData() {
+            updateStatus();
+        }
+
+        // Initialize
         updateStatus();
-        setInterval(updateStatus, 10000);
+        lucide.createIcons();
     </script>
 </body>
 </html>
