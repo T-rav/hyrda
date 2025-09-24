@@ -55,21 +55,8 @@ def create_app() -> Flask:
 
 # Web UI Routes
 @app.route("/")
-def index() -> str:
-    """Main dashboard page."""
-    return render_template("dashboard.html")
-
-
-@app.route("/tasks")
-def tasks_page() -> str:
-    """Tasks management page."""
-    return render_template("tasks.html")
-
-
-@app.route("/react")
-@app.route("/react/")
-def react_ui():
-    """Serve the React-based UI."""
+def index():
+    """Serve the React-based UI at root."""
     import os
     from pathlib import Path
 
@@ -78,24 +65,23 @@ def react_ui():
     if ui_dist_path.exists():
         with open(ui_dist_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            # Fix asset paths to work with our /react route
-            content = content.replace('src="/assets/', 'src="/react/assets/')
-            content = content.replace('href="/assets/', 'href="/react/assets/')
+            # Asset paths are now served at /assets/ (root level)
             return content
     else:
         return "React UI not built. Run 'cd ui && npm run build' to build the React UI.", 404
 
 
-@app.route("/react/assets/<path:filename>")
+
+@app.route("/assets/<path:filename>")
 def react_assets(filename):
     """Serve React static assets."""
     from flask import send_from_directory
     from pathlib import Path
 
-    ui_dist_path = Path(__file__).parent / "ui" / "dist" / "assets"
+    assets_dir = Path(__file__).parent / "ui" / "dist" / "assets"
 
-    if ui_dist_path.exists():
-        return send_from_directory(str(ui_dist_path), filename)
+    if assets_dir.exists():
+        return send_from_directory(str(assets_dir), filename)
     else:
         return "Asset not found", 404
 
