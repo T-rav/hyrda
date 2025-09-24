@@ -5,13 +5,13 @@ on:
   pull_request:
 
 jobs:
-  test:
+  python-tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         task: [lint, test]
-    name: ${{ matrix.task }}
+    name: Python ${{ matrix.task }}
 
     steps:
     - uses: actions/checkout@v4
@@ -53,3 +53,80 @@ jobs:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: make test-coverage
+
+  react-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [tasks, bot]
+        task: [lint, test, build]
+    name: React ${{ matrix.app }} ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: |
+          tasks/ui/package-lock.json
+          bot/health_ui/package-lock.json
+
+    - name: Install dependencies for tasks UI
+      if: matrix.app == 'tasks'
+      working-directory: tasks/ui
+      run: npm ci
+
+    - name: Install dependencies for bot health UI
+      if: matrix.app == 'bot'
+      working-directory: bot/health_ui
+      run: npm ci
+
+    - name: Run ESLint for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'lint'
+      working-directory: tasks/ui
+      run: npm run lint
+
+    - name: Run ESLint for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'lint'
+      working-directory: bot/health_ui
+      run: npm run lint
+
+    - name: Run tests for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'test'
+      working-directory: tasks/ui
+      run: npm run test:coverage
+
+    - name: Run tests for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'test'
+      working-directory: bot/health_ui
+      run: npm run test:coverage
+
+    - name: Build tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'build'
+      working-directory: tasks/ui
+      run: npm run build
+
+    - name: Build bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'build'
+      working-directory: bot/health_ui
+      run: npm run build
+
+    - name: Upload coverage reports for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'test'
+      uses: codecov/codecov-action@v3
+      with:
+        directory: tasks/ui/coverage
+        flags: react-tasks
+        name: react-tasks-coverage
+
+    - name: Upload coverage reports for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'test'
+      uses: codecov/codecov-action@v3
+      with:
+        directory: bot/health_ui/coverage
+        flags: react-bot
+        name: react-bot-coverage

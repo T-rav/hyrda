@@ -1,4 +1,4 @@
-# Insight Mesh Slack AI Bot
+# InsightMesh Slack AI Bot
 
 A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities that provides intelligent, context-aware assistance using your own knowledge base.
 
@@ -183,12 +183,12 @@ pc.create_index(
 
 ## Slack App Setup Guide
 
-This guide helps you configure your Slack app to work with the Insight Mesh bot.
+This guide helps you configure your Slack app to work with the InsightMesh bot.
 
 ### Step 1: Create or Update App Configuration in Slack
 
 1. Go to the Slack API Apps page (`https://api.slack.com/apps`) and select your bot application (or create a new one)
-2. Provide a description (e.g., "Insight Mesh Assistant helps you interact with your data using RAG and run agent processes")
+2. Provide a description (e.g., "InsightMesh Assistant helps you interact with your data using RAG and run agent processes")
 3. Upload an app icon if desired
 4. Click "Save Changes"
 
@@ -220,7 +220,7 @@ This guide helps you configure your Slack app to work with the Insight Mesh bot.
 1. Navigate to "Socket Mode" in the left navigation panel
 2. Toggle on "Enable Socket Mode"
 3. Create an app-level token if prompted:
-   - Name your token (e.g., "Insight Mesh Socket Token")
+   - Name your token (e.g., "InsightMesh Socket Token")
    - Ensure the `connections:write` scope is added
    - Click "Generate"
    - Save the token (starts with `xapp-`) for use in environment variables

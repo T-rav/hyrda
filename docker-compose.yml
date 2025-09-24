@@ -68,7 +68,7 @@ services:
     networks:
       - insightmesh
 
-  # Task Scheduler Service
+  # Task Scheduler Service (nginx + Flask in single container)
   tasks:
     build:
       context: ./tasks
@@ -82,6 +82,7 @@ services:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
+      - TASKS_PORT=8081
     ports:
       - "5001:5001"
     volumes:
@@ -93,7 +94,7 @@ services:
       sh -c "
         mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
         alembic upgrade head &&
-        python -u app.py
+        /usr/bin/supervisord
       "
     networks:
       - insightmesh

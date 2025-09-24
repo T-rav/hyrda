@@ -1,7 +1,7 @@
 {
-  "name": "insightmesh-health-ui",
+  "name": "insightmesh-tasks-ui",
   "version": "1.0.0",
-  "description": "Health dashboard for InsightMesh",
+  "description": "Tasks dashboard for InsightMesh",
   "private": true,
   "dependencies": {
     "lucide-react": "^0.263.1",
