@@ -1,0 +1,677 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - InsightMesh Tasks WebUI{% endblock %}
+
+{% block content %}
+<div class="glass-card mb-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <h2 class="mb-0"><i data-lucide="settings" class="icon text-primary me-2"></i>Task Management</h2>
+        <div>
+            <button class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#createTaskModal">
+                <i data-lucide="plus" class="icon-sm me-1"></i>Create Task
+            </button>
+            <button id="auto-refresh-btn" class="btn btn-outline-primary me-2" onclick="toggleAutoRefresh()">
+                <i data-lucide="play" class="icon-sm me-1"></i>Auto-refresh
+            </button>
+            <button class="btn btn-outline-secondary" onclick="refreshData()">
+                <i data-lucide="refresh-cw" class="icon-sm me-1"></i>Refresh
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Tasks Table -->
+<div class="glass-card">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3 class="mb-0">
+            <i data-lucide="list" class="icon me-2"></i>All Tasks
+            <span class="badge bg-primary ms-2" id="tasks-count">0</span>
+        </h3>
+    </div>
+
+    <div class="table-container">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>
+                            <i data-lucide="type" class="icon-sm me-1"></i>Name
+                        </th>
+                        <th>
+                            <i data-lucide="calendar" class="icon-sm me-1"></i>Trigger
+                        </th>
+                        <th>
+                            <i data-lucide="clock" class="icon-sm me-1"></i>Next Run
+                        </th>
+                        <th>
+                            <i data-lucide="settings" class="icon-sm me-1"></i>Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tasks-table">
+                    <tr>
+                        <td colspan="4" class="text-center py-5">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="spinner-border text-primary mb-3" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="text-muted mb-0">Loading tasks...</p>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create Task Modal -->
+<div class="modal fade" id="createTaskModal" tabindex="-1" aria-labelledby="createTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createTaskModalLabel">
+                    <i data-lucide="plus-circle" class="icon me-2"></i>Create New Task
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    <i data-lucide="x" class="icon-sm"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="createJobForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="taskType" class="form-label">
+                                    <i data-lucide="settings" class="icon-sm me-1"></i>Task Type
+                                </label>
+                                <select class="form-select" id="taskType" required>
+                                    <option value="">Select task type...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-4">
+                                <label for="taskName" class="form-label">
+                                    <i data-lucide="type" class="icon-sm me-1"></i>Task Name/Description
+                                </label>
+                                <input type="text" class="form-control" id="taskName" placeholder="Enter a descriptive name for this task" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i data-lucide="calendar" class="icon-sm me-1"></i>Schedule
+                        </label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <select class="form-select" id="triggerType" required>
+                                    <option value="interval">Interval</option>
+                                    <option value="cron">Cron</option>
+                                    <option value="date">Date</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <div id="scheduleParams">
+                                    <!-- Dynamic schedule parameters will be inserted here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4" id="taskParameters">
+                        <label class="form-label">
+                            <i data-lucide="sliders" class="icon-sm me-1"></i>Task Parameters
+                        </label>
+                        <div class="alert alert-info">
+                            <i data-lucide="info" class="icon-sm me-2"></i>
+                            <small>Parameters will appear here based on the selected task type</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i data-lucide="x" class="icon-sm me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-success" onclick="createTask()">
+                    <i data-lucide="check" class="icon-sm me-1"></i>Create Task
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div class="modal fade" id="taskDetailsModal" tabindex="-1" aria-labelledby="taskDetailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="taskDetailsModalLabel">
+                    <i data-lucide="info" class="icon me-2"></i>Task Details
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close">
+                    <i data-lucide="x" class="icon-sm"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="taskDetailsContent">
+                <!-- Task details will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let tasksData = [];
+    let taskTypesData = [];
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTaskTypes();
+        refreshData();
+        setupScheduleParametersHandler();
+    });
+
+    async function refreshData() {
+        try {
+            await loadTasks();
+            updateTasksTable();
+        } catch (error) {
+            console.error('Error refreshing data:', error);
+            showToast('Error refreshing data: ' + error.message, 'danger');
+        }
+    }
+
+    async function loadTasks() {
+        try {
+            const response = await apiCall('/api/jobs');
+            tasksData = response.jobs || [];
+            document.getElementById('tasks-count').textContent = tasksData.length;
+        } catch (error) {
+            console.error('Error loading tasks:', error);
+            tasksData = [];
+        }
+    }
+
+    async function loadTaskTypes() {
+        try {
+            const response = await apiCall('/api/job-types');
+            taskTypesData = response.job_types || [];
+            populateTaskTypeSelect();
+        } catch (error) {
+            console.error('Error loading task types:', error);
+        }
+    }
+
+    function populateTaskTypeSelect() {
+        const select = document.getElementById('taskType');
+        select.innerHTML = '<option value="">Select task type...</option>';
+
+        taskTypesData.forEach(taskType => {
+            const option = document.createElement('option');
+            option.value = taskType.type;
+            option.textContent = `${taskType.name} - ${taskType.description}`;
+            select.appendChild(option);
+        });
+
+        // Add event listener to handle task type selection
+        select.addEventListener('change', updateTaskParameters);
+    }
+
+    function setupScheduleParametersHandler() {
+        document.getElementById('triggerType').addEventListener('change', updateScheduleParameters);
+        updateScheduleParameters(); // Initialize with default
+    }
+
+    function updateScheduleParameters() {
+        const triggerType = document.getElementById('triggerType').value;
+        const container = document.getElementById('scheduleParams');
+
+        switch (triggerType) {
+            case 'interval':
+                container.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-4">
+                            <label for="hours" class="form-label d-flex align-items-center">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Hours
+                            </label>
+                            <input type="number" class="form-control" id="hours" placeholder="0" value="1" min="0">
+                        </div>
+                        <div class="col-4">
+                            <label for="minutes" class="form-label d-flex align-items-center">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Minutes
+                            </label>
+                            <input type="number" class="form-control" id="minutes" placeholder="0" value="0" min="0" max="59">
+                        </div>
+                        <div class="col-4">
+                            <label for="seconds" class="form-label d-flex align-items-center">
+                                <i data-lucide="clock" class="icon-sm me-1"></i>Seconds
+                            </label>
+                            <input type="number" class="form-control" id="seconds" placeholder="0" value="0" min="0" max="59">
+                        </div>
+                    </div>
+                `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                break;
+            case 'cron':
+                container.innerHTML = `
+                    <div>
+                        <label for="cronExpression" class="form-label">
+                            <i data-lucide="terminal" class="icon-sm me-1"></i>Cron Expression
+                        </label>
+                        <input type="text" class="form-control" id="cronExpression"
+                               placeholder="0 0 * * *" title="Cron expression (minute hour day month day_of_week)">
+                        <div class="form-text">
+                            <small>Format: minute hour day month day_of_week (e.g., "0 0 * * *" for daily at midnight)</small>
+                        </div>
+                    </div>
+                `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                break;
+            case 'date':
+                container.innerHTML = `
+                    <div>
+                        <label for="runDate" class="form-label">
+                            <i data-lucide="calendar-days" class="icon-sm me-1"></i>Run Date & Time
+                        </label>
+                        <input type="datetime-local" class="form-control" id="runDate">
+                        <div class="form-text">
+                            <small>Select the specific date and time to run this task</small>
+                        </div>
+                    </div>
+                `;
+                // Re-initialize icons after adding new content
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                break;
+        }
+    }
+
+    function updateTaskParameters() {
+        const taskType = document.getElementById('taskType').value;
+        const container = document.getElementById('taskParameters');
+
+        if (!taskType) {
+            container.innerHTML = `
+                <label class="form-label">
+                    <i data-lucide="sliders" class="icon-sm me-1"></i>Task Parameters
+                </label>
+                <div class="alert alert-info">
+                    <i data-lucide="info" class="icon-sm me-2"></i>
+                    <small>Parameters will appear here based on the selected task type</small>
+                </div>
+            `;
+            // Re-initialize icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            return;
+        }
+
+        const selectedTaskType = taskTypesData.find(tt => tt.type === taskType);
+        if (!selectedTaskType) return;
+
+        let parametersHTML = '<label class="form-label">Task Parameters</label>';
+
+        // Required parameters
+        if (selectedTaskType.required_params && selectedTaskType.required_params.length > 0) {
+            parametersHTML += '<div class="mb-3"><strong>Required Parameters:</strong></div>';
+            selectedTaskType.required_params.forEach(param => {
+                parametersHTML += `
+                    <div class="mb-2">
+                        <label for="param_${param}" class="form-label">${param} *</label>
+                        <input type="text" class="form-control" id="param_${param}" required>
+                    </div>
+                `;
+            });
+        }
+
+        // Optional parameters
+        if (selectedTaskType.optional_params && selectedTaskType.optional_params.length > 0) {
+            parametersHTML += '<div class="mb-3 mt-3"><strong>Optional Parameters:</strong></div>';
+
+            selectedTaskType.optional_params.forEach(param => {
+                // Add specific help text and input types for known parameters
+                let inputHTML = '';
+                let helpText = '';
+
+                switch(param) {
+                    case 'workspace_filter':
+                        inputHTML = `<input type="text" class="form-control" id="param_${param}" placeholder="e.g., my-workspace-id">`;
+                        helpText = 'Filter users by specific workspace ID (leave empty for all workspaces)';
+                        break;
+                    case 'user_types':
+                        inputHTML = `
+                            <select class="form-select" id="param_${param}" multiple>
+                                <option value="member" selected>Member</option>
+                                <option value="admin" selected>Admin</option>
+                                <option value="owner">Owner</option>
+                                <option value="bot">Bot</option>
+                            </select>`;
+                        helpText = 'Select which types of users to import (hold Ctrl/Cmd to select multiple)';
+                        break;
+                    case 'include_deactivated':
+                        inputHTML = `
+                            <select class="form-select" id="param_${param}">
+                                <option value="false" selected>No - Active users only</option>
+                                <option value="true">Yes - Include deactivated users</option>
+                            </select>`;
+                        helpText = 'Whether to include deactivated/deleted users in the import';
+                        break;
+                    default:
+                        inputHTML = `<input type="text" class="form-control" id="param_${param}">`;
+                        helpText = `Optional parameter: ${param}`;
+                }
+
+                parametersHTML += `
+                    <div class="mb-3">
+                        <label for="param_${param}" class="form-label">${param}</label>
+                        ${inputHTML}
+                        <div class="form-text">
+                            <small class="text-muted">${helpText}</small>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        container.innerHTML = parametersHTML;
+    }
+
+    function updateTasksTable() {
+        const tbody = document.getElementById('tasks-table');
+
+        if (tasksData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No tasks scheduled</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = tasksData.map(job => {
+            const isPaused = !job.next_run_time;
+            return `
+            <tr>
+                <td>
+                    <div>
+                        <strong>${job.name || 'Unnamed Task'}</strong>
+                        ${isPaused ? '<span class="badge bg-warning ms-2">Paused</span>' : '<span class="badge bg-success ms-2">Active</span>'}
+                    </div>
+                    <small class="text-muted">${job.id}</small>
+                </td>
+                <td><span class="badge bg-secondary">${job.trigger || 'Unknown'}</span></td>
+                <td>${job.next_run_time ? formatDate(job.next_run_time) : 'Paused'}</td>
+                <td>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewTaskDetails('${job.id}')" title="View Details">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-outline-warning btn-sm" onclick="${isPaused ? 'resumeTask' : 'pauseTask'}('${job.id}')" title="${isPaused ? 'Resume' : 'Pause'}">
+                            <i class="fas ${isPaused ? 'fa-play' : 'fa-pause'}"></i>
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="runTaskOnce('${job.id}')" title="Run Once">
+                            <i class="fas fa-play-circle"></i>
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteTask('${job.id}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        }).join('');
+    }
+
+    async function createTask() {
+        try {
+            const taskType = document.getElementById('taskType').value;
+            const taskName = document.getElementById('taskName').value;
+            const triggerType = document.getElementById('triggerType').value;
+
+            if (!taskType) {
+                showToast('Please select a task type', 'warning');
+                return;
+            }
+
+            if (!taskName) {
+                showToast('Please enter a task name', 'warning');
+                return;
+            }
+
+            // Build schedule object
+            const schedule = { trigger: triggerType };
+
+            switch (triggerType) {
+                case 'interval':
+                    const hours = parseInt(document.getElementById('hours').value) || 0;
+                    const minutes = parseInt(document.getElementById('minutes').value) || 0;
+                    const seconds = parseInt(document.getElementById('seconds').value) || 0;
+
+                    if (hours === 0 && minutes === 0 && seconds === 0) {
+                        showToast('Please specify at least one time unit for interval', 'warning');
+                        return;
+                    }
+
+                    if (hours > 0) schedule.hours = hours;
+                    if (minutes > 0) schedule.minutes = minutes;
+                    if (seconds > 0) schedule.seconds = seconds;
+                    break;
+
+                case 'cron':
+                    const cronExpression = document.getElementById('cronExpression').value;
+                    if (!cronExpression) {
+                        showToast('Please enter a cron expression', 'warning');
+                        return;
+                    }
+                    schedule.cron = cronExpression;
+                    break;
+
+                case 'date':
+                    const runDate = document.getElementById('runDate').value;
+                    if (!runDate) {
+                        showToast('Please select a run date', 'warning');
+                        return;
+                    }
+                    schedule.run_date = runDate;
+                    break;
+            }
+
+            // Collect task parameters
+            const parameters = {};
+            const selectedTaskType = taskTypesData.find(tt => tt.type === taskType);
+
+            if (selectedTaskType) {
+                // Collect required parameters
+                selectedTaskType.required_params?.forEach(param => {
+                    const element = document.getElementById(`param_${param}`);
+                    if (element && element.value) {
+                        parameters[param] = element.value;
+                    }
+                });
+
+                // Collect optional parameters
+                selectedTaskType.optional_params?.forEach(param => {
+                    const element = document.getElementById(`param_${param}`);
+                    if (element) {
+                        // Handle different input types
+                        if (element.multiple) {
+                            // Multi-select dropdown
+                            const selectedValues = Array.from(element.selectedOptions).map(option => option.value);
+                            if (selectedValues.length > 0) {
+                                parameters[param] = selectedValues;
+                            }
+                        } else if (element.tagName === 'SELECT') {
+                            // Single select dropdown
+                            if (element.value) {
+                                // Convert boolean strings to actual booleans
+                                if (element.value === 'true') {
+                                    parameters[param] = true;
+                                } else if (element.value === 'false') {
+                                    parameters[param] = false;
+                                } else {
+                                    parameters[param] = element.value;
+                                }
+                            }
+                        } else {
+                            // Regular text input
+                            if (element.value) {
+                                parameters[param] = element.value;
+                            }
+                        }
+                    }
+                });
+            }
+
+            const taskData = {
+                job_type: taskType,
+                name: taskName,
+                schedule: schedule,
+                parameters: parameters
+            };
+
+            const response = await apiCall('/api/jobs', {
+                method: 'POST',
+                body: JSON.stringify(taskData)
+            });
+
+            showToast('Job created successfully!', 'success');
+
+            // Close modal and refresh
+            const modal = bootstrap.Modal.getInstance(document.getElementById('createTaskModal'));
+            modal.hide();
+
+            // Reset form
+            document.getElementById('createJobForm').reset();
+            updateScheduleParameters();
+            updateTaskParameters();
+
+            refreshData();
+
+        } catch (error) {
+            console.error('Error creating job:', error);
+            showToast('Error creating job: ' + error.message, 'danger');
+        }
+    }
+
+    async function viewTaskDetails(taskId) {
+        try {
+            const job = await apiCall(`/api/jobs/${taskId}`);
+
+            const content = document.getElementById('taskDetailsContent');
+            content.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>ID:</strong></td><td><code>${job.id}</code></td></tr>
+                            <tr><td><strong>Name:</strong></td><td>${job.name || 'Unnamed'}</td></tr>
+                            <tr><td><strong>Function:</strong></td><td><code>${job.func || 'Unknown'}</code></td></tr>
+                            <tr><td><strong>Status:</strong></td><td>
+                                <span class="badge ${job.pending ? 'bg-warning' : 'bg-success'}">
+                                    ${job.pending ? 'Paused' : 'Active'}
+                                </span>
+                            </td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Schedule Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Trigger:</strong></td><td>${job.trigger || 'Unknown'}</td></tr>
+                            <tr><td><strong>Next Run:</strong></td><td>${job.next_run_time ? formatDate(job.next_run_time) : 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                ${job.args && job.args.length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Arguments</h6>
+                        <pre class="bg-light p-2 rounded">${JSON.stringify(job.args, null, 2)}</pre>
+                    </div>
+                ` : ''}
+                ${job.kwargs && Object.keys(job.kwargs).length > 0 ? `
+                    <div class="mt-3">
+                        <h6>Keyword Arguments</h6>
+                        <pre class="bg-light p-2 rounded">${JSON.stringify(job.kwargs, null, 2)}</pre>
+                    </div>
+                ` : ''}
+            `;
+
+            const modal = new bootstrap.Modal(document.getElementById('taskDetailsModal'));
+            modal.show();
+
+        } catch (error) {
+            showToast('Error loading job details: ' + error.message, 'danger');
+        }
+    }
+
+    // Task action functions (same as dashboard)
+    async function pauseTask(taskId) {
+        try {
+            await apiCall(`/api/jobs/${taskId}/pause`, { method: 'POST' });
+            showToast(`Job ${taskId} paused successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error pausing job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function resumeTask(taskId) {
+        try {
+            await apiCall(`/api/jobs/${taskId}/resume`, { method: 'POST' });
+            showToast(`Job ${taskId} resumed successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error resuming job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function deleteTask(taskId) {
+        if (!confirm(`Are you sure you want to delete job ${taskId}?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/jobs/${taskId}`, { method: 'DELETE' });
+            showToast(`Job ${taskId} deleted successfully`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error deleting job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function runTaskOnce(taskId) {
+        if (!confirm(`Run job ${taskId} once immediately?`)) {
+            return;
+        }
+
+        try {
+            const response = await apiCall(`/api/jobs/${taskId}/run-once`, { method: 'POST' });
+            showToast(`Job ${taskId} queued for immediate execution`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error running job: ${error.message}`, 'danger');
+        }
+    }
+
+    async function retryTask(taskId) {
+        if (!confirm(`Retry/re-queue job ${taskId}?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/jobs/${taskId}/retry`, { method: 'POST' });
+            showToast(`Job ${taskId} queued for retry`, 'success');
+            refreshData();
+        } catch (error) {
+            showToast(`Error retrying job: ${error.message}`, 'danger');
+        }
+    }
+</script>
+{% endblock %}

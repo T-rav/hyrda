@@ -124,7 +124,7 @@ The bot's health dashboard at `http://localhost:8080/ui` provides comprehensive 
    docker ps | grep elasticsearch
 
    # Check container logs
-   docker logs ai-slack-elasticsearch
+   docker logs insightmesh-elasticsearch
 
    # Verify health endpoint
    curl http://localhost:9200/_cluster/health | jq
