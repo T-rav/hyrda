@@ -226,6 +226,7 @@ function DashboardContent() {
         </div>
       </div>
 
+
       {/* Recent Runs */}
       <div className="glass-card">
         <div className="card-header">
@@ -646,6 +647,7 @@ function StatCard({ title, value, variant = 'primary' }) {
     </div>
   )
 }
+
 
 // Recent Runs Table Component with Pagination
 function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, onPageChange }) {
