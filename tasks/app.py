@@ -11,6 +11,8 @@ from flask_cors import CORS
 from config.settings import get_settings
 from jobs.job_registry import JobRegistry
 from services.scheduler_service import SchedulerService
+from models.task_run import TaskRun
+from models.base import get_db_session
 
 # Load environment variables
 load_dotenv()
@@ -231,13 +233,23 @@ def run_job_once(job_id: str) -> dict[str, Any]:
         # Create a one-time copy of the job
         one_time_id = f"{job_id}_manual_{int(datetime.now().timestamp())}"
 
+        # Use the same function and args as the original job, but mark as manual
+        manual_args = list(job.args) if job.args else []
+        # Ensure we have the right number of args and set triggered_by to "manual"
+        if len(manual_args) >= 2:
+            # Update or add the triggered_by parameter
+            if len(manual_args) >= 3:
+                manual_args[2] = "manual"  # Replace existing triggered_by
+            else:
+                manual_args.append("manual")  # Add triggered_by
+
         scheduler_service.add_job(
             func=job.func,
             trigger="date",
             run_date=datetime.now(UTC),
             job_id=one_time_id,
             name=f"{job.name} (Manual Run)",
-            **job.kwargs,
+            args=manual_args,
         )
 
         return jsonify(
@@ -298,6 +310,59 @@ def list_job_types() -> dict[str, Any]:
         return jsonify({"error": "Job registry not initialized"}), 500
 
     return jsonify({"job_types": job_registry.get_available_job_types()})
+
+
+@app.route("/api/task-runs")
+def list_task_runs() -> dict[str, Any]:
+    """List recent task runs."""
+    try:
+        with get_db_session() as session:
+            # Get recent task runs, ordered by most recent first
+            task_runs = (
+                session.query(TaskRun)
+                .order_by(TaskRun.started_at.desc())
+                .limit(50)  # Limit to last 50 runs
+                .all()
+            )
+
+            # Job type to name mapping
+            job_type_names = {
+                "slack_user_import": "Slack User Import",
+                "google_drive_ingest": "Google Drive Ingest",
+                "metrics_collection": "Metrics Collection",
+            }
+
+            runs_data = []
+            for run in task_runs:
+                # Extract job type from task config snapshot
+                job_type = None
+                job_name = "Unknown Job"
+                if run.task_config_snapshot:
+                    job_type = run.task_config_snapshot.get("job_type")
+                    job_name = job_type_names.get(job_type, job_type.replace("_", " ").title() if job_type else "Unknown Job")
+
+                runs_data.append({
+                    "id": run.id,
+                    "run_id": run.run_id,
+                    "job_type": job_type,
+                    "job_name": job_name,
+                    "status": run.status,
+                    "started_at": run.started_at.isoformat() if run.started_at else None,
+                    "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                    "duration_seconds": run.duration_seconds,
+                    "triggered_by": run.triggered_by,
+                    "triggered_by_user": run.triggered_by_user,
+                    "error_message": run.error_message,
+                    "records_processed": run.records_processed,
+                    "records_success": run.records_success,
+                    "records_failed": run.records_failed,
+                })
+
+            return jsonify({"task_runs": runs_data})
+
+    except Exception as e:
+        logger.error(f"Error fetching task runs: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/health")

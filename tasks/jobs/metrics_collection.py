@@ -76,7 +76,23 @@ class MetricsCollectionJob(BaseJob):
             # Send metrics to main bot API
             bot_result = await self._send_metrics_to_bot_api(aggregated_metrics)
 
+            # Calculate standardized metrics
+            total_data_points = sum(
+                len(data) if isinstance(data, list) else 1
+                for data in metrics_data.values()
+            )
+
+            # Determine success based on whether we collected any data
+            success_count = len([t for t in metric_types if t in metrics_data and metrics_data[t]])
+            failed_count = len(metric_types) - success_count
+
             return {
+                # Standardized fields for task run tracking
+                "records_processed": len(metric_types),  # Number of metric types requested
+                "records_success": success_count,        # Number of metric types successfully collected
+                "records_failed": failed_count,          # Number of metric types that failed
+
+                # Job-specific details for debugging/logging
                 "collected_metrics": metrics_data,
                 "aggregated_metrics": aggregated_metrics,
                 "external_api_result": external_result,
@@ -85,10 +101,7 @@ class MetricsCollectionJob(BaseJob):
                     "metric_types": metric_types,
                     "time_range_hours": time_range_hours,
                     "aggregate_level": aggregate_level,
-                    "total_data_points": sum(
-                        len(data) if isinstance(data, list) else 1
-                        for data in metrics_data.values()
-                    ),
+                    "total_data_points": total_data_points,
                 },
             }
 

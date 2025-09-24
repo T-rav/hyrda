@@ -15,29 +15,90 @@ from .slack_user_import import SlackUserImportJob
 logger = logging.getLogger(__name__)
 
 
-def execute_job_by_type(job_type: str, job_params: dict[str, Any]) -> dict[str, Any]:
+def execute_job_by_type(job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler") -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
+    import uuid
+    from datetime import datetime, UTC
     from config.settings import TasksSettings
+    from models.task_run import TaskRun
+    from models.base import get_db_session
 
-    # Job type mapping - keep this simple and static
-    job_types = {
-        "slack_user_import": "jobs.slack_user_import.SlackUserImportJob",
-        "google_drive_ingest": "jobs.google_drive_ingest.GoogleDriveIngestJob",
-        "metrics_collection": "jobs.metrics_collection.MetricsCollectionJob",
+
+    # Direct mapping - simpler than dynamic imports
+    job_classes = {
+        "slack_user_import": SlackUserImportJob,
+        "google_drive_ingest": GoogleDriveIngestJob,
+        "metrics_collection": MetricsCollectionJob,
     }
 
-    if job_type not in job_types:
+    job_class = job_classes.get(job_type)
+    if not job_class:
         raise ValueError(f"Unknown job type: {job_type}")
 
-    # Import the job class dynamically
-    module_path, class_name = job_types[job_type].rsplit('.', 1)
-    module = __import__(module_path, fromlist=[class_name])
-    job_class = getattr(module, class_name)
-
-    # Create settings and job instance
+    # Create job instance
     settings = TasksSettings()
     job_instance = job_class(settings, **job_params)
-    return job_instance.execute()
+
+    # Create TaskRun record
+    run_id = str(uuid.uuid4())
+    task_run = TaskRun(
+        run_id=run_id,
+        status="running",
+        started_at=datetime.now(UTC),
+        triggered_by=triggered_by,
+        task_config_snapshot={"job_type": job_type, "params": job_params},
+    )
+
+    try:
+        # Save the initial TaskRun record
+        with get_db_session() as session:
+            session.add(task_run)
+            session.commit()
+            session.refresh(task_run)
+
+        # Execute the job
+        result = job_instance.execute()
+
+        # Update TaskRun with success
+        with get_db_session() as session:
+            task_run = session.query(TaskRun).filter(TaskRun.run_id == run_id).first()
+            if task_run:
+                task_run.status = "success"
+                task_run.completed_at = datetime.now(UTC)
+                task_run.result_data = result
+                task_run.calculate_duration()
+
+                # Extract standardized metrics from job result
+                if isinstance(result, dict):
+                    # Handle BaseJob result structure (result is wrapped in "result" field)
+                    job_result = result.get("result", {}) if "result" in result else result
+
+                    # All jobs now return standardized fields
+                    if isinstance(job_result, dict):
+                        task_run.records_processed = job_result.get("records_processed")
+                        task_run.records_success = job_result.get("records_success")
+                        task_run.records_failed = job_result.get("records_failed")
+
+                session.commit()
+
+        return result
+
+    except Exception as e:
+        # Update TaskRun with failure
+        try:
+            with get_db_session() as session:
+                task_run = session.query(TaskRun).filter(TaskRun.run_id == run_id).first()
+                if task_run:
+                    task_run.status = "failed"
+                    task_run.completed_at = datetime.now(UTC)
+                    task_run.error_message = str(e)
+                    task_run.calculate_duration()
+                    session.commit()
+        except Exception as db_error:
+            logger.error(f"Failed to update TaskRun on error: {db_error}")
+
+        # Re-raise the original exception
+        raise e
 
 
 class JobRegistry:
@@ -95,13 +156,17 @@ class JobRegistry:
         trigger = schedule.get("trigger", "interval")
         schedule_params = {k: v for k, v in schedule.items() if k != "trigger"}
 
+        # Determine if this is a manual run based on job_id
+        final_job_id = job_id or f"{job_type}_{job_instance.get_job_id()}"
+        triggered_by = "manual" if "_manual_" in final_job_id else "scheduler"
+
         # Add job to scheduler using global executor function with only serializable data
         job = self.scheduler_service.add_job(
             func=execute_job_by_type,
             trigger=trigger,
-            job_id=job_id or f"{job_type}_{job_instance.get_job_id()}",
+            job_id=final_job_id,
             name=f"{job_class.JOB_NAME}",
-            args=[job_type, kwargs],  # Only pass serializable data
+            args=[job_type, kwargs, triggered_by],  # Include trigger type
             **schedule_params,
         )
 

@@ -14,11 +14,6 @@ class TaskRun(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    # Link to the scheduled task
-    scheduled_task_id = Column(
-        Integer, ForeignKey("scheduled_tasks.id"), nullable=False, index=True
-    )
-
     # Execution details
     run_id = Column(
         String(255), nullable=False, unique=True, index=True
@@ -61,8 +56,6 @@ class TaskRun(Base):
         DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
 
-    # Relationship back to the scheduled task
-    scheduled_task = relationship("ScheduledTask", back_populates="task_runs")
 
     def __repr__(self) -> str:
         return f"<TaskRun(id={self.id}, run_id={self.run_id}, status={self.status})>"
@@ -80,5 +73,19 @@ class TaskRun(Base):
     def calculate_duration(self) -> None:
         """Calculate and set the duration if both start and end times are available."""
         if self.started_at and self.completed_at:
-            delta = self.completed_at - self.started_at
+            # Handle timezone-aware vs timezone-naive datetime comparison
+            start_time = self.started_at
+            end_time = self.completed_at
+
+            # If one is timezone-aware and the other isn't, make them consistent
+            if start_time.tzinfo is not None and end_time.tzinfo is None:
+                # started_at is timezone-aware, completed_at is naive - assume UTC
+                from datetime import timezone
+                end_time = end_time.replace(tzinfo=timezone.utc)
+            elif start_time.tzinfo is None and end_time.tzinfo is not None:
+                # started_at is naive, completed_at is timezone-aware - assume UTC
+                from datetime import timezone
+                start_time = start_time.replace(tzinfo=timezone.utc)
+
+            delta = end_time - start_time
             self.duration_seconds = delta.total_seconds()
