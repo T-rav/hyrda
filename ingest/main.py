@@ -108,6 +108,21 @@ async def main():
             print("🔄 Single vector mode - using basic ingestion")
 
         if use_hybrid:
+            # Run Elasticsearch migrations first
+            print("🔄 Running Elasticsearch migrations...")
+            from services.elasticsearch_migrations import run_elasticsearch_migrations
+
+            migration_success = await run_elasticsearch_migrations(
+                elasticsearch_url=settings.vector.url,
+                collection_name=settings.vector.collection_name,
+                embedding_dims=3072  # text-embedding-3-large dimensions
+            )
+
+            if not migration_success:
+                print("❌ Elasticsearch migrations failed")
+                sys.exit(1)
+            print("✅ Elasticsearch migrations completed")
+
             # Use hybrid RAG service with title injection
             from services.hybrid_rag_service import create_hybrid_rag_service
             hybrid_service = await create_hybrid_rag_service(settings)
