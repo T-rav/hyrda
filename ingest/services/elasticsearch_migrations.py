@@ -84,11 +84,19 @@ class ElasticsearchMigrations:
             return True
 
         except RequestError as e:
-            logger.error(f"❌ Failed to create index '{index_name}': {e.error}")
-            logger.error(f"   Error details: {e.info}")
+            logger.error(f"❌ Failed to create index '{index_name}': {e}")
+            if hasattr(e, 'error'):
+                logger.error(f"   Error: {e.error}")
+            if hasattr(e, 'info'):
+                logger.error(f"   Info: {e.info}")
+            if hasattr(e, 'body'):
+                logger.error(f"   Body: {e.body}")
+            logger.error(f"   Status code: {e.status_code if hasattr(e, 'status_code') else 'unknown'}")
             return False
         except Exception as e:
-            logger.error(f"❌ Unexpected error creating index '{index_name}': {e}")
+            logger.error(f"❌ Unexpected error creating index '{index_name}': {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             return False
 
     async def run_migrations(self, collection_name: str, embedding_dims: int = 3072) -> bool:
@@ -97,15 +105,30 @@ class ElasticsearchMigrations:
 
         # Test connection first
         try:
-            await self.client.ping()
-            logger.info("✅ Elasticsearch connection verified")
+            ping_result = await self.client.ping()
+            logger.info(f"✅ Elasticsearch connection verified: {ping_result}")
+
+            # Get cluster info for debugging
+            try:
+                cluster_info = await self.client.info()
+                logger.info(f"   Cluster: {cluster_info.get('cluster_name', 'unknown')}")
+                logger.info(f"   Version: {cluster_info.get('version', {}).get('number', 'unknown')}")
+            except Exception as info_e:
+                logger.warning(f"   Could not get cluster info: {info_e}")
+
         except Exception as e:
-            logger.error(f"❌ Elasticsearch connection failed: {e}")
+            logger.error(f"❌ Elasticsearch connection failed: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             return False
 
-        # Create indices
-        dense_index = collection_name
-        sparse_index = f"{collection_name}_sparse"
+        # Create indices (ensure valid Elasticsearch index names)
+        # Elasticsearch index names must be lowercase and cannot contain certain characters
+        dense_index = collection_name.lower().replace('_', '-')
+        sparse_index = f"{dense_index}-sparse"
+
+        logger.info(f"   Dense index name: {dense_index}")
+        logger.info(f"   Sparse index name: {sparse_index}")
 
         results = []
 
