@@ -6,7 +6,7 @@ from typing import Any
 from slack_sdk import WebClient
 
 # Define SlackUser model locally since we're in a separate container
-from sqlalchemy import Column, DateTime, Integer, String, create_engine, func, select
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine, func, select
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -27,6 +27,8 @@ class SlackUser(Base):
     email_address = Column(String(255))
     display_name = Column(String(255))
     real_name = Column(String(255))
+    is_active = Column(Boolean, nullable=False, default=True)
+    user_type = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
@@ -189,20 +191,45 @@ class SlackUserImportJob(BaseJob):
                 continue
 
             # Extract relevant user data
+            deleted_status = user.get("deleted", False)
+            is_active_status = not deleted_status
+            is_bot_status = user.get("is_bot", False)
+            is_admin_status = user.get("is_admin", False)
+            is_owner_status = user.get("is_owner", False)
+
+            # Determine user type based on Slack flags (priority order: bot > owner > admin > member)
+            if is_bot_status:
+                user_type = "bot"
+            elif is_owner_status:
+                user_type = "owner"
+            elif is_admin_status:
+                user_type = "admin"
+            else:
+                user_type = "member"
+
             user_data = {
                 "id": user["id"],
                 "name": user.get("name"),
                 "real_name": user.get("real_name"),
                 "display_name": user.get("profile", {}).get("display_name"),
                 "email": user.get("profile", {}).get("email"),
-                "is_admin": user.get("is_admin", False),
-                "is_owner": user.get("is_owner", False),
-                "is_bot": user.get("is_bot", False),
-                "deleted": user.get("deleted", False),
+                "deleted": deleted_status,
+                "is_active": is_active_status,  # Active = not deleted
+                "user_type": user_type,
                 "status": user.get("profile", {}).get("status_text"),
                 "timezone": user.get("tz"),
                 "last_updated": user.get("updated"),
             }
+
+            # Debug logging for inactive users and bots
+            if not is_active_status:
+                logger.info(f"Processing inactive user: {user_data['id']} - {user_data.get('name')} - deleted: {deleted_status}")
+            elif user_type == "bot":
+                logger.info(f"Processing bot user: {user_data['id']} - {user_data.get('name')} - type: {user_type}")
+
+            # Debug print to see what's in user_data
+            print(f"DEBUG: user_data keys: {list(user_data.keys())}")
+            print(f"DEBUG: user_data for {user_data['id']}: is_active={user_data.get('is_active')}, user_type={user_data.get('user_type')}")
 
             filtered.append(user_data)
 
@@ -232,19 +259,25 @@ class SlackUserImportJob(BaseJob):
                         existing_user.email_address = user_data.get("email")
                         existing_user.display_name = user_data.get("display_name")
                         existing_user.real_name = user_data.get("real_name")
+                        existing_user.is_active = user_data.get("is_active", True)
+                        existing_user.user_type = user_data.get("user_type")
                         updated_users_count += 1
-                        logger.debug(f"Updated user: {user_data['id']}")
+                        print(f"DEBUG: Updating user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}")
+                        logger.info(f"Updated user: {user_data['id']} (active: {existing_user.is_active}, type: {existing_user.user_type})")
                     else:
                         # Create new user
+                        print(f"DEBUG: Creating new user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}")
                         new_user = SlackUser(
                             slack_user_id=user_data["id"],
                             email_address=user_data.get("email"),
                             display_name=user_data.get("display_name"),
                             real_name=user_data.get("real_name"),
+                            is_active=user_data.get("is_active", True),
+                            user_type=user_data.get("user_type"),
                         )
                         session.add(new_user)
                         new_users_count += 1
-                        logger.debug(f"Created new user: {user_data['id']}")
+                        logger.info(f"Created new user: {user_data['id']} (active: {new_user.is_active}, type: {new_user.user_type})")
 
                     processed_count += 1
 
