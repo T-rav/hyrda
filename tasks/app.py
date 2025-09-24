@@ -370,6 +370,8 @@ def health_check() -> dict[str, Any]:
     )
 
 
+
+
 def shutdown_scheduler():
     """Shutdown the scheduler gracefully."""
     if scheduler_service:
