@@ -1,5 +1,5 @@
 # Use Python 3.11 slim image for smaller attack surface
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:a0939570b38cddeb861b8e75d20b1c8218b21562b18f301171904b544e8cf228
 
 # Install security updates and dependencies including nginx
 RUN apt-get update && apt-get install -y \
