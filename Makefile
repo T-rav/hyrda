@@ -247,16 +247,16 @@ docker-monitor:
 	@echo "❌ Monitoring docker-compose file not found. Use 'make start' to run services."
 
 docker-prod:
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.prod.yml up -d
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.prod.yml up -d
 
 docker-stop:
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.elasticsearch.yml down
-	cd $(PROJECT_ROOT_DIR) && docker-compose -f docker-compose.mysql.yml down
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.elasticsearch.yml down
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.mysql.yml down
 
 # Full Docker Stack Commands
 docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker-compose up -d
+	cd $(PROJECT_ROOT_DIR) && docker compose up -d
 	@echo "$(GREEN)✅ Stack started! Services available at:$(RESET)"
 	@echo "$(BLUE)  - Bot API: http://localhost:8080$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:5001$(RESET)"
@@ -265,17 +265,17 @@ docker-up: check-env
 
 docker-down:
 	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker-compose down
+	cd $(PROJECT_ROOT_DIR) && docker compose down
 	@echo "$(GREEN)✅ Stack stopped!$(RESET)"
 
 docker-logs:
-	cd $(PROJECT_ROOT_DIR) && docker-compose logs -f
+	cd $(PROJECT_ROOT_DIR) && docker compose logs -f
 
 docker-restart: docker-down docker-up
 
 docker-build:
 	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker-compose build
+	cd $(PROJECT_ROOT_DIR) && docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"
 
 # Main stop command
