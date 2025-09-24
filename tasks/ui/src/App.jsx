@@ -442,7 +442,7 @@ function TasksContent({ showNotification }) {
               className="btn btn-success me-2"
               onClick={() => setShowCreateModal(true)}
             >
-              <Plus size={16} />
+              <Plus size={16} className="me-1" />
               Create Task
             </button>
             <button
