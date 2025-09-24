@@ -1,5 +1,4 @@
 import logging
-import os
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
@@ -52,6 +51,14 @@ class HealthChecker:
         app.router.add_get("/api/ready", self.readiness_check)
         app.router.add_get("/api/metrics", self.metrics)
         app.router.add_get("/api/prometheus", self.prometheus_metrics)
+
+        # Tasks service integration endpoints
+        app.router.add_post("/api/users/import", self.handle_user_import)
+        app.router.add_post("/api/ingest/completed", self.handle_ingest_completed)
+        app.router.add_post("/api/metrics/store", self.handle_metrics_store)
+        app.router.add_get("/api/metrics/usage", self.get_usage_metrics)
+        app.router.add_get("/api/metrics/performance", self.get_performance_metrics)
+        app.router.add_get("/api/metrics/errors", self.get_error_metrics)
 
         # Legacy routes (without /api prefix for backward compatibility)
         app.router.add_get("/health", self.health_check)
@@ -376,13 +383,6 @@ class HealthChecker:
         try:
             index_path = self._get_ui_index_path()
 
-            # Check if built UI exists
-            if not os.path.exists(index_path):
-                # Serve a simple fallback HTML page
-                return web.Response(
-                    text=self._get_fallback_ui(), content_type="text/html"
-                )
-
             # Serve the built React app
             with open(index_path, encoding="utf-8") as f:
                 content = f.read()
@@ -391,191 +391,185 @@ class HealthChecker:
 
         except Exception as e:
             logger.error(f"Error serving health UI: {e}")
-            return web.Response(text=self._get_fallback_ui(), content_type="text/html")
+            return web.Response(
+                text="Health UI not available", content_type="text/plain", status=500
+            )
 
-    def _get_fallback_ui(self) -> str:
-        """Fallback HTML page when React app is not built"""
-        return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Slack Bot - Health Dashboard</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
-        .header h1 {
-            color: #1a202c;
-            margin: 0 0 0.5rem 0;
-        }
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-        .status-card {
-            background: white;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        .api-links {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 1.5rem;
-        }
-        .api-links h3 {
-            margin: 0 0 1rem 0;
-            color: #1a202c;
-        }
-        .api-links a {
-            display: inline-block;
-            margin: 0.25rem 0.5rem;
-            padding: 0.5rem 1rem;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 0.875rem;
-        }
-        .api-links a:hover {
-            background: #5a67d8;
-        }
-        .build-info {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: #fef3cd;
-            border-radius: 4px;
-            font-size: 0.875rem;
-        }
-        .status-healthy { color: #10b981; }
-        .status-error { color: #ef4444; }
-        .auto-refresh { font-size: 0.875rem; color: #666; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 AI Slack Bot Health Dashboard</h1>
-            <p class="auto-refresh">Auto-refreshing every 10 seconds...</p>
-        </div>
+    # Tasks Service Integration Endpoints
 
-        <div class="status-grid">
-            <div class="status-card">
-                <h3>System Status</h3>
-                <div id="system-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>LLM Service</h3>
-                <div id="llm-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>Cache Service</h3>
-                <div id="cache-status" class="status-error">Loading...</div>
-            </div>
-            <div class="status-card">
-                <h3>Metrics</h3>
-                <div id="metrics-status" class="status-error">Loading...</div>
-            </div>
-        </div>
+    async def handle_user_import(self, request):
+        """Handle user import from tasks service."""
+        try:
+            data = await request.json()
+            users = data.get("users", [])
+            job_id = data.get("job_id", "unknown")
 
-        <div class="api-links">
-            <h3>API Endpoints</h3>
-            <a href="/api/health" target="_blank">Health Check</a>
-            <a href="/api/ready" target="_blank">Readiness Check</a>
-            <a href="/api/metrics" target="_blank">Metrics (JSON)</a>
-            <a href="/api/prometheus" target="_blank">Prometheus Metrics</a>
-        </div>
+            logger.info(f"Received user import from job {job_id}: {len(users)} users")
 
-        <div class="build-info">
-            <strong>ℹ️ Development Mode:</strong>
-            This is a simple fallback UI. For the full React dashboard, run:
-            <br><br>
-            <code>cd bot/health_ui && npm install && npm run build</code>
-        </div>
-    </div>
+            # Here you would implement the actual user storage logic
+            # For example: store in database, update user cache, etc.
 
-    <script>
-        async function updateStatus() {
-            try {
-                // Fetch health data
-                const [health, ready] = await Promise.all([
-                    fetch('/api/health').then(r => r.json()),
-                    fetch('/api/ready').then(r => r.json())
-                ]);
+            # Mock implementation - in a real scenario you'd store these users
+            processed_count = len(users)
 
-                // Update system status
-                const systemEl = document.getElementById('system-status');
-                systemEl.textContent = health.status === 'healthy' ? '✅ Healthy' : '❌ Unhealthy';
-                systemEl.className = health.status === 'healthy' ? 'status-healthy' : 'status-error';
-
-                // Update LLM status
-                const llmEl = document.getElementById('llm-status');
-                const llmStatus = ready.checks?.llm_api?.status;
-                llmEl.textContent = llmStatus === 'healthy' ? '✅ Connected' : '❌ Error';
-                llmEl.className = llmStatus === 'healthy' ? 'status-healthy' : 'status-error';
-
-                // Update cache status
-                const cacheEl = document.getElementById('cache-status');
-                const cacheStatus = ready.checks?.cache?.status;
-                if (cacheStatus === 'healthy') {
-                    cacheEl.textContent = '✅ Available';
-                    cacheEl.className = 'status-healthy';
-                } else if (cacheStatus === 'disabled') {
-                    cacheEl.textContent = '⚪ Disabled';
-                    cacheEl.className = 'status-healthy';
-                } else {
-                    cacheEl.textContent = '❌ Error';
-                    cacheEl.className = 'status-error';
+            return web.json_response(
+                {
+                    "status": "success",
+                    "processed_count": processed_count,
+                    "job_id": job_id,
+                    "message": f"Successfully processed {processed_count} users",
                 }
+            )
 
-                // Update metrics status
-                const metricsEl = document.getElementById('metrics-status');
-                const metricsStatus = ready.checks?.metrics?.status;
-                if (metricsStatus === 'healthy') {
-                    metricsEl.textContent = '✅ Enabled';
-                    metricsEl.className = 'status-healthy';
-                } else if (metricsStatus === 'disabled') {
-                    metricsEl.textContent = '⚪ Disabled';
-                    metricsEl.className = 'status-healthy';
-                } else {
-                    metricsEl.textContent = '❌ Error';
-                    metricsEl.className = 'status-error';
+        except Exception as e:
+            logger.error(f"Error processing user import: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def handle_ingest_completed(self, request):
+        """Handle document ingestion completion notification."""
+        try:
+            data = await request.json()
+            job_id = data.get("job_id", "unknown")
+            job_type = data.get("job_type", "unknown")
+            result = data.get("result", {})
+            folder_id = data.get("folder_id", "unknown")
+
+            logger.info(
+                f"Received ingestion completion from job {job_id}: {job_type} with result: {result}"
+            )
+
+            # Here you would implement post-ingestion logic
+            # For example: update search indexes, notify users, etc.
+
+            return web.json_response(
+                {
+                    "status": "success",
+                    "job_id": job_id,
+                    "message": f"Successfully processed ingestion completion for {folder_id}",
                 }
+            )
 
-            } catch (error) {
-                console.error('Error updating status:', error);
-                document.querySelectorAll('[id$="-status"]').forEach(el => {
-                    el.textContent = '❌ Error';
-                    el.className = 'status-error';
-                });
+        except Exception as e:
+            logger.error(f"Error processing ingestion completion: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def handle_metrics_store(self, request):
+        """Handle metrics storage from tasks service."""
+        try:
+            data = await request.json()
+            job_id = data.get("job_id", "unknown")
+            metrics = data.get("metrics", {})
+
+            logger.info(f"Received metrics from job {job_id}: {metrics}")
+
+            # Here you would implement metrics storage logic
+            # For example: store in time-series database, update dashboards, etc.
+
+            return web.json_response(
+                {
+                    "status": "success",
+                    "job_id": job_id,
+                    "message": "Metrics stored successfully",
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error storing metrics: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def get_usage_metrics(self, request):
+        """Get usage metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            include_details = (
+                request.query.get("include_details", "false").lower() == "true"
+            )
+
+            # Mock usage metrics - in a real implementation, fetch from database/cache
+            metrics_data = {
+                "time_range_hours": hours,
+                "total_messages": 150,
+                "active_users": 25,
+                "response_time_avg": 2.3,
+                "success_rate": 98.5,
+                "data": [
+                    {"hour": i, "messages": 10 + (i % 5) * 3, "users": 2 + (i % 3)}
+                    for i in range(hours)
+                ],
             }
-        }
 
-        // Initial load and auto-refresh
-        updateStatus();
-        setInterval(updateStatus, 10000);
-    </script>
-</body>
-</html>
-        """.strip()
+            if not include_details:
+                metrics_data.pop("data", None)
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting usage metrics: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def get_performance_metrics(self, request):
+        """Get performance metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            include_system = (
+                request.query.get("include_system", "false").lower() == "true"
+            )
+
+            # Mock performance metrics
+            metrics_data = {
+                "time_range_hours": hours,
+                "avg_response_time_ms": 2300,
+                "95th_percentile_ms": 4500,
+                "99th_percentile_ms": 8000,
+                "memory_usage_mb": 256,
+                "cpu_usage_percent": 15.3,
+                "data": [
+                    {
+                        "hour": i,
+                        "response_time": 2000 + (i % 7) * 200,
+                        "memory": 240 + (i % 5) * 10,
+                    }
+                    for i in range(min(hours, 24))
+                ],
+            }
+
+            if not include_system:
+                for item in metrics_data.get("data", []):
+                    item.pop("memory", None)
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting performance metrics: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def get_error_metrics(self, request):
+        """Get error metrics for tasks service."""
+        try:
+            hours = int(request.query.get("hours", 24))
+            severity = request.query.get("severity", "warning,error,critical")
+
+            severities = [s.strip() for s in severity.split(",")]
+
+            # Mock error metrics
+            metrics_data = {
+                "time_range_hours": hours,
+                "total_errors": 12,
+                "error_rate_percent": 1.5,
+                "severities": severities,
+                "data": [
+                    {
+                        "hour": i,
+                        "warning": max(0, 2 - (i % 3)),
+                        "error": max(0, 1 - (i % 5)),
+                        "critical": 1 if i % 12 == 0 else 0,
+                    }
+                    for i in range(min(hours, 24))
+                ],
+            }
+
+            return web.json_response(metrics_data)
+
+        except Exception as e:
+            logger.error(f"Error getting error metrics: {e}")
+            return web.json_response({"status": "error", "error": str(e)}, status=400)

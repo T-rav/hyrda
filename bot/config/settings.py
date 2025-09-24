@@ -52,9 +52,12 @@ class CacheSettings(BaseSettings):
 
 
 class DatabaseSettings(BaseSettings):
-    """PostgreSQL database settings"""
+    """MySQL database settings"""
 
-    url: str = Field(description="PostgreSQL connection URL")
+    url: str = Field(
+        default="mysql+pymysql://insightmesh_bot:insightmesh_bot_password@localhost:3306/insightmesh_bot",
+        description="MySQL connection URL",
+    )
     enabled: bool = Field(default=True, description="Enable database features")
 
     model_config = ConfigDict(env_prefix="DATABASE_")  # type: ignore[assignment,typeddict-unknown-key]

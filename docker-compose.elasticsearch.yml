@@ -1,7 +1,7 @@
 services:
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: ai-slack-elasticsearch
+    container_name: insightmesh-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false

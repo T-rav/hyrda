@@ -70,13 +70,16 @@ VECTOR_URL=http://localhost:9200  # Elasticsearch for sparse search
 HYBRID_RERANKER_ENABLED=true
 HYBRID_RERANKER_API_KEY=your-cohere-api-key  # Get from https://cohere.ai
 
-# Optional: Database for user prompts (use SQLite if not provided)
-DATABASE_URL=postgresql://user:pass@localhost:5432/slack_bot
+# Database for user prompts and tasks
+DATABASE_URL=mysql+pymysql://insightmesh_bot:insightmesh_bot_password@localhost:3306/bot
 ```
 
 ### 3. **Start Required Services**
 ```bash
-# For Hybrid RAG: Start Elasticsearch
+# Start MySQL database
+docker compose -f docker-compose.mysql.yml up -d
+
+# For Hybrid RAG: Start Elasticsearch  
 docker compose -f docker-compose.elasticsearch.yml up -d
 
 # Optional: Start Redis for caching

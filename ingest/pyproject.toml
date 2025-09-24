@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "google-drive-ingester"
-version = "1.0.0"
+version = "1.2.5"
 description = "Google Drive document ingester for RAG systems"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}

@@ -4,13 +4,13 @@ export const mockHealthData = {
     status: 'healthy',
     uptime_seconds: 3661,
     timestamp: '2024-01-15T10:30:00Z',
-    version: '1.2.0'
+    version: '1.2.5'
   },
   unhealthy: {
     status: 'unhealthy',
     uptime_seconds: 120,
     timestamp: '2024-01-15T10:30:00Z',
-    version: '1.2.0'
+    version: '1.2.5'
   }
 }
 
