@@ -70,7 +70,11 @@ class HealthChecker:
         # Health UI routes
         app.router.add_get("/", self.health_ui)
         app.router.add_get("/ui", self.health_ui)
-        app.router.add_static("/assets", self._get_ui_assets_path())
+
+        # Only add static assets if they exist
+        assets_path = self._get_ui_assets_path()
+        if os.path.exists(assets_path):
+            app.router.add_static("/assets", assets_path)
 
         self.runner = web.AppRunner(app)
         await self.runner.setup()
