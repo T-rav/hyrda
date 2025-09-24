@@ -1128,13 +1128,13 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
           </form>
         </div>
         <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
             <X size={16} className="me-1" />
             Cancel
           </button>
           <button
             type="button"
-            className="btn btn-success"
+            className="btn btn-outline-success"
             onClick={handleSubmit}
             disabled={loading}
           >
