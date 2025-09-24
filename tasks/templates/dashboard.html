@@ -118,7 +118,7 @@
     </div>
 
     <!-- Pagination Controls (hidden by default) -->
-    <div id="pagination-controls" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+    <div id="pagination-controls" class="d-flex justify-content-between align-items-center mt-3" style="display: none;">
         <div class="text-muted">
             Showing <span id="showing-start">1</span>-<span id="showing-end">5</span> of <span id="total-records">0</span> runs
         </div>
@@ -263,13 +263,21 @@
             const endIndex = startIndex + recordsPerPage;
             recentRuns = taskRunsData.slice(startIndex, endIndex);
 
-            // Show pagination controls
-            paginationControls.style.display = 'flex';
-            updatePaginationControls();
+            // Show pagination controls only if we have more than one page
+            const totalPages = Math.ceil(taskRunsData.length / recordsPerPage);
+            if (totalPages > 1) {
+                paginationControls.style.display = 'flex';
+                paginationControls.style.visibility = 'visible';
+                updatePaginationControls();
+            } else {
+                paginationControls.style.display = 'none';
+                paginationControls.style.visibility = 'hidden';
+            }
         } else {
             // Show just recent 5
             recentRuns = taskRunsData.slice(0, 5);
             paginationControls.style.display = 'none';
+            paginationControls.style.visibility = 'hidden';
         }
 
         tbody.innerHTML = recentRuns.map(run => {
