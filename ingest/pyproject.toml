@@ -39,7 +39,7 @@ dependencies = [
 ]
 
 [project.scripts]
-google-drive-ingester = "google_drive_ingester:main"
+google-drive-ingester = "main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -51,6 +51,11 @@ test = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
 ]
+
+# Explicit package configuration to avoid setuptools auto-discovery issues
+[tool.setuptools]
+packages = ["auth", "services"]
+py-modules = ["main", "ingester"]
 
 # Ruff configuration
 [tool.ruff]
