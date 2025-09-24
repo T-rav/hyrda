@@ -1,7 +1,6 @@
 """Task run model for tracking individual task executions."""
 
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.sql import func
 
 from .base import Base
