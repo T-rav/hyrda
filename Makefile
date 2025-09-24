@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui start start-with-tasks start-tasks-only db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -64,7 +64,8 @@ help:
 	@echo "  quality         Run all quality checks"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
-	@echo "  docker-build    Build Docker image"
+	@echo "  docker-build-bot Build single bot Docker image"
+	@echo "  docker-build    Build all Docker images in stack"
 	@echo "  docker-run      Run Docker container with .env"
 	@echo "  docker-monitor  Run full monitoring stack"
 	@echo "  docker-prod     Run production stack"
@@ -78,8 +79,9 @@ help:
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
 	@echo ""
-	@echo "$(GREEN)Health Dashboard:$(RESET)"
+	@echo "$(GREEN)UI Components:$(RESET)"
 	@echo "  health-ui       Build React health dashboard UI"
+	@echo "  tasks-ui        Build React tasks dashboard UI"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
 	@echo "  db-start        🐳 Start MySQL databases in Docker"
@@ -237,7 +239,7 @@ typecheck: $(VENV)
 quality: lint-check test
 
 
-docker-build:
+docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
 
 docker-run: check-env
@@ -273,7 +275,7 @@ docker-logs:
 
 docker-restart: docker-down docker-up
 
-docker-build:
+docker-build: health-ui tasks-ui
 	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"
@@ -293,6 +295,12 @@ health-ui:
 	cd $(BOT_DIR)/health_ui && npm install && npm run build
 	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:8080/ui$(RESET)"
+
+tasks-ui:
+	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install && npm run build
+	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
+	@echo "$(BLUE)🌐 Access at: http://localhost:5001$(RESET)"
 
 ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
