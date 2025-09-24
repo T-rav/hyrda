@@ -244,7 +244,7 @@ docker-run: check-env
 	docker run --rm --env-file $(ENV_FILE) --name $(IMAGE) $(IMAGE)
 
 docker-monitor:
-	@echo "❌ Monitoring docker-compose file not found. Use 'make start' to run services."
+	@echo "❌ Monitoring compose file not found. Use 'make start' to run services."
 
 docker-prod:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.prod.yml up -d
