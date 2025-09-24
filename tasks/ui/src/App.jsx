@@ -439,7 +439,7 @@ function TasksContent({ showNotification }) {
           </div>
           <div className="header-actions">
             <button
-              className="btn btn-success me-2"
+              className="btn btn-outline-success me-2"
               onClick={() => setShowCreateModal(true)}
             >
               <Plus size={16} className="me-1" />
