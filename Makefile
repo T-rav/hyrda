@@ -238,7 +238,6 @@ typecheck: $(VENV)
 
 quality: lint-check test
 
-
 docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
 
