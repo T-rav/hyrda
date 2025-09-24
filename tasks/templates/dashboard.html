@@ -17,18 +17,6 @@
     </div>
 </div>
 
-<!-- Scheduler Status -->
-<div class="glass-card mb-4">
-    <h3 class="mb-3"><i data-lucide="server" class="icon me-2"></i>Scheduler Status</h3>
-    <div class="row" id="scheduler-info">
-        <div class="col-12 text-center">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    </div>
-</div>
-
 <!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3 mb-3">
@@ -85,13 +73,25 @@
     </div>
 </div>
 
+<!-- Scheduler Status -->
+<div class="glass-card mb-4">
+    <h3 class="mb-3"><i data-lucide="server" class="icon me-2"></i>Scheduler Status</h3>
+    <div class="row" id="scheduler-info">
+        <div class="col-12 text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Recent Runs -->
 <div class="glass-card">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h3 class="mb-0">
             <i data-lucide="history" class="icon me-2"></i>Recent Runs
         </h3>
-        <a href="/tasks" class="btn btn-sm btn-outline-primary">
+        <a href="#" onclick="showAllRuns()" class="btn btn-sm btn-outline-primary">
             View All <i data-lucide="arrow-right" class="icon-sm ms-1"></i>
         </a>
     </div>
@@ -116,6 +116,18 @@
             </tbody>
         </table>
     </div>
+
+    <!-- Pagination Controls (hidden by default) -->
+    <div id="pagination-controls" class="d-flex justify-content-between align-items-center mt-3" style="display: none !important;">
+        <div class="text-muted">
+            Showing <span id="showing-start">1</span>-<span id="showing-end">5</span> of <span id="total-records">0</span> runs
+        </div>
+        <nav aria-label="Task runs pagination">
+            <ul class="pagination pagination-sm mb-0" id="pagination-list">
+                <!-- Pagination items will be inserted here -->
+            </ul>
+        </nav>
+    </div>
 </div>
 {% endblock %}
 
@@ -124,6 +136,8 @@
     let schedulerData = {};
     let tasksData = [];
     let taskRunsData = [];
+    let currentPage = 1;
+    const recordsPerPage = 20;
 
     // Load data on page load
     document.addEventListener('DOMContentLoaded', function() {
@@ -182,29 +196,23 @@
     function updateSchedulerInfo() {
         const container = document.getElementById('scheduler-info');
 
+        // Calculate run statistics
+        const totalRuns = taskRunsData.length;
+        const successfulRuns = taskRunsData.filter(run => run.status === 'success').length;
+        const failedRuns = taskRunsData.filter(run => run.status === 'failed').length;
+        const runningRuns = taskRunsData.filter(run => run.status === 'running').length;
+        const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0;
+
         container.innerHTML = `
-            <div class="col-md-2">
-                <strong>Status:</strong>
-                <span class="badge ${schedulerData.running ? 'bg-success' : 'bg-danger'} ms-2">
-                    <i class="fas ${schedulerData.running ? 'fa-play' : 'fa-stop'} me-1"></i>
-                    ${schedulerData.running ? 'Running' : 'Stopped'}
+            <div class="col-md-6">
+                <strong>Total Runs:</strong>
+                <span class="badge bg-info ms-2">${totalRuns}</span>
+            </div>
+            <div class="col-md-6">
+                <strong>Success Rate:</strong>
+                <span class="badge ${successRate >= 90 ? 'bg-success' : successRate >= 70 ? 'bg-warning' : 'bg-danger'} ms-2">
+                    ${successRate}% (${successfulRuns}/${totalRuns})
                 </span>
-            </div>
-            <div class="col-md-2">
-                <strong>Tasks Count:</strong>
-                <span class="badge bg-primary ms-2">${schedulerData.jobs_count || 0}</span>
-            </div>
-            <div class="col-md-2">
-                <strong>Timezone:</strong>
-                <span class="text-muted ms-2">${schedulerData.timezone || 'Unknown'}</span>
-            </div>
-            <div class="col-md-3">
-                <strong>Task Stores:</strong>
-                <span class="text-muted ms-2">${schedulerData.job_stores ? schedulerData.job_stores.join(', ') : 'Unknown'}</span>
-            </div>
-            <div class="col-md-3">
-                <strong>Executors:</strong>
-                <span class="text-muted ms-2">${schedulerData.executors ? schedulerData.executors.join(', ') : 'Unknown'}</span>
             </div>
         `;
     }
@@ -238,14 +246,31 @@
 
     function updateRecentTasksTable() {
         const tbody = document.getElementById('recent-tasks-table');
+        const paginationControls = document.getElementById('pagination-controls');
 
         if (taskRunsData.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent runs</td></tr>';
+            paginationControls.style.display = 'none';
             return;
         }
 
-        // Show last 5 task runs
-        const recentRuns = taskRunsData.slice(0, 5);
+        const showAll = window.showAllRunsMode || false;
+        let recentRuns;
+
+        if (showAll) {
+            // Show paginated results
+            const startIndex = (currentPage - 1) * recordsPerPage;
+            const endIndex = startIndex + recordsPerPage;
+            recentRuns = taskRunsData.slice(startIndex, endIndex);
+
+            // Show pagination controls
+            paginationControls.style.display = 'flex';
+            updatePaginationControls();
+        } else {
+            // Show just recent 5
+            recentRuns = taskRunsData.slice(0, 5);
+            paginationControls.style.display = 'none';
+        }
 
         tbody.innerHTML = recentRuns.map(run => {
             const statusBadge = {
@@ -288,6 +313,105 @@
             </tr>
         `;
         }).join('');
+    }
+
+    // Show all runs function
+    function showAllRuns() {
+        window.showAllRunsMode = !window.showAllRunsMode;
+        const button = document.querySelector('a[onclick="showAllRuns()"]');
+
+        if (window.showAllRunsMode) {
+            button.innerHTML = 'Show Recent <i data-lucide="arrow-up" class="icon-sm ms-1"></i>';
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-primary');
+            currentPage = 1; // Reset to first page when expanding
+        } else {
+            button.innerHTML = 'View All <i data-lucide="arrow-right" class="icon-sm ms-1"></i>';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-outline-primary');
+        }
+
+        updateRecentTasksTable();
+        // Re-initialize lucide icons for the new button content
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    }
+
+    // Pagination functions
+    function updatePaginationControls() {
+        const totalRecords = taskRunsData.length;
+        const totalPages = Math.ceil(totalRecords / recordsPerPage);
+        const startRecord = (currentPage - 1) * recordsPerPage + 1;
+        const endRecord = Math.min(currentPage * recordsPerPage, totalRecords);
+
+        // Update showing text
+        document.getElementById('showing-start').textContent = startRecord;
+        document.getElementById('showing-end').textContent = endRecord;
+        document.getElementById('total-records').textContent = totalRecords;
+
+        // Update pagination buttons
+        const paginationList = document.getElementById('pagination-list');
+        paginationList.innerHTML = '';
+
+        // Previous button
+        const prevLi = document.createElement('li');
+        prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+        prevLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a>`;
+        paginationList.appendChild(prevLi);
+
+        // Page numbers (show max 5 pages around current)
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+
+        if (startPage > 1) {
+            const firstLi = document.createElement('li');
+            firstLi.className = 'page-item';
+            firstLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(1)">1</a>`;
+            paginationList.appendChild(firstLi);
+
+            if (startPage > 2) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                paginationList.appendChild(ellipsisLi);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const li = document.createElement('li');
+            li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+            li.innerHTML = `<a class="page-link" href="#" onclick="changePage(${i})">${i}</a>`;
+            paginationList.appendChild(li);
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsisLi = document.createElement('li');
+                ellipsisLi.className = 'page-item disabled';
+                ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+                paginationList.appendChild(ellipsisLi);
+            }
+
+            const lastLi = document.createElement('li');
+            lastLi.className = 'page-item';
+            lastLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${totalPages})">${totalPages}</a>`;
+            paginationList.appendChild(lastLi);
+        }
+
+        // Next button
+        const nextLi = document.createElement('li');
+        nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+        nextLi.innerHTML = `<a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a>`;
+        paginationList.appendChild(nextLi);
+    }
+
+    function changePage(page) {
+        const totalPages = Math.ceil(taskRunsData.length / recordsPerPage);
+        if (page < 1 || page > totalPages) return;
+
+        currentPage = page;
+        updateRecentTasksTable();
     }
 
     // Task action functions
