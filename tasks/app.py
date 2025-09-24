@@ -53,37 +53,8 @@ def create_app() -> Flask:
     return app
 
 
-# Web UI Routes
-@app.route("/")
-def index():
-    """Serve the React-based UI at root."""
-    import os
-    from pathlib import Path
-
-    ui_dist_path = Path(__file__).parent / "ui" / "dist" / "index.html"
-
-    if ui_dist_path.exists():
-        with open(ui_dist_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            # Asset paths are now served at /assets/ (root level)
-            return content
-    else:
-        return "React UI not built. Run 'cd ui && npm run build' to build the React UI.", 404
-
-
-
-@app.route("/assets/<path:filename>")
-def react_assets(filename):
-    """Serve React static assets."""
-    from flask import send_from_directory
-    from pathlib import Path
-
-    assets_dir = Path(__file__).parent / "ui" / "dist" / "assets"
-
-    if assets_dir.exists():
-        return send_from_directory(str(assets_dir), filename)
-    else:
-        return "Asset not found", 404
+# UI serving removed - handled by nginx
+# Flask app now serves only API routes
 
 
 # API Routes

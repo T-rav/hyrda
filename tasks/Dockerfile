@@ -1,11 +1,13 @@
 # Use Python 3.11 slim image for smaller attack surface
 FROM python:3.11-slim
 
-# Install security updates and dependencies
+# Install security updates and dependencies including nginx
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
     default-mysql-client \
+    nginx \
+    supervisor \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -44,6 +46,16 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY --chown=appuser:appuser . .
 
+# Setup nginx configuration (as root)
+COPY nginx.conf /etc/nginx/sites-available/default
+RUN rm -f /etc/nginx/sites-enabled/default && \
+    ln -s /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+
+# Copy React UI build to nginx directory
+COPY --chown=www-data:www-data ui/dist /usr/share/nginx/html
+
+# Startup script no longer needed - using supervisor
+
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -51,15 +63,15 @@ ENV PYTHONUNBUFFERED=1 \
     ENVIRONMENT=production \
     LOG_LEVEL=INFO
 
-# Expose task scheduler port
+# Expose nginx port
 EXPOSE 5001
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5001/health || exit 1
 
-# Switch to non-root user
-USER appuser
+# Copy supervisor configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Use exec form for better signal handling
-CMD ["python", "-u", "app.py"]
+# Use supervisor to manage both nginx and Flask
+CMD ["/usr/bin/supervisord"]
