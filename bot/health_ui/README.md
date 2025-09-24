@@ -14,18 +14,6 @@ A React-based health monitoring dashboard for the AI Slack Bot.
 
 ## Quick Start
 
-### Option 1: Simple Fallback UI (No Build Required)
-
-The health server automatically serves a fallback HTML dashboard at:
-- `http://localhost:8080/`
-- `http://localhost:8080/ui`
-
-This provides basic health monitoring with auto-refresh functionality.
-
-### Option 2: Full React Dashboard
-
-For the enhanced React experience:
-
 ```bash
 # Install dependencies
 cd bot/health_ui
@@ -34,7 +22,9 @@ npm install
 # Build for production
 npm run build
 
-# The health server will automatically serve the built React app
+# The health server will automatically serve the React app at:
+# - http://localhost:8080/
+# - http://localhost:8080/ui
 ```
 
 ## Development

@@ -53,17 +53,8 @@ def create_app() -> Flask:
     return app
 
 
-# Web UI Routes
-@app.route("/")
-def index() -> str:
-    """Main dashboard page."""
-    return render_template("dashboard.html")
-
-
-@app.route("/tasks")
-def tasks_page() -> str:
-    """Tasks management page."""
-    return render_template("tasks.html")
+# UI serving removed - handled by nginx
+# Flask app now serves only API routes
 
 
 # API Routes
@@ -377,6 +368,8 @@ def health_check() -> dict[str, Any]:
             else False,
         }
     )
+
+
 
 
 def shutdown_scheduler():

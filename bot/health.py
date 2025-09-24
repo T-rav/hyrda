@@ -60,6 +60,9 @@ class HealthChecker:
         app.router.add_get("/api/metrics/performance", self.get_performance_metrics)
         app.router.add_get("/api/metrics/errors", self.get_error_metrics)
 
+        # Services health endpoint
+        app.router.add_get("/api/services/health", self.services_health)
+
         # Legacy routes (without /api prefix for backward compatibility)
         app.router.add_get("/health", self.health_check)
         app.router.add_get("/ready", self.readiness_check)
@@ -573,3 +576,139 @@ class HealthChecker:
         except Exception as e:
             logger.error(f"Error getting error metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def services_health(self, request):
+        """Get health status of all services."""
+        import aiohttp
+        import pymysql
+
+        services = {}
+
+        # Task Scheduler Health
+        try:
+            async with aiohttp.ClientSession() as session:
+                # Get scheduler info and jobs count
+                scheduler_resp = session.get(
+                    "http://tasks:8081/api/scheduler/info", timeout=5
+                )
+                jobs_resp = session.get("http://tasks:8081/api/jobs", timeout=5)
+
+                scheduler_result = await scheduler_resp
+                jobs_result = await jobs_resp
+
+                if scheduler_result.status == 200 and jobs_result.status == 200:
+                    scheduler_data = await scheduler_result.json()
+                    jobs_data = await jobs_result.json()
+
+                    services["task_scheduler"] = {
+                        "name": "Task Scheduler",
+                        "status": "healthy",
+                        "details": {
+                            "running": scheduler_data.get("running", False),
+                            "jobs_count": len(jobs_data.get("jobs", [])),
+                        },
+                    }
+                else:
+                    services["task_scheduler"] = {
+                        "name": "Task Scheduler",
+                        "status": "unhealthy",
+                        "details": {
+                            "error": f"Scheduler: HTTP {scheduler_result.status}, Jobs: HTTP {jobs_result.status}"
+                        },
+                    }
+        except Exception as e:
+            services["task_scheduler"] = {
+                "name": "Task Scheduler",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
+        # Database Health
+        try:
+            # Try to connect to MySQL and list databases
+            import os
+
+            connection = pymysql.connect(
+                host="mysql",
+                port=3306,
+                user="root",
+                password=os.getenv("MYSQL_ROOT_PASSWORD", "password"),
+                connect_timeout=5,
+            )
+
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW DATABASES")
+                databases = [row[0] for row in cursor.fetchall()]
+                # Filter out system databases
+                user_databases = [
+                    db
+                    for db in databases
+                    if db
+                    not in ["information_schema", "performance_schema", "mysql", "sys"]
+                ]
+
+            connection.close()
+
+            services["database"] = {
+                "name": "MySQL Database",
+                "status": "healthy",
+                "details": {
+                    "host": "mysql",
+                    "port": "3306",
+                    "databases": user_databases,
+                    "total_databases": len(user_databases),
+                },
+            }
+        except Exception as e:
+            services["database"] = {
+                "name": "MySQL Database",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
+        # Elasticsearch Health
+        try:
+            async with (
+                aiohttp.ClientSession() as session,
+                session.get(
+                    "http://elasticsearch:9200/_cluster/health", timeout=5
+                ) as resp,
+            ):
+                if resp.status == 200:
+                    es_data = await resp.json()
+                    services["elasticsearch"] = {
+                        "name": "Elasticsearch",
+                        "status": "healthy"
+                        if es_data.get("status") in ["green", "yellow"]
+                        else "unhealthy",
+                        "details": {
+                            "cluster_status": es_data.get("status"),
+                            "nodes": es_data.get("number_of_nodes"),
+                            "active_shards": es_data.get("active_shards"),
+                        },
+                    }
+                else:
+                    services["elasticsearch"] = {
+                        "name": "Elasticsearch",
+                        "status": "unhealthy",
+                        "details": {"error": f"HTTP {resp.status}"},
+                    }
+        except Exception as e:
+            services["elasticsearch"] = {
+                "name": "Elasticsearch",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
+        # Overall health status
+        all_healthy = all(
+            service["status"] == "healthy" for service in services.values()
+        )
+
+        return web.json_response(
+            {
+                "status": "healthy" if all_healthy else "degraded",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "services": services,
+            }
+        )
