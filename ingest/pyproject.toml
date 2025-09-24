@@ -27,6 +27,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "chromadb>=0.4.0",
     "pinecone>=3.0.0",
+    "elasticsearch>=8.0.0,<9.0.0",  # Compatible with ES 8.11.0 server
     "openai>=1.35.0",  # For embeddings
     "anthropic>=0.25.0",  # Alternative embedding provider
     "numpy>=1.24.0",
