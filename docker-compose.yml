@@ -3,7 +3,7 @@ name: insightmesh
 services:
   # MySQL Database
   mysql:
-    image: mysql:8.0
+    image: ghcr.io/docker-library/mysql:8.0
     container_name: insightmesh-mysql
     restart: unless-stopped
     environment:
@@ -22,7 +22,7 @@ services:
 
   # phpMyAdmin for database management
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
+    image: ghcr.io/phpmyadmin/phpmyadmin:latest
     container_name: insightmesh-phpmyadmin
     restart: unless-stopped
     environment:
@@ -99,7 +99,7 @@ services:
 
   # Redis Cache Service
   redis:
-    image: redis:7-alpine
+    image: ghcr.io/docker-library/redis:7-alpine
     container_name: insightmesh-redis
     restart: unless-stopped
     ports:

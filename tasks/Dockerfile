@@ -1,5 +1,5 @@
 # Use Python 3.11 slim image for smaller attack surface
-FROM python:3.11-slim
+FROM ghcr.io/docker-library/python:3.11-slim
 
 # Install security updates and dependencies including nginx
 RUN apt-get update && apt-get install -y \
