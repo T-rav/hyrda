@@ -97,9 +97,7 @@ class TestGetAppVersion:
     @patch("tomllib.load")
     def test_get_app_version_success(self, mock_toml_load, mock_open):
         """Test successful version retrieval from pyproject.toml"""
-        mock_toml_load.return_value = {
-            "project": {"version": "1.2.3"}
-        }
+        mock_toml_load.return_value = {"project": {"version": "1.2.3"}}
 
         version = get_app_version()
 
@@ -145,7 +143,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
             "status": "available",
             "memory_used": "100MB",
             "cached_conversations": 5,
-            "redis_url": "redis://localhost:6379"
+            "redis_url": "redis://localhost:6379",
         }
 
         # Mock Langfuse service
@@ -156,9 +154,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
 
         # Create health checker
         self.health_checker = HealthChecker(
-            mock_settings,
-            conversation_cache=mock_cache,
-            langfuse_service=mock_langfuse
+            mock_settings, conversation_cache=mock_cache, langfuse_service=mock_langfuse
         )
 
         # Create test app
@@ -169,10 +165,16 @@ class TestHealthEndpoints(AioHTTPTestCase):
         app.router.add_get("/prometheus", self.health_checker.prometheus_metrics)
         app.router.add_get("/ui", self.health_checker.health_ui)
         app.router.add_post("/api/users/import", self.health_checker.handle_user_import)
-        app.router.add_post("/api/ingest/completed", self.health_checker.handle_ingest_completed)
-        app.router.add_post("/api/metrics/store", self.health_checker.handle_metrics_store)
+        app.router.add_post(
+            "/api/ingest/completed", self.health_checker.handle_ingest_completed
+        )
+        app.router.add_post(
+            "/api/metrics/store", self.health_checker.handle_metrics_store
+        )
         app.router.add_get("/api/metrics/usage", self.health_checker.get_usage_metrics)
-        app.router.add_get("/api/metrics/performance", self.health_checker.get_performance_metrics)
+        app.router.add_get(
+            "/api/metrics/performance", self.health_checker.get_performance_metrics
+        )
         app.router.add_get("/api/metrics/errors", self.health_checker.get_error_metrics)
         app.router.add_get("/api/services/health", self.health_checker.services_health)
 
@@ -267,7 +269,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
     @unittest_run_loop
     async def test_health_ui_endpoint(self):
         """Test health UI endpoint when files are missing"""
-        with patch('builtins.open', side_effect=FileNotFoundError("UI file not found")):
+        with patch("builtins.open", side_effect=FileNotFoundError("UI file not found")):
             resp = await self.client.request("GET", "/ui")
 
             assert resp.status == 500
@@ -280,16 +282,10 @@ class TestHealthEndpoints(AioHTTPTestCase):
         """Test user import API endpoint"""
         test_data = {
             "job_id": "test-job-123",
-            "users": [
-                {"id": "U123", "name": "user1"},
-                {"id": "U456", "name": "user2"}
-            ]
+            "users": [{"id": "U123", "name": "user1"}, {"id": "U456", "name": "user2"}],
         }
 
-        resp = await self.client.request(
-            "POST", "/api/users/import",
-            json=test_data
-        )
+        resp = await self.client.request("POST", "/api/users/import", json=test_data)
 
         assert resp.status == 200
 
@@ -302,9 +298,10 @@ class TestHealthEndpoints(AioHTTPTestCase):
     async def test_user_import_endpoint_invalid_json(self):
         """Test user import endpoint with invalid JSON"""
         resp = await self.client.request(
-            "POST", "/api/users/import",
+            "POST",
+            "/api/users/import",
             data="invalid json",
-            headers={"Content-Type": "application/json"}
+            headers={"Content-Type": "application/json"},
         )
 
         assert resp.status == 400
@@ -319,16 +316,11 @@ class TestHealthEndpoints(AioHTTPTestCase):
             "job_id": "ingest-job-456",
             "job_type": "google_drive_ingest",
             "folder_id": "folder-789",
-            "result": {
-                "documents_processed": 10,
-                "success_count": 9,
-                "error_count": 1
-            }
+            "result": {"documents_processed": 10, "success_count": 9, "error_count": 1},
         }
 
         resp = await self.client.request(
-            "POST", "/api/ingest/completed",
-            json=test_data
+            "POST", "/api/ingest/completed", json=test_data
         )
 
         assert resp.status == 200
@@ -345,14 +337,11 @@ class TestHealthEndpoints(AioHTTPTestCase):
             "metrics": {
                 "execution_time": 45.2,
                 "memory_usage": 256,
-                "success_rate": 0.95
-            }
+                "success_rate": 0.95,
+            },
         }
 
-        resp = await self.client.request(
-            "POST", "/api/metrics/store",
-            json=test_data
-        )
+        resp = await self.client.request("POST", "/api/metrics/store", json=test_data)
 
         assert resp.status == 200
 
@@ -363,7 +352,9 @@ class TestHealthEndpoints(AioHTTPTestCase):
     @unittest_run_loop
     async def test_usage_metrics_endpoint(self):
         """Test usage metrics API endpoint"""
-        resp = await self.client.request("GET", "/api/metrics/usage?hours=12&include_details=true")
+        resp = await self.client.request(
+            "GET", "/api/metrics/usage?hours=12&include_details=true"
+        )
 
         assert resp.status == 200
 
@@ -445,17 +436,17 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert len(data["data"]) == 24
 
     @unittest_run_loop
-    @patch('aiohttp.ClientSession.get')
-    @patch('pymysql.connect')
+    @patch("aiohttp.ClientSession.get")
+    @patch("pymysql.connect")
     async def test_services_health_endpoint(self, mock_db_connect, mock_aiohttp_get):
         """Test services health check endpoint"""
         # Mock database connection
         mock_connection = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
-            ('insightmesh_bot',),
-            ('insightmesh_tasks',),
-            ('information_schema',)
+            ("insightmesh_bot",),
+            ("insightmesh_tasks",),
+            ("information_schema",),
         ]
         mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
         mock_db_connect.return_value = mock_connection
@@ -465,7 +456,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
         mock_response.status = 200
         mock_response.json.return_value = {
             "running": True,
-            "jobs": [{"id": "job1"}, {"id": "job2"}]
+            "jobs": [{"id": "job1"}, {"id": "job2"}],
         }
 
         mock_es_response = AsyncMock()
@@ -473,7 +464,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
         mock_es_response.json.return_value = {
             "status": "green",
             "number_of_nodes": 1,
-            "active_shards": 5
+            "active_shards": 5,
         }
 
         # Configure the async context manager properly
@@ -481,7 +472,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
         mock_session.get.return_value.__aenter__.return_value = mock_es_response
         mock_aiohttp_get.return_value = mock_response
 
-        with patch('aiohttp.ClientSession') as mock_session_class:
+        with patch("aiohttp.ClientSession") as mock_session_class:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             mock_session_class.return_value.__aexit__.return_value = None
             mock_session.get.return_value.__aenter__.return_value = mock_es_response
@@ -515,10 +506,7 @@ class TestHealthEndpointsEdgeCases:
         mock_cache = AsyncMock()
         mock_cache.get_cache_stats.side_effect = Exception("Redis connection failed")
 
-        health_checker = HealthChecker(
-            mock_settings,
-            conversation_cache=mock_cache
-        )
+        health_checker = HealthChecker(mock_settings, conversation_cache=mock_cache)
 
         # Test the logic directly (avoiding async test complexity)
         assert health_checker.conversation_cache is not None
@@ -534,8 +522,7 @@ class TestHealthEndpointsEdgeCases:
         mock_langfuse_healthy.settings.host = "https://test.langfuse.com"
 
         health_checker = HealthChecker(
-            mock_settings,
-            langfuse_service=mock_langfuse_healthy
+            mock_settings, langfuse_service=mock_langfuse_healthy
         )
         assert health_checker.langfuse_service.enabled is True
         assert health_checker.langfuse_service.client is not None
@@ -547,8 +534,7 @@ class TestHealthEndpointsEdgeCases:
         mock_langfuse_unhealthy.settings.host = "https://test.langfuse.com"
 
         health_checker2 = HealthChecker(
-            mock_settings,
-            langfuse_service=mock_langfuse_unhealthy
+            mock_settings, langfuse_service=mock_langfuse_unhealthy
         )
         assert health_checker2.langfuse_service.enabled is True
         assert health_checker2.langfuse_service.client is None
