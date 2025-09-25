@@ -132,7 +132,7 @@ services:
       - VECTOR_URL=http://elasticsearch:9200
       - VECTOR_ENABLED=true
       - VECTOR_PROVIDER=elasticsearch
-      - VECTOR_COLLECTION_NAME=knowledge_base
+      - VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
       - HYBRID_ENABLED=false
       - CACHE_ENABLED=true
       - CACHE_REDIS_URL=redis://redis:6379
