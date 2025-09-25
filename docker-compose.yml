@@ -82,7 +82,6 @@ services:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
-      - TASKS_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
@@ -128,13 +127,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_bot
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - VECTOR_URL=http://elasticsearch:9200
-      - VECTOR_ENABLED=true
-      - VECTOR_PROVIDER=elasticsearch
-      - VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
-      - HYBRID_ENABLED=false
-      - CACHE_ENABLED=true
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:
