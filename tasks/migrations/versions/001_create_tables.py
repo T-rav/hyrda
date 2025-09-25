@@ -69,7 +69,6 @@ def upgrade() -> None:
             nullable=True,
             server_default="scheduler",
         ),
-        sa.Column("triggered_by_user", sa.String(length=255), nullable=True),
         sa.Column("task_config_snapshot", sa.JSON(), nullable=True),
         sa.Column("result_data", sa.JSON(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -78,7 +77,6 @@ def upgrade() -> None:
         sa.Column("records_processed", sa.Integer(), nullable=True),
         sa.Column("records_success", sa.Integer(), nullable=True),
         sa.Column("records_failed", sa.Integer(), nullable=True),
-        sa.Column("environment_info", sa.JSON(), nullable=True),
         sa.Column(
             "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
         ),

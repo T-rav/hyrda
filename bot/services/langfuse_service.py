@@ -40,8 +40,9 @@ class LangfuseService:
     Service for managing Langfuse observability integration
     """
 
-    def __init__(self, settings: LangfuseSettings):
+    def __init__(self, settings: LangfuseSettings, environment: str = "development"):
         self.settings = settings
+        self.environment = environment
         self.client: Langfuse | None = None
         self.enabled = settings.enabled and _langfuse_available
         self.current_trace = None
@@ -111,6 +112,7 @@ class LangfuseService:
                 metadata={
                     "provider": provider,
                     "model": model,
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
                 usage=usage,
@@ -165,6 +167,7 @@ class LangfuseService:
                         if results
                         else 0
                     ),
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
             )
@@ -198,6 +201,7 @@ class LangfuseService:
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "session_id": conversation_id,
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
             )
@@ -243,6 +247,7 @@ class LangfuseService:
                         metadata={
                             "platform": "slack",
                             "conversation_id": conversation_id,
+                            "environment": self.environment,
                             **(metadata or {}),
                         },
                     )
@@ -314,8 +319,10 @@ def get_langfuse_service() -> LangfuseService | None:
     return langfuse_service
 
 
-def initialize_langfuse_service(settings: LangfuseSettings) -> LangfuseService:
+def initialize_langfuse_service(
+    settings: LangfuseSettings, environment: str = "development"
+) -> LangfuseService:
     """Initialize the global Langfuse service"""
     global langfuse_service  # noqa: PLW0603
-    langfuse_service = LangfuseService(settings)
+    langfuse_service = LangfuseService(settings, environment)
     return langfuse_service
