@@ -130,9 +130,7 @@ export const mockMetricsData = {
     },
     active_conversations: {
       total: 3,
-      tracked_by_metrics: 2,
-      cached_conversations: 3,
-      description: 'Active conversations being tracked'
+      description: 'Active conversations (last 4 hours)'
     },
     services: {
       langfuse: {

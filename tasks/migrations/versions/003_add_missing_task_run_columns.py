@@ -6,6 +6,8 @@ Create Date: 2025-09-24 04:30:00.000000
 
 """
 
+import contextlib
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -21,17 +23,16 @@ def upgrade() -> None:
     # MySQL doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
     # So we use a try/except approach via SQLAlchemy
 
-    try:
-        op.add_column("task_runs", sa.Column("triggered_by_user", sa.String(length=255), nullable=True))
-    except Exception:
-        # Column already exists, which is fine
-        pass
+    with contextlib.suppress(Exception):
+        op.add_column(
+            "task_runs",
+            sa.Column("triggered_by_user", sa.String(length=255), nullable=True),
+        )
 
-    try:
-        op.add_column("task_runs", sa.Column("environment_info", sa.JSON(), nullable=True))
-    except Exception:
-        # Column already exists, which is fine
-        pass
+    with contextlib.suppress(Exception):
+        op.add_column(
+            "task_runs", sa.Column("environment_info", sa.JSON(), nullable=True)
+        )
 
 
 def downgrade() -> None:

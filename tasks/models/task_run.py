@@ -1,5 +1,7 @@
 """Task run model for tracking individual task executions."""
 
+from datetime import UTC
+
 from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.sql import func
 
@@ -55,7 +57,6 @@ class TaskRun(Base):
         DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
 
-
     def __repr__(self) -> str:
         return f"<TaskRun(id={self.id}, run_id={self.run_id}, status={self.status})>"
 
@@ -79,12 +80,10 @@ class TaskRun(Base):
             # If one is timezone-aware and the other isn't, make them consistent
             if start_time.tzinfo is not None and end_time.tzinfo is None:
                 # started_at is timezone-aware, completed_at is naive - assume UTC
-                from datetime import timezone
-                end_time = end_time.replace(tzinfo=timezone.utc)
+                end_time = end_time.replace(tzinfo=UTC)
             elif start_time.tzinfo is None and end_time.tzinfo is not None:
                 # started_at is naive, completed_at is timezone-aware - assume UTC
-                from datetime import timezone
-                start_time = start_time.replace(tzinfo=timezone.utc)
+                start_time = start_time.replace(tzinfo=UTC)
 
             delta = end_time - start_time
             self.duration_seconds = delta.total_seconds()
