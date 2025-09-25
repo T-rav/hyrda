@@ -39,9 +39,12 @@ help:
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
 	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run bot + task scheduler (recommended)"
+	@echo "  $(GREEN)make start-all$(RESET)   🔥 Start everything including monitoring stack"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
+	@echo "  stop             🛑 Stop core services"
+	@echo "  stop-all         🔥 Stop everything including monitoring"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -264,11 +267,15 @@ docker-stop:
 docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
-	@echo "$(GREEN)✅ Stack started! Services available at:$(RESET)"
-	@echo "$(BLUE)  - Bot API: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
-	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
-	@echo "$(BLUE)  - phpMyAdmin: http://localhost:8081$(RESET)"
-	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
+	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
+	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - 🗄️  Database Admin: http://localhost:8081$(RESET)"
+	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
+	@echo "$(BLUE)  - 📊 Metrics Endpoint: http://localhost:$${HEALTH_PORT:-8080}/metrics$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)💡 For monitoring stack: make docker-monitor$(RESET)"
+	@echo "$(YELLOW)💡 For everything at once: make start-all$(RESET)"
 
 docker-down:
 	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
@@ -287,6 +294,12 @@ docker-build: health-ui tasks-ui
 
 # Main stop command
 stop: docker-down
+
+# Stop everything including monitoring
+stop-all: docker-down
+	@echo "$(BLUE)🛑 Stopping monitoring stack...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
+	@echo "$(GREEN)✅ All services stopped!$(RESET)"
 
 setup-dev: install-dev
 	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi
@@ -343,6 +356,24 @@ python-version: $(VENV)
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
 # Main start command (uses Docker)
 start: docker-build docker-up
+
+# Start everything including monitoring stack
+start-all: docker-build docker-up docker-monitor
+	@echo "$(GREEN)🔥 ================================$(RESET)"
+	@echo "$(GREEN)🚀 FULL STACK STARTED SUCCESSFULLY!$(RESET)"
+	@echo "$(GREEN)🔥 ================================$(RESET)"
+	@echo ""
+	@echo "$(BLUE)📊 Main Services:$(RESET)"
+	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🔍 Monitoring Stack:$(RESET)"
+	@echo "$(YELLOW)  - Grafana Dashboard: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(YELLOW)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
+	@echo ""
+	@echo "$(GREEN)🎉 All services are running! Check the health dashboard for RAG metrics.$(RESET)"
 
 # Docker-based start (same as start)
 start-docker: start
