@@ -193,10 +193,57 @@ class HybridRAGService:
             logger.info(
                 f"✅ Successfully ingested {len(texts)} documents into hybrid system"
             )
+
+            # Trace document ingestion to Langfuse
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                # Reconstruct documents for tracing
+                documents_for_tracing = [
+                    {"content": text, "metadata": meta}
+                    for text, meta in zip(texts, metadata, strict=False)
+                ]
+
+                langfuse_service.trace_document_ingestion(
+                    documents=documents_for_tracing,
+                    success_count=len(texts),
+                    error_count=0,
+                    metadata={
+                        "ingestion_type": "hybrid_rag_service",
+                        "dense_store": "pinecone",
+                        "sparse_store": "elasticsearch",
+                        "title_injection_enabled": True,
+                        "dual_indexing": True,
+                    },
+                )
+                logger.info(
+                    f"📊 Logged hybrid document ingestion to Langfuse: {len(texts)} documents"
+                )
+
             return True
 
         except Exception as e:
             logger.error(f"Failed to ingest documents: {e}")
+
+            # Trace failed ingestion
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                documents_for_tracing = [
+                    {"content": text, "metadata": meta}
+                    for text, meta in zip(texts, metadata, strict=False)
+                ]
+
+                langfuse_service.trace_document_ingestion(
+                    documents=documents_for_tracing,
+                    success_count=0,
+                    error_count=len(texts),
+                    metadata={
+                        "ingestion_type": "hybrid_rag_service",
+                        "error": str(e),
+                        "dense_store": "pinecone",
+                        "sparse_store": "elasticsearch",
+                    },
+                )
+
             return False
 
     async def hybrid_search(
