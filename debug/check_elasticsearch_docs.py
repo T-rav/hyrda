@@ -20,7 +20,7 @@ async def check_elasticsearch():
 
     # Configuration
     es_url = os.getenv('ELASTICSEARCH_URL', 'http://localhost:9200')
-    base_index = os.getenv('VECTOR_COLLECTION_NAME', 'knowledge_base')
+    base_index = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
 
     print(f"🔍 Checking Elasticsearch at: {es_url}")
     print(f"📚 Base index name: {base_index}")
