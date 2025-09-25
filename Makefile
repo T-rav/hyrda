@@ -259,8 +259,8 @@ docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
 	@echo "$(GREEN)✅ Stack started! Services available at:$(RESET)"
-	@echo "$(BLUE)  - Bot API: http://localhost:8080$(RESET)"
-	@echo "$(BLUE)  - Task Scheduler: http://localhost:5001$(RESET)"
+	@echo "$(BLUE)  - Bot API: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - phpMyAdmin: http://localhost:8081$(RESET)"
 	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
 
@@ -293,13 +293,13 @@ health-ui:
 	@echo "$(BLUE)Building React health dashboard...$(RESET)"
 	cd $(BOT_DIR)/health_ui && npm install && npm run build
 	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
-	@echo "$(BLUE)🌐 Access at: http://localhost:8080/ui$(RESET)"
+	@echo "$(BLUE)🌐 Access at: http://localhost:$${HEALTH_PORT:-8080}/ui$(RESET)"
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install && npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
-	@echo "$(BLUE)🌐 Access at: http://localhost:5001$(RESET)"
+	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
 ci: quality test-coverage docker-build
 	@echo "✅ All CI checks passed!"
@@ -354,11 +354,11 @@ start-local: install-dev health-ui check-env db-start start-redis
 	@echo "$(BLUE)✅ Redis service started$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)🌐 Access points:$(RESET)"
-	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:8080/ui$(RESET)"
-	@echo "$(YELLOW)   Task Scheduler:       http://localhost:5001$(RESET)"
+	@echo "$(YELLOW)   Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}/ui$(RESET)"
+	@echo "$(YELLOW)   Task Scheduler:       http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(YELLOW)   Database Admin:       http://localhost:8081$(RESET)"
-	@echo "$(YELLOW)   Prometheus Metrics:   http://localhost:8080/prometheus$(RESET)"
-	@echo "$(YELLOW)   API Endpoints:        http://localhost:8080/api/*$(RESET)"
+	@echo "$(YELLOW)   Prometheus Metrics:   http://localhost:$${HEALTH_PORT:-8080}/prometheus$(RESET)"
+	@echo "$(YELLOW)   API Endpoints:        http://localhost:$${HEALTH_PORT:-8080}/api/*$(RESET)"
 	@echo ""
 	@echo "$(GREEN)🤖 Starting the AI Slack Bot with Task Scheduler...$(RESET)"
 	@echo "$(GREEN)Press Ctrl+C to stop both services$(RESET)"
