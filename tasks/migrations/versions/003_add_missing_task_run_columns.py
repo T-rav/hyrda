@@ -17,20 +17,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add the missing triggered_by_user column to task_runs table if it doesn't exist
-    # Using IF NOT EXISTS equivalent for MySQL
-    op.execute("""
-        ALTER TABLE task_runs
-        ADD COLUMN IF NOT EXISTS triggered_by_user VARCHAR(255) NULL
-        COMMENT 'Slack user ID if manually triggered'
-    """)
+    # Add the missing triggered_by_user column to task_runs table safely
+    # MySQL doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
+    # So we use a try/except approach via SQLAlchemy
 
-    # Add the missing environment_info column to task_runs table if it doesn't exist
-    op.execute("""
-        ALTER TABLE task_runs
-        ADD COLUMN IF NOT EXISTS environment_info JSON NULL
-        COMMENT 'System info, versions, etc.'
-    """)
+    try:
+        op.add_column("task_runs", sa.Column("triggered_by_user", sa.String(length=255), nullable=True))
+    except Exception:
+        # Column already exists, which is fine
+        pass
+
+    try:
+        op.add_column("task_runs", sa.Column("environment_info", sa.JSON(), nullable=True))
+    except Exception:
+        # Column already exists, which is fine
+        pass
 
 
 def downgrade() -> None:
