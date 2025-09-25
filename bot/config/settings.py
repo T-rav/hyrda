@@ -74,7 +74,7 @@ class VectorSettings(BaseSettings):
         default=None, description="Vector DB API key (required for Pinecone)"
     )
     collection_name: str = Field(
-        default="knowledge_base", description="Collection/index name"
+        default="insightmesh-knowledge-base", description="Collection/index name"
     )
     environment: str | None = Field(
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
