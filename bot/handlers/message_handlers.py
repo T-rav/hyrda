@@ -83,6 +83,16 @@ async def handle_message(
         conversation_id = thread_ts or channel
         metrics_service.record_conversation_activity(conversation_id)
 
+        # Categorize query type for metrics
+        query_category = "question"  # Default
+        if text.lower().startswith(("run ", "execute ", "start ")):
+            query_category = "command"
+        elif thread_ts:  # In a thread, likely continuing conversation
+            query_category = "conversation"
+
+        has_context = bool(thread_ts)  # Has conversation context
+        metrics_service.record_query_type(query_category, has_context)
+
     # For tracking the thinking indicator message
     thinking_message_ts = None
 

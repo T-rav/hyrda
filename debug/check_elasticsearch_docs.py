@@ -4,7 +4,6 @@ Simple script to check Elasticsearch for documents
 """
 
 import asyncio
-import json
 import os
 from datetime import datetime
 
@@ -87,7 +86,7 @@ async def check_elasticsearch():
                             body={"size": 3, "sort": [{"_score": {"order": "desc"}}]}
                         )
 
-                        print(f"   📝 Sample documents:")
+                        print("   📝 Sample documents:")
                         for i, hit in enumerate(sample['hits']['hits'][:3], 1):
                             source = hit['_source']
                             title = source.get('title', 'No title')
@@ -136,7 +135,7 @@ async def check_elasticsearch():
 
 def main():
     """Main function"""
-    print(f"🚀 Elasticsearch Document Checker")
+    print("🚀 Elasticsearch Document Checker")
     print(f"⏰ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
 

@@ -7,6 +7,7 @@ Separated for better organization and testability.
 
 import logging
 from typing import Any
+
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 

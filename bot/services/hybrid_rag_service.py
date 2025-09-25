@@ -335,8 +335,44 @@ class HybridRAGService:
                     similarity_threshold=0.0,  # Let reranking handle quality
                 )
 
-                # Log retrieved documents to Langfuse
+                # Log retrieved documents to Langfuse and record metrics
                 if context_chunks:
+                    # Record RAG metrics
+                    from services.metrics_service import get_metrics_service
+
+                    metrics_service = get_metrics_service()
+                    if metrics_service:
+                        # Calculate metrics
+                        unique_docs = len({
+                            chunk.get("metadata", {}).get("file_name", "unknown")
+                            for chunk in context_chunks
+                        })
+                        avg_similarity = sum(
+                            chunk.get("similarity", 0) for chunk in context_chunks
+                        ) / len(context_chunks)
+                        total_context_length = sum(
+                            len(chunk.get("content", "")) for chunk in context_chunks
+                        )
+
+                        # Record successful hybrid RAG query
+                        metrics_service.record_rag_query_result(
+                            result_type="hit",
+                            provider="hybrid",
+                            chunks_found=len(context_chunks),
+                            unique_documents=unique_docs,
+                            context_length=total_context_length,
+                            avg_similarity=avg_similarity,
+                        )
+
+                        # Record document usage with hybrid source info
+                        for chunk in context_chunks:
+                            doc_metadata = chunk.get("metadata", {})
+                            doc_type = doc_metadata.get("file_type", "unknown")
+                            hybrid_source = chunk.get("_hybrid_source", "unknown")
+                            metrics_service.record_document_usage(
+                                doc_type, f"hybrid_{hybrid_source}"
+                            )
+
                     langfuse_service = get_langfuse_service()
                     if langfuse_service:
                         # Prepare retrieval data for Langfuse with document details
@@ -385,6 +421,16 @@ class HybridRAGService:
                         )
                         logger.info(
                             f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse for query: {query[:50]}..."
+                        )
+                else:
+                    # Record RAG miss when no context found
+                    from services.metrics_service import get_metrics_service
+
+                    metrics_service = get_metrics_service()
+                    if metrics_service:
+                        metrics_service.record_rag_query_result(
+                            result_type="miss",
+                            provider="hybrid",
                         )
 
                 if context_chunks:

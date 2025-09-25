@@ -4,7 +4,8 @@ Elasticsearch Index Migration System
 Ensures required indices exist with proper mappings before RAG initialization.
 """
 import logging
-from typing import Dict, Any
+from typing import Any
+
 try:
     from elasticsearch import AsyncElasticsearch
     from elasticsearch.exceptions import RequestError
@@ -22,7 +23,7 @@ class ElasticsearchMigrations:
     def __init__(self, client: AsyncElasticsearch):
         self.client = client
 
-    def get_dense_index_mapping(self, dims: int = 3072) -> Dict[str, Any]:
+    def get_dense_index_mapping(self, dims: int = 3072) -> dict[str, Any]:
         """Get mapping for dense vector index"""
         return {
             "mappings": {
@@ -46,7 +47,7 @@ class ElasticsearchMigrations:
             },
         }
 
-    def get_sparse_index_mapping(self) -> Dict[str, Any]:
+    def get_sparse_index_mapping(self) -> dict[str, Any]:
         """Get mapping for sparse/BM25 index (no embeddings)"""
         return {
             "mappings": {
@@ -67,7 +68,7 @@ class ElasticsearchMigrations:
             },
         }
 
-    async def ensure_index_exists(self, index_name: str, mapping: Dict[str, Any]) -> bool:
+    async def ensure_index_exists(self, index_name: str, mapping: dict[str, Any]) -> bool:
         """Ensure index exists with proper mapping"""
         try:
             # Check if index exists
