@@ -134,30 +134,6 @@ function App() {
               </div>
             )}
 
-            {/* Monitoring Tools */}
-            <div className="grid-section">
-              <h2>🔍 Monitoring Tools</h2>
-              <div className="api-links">
-                <a
-                  href="http://localhost:3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="api-link monitoring-link"
-                  title="Grafana Dashboard - Visualize RAG metrics and performance trends"
-                >
-                  📈 Grafana Dashboard
-                </a>
-                <a
-                  href="http://localhost:9090"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="api-link monitoring-link"
-                  title="Prometheus - Raw metrics and query interface"
-                >
-                  🔍 Prometheus
-                </a>
-              </div>
-            </div>
           </div>
         </main>
 
