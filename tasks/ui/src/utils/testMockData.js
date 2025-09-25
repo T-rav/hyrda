@@ -130,9 +130,15 @@ export const mockMetricsData = {
     },
     active_conversations: {
       total: 3,
-      tracked_by_metrics: 2,
-      cached_conversations: 3,
-      description: 'Active conversations being tracked'
+      description: 'Active conversations (last 4 hours)'
+    },
+    rag_performance: {
+      total_queries: 47,
+      success_rate: 85.1,
+      miss_rate: 14.9,
+      avg_chunks: 3.2,
+      documents_used: 23,
+      description: 'RAG queries processed (since 09:15)'
     },
     services: {
       langfuse: {

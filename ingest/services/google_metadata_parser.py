@@ -5,7 +5,6 @@ Handles parsing and formatting of Google Drive metadata.
 Separated for better maintainability and testability.
 """
 
-from typing import Any
 
 
 class GoogleMetadataParser:

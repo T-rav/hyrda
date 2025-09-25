@@ -72,7 +72,7 @@ async def maintain_presence(client: WebClient):
         await asyncio.sleep(300)
 
 
-def signal_handler(signum, frame):
+def signal_handler(signum, _):
     """Handle shutdown signals"""
     logger.info(f"Received signal {signum}, initiating graceful shutdown...")
     shutdown_event.set()

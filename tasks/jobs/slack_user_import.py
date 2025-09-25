@@ -6,7 +6,16 @@ from typing import Any
 from slack_sdk import WebClient
 
 # Define SlackUser model locally since we're in a separate container
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine, func, select
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Integer,
+    String,
+    create_engine,
+    func,
+    select,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -114,7 +123,6 @@ class SlackUserImportJob(BaseJob):
                 "records_processed": processed_count,
                 "records_success": success_count,
                 "records_failed": failed_count,
-
                 # Job-specific details for debugging/logging
                 "total_users_fetched": len(users_data),
                 "filtered_users_count": len(filtered_users),
@@ -223,13 +231,19 @@ class SlackUserImportJob(BaseJob):
 
             # Debug logging for inactive users and bots
             if not is_active_status:
-                logger.info(f"Processing inactive user: {user_data['id']} - {user_data.get('name')} - deleted: {deleted_status}")
+                logger.info(
+                    f"Processing inactive user: {user_data['id']} - {user_data.get('name')} - deleted: {deleted_status}"
+                )
             elif user_type == "bot":
-                logger.info(f"Processing bot user: {user_data['id']} - {user_data.get('name')} - type: {user_type}")
+                logger.info(
+                    f"Processing bot user: {user_data['id']} - {user_data.get('name')} - type: {user_type}"
+                )
 
             # Debug print to see what's in user_data
             print(f"DEBUG: user_data keys: {list(user_data.keys())}")
-            print(f"DEBUG: user_data for {user_data['id']}: is_active={user_data.get('is_active')}, user_type={user_data.get('user_type')}")
+            print(
+                f"DEBUG: user_data for {user_data['id']}: is_active={user_data.get('is_active')}, user_type={user_data.get('user_type')}"
+            )
 
             filtered.append(user_data)
 
@@ -262,11 +276,17 @@ class SlackUserImportJob(BaseJob):
                         existing_user.is_active = user_data.get("is_active", True)
                         existing_user.user_type = user_data.get("user_type")
                         updated_users_count += 1
-                        print(f"DEBUG: Updating user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}")
-                        logger.info(f"Updated user: {user_data['id']} (active: {existing_user.is_active}, type: {existing_user.user_type})")
+                        print(
+                            f"DEBUG: Updating user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
+                        )
+                        logger.info(
+                            f"Updated user: {user_data['id']} (active: {existing_user.is_active}, type: {existing_user.user_type})"
+                        )
                     else:
                         # Create new user
-                        print(f"DEBUG: Creating new user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}")
+                        print(
+                            f"DEBUG: Creating new user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
+                        )
                         new_user = SlackUser(
                             slack_user_id=user_data["id"],
                             email_address=user_data.get("email"),
@@ -277,7 +297,9 @@ class SlackUserImportJob(BaseJob):
                         )
                         session.add(new_user)
                         new_users_count += 1
-                        logger.info(f"Created new user: {user_data['id']} (active: {new_user.is_active}, type: {new_user.user_type})")
+                        logger.info(
+                            f"Created new user: {user_data['id']} (active: {new_user.is_active}, type: {new_user.user_type})"
+                        )
 
                     processed_count += 1
 

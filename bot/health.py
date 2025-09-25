@@ -271,6 +271,24 @@ class HealthChecker:
                 "message": message,
             }
 
+        # Add RAG service check
+        if metrics_service and metrics_service.enabled:
+            rag_stats = metrics_service.get_rag_stats()
+            checks["rag"] = {
+                "status": "healthy",
+                "total_queries": rag_stats["total_queries"],
+                "success_rate": rag_stats["success_rate"],
+                "miss_rate": rag_stats["miss_rate"],
+                "avg_chunks": rag_stats["avg_chunks_per_query"],
+                "documents_used": rag_stats["total_documents_used"],
+                "description": "RAG query performance tracking",
+            }
+        else:
+            checks["rag"] = {
+                "status": "disabled",
+                "message": "RAG metrics require metrics service to be enabled",
+            }
+
         response_data = {
             "status": "ready" if all_healthy else "not_ready",
             "checks": checks,
@@ -301,30 +319,23 @@ class HealthChecker:
         # Add metrics service data
         metrics_service = get_metrics_service()
         if metrics_service and metrics_service.enabled:
-            # Get active conversation count from metrics service
+            # Get active conversation count from metrics service (last 4 hours)
             active_count = metrics_service.get_active_conversation_count()
 
-            # If we have cache stats, compare with cached conversations
-            if (
-                self.conversation_cache
-                and "cache" in metrics
-                and metrics["cache"].get("cached_conversations") is not None
-            ):
-                cache_count = int(metrics["cache"]["cached_conversations"])
-                # Use the higher of the two counts as active conversations might not all be cached
-                final_active_count = max(active_count, cache_count)
-            else:
-                final_active_count = active_count
-
             metrics["active_conversations"] = {
-                "total": final_active_count,
-                "tracked_by_metrics": active_count,
-                "cached_conversations": metrics.get("cache", {}).get(
-                    "cached_conversations", 0
-                )
-                if self.conversation_cache
-                else 0,
-                "description": "Active conversations being tracked",
+                "total": active_count,
+                "description": "Active conversations (last 4 hours)",
+            }
+
+            # Get RAG performance stats
+            rag_stats = metrics_service.get_rag_stats()
+            metrics["rag_performance"] = {
+                "total_queries": rag_stats["total_queries"],
+                "success_rate": rag_stats["success_rate"],
+                "miss_rate": rag_stats["miss_rate"],
+                "avg_chunks": rag_stats["avg_chunks_per_query"],
+                "documents_used": rag_stats["total_documents_used"],
+                "description": f"RAG queries processed (since {rag_stats['last_reset'].strftime('%H:%M')})",
             }
 
         # Add service status

@@ -2,17 +2,16 @@
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 from config.settings import get_settings
 from jobs.job_registry import JobRegistry
-from services.scheduler_service import SchedulerService
-from models.task_run import TaskRun
 from models.base import get_db_session
+from models.task_run import TaskRun
+from services.scheduler_service import SchedulerService
 
 # Load environment variables
 load_dotenv()
@@ -59,7 +58,7 @@ def create_app() -> Flask:
 
 # API Routes
 @app.route("/api/scheduler/info")
-def scheduler_info() -> dict[str, Any]:
+def scheduler_info() -> Response | tuple[Response, int]:
     """Get scheduler information."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -68,7 +67,7 @@ def scheduler_info() -> dict[str, Any]:
 
 
 @app.route("/api/jobs")
-def list_jobs() -> dict[str, Any]:
+def list_jobs() -> Response | tuple[Response, int]:
     """List all jobs."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -85,7 +84,7 @@ def list_jobs() -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>")
-def get_job(job_id: str) -> dict[str, Any]:
+def get_job(job_id: str) -> Response | tuple[Response, int]:
     """Get specific job details."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -98,7 +97,7 @@ def get_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/pause", methods=["POST"])
-def pause_job(job_id: str) -> dict[str, Any]:
+def pause_job(job_id: str) -> Response | tuple[Response, int]:
     """Pause a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -111,7 +110,7 @@ def pause_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/resume", methods=["POST"])
-def resume_job(job_id: str) -> dict[str, Any]:
+def resume_job(job_id: str) -> Response | tuple[Response, int]:
     """Resume a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -124,7 +123,7 @@ def resume_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>", methods=["DELETE"])
-def delete_job(job_id: str) -> dict[str, Any]:
+def delete_job(job_id: str) -> Response | tuple[Response, int]:
     """Delete a job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -137,7 +136,7 @@ def delete_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs", methods=["POST"])
-def create_job() -> dict[str, Any]:
+def create_job() -> Response | tuple[Response, int]:
     """Create a new job."""
     if not scheduler_service or not job_registry:
         return jsonify({"error": "Services not initialized"}), 500
@@ -170,7 +169,7 @@ def create_job() -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>", methods=["PUT"])
-def update_job(job_id: str) -> dict[str, Any]:
+def update_job(job_id: str) -> Response | tuple[Response, int]:
     """Update an existing job."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -191,7 +190,7 @@ def update_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/retry", methods=["POST"])
-def retry_job(job_id: str) -> dict[str, Any]:
+def retry_job(job_id: str) -> Response | tuple[Response, int]:
     """Retry/re-queue a failed job immediately."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -211,7 +210,7 @@ def retry_job(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/run-once", methods=["POST"])
-def run_job_once(job_id: str) -> dict[str, Any]:
+def run_job_once(job_id: str) -> Response | tuple[Response, int]:
     """Run a job once immediately (ad-hoc execution)."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -255,7 +254,7 @@ def run_job_once(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/jobs/<job_id>/history")
-def get_job_history(job_id: str) -> dict[str, Any]:
+def get_job_history(job_id: str) -> Response | tuple[Response, int]:
     """Get job execution history."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
@@ -295,7 +294,7 @@ def get_job_history(job_id: str) -> dict[str, Any]:
 
 
 @app.route("/api/job-types")
-def list_job_types() -> dict[str, Any]:
+def list_job_types() -> Response | tuple[Response, int]:
     """List available job types."""
     if not job_registry:
         return jsonify({"error": "Job registry not initialized"}), 500
@@ -304,7 +303,7 @@ def list_job_types() -> dict[str, Any]:
 
 
 @app.route("/api/task-runs")
-def list_task_runs() -> dict[str, Any]:
+def list_task_runs() -> Response | tuple[Response, int]:
     """List recent task runs."""
     try:
         with get_db_session() as session:
@@ -330,24 +329,35 @@ def list_task_runs() -> dict[str, Any]:
                 job_name = "Unknown Job"
                 if run.task_config_snapshot:
                     job_type = run.task_config_snapshot.get("job_type")
-                    job_name = job_type_names.get(job_type, job_type.replace("_", " ").title() if job_type else "Unknown Job")
+                    job_name = job_type_names.get(
+                        job_type,
+                        job_type.replace("_", " ").title()
+                        if job_type
+                        else "Unknown Job",
+                    )
 
-                runs_data.append({
-                    "id": run.id,
-                    "run_id": run.run_id,
-                    "job_type": job_type,
-                    "job_name": job_name,
-                    "status": run.status,
-                    "started_at": run.started_at.isoformat() if run.started_at else None,
-                    "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-                    "duration_seconds": run.duration_seconds,
-                    "triggered_by": run.triggered_by,
-                    "triggered_by_user": run.triggered_by_user,
-                    "error_message": run.error_message,
-                    "records_processed": run.records_processed,
-                    "records_success": run.records_success,
-                    "records_failed": run.records_failed,
-                })
+                runs_data.append(
+                    {
+                        "id": run.id,
+                        "run_id": run.run_id,
+                        "job_type": job_type,
+                        "job_name": job_name,
+                        "status": run.status,
+                        "started_at": run.started_at.isoformat()
+                        if run.started_at
+                        else None,
+                        "completed_at": run.completed_at.isoformat()
+                        if run.completed_at
+                        else None,
+                        "duration_seconds": run.duration_seconds,
+                        "triggered_by": run.triggered_by,
+                        "triggered_by_user": run.triggered_by_user,
+                        "error_message": run.error_message,
+                        "records_processed": run.records_processed,
+                        "records_success": run.records_success,
+                        "records_failed": run.records_failed,
+                    }
+                )
 
             return jsonify({"task_runs": runs_data})
 
@@ -357,7 +367,7 @@ def list_task_runs() -> dict[str, Any]:
 
 
 @app.route("/health")
-def health_check() -> dict[str, Any]:
+def health_check() -> Response:
     """Health check endpoint."""
     return jsonify(
         {
@@ -368,8 +378,6 @@ def health_check() -> dict[str, Any]:
             else False,
         }
     )
-
-
 
 
 def shutdown_scheduler():

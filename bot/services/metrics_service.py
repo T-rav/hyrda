@@ -39,9 +39,17 @@ class MetricsService:
 
         # Track active conversations with timestamps
         self._active_conversations = {}  # conversation_id -> last_activity_time
-        self._conversation_timeout = timedelta(
-            minutes=30
-        )  # Consider inactive after 30 minutes
+        self._conversation_timeout = timedelta(hours=4)
+
+        # Track RAG stats for dashboard (in-memory counters)
+        self._rag_stats = {
+            "total_queries": 0,
+            "successful_queries": 0,
+            "failed_queries": 0,
+            "total_documents_used": 0,
+            "avg_chunks_per_query": 0.0,
+            "last_reset": datetime.now(),
+        }
 
         if not self.enabled:
             return
@@ -112,6 +120,56 @@ class MetricsService:
             buckets=(50, 100, 250, 500, 1000, 2000, 4000, 8000),
         )
 
+        # RAG-specific metrics
+        self.rag_hits_vs_misses = Counter(
+            "rag_query_results_total",
+            "RAG queries with results found vs no results",
+            ["result_type", "provider"],  # result_type: hit, miss, error
+        )
+
+        self.rag_document_usage = Counter(
+            "rag_documents_retrieved_total",
+            "Documents retrieved and used in responses",
+            ["document_type", "source"],
+        )
+
+        self.rag_query_types = Counter(
+            "rag_query_types_total",
+            "Types of queries processed",
+            [
+                "query_category",
+                "has_context",
+            ],  # query_category: question, command, conversation
+        )
+
+        self.user_satisfaction = Counter(
+            "user_interactions_total",
+            "User interaction patterns",
+            [
+                "interaction_type",
+                "user_type",
+            ],  # interaction_type: follow_up, new_topic, error_report
+        )
+
+        # Advanced RAG metrics
+        self.retrieval_chunk_count = Histogram(
+            "rag_chunks_retrieved_count",
+            "Number of chunks retrieved per query",
+            buckets=(0, 1, 2, 3, 5, 10, 15, 20, 30),
+        )
+
+        self.document_diversity = Histogram(
+            "rag_unique_documents_per_query",
+            "Number of unique documents used per query",
+            buckets=(0, 1, 2, 3, 4, 5, 7, 10),
+        )
+
+        self.context_utilization = Histogram(
+            "rag_context_length_chars",
+            "Length of context provided to LLM",
+            buckets=(0, 500, 1000, 2000, 4000, 8000, 16000, 32000),
+        )
+
         logger.info("Metrics service initialized with Prometheus client")
 
     def record_message_processed(self, user_id: str, channel_type: str = "dm"):
@@ -144,6 +202,9 @@ class MetricsService:
 
             if avg_similarity > 0:
                 self.retrieval_quality.observe(avg_similarity)
+
+            # Track number of chunks found (could be useful for monitoring)
+            _ = chunks_found  # Acknowledged but not currently tracked in metrics
 
         except Exception as e:
             logger.error(f"Error recording RAG retrieval metric: {e}")
@@ -198,6 +259,92 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error updating cache hit rate: {e}")
 
+    def record_rag_query_result(
+        self,
+        result_type: str,  # "hit", "miss", "error"
+        provider: str,
+        chunks_found: int = 0,
+        unique_documents: int = 0,
+        context_length: int = 0,
+        avg_similarity: float = 0.0,
+    ):
+        """Record RAG query results and quality metrics"""
+        try:
+            # Update dashboard stats (always track, even if Prometheus disabled)
+            self._rag_stats["total_queries"] += 1
+            if result_type == "hit":
+                self._rag_stats["successful_queries"] += 1
+                self._rag_stats["total_documents_used"] += unique_documents
+                # Update rolling average of chunks per query
+                total_queries = self._rag_stats["total_queries"]
+                current_avg = self._rag_stats["avg_chunks_per_query"]
+                self._rag_stats["avg_chunks_per_query"] = (
+                    current_avg * (total_queries - 1) + chunks_found
+                ) / total_queries
+            elif result_type in ["miss", "error"]:
+                self._rag_stats["failed_queries"] += 1
+
+            if not self.enabled:
+                return
+
+            # Record hit/miss/error to Prometheus
+            self.rag_hits_vs_misses.labels(
+                result_type=result_type, provider=provider
+            ).inc()
+
+            # Record chunk and document metrics for successful queries
+            if result_type == "hit" and chunks_found > 0:
+                self.retrieval_chunk_count.observe(chunks_found)
+                self.document_diversity.observe(unique_documents)
+
+                if context_length > 0:
+                    self.context_utilization.observe(context_length)
+
+                if avg_similarity > 0:
+                    self.retrieval_quality.observe(avg_similarity)
+
+        except Exception as e:
+            logger.error(f"Error recording RAG query result: {e}")
+
+    def record_document_usage(self, document_type: str, source: str):
+        """Record when a document is retrieved and used"""
+        if not self.enabled:
+            return
+
+        try:
+            self.rag_document_usage.labels(
+                document_type=document_type, source=source
+            ).inc()
+        except Exception as e:
+            logger.error(f"Error recording document usage: {e}")
+
+    def record_query_type(self, query_category: str, has_context: bool):
+        """Record the type of query being processed"""
+        if not self.enabled:
+            return
+
+        try:
+            self.rag_query_types.labels(
+                query_category=query_category,
+                has_context="yes" if has_context else "no",
+            ).inc()
+        except Exception as e:
+            logger.error(f"Error recording query type: {e}")
+
+    def record_user_interaction(
+        self, interaction_type: str, user_type: str = "regular"
+    ):
+        """Record user interaction patterns for satisfaction tracking"""
+        if not self.enabled:
+            return
+
+        try:
+            self.user_satisfaction.labels(
+                interaction_type=interaction_type, user_type=user_type
+            ).inc()
+        except Exception as e:
+            logger.error(f"Error recording user interaction: {e}")
+
     def record_conversation_activity(self, conversation_id: str):
         """Record activity in a conversation"""
         if not self.enabled:
@@ -206,6 +353,11 @@ class MetricsService:
         try:
             # Update conversation activity timestamp
             self._active_conversations[conversation_id] = datetime.now()
+
+            # Log conversation activity for debugging
+            logger.debug(
+                f"Recorded activity for conversation: {conversation_id[:20]}... (total active: {len(self._active_conversations)})"
+            )
 
             # Clean up old conversations and update metric
             self._cleanup_inactive_conversations()
@@ -237,9 +389,11 @@ class MetricsService:
             self.active_conversations.set(active_count)
 
             if inactive_conversations:
-                logger.debug(
+                logger.info(
                     f"Cleaned up {len(inactive_conversations)} inactive conversations. Active: {active_count}"
                 )
+            elif active_count > 0:
+                logger.debug(f"Active conversations: {active_count}")
 
         except Exception as e:
             logger.error(f"Error cleaning up conversations: {e}")
@@ -261,6 +415,37 @@ class MetricsService:
 
         self._cleanup_inactive_conversations()
         return len(self._active_conversations)
+
+    def get_rag_stats(self) -> dict:
+        """Get RAG statistics for dashboard display"""
+        stats = self._rag_stats.copy()
+
+        # Calculate success rate
+        total = stats["total_queries"]
+        if total > 0:
+            stats["success_rate"] = round(
+                (stats["successful_queries"] / total) * 100, 1
+            )
+            stats["miss_rate"] = round((stats["failed_queries"] / total) * 100, 1)
+        else:
+            stats["success_rate"] = 0.0
+            stats["miss_rate"] = 0.0
+
+        # Round average chunks
+        stats["avg_chunks_per_query"] = round(stats["avg_chunks_per_query"], 1)
+
+        return stats
+
+    def reset_rag_stats(self):
+        """Reset RAG statistics (useful for daily/weekly resets)"""
+        self._rag_stats = {
+            "total_queries": 0,
+            "successful_queries": 0,
+            "failed_queries": 0,
+            "total_documents_used": 0,
+            "avg_chunks_per_query": 0.0,
+            "last_reset": datetime.now(),
+        }
 
     @asynccontextmanager
     async def time_request(self, endpoint: str, method: str = "POST"):
