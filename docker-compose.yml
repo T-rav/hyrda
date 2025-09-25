@@ -82,6 +82,7 @@ services:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
+      - FLASK_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:

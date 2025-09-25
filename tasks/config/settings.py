@@ -12,7 +12,7 @@ class TasksSettings(BaseSettings):
     )
 
     # Server configuration
-    port: int = Field(default=8081, alias="TASKS_PORT")
+    port: int = Field(default=8081, alias="FLASK_PORT")
     host: str = Field(default="0.0.0.0", alias="TASKS_HOST")
     secret_key: str = Field(
         default="dev-secret-key-change-in-production", alias="SECRET_KEY"

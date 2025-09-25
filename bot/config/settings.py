@@ -200,6 +200,10 @@ class LangfuseSettings(BaseSettings):
 class Settings(BaseSettings):
     """Main application settings"""
 
+    environment: str = Field(
+        default="development",
+        description="Application environment (development, staging, production)",
+    )
     slack: SlackSettings = Field(default_factory=SlackSettings)  # type: ignore[arg-type]
     llm: LLMSettings = Field(default_factory=LLMSettings)  # type: ignore[arg-type]
     agent: AgentSettings = Field(default_factory=AgentSettings)
