@@ -19,7 +19,7 @@ services:
       retries: 10
 
   phpmyadmin:
-    image: public.ecr.aws/phpmyadmin/phpmyadmin:latest
+    image: phpmyadmin/phpmyadmin:latest
     container_name: insightmesh-phpmyadmin
     restart: unless-stopped
     environment:
