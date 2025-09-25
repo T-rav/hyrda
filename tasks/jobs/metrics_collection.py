@@ -83,15 +83,18 @@ class MetricsCollectionJob(BaseJob):
             )
 
             # Determine success based on whether we collected any data
-            success_count = len([t for t in metric_types if t in metrics_data and metrics_data[t]])
+            success_count = len(
+                [t for t in metric_types if t in metrics_data and metrics_data[t]]
+            )
             failed_count = len(metric_types) - success_count
 
             return {
                 # Standardized fields for task run tracking
-                "records_processed": len(metric_types),  # Number of metric types requested
-                "records_success": success_count,        # Number of metric types successfully collected
-                "records_failed": failed_count,          # Number of metric types that failed
-
+                "records_processed": len(
+                    metric_types
+                ),  # Number of metric types requested
+                "records_success": success_count,  # Number of metric types successfully collected
+                "records_failed": failed_count,  # Number of metric types that failed
                 # Job-specific details for debugging/logging
                 "collected_metrics": metrics_data,
                 "aggregated_metrics": aggregated_metrics,

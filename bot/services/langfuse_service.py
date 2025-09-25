@@ -26,8 +26,9 @@ except ImportError:
     _langfuse_available = False
 
     # Provide no-op decorator if langfuse is not available
-    def observe(name: str = None, as_type: str = None, **kwargs):
+    def observe(name: str = None, as_type: str = None, **kwargs):  # noqa: ARG001
         """No-op decorator when Langfuse is not available"""
+        _ = (name, as_type, kwargs)  # Acknowledge but ignore parameters
 
         def decorator(func):
             return func

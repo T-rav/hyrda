@@ -78,9 +78,7 @@ export function getMetricLabel(service, serviceData, metricsData) {
     case 'cache':
       return 'Memory Used'
     case 'metrics':
-      const tracked = metricsData?.active_conversations?.tracked_by_metrics || 0
-      const cached = metricsData?.active_conversations?.cached_conversations || 0
-      return tracked > 0 || cached > 0 ? `${tracked} tracked, ${cached} cached` : 'Active Conversations'
+      return 'Active Conversations (4h)'
     default:
       return 'Value'
   }

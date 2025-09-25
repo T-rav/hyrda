@@ -78,6 +78,8 @@ async def handle_message(
         )
 
         # Track active conversations with proper conversation ID
+        # Use thread_ts for threaded conversations, otherwise use channel
+        # This matches the conversation_id used by LLM service for Langfuse tracing
         conversation_id = thread_ts or channel
         metrics_service.record_conversation_activity(conversation_id)
 

@@ -39,9 +39,7 @@ class MetricsService:
 
         # Track active conversations with timestamps
         self._active_conversations = {}  # conversation_id -> last_activity_time
-        self._conversation_timeout = timedelta(
-            minutes=30
-        )  # Consider inactive after 30 minutes
+        self._conversation_timeout = timedelta(hours=4)
 
         if not self.enabled:
             return
@@ -145,6 +143,9 @@ class MetricsService:
             if avg_similarity > 0:
                 self.retrieval_quality.observe(avg_similarity)
 
+            # Track number of chunks found (could be useful for monitoring)
+            _ = chunks_found  # Acknowledged but not currently tracked in metrics
+
         except Exception as e:
             logger.error(f"Error recording RAG retrieval metric: {e}")
 
@@ -207,6 +208,11 @@ class MetricsService:
             # Update conversation activity timestamp
             self._active_conversations[conversation_id] = datetime.now()
 
+            # Log conversation activity for debugging
+            logger.debug(
+                f"Recorded activity for conversation: {conversation_id[:20]}... (total active: {len(self._active_conversations)})"
+            )
+
             # Clean up old conversations and update metric
             self._cleanup_inactive_conversations()
 
@@ -237,9 +243,11 @@ class MetricsService:
             self.active_conversations.set(active_count)
 
             if inactive_conversations:
-                logger.debug(
+                logger.info(
                     f"Cleaned up {len(inactive_conversations)} inactive conversations. Active: {active_count}"
                 )
+            elif active_count > 0:
+                logger.debug(f"Active conversations: {active_count}")
 
         except Exception as e:
             logger.error(f"Error cleaning up conversations: {e}")
