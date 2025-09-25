@@ -57,7 +57,9 @@ class TestEventHandlerRegistration:
         """Test that handlers can be registered with conversation cache"""
         mock_cache = AsyncMock()
 
-        await register_handlers(mock_app, mock_slack_service, mock_llm_service, mock_cache)
+        await register_handlers(
+            mock_app, mock_slack_service, mock_llm_service, mock_cache
+        )
 
         # Verify that handlers were still registered correctly
         assert mock_app.event.call_count >= 3
@@ -121,7 +123,9 @@ class TestEventHandlerFunctionality:
         self, mock_slack_service, mock_llm_service
     ):
         """Test app mention functionality by simulating handler logic"""
-        with patch("handlers.event_handlers.handle_message", new_callable=AsyncMock) as mock_handle_message:
+        with patch(
+            "handlers.event_handlers.handle_message", new_callable=AsyncMock
+        ) as mock_handle_message:
             # Simulate what the app mention handler does
             text = "<@B987654321> hello there"
             clean_text = text.split(">", 1)[-1].strip() if ">" in text else text
@@ -134,7 +138,7 @@ class TestEventHandlerFunctionality:
                 llm_service=mock_llm_service,
                 channel="C123456789",
                 thread_ts="1234567890.123456",
-                conversation_cache=None
+                conversation_cache=None,
             )
 
             mock_handle_message.assert_called_once_with(
@@ -144,20 +148,20 @@ class TestEventHandlerFunctionality:
                 llm_service=mock_llm_service,
                 channel="C123456789",
                 thread_ts="1234567890.123456",
-                conversation_cache=None
+                conversation_cache=None,
             )
 
     @pytest.mark.asyncio
-    async def test_message_filtering_logic(
-        self, mock_slack_service, mock_llm_service
-    ):
+    async def test_message_filtering_logic(self, mock_slack_service, mock_llm_service):
         """Test message filtering logic"""
         # Test bot message filtering
         event_bot_id = {"bot_id": "B123456789", "text": "Bot message"}
         assert event_bot_id.get("bot_id") is not None  # Should be filtered out
 
         event_bot_subtype = {"subtype": "bot_message", "text": "Bot message"}
-        assert event_bot_subtype.get("subtype") == "bot_message"  # Should be filtered out
+        assert (
+            event_bot_subtype.get("subtype") == "bot_message"
+        )  # Should be filtered out
 
         # Test no user filtering
         event_no_user = {"text": "Message", "channel": "C123"}
@@ -230,7 +234,9 @@ class TestProcessMessageByContext:
 
             mock_handle_message.assert_called_once()
             call_args = mock_handle_message.call_args
-            assert call_args.kwargs["text"] == "hello"  # Text should be cleaned (split(">", 1)[-1].strip())
+            assert (
+                call_args.kwargs["text"] == "hello"
+            )  # Text should be cleaned (split(">", 1)[-1].strip())
 
     @pytest.mark.asyncio
     async def test_process_message_by_context_thread_participant(
@@ -258,7 +264,9 @@ class TestProcessMessageByContext:
 
             # Should respond in threads when bot is participant
             mock_handle_message.assert_called_once()
-            mock_slack_service.get_thread_info.assert_called_once_with("C12345", "1234567890.123456")
+            mock_slack_service.get_thread_info.assert_called_once_with(
+                "C12345", "1234567890.123456"
+            )
 
     @pytest.mark.asyncio
     async def test_process_message_by_context_thread_not_participant(
@@ -371,7 +379,6 @@ class TestProcessMessageByContext:
         with patch(
             "handlers.event_handlers.handle_message", new_callable=AsyncMock
         ) as mock_handle_message:
-
             # Test mention with no text after
             await process_message_by_context(
                 user_id="U12345",
@@ -390,9 +397,7 @@ class TestProcessMessageByContext:
             assert kwargs["text"] == ""
 
     @pytest.mark.asyncio
-    async def test_bot_id_none_handling(
-        self, mock_slack_service, mock_llm_service
-    ):
+    async def test_bot_id_none_handling(self, mock_slack_service, mock_llm_service):
         """Test handling when bot_id is None"""
         mock_slack_service.bot_id = None
 
@@ -419,7 +424,10 @@ class TestProcessMessageByContext:
     ):
         """Test complex mention text scenarios"""
         test_cases = [
-            ("<@B12345678> simple message", "simple message"),  # Fixed: split(">", 1)[-1].strip() removes leading space
+            (
+                "<@B12345678> simple message",
+                "simple message",
+            ),  # Fixed: split(">", 1)[-1].strip() removes leading space
             ("<@B12345678>no space", "no space"),
             ("<@B12345678> ", ""),  # Fixed: strip() removes the space
             ("prefix <@B12345678> suffix", "suffix"),  # Fixed: text after > is cleaned
@@ -429,7 +437,6 @@ class TestProcessMessageByContext:
             with patch(
                 "handlers.event_handlers.handle_message", new_callable=AsyncMock
             ) as mock_handle_message:
-
                 await process_message_by_context(
                     user_id="U12345",
                     channel="C12345",
@@ -441,7 +448,10 @@ class TestProcessMessageByContext:
                     llm_service=mock_llm_service,
                 )
 
-                if mock_slack_service.bot_id and f"<@{mock_slack_service.bot_id}>" in input_text:
+                if (
+                    mock_slack_service.bot_id
+                    and f"<@{mock_slack_service.bot_id}>" in input_text
+                ):
                     mock_handle_message.assert_called_once()
                     args, kwargs = mock_handle_message.call_args
                     assert kwargs["text"] == expected_clean
@@ -456,9 +466,9 @@ class TestProcessMessageByContext:
         """Test edge cases in thread participation checking"""
         # Test with various thread_info responses
         thread_info_cases = [
-            ({"bot_is_participant": True}, True),    # Should respond
+            ({"bot_is_participant": True}, True),  # Should respond
             ({"bot_is_participant": False}, False),  # Should not respond
-            ({}, False),                             # Should not respond (missing key)
+            ({}, False),  # Should not respond (missing key)
         ]
 
         for thread_info, should_respond in thread_info_cases:
@@ -467,7 +477,6 @@ class TestProcessMessageByContext:
             with patch(
                 "handlers.event_handlers.handle_message", new_callable=AsyncMock
             ) as mock_handle_message:
-
                 await process_message_by_context(
                     user_id="U12345",
                     channel="C12345",
@@ -509,14 +518,12 @@ class TestEventHandlerErrorHandling:
 
         # Should not raise - error should be caught and logged
         # This simulates what the actual handler does
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):
             await mock_slack_service.send_message(
-                channel="C123",
-                text="Welcome message",
-                thread_ts="1234"
+                channel="C123", text="Welcome message", thread_ts="1234"
             )
-        except Exception:
-            pass  # Handler catches and logs errors
 
         # Verify the send was attempted
         mock_slack_service.send_message.assert_called_once()
@@ -527,8 +534,14 @@ class TestEventHandlerErrorHandling:
     ):
         """Test that mention handler errors are properly handled"""
         with (
-            patch("handlers.event_handlers.handle_message", new_callable=AsyncMock, side_effect=Exception("Processing failed")) as mock_handle_message,
-            patch("handlers.event_handlers.handle_error", new_callable=AsyncMock) as mock_handle_error
+            patch(
+                "handlers.event_handlers.handle_message",
+                new_callable=AsyncMock,
+                side_effect=Exception("Processing failed"),
+            ) as mock_handle_message,
+            patch(
+                "handlers.event_handlers.handle_error", new_callable=AsyncMock
+            ) as mock_handle_error,
         ):
             # Simulate the error handling that would happen in the mention handler
             try:
@@ -540,7 +553,7 @@ class TestEventHandlerErrorHandling:
                     llm_service=mock_llm_service,
                     channel="C123",
                     thread_ts="1234",
-                    conversation_cache=None
+                    conversation_cache=None,
                 )
             except Exception as e:
                 # Handler would catch and call handle_error
@@ -549,7 +562,7 @@ class TestEventHandlerErrorHandling:
                     "C123",  # channel
                     "1234",  # thread_ts
                     e,
-                    "I'm sorry, I encountered an error while processing your request."
+                    "I'm sorry, I encountered an error while processing your request.",
                 )
 
             mock_handle_error.assert_called_once()

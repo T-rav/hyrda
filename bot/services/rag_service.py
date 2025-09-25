@@ -209,10 +209,12 @@ class RAGService:
                     metrics_service = get_metrics_service()
                     if metrics_service:
                         # Calculate metrics
-                        unique_docs = len({
-                            chunk.get("metadata", {}).get("file_name", "unknown")
-                            for chunk in context_chunks
-                        })
+                        unique_docs = len(
+                            {
+                                chunk.get("metadata", {}).get("file_name", "unknown")
+                                for chunk in context_chunks
+                            }
+                        )
                         avg_similarity = sum(
                             chunk.get("similarity", 0) for chunk in context_chunks
                         ) / len(context_chunks)
