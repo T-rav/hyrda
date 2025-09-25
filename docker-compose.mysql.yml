@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   mysql:
-    image: mysql:8.0
+    image: ghcr.io/docker-library/mysql:8.0
     container_name: insightmesh-mysql
     restart: unless-stopped
     environment:
@@ -19,7 +19,7 @@ services:
       retries: 10
 
   phpmyadmin:
-    image: phpmyadmin/phpmyadmin:latest
+    image: ghcr.io/phpmyadmin/phpmyadmin:latest
     container_name: insightmesh-phpmyadmin
     restart: unless-stopped
     environment:
