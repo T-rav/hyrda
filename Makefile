@@ -430,7 +430,7 @@ db-upgrade: $(VENV) db-start
 	@echo "$(BLUE)Upgrading tasks database...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m alembic upgrade head
 	@echo "$(BLUE)Running Elasticsearch index migrations...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)ingest && $(PYTHON) -c "import asyncio; from services.elasticsearch_migrations import run_elasticsearch_migrations; import os; asyncio.run(run_elasticsearch_migrations(os.getenv('VECTOR_URL', 'http://localhost:9200'), os.getenv('VECTOR_COLLECTION_NAME', 'knowledge-base'), 3072))" || echo "$(YELLOW)⚠️  Elasticsearch migrations skipped (service may not be running)$(RESET)"
+	cd $(PROJECT_ROOT_DIR)ingest && $(PYTHON) -c "import asyncio; from services.elasticsearch_migrations import run_elasticsearch_migrations; import os; asyncio.run(run_elasticsearch_migrations(os.getenv('VECTOR_URL', 'http://localhost:9200'), os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base'), 3072))" || echo "$(YELLOW)⚠️  Elasticsearch migrations skipped (service may not be running)$(RESET)"
 	@echo "$(GREEN)✅ All migrations applied successfully!$(RESET)"
 
 # Rollback last migration

@@ -33,7 +33,7 @@ echo "📋 Index Status:"
 echo "------------------------------"
 
 # Check different index variations
-for suffix in "" "_sparse" "_dense"; do
+for suffix in "" "_sparse"; do
     index="${INDEX_NAME}${suffix}"
     echo ""
     echo "🔍 Checking: $index"
