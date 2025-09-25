@@ -41,11 +41,12 @@ async def check_apple_documents():
     await vector_store.initialize()
 
     try:
-        # Search for Apple with very broad parameters to get ALL Apple-related chunks
+        # Search for Apple using text search instead of vector search
         query_embedding = await embedding_provider.get_embedding("Apple")
 
         results = await vector_store.search(
             query_embedding=query_embedding,
+            query_text="Apple",  # Use text search for better compatibility
             limit=100,  # Get many results
             similarity_threshold=0.01,  # Very low threshold
         )
