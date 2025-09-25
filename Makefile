@@ -67,7 +67,7 @@ help:
 	@echo "  docker-build-bot Build single bot Docker image"
 	@echo "  docker-build    Build all Docker images in stack"
 	@echo "  docker-run      Run Docker container with .env"
-	@echo "  docker-monitor  Run full monitoring stack"
+	@echo "  docker-monitor  🔍 Run monitoring stack (Prometheus + Grafana)"
 	@echo "  docker-prod     Run production stack"
 	@echo "  docker-stop     Stop all containers"
 	@echo ""
@@ -244,8 +244,13 @@ docker-build-bot:
 docker-run: check-env
 	docker run --rm --env-file $(ENV_FILE) --name $(IMAGE) $(IMAGE)
 
-docker-monitor:
-	@echo "❌ Monitoring compose file not found. Use 'make start' to run services."
+docker-monitor: check-env
+	@echo "$(BLUE)🔍 Starting monitoring stack (Prometheus + Grafana + AlertManager)...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml up -d
+	@echo "$(GREEN)✅ Monitoring stack started! Access points:$(RESET)"
+	@echo "$(BLUE)  - Grafana Dashboard: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(BLUE)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 docker-prod:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.prod.yml up -d
@@ -253,6 +258,7 @@ docker-prod:
 docker-stop:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.elasticsearch.yml down
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.mysql.yml down
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 
 # Full Docker Stack Commands
 docker-up: check-env
