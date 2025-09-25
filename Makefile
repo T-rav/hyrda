@@ -42,7 +42,6 @@ help:
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
-	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
 	@echo "  stop             🛑 Stop everything"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
