@@ -8,8 +8,8 @@ Main service that coordinates the ingestion process by:
 - Managing the overall ingestion workflow
 """
 
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .google_drive_client import GoogleDriveClient
@@ -60,7 +60,7 @@ class IngestionOrchestrator:
         # For hybrid RAG service, embedding service is built-in
         if hasattr(vector_service, 'embedding_service'):
             self.embedding_service = vector_service.embedding_service
-            
+
         # Initialize contextual retrieval service if enabled
         if enable_contextual_retrieval and llm_service:
             # Import here to avoid circular dependencies
@@ -151,7 +151,7 @@ class IngestionOrchestrator:
                     if self.enable_contextual_retrieval and self.contextual_retrieval_service:
                         print(f"Adding contextual descriptions to {len(chunks)} chunks...")
                         chunks = await self.contextual_retrieval_service.add_context_to_chunks(
-                            chunks, 
+                            chunks,
                             {
                                 'file_name': file_info['name'],
                                 'full_path': file_info.get('full_path', file_info['name']),
@@ -202,7 +202,7 @@ class IngestionOrchestrator:
                     if self.enable_contextual_retrieval and self.contextual_retrieval_service:
                         print(f"Adding contextual descriptions to {len(chunks)} chunks...")
                         chunks = await self.contextual_retrieval_service.add_context_to_chunks(
-                            chunks, 
+                            chunks,
                             {
                                 'file_name': file_info['name'],
                                 'full_path': file_info.get('full_path', file_info['name']),

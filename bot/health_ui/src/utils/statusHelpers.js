@@ -68,6 +68,12 @@ export function getMetricValue(service, serviceData, metricsData) {
       return metricsData?.cache?.memory_used || serviceData.memory_used || 'N/A'
     case 'metrics':
       return metricsData?.active_conversations?.total || serviceData.active_conversations || 0
+    case 'rag':
+      const ragData = metricsData?.rag_performance
+      if (ragData && ragData.total_queries > 0) {
+        return `${ragData.success_rate}%`
+      }
+      return 'No queries yet'
     default:
       return 'N/A'
   }
@@ -79,6 +85,12 @@ export function getMetricLabel(service, serviceData, metricsData) {
       return 'Memory Used'
     case 'metrics':
       return 'Active Conversations (4h)'
+    case 'rag':
+      const ragData = metricsData?.rag_performance
+      if (ragData && ragData.total_queries > 0) {
+        return `RAG Success Rate (${ragData.total_queries} queries)`
+      }
+      return 'RAG Performance'
     default:
       return 'Value'
   }

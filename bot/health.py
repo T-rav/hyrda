@@ -271,6 +271,24 @@ class HealthChecker:
                 "message": message,
             }
 
+        # Add RAG service check
+        if metrics_service and metrics_service.enabled:
+            rag_stats = metrics_service.get_rag_stats()
+            checks["rag"] = {
+                "status": "healthy",
+                "total_queries": rag_stats["total_queries"],
+                "success_rate": rag_stats["success_rate"],
+                "miss_rate": rag_stats["miss_rate"],
+                "avg_chunks": rag_stats["avg_chunks_per_query"],
+                "documents_used": rag_stats["total_documents_used"],
+                "description": "RAG query performance tracking",
+            }
+        else:
+            checks["rag"] = {
+                "status": "disabled",
+                "message": "RAG metrics require metrics service to be enabled",
+            }
+
         response_data = {
             "status": "ready" if all_healthy else "not_ready",
             "checks": checks,
@@ -307,6 +325,17 @@ class HealthChecker:
             metrics["active_conversations"] = {
                 "total": active_count,
                 "description": "Active conversations (last 4 hours)",
+            }
+
+            # Get RAG performance stats
+            rag_stats = metrics_service.get_rag_stats()
+            metrics["rag_performance"] = {
+                "total_queries": rag_stats["total_queries"],
+                "success_rate": rag_stats["success_rate"],
+                "miss_rate": rag_stats["miss_rate"],
+                "avg_chunks": rag_stats["avg_chunks_per_query"],
+                "documents_used": rag_stats["total_documents_used"],
+                "description": f"RAG queries processed (since {rag_stats['last_reset'].strftime('%H:%M')})",
             }
 
         # Add service status
