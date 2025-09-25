@@ -68,7 +68,6 @@ class GoogleDriveIngestJob(BaseJob):
                 "records_processed": 1,  # One folder processed
                 "records_success": 1 if ingest_success else 0,
                 "records_failed": 0 if ingest_success else 1,
-
                 # Job-specific details for debugging/logging
                 "folder_id": folder_id,
                 "ingestion_result": ingest_result,

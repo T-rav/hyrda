@@ -38,10 +38,11 @@ help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
-	@echo "  $(GREEN)make start$(RESET)       🎯 Build everything and run bot + task scheduler (recommended)"
+	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring (recommended)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
-	@echo "  start-tasks-only 📅 Run only the Task Scheduler"
+	@echo "  start-core       🤖 Core services only (no monitoring)"
+	@echo "  stop             🛑 Stop everything"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
 	@echo "  install         Install Python dependencies in virtual environment"
@@ -67,7 +68,7 @@ help:
 	@echo "  docker-build-bot Build single bot Docker image"
 	@echo "  docker-build    Build all Docker images in stack"
 	@echo "  docker-run      Run Docker container with .env"
-	@echo "  docker-monitor  Run full monitoring stack"
+	@echo "  docker-monitor  🔍 Run monitoring stack (Prometheus + Grafana)"
 	@echo "  docker-prod     Run production stack"
 	@echo "  docker-stop     Stop all containers"
 	@echo ""
@@ -244,8 +245,13 @@ docker-build-bot:
 docker-run: check-env
 	docker run --rm --env-file $(ENV_FILE) --name $(IMAGE) $(IMAGE)
 
-docker-monitor:
-	@echo "❌ Monitoring compose file not found. Use 'make start' to run services."
+docker-monitor: check-env
+	@echo "$(BLUE)🔍 Starting monitoring stack (Prometheus + Grafana + AlertManager)...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml up -d
+	@echo "$(GREEN)✅ Monitoring stack started! Access points:$(RESET)"
+	@echo "$(BLUE)  - Grafana Dashboard: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(BLUE)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 docker-prod:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.prod.yml up -d
@@ -253,16 +259,21 @@ docker-prod:
 docker-stop:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.elasticsearch.yml down
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.mysql.yml down
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 
 # Full Docker Stack Commands
 docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
-	@echo "$(GREEN)✅ Stack started! Services available at:$(RESET)"
-	@echo "$(BLUE)  - Bot API: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
-	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
-	@echo "$(BLUE)  - phpMyAdmin: http://localhost:8081$(RESET)"
-	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
+	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
+	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - 🗄️  Database Admin: http://localhost:8081$(RESET)"
+	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
+	@echo "$(BLUE)  - 📊 Metrics Endpoint: http://localhost:$${HEALTH_PORT:-8080}/metrics$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)💡 For monitoring stack: make docker-monitor$(RESET)"
+	@echo "$(YELLOW)💡 For everything at once: make start$(RESET)"
 
 docker-down:
 	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
@@ -279,8 +290,11 @@ docker-build: health-ui tasks-ui
 	cd $(PROJECT_ROOT_DIR) && docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"
 
-# Main stop command
+# Main stop command - stops everything
 stop: docker-down
+	@echo "$(BLUE)🛑 Stopping monitoring stack...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
+	@echo "$(GREEN)✅ All services stopped!$(RESET)"
 
 setup-dev: install-dev
 	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi
@@ -335,8 +349,26 @@ python-version: $(VENV)
 	@$(PIP) --version
 
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
-# Main start command (uses Docker)
-start: docker-build docker-up
+# Main start command - includes everything (core + monitoring)
+start: docker-build docker-up docker-monitor
+	@echo "$(GREEN)🔥 ================================$(RESET)"
+	@echo "$(GREEN)🚀 FULL STACK STARTED SUCCESSFULLY!$(RESET)"
+	@echo "$(GREEN)🔥 ================================$(RESET)"
+	@echo ""
+	@echo "$(BLUE)📊 Main Services:$(RESET)"
+	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🔍 Monitoring Stack:$(RESET)"
+	@echo "$(YELLOW)  - Grafana Dashboard: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(YELLOW)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
+	@echo ""
+	@echo "$(GREEN)🎉 All services are running! Check the health dashboard for RAG metrics.$(RESET)"
+
+# Core services only (without monitoring)
+start-core: docker-build docker-up
 
 # Docker-based start (same as start)
 start-docker: start

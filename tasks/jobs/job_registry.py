@@ -15,14 +15,16 @@ from .slack_user_import import SlackUserImportJob
 logger = logging.getLogger(__name__)
 
 
-def execute_job_by_type(job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler") -> dict[str, Any]:
+def execute_job_by_type(
+    job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler"
+) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import uuid
-    from datetime import datetime, UTC
-    from config.settings import TasksSettings
-    from models.task_run import TaskRun
-    from models.base import get_db_session
+    from datetime import UTC, datetime
 
+    from config.settings import TasksSettings
+    from models.base import get_db_session
+    from models.task_run import TaskRun
 
     # Direct mapping - simpler than dynamic imports
     job_classes = {
@@ -71,7 +73,9 @@ def execute_job_by_type(job_type: str, job_params: dict[str, Any], triggered_by:
                 # Extract standardized metrics from job result
                 if isinstance(result, dict):
                     # Handle BaseJob result structure (result is wrapped in "result" field)
-                    job_result = result.get("result", {}) if "result" in result else result
+                    job_result = (
+                        result.get("result", {}) if "result" in result else result
+                    )
 
                     # All jobs now return standardized fields
                     if isinstance(job_result, dict):
@@ -87,7 +91,9 @@ def execute_job_by_type(job_type: str, job_params: dict[str, Any], triggered_by:
         # Update TaskRun with failure
         try:
             with get_db_session() as session:
-                task_run = session.query(TaskRun).filter(TaskRun.run_id == run_id).first()
+                task_run = (
+                    session.query(TaskRun).filter(TaskRun.run_id == run_id).first()
+                )
                 if task_run:
                     task_run.status = "failed"
                     task_run.completed_at = datetime.now(UTC)
