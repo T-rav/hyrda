@@ -3,7 +3,7 @@ name: insightmesh
 services:
   # MySQL Database
   mysql:
-    image: mysql:8.0
+    image: public.ecr.aws/docker/library/mysql:8.0
     container_name: insightmesh-mysql
     restart: unless-stopped
     environment:
@@ -82,9 +82,8 @@ services:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
-      - TASKS_PORT=8081
     ports:
-      - "5001:5001"
+      - "${TASKS_PORT:-5001}:5001"
     depends_on:
       mysql:
         condition: service_healthy
@@ -99,7 +98,7 @@ services:
 
   # Redis Cache Service
   redis:
-    image: redis:7-alpine
+    image: public.ecr.aws/docker/library/redis:7-alpine
     container_name: insightmesh-redis
     restart: unless-stopped
     ports:
@@ -128,17 +127,11 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_bot
-      - ELASTICSEARCH_URL=http://elasticsearch:9200
       - VECTOR_URL=http://elasticsearch:9200
-      - VECTOR_ENABLED=true
-      - VECTOR_PROVIDER=elasticsearch
-      - VECTOR_COLLECTION_NAME=knowledge_base
-      - HYBRID_ENABLED=false
-      - CACHE_ENABLED=true
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:
-      - "8080:8080"
+      - "${HEALTH_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy
