@@ -84,7 +84,7 @@ services:
       - ENVIRONMENT=production
       - TASKS_PORT=8081
     ports:
-      - "5001:5001"
+      - "${TASKS_PORT:-5001}:5001"
     depends_on:
       mysql:
         condition: service_healthy
@@ -138,7 +138,7 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:
-      - "8080:8080"
+      - "${HEALTH_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy
