@@ -19,7 +19,7 @@ from config.settings import Settings, VectorSettings
 from services.citation_service import CitationService
 from services.embedding_service import create_embedding_provider
 from services.hybrid_retrieval_service import CohereReranker, HybridRetrievalService
-from services.langfuse_service import observe
+from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.title_injection_service import (
     EnhancedChunkProcessor,
@@ -193,10 +193,57 @@ class HybridRAGService:
             logger.info(
                 f"✅ Successfully ingested {len(texts)} documents into hybrid system"
             )
+
+            # Trace document ingestion to Langfuse
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                # Reconstruct documents for tracing
+                documents_for_tracing = [
+                    {"content": text, "metadata": meta}
+                    for text, meta in zip(texts, metadata, strict=False)
+                ]
+
+                langfuse_service.trace_document_ingestion(
+                    documents=documents_for_tracing,
+                    success_count=len(texts),
+                    error_count=0,
+                    metadata={
+                        "ingestion_type": "hybrid_rag_service",
+                        "dense_store": "pinecone",
+                        "sparse_store": "elasticsearch",
+                        "title_injection_enabled": True,
+                        "dual_indexing": True,
+                    },
+                )
+                logger.info(
+                    f"📊 Logged hybrid document ingestion to Langfuse: {len(texts)} documents"
+                )
+
             return True
 
         except Exception as e:
             logger.error(f"Failed to ingest documents: {e}")
+
+            # Trace failed ingestion
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                documents_for_tracing = [
+                    {"content": text, "metadata": meta}
+                    for text, meta in zip(texts, metadata, strict=False)
+                ]
+
+                langfuse_service.trace_document_ingestion(
+                    documents=documents_for_tracing,
+                    success_count=0,
+                    error_count=len(texts),
+                    metadata={
+                        "ingestion_type": "hybrid_rag_service",
+                        "error": str(e),
+                        "dense_store": "pinecone",
+                        "sparse_store": "elasticsearch",
+                    },
+                )
+
             return False
 
     async def hybrid_search(
@@ -287,6 +334,58 @@ class HybridRAGService:
                     top_k=self.hybrid_settings.final_top_k,
                     similarity_threshold=0.0,  # Let reranking handle quality
                 )
+
+                # Log retrieved documents to Langfuse
+                if context_chunks:
+                    langfuse_service = get_langfuse_service()
+                    if langfuse_service:
+                        # Prepare retrieval data for Langfuse with document details
+                        retrieval_results = []
+                        for chunk in context_chunks:
+                            result = {
+                                "content": chunk["content"],
+                                "similarity": chunk.get("similarity", 0),
+                                "source": chunk.get("_hybrid_source", "unknown"),
+                                "rank": chunk.get("_hybrid_rank", 0),
+                                "metadata": chunk.get("metadata", {}),
+                            }
+                            # Add document name for easier tracking
+                            if chunk.get("metadata", {}).get("file_name"):
+                                result["document"] = chunk["metadata"]["file_name"]
+                            retrieval_results.append(result)
+
+                        # Send retrieval trace to Langfuse
+                        langfuse_service.trace_retrieval(
+                            query=query,
+                            results=retrieval_results,
+                            metadata={
+                                "retrieval_type": "hybrid_rag",
+                                "top_k": self.hybrid_settings.final_top_k,
+                                "total_chunks": len(context_chunks),
+                                "avg_similarity": sum(
+                                    r["similarity"] for r in retrieval_results
+                                )
+                                / len(retrieval_results)
+                                if retrieval_results
+                                else 0,
+                                "sources_used": list(
+                                    {
+                                        r.get("source", "unknown")
+                                        for r in retrieval_results
+                                    }
+                                ),
+                                "documents_used": list(
+                                    {
+                                        r.get("document", "unknown")
+                                        for r in retrieval_results
+                                        if r.get("document")
+                                    }
+                                ),
+                            },
+                        )
+                        logger.info(
+                            f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse for query: {query[:50]}..."
+                        )
 
                 if context_chunks:
                     # Build context from retrieved chunks

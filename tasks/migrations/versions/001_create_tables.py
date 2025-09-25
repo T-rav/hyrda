@@ -28,8 +28,12 @@ def upgrade() -> None:
         sa.Column("schedule_config", sa.JSON(), nullable=False),
         sa.Column("params", sa.JSON(), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_scheduled_tasks")),
     )
     op.create_index(
@@ -59,7 +63,12 @@ def upgrade() -> None:
         sa.Column("started_at", sa.DateTime(), nullable=False),
         sa.Column("completed_at", sa.DateTime(), nullable=True),
         sa.Column("duration_seconds", sa.Float(), nullable=True),
-        sa.Column("triggered_by", sa.String(length=100), nullable=True, server_default="scheduler"),
+        sa.Column(
+            "triggered_by",
+            sa.String(length=100),
+            nullable=True,
+            server_default="scheduler",
+        ),
         sa.Column("task_config_snapshot", sa.JSON(), nullable=True),
         sa.Column("result_data", sa.JSON(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -68,8 +77,12 @@ def upgrade() -> None:
         sa.Column("records_processed", sa.Integer(), nullable=True),
         sa.Column("records_success", sa.Integer(), nullable=True),
         sa.Column("records_failed", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=False, server_default=sa.func.now()
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_task_runs")),
     )
     op.create_index(

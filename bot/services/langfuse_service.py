@@ -40,8 +40,9 @@ class LangfuseService:
     Service for managing Langfuse observability integration
     """
 
-    def __init__(self, settings: LangfuseSettings):
+    def __init__(self, settings: LangfuseSettings, environment: str = "development"):
         self.settings = settings
+        self.environment = environment
         self.client: Langfuse | None = None
         self.enabled = settings.enabled and _langfuse_available
         self.current_trace = None
@@ -111,6 +112,7 @@ class LangfuseService:
                 metadata={
                     "provider": provider,
                     "model": model,
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
                 usage=usage,
@@ -129,7 +131,7 @@ class LangfuseService:
         metadata: dict[str, Any] | None = None,
     ):
         """
-        Trace RAG retrieval operation
+        Trace RAG retrieval operation with enhanced document visibility
 
         Args:
             query: Search query
@@ -143,34 +145,208 @@ class LangfuseService:
             if not self.client:
                 return
 
-            # Create span for RAG retrieval
+            # Prepare enhanced chunk data with full content for better visibility
+            enhanced_chunks = []
+            document_sources = set()
+
+            for i, result in enumerate(results):
+                content = result.get("content", "")
+                chunk_metadata = result.get("metadata", {})
+
+                # Track unique document sources
+                doc_name = chunk_metadata.get("file_name") or result.get(
+                    "document", f"chunk_{i}"
+                )
+                document_sources.add(doc_name)
+
+                enhanced_chunk = {
+                    "chunk_id": i + 1,
+                    "content": content,  # Full content for better analysis
+                    "content_preview": content[:300] + "..."
+                    if len(content) > 300
+                    else content,
+                    "similarity_score": result.get("similarity", 0),
+                    "document_source": doc_name,
+                    "metadata": chunk_metadata,
+                }
+
+                # Add hybrid-specific data if available
+                if result.get("_hybrid_source"):
+                    enhanced_chunk["retrieval_source"] = result.get("_hybrid_source")
+                    enhanced_chunk["hybrid_rank"] = result.get("_hybrid_rank", 0)
+
+                enhanced_chunks.append(enhanced_chunk)
+
+            # Create span for RAG retrieval with enhanced data
             span = self.client.start_span(
                 name="rag_retrieval",
-                input={"query": query},
+                input={
+                    "query": query,
+                    "query_length": len(query),
+                },
                 output={
-                    "retrieved_chunks": len(results),
-                    "chunks": [
-                        {
-                            "content": result.get("content", "")[:200] + "...",
-                            "similarity": result.get("similarity", 0),
-                            "metadata": result.get("metadata", {}),
-                        }
-                        for result in results[:5]  # Limit to first 5 for brevity
-                    ],
+                    "total_chunks_retrieved": len(results),
+                    "unique_documents": len(document_sources),
+                    "document_sources": list(document_sources),
+                    "chunks": enhanced_chunks,  # Full chunk data
+                    "retrieval_summary": {
+                        "avg_similarity": (
+                            sum(r.get("similarity", 0) for r in results) / len(results)
+                            if results
+                            else 0
+                        ),
+                        "top_similarity": max(
+                            (r.get("similarity", 0) for r in results), default=0
+                        ),
+                        "min_similarity": min(
+                            (r.get("similarity", 0) for r in results), default=0
+                        ),
+                    },
                 },
                 metadata={
+                    "retrieval_type": metadata.get("retrieval_type", "unknown")
+                    if metadata
+                    else "unknown",
+                    "vector_store": metadata.get("vector_store", "unknown")
+                    if metadata
+                    else "unknown",
                     "chunk_count": len(results),
-                    "avg_similarity": (
-                        sum(r.get("similarity", 0) for r in results) / len(results)
-                        if results
-                        else 0
-                    ),
+                    "unique_document_count": len(document_sources),
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
             )
             span.end()
+
+            logger.debug(
+                f"Enhanced retrieval trace created: {len(results)} chunks from {len(document_sources)} documents"
+            )
+
         except Exception as e:
             logger.error(f"Error tracing retrieval: {e}")
+
+    def trace_document_ingestion(
+        self,
+        documents: list[dict[str, Any]],
+        success_count: int,
+        error_count: int,
+        metadata: dict[str, Any] | None = None,
+    ):
+        """
+        Trace document ingestion process to track what documents are being added to the knowledge base
+
+        Args:
+            documents: List of documents being ingested
+            success_count: Number of successfully ingested chunks
+            error_count: Number of failed chunks
+            metadata: Additional metadata
+        """
+        if not self.enabled:
+            return
+
+        try:
+            if not self.client:
+                return
+
+            # Prepare document summary for ingestion tracking
+            document_summaries = []
+            total_content_length = 0
+
+            for i, doc in enumerate(
+                documents[:10]
+            ):  # Limit to first 10 for performance
+                content = doc.get("content", "")
+                doc_metadata = doc.get("metadata", {})
+                total_content_length += len(content)
+
+                doc_summary = {
+                    "document_id": i + 1,
+                    "file_name": doc_metadata.get("file_name", f"document_{i}"),
+                    "file_type": doc_metadata.get("file_type", "unknown"),
+                    "content_length": len(content),
+                    "content_preview": content[:500] + "..."
+                    if len(content) > 500
+                    else content,
+                    "metadata": doc_metadata,
+                }
+                document_summaries.append(doc_summary)
+
+            # Create span for document ingestion
+            span = self.client.start_span(
+                name="document_ingestion",
+                input={
+                    "total_documents": len(documents),
+                    "documents": document_summaries,
+                },
+                output={
+                    "ingestion_results": {
+                        "successful_chunks": success_count,
+                        "failed_chunks": error_count,
+                        "success_rate": success_count / (success_count + error_count)
+                        if (success_count + error_count) > 0
+                        else 0,
+                    }
+                },
+                metadata={
+                    "total_documents": len(documents),
+                    "total_content_length": total_content_length,
+                    "avg_document_size": total_content_length / len(documents)
+                    if documents
+                    else 0,
+                    "successful_chunks": success_count,
+                    "failed_chunks": error_count,
+                    "environment": self.environment,
+                    **(metadata or {}),
+                },
+            )
+            span.end()
+
+            logger.debug(
+                f"Document ingestion trace created: {len(documents)} documents, {success_count} successful chunks"
+            )
+
+        except Exception as e:
+            logger.error(f"Error tracing document ingestion: {e}")
+
+    def create_rag_trace(
+        self,
+        user_id: str,
+        conversation_id: str,
+        query: str,
+        metadata: dict[str, Any] | None = None,
+    ):
+        """
+        Create a comprehensive RAG trace that will contain both retrieval and generation spans
+
+        Args:
+            user_id: User ID
+            conversation_id: Conversation ID
+            query: User query
+            metadata: Additional metadata
+        """
+        if not self.enabled or not self.client:
+            return None
+
+        try:
+            # Create a parent trace for the entire RAG operation
+            trace = self.client.start_trace(
+                name="rag_operation",
+                input={"user_query": query},
+                metadata={
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "operation_type": "rag_query",
+                    "environment": self.environment,
+                    **(metadata or {}),
+                },
+            )
+
+            logger.debug(f"Created RAG trace for query: {query[:50]}...")
+            return trace
+
+        except Exception as e:
+            logger.error(f"Error creating RAG trace: {e}")
+            return None
 
     def start_conversation_trace(
         self,
@@ -198,6 +374,7 @@ class LangfuseService:
                     "user_id": user_id,
                     "conversation_id": conversation_id,
                     "session_id": conversation_id,
+                    "environment": self.environment,
                     **(metadata or {}),
                 },
             )
@@ -243,6 +420,7 @@ class LangfuseService:
                         metadata={
                             "platform": "slack",
                             "conversation_id": conversation_id,
+                            "environment": self.environment,
                             **(metadata or {}),
                         },
                     )
@@ -314,8 +492,10 @@ def get_langfuse_service() -> LangfuseService | None:
     return langfuse_service
 
 
-def initialize_langfuse_service(settings: LangfuseSettings) -> LangfuseService:
+def initialize_langfuse_service(
+    settings: LangfuseSettings, environment: str = "development"
+) -> LangfuseService:
     """Initialize the global Langfuse service"""
     global langfuse_service  # noqa: PLW0603
-    langfuse_service = LangfuseService(settings)
+    langfuse_service = LangfuseService(settings, environment)
     return langfuse_service

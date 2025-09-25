@@ -16,7 +16,7 @@ from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
 from services.document_processor import DocumentProcessor
 from services.embedding_service import create_embedding_provider
-from services.langfuse_service import observe
+from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.retrieval_service import RetrievalService
 from services.vector_service import create_vector_store
@@ -143,6 +143,29 @@ class RAGService:
         logger.info(
             f"📊 Ingestion complete: {success_count} success, {error_count} errors"
         )
+
+        # Trace document ingestion to Langfuse
+        langfuse_service = get_langfuse_service()
+        if langfuse_service:
+            langfuse_service.trace_document_ingestion(
+                documents=documents,
+                success_count=success_count,
+                error_count=error_count,
+                metadata={
+                    "ingestion_type": "rag_service",
+                    "batch_size": batch_size,
+                    "vector_store": self.settings.vector.provider
+                    if self.settings.vector
+                    else "unknown",
+                    "embedding_provider": type(self.embedding_provider).__name__
+                    if self.embedding_provider
+                    else "unknown",
+                },
+            )
+            logger.info(
+                f"📊 Logged document ingestion to Langfuse: {len(documents)} documents"
+            )
+
         return success_count, error_count
 
     @observe(name="rag_generation", as_type="generation")
@@ -177,6 +200,54 @@ class RAGService:
                 context_chunks = await self.retrieval_service.retrieve_context(
                     query, self.vector_store, self.embedding_provider
                 )
+
+                # Log retrieved documents to Langfuse
+                if context_chunks:
+                    langfuse_service = get_langfuse_service()
+                    if langfuse_service:
+                        # Prepare retrieval data for Langfuse with document details
+                        retrieval_results = []
+                        for chunk in context_chunks:
+                            result = {
+                                "content": chunk.get("content", ""),
+                                "similarity": chunk.get("similarity", 0),
+                                "metadata": chunk.get("metadata", {}),
+                            }
+                            # Add document name for easier tracking
+                            if chunk.get("metadata", {}).get("file_name"):
+                                result["document"] = chunk["metadata"]["file_name"]
+                            retrieval_results.append(result)
+
+                        # Send retrieval trace to Langfuse
+                        langfuse_service.trace_retrieval(
+                            query=query,
+                            results=retrieval_results,
+                            metadata={
+                                "retrieval_type": f"{self.settings.vector.provider}_rag"
+                                if self.settings.vector
+                                else "unknown_rag",
+                                "total_chunks": len(context_chunks),
+                                "avg_similarity": sum(
+                                    r["similarity"] for r in retrieval_results
+                                )
+                                / len(retrieval_results)
+                                if retrieval_results
+                                else 0,
+                                "documents_used": list(
+                                    {
+                                        r.get("document", "unknown")
+                                        for r in retrieval_results
+                                        if r.get("document")
+                                    }
+                                ),
+                                "vector_store": self.settings.vector.provider
+                                if self.settings.vector
+                                else "unknown",
+                            },
+                        )
+                        logger.info(
+                            f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse for query: {query[:50]}..."
+                        )
 
                 # Log context quality
                 if context_chunks:
