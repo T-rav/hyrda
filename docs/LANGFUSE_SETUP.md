@@ -83,9 +83,18 @@ langfuse>=3.3.0
 - **Status**: Success/failure with error details
 
 ### RAG Operations  
+- **Document Ingestion**: Original documents being added to knowledge base
+  - Full document content and metadata
+  - Ingestion success/failure rates
+  - Document types and sources
 - **Retrieval**: Vector search queries and results
-- **Context**: Which documents were retrieved
-- **Quality**: Relevance scores and reranking
+  - Full retrieved chunk content (not just previews)
+  - Document sources and similarity scores
+  - Hybrid retrieval sources (dense vs sparse)
+- **Context**: Which documents were retrieved and used
+  - Complete document metadata and file names
+  - Retrieval quality metrics (avg/min/max similarity)
+  - Unique document count per query
 
 ### Conversations
 - **User Sessions**: Grouped by Slack thread
@@ -145,3 +154,55 @@ Langfuse works alongside your existing monitoring stack:
 - **Cost optimization**: Identify expensive usage patterns
 
 Together they provide complete observability for your AI Slack Bot! 🚀
+
+## 🔍 What You'll See in Langfuse
+
+### Enhanced RAG Tracing
+
+After the recent improvements, your Langfuse dashboard will now show:
+
+#### Document Ingestion Traces
+- **Span Name**: `document_ingestion`
+- **Input**: List of documents with full content previews
+- **Output**: Success/failure counts and ingestion results
+- **Metadata**: Document types, sizes, and ingestion settings
+
+#### Enhanced Retrieval Traces  
+- **Span Name**: `rag_retrieval`
+- **Input**: User query and query metadata
+- **Output**:
+  - Full retrieved chunk content (not truncated)
+  - Document sources and similarity scores
+  - Retrieval quality summary (avg/min/max similarity)
+  - Hybrid source information (dense vs sparse)
+- **Metadata**: Vector store info, chunk counts, unique documents
+
+#### Generation Traces
+- **Span Name**: `rag_generation` or `hybrid_rag_generation`
+- **Input**: Query and conversation history
+- **Output**: Generated response with citations
+- **Metadata**: RAG settings, model info, response quality
+
+### Troubleshooting RAG Data Visibility
+
+If you're still not seeing RAG data:
+
+1. **Check Langfuse Status**: Visit `http://localhost:8080/ui` and ensure Langfuse shows as "Healthy"
+
+2. **Verify Environment Variables**:
+   ```bash
+   echo $LANGFUSE_ENABLED    # Should be "true"
+   echo $LANGFUSE_PUBLIC_KEY # Should start with "pk-lf-"
+   echo $LANGFUSE_SECRET_KEY # Should start with "sk-lf-"
+   ```
+
+3. **Check Logs**: Look for these messages in your bot logs:
+   ```
+   📊 Logged retrieval of X chunks to Langfuse for query: ...
+   📊 Logged document ingestion to Langfuse: X documents
+   Enhanced retrieval trace created: X chunks from Y documents
+   ```
+
+4. **Test with a Simple Query**: Send a message to your bot and check if new traces appear in Langfuse within 30 seconds
+
+5. **Enable Debug Mode**: Set `LANGFUSE_DEBUG=true` for more detailed logging

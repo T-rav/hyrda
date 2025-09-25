@@ -143,6 +143,29 @@ class RAGService:
         logger.info(
             f"📊 Ingestion complete: {success_count} success, {error_count} errors"
         )
+
+        # Trace document ingestion to Langfuse
+        langfuse_service = get_langfuse_service()
+        if langfuse_service:
+            langfuse_service.trace_document_ingestion(
+                documents=documents,
+                success_count=success_count,
+                error_count=error_count,
+                metadata={
+                    "ingestion_type": "rag_service",
+                    "batch_size": batch_size,
+                    "vector_store": self.settings.vector.provider
+                    if self.settings.vector
+                    else "unknown",
+                    "embedding_provider": type(self.embedding_provider).__name__
+                    if self.embedding_provider
+                    else "unknown",
+                },
+            )
+            logger.info(
+                f"📊 Logged document ingestion to Langfuse: {len(documents)} documents"
+            )
+
         return success_count, error_count
 
     @observe(name="rag_generation", as_type="generation")
@@ -200,7 +223,9 @@ class RAGService:
                             query=query,
                             results=retrieval_results,
                             metadata={
-                                "retrieval_type": "elasticsearch_rag",
+                                "retrieval_type": f"{self.settings.vector.provider}_rag"
+                                if self.settings.vector
+                                else "unknown_rag",
                                 "total_chunks": len(context_chunks),
                                 "avg_similarity": sum(
                                     r["similarity"] for r in retrieval_results
