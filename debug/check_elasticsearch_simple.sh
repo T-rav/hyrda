@@ -2,7 +2,7 @@
 # Simple curl-based Elasticsearch document checker
 
 ES_URL="${ELASTICSEARCH_URL:-http://localhost:9200}"
-INDEX_NAME="${VECTOR_COLLECTION_NAME:-knowledge_base}"
+INDEX_NAME="${VECTOR_COLLECTION_NAME:-insightmesh-knowledge-base}"
 
 echo "🔍 Checking Elasticsearch at: $ES_URL"
 echo "📚 Base index name: $INDEX_NAME"
