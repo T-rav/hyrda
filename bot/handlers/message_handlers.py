@@ -221,7 +221,7 @@ async def process_file_attachments(
             )
 
             # Download file content
-            headers = {"Authorization": f"Bearer {slack_service.token}"}
+            headers = {"Authorization": f"Bearer {slack_service.settings.bot_token}"}
             response = requests.get(file_url, headers=headers, timeout=30)
 
             if response.status_code != 200:
