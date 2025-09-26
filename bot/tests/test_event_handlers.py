@@ -10,28 +10,171 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from handlers.event_handlers import process_message_by_context, register_handlers
 
 
+# Event Handler Test Factory Classes
+class SlackAppFactory:
+    """Factory for creating Slack app mocks for event testing"""
+
+    @staticmethod
+    def create_basic_app() -> MagicMock:
+        """Create basic Slack app mock"""
+        app = MagicMock()
+        app.event = MagicMock()
+        return app
+
+    @staticmethod
+    def create_app_with_event_tracking() -> MagicMock:
+        """Create app mock that tracks event registrations"""
+        app = SlackAppFactory.create_basic_app()
+        app.event.call_count = 0
+        app.event.call_args_list = []
+        return app
+
+
+class SlackServiceFactory:
+    """Factory for creating Slack service mocks for event testing"""
+
+    @staticmethod
+    def create_basic_service(bot_id: str = "B12345678") -> AsyncMock:
+        """Create basic Slack service mock"""
+        service = AsyncMock()
+        service.bot_id = bot_id
+        service.send_message = AsyncMock()
+        service.get_thread_info = AsyncMock(return_value={"bot_is_participant": True})
+        return service
+
+    @staticmethod
+    def create_service_with_thread_info(thread_info: dict = None) -> AsyncMock:
+        """Create service with specific thread info"""
+        if thread_info is None:
+            thread_info = {"bot_is_participant": True}
+        service = SlackServiceFactory.create_basic_service()
+        service.get_thread_info = AsyncMock(return_value=thread_info)
+        return service
+
+
+class LLMServiceFactory:
+    """Factory for creating LLM service mocks for event testing"""
+
+    @staticmethod
+    def create_basic_service() -> AsyncMock:
+        """Create basic LLM service mock"""
+        return AsyncMock()
+
+
+class ConversationCacheFactory:
+    """Factory for creating conversation cache mocks for event testing"""
+
+    @staticmethod
+    def create_basic_cache() -> AsyncMock:
+        """Create basic conversation cache mock"""
+        return AsyncMock()
+
+
+class SlackEventFactory:
+    """Factory for creating Slack event objects for testing"""
+
+    @staticmethod
+    def create_bot_event(bot_id: str = "B123456789") -> dict:
+        """Create event from a bot (should be filtered)"""
+        return {"bot_id": bot_id, "text": "Bot message"}
+
+    @staticmethod
+    def create_bot_subtype_event() -> dict:
+        """Create bot_message subtype event (should be filtered)"""
+        return {"subtype": "bot_message", "text": "Bot message"}
+
+    @staticmethod
+    def create_no_user_event() -> dict:
+        """Create event without user (should be filtered)"""
+        return {"text": "Message", "channel": "C123"}
+
+    @staticmethod
+    def create_valid_event(
+        user_id: str = "U123",
+        text: str = "Hello",
+        channel: str = "C123",
+        thread_ts: str = None,
+    ) -> dict:
+        """Create valid user event (should be processed)"""
+        event = {"user": user_id, "text": text, "channel": channel}
+        if thread_ts:
+            event["thread_ts"] = thread_ts
+        return event
+
+    @staticmethod
+    def create_app_mention_event(
+        user_id: str = "U123456789",
+        bot_mention: str = "<@B987654321>",
+        text: str = "hello there",
+        channel: str = "C123456789",
+        thread_ts: str = "1234567890.123456",
+    ) -> dict:
+        """Create app mention event"""
+        return {
+            "user": user_id,
+            "text": f"{bot_mention} {text}",
+            "channel": channel,
+            "thread_ts": thread_ts,
+        }
+
+    @staticmethod
+    def create_dm_event(
+        user_id: str = "U123456789",
+        text: str = "Hello in DM",
+        channel: str = "D123456789",
+    ) -> dict:
+        """Create direct message event"""
+        return {"user": user_id, "text": text, "channel": channel}
+
+
+class EventContextFactory:
+    """Factory for creating event context scenarios"""
+
+    @staticmethod
+    def create_dm_context(
+        user_id: str = "U123456789",
+        text: str = "Hello",
+        channel: str = "D123456789",
+    ) -> dict:
+        """Create DM context (channel starts with D)"""
+        return {
+            "event": SlackEventFactory.create_dm_event(user_id, text, channel),
+            "context": "dm",
+        }
+
+    @staticmethod
+    def create_channel_context(
+        user_id: str = "U123456789",
+        text: str = "Hello",
+        channel: str = "C123456789",
+        thread_ts: str = "1234567890.123456",
+    ) -> dict:
+        """Create channel context with thread"""
+        return {
+            "event": SlackEventFactory.create_valid_event(
+                user_id, text, channel, thread_ts
+            ),
+            "context": "channel",
+        }
+
+
 class TestEventHandlerRegistration:
     """Tests for event handler registration"""
 
     @pytest.fixture
     def mock_app(self):
         """Create mock Slack app"""
-        app = MagicMock()
-        app.event = MagicMock()
-        return app
+        return SlackAppFactory.create_basic_app()
 
     @pytest.fixture
     def mock_slack_service(self):
         """Create mock Slack service"""
-        service = AsyncMock()
-        service.bot_id = "B12345678"
-        service.send_message = AsyncMock()
-        return service
+        return SlackServiceFactory.create_basic_service()
 
     @pytest.fixture
     def mock_llm_service(self):
         """Create mock LLM service"""
-        return AsyncMock()
+        return LLMServiceFactory.create_basic_service()
 
     @pytest.mark.asyncio
     async def test_register_handlers(
@@ -55,7 +198,8 @@ class TestEventHandlerRegistration:
         self, mock_app, mock_slack_service, mock_llm_service
     ):
         """Test that handlers can be registered with conversation cache"""
-        mock_cache = AsyncMock()
+        # Create cache using factory
+        mock_cache = ConversationCacheFactory.create_basic_cache()
 
         await register_handlers(
             mock_app, mock_slack_service, mock_llm_service, mock_cache
@@ -84,16 +228,12 @@ class TestEventHandlerFunctionality:
     @pytest.fixture
     def mock_slack_service(self):
         """Create mock Slack service"""
-        service = AsyncMock()
-        service.bot_id = "B12345678"
-        service.send_message = AsyncMock()
-        service.get_thread_info = AsyncMock(return_value={"bot_is_participant": True})
-        return service
+        return SlackServiceFactory.create_basic_service()
 
     @pytest.fixture
     def mock_llm_service(self):
         """Create mock LLM service"""
-        return AsyncMock()
+        return LLMServiceFactory.create_basic_service()
 
     @pytest.mark.asyncio
     async def test_assistant_thread_functionality(
@@ -126,23 +266,26 @@ class TestEventHandlerFunctionality:
         with patch(
             "handlers.event_handlers.handle_message", new_callable=AsyncMock
         ) as mock_handle_message:
-            # Simulate what the app mention handler does
-            text = "<@B987654321> hello there"
-            clean_text = text.split(">", 1)[-1].strip() if ">" in text else text
+            # Create app mention event using factory
+            event = SlackEventFactory.create_app_mention_event()
+            raw_text = event["text"]
+            clean_text = (
+                raw_text.split(">", 1)[-1].strip() if ">" in raw_text else raw_text
+            )
 
             # Call handle_message as the handler would
             await mock_handle_message(
                 text=clean_text,
-                user_id="U123456789",
+                user_id=event["user"],
                 slack_service=mock_slack_service,
                 llm_service=mock_llm_service,
-                channel="C123456789",
-                thread_ts="1234567890.123456",
+                channel=event["channel"],
+                thread_ts=event["thread_ts"],
                 conversation_cache=None,
             )
 
             mock_handle_message.assert_called_once_with(
-                text="hello there",  # Fixed: text.split(">", 1)[-1].strip() removes the ">" and leading space
+                text="hello there",  # Cleaned text after removing mention
                 user_id="U123456789",
                 slack_service=mock_slack_service,
                 llm_service=mock_llm_service,
@@ -154,21 +297,21 @@ class TestEventHandlerFunctionality:
     @pytest.mark.asyncio
     async def test_message_filtering_logic(self, mock_slack_service, mock_llm_service):
         """Test message filtering logic"""
-        # Test bot message filtering
-        event_bot_id = {"bot_id": "B123456789", "text": "Bot message"}
+        # Test bot message filtering using factory
+        event_bot_id = SlackEventFactory.create_bot_event()
         assert event_bot_id.get("bot_id") is not None  # Should be filtered out
 
-        event_bot_subtype = {"subtype": "bot_message", "text": "Bot message"}
+        event_bot_subtype = SlackEventFactory.create_bot_subtype_event()
         assert (
             event_bot_subtype.get("subtype") == "bot_message"
         )  # Should be filtered out
 
-        # Test no user filtering
-        event_no_user = {"text": "Message", "channel": "C123"}
+        # Test no user filtering using factory
+        event_no_user = SlackEventFactory.create_no_user_event()
         assert event_no_user.get("user") is None  # Should be filtered out
 
-        # Test valid message
-        event_valid = {"user": "U123", "text": "Hello", "channel": "C123"}
+        # Test valid message using factory
+        event_valid = SlackEventFactory.create_valid_event()
         assert event_valid.get("user") is not None  # Should be processed
 
 
@@ -178,15 +321,12 @@ class TestProcessMessageByContext:
     @pytest.fixture
     def mock_slack_service(self):
         """Create mock Slack service"""
-        service = AsyncMock()
-        service.bot_id = "B12345678"
-        service.get_thread_info = AsyncMock()
-        return service
+        return SlackServiceFactory.create_basic_service()
 
     @pytest.fixture
     def mock_llm_service(self):
         """Create mock LLM service"""
-        return AsyncMock()
+        return LLMServiceFactory.create_basic_service()
 
     @pytest.mark.asyncio
     async def test_process_message_by_context_dm(
@@ -243,9 +383,9 @@ class TestProcessMessageByContext:
         self, mock_slack_service, mock_llm_service
     ):
         """Test processing message in thread where bot is participant"""
-        # Mock thread info to indicate bot is a participant
-        mock_slack_service.get_thread_info = AsyncMock(
-            return_value={"bot_is_participant": True}
+        # Use factory to create service with specific thread info
+        mock_slack_service = SlackServiceFactory.create_service_with_thread_info(
+            {"bot_is_participant": True}
         )
 
         with patch(
@@ -273,9 +413,9 @@ class TestProcessMessageByContext:
         self, mock_slack_service, mock_llm_service
     ):
         """Test processing message in thread where bot is not participant"""
-        # Mock thread info to indicate bot is NOT a participant
-        mock_slack_service.get_thread_info = AsyncMock(
-            return_value={"bot_is_participant": False}
+        # Use factory to create service with specific thread info
+        mock_slack_service = SlackServiceFactory.create_service_with_thread_info(
+            {"bot_is_participant": False}
         )
 
         with patch(

@@ -1,13 +1,12 @@
 # InsightMesh - Tasks Service
 
-A standalone APScheduler WebUI service for managing scheduled tasks in the InsightMesh ecosystem. This service provides a web interface for creating, managing, and monitoring scheduled jobs like Slack user imports, Google Drive document ingestion, and metrics collection.
+A standalone APScheduler WebUI service for managing scheduled tasks in the InsightMesh ecosystem. This service provides a web interface for creating, managing, and monitoring scheduled jobs like Slack user imports and metrics collection.
 
 ## Features
 
 - **Web-based Dashboard**: Modern, responsive web interface for job management
 - **Multiple Job Types**:
   - Slack User Import: Synchronize Slack users to database
-  - Google Drive Ingest: Automated document ingestion from Google Drive
   - Metrics Collection: System and usage metrics aggregation
 - **Flexible Scheduling**: Support for interval, cron, and one-time jobs
 - **Real-time Monitoring**: Live job status updates and execution history
@@ -44,9 +43,6 @@ SLACK_BOT_API_KEY=your-api-key-here
 SLACK_BOT_TOKEN=xoxb-your-bot-token
 SLACK_APP_TOKEN=xapp-your-app-token
 
-# Google Drive API (for document ingestion jobs)
-GOOGLE_CREDENTIALS_PATH=credentials.json
-GOOGLE_TOKEN_PATH=token.json
 ```
 
 ### 2. Install Dependencies
@@ -80,19 +76,6 @@ Synchronizes Slack workspace users to a database via the main bot API.
 - Every hour: `{"trigger": "interval", "hours": 1}`
 - Daily at 2 AM: `{"trigger": "cron", "hour": 2, "minute": 0}`
 
-### Google Drive Ingest
-
-Automated document ingestion from Google Drive folders.
-
-**Parameters:**
-- `folder_id` (required): Google Drive folder ID
-- `metadata` (optional): Additional metadata to attach
-- `force_update` (optional): Force re-processing of existing documents
-- `file_types` (optional): Comma-separated list of file types to process
-
-**Schedule Examples:**
-- Every 4 hours: `{"trigger": "interval", "hours": 4}`
-- Weekdays at 9 AM: `{"trigger": "cron", "day_of_week": "mon-fri", "hour": 9}`
 
 ### Metrics Collection
 
@@ -150,24 +133,6 @@ curl -X POST http://localhost:5001/api/jobs \
   }'
 ```
 
-### Example: Create Google Drive Ingest Job
-
-```bash
-curl -X POST http://localhost:5001/api/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "job_type": "google_drive_ingest",
-    "schedule": {
-      "trigger": "interval",
-      "hours": 6
-    },
-    "parameters": {
-      "folder_id": "1ABC123DEF456GHI789",
-      "metadata": "{\"department\": \"engineering\"}",
-      "force_update": false
-    }
-  }'
-```
 
 ### Example: Create Metrics Collection Job
 
@@ -224,9 +189,6 @@ The tasks service integrates with the main Slack bot through HTTP APIs:
 - Sends processed user data to `/api/users/import`
 - Includes job metadata for tracking
 
-### Document Ingest Integration
-- Notifies completion to `/api/ingest/completed`
-- Provides ingestion results and statistics
 
 ### Metrics Integration
 - Stores collected metrics via `/api/metrics/store`
@@ -277,7 +239,6 @@ tasks/
 │   ├── base_job.py        # Base job class
 │   ├── job_registry.py    # Job type registry
 │   ├── slack_user_import.py
-│   ├── google_drive_ingest.py
 │   └── metrics_collection.py
 ├── services/
 │   └── scheduler_service.py
@@ -391,10 +352,6 @@ SLACK_BOT_API_KEY=your-api-authentication-key
    - Verify database connectivity
    - Review job parameters and trigger configuration
 
-2. **Google Drive ingestion fails**
-   - Verify Google credentials are properly configured
-   - Check folder permissions and ID
-   - Ensure ingest service is accessible
 
 3. **Slack API errors**
    - Validate bot tokens and permissions

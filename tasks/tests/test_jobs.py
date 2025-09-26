@@ -6,7 +6,6 @@ from unittest.mock import Mock, patch
 import pytest
 
 from jobs.base_job import BaseJob
-from jobs.google_drive_ingest import GoogleDriveIngestJob
 from jobs.metrics_collection import MetricsCollectionJob
 from jobs.slack_user_import import SlackUserImportJob
 
@@ -153,70 +152,6 @@ class TestSlackUserImportJob:
         # Filter for all types
         filtered = job._filter_users(sample_slack_users, ["member", "admin"])
         assert len(filtered) == 2
-
-
-class TestGoogleDriveIngestJob:
-    """Test Google Drive ingest job."""
-
-    def test_google_drive_ingest_job_init(self, test_settings):
-        """Test Google Drive ingest job initialization."""
-        job = GoogleDriveIngestJob(test_settings, folder_id="test_folder_123")
-        assert job.JOB_NAME == "Google Drive Ingest"
-        assert job.params["folder_id"] == "test_folder_123"
-
-    def test_google_drive_ingest_job_validation(self, test_settings):
-        """Test validation requires folder_id."""
-        with pytest.raises(ValueError, match="Required parameter missing: folder_id"):
-            GoogleDriveIngestJob(test_settings)
-
-    @patch("jobs.google_drive_ingest.subprocess.run")
-    @patch("jobs.google_drive_ingest.requests")
-    def test_google_drive_ingest_execution(
-        self, mock_requests, mock_subprocess, test_settings
-    ):
-        """Test Google Drive ingest execution."""
-        # Mock subprocess
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Ingestion completed successfully"
-        mock_result.stderr = ""
-        mock_subprocess.return_value = mock_result
-
-        # Mock API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {"status": "received"}
-        mock_requests.post.return_value = mock_response
-
-        job = GoogleDriveIngestJob(test_settings, folder_id="test_folder_123")
-
-        with patch.object(
-            job, "_send_results_to_bot_api", return_value={"status": "success"}
-        ):
-            result = job.execute()
-
-        assert result["status"] == "success"
-        assert result["result"]["folder_id"] == "test_folder_123"
-
-    @patch("jobs.google_drive_ingest.subprocess.run")
-    def test_google_drive_ingest_process_failure(self, mock_subprocess, test_settings):
-        """Test handling of failed ingestion process."""
-        # Mock failed subprocess
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_result.stdout = ""
-        mock_result.stderr = "Error: Invalid folder ID"
-        mock_subprocess.return_value = mock_result
-
-        job = GoogleDriveIngestJob(test_settings, folder_id="invalid_folder")
-
-        with patch.object(
-            job, "_send_results_to_bot_api", return_value={"status": "success"}
-        ):
-            result = job.execute()
-
-        assert result["status"] == "success"
-        assert result["result"]["ingestion_result"]["status"] == "error"
 
 
 class TestMetricsCollectionJob:

@@ -12,14 +12,195 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from health import HealthChecker, get_app_version
 
 
+# Health Endpoints Test Factory Classes
+class HealthSettingsFactory:
+    """Factory for creating health-related settings mocks"""
+
+    @staticmethod
+    def create_basic_settings() -> MagicMock:
+        """Create basic settings mock for health checking"""
+        settings = MagicMock()
+        settings.llm.api_url = "https://api.openai.com/v1"
+        settings.llm.api_key.get_secret_value.return_value = "test-key"
+        settings.slack.bot_token = "xoxb-test"
+        settings.slack.app_token = "xapp-test"
+        return settings
+
+    @staticmethod
+    def create_settings_with_langfuse() -> MagicMock:
+        """Create settings with Langfuse configuration"""
+        settings = HealthSettingsFactory.create_basic_settings()
+        settings.langfuse.public_key = "lf_pk_test"
+        settings.langfuse.secret_key.get_secret_value.return_value = "lf_sk_test"
+        settings.langfuse.host = "https://langfuse.example.com"
+        return settings
+
+    @staticmethod
+    def create_settings_with_disabled_services() -> MagicMock:
+        """Create settings with various services disabled"""
+        settings = HealthSettingsFactory.create_basic_settings()
+        settings.cache.enabled = False
+        settings.langfuse.enabled = False
+        return settings
+
+
+class ConversationCacheFactory:
+    """Factory for creating conversation cache mocks for health testing"""
+
+    @staticmethod
+    def create_healthy_cache() -> MagicMock:
+        """Create healthy conversation cache mock"""
+        cache = MagicMock()
+        cache.get_cache_stats.return_value = {
+            "total_conversations": 42,
+            "cache_hits": 35,
+            "cache_misses": 7,
+            "hit_rate": 83.3,
+        }
+        return cache
+
+    @staticmethod
+    def create_failing_cache() -> MagicMock:
+        """Create conversation cache mock that fails health checks"""
+        cache = MagicMock()
+        cache.get_cache_stats.side_effect = Exception("Redis connection failed")
+        return cache
+
+    @staticmethod
+    def create_empty_cache() -> MagicMock:
+        """Create conversation cache with no data"""
+        cache = MagicMock()
+        cache.get_cache_stats.return_value = {
+            "total_conversations": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "hit_rate": 0.0,
+        }
+        return cache
+
+
+class LangfuseServiceFactory:
+    """Factory for creating Langfuse service mocks for health testing"""
+
+    @staticmethod
+    def create_healthy_service() -> MagicMock:
+        """Create healthy Langfuse service mock"""
+        service = MagicMock()
+        service.get_health_status.return_value = {
+            "status": "healthy",
+            "projects_count": 3,
+            "traces_count": 150,
+            "last_trace": "2024-01-15T10:30:00Z",
+        }
+        return service
+
+    @staticmethod
+    def create_failing_service() -> MagicMock:
+        """Create Langfuse service mock that fails health checks"""
+        service = MagicMock()
+        service.get_health_status.side_effect = Exception("Langfuse API unavailable")
+        return service
+
+    @staticmethod
+    def create_degraded_service() -> MagicMock:
+        """Create Langfuse service with degraded status"""
+        service = MagicMock()
+        service.get_health_status.return_value = {
+            "status": "degraded",
+            "projects_count": 3,
+            "traces_count": 150,
+            "last_trace": "2024-01-15T08:30:00Z",  # Older timestamp
+            "warnings": ["High latency detected"],
+        }
+        return service
+
+
+class HealthResponseFactory:
+    """Factory for creating expected health response structures"""
+
+    @staticmethod
+    def create_healthy_response() -> dict:
+        """Create expected healthy response structure"""
+        return {
+            "status": "healthy",
+            "timestamp": "2024-01-15T12:00:00Z",
+            "uptime": 3600.0,  # 1 hour
+            "version": "1.2.3",
+            "services": {
+                "llm": {"status": "healthy", "response_time": 0.15},
+                "slack": {"status": "healthy", "bot_connected": True},
+                "cache": {"status": "healthy", "total_conversations": 42},
+                "langfuse": {"status": "healthy", "traces_count": 150},
+            },
+        }
+
+    @staticmethod
+    def create_degraded_response() -> dict:
+        """Create expected degraded response structure"""
+        return {
+            "status": "degraded",
+            "timestamp": "2024-01-15T12:00:00Z",
+            "uptime": 3600.0,
+            "version": "1.2.3",
+            "services": {
+                "llm": {"status": "healthy", "response_time": 0.15},
+                "slack": {"status": "healthy", "bot_connected": True},
+                "cache": {"status": "unhealthy", "error": "Redis connection failed"},
+                "langfuse": {"status": "degraded", "warnings": ["High latency"]},
+            },
+        }
+
+    @staticmethod
+    def create_minimal_response() -> dict:
+        """Create minimal response for basic health check"""
+        return {
+            "status": "healthy",
+            "timestamp": "2024-01-15T12:00:00Z",
+            "uptime": 10.5,
+            "version": "1.2.3",
+        }
+
+
+class HealthCheckerFactory:
+    """Factory for creating HealthChecker instances with various configurations"""
+
+    @staticmethod
+    def create_basic_health_checker(
+        settings: MagicMock = None,
+        conversation_cache: MagicMock = None,
+        langfuse_service: MagicMock = None,
+    ) -> HealthChecker:
+        """Create basic HealthChecker instance"""
+        if settings is None:
+            settings = HealthSettingsFactory.create_basic_settings()
+        return HealthChecker(settings, conversation_cache, langfuse_service)
+
+    @staticmethod
+    def create_full_health_checker() -> HealthChecker:
+        """Create HealthChecker with all services configured"""
+        return HealthCheckerFactory.create_basic_health_checker(
+            HealthSettingsFactory.create_settings_with_langfuse(),
+            ConversationCacheFactory.create_healthy_cache(),
+            LangfuseServiceFactory.create_healthy_service(),
+        )
+
+    @staticmethod
+    def create_minimal_health_checker() -> HealthChecker:
+        """Create HealthChecker with minimal configuration"""
+        return HealthCheckerFactory.create_basic_health_checker(
+            HealthSettingsFactory.create_basic_settings()
+        )
+
+
 class TestHealthChecker:
     """Tests for HealthChecker class initialization and basic functionality"""
 
     def test_health_checker_initialization(self):
         """Test health checker can be initialized"""
-        mock_settings = MagicMock()
-        mock_cache = MagicMock()
-        mock_langfuse = MagicMock()
+        # Create components using factories
+        mock_settings = HealthSettingsFactory.create_basic_settings()
+        mock_cache = ConversationCacheFactory.create_healthy_cache()
+        mock_langfuse = LangfuseServiceFactory.create_healthy_service()
 
         health_checker = HealthChecker(
             mock_settings, conversation_cache=mock_cache, langfuse_service=mock_langfuse
@@ -34,19 +215,17 @@ class TestHealthChecker:
 
     def test_health_checker_with_minimal_config(self):
         """Test health checker works with minimal configuration"""
-        mock_settings = MagicMock()
+        # Create minimal health checker using factory
+        health_checker = HealthCheckerFactory.create_minimal_health_checker()
 
-        health_checker = HealthChecker(mock_settings)
-
-        assert health_checker.settings == mock_settings
+        assert health_checker.settings is not None
         assert health_checker.conversation_cache is None
         assert health_checker.langfuse_service is None
 
     def test_health_checker_start_time_set(self):
         """Test that start time is recorded on initialization"""
-        mock_settings = MagicMock()
-
-        health_checker = HealthChecker(mock_settings)
+        # Create health checker using factory
+        health_checker = HealthCheckerFactory.create_minimal_health_checker()
 
         # Should have a start_time attribute
         assert hasattr(health_checker, "start_time")
@@ -55,8 +234,8 @@ class TestHealthChecker:
 
     def test_health_checker_uptime_calculation(self):
         """Test that health checker can calculate uptime"""
-        mock_settings = MagicMock()
-        health_checker = HealthChecker(mock_settings)
+        # Create health checker using factory
+        health_checker = HealthCheckerFactory.create_minimal_health_checker()
 
         # Mock start time to a known value
         test_start_time = datetime.now(UTC)
@@ -71,8 +250,8 @@ class TestHealthChecker:
 
     def test_get_ui_assets_path(self):
         """Test UI assets path generation"""
-        mock_settings = MagicMock()
-        health_checker = HealthChecker(mock_settings)
+        # Create health checker using factory
+        health_checker = HealthCheckerFactory.create_minimal_health_checker()
 
         assets_path = health_checker._get_ui_assets_path()
 
@@ -81,8 +260,8 @@ class TestHealthChecker:
 
     def test_get_ui_index_path(self):
         """Test UI index path generation"""
-        mock_settings = MagicMock()
-        health_checker = HealthChecker(mock_settings)
+        # Create health checker using factory
+        health_checker = HealthCheckerFactory.create_minimal_health_checker()
 
         index_path = health_checker._get_ui_index_path()
 

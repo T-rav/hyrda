@@ -207,10 +207,10 @@ class TestTasksAPIContracts:
         """Test POST /api/jobs accepts expected job creation format"""
         job_payload = {
             "name": "New Test Job",
-            "job_type": "google_drive_ingest",
+            "job_type": "metrics_collection",
             "trigger": "cron",
             "trigger_config": {"hour": 10, "minute": 0, "timezone": "UTC"},
-            "config": {"folder_id": "1ABC123", "metadata": {"department": "test"}},
+            "config": {"metric_types": ["usage", "performance"]},
             "enabled": True,
         }
 
@@ -277,12 +277,11 @@ class TestTasksAPIContracts:
         """Test /api/job-types returns available job types for UI dropdown"""
         expected_job_types = [
             {
-                "id": "google_drive_ingest",
-                "name": "Google Drive Ingestion",
-                "description": "Ingest documents from Google Drive",
+                "id": "slack_user_import",
+                "name": "Slack User Import",
+                "description": "Import users from Slack workspace",
                 "config_schema": {
-                    "folder_id": {"type": "string", "required": True},
-                    "metadata": {"type": "object", "required": False},
+                    "user_types": {"type": "array", "required": False},
                 },
             },
             {
