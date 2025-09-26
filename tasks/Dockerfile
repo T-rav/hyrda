@@ -21,30 +21,12 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Install Python dependencies directly
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    "apscheduler>=3.10.4" \
-    "flask>=3.0.0" \
-    "flask-cors>=4.0.0" \
-    "tzlocal>=5.2" \
-    "pytz>=2023.3" \
-    "python-dotenv>=1.0.0" \
-    "pydantic>=1.9.0" \
-    "pydantic-settings>=2.0.0" \
-    "requests>=2.28.0" \
-    "aiohttp>=3.8.0" \
-    "sqlalchemy[asyncio]>=2.0.0" \
-    "pymysql>=1.1.0" \
-    "alembic>=1.13.0" \
-    "google-api-python-client>=2.0.0" \
-    "google-auth-httplib2>=0.1.0" \
-    "google-auth-oauthlib>=1.0.0" \
-    "slack-sdk>=3.35.0" \
-    "loguru>=0.7.0"
-
-# Copy application code
+# Copy application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser . .
+
+# Install Python dependencies from pyproject.toml
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
 
 # Setup nginx configuration (as root)
 COPY nginx.conf /etc/nginx/sites-available/default

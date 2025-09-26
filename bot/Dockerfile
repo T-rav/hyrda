@@ -19,39 +19,12 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Copy requirements and install dependencies
-COPY --chown=appuser:appuser pyproject.toml ./
-
-# Install Python dependencies directly from pyproject.toml
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-    "slack-bolt>=1.23.0" \
-    "slack-sdk>=3.35.0" \
-    "aiohttp>=3.8.0" \
-    "python-dotenv>=1.0.0" \
-    "pydantic>=1.9.0" \
-    "pydantic-settings>=2.0.0" \
-    "loguru>=0.7.0" \
-    "requests>=2.28.0" \
-    "redis>=5.0.0" \
-    "asyncpg>=0.29.0" \
-    "aiomysql>=0.2.0" \
-    "pymysql>=1.1.0" \
-    "sqlalchemy[asyncio]>=2.0.0" \
-    "alembic>=1.13.0" \
-    "openai>=1.35.0" \
-    "anthropic>=0.25.0" \
-    "sentence-transformers>=2.2.0" \
-    "elasticsearch>=8.0.0,<9.0.0" \
-    "pinecone>=3.0.0" \
-    "cohere>=5.0.0" \
-    "numpy>=1.24.0" \
-    "langfuse>=3.3.0" \
-    "slackify-markdown>=0.2.0" \
-    "prometheus-client>=0.19.0"
-
-# Copy application code
+# Copy application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser . .
+
+# Install Python dependencies from pyproject.toml
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e .
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \

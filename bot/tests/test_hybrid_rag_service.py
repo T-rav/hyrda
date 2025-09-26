@@ -20,12 +20,13 @@ from config.settings import (
 )
 
 
-class TestHybridRAGService:
-    """Test cases for HybridRAGService"""
+# Hybrid RAG Test Factory Classes
+class HybridRAGSettingsFactory:
+    """Factory for creating hybrid RAG settings configurations"""
 
-    @pytest.fixture
-    def settings(self):
-        """Create settings for testing"""
+    @staticmethod
+    def create_default_settings() -> Settings:
+        """Create default settings for hybrid RAG testing"""
         return Settings(
             vector=VectorSettings(
                 provider="pinecone",
@@ -56,6 +57,92 @@ class TestHybridRAGService:
             ),
         )
 
+    @staticmethod
+    def create_settings_without_reranker() -> Settings:
+        """Create settings without reranker API key"""
+        settings = HybridRAGSettingsFactory.create_default_settings()
+        settings.hybrid.reranker_api_key = None
+        return settings
+
+
+class HybridRAGComponentFactory:
+    """Factory for creating hybrid RAG component mocks"""
+
+    @staticmethod
+    def create_embedding_provider() -> Mock:
+        """Create mock embedding provider"""
+        return Mock()
+
+    @staticmethod
+    def create_llm_provider() -> Mock:
+        """Create mock LLM provider"""
+        return Mock()
+
+    @staticmethod
+    def create_title_injection_service() -> Mock:
+        """Create mock title injection service"""
+        return Mock()
+
+    @staticmethod
+    def create_chunk_processor() -> Mock:
+        """Create mock enhanced chunk processor with prepared dual docs"""
+        processor = Mock()
+        # The method returns only the dual docs dict, not a tuple
+        processor.prepare_for_dual_indexing.return_value = {
+            "dense": [{"content": "dense content", "metadata": {"key": "value"}}],
+            "sparse": [
+                {
+                    "content": "sparse content",
+                    "title": "test title",
+                    "metadata": {"key": "value"},
+                }
+            ],
+        }
+        return processor
+
+    @staticmethod
+    def create_vector_store() -> AsyncMock:
+        """Create mock vector store"""
+        store = AsyncMock()
+        store.initialize = AsyncMock()
+        store.add_documents = AsyncMock()
+        return store
+
+    @staticmethod
+    def create_dense_and_sparse_stores() -> tuple[AsyncMock, AsyncMock]:
+        """Create both dense and sparse vector stores"""
+        return (
+            HybridRAGComponentFactory.create_vector_store(),
+            HybridRAGComponentFactory.create_vector_store(),
+        )
+
+    @staticmethod
+    def create_reranker() -> Mock:
+        """Create mock reranker"""
+        return Mock()
+
+    @staticmethod
+    def create_hybrid_retrieval_service() -> Mock:
+        """Create mock hybrid retrieval service"""
+        service = Mock()
+        service.retrieve_hybrid.return_value = [
+            {
+                "content": "Hybrid search result",
+                "metadata": {"source": "test.pdf"},
+                "score": 0.95,
+            }
+        ]
+        return service
+
+
+class TestHybridRAGService:
+    """Test cases for HybridRAGService"""
+
+    @pytest.fixture
+    def settings(self):
+        """Create settings for testing"""
+        return HybridRAGSettingsFactory.create_default_settings()
+
     @pytest.fixture
     def hybrid_rag_service(self, settings):
         """Create HybridRAGService instance for testing"""
@@ -73,7 +160,7 @@ class TestHybridRAGService:
     @pytest.mark.asyncio
     async def test_initialize_success(self, hybrid_rag_service):
         """Test successful initialization of all components"""
-        # Mock all dependencies
+        # Mock all dependencies using factories
         with (
             patch(
                 "bot.services.hybrid_rag_service.create_embedding_provider"
@@ -93,21 +180,28 @@ class TestHybridRAGService:
                 "bot.services.hybrid_rag_service.HybridRetrievalService"
             ) as mock_hybrid_retrieval,
         ):
-            # Setup mocks
-            mock_embedding.return_value = Mock()
-            mock_llm.return_value = Mock()
-            mock_title_instance = Mock()
-            mock_title.return_value = mock_title_instance
-            mock_processor.return_value = Mock()
+            # Setup mocks using factories
+            mock_embedding.return_value = (
+                HybridRAGComponentFactory.create_embedding_provider()
+            )
+            mock_llm.return_value = HybridRAGComponentFactory.create_llm_provider()
+            mock_title.return_value = (
+                HybridRAGComponentFactory.create_title_injection_service()
+            )
+            mock_processor.return_value = (
+                HybridRAGComponentFactory.create_chunk_processor()
+            )
 
-            mock_dense_store = AsyncMock()
-            mock_sparse_store = AsyncMock()
+            # Create vector stores using factory
+            mock_dense_store, mock_sparse_store = (
+                HybridRAGComponentFactory.create_dense_and_sparse_stores()
+            )
             mock_vector_store.side_effect = [mock_dense_store, mock_sparse_store]
 
-            mock_reranker_instance = Mock()
-            mock_reranker.return_value = mock_reranker_instance
-
-            mock_hybrid_retrieval.return_value = Mock()
+            mock_reranker.return_value = HybridRAGComponentFactory.create_reranker()
+            mock_hybrid_retrieval.return_value = (
+                HybridRAGComponentFactory.create_hybrid_retrieval_service()
+            )
 
             await hybrid_rag_service.initialize()
 
@@ -124,9 +218,10 @@ class TestHybridRAGService:
             mock_sparse_store.initialize.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_initialize_without_reranker_api_key(self, settings):
+    async def test_initialize_without_reranker_api_key(self):
         """Test initialization without reranker API key"""
-        settings.hybrid.reranker_api_key = None
+        # Create settings without reranker using factory
+        settings = HybridRAGSettingsFactory.create_settings_without_reranker()
         service = HybridRAGService(settings)
 
         with (
@@ -134,8 +229,12 @@ class TestHybridRAGService:
                 "bot.services.hybrid_rag_service.create_embedding_provider"
             ) as mock_embedding,
             patch("bot.services.hybrid_rag_service.create_llm_provider") as mock_llm,
-            patch("bot.services.hybrid_rag_service.TitleInjectionService"),
-            patch("bot.services.hybrid_rag_service.EnhancedChunkProcessor"),
+            patch(
+                "bot.services.hybrid_rag_service.TitleInjectionService"
+            ) as mock_title,
+            patch(
+                "bot.services.hybrid_rag_service.EnhancedChunkProcessor"
+            ) as mock_processor,
             patch(
                 "bot.services.hybrid_rag_service.create_vector_store"
             ) as mock_vector_store,
@@ -143,11 +242,27 @@ class TestHybridRAGService:
                 "bot.services.hybrid_rag_service.HybridRetrievalService"
             ) as mock_hybrid_retrieval,
         ):
-            mock_embedding.return_value = Mock()
-            mock_llm.return_value = Mock()
-            mock_dense_store = AsyncMock()
-            mock_sparse_store = AsyncMock()
+            # Setup mocks using factories
+            mock_embedding.return_value = (
+                HybridRAGComponentFactory.create_embedding_provider()
+            )
+            mock_llm.return_value = HybridRAGComponentFactory.create_llm_provider()
+            mock_title.return_value = (
+                HybridRAGComponentFactory.create_title_injection_service()
+            )
+            mock_processor.return_value = (
+                HybridRAGComponentFactory.create_chunk_processor()
+            )
+
+            # Create vector stores using factory
+            mock_dense_store, mock_sparse_store = (
+                HybridRAGComponentFactory.create_dense_and_sparse_stores()
+            )
             mock_vector_store.side_effect = [mock_dense_store, mock_sparse_store]
+
+            mock_hybrid_retrieval.return_value = (
+                HybridRAGComponentFactory.create_hybrid_retrieval_service()
+            )
 
             await service.initialize()
 
@@ -179,30 +294,15 @@ class TestHybridRAGService:
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, hybrid_rag_service):
         """Test successful document ingestion"""
-        # Initialize service
+        # Initialize service using factories
         hybrid_rag_service._initialized = True
-        hybrid_rag_service.chunk_processor = Mock()
-        hybrid_rag_service.dense_store = AsyncMock()
-        hybrid_rag_service.sparse_store = AsyncMock()
-
-        # Mock chunk processor output
-        mock_dual_docs = {
-            "dense": [{"content": "dense content", "metadata": {"key": "value"}}],
-            "sparse": [
-                {
-                    "content": "sparse content",
-                    "title": "test title",
-                    "metadata": {"key": "value"},
-                }
-            ],
-        }
-        hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.return_value = (
-            mock_dual_docs
+        hybrid_rag_service.chunk_processor = (
+            HybridRAGComponentFactory.create_chunk_processor()
         )
-
-        # Mock store operations
-        hybrid_rag_service.dense_store.add_documents.return_value = AsyncMock()
-        hybrid_rag_service.sparse_store.add_documents.return_value = AsyncMock()
+        hybrid_rag_service.dense_store = HybridRAGComponentFactory.create_vector_store()
+        hybrid_rag_service.sparse_store = (
+            HybridRAGComponentFactory.create_vector_store()
+        )
 
         texts = ["test document"]
         embeddings = [[0.1, 0.2, 0.3]]
@@ -219,6 +319,7 @@ class TestHybridRAGService:
     async def test_ingest_documents_failure(self, hybrid_rag_service):
         """Test document ingestion failure handling"""
         hybrid_rag_service._initialized = True
+        # Create processor that fails using factory
         hybrid_rag_service.chunk_processor = Mock()
         hybrid_rag_service.chunk_processor.prepare_for_dual_indexing.side_effect = (
             Exception("Processing failed")
@@ -237,15 +338,17 @@ class TestHybridRAGService:
             await hybrid_rag_service.hybrid_search("query", [0.1, 0.2])
 
     @pytest.mark.asyncio
-    async def test_hybrid_search_disabled(self, settings):
+    async def test_hybrid_search_disabled(self):
         """Test hybrid search when hybrid is disabled"""
+        # Create settings with hybrid disabled
+        settings = HybridRAGSettingsFactory.create_default_settings()
         settings.hybrid.enabled = False
         service = HybridRAGService(settings)
         service._initialized = True
-        service.dense_store = AsyncMock()
 
-        # Mock dense store search
+        # Create mock dense store using factory
         expected_results = [{"content": "result", "similarity": 0.8}]
+        service.dense_store = HybridRAGComponentFactory.create_vector_store()
         service.dense_store.search.return_value = expected_results
 
         results = await service.hybrid_search("query", [0.1, 0.2], top_k=5)

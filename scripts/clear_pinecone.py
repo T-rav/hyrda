@@ -15,6 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Load environment
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -25,9 +26,9 @@ def clear_pinecone():
         from pinecone import Pinecone
 
         # Get settings from environment
-        api_key = os.getenv('VECTOR_API_KEY')
-        index_name = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
-        environment = os.getenv('VECTOR_ENVIRONMENT', 'us-east-1')
+        api_key = os.getenv("VECTOR_API_KEY")
+        index_name = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
+        environment = os.getenv("VECTOR_ENVIRONMENT", "us-east-1")
 
         if not api_key:
             print("❌ VECTOR_API_KEY not found in .env file")
@@ -49,7 +50,7 @@ def clear_pinecone():
 
         # Get index stats before clearing
         stats = index.describe_index_stats()
-        total_vectors = stats.get('total_vector_count', 0)
+        total_vectors = stats.get("total_vector_count", 0)
 
         if total_vectors == 0:
             print("✅ Index is already empty")
@@ -58,8 +59,10 @@ def clear_pinecone():
         print(f"📊 Found {total_vectors} vectors in index")
 
         # Confirm deletion
-        response = input(f"⚠️  Are you sure you want to delete all {total_vectors} vectors? (yes/no): ")
-        if response.lower() not in ['yes', 'y']:
+        response = input(
+            f"⚠️  Are you sure you want to delete all {total_vectors} vectors? (yes/no): "
+        )
+        if response.lower() not in ["yes", "y"]:
             print("❌ Operation cancelled")
             return False
 
@@ -70,7 +73,9 @@ def clear_pinecone():
 
         print("✅ Successfully cleared Pinecone index!")
         print("\n📋 Next steps:")
-        print("  • Re-run ingestion: cd ingest && python main.py --folder-id YOUR_FOLDER_ID")
+        print(
+            "  • Re-run ingestion: cd ingest && python main.py --folder-id YOUR_FOLDER_ID"
+        )
         print("  • Initialize indices: python scripts/init_indices.py")
 
         return True

@@ -14,7 +14,6 @@ from typing import Any
 from config.settings import Settings
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
-from services.document_processor import DocumentProcessor
 from services.embedding_service import create_embedding_provider
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
@@ -52,7 +51,6 @@ class RAGService:
         self.retrieval_service = RetrievalService(settings)
         self.context_builder = ContextBuilder()
         self.citation_service = CitationService()
-        self.document_processor = DocumentProcessor()
 
     async def initialize(self):
         """Initialize all services"""
@@ -102,23 +100,24 @@ class RAGService:
                         error_count += 1
                         continue
 
-                    # Process document based on type
-                    file_type = metadata.get("file_type", "text")
-                    processed_chunks = self.document_processor.process_generic_document(
-                        content, file_type, metadata
-                    )
+                    # Simple text chunking (document processing handled by ingest service)
+                    chunk_size = 1000
+                    chunks = [
+                        content[i : i + chunk_size]
+                        for i in range(0, len(content), chunk_size)
+                    ]
 
                     # Generate embeddings for chunks
-                    for chunk in processed_chunks:
+                    for chunk_content in chunks:
                         try:
                             chunk_embedding = (
                                 await self.embedding_provider.get_embedding(
-                                    chunk["content"]
+                                    chunk_content
                                 )
                             )
 
-                            texts.append(chunk["content"])
-                            metadatas.append(chunk["metadata"])
+                            texts.append(chunk_content)
+                            metadatas.append(metadata)
                             embeddings.append(chunk_embedding)
 
                         except Exception as e:
@@ -349,7 +348,6 @@ class RAGService:
                 "retrieval": "initialized",
                 "context_builder": "initialized",
                 "citation": "initialized",
-                "document_processor": "initialized",
             },
         }
 

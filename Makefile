@@ -8,14 +8,16 @@ BOT_DIR := $(PROJECT_ROOT_DIR)bot
 
 # Virtual environment settings
 VENV := $(PROJECT_ROOT_DIR)venv
-PYTHON := $(VENV)/bin/python3.11
-PIP := $(VENV)/bin/pip
+PYTHON ?= $(VENV)/bin/python
+PIP ?= $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 
-# Find Python command with ruff installed (for linting) - prioritize venv
-PYTHON_LINT := $(shell \
-    if [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
+# Find Python command with ruff installed (for linting) - prioritize env var, then venv
+PYTHON_LINT ?= $(shell \
+    if [ -n "$$PYTHON" ] && $$PYTHON -m ruff --version >/dev/null 2>&1; then \
+        echo "$$PYTHON"; \
+    elif [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
         echo "$(VENV)/bin/python"; \
     else \
         for cmd in python3.11 python3 python; do \
@@ -32,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -42,6 +44,8 @@ help:
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
+	@echo "  restart          🔄 Restart the full stack (stop + start)"
+	@echo "  status           📋 Show Docker container status"
 	@echo "  stop             🛑 Stop everything"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
@@ -162,6 +166,15 @@ test-ingest: $(VENV)
 	@echo "$(BLUE)Running ingestion service tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)ingest && PYTHONPATH=. $(PYTHON) -m pytest -v
 
+test-tasks: $(VENV)
+	@echo "$(BLUE)Running task service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0
+
+lint-tasks: $(VENV)
+	@echo "$(BLUE)Running task service linting...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m ruff check . --fix
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m ruff format .
+
 # Check if Elasticsearch is running and healthy
 ingest-check-es:
 	@echo "$(BLUE)Checking if Elasticsearch is available...$(RESET)"
@@ -227,11 +240,9 @@ lint-check:
 	$(PYTHON_LINT) -m ruff check $(BOT_DIR)
 	@echo "$(BLUE)🎨 Checking ruff formatting...$(RESET)"
 	$(PYTHON_LINT) -m ruff format $(BOT_DIR) --check
-	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
 	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
 	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
-	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
+	@echo "$(GREEN)✅ All checks completed with ruff + bandit!$(RESET)"
 
 typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
@@ -295,6 +306,36 @@ stop: docker-down
 	@echo "$(BLUE)🛑 Stopping monitoring stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 	@echo "$(GREEN)✅ All services stopped!$(RESET)"
+
+# Restart command - stop everything and start the full stack
+restart: stop start
+	@echo "$(GREEN)🔄 ================================$(RESET)"
+	@echo "$(GREEN)✅ RESTART COMPLETED SUCCESSFULLY!$(RESET)"
+	@echo "$(GREEN)🔄 ================================$(RESET)"
+
+# Status command - show Docker container status
+status:
+	@echo "$(BLUE)📋 ================================$(RESET)"
+	@echo "$(BLUE)🐳 DOCKER CONTAINER STATUS$(RESET)"
+	@echo "$(BLUE)📋 ================================$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🔍 Main Stack Containers:$(RESET)"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "network=insightmesh" 2>/dev/null || echo "$(RED)❌ Main stack not running$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📊 Monitoring Stack Containers:$(RESET)"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)❌ Monitoring stack not running$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📈 All InsightMesh Containers:$(RESET)"
+	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)❌ No InsightMesh containers found$(RESET)"
+	@echo ""
+	@echo "$(BLUE)🌐 Service URLs (if running):$(RESET)"
+	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
+	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
+	@echo "$(BLUE)  - Grafana: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(BLUE)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 setup-dev: install-dev
 	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi

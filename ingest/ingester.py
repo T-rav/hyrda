@@ -20,8 +20,9 @@ warnings.warn(
     "ingester.py is deprecated. Use the new modular services or main.py instead. "
     "See services/ directory for the refactored implementation.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
+
 
 # Compatibility class that mimics the old GoogleDriveIngester
 class GoogleDriveIngester:
@@ -32,9 +33,10 @@ class GoogleDriveIngester:
 
     def __init__(self, credentials_file=None, token_file=None):
         warnings.warn(
-            "GoogleDriveIngester is deprecated. Use services.IngestionOrchestrator instead.",
+            "GoogleDriveIngester is deprecated. "
+            "Use services.IngestionOrchestrator instead.",
             DeprecationWarning,
-            stacklevel=2
+            stacklevel=2,
         )
         self.orchestrator = IngestionOrchestrator(credentials_file, token_file)
         self.google_drive_client = self.orchestrator.google_drive_client
@@ -54,7 +56,9 @@ class GoogleDriveIngester:
 
     def list_folder_contents(self, folder_id, recursive=True, folder_path=""):
         """Legacy compatibility method."""
-        return self.google_drive_client.list_folder_contents(folder_id, recursive, folder_path)
+        return self.google_drive_client.list_folder_contents(
+            folder_id, recursive, folder_path
+        )
 
     def download_file_content(self, file_id, mime_type):
         """Legacy compatibility method."""
@@ -114,14 +118,16 @@ async def main():
     warnings.warn(
         "Using ingester.py as main entry point is deprecated. Use main.py instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
     # Import and run the new main function
     from main import main as new_main
+
     await new_main()
 
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

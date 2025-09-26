@@ -10,8 +10,22 @@ import { useHealthData } from './hooks/useHealthData'
 import { formatUptime, getOverallStatus } from './utils/statusHelpers'
 import './App.css'
 
+// Custom hook for managing document title
+function useDocumentTitle(title) {
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = title
+    return () => {
+      document.title = previousTitle
+    }
+  }, [title])
+}
+
 function App() {
   const { health, metrics, ready, loading, error, lastUpdate, refetch } = useHealthData()
+
+  // Use the custom hook to set document title
+  useDocumentTitle('InsightMesh - Health Dashboard')
 
   if (loading && !health) {
     return <LoadingSpinner />
@@ -338,11 +352,11 @@ function RAGMetricsSection({ ready }) {
           status="info"
         />
         <MetricsCard
-          title="Success Rate"
-          value={formatPercentage(ragData.success_rate)}
-          label="Successful retrievals"
-          icon={<CheckCircle size={20} />}
-          status={ragData.success_rate >= 80 ? 'healthy' : ragData.success_rate >= 60 ? 'warning' : 'error'}
+          title="Queries with No Documents"
+          value={Math.round((ragData.total_queries * ragData.miss_rate) / 100) || 0}
+          label="Queries returning no results"
+          icon={<XCircle size={20} />}
+          status={ragData.miss_rate <= 10 ? 'healthy' : ragData.miss_rate <= 30 ? 'warning' : 'error'}
         />
         <MetricsCard
           title="Total Queries"

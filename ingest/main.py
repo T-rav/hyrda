@@ -35,6 +35,7 @@ def find_and_load_env():
     print("⚠️  No .env file found in current directory or parent directories")
     return False
 
+
 # Load environment variables
 find_and_load_env()
 
@@ -48,13 +49,22 @@ async def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="Ingest documents from Google Drive")
     parser.add_argument("--folder-id", required=True, help="Google Drive folder ID")
-    parser.add_argument("--credentials", help="Path to Google OAuth2 credentials JSON file")
+    parser.add_argument(
+        "--credentials", help="Path to Google OAuth2 credentials JSON file"
+    )
     parser.add_argument("--token", help="Path to store OAuth2 token")
-    parser.add_argument("--recursive", action="store_true", default=True,
-                       help="Include subfolders (default: True)")
+    parser.add_argument(
+        "--recursive",
+        action="store_true",
+        default=True,
+        help="Include subfolders (default: True)",
+    )
     parser.add_argument("--metadata", help="Additional metadata as JSON string")
-    parser.add_argument("--reauth", action="store_true",
-                       help="Force re-authentication (useful for shared drive access)")
+    parser.add_argument(
+        "--reauth",
+        action="store_true",
+        help="Force re-authentication (useful for shared drive access)",
+    )
 
     args = parser.parse_args()
 
@@ -69,7 +79,7 @@ async def main():
 
     # Handle re-authentication if requested
     if args.reauth:
-        token_file = args.token or 'auth/token.json'
+        token_file = args.token or "auth/token.json"
         if os.path.exists(token_file):
             print(f"🔄 Removing existing token file: {token_file}")
             os.remove(token_file)
@@ -101,8 +111,11 @@ async def main():
             settings = Settings()
             use_hybrid = settings.hybrid.enabled and settings.vector.enabled
             if use_hybrid:
-                print("🔄 Hybrid RAG mode detected - using title injection and dual indexing")
-        except:
+                print(
+                    "🔄 Hybrid RAG mode detected - "
+                    "using title injection and dual indexing"
+                )
+        except Exception:
             # Fallback to individual settings if full Settings fails
             use_hybrid = False
             print("🔄 Single vector mode - using basic ingestion")
@@ -111,20 +124,25 @@ async def main():
             # Use hybrid RAG service with title injection
             # Note: Elasticsearch migrations are handled by 'make db-upgrade'
             from services.hybrid_rag_service import create_hybrid_rag_service
+
             hybrid_service = await create_hybrid_rag_service(settings)
 
             # Initialize LLM service for contextual retrieval if enabled
             llm_service = None
             if settings.rag.enable_contextual_retrieval:
                 from services.llm_service import create_llm_service
+
                 llm_service = await create_llm_service(settings.llm)
-                print("✅ Contextual retrieval enabled - chunks will be enhanced with context")
+                print(
+                    "✅ Contextual retrieval enabled - "
+                    "chunks will be enhanced with context"
+                )
 
             # Set hybrid service in orchestrator
             orchestrator.set_services(
                 hybrid_service,
                 llm_service=llm_service,
-                enable_contextual_retrieval=settings.rag.enable_contextual_retrieval
+                enable_contextual_retrieval=settings.rag.enable_contextual_retrieval,
             )
 
         else:
@@ -135,23 +153,32 @@ async def main():
 
             # Initialize vector store
             from services.vector_service import create_vector_store
+
             vector_store = create_vector_store(vector_settings)
             await vector_store.initialize()
 
             # Initialize embedding service
             from services.embedding_service import create_embedding_provider
-            embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+
+            embedding_provider = create_embedding_provider(
+                embedding_settings, llm_settings
+            )
 
             # Initialize LLM service for contextual retrieval if enabled
             llm_service = None
             try:
                 from config.settings import RAGSettings
+
                 rag_settings = RAGSettings()
                 if rag_settings.enable_contextual_retrieval:
                     from services.llm_service import create_llm_service
+
                     llm_service = await create_llm_service(llm_settings)
-                    print("✅ Contextual retrieval enabled - chunks will be enhanced with context")
-            except:
+                    print(
+                        "✅ Contextual retrieval enabled - "
+                        "chunks will be enhanced with context"
+                    )
+            except Exception:
                 pass  # Contextual retrieval settings not available
 
             # Set services in orchestrator
@@ -159,11 +186,14 @@ async def main():
                 vector_store,
                 embedding_provider,
                 llm_service=llm_service,
-                enable_contextual_retrieval=llm_service is not None
+                enable_contextual_retrieval=llm_service is not None,
             )
 
         if use_hybrid:
-            print("✅ Hybrid RAG services initialized successfully (Pinecone + Elasticsearch + Title Injection)")
+            print(
+                "✅ Hybrid RAG services initialized successfully "
+                "(Pinecone + Elasticsearch + Title Injection)"
+            )
         else:
             print("✅ Single vector services initialized successfully")
     except Exception as e:
@@ -173,9 +203,7 @@ async def main():
     # Ingest folder
     try:
         success_count, error_count = await orchestrator.ingest_folder(
-            args.folder_id,
-            recursive=args.recursive,
-            metadata=metadata
+            args.folder_id, recursive=args.recursive, metadata=metadata
         )
 
         print("\n📊 Ingestion Summary:")

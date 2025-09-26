@@ -1,7 +1,8 @@
 # Google Drive API credentials and tokens
 credentials.json
 token.json
-auth/
+auth/token.json
+auth/credentials.json
 
 # Environment files
 .env

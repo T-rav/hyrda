@@ -8,7 +8,10 @@ initialization patterns, health checks, and resource management.
 import asyncio
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Any
+
+from models import HealthCheckResponse
 
 
 class BaseService(ABC):
@@ -111,23 +114,23 @@ class BaseService(ABC):
         """
         # Default implementation - subclasses can override
 
-    def health_check(self) -> dict[str, Any]:
+    def health_check(self) -> HealthCheckResponse:
         """
         Perform a health check on the service.
 
         Returns:
-            Dict containing health status information
+            HealthCheckResponse containing health status information
 
         Override this method in subclasses for service-specific health checks.
         """
         status = "healthy" if self._initialized and not self._closed else "unhealthy"
 
-        return {
-            "status": status,
-            "service": self._service_name,
-            "initialized": self._initialized,
-            "closed": self._closed,
-        }
+        return HealthCheckResponse(
+            status=status,  # type: ignore
+            timestamp=datetime.now(),
+            service_name=self._service_name,
+            details=f"initialized={self._initialized}, closed={self._closed}",
+        )
 
     async def ensure_initialized(self) -> None:
         """
@@ -249,19 +252,37 @@ class ManagedService(BaseService):
 
         await super()._close()
 
-    def health_check(self) -> dict[str, Any]:
+    def health_check(self) -> HealthCheckResponse:
         """Health check including dependencies."""
-        health = super().health_check()
-        health["dependencies"] = {}
+        base_health = super().health_check()
+        dependencies = {}
 
         for name, service in self._dependencies.items():
             try:
                 if hasattr(service, "health_check") and callable(service.health_check):
                     dep_health = service.health_check()
-                    health["dependencies"][name] = dep_health
+                    # Convert to dict for storage in metrics
+                    if isinstance(dep_health, HealthCheckResponse):
+                        dependencies[name] = {
+                            "status": dep_health.status,
+                            "details": dep_health.details,
+                        }
+                    else:
+                        dependencies[name] = dep_health
                 else:
-                    health["dependencies"][name] = {"status": "unknown"}
+                    dependencies[name] = {"status": "unknown"}
             except Exception as e:
-                health["dependencies"][name] = {"status": "error", "error": str(e)}
+                dependencies[name] = {"status": "error", "error": str(e)}
 
-        return health
+        # Determine overall status based on dependencies
+        overall_status = base_health.status
+        if any(dep.get("status") == "unhealthy" for dep in dependencies.values()):
+            overall_status = "degraded"
+
+        return HealthCheckResponse(
+            status=overall_status,  # type: ignore
+            timestamp=datetime.now(),
+            service_name=self._service_name,
+            details=base_health.details,
+            metrics={"dependencies": dependencies},
+        )

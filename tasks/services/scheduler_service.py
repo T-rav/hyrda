@@ -138,7 +138,9 @@ class SchedulerService:
         # Only include simple serializable types
         if job.kwargs:
             for key, value in job.kwargs.items():
-                if isinstance(value, str | int | float | bool | list | dict | type(None)):
+                if isinstance(
+                    value, str | int | float | bool | list | dict | type(None)
+                ):
                     safe_kwargs[key] = value
                 else:
                     safe_kwargs[key] = str(value)

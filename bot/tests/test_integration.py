@@ -14,6 +14,116 @@ from health import HealthChecker
 from services.retrieval_service import RetrievalService
 
 
+# Integration Test Factory Classes
+class SettingsFactory:
+    """Factory for creating mock settings for integration tests"""
+
+    @staticmethod
+    def create_basic_settings() -> MagicMock:
+        """Create basic settings with essential configuration"""
+        settings = MagicMock()
+        settings.slack.bot_token = "xoxb-test"
+        settings.slack.app_token = "xapp-test"
+        settings.llm = MagicMock()
+        settings.llm.api_url = "https://api.openai.com/v1"
+        settings.llm.api_key.get_secret_value.return_value = "test-key"
+        return settings
+
+    @staticmethod
+    def create_cache_enabled_settings() -> MagicMock:
+        """Create settings with cache enabled"""
+        settings = SettingsFactory.create_basic_settings()
+        settings.cache.enabled = True
+        settings.cache.redis_url = "redis://localhost:6379"
+        settings.cache.conversation_ttl = 1800
+        return settings
+
+    @staticmethod
+    def create_cache_disabled_settings() -> MagicMock:
+        """Create settings with cache disabled"""
+        settings = SettingsFactory.create_basic_settings()
+        settings.cache.enabled = False
+        return settings
+
+
+class SlackServiceFactory:
+    """Factory for creating Slack service mocks for integration tests"""
+
+    @staticmethod
+    def create_basic_service() -> AsyncMock:
+        """Create basic Slack service mock"""
+        service = AsyncMock()
+        service.send_thinking_indicator.return_value = "thinking_ts"
+        service.delete_thinking_indicator = AsyncMock()
+        service.send_message = AsyncMock()
+        service.get_thread_history = AsyncMock(return_value=([], True))
+        return service
+
+    @staticmethod
+    def create_service_with_thread_history(history: list = None) -> AsyncMock:
+        """Create Slack service with specific thread history"""
+        if history is None:
+            history = []
+        service = SlackServiceFactory.create_basic_service()
+        service.get_thread_history = AsyncMock(return_value=(history, True))
+        return service
+
+
+class LLMServiceFactory:
+    """Factory for creating LLM service mocks for integration tests"""
+
+    @staticmethod
+    def create_service(response: str = "Test LLM response") -> AsyncMock:
+        """Create LLM service mock with specific response"""
+        service = AsyncMock()
+        service.get_response.return_value = response
+        return service
+
+    @staticmethod
+    def create_failing_service(error_message: str = "LLM API error") -> AsyncMock:
+        """Create LLM service mock that raises an exception"""
+        service = AsyncMock()
+        service.get_response.side_effect = Exception(error_message)
+        return service
+
+
+class ConversationCacheFactory:
+    """Factory for creating conversation cache mocks"""
+
+    @staticmethod
+    def create_cache() -> AsyncMock:
+        """Create basic conversation cache mock"""
+        cache = AsyncMock()
+        cache.get_conversation.return_value = ([], False, "miss")
+        cache.update_conversation = AsyncMock()
+        cache.get_cache_stats.return_value = {
+            "total_conversations": 10,
+            "cache_hits": 8,
+            "cache_misses": 2,
+        }
+        return cache
+
+    @staticmethod
+    def create_cache_with_conversation(conversation: list = None) -> AsyncMock:
+        """Create cache with existing conversation"""
+        if conversation is None:
+            conversation = [{"role": "user", "content": "Previous message"}]
+        cache = ConversationCacheFactory.create_cache()
+        cache.get_conversation.return_value = (conversation, True, "cache")
+        return cache
+
+
+class AppFactory:
+    """Factory for creating app mocks"""
+
+    @staticmethod
+    def create_app_mock() -> AsyncMock:
+        """Create basic app mock"""
+        app = AsyncMock()
+        app.client = AsyncMock()
+        return app
+
+
 class TestIntegration:
     """Integration tests for the complete system"""
 
@@ -28,22 +138,15 @@ class TestIntegration:
             patch("app.SlackService"),
             patch("app.ConversationCache") as mock_cache,
         ):
-            # Mock settings
-            settings_instance = MagicMock()
-            settings_instance.slack.bot_token = "xoxb-test"
-            settings_instance.llm = MagicMock()
-            settings_instance.cache.enabled = True
-            settings_instance.cache.redis_url = "redis://localhost:6379"
-            settings_instance.cache.conversation_ttl = 1800
-            # Database not used in simplified architecture
+            # Create settings using factory
+            settings_instance = SettingsFactory.create_cache_enabled_settings()
             mock_settings.return_value = settings_instance
 
-            # Mock service instances
-            mock_app_instance = AsyncMock()
-            mock_app_instance.client = AsyncMock()
+            # Create service instances using factories
+            mock_app_instance = AppFactory.create_app_mock()
             mock_app.return_value = mock_app_instance
 
-            mock_cache_instance = AsyncMock()
+            mock_cache_instance = ConversationCacheFactory.create_cache()
             mock_cache.return_value = mock_cache_instance
 
             # Create app
@@ -76,16 +179,12 @@ class TestIntegration:
             patch("app.LLMService"),
             patch("app.SlackService"),
         ):
-            # Mock settings with services disabled
-            settings_instance = MagicMock()
-            settings_instance.slack.bot_token = "xoxb-test"
-            settings_instance.llm = MagicMock()
-            settings_instance.cache.enabled = False
-            # Database not used in simplified architecture
+            # Create settings with disabled services using factory
+            settings_instance = SettingsFactory.create_cache_disabled_settings()
             mock_settings.return_value = settings_instance
 
-            mock_app_instance = AsyncMock()
-            mock_app_instance.client = AsyncMock()
+            # Create app mock using factory
+            mock_app_instance = AppFactory.create_app_mock()
             mock_app.return_value = mock_app_instance
 
             # Create app
@@ -110,20 +209,11 @@ class TestIntegration:
     async def test_health_checker_with_all_services(self):
         """Test health checker with all services available"""
         with patch("health.Settings"):
-            mock_settings_instance = MagicMock()
-            mock_settings_instance.llm.api_url = "https://api.openai.com/v1"
-            mock_settings_instance.slack.bot_token = "xoxb-test"
-            mock_settings_instance.slack.app_token = "xapp-test"
-            mock_settings_instance.llm.api_key.get_secret_value.return_value = (
-                "test-key"
-            )
+            # Create settings using factory
+            mock_settings_instance = SettingsFactory.create_basic_settings()
 
-            mock_conversation_cache = AsyncMock()
-            mock_conversation_cache.get_cache_stats.return_value = {
-                "total_conversations": 10,
-                "cache_hits": 8,
-                "cache_misses": 2,
-            }
+            # Create conversation cache using factory
+            mock_conversation_cache = ConversationCacheFactory.create_cache()
 
             # No migration data in simplified architecture
 
@@ -141,15 +231,11 @@ class TestIntegration:
     async def test_full_message_flow_with_cache(self):
         """Test complete message flow with cache"""
 
-        # Mock services
-        mock_slack_service = AsyncMock()
-        mock_slack_service.send_thinking_indicator.return_value = "thinking_ts"
-        mock_slack_service.delete_thinking_indicator = AsyncMock()
-        mock_slack_service.send_message = AsyncMock()
-        mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
-
-        mock_llm_service = AsyncMock()
-        mock_llm_service.get_response.return_value = "I'm a Python expert response"
+        # Create services using factories
+        mock_slack_service = SlackServiceFactory.create_basic_service()
+        mock_llm_service = LLMServiceFactory.create_service(
+            "I'm a Python expert response"
+        )
 
         # Test completed
         # Test completed
@@ -184,15 +270,9 @@ class TestIntegration:
     async def test_prompt_command_integration(self):
         """Test @prompt command integration with database"""
 
-        mock_slack_service = AsyncMock()
-        mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
-        mock_slack_service.send_thinking_indicator = AsyncMock(
-            return_value="thinking_ts"
-        )
-        mock_slack_service.delete_thinking_indicator = AsyncMock()
-
-        mock_llm_service = AsyncMock()
-        mock_llm_service.get_response = AsyncMock(return_value="SQL response")
+        # Create services using factories
+        mock_slack_service = SlackServiceFactory.create_basic_service()
+        mock_llm_service = LLMServiceFactory.create_service("SQL response")
 
         # Handle @prompt command (now just regular message in simplified architecture)
         await handle_message(
@@ -214,23 +294,12 @@ class TestIntegration:
     async def test_conversation_cache_integration(self):
         """Test conversation cache integration with message handling"""
 
-        mock_slack_service = AsyncMock()
-        mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
-        mock_slack_service.send_thinking_indicator = AsyncMock(
-            return_value="thinking_ts"
+        # Create services using factories
+        mock_slack_service = SlackServiceFactory.create_basic_service()
+        mock_llm_service = LLMServiceFactory.create_service("Cached response")
+        mock_conversation_cache = (
+            ConversationCacheFactory.create_cache_with_conversation()
         )
-        mock_slack_service.delete_thinking_indicator = AsyncMock()
-
-        mock_llm_service = AsyncMock()
-        mock_llm_service.get_response.return_value = "Cached response"
-
-        mock_conversation_cache = AsyncMock()
-        mock_conversation_cache.get_conversation.return_value = (
-            [{"role": "user", "content": "Previous message"}],
-            True,
-            "cache",
-        )
-        mock_conversation_cache.update_conversation = AsyncMock()
 
         with patch("handlers.message_handlers.MessageFormatter") as mock_formatter:
             mock_formatter.format_message = AsyncMock(return_value="Cached response")
@@ -262,12 +331,9 @@ class TestIntegration:
     async def test_error_handling_integration(self):
         """Test error handling across integrated components"""
 
-        mock_slack_service = AsyncMock()
-        mock_slack_service.send_thinking_indicator.return_value = "thinking_ts"
-        mock_slack_service.delete_thinking_indicator = AsyncMock()
-
-        mock_llm_service = AsyncMock()
-        mock_llm_service.get_response.side_effect = Exception("LLM API error")
+        # Create services using factories
+        mock_slack_service = SlackServiceFactory.create_basic_service()
+        mock_llm_service = LLMServiceFactory.create_failing_service("LLM API error")
 
         with patch("handlers.message_handlers.handle_error") as mock_handle_error:
             await handle_message(
