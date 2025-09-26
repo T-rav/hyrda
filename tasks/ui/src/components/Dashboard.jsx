@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   ListChecks,
@@ -24,7 +24,6 @@ function Dashboard({ onError, setLoading }) {
   const recordsPerPage = 20
 
   const {
-    schedulerData,
     tasksData,
     taskRunsData,
     loading,
