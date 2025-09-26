@@ -283,7 +283,7 @@ class HybridRAGService:
                 "content": result.content,
                 "similarity": result.similarity,
                 "metadata": result.metadata,
-                "id": result.id,
+                "id": result.chunk_id,
                 "_hybrid_source": result.source,  # Track source for debugging
                 "_hybrid_rank": result.rank,
             }

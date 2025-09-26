@@ -8,7 +8,6 @@ from apscheduler.job import Job
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
-from .google_drive_ingest import GoogleDriveIngestJob
 from .metrics_collection import MetricsCollectionJob
 from .slack_user_import import SlackUserImportJob
 
@@ -29,7 +28,6 @@ def execute_job_by_type(
     # Direct mapping - simpler than dynamic imports
     job_classes = {
         "slack_user_import": SlackUserImportJob,
-        "google_drive_ingest": GoogleDriveIngestJob,
         "metrics_collection": MetricsCollectionJob,
     }
 
@@ -118,7 +116,6 @@ class JobRegistry:
         # Job type mapping
         self.job_types = {
             "slack_user_import": SlackUserImportJob,
-            "google_drive_ingest": GoogleDriveIngestJob,
             "metrics_collection": MetricsCollectionJob,
         }
 

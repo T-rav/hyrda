@@ -296,11 +296,11 @@ class TestSlackService:
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-        assert thread_info["exists"] is True
-        assert thread_info["message_count"] == 3
-        assert thread_info["bot_is_participant"] is True
-        assert set(thread_info["participant_ids"]) == {"U12345", "B12345678", "U67890"}
-        assert thread_info["error"] is None
+        assert thread_info.exists is True
+        assert thread_info.message_count == 3
+        assert thread_info.bot_is_participant is True
+        assert set(thread_info.participant_ids) == {"U12345", "B12345678", "U67890"}
+        assert thread_info.error is None
 
     @pytest.mark.asyncio
     async def test_get_thread_info_bot_not_participant(self, slack_service):
@@ -324,10 +324,10 @@ class TestSlackService:
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-        assert thread_info["exists"] is True
-        assert thread_info["message_count"] == 2
-        assert thread_info["bot_is_participant"] is False
-        assert set(thread_info["participant_ids"]) == {"U12345", "U67890"}
+        assert thread_info.exists is True
+        assert thread_info.message_count == 2
+        assert thread_info.bot_is_participant is False
+        assert set(thread_info.participant_ids) == {"U12345", "U67890"}
 
     @pytest.mark.asyncio
     async def test_get_thread_info_no_bot_id(self, slack_service):
@@ -366,8 +366,8 @@ class TestSlackService:
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-        assert thread_info["exists"] is False
-        assert "Missing permission scope: channels:history" in thread_info["error"]
+        assert thread_info.exists is False
+        assert "Missing permission scope: channels:history" in thread_info.error
 
     @pytest.mark.asyncio
     async def test_get_thread_info_generic_error(self, slack_service):
@@ -381,8 +381,8 @@ class TestSlackService:
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-        assert thread_info["exists"] is False
-        assert thread_info["error"] == "Generic error"
+        assert thread_info.exists is False
+        assert thread_info.error == "Generic error"
 
     @pytest.mark.asyncio
     async def test_get_thread_info_no_messages(self, slack_service):
@@ -394,6 +394,6 @@ class TestSlackService:
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-        assert thread_info["exists"] is False
-        assert thread_info["message_count"] == 0
-        assert thread_info["bot_is_participant"] is False
+        assert thread_info.exists is False
+        assert thread_info.message_count == 0
+        assert thread_info.bot_is_participant is False

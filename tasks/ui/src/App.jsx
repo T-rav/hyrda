@@ -2,9 +2,23 @@ import React, { useState } from 'react'
 import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X } from 'lucide-react'
 import './App.css'
 
+// Custom hook for managing document title
+function useDocumentTitle(title) {
+  React.useEffect(() => {
+    const previousTitle = document.title
+    document.title = title
+    return () => {
+      document.title = previousTitle
+    }
+  }, [title])
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
+
+  // Use the custom hook to set document title
+  useDocumentTitle('InsightMesh - Tasks Dashboard')
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)

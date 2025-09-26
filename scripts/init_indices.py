@@ -17,6 +17,7 @@ sys.path.append(str(Path(__file__).parent.parent / "bot"))
 
 # Load environment
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -24,18 +25,20 @@ class IndexManager:
     """Manages vector database index initialization"""
 
     def __init__(self):
-        self.api_key = os.getenv('VECTOR_API_KEY')
-        self.index_name = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
-        self.environment = os.getenv('VECTOR_ENVIRONMENT', 'us-east-1')
-        self.es_url = os.getenv('VECTOR_URL', 'http://localhost:9200')
-        self.embedding_model = os.getenv('EMBEDDING_MODEL', 'text-embedding-3-large')
+        self.api_key = os.getenv("VECTOR_API_KEY")
+        self.index_name = os.getenv(
+            "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
+        )
+        self.environment = os.getenv("VECTOR_ENVIRONMENT", "us-east-1")
+        self.es_url = os.getenv("VECTOR_URL", "http://localhost:9200")
+        self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
 
     def get_embedding_dimensions(self):
         """Get embedding dimensions based on model"""
         model_dims = {
-            'text-embedding-3-small': 1536,
-            'text-embedding-3-large': 3072,
-            'text-embedding-ada-002': 1536,
+            "text-embedding-3-small": 1536,
+            "text-embedding-3-large": 3072,
+            "text-embedding-ada-002": 1536,
         }
         return model_dims.get(self.embedding_model, 1536)
 
@@ -51,7 +54,9 @@ class IndexManager:
             print("🔄 Initializing Pinecone index...")
             print(f"   Index: {self.index_name}")
             print(f"   Environment: {self.environment}")
-            print(f"   Model: {self.embedding_model} ({self.get_embedding_dimensions()} dimensions)")
+            print(
+                f"   Model: {self.embedding_model} ({self.get_embedding_dimensions()} dimensions)"
+            )
 
             pc = Pinecone(api_key=self.api_key)
 
@@ -74,10 +79,7 @@ class IndexManager:
                     name=self.index_name,
                     dimension=self.get_embedding_dimensions(),
                     metric="cosine",
-                    spec=ServerlessSpec(
-                        cloud="aws",
-                        region=self.environment
-                    )
+                    spec=ServerlessSpec(cloud="aws", region=self.environment),
                 )
 
             print("✅ Pinecone index ready")
@@ -100,15 +102,15 @@ class IndexManager:
             print(f"   Base name: {self.index_name}")
 
             client = AsyncElasticsearch(
-                hosts=[self.es_url],
-                verify_certs=False,
-                ssl_show_warn=False
+                hosts=[self.es_url], verify_certs=False, ssl_show_warn=False
             )
 
             # Test connection
             if not await client.ping():
                 print("❌ Cannot connect to Elasticsearch. Is it running?")
-                print("   Start with: docker compose -f docker-compose.elasticsearch.yml up -d")
+                print(
+                    "   Start with: docker compose -f docker-compose.elasticsearch.yml up -d"
+                )
                 return False
 
             # Define indices to create
@@ -118,14 +120,18 @@ class IndexManager:
                     "mappings": {
                         "properties": {
                             "content": {"type": "text", "analyzer": "standard"},
-                            "title": {"type": "text", "analyzer": "standard", "boost": 2.0},
+                            "title": {
+                                "type": "text",
+                                "analyzer": "standard",
+                                "boost": 2.0,
+                            },
                             "metadata": {"type": "object", "enabled": True},
-                            "timestamp": {"type": "date"}
+                            "timestamp": {"type": "date"},
                         }
                     },
                     "settings": {
                         "index": {"number_of_shards": 1, "number_of_replicas": 0}
-                    }
+                    },
                 }
             }
 
@@ -142,7 +148,11 @@ class IndexManager:
                         continue
 
                 if not exists:
-                    index_type = "sparse (BM25)" if "_sparse" in index_name else "dense (vectors)"
+                    index_type = (
+                        "sparse (BM25)"
+                        if "_sparse" in index_name
+                        else "dense (vectors)"
+                    )
                     print(f"🔌 Creating {index_type} index: {index_name}")
                     await client.indices.create(index=index_name, **mapping)
 
@@ -151,7 +161,9 @@ class IndexManager:
             return True
 
         except ImportError:
-            print("❌ Elasticsearch package not installed. Run: pip install elasticsearch")
+            print(
+                "❌ Elasticsearch package not installed. Run: pip install elasticsearch"
+            )
             return False
         except Exception as e:
             print(f"❌ Error initializing Elasticsearch: {e}")
@@ -173,12 +185,16 @@ class IndexManager:
         print()
         print("📋 Summary:")
         print(f"   Pinecone: {'✅ Ready' if pinecone_success else '❌ Failed'}")
-        print(f"   Elasticsearch: {'✅ Ready' if elasticsearch_success else '❌ Failed'}")
+        print(
+            f"   Elasticsearch: {'✅ Ready' if elasticsearch_success else '❌ Failed'}"
+        )
 
         if pinecone_success and elasticsearch_success:
             print("\n🎉 All indices initialized successfully!")
             print("\n📋 Next steps:")
-            print("  • Run ingestion: cd ingest && python main.py --folder-id YOUR_FOLDER_ID")
+            print(
+                "  • Run ingestion: cd ingest && python main.py --folder-id YOUR_FOLDER_ID"
+            )
             print("  • Start bot: ./start_bot.sh")
             return True
         else:
@@ -191,12 +207,19 @@ async def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Initialize vector database indices")
-    parser.add_argument("--force", action="store_true",
-                       help="Force recreate indices (deletes existing data)")
-    parser.add_argument("--pinecone-only", action="store_true",
-                       help="Initialize only Pinecone index")
-    parser.add_argument("--elasticsearch-only", action="store_true",
-                       help="Initialize only Elasticsearch indices")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force recreate indices (deletes existing data)",
+    )
+    parser.add_argument(
+        "--pinecone-only", action="store_true", help="Initialize only Pinecone index"
+    )
+    parser.add_argument(
+        "--elasticsearch-only",
+        action="store_true",
+        help="Initialize only Elasticsearch indices",
+    )
 
     args = parser.parse_args()
 
@@ -204,7 +227,7 @@ async def main():
 
     if args.force:
         response = input("⚠️  This will delete all existing data. Continue? (yes/no): ")
-        if response.lower() not in ['yes', 'y']:
+        if response.lower() not in ["yes", "y"]:
             print("❌ Operation cancelled")
             return
 

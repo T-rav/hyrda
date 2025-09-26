@@ -13,33 +13,128 @@ from bot.services.rag_service import RAGService
 from config.settings import EmbeddingSettings, LLMSettings, Settings, VectorSettings
 
 
-class TestRAGService:
-    """Test cases for RAG service"""
+# TDD Factory Patterns for RAG Service Testing
+class SettingsFactory:
+    """Factory for creating various Settings configurations"""
 
-    @pytest.fixture
-    def settings(self):
-        """Create settings for testing"""
+    @staticmethod
+    def create_complete_rag_settings(
+        embedding_provider: str = "openai",
+        llm_provider: str = "openai",
+        vector_provider: str = "pinecone",
+    ) -> Settings:
+        """Create complete RAG settings with all components"""
         return Settings(
             embedding=EmbeddingSettings(
-                provider="openai",
+                provider=embedding_provider,
                 model="text-embedding-ada-002",
                 api_key=SecretStr("test-key"),
             ),
             llm=LLMSettings(
-                provider="openai",
+                provider=llm_provider,
                 model="gpt-4",
                 api_key=SecretStr("test-key"),
             ),
             vector=VectorSettings(
-                provider="pinecone",
+                provider=vector_provider,
                 api_key=SecretStr("test-key"),
                 collection_name="test",
+                enabled=True,
             ),
         )
 
-    @pytest.fixture
-    def rag_service(self, settings):
-        """Create RAG service for testing"""
+    @staticmethod
+    def create_vector_disabled_settings() -> Settings:
+        """Create settings with vector storage disabled"""
+        settings = SettingsFactory.create_complete_rag_settings()
+        settings.vector.enabled = False
+        return settings
+
+
+class VectorStoreMockFactory:
+    """Factory for creating vector store mocks"""
+
+    @staticmethod
+    def create_basic_vector_store() -> AsyncMock:
+        """Create basic vector store mock"""
+        mock_store = AsyncMock()
+        mock_store.initialize = AsyncMock()
+        mock_store.close = AsyncMock()
+        mock_store.add_documents = AsyncMock(return_value=5)  # Default documents added
+        mock_store.search = AsyncMock(return_value=[])  # Default empty search
+        return mock_store
+
+    @staticmethod
+    def create_vector_store_with_documents(doc_count: int = 5) -> AsyncMock:
+        """Create vector store mock that returns specific document count"""
+        mock_store = VectorStoreMockFactory.create_basic_vector_store()
+        mock_store.add_documents = AsyncMock(return_value=doc_count)
+        return mock_store
+
+    @staticmethod
+    def create_failing_vector_store(error: str = "Vector store error") -> AsyncMock:
+        """Create vector store mock that fails operations"""
+        mock_store = AsyncMock()
+        mock_store.initialize = AsyncMock(side_effect=Exception(error))
+        mock_store.close = AsyncMock()
+        mock_store.add_documents = AsyncMock(side_effect=Exception(error))
+        return mock_store
+
+
+class EmbeddingProviderMockFactory:
+    """Factory for creating embedding provider mocks"""
+
+    @staticmethod
+    def create_basic_embedding_provider() -> AsyncMock:
+        """Create basic embedding provider mock"""
+        mock_provider = AsyncMock()
+        mock_provider.get_embedding = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        mock_provider.get_embeddings = AsyncMock(return_value=[[0.1, 0.2], [0.4, 0.5]])
+        mock_provider.close = AsyncMock()
+        return mock_provider
+
+    @staticmethod
+    def create_embedding_provider_with_error(
+        error: str = "Embedding error",
+    ) -> AsyncMock:
+        """Create embedding provider mock that fails"""
+        mock_provider = AsyncMock()
+        mock_provider.get_embedding = AsyncMock(side_effect=Exception(error))
+        mock_provider.close = AsyncMock()
+        return mock_provider
+
+
+class LLMProviderMockFactory:
+    """Factory for creating LLM provider mocks"""
+
+    @staticmethod
+    def create_basic_llm_provider(response: str = "Test LLM response") -> AsyncMock:
+        """Create basic LLM provider mock"""
+        mock_provider = AsyncMock()
+        mock_provider.get_response = AsyncMock(return_value=response)
+        mock_provider.close = AsyncMock()
+        return mock_provider
+
+    @staticmethod
+    def create_failing_llm_provider(error: str = "LLM error") -> AsyncMock:
+        """Create LLM provider mock that fails"""
+        mock_provider = AsyncMock()
+        mock_provider.get_response = AsyncMock(side_effect=Exception(error))
+        mock_provider.close = AsyncMock()
+        return mock_provider
+
+
+class RAGServiceMockFactory:
+    """Factory for creating RAG service with configured mocks"""
+
+    @staticmethod
+    def create_service_with_mocks(
+        settings: Settings,
+        vector_store: AsyncMock = None,
+        embedding_provider: AsyncMock = None,
+        llm_provider: AsyncMock = None,
+    ) -> RAGService:
+        """Create RAG service with specific mocks"""
         with (
             patch("bot.services.rag_service.create_vector_store") as mock_vector_store,
             patch(
@@ -47,30 +142,103 @@ class TestRAGService:
             ) as mock_embedding,
             patch("bot.services.rag_service.create_llm_provider") as mock_llm,
         ):
-            # Create mock instances
-            mock_vector_store_instance = AsyncMock()
-            mock_vector_store_instance.initialize = AsyncMock()
-            mock_vector_store_instance.close = AsyncMock()
-            mock_vector_store_instance.add_documents = AsyncMock()
+            # Use provided mocks or create defaults
+            vector_store_instance = (
+                vector_store or VectorStoreMockFactory.create_basic_vector_store()
+            )
+            embedding_instance = (
+                embedding_provider
+                or EmbeddingProviderMockFactory.create_basic_embedding_provider()
+            )
+            llm_instance = (
+                llm_provider or LLMProviderMockFactory.create_basic_llm_provider()
+            )
 
-            mock_embedding_instance = AsyncMock()
-            mock_llm_instance = AsyncMock()
-
-            mock_vector_store.return_value = mock_vector_store_instance
-            mock_embedding.return_value = mock_embedding_instance
-            mock_llm.return_value = mock_llm_instance
-
-            # Ensure vector is enabled for testing
-            settings.vector.enabled = True
+            mock_vector_store.return_value = vector_store_instance
+            mock_embedding.return_value = embedding_instance
+            mock_llm.return_value = llm_instance
 
             service = RAGService(settings)
 
-            # Ensure the service has the expected attributes even if settings change
-            service.vector_store = mock_vector_store_instance
-            service.embedding_provider = mock_embedding_instance
-            service.llm_provider = mock_llm_instance
+            # Ensure the service has the expected attributes
+            service.vector_store = vector_store_instance
+            service.embedding_provider = embedding_instance
+            service.llm_provider = llm_instance
 
             return service
+
+
+class RetrievalServiceMockFactory:
+    """Factory for creating retrieval service mocks"""
+
+    @staticmethod
+    def create_basic_retrieval_service() -> Mock:
+        """Create basic retrieval service mock"""
+        mock_service = Mock()
+        mock_service.retrieve_context = AsyncMock(return_value=[])
+        return mock_service
+
+    @staticmethod
+    def create_retrieval_service_with_context(context: list = None) -> Mock:
+        """Create retrieval service with specific context"""
+        if context is None:
+            context = [{"content": "Test context", "metadata": {"source": "test"}}]
+
+        mock_service = RetrievalServiceMockFactory.create_basic_retrieval_service()
+        mock_service.retrieve_context = AsyncMock(return_value=context)
+        return mock_service
+
+
+class DocumentTestDataFactory:
+    """Factory for creating test documents"""
+
+    @staticmethod
+    def create_simple_documents(count: int = 5) -> list:
+        """Create simple test documents"""
+        return [
+            {
+                "content": f"Document {i} content",
+                "metadata": {"source": f"doc{i}.txt", "page": i},
+            }
+            for i in range(count)
+        ]
+
+    @staticmethod
+    def create_complex_documents() -> list:
+        """Create complex test documents with various metadata"""
+        return [
+            {
+                "content": "Complex document with detailed content for testing",
+                "metadata": {
+                    "source": "complex_doc.pdf",
+                    "page": 1,
+                    "title": "Complex Document",
+                    "author": "Test Author",
+                },
+            },
+            {
+                "content": "Another document with different structure",
+                "metadata": {
+                    "source": "another_doc.txt",
+                    "section": "Introduction",
+                    "category": "research",
+                },
+            },
+        ]
+
+
+class TestRAGService:
+    """Test cases for RAG service"""
+
+    @pytest.fixture
+    def settings(self):
+        """Create settings for testing"""
+        return SettingsFactory.create_complete_rag_settings()
+
+    @pytest.fixture
+    def rag_service(self, settings):
+        """Create RAG service for testing"""
+        return RAGServiceMockFactory.create_service_with_mocks(settings)
 
     def test_init(self, rag_service, settings):
         """Test service initialization"""
@@ -103,19 +271,17 @@ class TestRAGService:
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, rag_service):
         """Test successful document ingestion"""
-        # Set up the document processor and embedding provider mocks
-        rag_service.document_processor.process_generic_document = Mock(
-            return_value=[
-                {"content": "processed chunk", "metadata": {"file_name": "test.pdf"}}
-            ]
-        )
+        # Set up embedding provider and vector store mocks
         rag_service.embedding_provider.get_embedding = AsyncMock(
             return_value=[0.1, 0.2, 0.3]
         )
         rag_service.vector_store.add_documents = AsyncMock()
 
         documents = [
-            {"content": "test document", "metadata": {"file_name": "test.pdf"}}
+            {
+                "content": "test document content that is long enough to be processed",
+                "metadata": {"file_name": "test.pdf"},
+            }
         ]
 
         result = await rag_service.ingest_documents(documents)

@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from models.retrieval import RetrievalMethod, RetrievalResult
 from services.hybrid_retrieval_service import (
     CohereReranker,
     HybridRetrievalService,
-    RetrievalResult,
 )
 
 
@@ -33,23 +33,30 @@ class TestRetrievalResult:
         result = RetrievalResult(
             content="Test content",
             similarity=0.85,
-            metadata={"source": "test"},
-            id="doc_1",
-            source="dense",
+            chunk_id="doc_1",
+            document_id="doc_1",
+            source=RetrievalMethod.DENSE,
             rank=1,
+            metadata={"source": "test"},
         )
 
         assert result.content == "Test content"
         assert result.similarity == 0.85
         assert result.metadata == {"source": "test"}
-        assert result.id == "doc_1"
-        assert result.source == "dense"
+        assert result.chunk_id == "doc_1"
+        assert result.document_id == "doc_1"
+        assert result.source == RetrievalMethod.DENSE
         assert result.rank == 1
 
     def test_retrieval_result_optional_rank(self):
         """Test RetrievalResult with optional rank"""
         result = RetrievalResult(
-            content="Content", similarity=0.5, metadata={}, id="doc_2", source="sparse"
+            content="Content",
+            similarity=0.5,
+            chunk_id="doc_2",
+            document_id="doc_2",
+            source=RetrievalMethod.SPARSE,
+            metadata={},
         )
 
         assert result.rank is None
@@ -90,8 +97,22 @@ class TestCohereReranker:
         # Test data
         reranker = CohereReranker(api_key="test-key")
         documents = [
-            RetrievalResult("Doc 1", 0.5, {}, "1", "dense"),
-            RetrievalResult("Doc 2", 0.6, {}, "2", "dense"),
+            RetrievalResult(
+                content="Doc 1",
+                similarity=0.5,
+                chunk_id="1",
+                document_id="1",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Doc 2",
+                similarity=0.6,
+                chunk_id="2",
+                document_id="2",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
 
         # Execute
@@ -123,8 +144,22 @@ class TestCohereReranker:
 
         reranker = CohereReranker(api_key="test-key")
         documents = [
-            RetrievalResult("Doc 1", 0.8, {}, "1", "dense"),
-            RetrievalResult("Doc 2", 0.6, {}, "2", "dense"),
+            RetrievalResult(
+                content="Doc 1",
+                similarity=0.8,
+                chunk_id="1",
+                document_id="1",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Doc 2",
+                similarity=0.6,
+                chunk_id="2",
+                document_id="2",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
 
         # Should fallback to original ranking
@@ -165,8 +200,8 @@ class TestHybridRetrievalService:
         assert len(results) == 2
         assert results[0].content == "Dense doc 1"
         assert results[0].similarity == 0.9
-        assert results[0].source == "dense"
-        assert results[1].id == "d2"
+        assert results[0].source == RetrievalMethod.DENSE
+        assert results[1].chunk_id == "d2"
 
     @pytest.mark.asyncio
     async def test_sparse_retrieval(self):
@@ -180,7 +215,7 @@ class TestHybridRetrievalService:
 
         assert len(results) == 1
         assert results[0].content == "Sparse doc 1"
-        assert results[0].source == "sparse"
+        assert results[0].source == RetrievalMethod.SPARSE
 
         # Verify BM25 search was called with correct parameters
         self.sparse_store.bm25_search.assert_called_once_with(
@@ -192,12 +227,40 @@ class TestHybridRetrievalService:
     def test_reciprocal_rank_fusion_no_overlap(self):
         """Test RRF with no overlapping documents"""
         dense_results = [
-            RetrievalResult("Dense 1", 0.9, {}, "d1", "dense"),
-            RetrievalResult("Dense 2", 0.8, {}, "d2", "dense"),
+            RetrievalResult(
+                content="Dense 1",
+                similarity=0.9,
+                chunk_id="d1",
+                document_id="d1",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Dense 2",
+                similarity=0.8,
+                chunk_id="d2",
+                document_id="d2",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
         sparse_results = [
-            RetrievalResult("Sparse 1", 0.7, {}, "s1", "sparse"),
-            RetrievalResult("Sparse 2", 0.6, {}, "s2", "sparse"),
+            RetrievalResult(
+                content="Sparse 1",
+                similarity=0.7,
+                chunk_id="s1",
+                document_id="s1",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Sparse 2",
+                similarity=0.6,
+                chunk_id="s2",
+                document_id="s2",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),
         ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
@@ -209,25 +272,53 @@ class TestHybridRetrievalService:
         # d2: 1/(60+2) ≈ 0.0161, s2: 1/(60+2) ≈ 0.0161
 
         # Should be sorted by RRF score (descending)
-        assert fused[0].id in ["d1", "s1"]  # Tied for first
+        assert fused[0].chunk_id in ["d1", "s1"]  # Tied for first
 
-        # Check proper source labeling (no overlap, so should be dense/elastic, not hybrid)
-        dense_docs = [r for r in fused if r.id.startswith("d")]
-        sparse_docs = [r for r in fused if r.id.startswith("s")]
-        assert all(result.source == "dense" for result in dense_docs)
-        assert all(result.source == "elastic" for result in sparse_docs)
+        # Check proper source labeling (no overlap, so should be dense/sparse, not hybrid)
+        dense_docs = [r for r in fused if r.chunk_id.startswith("d")]
+        sparse_docs = [r for r in fused if r.chunk_id.startswith("s")]
+        assert all(result.source == RetrievalMethod.DENSE for result in dense_docs)
+        assert all(result.source == RetrievalMethod.SPARSE for result in sparse_docs)
         assert all(result.rank == i + 1 for i, result in enumerate(fused))
 
     def test_reciprocal_rank_fusion_with_overlap(self):
         """Test RRF with overlapping documents"""
         # Same document appears in both dense and sparse results
         dense_results = [
-            RetrievalResult("Overlap doc", 0.9, {}, "overlap", "dense"),
-            RetrievalResult("Dense only", 0.8, {}, "dense_only", "dense"),
+            RetrievalResult(
+                content="Overlap doc",
+                similarity=0.9,
+                chunk_id="overlap",
+                document_id="overlap",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Dense only",
+                similarity=0.8,
+                chunk_id="dense_only",
+                document_id="dense_only",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
         sparse_results = [
-            RetrievalResult("Sparse only", 0.7, {}, "sparse_only", "sparse"),
-            RetrievalResult("Overlap doc", 0.6, {}, "overlap", "sparse"),  # Same ID
+            RetrievalResult(
+                content="Sparse only",
+                similarity=0.7,
+                chunk_id="sparse_only",
+                document_id="sparse_only",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Overlap doc",
+                similarity=0.6,
+                chunk_id="overlap",
+                document_id="overlap",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),  # Same ID
         ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
@@ -235,7 +326,7 @@ class TestHybridRetrievalService:
         assert len(fused) == 3  # Deduplicated
 
         # Find the overlapping document
-        overlap_doc = next(doc for doc in fused if doc.id == "overlap")
+        overlap_doc = next(doc for doc in fused if doc.chunk_id == "overlap")
 
         # Should have the highest scaled similarity score (since it has the highest RRF score)
         # With our scaling, the top result should be close to 0.95
@@ -243,7 +334,7 @@ class TestHybridRetrievalService:
             overlap_doc.similarity > 0.9
         )  # Should be near the top of the scaled range
         assert overlap_doc.similarity <= 0.95  # But not exceed the maximum
-        assert overlap_doc.source == "hybrid"
+        assert overlap_doc.source == RetrievalMethod.HYBRID
 
     @pytest.mark.asyncio
     async def test_hybrid_search_full_pipeline(self):
@@ -273,7 +364,17 @@ class TestHybridRetrievalService:
         """Test hybrid search with reranking"""
         # Setup mock reranker
         mock_reranker = AsyncMock()
-        mock_reranked = [RetrievalResult("Reranked", 0.95, {}, "r1", "hybrid", rank=1)]
+        mock_reranked = [
+            RetrievalResult(
+                content="Reranked",
+                similarity=0.95,
+                chunk_id="r1",
+                document_id="r1",
+                source="hybrid",  # Using string since it's not a standard enum value
+                rank=1,
+                metadata={},
+            )
+        ]
         mock_reranker.rerank = AsyncMock(return_value=mock_reranked)
 
         service_with_reranker = HybridRetrievalService(
@@ -354,8 +455,22 @@ class TestRRFAlgorithm:
     def test_rrf_single_list(self):
         """Test RRF with only dense results"""
         dense_results = [
-            RetrievalResult("Doc 1", 0.9, {}, "d1", "dense"),
-            RetrievalResult("Doc 2", 0.8, {}, "d2", "dense"),
+            RetrievalResult(
+                content="Doc 1",
+                similarity=0.9,
+                chunk_id="d1",
+                document_id="d1",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(
+                content="Doc 2",
+                similarity=0.8,
+                chunk_id="d2",
+                document_id="d2",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
         sparse_results = []
 
@@ -363,13 +478,31 @@ class TestRRFAlgorithm:
 
         assert len(fused) == 2
         # Should maintain relative order from dense results
-        assert fused[0].id == "d1"
-        assert fused[1].id == "d2"
+        assert fused[0].chunk_id == "d1"
+        assert fused[1].chunk_id == "d2"
 
     def test_rrf_mathematical_correctness(self):
         """Test RRF score calculation correctness"""
-        dense_results = [RetrievalResult("Dense", 0.9, {}, "same", "dense")]
-        sparse_results = [RetrievalResult("Sparse", 0.7, {}, "same", "sparse")]
+        dense_results = [
+            RetrievalResult(
+                content="Dense",
+                similarity=0.9,
+                chunk_id="same",
+                document_id="same",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            )
+        ]
+        sparse_results = [
+            RetrievalResult(
+                content="Sparse",
+                similarity=0.7,
+                chunk_id="same",
+                document_id="same",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            )
+        ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
 
@@ -385,12 +518,40 @@ class TestRRFAlgorithm:
     def test_rrf_rank_order(self):
         """Test that RRF produces correct ranking"""
         dense_results = [
-            RetrievalResult("A", 0.9, {}, "A", "dense"),  # rank 1 dense
-            RetrievalResult("B", 0.8, {}, "B", "dense"),  # rank 2 dense
+            RetrievalResult(  # rank 1 dense
+                content="A",
+                similarity=0.9,
+                chunk_id="A",
+                document_id="A",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
+            RetrievalResult(  # rank 2 dense
+                content="B",
+                similarity=0.8,
+                chunk_id="B",
+                document_id="B",
+                source=RetrievalMethod.DENSE,
+                metadata={},
+            ),
         ]
         sparse_results = [
-            RetrievalResult("B", 0.7, {}, "B", "sparse"),  # rank 1 sparse
-            RetrievalResult("C", 0.6, {}, "C", "sparse"),  # rank 2 sparse
+            RetrievalResult(  # rank 1 sparse
+                content="B",
+                similarity=0.7,
+                chunk_id="B",
+                document_id="B",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),
+            RetrievalResult(  # rank 2 sparse
+                content="C",
+                similarity=0.6,
+                chunk_id="C",
+                document_id="C",
+                source=RetrievalMethod.SPARSE,
+                metadata={},
+            ),
         ]
 
         fused = self.service._reciprocal_rank_fusion(dense_results, sparse_results)
@@ -399,6 +560,8 @@ class TestRRFAlgorithm:
         # A appears in dense only: 1/(60+1) = medium score
         # C appears in sparse only: 1/(60+2) = lowest score
 
-        assert fused[0].id == "B"  # Should rank first (highest combined RRF score)
-        assert fused[1].id == "A"  # Should rank second
-        assert fused[2].id == "C"  # Should rank third
+        assert (
+            fused[0].chunk_id == "B"
+        )  # Should rank first (highest combined RRF score)
+        assert fused[1].chunk_id == "A"  # Should rank second
+        assert fused[2].chunk_id == "C"  # Should rank third

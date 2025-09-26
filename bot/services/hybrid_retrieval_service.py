@@ -11,8 +11,8 @@ Based on the expert recommendations for modern RAG:
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Any
+
+from models import RetrievalMethod, RetrievalResult
 
 try:
     import cohere
@@ -22,16 +22,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RetrievalResult:
-    """Unified result format for all retrieval stages"""
-
-    content: str
-    similarity: float
-    metadata: dict[str, Any]
-    id: str
-    source: str  # "dense", "sparse", or "hybrid"
-    rank: int | None = None
+# RetrievalResult imported from models
 
 
 class Reranker(ABC):
@@ -82,10 +73,22 @@ class CohereReranker(Reranker):
             reranked_results = []
             for result in response.results:
                 original_doc = documents[result.index]
-                # Normalize Cohere relevance score to 0-1 range and ensure valid bounds
-                original_doc.similarity = min(1.0, max(0.0, result.relevance_score))
-                original_doc.rank = len(reranked_results) + 1
-                reranked_results.append(original_doc)
+                # Create new RetrievalResult with updated similarity and rank
+                # since the original is frozen
+                reranked_doc = RetrievalResult(
+                    content=original_doc.content,
+                    similarity=min(
+                        1.0, max(0.0, result.relevance_score)
+                    ),  # Normalize to 0-1
+                    chunk_id=original_doc.chunk_id,
+                    document_id=original_doc.document_id,
+                    source=original_doc.source,
+                    rank=len(reranked_results) + 1,
+                    rerank_score=result.relevance_score,
+                    metadata=original_doc.metadata,
+                    retrieved_at=original_doc.retrieved_at,
+                )
+                reranked_results.append(reranked_doc)
 
             logger.info(
                 f"Reranked {len(doc_texts)} documents to top {len(reranked_results)}"
@@ -208,9 +211,12 @@ class HybridRetrievalService:
                 RetrievalResult(
                     content=r["content"],
                     similarity=r["similarity"],
-                    metadata=r["metadata"],
-                    id=r["id"],
-                    source="dense",
+                    metadata=r.get("metadata", {}),
+                    chunk_id=r["id"],
+                    document_id=r.get(
+                        "document_id", r["id"]
+                    ),  # Fallback to chunk_id if no document_id
+                    source=RetrievalMethod.DENSE,
                 )
                 for r in results
             ]
@@ -232,9 +238,12 @@ class HybridRetrievalService:
                 RetrievalResult(
                     content=r["content"],
                     similarity=r["similarity"],
-                    metadata=r["metadata"],
-                    id=r["id"],
-                    source="sparse",
+                    metadata=r.get("metadata", {}),
+                    chunk_id=r["id"],
+                    document_id=r.get(
+                        "document_id", r["id"]
+                    ),  # Fallback to chunk_id if no document_id
+                    source=RetrievalMethod.SPARSE,
                 )
                 for r in results
             ]
@@ -253,12 +262,12 @@ class HybridRetrievalService:
         RRF Score = sum(1 / (k + rank)) for each list where doc appears
         Default k=60 from research
         """
-        # Create lookup for dense results by ID
+        # Create lookup for dense results by chunk_id
         dense_lookup = {
-            result.id: (i + 1, result) for i, result in enumerate(dense_results)
+            result.chunk_id: (i + 1, result) for i, result in enumerate(dense_results)
         }
         sparse_lookup = {
-            result.id: (i + 1, result) for i, result in enumerate(sparse_results)
+            result.chunk_id: (i + 1, result) for i, result in enumerate(sparse_results)
         }
 
         # Get all unique document IDs
@@ -286,16 +295,30 @@ class HybridRetrievalService:
                 if doc is None:  # Sparse-only result
                     doc = sparse_doc
 
-            # Set source based on where the document appears
+            # Determine source based on where the document appears
             if appears_in_dense and appears_in_sparse:
-                doc.source = "hybrid"  # Appears in both - true hybrid
+                source_type = RetrievalMethod.HYBRID  # Appears in both - true hybrid
             elif appears_in_sparse:
-                doc.source = "elastic"  # Sparse/Elasticsearch only
+                source_type = RetrievalMethod.SPARSE  # Sparse/Elasticsearch only
             else:
-                doc.source = "dense"  # Dense/Pinecone only
+                source_type = RetrievalMethod.DENSE  # Dense/Pinecone only
+
+            # Create a new RetrievalResult with the updated source
+            # since the original is frozen
+            fused_doc = RetrievalResult(
+                content=doc.content,
+                similarity=doc.similarity,  # Will be updated later in the final loop
+                chunk_id=doc.chunk_id,
+                document_id=doc.document_id,
+                source=source_type,
+                rank=doc.rank,
+                rerank_score=doc.rerank_score,
+                metadata=doc.metadata,
+                retrieved_at=doc.retrieved_at,
+            )
 
             fused_scores[doc_id] = rrf_score
-            fused_docs[doc_id] = doc
+            fused_docs[doc_id] = fused_doc
 
         # Sort by RRF score (higher is better)
         sorted_ids = sorted(
@@ -307,16 +330,28 @@ class HybridRetrievalService:
         max_rrf_score = max(fused_scores.values()) if fused_scores else 1.0
 
         for i, doc_id in enumerate(sorted_ids):
-            doc = fused_docs[doc_id]
+            original_doc = fused_docs[doc_id]
             # Scale RRF scores to meaningful similarity range (0.3-0.95)
             # Normalize against max score, then scale with a power curve for good spread
             normalized_score = fused_scores[doc_id] / max_rrf_score
             scaled_score = (
                 normalized_score**0.8
             )  # Gentle power curve for better distribution
-            doc.similarity = 0.3 + (scaled_score * 0.65)  # Scale to 0.3-0.95 range
-            doc.rank = i + 1
-            fused_results.append(doc)
+
+            # Create new RetrievalResult with updated similarity and rank
+            # since the original is frozen
+            fused_doc = RetrievalResult(
+                content=original_doc.content,
+                similarity=0.3 + (scaled_score * 0.65),  # Scale to 0.3-0.95 range
+                chunk_id=original_doc.chunk_id,
+                document_id=original_doc.document_id,
+                source=original_doc.source,
+                rank=i + 1,
+                rerank_score=original_doc.rerank_score,
+                metadata=original_doc.metadata,
+                retrieved_at=original_doc.retrieved_at,
+            )
+            fused_results.append(fused_doc)
 
         logger.info(
             f"RRF fused {len(dense_results)} dense + {len(sparse_results)} sparse → {len(fused_results)} results"

@@ -18,8 +18,8 @@ async def check_elasticsearch():
     """Check Elasticsearch cluster and document counts"""
 
     # Configuration
-    es_url = os.getenv('ELASTICSEARCH_URL', 'http://localhost:9200')
-    base_index = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+    base_index = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
 
     print(f"🔍 Checking Elasticsearch at: {es_url}")
     print(f"📚 Base index name: {base_index}")
@@ -28,9 +28,7 @@ async def check_elasticsearch():
     try:
         # Initialize client
         client = AsyncElasticsearch(
-            hosts=[es_url],
-            verify_certs=False,
-            ssl_show_warn=False
+            hosts=[es_url], verify_certs=False, ssl_show_warn=False
         )
 
         # Test connection
@@ -53,11 +51,7 @@ async def check_elasticsearch():
         print()
 
         # Check for indices
-        indices_to_check = [
-            base_index,
-            f"{base_index}_sparse",
-            f"{base_index}_dense"
-        ]
+        indices_to_check = [base_index, f"{base_index}_sparse", f"{base_index}_dense"]
 
         print("📋 Index Status:")
         print("-" * 30)
@@ -68,11 +62,13 @@ async def check_elasticsearch():
                 if exists:
                     # Get document count
                     count_response = await client.count(index=index_name)
-                    doc_count = count_response['count']
+                    doc_count = count_response["count"]
 
                     # Get index stats
                     stats = await client.indices.stats(index=index_name)
-                    size_bytes = stats['indices'][index_name]['total']['store']['size_in_bytes']
+                    size_bytes = stats["indices"][index_name]["total"]["store"][
+                        "size_in_bytes"
+                    ]
                     size_mb = size_bytes / (1024 * 1024)
 
                     print(f"✅ {index_name}")
@@ -83,14 +79,14 @@ async def check_elasticsearch():
                     if doc_count > 0:
                         sample = await client.search(
                             index=index_name,
-                            body={"size": 3, "sort": [{"_score": {"order": "desc"}}]}
+                            body={"size": 3, "sort": [{"_score": {"order": "desc"}}]},
                         )
 
                         print("   📝 Sample documents:")
-                        for i, hit in enumerate(sample['hits']['hits'][:3], 1):
-                            source = hit['_source']
-                            title = source.get('title', 'No title')
-                            content_preview = source.get('content', '')[:100]
+                        for i, hit in enumerate(sample["hits"]["hits"][:3], 1):
+                            source = hit["_source"]
+                            title = source.get("title", "No title")
+                            content_preview = source.get("content", "")[:100]
                             if len(content_preview) == 100:
                                 content_preview += "..."
                             print(f"      {i}. {title}")
@@ -114,14 +110,10 @@ async def check_elasticsearch():
                 exists = await client.indices.exists(index=index_name)
                 if exists:
                     search_response = await client.search(
-                        index=index_name,
-                        body={
-                            "query": {"match_all": {}},
-                            "size": 1
-                        }
+                        index=index_name, body={"query": {"match_all": {}}, "size": 1}
                     )
 
-                    total_hits = search_response['hits']['total']['value']
+                    total_hits = search_response["hits"]["total"]["value"]
                     print(f"✅ {index_name}: {total_hits} searchable documents")
 
             except Exception as e:

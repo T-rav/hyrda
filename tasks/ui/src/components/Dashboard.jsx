@@ -26,6 +26,7 @@ function Dashboard({ onError, setLoading }) {
   const {
     tasksData,
     taskRunsData,
+    ragMetrics,
     loading,
     error,
     refreshData
@@ -90,7 +91,10 @@ function Dashboard({ onError, setLoading }) {
   // Calculate scheduler stats
   const totalRuns = taskRunsData.length
   const successfulRuns = taskRunsData.filter(run => run.status === 'success').length
-  const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0
+
+  // Calculate RAG query stats
+  const totalQueries = ragMetrics.total_queries || 0
+  const queriesWithNoDocuments = totalQueries > 0 ? Math.round((totalQueries * (ragMetrics.miss_rate || 0)) / 100) : 0
 
   return (
     <div className="dashboard">
@@ -164,13 +168,13 @@ function Dashboard({ onError, setLoading }) {
               <span className="badge bg-info ms-2">{totalRuns}</span>
             </div>
             <div className="stat-item">
-              <strong>Success Rate:</strong>
+              <strong>Queries with No Documents:</strong>
               <span className={`badge ms-2 ${
-                successRate >= 90 ? 'bg-success' :
-                successRate >= 70 ? 'bg-warning' :
+                queriesWithNoDocuments === 0 ? 'bg-success' :
+                queriesWithNoDocuments <= 5 ? 'bg-warning' :
                 'bg-danger'
               }`}>
-                {successRate}% ({successfulRuns}/{totalRuns})
+                {queriesWithNoDocuments}
               </span>
             </div>
           </div>

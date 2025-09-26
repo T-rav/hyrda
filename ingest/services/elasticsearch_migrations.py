@@ -3,6 +3,7 @@ Elasticsearch Index Migration System
 
 Ensures required indices exist with proper mappings before RAG initialization.
 """
+
 import logging
 from typing import Any
 
@@ -39,12 +40,7 @@ class ElasticsearchMigrations:
                     "timestamp": {"type": "date"},
                 }
             },
-            "settings": {
-                "index": {
-                    "number_of_shards": 1,
-                    "number_of_replicas": 0
-                }
-            },
+            "settings": {"index": {"number_of_shards": 1, "number_of_replicas": 0}},
         }
 
     def get_sparse_index_mapping(self) -> dict[str, Any]:
@@ -52,23 +48,17 @@ class ElasticsearchMigrations:
         return {
             "mappings": {
                 "properties": {
-                    "content": {
-                        "type": "text",
-                        "analyzer": "standard"
-                    },
+                    "content": {"type": "text", "analyzer": "standard"},
                     "metadata": {"type": "object", "enabled": True},
                     "timestamp": {"type": "date"},
                 }
             },
-            "settings": {
-                "index": {
-                    "number_of_shards": 1,
-                    "number_of_replicas": 0
-                }
-            },
+            "settings": {"index": {"number_of_shards": 1, "number_of_replicas": 0}},
         }
 
-    async def ensure_index_exists(self, index_name: str, mapping: dict[str, Any]) -> bool:
+    async def ensure_index_exists(
+        self, index_name: str, mapping: dict[str, Any]
+    ) -> bool:
         """Ensure index exists with proper mapping"""
         try:
             # Check if index exists
@@ -86,21 +76,28 @@ class ElasticsearchMigrations:
 
         except RequestError as e:
             logger.error(f"❌ Failed to create index '{index_name}': {e}")
-            if hasattr(e, 'error'):
+            if hasattr(e, "error"):
                 logger.error(f"   Error: {e.error}")
-            if hasattr(e, 'info'):
+            if hasattr(e, "info"):
                 logger.error(f"   Info: {e.info}")
-            if hasattr(e, 'body'):
+            if hasattr(e, "body"):
                 logger.error(f"   Body: {e.body}")
-            logger.error(f"   Status code: {e.status_code if hasattr(e, 'status_code') else 'unknown'}")
+            logger.error(
+                f"   Status code: {e.status_code if hasattr(e, 'status_code') else 'unknown'}"
+            )
             return False
         except Exception as e:
-            logger.error(f"❌ Unexpected error creating index '{index_name}': {type(e).__name__}: {e}")
+            logger.error(
+                f"❌ Unexpected error creating index '{index_name}': {type(e).__name__}: {e}"
+            )
             import traceback
+
             logger.error(f"   Traceback: {traceback.format_exc()}")
             return False
 
-    async def run_migrations(self, collection_name: str, embedding_dims: int = 3072) -> bool:
+    async def run_migrations(
+        self, collection_name: str, embedding_dims: int = 3072
+    ) -> bool:
         """Run all required migrations for RAG system"""
         logger.info("🔄 Running Elasticsearch migrations...")
 
@@ -112,20 +109,25 @@ class ElasticsearchMigrations:
             # Get cluster info for debugging
             try:
                 cluster_info = await self.client.info()
-                logger.info(f"   Cluster: {cluster_info.get('cluster_name', 'unknown')}")
-                logger.info(f"   Version: {cluster_info.get('version', {}).get('number', 'unknown')}")
+                logger.info(
+                    f"   Cluster: {cluster_info.get('cluster_name', 'unknown')}"
+                )
+                logger.info(
+                    f"   Version: {cluster_info.get('version', {}).get('number', 'unknown')}"
+                )
             except Exception as info_e:
                 logger.warning(f"   Could not get cluster info: {info_e}")
 
         except Exception as e:
             logger.error(f"❌ Elasticsearch connection failed: {type(e).__name__}: {e}")
             import traceback
+
             logger.error(f"   Traceback: {traceback.format_exc()}")
             return False
 
         # Create indices (ensure valid Elasticsearch index names)
         # Elasticsearch index names must be lowercase and cannot contain certain characters
-        dense_index = collection_name.lower().replace('_', '-')
+        dense_index = collection_name.lower().replace("_", "-")
         sparse_index = f"{dense_index}-sparse"
 
         logger.info(f"   Dense index name: {dense_index}")
@@ -152,9 +154,7 @@ class ElasticsearchMigrations:
 
 
 async def run_elasticsearch_migrations(
-    elasticsearch_url: str,
-    collection_name: str,
-    embedding_dims: int = 3072
+    elasticsearch_url: str, collection_name: str, embedding_dims: int = 3072
 ) -> bool:
     """Convenience function to run migrations"""
     client = AsyncElasticsearch(
