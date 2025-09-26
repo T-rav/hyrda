@@ -1,13 +1,21 @@
 import contextlib
 import logging
+import os
+
+# Import document processor from ingest module
+import sys
 import time
 
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
+from services.slack_file_service import SlackFileService
 from services.slack_service import SlackService
 from utils.errors import handle_error
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../../ingest"))
+from services.document_processor import DocumentProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +62,7 @@ async def handle_message(
     llm_service: LLMService,
     channel: str,
     thread_ts: str | None = None,
+    files: list[dict] | None = None,
     conversation_cache=None,
 ):
     """Handle an incoming message from Slack"""
@@ -167,6 +176,42 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
+        # Process attached files if present
+        document_content = ""
+        if files:
+            file_service = SlackFileService(slack_service.client)
+            doc_processor = DocumentProcessor()
+
+            for file_info in files:
+                if file_service.is_processable_file(file_info):
+                    logger.info(f"Processing file: {file_info.get('name', 'unknown')}")
+
+                    # Download file content
+                    file_content = await file_service.download_file_content(file_info)
+                    if file_content:
+                        # Extract text from document
+                        extracted_text = doc_processor.extract_text(
+                            file_content, file_info.get("mimetype", "")
+                        )
+                        if extracted_text:
+                            file_name = file_info.get("name", "unknown file")
+                            document_content += f"\n\n--- Content from {file_name} ---\n{extracted_text}"
+                            logger.info(
+                                f"Extracted {len(extracted_text)} characters from {file_name}"
+                            )
+                        else:
+                            logger.warning(
+                                f"Could not extract text from {file_info.get('name')}"
+                            )
+                    else:
+                        logger.warning(
+                            f"Could not download file {file_info.get('name')}"
+                        )
+                else:
+                    logger.info(
+                        f"Skipping unsupported file type: {file_info.get('mimetype')}"
+                    )
+
         # Get the thread history for context
         history, should_use_thread_context = await slack_service.get_thread_history(
             channel, thread_ts
@@ -177,11 +222,32 @@ async def handle_message(
                 f"Using thread context with {len(history)} messages for response generation"
             )
 
+        # Add document content to cache if present and cache is available
+        if document_content and conversation_cache and thread_ts:
+            document_message = {
+                "role": "user",
+                "content": f"[Document content shared by user]{document_content}",
+            }
+            await conversation_cache.update_conversation(
+                thread_ts, document_message, is_bot_message=False
+            )
+            logger.info(
+                f"Added document content to conversation cache for thread {thread_ts}"
+            )
+
+        # Prepare current query with document content if present
+        current_query = text
+        if document_content:
+            current_query = f"{text}{document_content}"
+            logger.info(
+                f"Enhanced query with {len(document_content)} characters of document content"
+            )
+
         # Generate response using LLM service
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
-            current_query=text,  # Pass the actual user message directly
+            current_query=current_query,
         )
 
         # Clean up thinking message

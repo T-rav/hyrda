@@ -61,6 +61,7 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
+                files=body["event"].get("files", []),
                 conversation_cache=conversation_cache,
             )
         except Exception as e:
@@ -104,6 +105,9 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 f"Processing message: channel_type={channel_type}, thread_ts={thread_ts}, text='{text}'"
             )
 
+            # Extract files if present
+            files = event.get("files", [])
+
             # Process message based on context
             await process_message_by_context(
                 user_id=user_id,
@@ -115,6 +119,7 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 slack_service=slack_service,
                 llm_service=llm_service,
                 conversation_cache=conversation_cache,
+                files=files,
             )
 
         except Exception as e:
@@ -133,6 +138,7 @@ async def process_message_by_context(
     slack_service: SlackService,
     llm_service: LLMService,
     conversation_cache=None,
+    files: list[dict] | None = None,
 ):
     """Process message based on its context (DM, mention, thread)"""
 
@@ -150,6 +156,7 @@ async def process_message_by_context(
             llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,  # Use thread_ts if in thread, otherwise ts
+            files=files,
             conversation_cache=conversation_cache,
         )
         return
@@ -169,6 +176,7 @@ async def process_message_by_context(
             llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,
+            files=files,
             conversation_cache=conversation_cache,
         )
         return
@@ -191,6 +199,7 @@ async def process_message_by_context(
                     llm_service=llm_service,
                     channel=channel,
                     thread_ts=thread_ts,
+                    files=files,
                     conversation_cache=conversation_cache,
                 )
             else:
@@ -205,6 +214,7 @@ async def process_message_by_context(
                 llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
+                files=files,
                 conversation_cache=conversation_cache,
             )
         return
