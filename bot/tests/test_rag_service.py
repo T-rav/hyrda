@@ -103,19 +103,17 @@ class TestRAGService:
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, rag_service):
         """Test successful document ingestion"""
-        # Set up the document processor and embedding provider mocks
-        rag_service.document_processor.process_generic_document = Mock(
-            return_value=[
-                {"content": "processed chunk", "metadata": {"file_name": "test.pdf"}}
-            ]
-        )
+        # Set up embedding provider and vector store mocks
         rag_service.embedding_provider.get_embedding = AsyncMock(
             return_value=[0.1, 0.2, 0.3]
         )
         rag_service.vector_store.add_documents = AsyncMock()
 
         documents = [
-            {"content": "test document", "metadata": {"file_name": "test.pdf"}}
+            {
+                "content": "test document content that is long enough to be processed",
+                "metadata": {"file_name": "test.pdf"},
+            }
         ]
 
         result = await rag_service.ingest_documents(documents)
