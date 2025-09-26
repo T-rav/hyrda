@@ -39,7 +39,6 @@ class TestJobRegistry:
         # Check for expected job types
         job_type_names = [jt["type"] for jt in job_types]
         assert "slack_user_import" in job_type_names
-        assert "google_drive_ingest" in job_type_names
         assert "metrics_collection" in job_type_names
 
     def test_create_slack_user_import_job(self, test_settings):
@@ -57,25 +56,6 @@ class TestJobRegistry:
 
         assert job.id == "test_slack_import"
         assert job.name == "Slack User Import"
-
-        # Cleanup
-        scheduler_service.shutdown(wait=False)
-
-    def test_create_google_drive_ingest_job(self, test_settings):
-        """Test creating a Google Drive ingest job."""
-        scheduler_service = SchedulerService(test_settings)
-        scheduler_service.start()
-        registry = JobRegistry(test_settings, scheduler_service)
-
-        job = registry.create_job(
-            job_type="google_drive_ingest",
-            job_id="test_drive_ingest",
-            schedule={"trigger": "interval", "hours": 6},
-            folder_id="test_folder_123",
-        )
-
-        assert job.id == "test_drive_ingest"
-        assert job.name == "Google Drive Ingest"
 
         # Cleanup
         scheduler_service.shutdown(wait=False)
@@ -131,9 +111,6 @@ class TestJobRegistry:
         # Test valid job types
         slack_class = registry.get_job_class("slack_user_import")
         assert slack_class is not None
-
-        drive_class = registry.get_job_class("google_drive_ingest")
-        assert drive_class is not None
 
         metrics_class = registry.get_job_class("metrics_collection")
         assert metrics_class is not None

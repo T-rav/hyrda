@@ -4,6 +4,7 @@ Tests for EmbeddingService functionality.
 Tests embedding providers, text chunking, and vectorization.
 """
 
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -19,13 +20,184 @@ from bot.services.embedding_service import (
 from config.settings import EmbeddingSettings, LLMSettings
 
 
+# TDD Factory Patterns for Embedding Service Testing
+class EmbeddingSettingsFactory:
+    """Factory for creating embedding settings with different configurations"""
+
+    @staticmethod
+    def create_openai_settings(
+        model: str = "text-embedding-ada-002", api_key: str = "test-api-key"
+    ) -> EmbeddingSettings:
+        """Create OpenAI embedding settings"""
+        return EmbeddingSettings(
+            provider="openai",
+            model=model,
+            api_key=SecretStr(api_key),
+        )
+
+    @staticmethod
+    def create_openai_settings_no_key(
+        model: str = "text-embedding-ada-002",
+    ) -> EmbeddingSettings:
+        """Create OpenAI embedding settings without API key"""
+        return EmbeddingSettings(
+            provider="openai",
+            model=model,
+        )
+
+    @staticmethod
+    def create_sentence_transformer_settings(
+        model: str = "all-MiniLM-L6-v2",
+    ) -> EmbeddingSettings:
+        """Create SentenceTransformer embedding settings"""
+        return EmbeddingSettings(
+            provider="sentence-transformers",
+            model=model,
+        )
+
+    @staticmethod
+    def create_unsupported_settings() -> EmbeddingSettings:
+        """Create unsupported provider settings"""
+        return EmbeddingSettings(
+            provider="unsupported",
+            model="test-model",
+        )
+
+
+class LLMSettingsFactory:
+    """Factory for creating LLM settings for fallback scenarios"""
+
+    @staticmethod
+    def create_openai_settings(
+        model: str = "gpt-3.5-turbo", api_key: str = "llm-api-key"
+    ) -> LLMSettings:
+        """Create OpenAI LLM settings"""
+        return LLMSettings(provider="openai", api_key=SecretStr(api_key), model=model)
+
+
+class EmbeddingResponseFactory:
+    """Factory for creating embedding API response mocks"""
+
+    @staticmethod
+    def create_openai_single_embedding(embedding: list[float] = None) -> Mock:
+        """Create OpenAI single embedding response"""
+        if embedding is None:
+            embedding = [0.1, 0.2, 0.3]
+
+        response = Mock()
+        response.data = [Mock(embedding=embedding)]
+        return response
+
+    @staticmethod
+    def create_openai_multiple_embeddings(embeddings: list[list[float]] = None) -> Mock:
+        """Create OpenAI multiple embeddings response"""
+        if embeddings is None:
+            embeddings = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+
+        response = Mock()
+        response.data = [Mock(embedding=emb) for emb in embeddings]
+        return response
+
+
+class SentenceTransformerMockFactory:
+    """Factory for creating SentenceTransformer mocks"""
+
+    @staticmethod
+    def create_model_mock(embeddings: list[list[float]] = None) -> Mock:
+        """Create SentenceTransformer model mock"""
+        if embeddings is None:
+            embeddings = [[0.1, 0.2, 0.3]]
+
+        mock_model = Mock()
+        mock_model.encode.return_value = (
+            embeddings[0] if len(embeddings) == 1 else embeddings
+        )
+        return mock_model
+
+    @staticmethod
+    def create_initialization_mocks() -> dict[str, Mock]:
+        """Create mocks for SentenceTransformer initialization"""
+        mock_model = SentenceTransformerMockFactory.create_model_mock()
+        mock_loop = Mock()
+        mock_loop.run_in_executor = AsyncMock(return_value=mock_model)
+
+        return {
+            "model": mock_model,
+            "loop": mock_loop,
+        }
+
+
+class ClientMockFactory:
+    """Factory for creating client mocks"""
+
+    @staticmethod
+    def create_openai_client() -> Mock:
+        """Create OpenAI client mock"""
+        client = Mock()
+        client._client = Mock()
+        client.close = AsyncMock()
+        client.embeddings = Mock()
+        client.embeddings.create = AsyncMock()
+        return client
+
+    @staticmethod
+    def create_failing_client(error: str = "API Error") -> Mock:
+        """Create client mock that raises exceptions"""
+        client = ClientMockFactory.create_openai_client()
+        client.embeddings.create = AsyncMock(side_effect=Exception(error))
+        return client
+
+
+class TextChunkingTestDataFactory:
+    """Factory for creating text chunking test data"""
+
+    @staticmethod
+    def create_short_text(content: str = "Short text that fits in one chunk") -> str:
+        """Create short text for single chunk scenarios"""
+        return content
+
+    @staticmethod
+    def create_long_text(
+        chunk_size: int = 100, num_chunks: int = 3, word: str = "test"
+    ) -> str:
+        """Create long text that requires multiple chunks"""
+        # Create text longer than chunk_size * num_chunks
+        words_per_chunk = chunk_size // (len(word) + 1)  # +1 for space
+        total_words = words_per_chunk * num_chunks + 10  # +10 to ensure multiple chunks
+        return " ".join([word] * total_words)
+
+    @staticmethod
+    def create_custom_text_scenarios() -> list[dict[str, Any]]:
+        """Create various text scenarios for comprehensive testing"""
+        return [
+            {
+                "text": "Short text",
+                "chunk_size": 100,
+                "expected_chunks": 1,
+                "description": "short_text",
+            },
+            {
+                "text": TextChunkingTestDataFactory.create_long_text(),
+                "chunk_size": 100,
+                "expected_chunks": 3,
+                "description": "long_text_multiple_chunks",
+            },
+            {
+                "text": "",
+                "chunk_size": 100,
+                "expected_chunks": 0,
+                "description": "empty_text",
+            },
+        ]
+
+
 class TestEmbeddingProvider:
     """Test cases for abstract EmbeddingProvider base class"""
 
     def test_embedding_provider_is_abstract(self):
         """Test that EmbeddingProvider cannot be instantiated directly"""
         with pytest.raises(TypeError):
-            EmbeddingProvider(Mock())
+            EmbeddingProvider(EmbeddingSettingsFactory.create_openai_settings())
 
 
 class TestOpenAIEmbeddingProvider:
@@ -34,18 +206,12 @@ class TestOpenAIEmbeddingProvider:
     @pytest.fixture
     def embedding_settings(self):
         """Create embedding settings for testing"""
-        return EmbeddingSettings(
-            provider="openai",
-            model="text-embedding-ada-002",
-            api_key=SecretStr("test-api-key"),
-        )
+        return EmbeddingSettingsFactory.create_openai_settings()
 
     @pytest.fixture
     def llm_settings(self):
         """Create LLM settings for testing"""
-        return LLMSettings(
-            provider="openai", api_key=SecretStr("llm-api-key"), model="gpt-3.5-turbo"
-        )
+        return LLMSettingsFactory.create_openai_settings()
 
     @pytest.fixture
     def provider(self, embedding_settings):
@@ -66,12 +232,8 @@ class TestOpenAIEmbeddingProvider:
 
     def test_init_with_llm_fallback_key(self):
         """Test initialization falling back to LLM API key"""
-        embedding_settings = EmbeddingSettings(
-            provider="openai", model="text-embedding-ada-002"
-        )
-        llm_settings = LLMSettings(
-            provider="openai", model="gpt-4", api_key=SecretStr("llm-api-key")
-        )
+        embedding_settings = EmbeddingSettingsFactory.create_openai_settings_no_key()
+        llm_settings = LLMSettingsFactory.create_openai_settings("gpt-4", "llm-api-key")
 
         # Instead of testing the actual AsyncOpenAI call, test the logic itself
         with patch("bot.services.embedding_service.AsyncOpenAI") as mock_openai:
@@ -88,9 +250,7 @@ class TestOpenAIEmbeddingProvider:
     def test_init_without_api_key(self):
         """Test initialization logic when no keys are explicitly provided"""
         # This test verifies the key resolution logic in the constructor
-        embedding_settings = EmbeddingSettings(
-            provider="openai", model="text-embedding-ada-002"
-        )
+        embedding_settings = EmbeddingSettingsFactory.create_openai_settings_no_key()
 
         # Since the environment may have real keys, we test the logic differently:
         # When no llm_settings is provided and embedding_settings has no api_key,
@@ -107,11 +267,9 @@ class TestOpenAIEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_get_embeddings_success(self, provider):
         """Test successful embedding generation"""
-        mock_response = Mock()
-        mock_response.data = [
-            Mock(embedding=[0.1, 0.2, 0.3]),
-            Mock(embedding=[0.4, 0.5, 0.6]),
-        ]
+        mock_response = EmbeddingResponseFactory.create_openai_multiple_embeddings(
+            [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+        )
 
         provider.client.embeddings.create = AsyncMock(return_value=mock_response)
 
@@ -126,9 +284,7 @@ class TestOpenAIEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_get_embeddings_error(self, provider):
         """Test embedding generation error handling"""
-        provider.client.embeddings.create = AsyncMock(
-            side_effect=Exception("API Error")
-        )
+        provider.client = ClientMockFactory.create_failing_client("API Error")
 
         texts = ["text 1", "text 2"]
 
@@ -138,8 +294,9 @@ class TestOpenAIEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_get_embedding_single(self, provider):
         """Test single embedding generation"""
-        mock_response = Mock()
-        mock_response.data = [Mock(embedding=[0.1, 0.2, 0.3])]
+        mock_response = EmbeddingResponseFactory.create_openai_single_embedding(
+            [0.1, 0.2, 0.3]
+        )
 
         provider.client.embeddings.create = AsyncMock(return_value=mock_response)
 
@@ -150,8 +307,7 @@ class TestOpenAIEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_close(self, provider):
         """Test closing the provider"""
-        provider.client._client = Mock()
-        provider.client.close = AsyncMock()
+        provider.client = ClientMockFactory.create_openai_client()
 
         await provider.close()
 
@@ -164,9 +320,7 @@ class TestSentenceTransformerEmbeddingProvider:
     @pytest.fixture
     def embedding_settings(self):
         """Create embedding settings for testing"""
-        return EmbeddingSettings(
-            provider="sentence-transformers", model="all-MiniLM-L6-v2"
-        )
+        return EmbeddingSettingsFactory.create_sentence_transformer_settings()
 
     @pytest.fixture
     def provider(self, embedding_settings):
@@ -182,21 +336,19 @@ class TestSentenceTransformerEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_initialize_success(self, provider):
         """Test successful model initialization"""
-        mock_model = Mock()
+        mocks = SentenceTransformerMockFactory.create_initialization_mocks()
 
         with (
             patch(
                 "sentence_transformers.SentenceTransformer",
-                return_value=mock_model,
+                return_value=mocks["model"],
             ),
-            patch("asyncio.get_event_loop") as mock_loop,
+            patch("asyncio.get_event_loop", return_value=mocks["loop"]),
         ):
-            mock_loop.return_value.run_in_executor = AsyncMock(return_value=mock_model)
-
             await provider._initialize()
 
             assert provider._initialized is True
-            assert provider.model_instance == mock_model
+            assert provider.model_instance == mocks["model"]
 
     @pytest.mark.asyncio
     async def test_initialize_import_error(self, provider):
@@ -215,33 +367,30 @@ class TestSentenceTransformerEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_initialize_only_once(self, provider):
         """Test that initialization only happens once"""
-        mock_model = Mock()
+        mocks = SentenceTransformerMockFactory.create_initialization_mocks()
 
         with (
             patch(
                 "sentence_transformers.SentenceTransformer",
-                return_value=mock_model,
+                return_value=mocks["model"],
             ),
-            patch("asyncio.get_event_loop") as mock_loop,
+            patch("asyncio.get_event_loop", return_value=mocks["loop"]),
         ):
-            mock_loop.return_value.run_in_executor = AsyncMock(return_value=mock_model)
-
             await provider._initialize()
             await provider._initialize()  # Second call
 
             # Should only be called once
-            mock_loop.return_value.run_in_executor.assert_called_once()
+            mocks["loop"].run_in_executor.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_embeddings_success(self, provider):
         """Test successful embedding generation"""
-        mock_model = Mock()
         mock_embeddings = [
             Mock(tolist=Mock(return_value=[0.1, 0.2, 0.3])),
             Mock(tolist=Mock(return_value=[0.4, 0.5, 0.6])),
         ]
 
-        provider.model_instance = mock_model
+        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
         provider._initialized = True
 
         with patch("asyncio.get_event_loop") as mock_loop:
@@ -273,10 +422,9 @@ class TestSentenceTransformerEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_get_embedding_single(self, provider):
         """Test single embedding generation"""
-        mock_model = Mock()
         mock_embeddings = [Mock(tolist=Mock(return_value=[0.1, 0.2, 0.3]))]
 
-        provider.model_instance = mock_model
+        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
         provider._initialized = True
 
         with patch("asyncio.get_event_loop") as mock_loop:
@@ -291,7 +439,7 @@ class TestSentenceTransformerEmbeddingProvider:
     @pytest.mark.asyncio
     async def test_close(self, provider):
         """Test closing the provider"""
-        provider.model_instance = Mock()
+        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
         provider._initialized = True
 
         await provider.close()
@@ -305,11 +453,7 @@ class TestCreateEmbeddingProvider:
 
     def test_create_openai_provider(self):
         """Test creating OpenAI provider"""
-        settings = EmbeddingSettings(
-            provider="openai",
-            model="text-embedding-ada-002",
-            api_key=SecretStr("test-key"),
-        )
+        settings = EmbeddingSettingsFactory.create_openai_settings()
 
         with patch("bot.services.embedding_service.AsyncOpenAI"):
             provider = create_embedding_provider(settings)
@@ -319,9 +463,7 @@ class TestCreateEmbeddingProvider:
 
     def test_create_sentence_transformers_provider(self):
         """Test creating SentenceTransformers provider"""
-        settings = EmbeddingSettings(
-            provider="sentence-transformers", model="all-MiniLM-L6-v2"
-        )
+        settings = EmbeddingSettingsFactory.create_sentence_transformer_settings()
 
         provider = create_embedding_provider(settings)
 
