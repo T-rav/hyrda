@@ -105,6 +105,8 @@ ignore = [
     "PLR0912", # too many branches
     "PLR0915", # too many statements
     "PLR2004", # magic value used in comparison
+    "PLW0603", # Using the global statement is discouraged (needed for Flask app factory)
+    "PLC0415", # Allow imports inside functions for optional dependencies
 ]
 
 [tool.ruff.lint.per-file-ignores]
