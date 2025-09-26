@@ -1,21 +1,17 @@
 import contextlib
 import logging
-import os
 
 # Import document processor from ingest module
-import sys
 import time
 
 from handlers.agent_processes import get_agent_blocks, run_agent_process
+from services.document_processor import DocumentProcessor
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
 from services.slack_file_service import SlackFileService
 from services.slack_service import SlackService
 from utils.errors import handle_error
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "../../ingest"))
-from services.document_processor import DocumentProcessor
 
 logger = logging.getLogger(__name__)
 
