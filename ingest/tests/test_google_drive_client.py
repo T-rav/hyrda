@@ -76,7 +76,7 @@ class TestGoogleDriveClient:
             mock_flow.return_value = mock_flow_instance
 
             with (
-                patch("services.google_drive_client.build") as mock_build,
+                patch("services.google_drive_client.build"),
                 patch("builtins.open", create=True),
             ):
                 result = client.authenticate()

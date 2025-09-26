@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [lint, test]
+        task: [lint, test, ingest-lint, ingest-test]
     name: Python ${{ matrix.task }}
 
     steps:
@@ -53,6 +53,19 @@ jobs:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
       run: make test-coverage
+
+    - name: Run ingest linting
+      if: matrix.task == 'ingest-lint'
+      run: |
+        $(VENV)/bin/python -m ruff check ingest/ debug/ --no-fix
+        $(VENV)/bin/python -m pyright ingest/ debug/ --level error --project bot/
+
+    - name: Run ingest tests
+      if: matrix.task == 'ingest-test'
+      env:
+        ENVIRONMENT: test
+        LOG_LEVEL: WARNING
+      run: make test-ingest
 
   react-tests:
     runs-on: ubuntu-latest

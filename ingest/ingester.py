@@ -33,7 +33,8 @@ class GoogleDriveIngester:
 
     def __init__(self, credentials_file=None, token_file=None):
         warnings.warn(
-            "GoogleDriveIngester is deprecated. Use services.IngestionOrchestrator instead.",
+            "GoogleDriveIngester is deprecated. "
+            "Use services.IngestionOrchestrator instead.",
             DeprecationWarning,
             stacklevel=2,
         )

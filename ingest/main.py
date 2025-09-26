@@ -112,9 +112,10 @@ async def main():
             use_hybrid = settings.hybrid.enabled and settings.vector.enabled
             if use_hybrid:
                 print(
-                    "🔄 Hybrid RAG mode detected - using title injection and dual indexing"
+                    "🔄 Hybrid RAG mode detected - "
+                    "using title injection and dual indexing"
                 )
-        except:
+        except Exception:
             # Fallback to individual settings if full Settings fails
             use_hybrid = False
             print("🔄 Single vector mode - using basic ingestion")
@@ -133,7 +134,8 @@ async def main():
 
                 llm_service = await create_llm_service(settings.llm)
                 print(
-                    "✅ Contextual retrieval enabled - chunks will be enhanced with context"
+                    "✅ Contextual retrieval enabled - "
+                    "chunks will be enhanced with context"
                 )
 
             # Set hybrid service in orchestrator
@@ -173,9 +175,10 @@ async def main():
 
                     llm_service = await create_llm_service(llm_settings)
                     print(
-                        "✅ Contextual retrieval enabled - chunks will be enhanced with context"
+                        "✅ Contextual retrieval enabled - "
+                        "chunks will be enhanced with context"
                     )
-            except:
+            except Exception:
                 pass  # Contextual retrieval settings not available
 
             # Set services in orchestrator
@@ -188,7 +191,8 @@ async def main():
 
         if use_hybrid:
             print(
-                "✅ Hybrid RAG services initialized successfully (Pinecone + Elasticsearch + Title Injection)"
+                "✅ Hybrid RAG services initialized successfully "
+                "(Pinecone + Elasticsearch + Title Injection)"
             )
         else:
             print("✅ Single vector services initialized successfully")
