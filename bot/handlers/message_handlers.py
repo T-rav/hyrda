@@ -257,8 +257,13 @@ async def process_file_attachments(
             file_content = ""
 
             # Process based on file type
-            if file_type.startswith("text/") or file_name.endswith(
-                (".txt", ".md", ".py", ".js", ".json", ".csv", ".vtt", ".srt")
+            # Check MIME types first, then fall back to extensions
+            if (
+                file_type.startswith("text/")
+                or file_type in ("text/vtt", "application/x-subrip", "text/srt")
+                or file_name.endswith(
+                    (".txt", ".md", ".py", ".js", ".json", ".csv", ".vtt", ".srt")
+                )
             ):
                 # Text files
                 try:

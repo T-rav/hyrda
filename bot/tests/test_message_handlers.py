@@ -469,6 +469,7 @@ class TestFileProcessingErrorHandling:
             ("test.csv", "text/csv"),
             ("test.vtt", "text/vtt"),
             ("test.srt", "application/x-subrip"),
+            ("subtitles.srt", "text/srt"),  # Alternative SRT MIME type
             ("test.pdf", "application/pdf"),
             (
                 "test.docx",
