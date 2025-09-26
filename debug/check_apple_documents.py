@@ -9,10 +9,11 @@ import sys
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Add bot directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'bot'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bot"))
 
 from config.settings import Settings
 from services.embedding_service import create_embedding_provider
@@ -71,11 +72,13 @@ async def check_apple_documents():
                 # Group by document
                 if file_name not in documents:
                     documents[file_name] = []
-                documents[file_name].append({
-                    'similarity': result.get("similarity", 0),
-                    'content_preview': content[:100].replace("\n", " "),
-                    'chunk_metadata': metadata
-                })
+                documents[file_name].append(
+                    {
+                        "similarity": result.get("similarity", 0),
+                        "content_preview": content[:100].replace("\n", " "),
+                        "chunk_metadata": metadata,
+                    }
+                )
 
         print(f"🍎 Found {len(apple_chunks)} chunks containing 'Apple'")
         print(f"📄 Across {len(documents)} unique documents:")
@@ -91,9 +94,11 @@ async def check_apple_documents():
 
             # Show chunk details
             for i, chunk in enumerate(chunks[:3]):  # Show first 3 chunks
-                similarity = chunk['similarity']
-                content_preview = chunk['content_preview']
-                print(f"   Chunk {i+1}: Similarity {similarity:.3f} - {content_preview}...")
+                similarity = chunk["similarity"]
+                content_preview = chunk["content_preview"]
+                print(
+                    f"   Chunk {i+1}: Similarity {similarity:.3f} - {content_preview}..."
+                )
 
             if len(chunks) > 3:
                 print(f"   ... and {len(chunks) - 3} more chunks")
@@ -106,12 +111,17 @@ async def check_apple_documents():
             chunk_count = len(documents[doc])
             print(f"     • {doc} ({chunk_count} chunks)")
 
-        print(f"   - Total chunks from title documents: {sum(len(documents[doc]) for doc in apple_title_docs)}")
-        print(f"   - Other documents mentioning Apple: {len(documents) - len(apple_title_docs)}")
+        print(
+            f"   - Total chunks from title documents: {sum(len(documents[doc]) for doc in apple_title_docs)}"
+        )
+        print(
+            f"   - Other documents mentioning Apple: {len(documents) - len(apple_title_docs)}"
+        )
 
     except Exception as e:
         print(f"❌ Error during check: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:

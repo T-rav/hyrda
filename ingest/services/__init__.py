@@ -12,4 +12,4 @@ from .document_processor import DocumentProcessor
 from .google_drive_client import GoogleDriveClient
 from .ingestion_orchestrator import IngestionOrchestrator
 
-__all__ = ['DocumentProcessor', 'GoogleDriveClient', 'IngestionOrchestrator']
+__all__ = ["DocumentProcessor", "GoogleDriveClient", "IngestionOrchestrator"]

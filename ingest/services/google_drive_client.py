@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 class GoogleDriveClient:
     """Main orchestrator for Google Drive operations."""
 
-    def __init__(self, credentials_file: str | None = None, token_file: str | None = None):
+    def __init__(
+        self, credentials_file: str | None = None, token_file: str | None = None
+    ):
         """
         Initialize the Google Drive client.
 
@@ -99,7 +101,9 @@ class GoogleDriveClient:
                 if processed_item:
                     files.extend(processed_item)
             except Exception as e:
-                logger.error(f"Error processing item {item.get('name', 'unknown')}: {e}")
+                logger.error(
+                    f"Error processing item {item.get('name', 'unknown')}: {e}"
+                )
 
         logger.info(f"✅ Found {len(files)} items in folder")
         return files
@@ -120,25 +124,20 @@ class GoogleDriveClient:
             List of processed items (may include subfolder contents)
         """
         # Enrich metadata
-        item['folder_id'] = folder_id
+        item["folder_id"] = folder_id
         enriched_item = self.metadata_parser.enrich_file_metadata(item, folder_path)
 
         # Get detailed permissions
-        detailed_permissions = self.api_service.get_detailed_permissions(item['id'])
-        enriched_item['detailed_permissions'] = detailed_permissions
+        detailed_permissions = self.api_service.get_detailed_permissions(item["id"])
+        enriched_item["detailed_permissions"] = detailed_permissions
 
         files = [enriched_item]
 
         # If it's a folder and recursive is enabled, get its contents
-        if (
-            recursive
-            and item['mimeType'] == 'application/vnd.google-apps.folder'
-        ):
+        if recursive and item["mimeType"] == "application/vnd.google-apps.folder":
             try:
                 subfolder_files = self.list_folder_contents(
-                    item['id'],
-                    recursive=True,
-                    folder_path=enriched_item['full_path']
+                    item["id"], recursive=True, folder_path=enriched_item["full_path"]
                 )
                 files.extend(subfolder_files)
             except Exception as e:
@@ -174,11 +173,11 @@ class GoogleDriveClient:
             # Process content based on type
             if isinstance(raw_content, bytes):
                 # Handle Google Apps files (usually come as bytes)
-                if mime_type.startswith('application/vnd.google-apps'):
+                if mime_type.startswith("application/vnd.google-apps"):
                     try:
-                        return raw_content.decode('utf-8')
+                        return raw_content.decode("utf-8")
                     except UnicodeDecodeError:
-                        return raw_content.decode('latin-1', errors='ignore')
+                        return raw_content.decode("latin-1", errors="ignore")
                 else:
                     # Use document processor for other file types
                     return self.document_processor.extract_text(raw_content, mime_type)
@@ -200,10 +199,12 @@ class GoogleDriveClient:
             "authenticated": self.api_service is not None,
             "services": {
                 "authenticator": "initialized",
-                "api_service": "initialized" if self.api_service else "not_authenticated",
+                "api_service": "initialized"
+                if self.api_service
+                else "not_authenticated",
                 "metadata_parser": "initialized",
-                "document_processor": "initialized"
-            }
+                "document_processor": "initialized",
+            },
         }
 
     # Backward compatibility - delegate to metadata parser

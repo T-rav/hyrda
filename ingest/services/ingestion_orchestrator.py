@@ -18,7 +18,9 @@ from .google_drive_client import GoogleDriveClient
 class IngestionOrchestrator:
     """Main orchestrator for the document ingestion process."""
 
-    def __init__(self, credentials_file: str | None = None, token_file: str | None = None):
+    def __init__(
+        self, credentials_file: str | None = None, token_file: str | None = None
+    ):
         """
         Initialize the ingestion orchestrator.
 
@@ -42,7 +44,13 @@ class IngestionOrchestrator:
         """
         return self.google_drive_client.authenticate()
 
-    def set_services(self, vector_service, embedding_service=None, llm_service=None, enable_contextual_retrieval=False):
+    def set_services(
+        self,
+        vector_service,
+        embedding_service=None,
+        llm_service=None,
+        enable_contextual_retrieval=False,
+    ):
         """
         Set the vector database and embedding services.
 
@@ -58,7 +66,7 @@ class IngestionOrchestrator:
         self.enable_contextual_retrieval = enable_contextual_retrieval
 
         # For hybrid RAG service, embedding service is built-in
-        if hasattr(vector_service, 'embedding_service'):
+        if hasattr(vector_service, "embedding_service"):
             self.embedding_service = vector_service.embedding_service
 
         # Initialize contextual retrieval service if enabled
@@ -66,9 +74,12 @@ class IngestionOrchestrator:
             # Import here to avoid circular dependencies
             sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
             from services.contextual_retrieval_service import ContextualRetrievalService
+
             self.contextual_retrieval_service = ContextualRetrievalService(llm_service)
 
-    async def ingest_files(self, files: list[dict], metadata: dict | None = None) -> tuple[int, int]:
+    async def ingest_files(
+        self, files: list[dict], metadata: dict | None = None
+    ) -> tuple[int, int]:
         """
         Ingest files into the vector database.
 
@@ -81,14 +92,18 @@ class IngestionOrchestrator:
         """
         # Check that services are properly initialized
         if not self.vector_service:
-            raise RuntimeError("Vector service not initialized. Services must be set before calling ingest_files.")
+            raise RuntimeError(
+                "Vector service not initialized. Services must be set before calling ingest_files."
+            )
 
         # For hybrid services, embedding service is built-in
-        if hasattr(self.vector_service, 'embedding_service'):
+        if hasattr(self.vector_service, "embedding_service"):
             # Hybrid service has built-in embedding service
             pass
         elif not self.embedding_service:
-            raise RuntimeError("Embedding service not initialized. Services must be set before calling ingest_files.")
+            raise RuntimeError(
+                "Embedding service not initialized. Services must be set before calling ingest_files."
+            )
 
         success_count = 0
         error_count = 0
@@ -96,13 +111,15 @@ class IngestionOrchestrator:
         for file_info in files:
             try:
                 # Skip folders and unsupported file types
-                if file_info['mimeType'] == 'application/vnd.google-apps.folder':
+                if file_info["mimeType"] == "application/vnd.google-apps.folder":
                     continue
 
                 print(f"Processing: {file_info['name']}")
 
                 # Download file content
-                content = self.google_drive_client.download_file_content(file_info['id'], file_info['mimeType'])
+                content = self.google_drive_client.download_file_content(
+                    file_info["id"], file_info["mimeType"]
+                )
                 if not content:
                     print(f"Failed to download: {file_info['name']}")
                     error_count += 1
@@ -110,19 +127,23 @@ class IngestionOrchestrator:
 
                 # Prepare comprehensive document metadata
                 doc_metadata = {
-                    'source': 'google_drive',
-                    'file_id': file_info['id'],
-                    'file_name': file_info['name'],
-                    'full_path': file_info.get('full_path', file_info['name']),
-                    'folder_path': file_info.get('folder_path', ''),
-                    'mime_type': file_info['mimeType'],
-                    'modified_time': file_info.get('modifiedTime'),
-                    'created_time': file_info.get('createdTime'),
-                    'size': file_info.get('size'),
-                    'web_view_link': file_info.get('webViewLink'),
-                    'owner_emails': GoogleDriveClient.get_owner_emails(file_info.get('owners', [])),
-                    'permissions_summary': GoogleDriveClient.get_permissions_summary(file_info.get('detailed_permissions', [])),
-                    'ingested_at': datetime.utcnow().isoformat()
+                    "source": "google_drive",
+                    "file_id": file_info["id"],
+                    "file_name": file_info["name"],
+                    "full_path": file_info.get("full_path", file_info["name"]),
+                    "folder_path": file_info.get("folder_path", ""),
+                    "mime_type": file_info["mimeType"],
+                    "modified_time": file_info.get("modifiedTime"),
+                    "created_time": file_info.get("createdTime"),
+                    "size": file_info.get("size"),
+                    "web_view_link": file_info.get("webViewLink"),
+                    "owner_emails": GoogleDriveClient.get_owner_emails(
+                        file_info.get("owners", [])
+                    ),
+                    "permissions_summary": GoogleDriveClient.get_permissions_summary(
+                        file_info.get("detailed_permissions", [])
+                    ),
+                    "ingested_at": datetime.utcnow().isoformat(),
                 }
 
                 # Add any additional metadata provided
@@ -130,62 +151,77 @@ class IngestionOrchestrator:
                     doc_metadata.update(metadata)
 
                 # Check if we're using hybrid RAG service with title injection
-                if hasattr(self.vector_service, 'ingest_documents'):
+                if hasattr(self.vector_service, "ingest_documents"):
                     # For hybrid service, we need to chunk and generate embeddings first
                     import sys
                     from pathlib import Path
+
                     sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
                     from services.embedding_service import chunk_text
 
                     # Chunk the content
-                    chunk_size = getattr(self.vector_service, 'embedding_service', None)
-                    if chunk_size and hasattr(chunk_size, 'settings'):
-                        chunks = chunk_text(content,
-                                           chunk_size=chunk_size.settings.chunk_size,
-                                           chunk_overlap=chunk_size.settings.chunk_overlap)
+                    chunk_size = getattr(self.vector_service, "embedding_service", None)
+                    if chunk_size and hasattr(chunk_size, "settings"):
+                        chunks = chunk_text(
+                            content,
+                            chunk_size=chunk_size.settings.chunk_size,
+                            chunk_overlap=chunk_size.settings.chunk_overlap,
+                        )
                     else:
                         # Use default chunking
                         chunks = chunk_text(content, chunk_size=1000, chunk_overlap=200)
 
                     # Add contextual descriptions if enabled
-                    if self.enable_contextual_retrieval and self.contextual_retrieval_service:
-                        print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                    if (
+                        self.enable_contextual_retrieval
+                        and self.contextual_retrieval_service
+                    ):
+                        print(
+                            f"Adding contextual descriptions to {len(chunks)} chunks..."
+                        )
                         chunks = await self.contextual_retrieval_service.add_context_to_chunks(
                             chunks,
                             {
-                                'file_name': file_info['name'],
-                                'full_path': file_info.get('full_path', file_info['name']),
-                                'mimeType': file_info['mimeType'],
-                                'createdTime': file_info.get('createdTime'),
-                                'owners': file_info.get('owners', [])
-                            }
+                                "file_name": file_info["name"],
+                                "full_path": file_info.get(
+                                    "full_path", file_info["name"]
+                                ),
+                                "mimeType": file_info["mimeType"],
+                                "createdTime": file_info.get("createdTime"),
+                                "owners": file_info.get("owners", []),
+                            },
                         )
 
                     # Generate embeddings using hybrid service's embedding service
-                    embeddings = await self.vector_service.embedding_service.get_embeddings(chunks)
+                    embeddings = (
+                        await self.vector_service.embedding_service.get_embeddings(
+                            chunks
+                        )
+                    )
 
                     # Prepare metadata for each chunk
                     chunk_metadata = []
                     for i, chunk in enumerate(chunks):
                         chunk_meta = doc_metadata.copy()
-                        chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
-                        chunk_meta['chunk_index'] = i
-                        chunk_meta['total_chunks'] = len(chunks)
+                        chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
+                        chunk_meta["chunk_index"] = i
+                        chunk_meta["total_chunks"] = len(chunks)
                         chunk_metadata.append(chunk_meta)
 
                     # Use hybrid ingestion with proper parameters
                     await self.vector_service.ingest_documents(
-                        texts=chunks,
-                        embeddings=embeddings,
-                        metadata=chunk_metadata
+                        texts=chunks, embeddings=embeddings, metadata=chunk_metadata
                     )
-                    print(f"   📊 Used hybrid ingestion with title injection ({len(chunks)} chunks)")
+                    print(
+                        f"   📊 Used hybrid ingestion with title injection ({len(chunks)} chunks)"
+                    )
 
                 else:
                     # Fallback to single vector store ingestion with title injection
                     # Import required functions
                     import sys
                     from pathlib import Path
+
                     sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
                     from services.embedding_service import chunk_text
                     from services.title_injection_service import TitleInjectionService
@@ -194,46 +230,61 @@ class IngestionOrchestrator:
                     title_injection = TitleInjectionService()
 
                     # Chunk the content and generate embeddings
-                    chunks = chunk_text(content,
-                                       chunk_size=self.embedding_service.settings.chunk_size,
-                                       chunk_overlap=self.embedding_service.settings.chunk_overlap)
+                    chunks = chunk_text(
+                        content,
+                        chunk_size=self.embedding_service.settings.chunk_size,
+                        chunk_overlap=self.embedding_service.settings.chunk_overlap,
+                    )
 
                     # Add contextual descriptions if enabled
-                    if self.enable_contextual_retrieval and self.contextual_retrieval_service:
-                        print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                    if (
+                        self.enable_contextual_retrieval
+                        and self.contextual_retrieval_service
+                    ):
+                        print(
+                            f"Adding contextual descriptions to {len(chunks)} chunks..."
+                        )
                         chunks = await self.contextual_retrieval_service.add_context_to_chunks(
                             chunks,
                             {
-                                'file_name': file_info['name'],
-                                'full_path': file_info.get('full_path', file_info['name']),
-                                'mimeType': file_info['mimeType'],
-                                'createdTime': file_info.get('createdTime'),
-                                'owners': file_info.get('owners', [])
-                            }
+                                "file_name": file_info["name"],
+                                "full_path": file_info.get(
+                                    "full_path", file_info["name"]
+                                ),
+                                "mimeType": file_info["mimeType"],
+                                "createdTime": file_info.get("createdTime"),
+                                "owners": file_info.get("owners", []),
+                            },
                         )
 
                     # Apply title injection to chunks for better semantic search
                     chunk_metadata = []
                     for i, chunk in enumerate(chunks):
                         chunk_meta = doc_metadata.copy()
-                        chunk_meta['chunk_id'] = f"{file_info['id']}_chunk_{i}"
-                        chunk_meta['chunk_index'] = i
-                        chunk_meta['total_chunks'] = len(chunks)
+                        chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
+                        chunk_meta["chunk_index"] = i
+                        chunk_meta["total_chunks"] = len(chunks)
                         chunk_metadata.append(chunk_meta)
 
                     # Inject titles into chunk text for better embedding semantic understanding
-                    enhanced_chunks = title_injection.inject_titles(chunks, chunk_metadata)
+                    enhanced_chunks = title_injection.inject_titles(
+                        chunks, chunk_metadata
+                    )
 
                     # Generate embeddings for enhanced chunks (with title injection)
-                    embeddings = await self.embedding_service.get_embeddings(enhanced_chunks)
+                    embeddings = await self.embedding_service.get_embeddings(
+                        enhanced_chunks
+                    )
 
                     # Add documents to vector store
                     await self.vector_service.add_documents(
                         texts=enhanced_chunks,  # Use enhanced chunks with title injection
                         embeddings=embeddings,
-                        metadata=chunk_metadata
+                        metadata=chunk_metadata,
                     )
-                    print(f"   📊 Used single vector store ingestion with title injection ({len(enhanced_chunks)} chunks)")
+                    print(
+                        f"   📊 Used single vector store ingestion with title injection ({len(enhanced_chunks)} chunks)"
+                    )
 
                 print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
@@ -244,8 +295,9 @@ class IngestionOrchestrator:
 
         return success_count, error_count
 
-    async def ingest_folder(self, folder_id: str, recursive: bool = True,
-                          metadata: dict | None = None) -> tuple[int, int]:
+    async def ingest_folder(
+        self, folder_id: str, recursive: bool = True, metadata: dict | None = None
+    ) -> tuple[int, int]:
         """
         Ingest all files from a Google Drive folder.
 
@@ -258,14 +310,24 @@ class IngestionOrchestrator:
             Tuple of (success_count, error_count)
         """
         print(f"Scanning folder: {folder_id} (recursive: {recursive})")
-        files = self.google_drive_client.list_folder_contents(folder_id, recursive, folder_path="")
+        files = self.google_drive_client.list_folder_contents(
+            folder_id, recursive, folder_path=""
+        )
 
         # Debug output
         if not files:
             print("Found 0 items - folder appears to be empty or inaccessible")
         else:
-            folders = [f for f in files if f['mimeType'] == 'application/vnd.google-apps.folder']
-            documents = [f for f in files if f['mimeType'] != 'application/vnd.google-apps.folder']
+            folders = [
+                f
+                for f in files
+                if f["mimeType"] == "application/vnd.google-apps.folder"
+            ]
+            documents = [
+                f
+                for f in files
+                if f["mimeType"] != "application/vnd.google-apps.folder"
+            ]
 
             print(f"Found {len(files)} total items:")
             print(f"  📁 {len(folders)} folders")

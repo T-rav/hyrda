@@ -5,11 +5,9 @@ import logging
 import time
 
 from handlers.agent_processes import get_agent_blocks, run_agent_process
-from services.document_processor import DocumentProcessor
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
-from services.slack_file_service import SlackFileService
 from services.slack_service import SlackService
 from utils.errors import handle_error
 
@@ -172,41 +170,11 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # Process attached files if present
+        # Handle file attachments (basic notification only)
         document_content = ""
         if files:
-            file_service = SlackFileService(slack_service.client)
-            doc_processor = DocumentProcessor()
-
-            for file_info in files:
-                if file_service.is_processable_file(file_info):
-                    logger.info(f"Processing file: {file_info.get('name', 'unknown')}")
-
-                    # Download file content
-                    file_content = await file_service.download_file_content(file_info)
-                    if file_content:
-                        # Extract text from document
-                        extracted_text = doc_processor.extract_text(
-                            file_content, file_info.get("mimetype", "")
-                        )
-                        if extracted_text:
-                            file_name = file_info.get("name", "unknown file")
-                            document_content += f"\n\n--- Content from {file_name} ---\n{extracted_text}"
-                            logger.info(
-                                f"Extracted {len(extracted_text)} characters from {file_name}"
-                            )
-                        else:
-                            logger.warning(
-                                f"Could not extract text from {file_info.get('name')}"
-                            )
-                    else:
-                        logger.warning(
-                            f"Could not download file {file_info.get('name')}"
-                        )
-                else:
-                    logger.info(
-                        f"Skipping unsupported file type: {file_info.get('mimetype')}"
-                    )
+            logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
+            # Note: Document processing functionality is handled by separate ingest service
 
         # Get the thread history for context
         history, should_use_thread_context = await slack_service.get_thread_history(
