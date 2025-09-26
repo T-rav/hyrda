@@ -147,10 +147,10 @@ class TestBaseService:
 
         health = service.health_check()
 
-        assert health["service"] == "test_service"
-        assert health["status"] == "unhealthy"  # Not initialized
-        assert health["initialized"] is False
-        assert health["closed"] is False
+        assert health.service_name == "test_service"
+        assert health.status == "unhealthy"  # Not initialized
+        assert "initialized=False" in health.details
+        assert "closed=False" in health.details
 
     @pytest.mark.asyncio
     async def test_health_check_initialized(self):
@@ -160,8 +160,8 @@ class TestBaseService:
 
         health = service.health_check()
 
-        assert health["status"] == "healthy"
-        assert health["initialized"] is True
+        assert health.status == "healthy"
+        assert "initialized=True" in health.details
 
     @pytest.mark.asyncio
     async def test_async_context_manager(self):
@@ -324,9 +324,10 @@ class TestManagedService:
 
         health = service.health_check()
 
-        assert "dependencies" in health
-        assert "test" in health["dependencies"]
-        assert health["dependencies"]["test"]["status"] == "healthy"
+        assert health.metrics is not None and "dependencies" in health.metrics
+        assert health.metrics is not None
+        assert "test" in health.metrics["dependencies"]
+        assert health.metrics["dependencies"]["test"]["status"] == "healthy"
 
     @pytest.mark.asyncio
     async def test_dependency_close_error_handling(self):
