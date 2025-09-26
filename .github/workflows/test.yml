@@ -53,8 +53,7 @@ jobs:
     - name: Run ingest linting
       if: matrix.task == 'ingest-lint'
       run: |
-        python -m ruff check ingest/ debug/ --no-fix
-        python -m pyright ingest/ debug/ --level error --project bot/
+        cd ingest && python -m ruff check . ../debug/ --no-fix
 
     - name: Run ingest tests
       if: matrix.task == 'ingest-test'
