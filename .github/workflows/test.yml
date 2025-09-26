@@ -31,9 +31,13 @@ jobs:
           ${{ runner.os }}-venv-
 
     - name: Install dependencies
-      if: steps.cache-venv.outputs.cache-hit != 'true'
       run: |
         python -m pip install --upgrade pip
+        # Ensure venv is properly set up (creates if missing, validates if cached)
+        if [ ! -f venv/bin/python ] || [ ! -f venv/bin/pip ]; then
+          echo "Creating or fixing virtual environment..."
+          python3.11 -m venv venv
+        fi
         make install-dev
 
     - name: Run unified linting and type checking
@@ -57,8 +61,8 @@ jobs:
     - name: Run ingest linting
       if: matrix.task == 'ingest-lint'
       run: |
-        $(VENV)/bin/python -m ruff check ingest/ debug/ --no-fix
-        $(VENV)/bin/python -m pyright ingest/ debug/ --level error --project bot/
+        venv/bin/python -m ruff check ingest/ debug/ --no-fix
+        venv/bin/python -m pyright ingest/ debug/ --level error --project bot/
 
     - name: Run ingest tests
       if: matrix.task == 'ingest-test'

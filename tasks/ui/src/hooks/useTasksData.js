@@ -2,11 +2,14 @@ import { useState, useCallback } from 'react'
 
 // API base URL - tasks service runs on port 5001
 const API_BASE = 'http://localhost:5001/api'
+// Bot API base URL for RAG metrics
+const BOT_API_BASE = 'http://localhost:8080/api'
 
 export function useTasksData() {
   const [schedulerData, setSchedulerData] = useState({})
   const [tasksData, setTasksData] = useState([])
   const [taskRunsData, setTaskRunsData] = useState([])
+  const [ragMetrics, setRagMetrics] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -58,6 +61,27 @@ export function useTasksData() {
     }
   }, [apiCall])
 
+  // Load RAG metrics from bot service
+  const loadRagMetrics = useCallback(async () => {
+    try {
+      const response = await fetch(`${BOT_API_BASE}/metrics`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setRagMetrics(data.rag_performance || {})
+    } catch (error) {
+      console.error('Error loading RAG metrics:', error)
+      setRagMetrics({})
+    }
+  }, [])
+
   // Refresh all data
   const refreshData = useCallback(async () => {
     setLoading(true)
@@ -67,7 +91,8 @@ export function useTasksData() {
       await Promise.all([
         loadSchedulerInfo(),
         loadTasks(),
-        loadTaskRuns()
+        loadTaskRuns(),
+        loadRagMetrics()
       ])
     } catch (error) {
       console.error('Error refreshing data:', error)
@@ -75,7 +100,7 @@ export function useTasksData() {
     } finally {
       setLoading(false)
     }
-  }, [loadSchedulerInfo, loadTasks, loadTaskRuns])
+  }, [loadSchedulerInfo, loadTasks, loadTaskRuns, loadRagMetrics])
 
   // Task action functions
   const pauseTask = useCallback(async (taskId) => {
@@ -118,6 +143,7 @@ export function useTasksData() {
     schedulerData,
     tasksData,
     taskRunsData,
+    ragMetrics,
     loading,
     error,
     refreshData,

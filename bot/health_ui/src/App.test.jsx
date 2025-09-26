@@ -111,12 +111,50 @@ describe('Health Dashboard App', () => {
     })
   })
 
-  test('renders health dashboard header', async () => {
+  test('renders health dashboard header with correct title', async () => {
     render(<App />)
 
     await waitFor(() => {
       expect(screen.getByText('InsightMesh Health Dashboard')).toBeInTheDocument()
     })
+  })
+
+  test('ensures Health Dashboard title consistency', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      // Verify the main header title is exactly "InsightMesh Health Dashboard"
+      const mainTitle = screen.getByText('InsightMesh Health Dashboard')
+      expect(mainTitle).toBeInTheDocument()
+      expect(mainTitle.tagName).toBe('H1')
+    })
+  })
+
+  test('verifies Health Dashboard title does not change unexpectedly', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      // This test ensures the title remains "InsightMesh Health Dashboard" and not something else
+      expect(screen.getByText('InsightMesh Health Dashboard')).toBeInTheDocument()
+
+      // Ensure it's not the Tasks Dashboard title
+      expect(screen.queryByText('InsightMesh Tasks')).not.toBeInTheDocument()
+
+      // Ensure it's not a generic title
+      expect(screen.queryByText('InsightMesh Dashboard')).not.toBeInTheDocument()
+    })
+  })
+
+  test('verifies HTML page title matches expected Health Dashboard title', async () => {
+    render(<App />)
+
+    // Wait for useEffect to set the document title
+    await waitFor(() => {
+      expect(document.title).toBe('InsightMesh - Health Dashboard')
+    })
+
+    // Ensure it's not the Tasks Dashboard title
+    expect(document.title).not.toBe('InsightMesh - Tasks Dashboard')
   })
 
   test('displays loading spinner initially', () => {
@@ -212,6 +250,82 @@ describe('Health Dashboard App', () => {
       expect(metricsLink).toHaveAttribute('href', '/api/metrics')
       expect(metricsLink).toHaveAttribute('target', '_blank')
       expect(metricsLink).toHaveAttribute('rel', 'noopener noreferrer')
+    })
+  })
+})
+
+describe('Health Dashboard Title Consistency Tests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockHealthData)
+        })
+      }
+      if (url.includes('/api/metrics')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockMetricsData)
+        })
+      }
+      if (url.includes('/api/ready')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockReadyData)
+        })
+      }
+      if (url.includes('/api/services/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockServicesData)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+  })
+
+  test('maintains consistent Health Dashboard branding', async () => {
+    render(<App />)
+
+    // Wait for useEffect to set the document title
+    await waitFor(() => {
+      expect(document.title).toBe('InsightMesh - Health Dashboard')
+    })
+
+    // Wait for the data to load and the title to appear
+    await waitFor(() => {
+      expect(screen.getByText('InsightMesh Health Dashboard')).toBeInTheDocument()
+    })
+  })
+
+  test('prevents accidental title changes to Tasks Dashboard', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      // Ensure Health Dashboard elements are present
+      expect(screen.getByText('InsightMesh Health Dashboard')).toBeInTheDocument()
+
+      // Ensure Tasks Dashboard elements are NOT present
+      expect(screen.queryByText('InsightMesh Tasks')).not.toBeInTheDocument()
+      expect(screen.queryByText('Tasks Dashboard')).not.toBeInTheDocument()
+    })
+  })
+
+  test('ensures Health Dashboard maintains correct context', async () => {
+    render(<App />)
+
+    await waitFor(() => {
+      // Verify Health Dashboard specific elements
+      expect(screen.getByText('InsightMesh Health Dashboard')).toBeInTheDocument()
+      expect(screen.getByText('Infrastructure')).toBeInTheDocument()
+
+      // Verify HTML title is correct
+      expect(document.title).toBe('InsightMesh - Health Dashboard')
     })
   })
 })
