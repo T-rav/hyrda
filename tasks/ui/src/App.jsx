@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, BarChart3, Search } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X } from 'lucide-react'
 import './App.css'
 
 function App() {
@@ -49,26 +49,6 @@ function App() {
               Health
             </a>
             <div className="nav-divider"></div>
-            <a
-              href="http://localhost:3000"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nav-link external monitoring-link"
-              title="Grafana Dashboard - RAG metrics visualization"
-            >
-              <BarChart3 size={20} />
-              Grafana
-            </a>
-            <a
-              href="http://localhost:9090"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nav-link external monitoring-link"
-              title="Prometheus - Raw metrics"
-            >
-              <Search size={20} />
-              Prometheus
-            </a>
           </nav>
         </div>
       </header>
