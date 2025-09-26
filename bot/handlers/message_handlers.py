@@ -1,4 +1,5 @@
 import contextlib
+import io
 import logging
 import time
 
@@ -44,6 +45,154 @@ Remember: Your strength lies in connecting users with their organization's docum
 HTTP_OK = 200
 
 
+async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
+    """Extract text from PDF using PyMuPDF"""
+    try:
+        import fitz  # PyMuPDF
+
+        # Open PDF from bytes
+        pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+        text_content = ""
+
+        for page_num in range(pdf_document.page_count):
+            page = pdf_document.load_page(page_num)
+            page_text = page.get_text()
+            if page_text.strip():
+                text_content += f"\n\n--- Page {page_num + 1} ---\n{page_text}"
+
+        pdf_document.close()
+
+        if text_content.strip():
+            return text_content.strip()
+        else:
+            return f"[PDF file: {file_name} - No extractable text content found]"
+
+    except ImportError:
+        logger.error("PyMuPDF not available for PDF processing")
+        return f"[PDF file: {file_name} - PyMuPDF library not available]"
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF {file_name}: {e}")
+        return f"[PDF file: {file_name} - Error extracting text: {str(e)}]"
+
+
+async def extract_office_text(content: bytes, file_name: str, file_type: str) -> str:
+    """Extract text from Office documents (Word, Excel, PowerPoint)"""
+    try:
+        content_stream = io.BytesIO(content)
+
+        if file_name.endswith(".docx") or "wordprocessingml" in file_type:
+            return await extract_word_text(content_stream, file_name)
+        elif file_name.endswith(".xlsx") or "spreadsheetml" in file_type:
+            return await extract_excel_text(content_stream, file_name)
+        elif file_name.endswith(".pptx") or "presentationml" in file_type:
+            return await extract_powerpoint_text(content_stream, file_name)
+        else:
+            return f"[Office document: {file_name} - Unsupported Office format]"
+
+    except Exception as e:
+        logger.error(f"Error extracting text from Office document {file_name}: {e}")
+        return f"[Office document: {file_name} - Error extracting text: {str(e)}]"
+
+
+async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
+    """Extract text from Word documents"""
+    try:
+        from docx import Document
+
+        doc = Document(content_stream)
+        text_content = ""
+
+        for paragraph in doc.paragraphs:
+            if paragraph.text.strip():
+                text_content += paragraph.text + "\n"
+
+        # Extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = []
+                for cell in row.cells:
+                    if cell.text.strip():
+                        row_text.append(cell.text.strip())
+                if row_text:
+                    text_content += " | ".join(row_text) + "\n"
+
+        if text_content.strip():
+            return text_content.strip()
+        else:
+            return f"[Word document: {file_name} - No extractable text content found]"
+
+    except ImportError:
+        logger.error("python-docx not available for Word processing")
+        return f"[Word document: {file_name} - python-docx library not available]"
+    except Exception as e:
+        logger.error(f"Error extracting text from Word document {file_name}: {e}")
+        return f"[Word document: {file_name} - Error extracting text: {str(e)}]"
+
+
+async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
+    """Extract text from Excel files"""
+    try:
+        from openpyxl import load_workbook
+
+        workbook = load_workbook(content_stream, read_only=True, data_only=True)
+        text_content = ""
+
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            text_content += f"\n\n--- Sheet: {sheet_name} ---\n"
+
+            # Extract data from used cells
+            for row in sheet.iter_rows(values_only=True):
+                row_data = []
+                for cell_value in row:
+                    if cell_value is not None:
+                        row_data.append(str(cell_value))
+                if row_data:
+                    text_content += " | ".join(row_data) + "\n"
+
+        workbook.close()
+
+        if text_content.strip():
+            return text_content.strip()
+        else:
+            return f"[Excel file: {file_name} - No extractable data found]"
+
+    except ImportError:
+        logger.error("openpyxl not available for Excel processing")
+        return f"[Excel file: {file_name} - openpyxl library not available]"
+    except Exception as e:
+        logger.error(f"Error extracting text from Excel file {file_name}: {e}")
+        return f"[Excel file: {file_name} - Error extracting text: {str(e)}]"
+
+
+async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) -> str:
+    """Extract text from PowerPoint presentations"""
+    try:
+        from pptx import Presentation
+
+        prs = Presentation(content_stream)
+        text_content = ""
+
+        for i, slide in enumerate(prs.slides):
+            text_content += f"\n\n--- Slide {i + 1} ---\n"
+
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    text_content += shape.text + "\n"
+
+        if text_content.strip():
+            return text_content.strip()
+        else:
+            return f"[PowerPoint file: {file_name} - No extractable text content found]"
+
+    except ImportError:
+        logger.error("python-pptx not available for PowerPoint processing")
+        return f"[PowerPoint file: {file_name} - python-pptx library not available]"
+    except Exception as e:
+        logger.error(f"Error extracting text from PowerPoint file {file_name}: {e}")
+        return f"[PowerPoint file: {file_name} - Error extracting text: {str(e)}]"
+
+
 async def process_file_attachments(
     files: list[dict], slack_service: SlackService
 ) -> str:
@@ -56,8 +205,8 @@ async def process_file_attachments(
             file_type = file_info.get("mimetype", "")
             file_size = file_info.get("size", 0)
 
-            # Skip very large files (>10MB)
-            if file_size > 10 * 1024 * 1024:
+            # Skip very large files (>100MB)
+            if file_size > 100 * 1024 * 1024:
                 logger.warning(f"Skipping large file: {file_name} ({file_size} bytes)")
                 continue
 
@@ -94,14 +243,16 @@ async def process_file_attachments(
                     file_content = response.content.decode("utf-8", errors="ignore")
 
             elif file_type == "application/pdf" or file_name.endswith(".pdf"):
-                # Basic PDF text extraction (without external dependencies)
-                file_content = f"[PDF file: {file_name} - content extraction would require PyMuPDF library. Please use the ingest service for full PDF processing.]"
+                # PDF text extraction using PyMuPDF
+                file_content = await extract_pdf_text(response.content, file_name)
 
             elif file_type.startswith(
                 "application/vnd.openxmlformats"
             ) or file_name.endswith((".docx", ".xlsx", ".pptx")):
                 # Office documents
-                file_content = f"[Office document: {file_name} - content extraction would require specialized libraries. Please use the ingest service for full document processing.]"
+                file_content = await extract_office_text(
+                    response.content, file_name, file_type
+                )
 
             else:
                 # Unknown file type
