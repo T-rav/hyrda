@@ -1,12 +1,12 @@
 {
   "include": [
-    "bot"
+    "."
   ],
   "exclude": [
-    "bot/tests",
+    "tests",
     "**/__pycache__",
     "**/node_modules",
-    "bot/venv"
+    "venv"
   ],
   "ignore": [],
   "defineConstant": {},

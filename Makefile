@@ -13,9 +13,11 @@ PIP ?= $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 
-# Find Python command with ruff installed (for linting) - prioritize venv
-PYTHON_LINT := $(shell \
-    if [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
+# Find Python command with ruff installed (for linting) - prioritize env var, then venv
+PYTHON_LINT ?= $(shell \
+    if [ -n "$$PYTHON" ] && $$PYTHON -m ruff --version >/dev/null 2>&1; then \
+        echo "$$PYTHON"; \
+    elif [ -f "$(VENV)/bin/python" ] && $(VENV)/bin/python -m ruff --version >/dev/null 2>&1; then \
         echo "$(VENV)/bin/python"; \
     else \
         for cmd in python3.11 python3 python; do \
@@ -229,11 +231,9 @@ lint-check:
 	$(PYTHON_LINT) -m ruff check $(BOT_DIR)
 	@echo "$(BLUE)🎨 Checking ruff formatting...$(RESET)"
 	$(PYTHON_LINT) -m ruff format $(BOT_DIR) --check
-	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
 	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
 	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
-	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
+	@echo "$(GREEN)✅ All checks completed with ruff + bandit!$(RESET)"
 
 typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
