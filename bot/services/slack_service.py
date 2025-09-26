@@ -7,6 +7,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
 from config.settings import SlackSettings
+from models import ThreadInfo
 from utils.errors import delete_message
 
 logger = logging.getLogger(__name__)
@@ -128,16 +129,15 @@ class SlackService:
 
         return messages, success
 
-    async def get_thread_info(self, channel: str, thread_ts: str) -> dict:
+    async def get_thread_info(self, channel: str, thread_ts: str) -> ThreadInfo:
         """Get information about a thread, including whether the bot is part of it"""
-        thread_info = {
-            "exists": False,
-            "message_count": 0,
-            "bot_is_participant": False,
-            "messages": [],
-            "participant_ids": set(),
-            "error": None,
-        }
+        # Initialize with defaults
+        exists = False
+        message_count = 0
+        bot_is_participant = False
+        messages = []
+        participant_ids: set[str] = set()
+        error = None
 
         try:
             # Get the messages in the thread
@@ -152,9 +152,8 @@ class SlackService:
 
             if history_response and history_response.get("messages"):
                 messages = history_response["messages"]
-                thread_info["exists"] = True
-                thread_info["message_count"] = len(messages)
-                thread_info["messages"] = messages
+                exists = True
+                message_count = len(messages)
 
                 # Get both bot's user ID and bot ID if we don't have them yet
                 if not hasattr(self, "bot_user_id") or not self.bot_user_id:
@@ -180,7 +179,7 @@ class SlackService:
                     bot_id = msg.get("bot_id")
 
                     if user_id:
-                        thread_info["participant_ids"].add(user_id)
+                        participant_ids.add(user_id)
 
                     # Check both possible ways the bot could appear in messages:
                     # 1. As a user (user_id field)
@@ -200,20 +199,17 @@ class SlackService:
                     )
 
                     if is_bot_message:
-                        thread_info["bot_is_participant"] = True
-
-                # Convert participant_ids to a list for serialization
-                thread_info["participant_ids"] = list(thread_info["participant_ids"])
+                        bot_is_participant = True
 
                 logger.info(
-                    f"Thread info: exists={thread_info['exists']}, count={thread_info['message_count']}, bot_participant={thread_info['bot_is_participant']}"
+                    f"Thread info: exists={exists}, count={message_count}, bot_participant={bot_is_participant}"
                 )
                 logger.info(
-                    f"Thread participants: {thread_info['participant_ids']}, bot_user_id={getattr(self, 'bot_user_id', None)}, bot_id={self.bot_id}"
+                    f"Thread participants: {list(participant_ids)}, bot_user_id={getattr(self, 'bot_user_id', None)}, bot_id={self.bot_id}"
                 )
         except Exception as e:
             error_msg = str(e)
-            thread_info["error"] = error_msg
+            error = error_msg
             logger.error(f"Error getting thread info: {error_msg}")
 
             # Check if this is a permission error
@@ -229,6 +225,15 @@ class SlackService:
                 logger.error(
                     f"Missing permission scope: {needed_scope}. Add this to your Slack app configuration."
                 )
-                thread_info["error"] = f"Missing permission scope: {needed_scope}"
+                error = f"Missing permission scope: {needed_scope}"
 
-        return thread_info
+        return ThreadInfo(
+            exists=exists,
+            message_count=message_count,
+            bot_is_participant=bot_is_participant,
+            messages=messages,
+            participant_ids=list(participant_ids),
+            error=error,
+            channel=channel,
+            thread_ts=thread_ts,
+        )

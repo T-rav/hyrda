@@ -1,6 +1,7 @@
 import asyncio
 import logging
-from typing import Any
+
+from models import ApiResponse
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +22,12 @@ AGENT_PROCESSES = {
 }
 
 
-async def run_agent_process(process_id: str) -> dict[str, Any]:
+async def run_agent_process(process_id: str) -> ApiResponse:
     """Run an agent process in the background and return status info"""
     if process_id not in AGENT_PROCESSES:
-        return {"success": False, "message": f"Unknown agent process: {process_id}"}
+        return ApiResponse(
+            success=False, error_message=f"Unknown agent process: {process_id}"
+        )
 
     process = AGENT_PROCESSES[process_id]
 
@@ -37,49 +40,60 @@ async def run_agent_process(process_id: str) -> dict[str, Any]:
         )
 
         # Return immediately with process info
-        return {
-            "success": True,
-            "process_id": process_id,
-            "name": process["name"],
-            "status": "started",
-            "pid": process_obj.pid,
-        }
+        return ApiResponse(
+            success=True,
+            data={
+                "process_id": process_id,
+                "name": process["name"],
+                "status": "started",
+                "pid": process_obj.pid,
+            },
+        )
     except Exception as e:
         logger.error(f"Error running agent process {process_id}: {e}")
-        return {
-            "success": False,
-            "process_id": process_id,
-            "name": process["name"],
-            "error": str(e),
-        }
+        return ApiResponse(
+            success=False,
+            data={
+                "process_id": process_id,
+                "name": process["name"],
+            },
+            error_message=str(e),
+        )
 
 
-def get_agent_blocks(result: dict[str, Any], user_id: str) -> list:
+def get_agent_blocks(result: ApiResponse, user_id: str) -> list:
     """Get rich message blocks for agent process result"""
-    if not result.get("success"):
+    if not result.success:
+        error_msg = result.error_message or "Unknown error"
         return [
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"❌ Failed to start agent process: {result.get('error', 'Unknown error')}",
+                    "text": f"❌ Failed to start agent process: {error_msg}",
                 },
             }
         ]
+
+    # Extract data from the response
+    data = result.data or {}
+    name = data.get("name", "Unknown Process")
+    status = data.get("status", "unknown")
+    pid = data.get("pid", "unknown")
 
     return [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"🚀 *Agent Process Started*: {result['name']}",
+                "text": f"🚀 *Agent Process Started*: {name}",
             },
         },
         {
             "type": "section",
             "fields": [
-                {"type": "mrkdwn", "text": f"*Status:* {result['status']}"},
-                {"type": "mrkdwn", "text": f"*Process ID:* {result['pid']}"},
+                {"type": "mrkdwn", "text": f"*Status:* {status}"},
+                {"type": "mrkdwn", "text": f"*Process ID:* {pid}"},
             ],
         },
         {

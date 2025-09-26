@@ -49,19 +49,19 @@ class TestAgentProcesses:
 
             result = await run_agent_process(process_id)
 
-            assert result["success"] is True
-            assert result["process_id"] == process_id
-            assert result["status"] == "started"
-            assert result["pid"] == 12345
-            assert "name" in result
+            assert result.success is True
+            assert result.data["process_id"] == process_id
+            assert result.data["status"] == "started"
+            assert result.data["pid"] == 12345
+            assert "name" in result.data
 
     @pytest.mark.asyncio
     async def test_run_agent_process_unknown(self):
         """Test running unknown agent process"""
         result = await run_agent_process("nonexistent_process")
 
-        assert result["success"] is False
-        assert "Unknown agent process" in result["message"]
+        assert result.success is False
+        assert "Unknown agent process" in result.error_message
 
     @pytest.mark.asyncio
     async def test_run_agent_process_exception(self):
@@ -73,18 +73,25 @@ class TestAgentProcesses:
         ):
             result = await run_agent_process(process_id)
 
-            assert result["success"] is False
-            assert result["error"] == "Test error"
-            assert result["process_id"] == process_id
+            assert result.success is False
+            assert "Test error" in result.error_message
+            assert result.data["process_id"] == process_id
 
     def test_get_agent_blocks_success(self):
         """Test getting agent blocks for successful result"""
-        result = {
-            "success": True,
-            "name": "Test Process",
-            "status": "started",
-            "pid": 12345,
-        }
+        from datetime import datetime
+
+        from bot.models.service_responses import ApiResponse
+
+        result = ApiResponse(
+            success=True,
+            data={
+                "name": "Test Process",
+                "status": "started",
+                "pid": 12345,
+            },
+            timestamp=datetime.now(),
+        )
         user_id = "U123456"
 
         blocks = get_agent_blocks(result, user_id)
@@ -97,7 +104,13 @@ class TestAgentProcesses:
 
     def test_get_agent_blocks_failure(self):
         """Test getting agent blocks for failed result"""
-        result = {"success": False, "error": "Test error"}
+        from datetime import datetime
+
+        from bot.models.service_responses import ApiResponse
+
+        result = ApiResponse(
+            success=False, error_message="Test error", timestamp=datetime.now()
+        )
         user_id = "U123456"
 
         blocks = get_agent_blocks(result, user_id)
