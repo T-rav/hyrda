@@ -660,3 +660,50 @@ class TestConversationCacheImplementation:
                 "1234567890.123", message, is_bot_message=False
             )
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_clear_conversation_redis_error(self, cache):
+        """Test clear conversation with Redis error"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.delete.side_effect = Exception("Redis error")
+            mock_get_client.return_value = mock_redis
+
+            result = await cache.clear_conversation("1234567890.123")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_get_cache_stats_redis_error(self, cache):
+        """Test cache stats with Redis error"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.info.side_effect = Exception("Redis error")
+            mock_get_client.return_value = mock_redis
+
+            stats = await cache.get_cache_stats()
+
+        assert stats["status"] == "error"
+        assert "Redis error" in stats["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_cache_fallback_after_error(self, cache):
+        """Test cache falling back to Slack after Redis error during retrieve"""
+        mock_slack_service = AsyncMock(spec=SlackService)
+        mock_slack_service.get_thread_history.return_value = (
+            [{"role": "user", "content": "from slack"}],
+            True,
+        )
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.side_effect = Exception("Cache error")
+            mock_get_client.return_value = mock_redis
+
+            messages, success, source = await cache.get_conversation(
+                "C123", "1234567890.123", mock_slack_service
+            )
+
+        assert success is True
+        assert source == "slack_api"
+        assert len(messages) == 1
