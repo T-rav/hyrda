@@ -62,7 +62,9 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
-      run: make test-ingest
+      run: |
+        pip install -e "ingest/.[test]"
+        make test-ingest
 
   react-tests:
     runs-on: ubuntu-latest
