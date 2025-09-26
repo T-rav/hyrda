@@ -85,13 +85,53 @@ describe('App Component', () => {
     })
   })
 
-  test('renders app with header and navigation', () => {
+  test('renders app with correct title and header', () => {
     render(<App />)
 
+    // Test the main header title
     expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+
+    // Test navigation elements
     expect(screen.getByRole('button', { name: /dashboard/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /tasks/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /health/i })).toBeInTheDocument()
+  })
+
+  test('ensures Tasks Dashboard title consistency', () => {
+    render(<App />)
+
+    // Verify the main header title is exactly "InsightMesh Tasks"
+    const mainTitle = screen.getByText('InsightMesh Tasks')
+    expect(mainTitle).toBeInTheDocument()
+    expect(mainTitle.tagName).toBe('H1')
+
+    // Verify footer title consistency
+    expect(screen.getByText('InsightMesh Tasks v1.0.0')).toBeInTheDocument()
+  })
+
+  test('verifies Tasks Dashboard title does not change unexpectedly', () => {
+    render(<App />)
+
+    // This test ensures the title remains "InsightMesh Tasks" and not something else
+    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+
+    // Ensure it's not the Health Dashboard title
+    expect(screen.queryByText('InsightMesh Health Dashboard')).not.toBeInTheDocument()
+
+    // Ensure it's not a generic title
+    expect(screen.queryByText('InsightMesh Dashboard')).not.toBeInTheDocument()
+  })
+
+  test('verifies HTML page title matches expected Tasks Dashboard title', async () => {
+    render(<App />)
+
+    // Wait for useEffect to set the document title
+    await waitFor(() => {
+      expect(document.title).toBe('InsightMesh - Tasks Dashboard')
+    })
+
+    // Ensure it's not the Health Dashboard title
+    expect(document.title).not.toBe('InsightMesh - Health Dashboard')
   })
 
   test('switches between dashboard and tasks tabs', async () => {
@@ -163,6 +203,73 @@ describe('App Component', () => {
     expect(healthLink).toHaveAttribute('href', 'http://localhost:8080/ui')
     expect(healthLink).toHaveAttribute('target', '_blank')
     expect(healthLink).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+})
+
+describe('Tasks Dashboard Title Consistency Tests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobs)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+  })
+
+  test('maintains consistent Tasks Dashboard branding', async () => {
+    render(<App />)
+
+    // Wait for useEffect to set the document title
+    await waitFor(() => {
+      expect(document.title).toBe('InsightMesh - Tasks Dashboard')
+    })
+
+    // Verify all title-related elements are consistent
+    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+    expect(screen.getByText('InsightMesh Tasks v1.0.0')).toBeInTheDocument()
+  })
+
+  test('prevents accidental title changes to Health Dashboard', () => {
+    render(<App />)
+
+    // Ensure Tasks Dashboard elements are present
+    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+
+    // Ensure Health Dashboard elements are NOT present
+    expect(screen.queryByText('InsightMesh Health Dashboard')).not.toBeInTheDocument()
+    expect(screen.queryByText('Health Dashboard')).not.toBeInTheDocument()
+  })
+
+  test('ensures navigation maintains correct dashboard context', () => {
+    render(<App />)
+
+    // Verify navigation elements maintain Tasks context
+    expect(screen.getByRole('button', { name: /dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /tasks/i })).toBeInTheDocument()
+
+    // Verify external health link points to correct location
+    const healthLink = screen.getByRole('link', { name: /health/i })
+    expect(healthLink).toHaveAttribute('href', 'http://localhost:8080/ui')
   })
 })
 

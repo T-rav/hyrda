@@ -6,6 +6,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
 
+  // Set document title
+  React.useEffect(() => {
+    document.title = 'InsightMesh - Tasks Dashboard'
+  }, [])
+
   const handleTabChange = (tab) => {
     setActiveTab(tab)
   }
