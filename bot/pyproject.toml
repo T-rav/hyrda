@@ -167,7 +167,7 @@ asyncio_mode = "auto"
 addopts = [
     "--verbose",
     "--cov=.",
-    "--cov-fail-under=65",
+    "--cov-fail-under=70",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
     "--cov-report=xml",

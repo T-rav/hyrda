@@ -1,6 +1,8 @@
 import asyncio
+import json
 import os
 import sys
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -308,3 +310,353 @@ class TestConversationCache:
 
         # Both calls should have been made
         assert mock_conversation_cache.update_conversation.call_count == 2
+
+
+class TestConversationCacheImplementation:
+    """Tests for actual ConversationCache implementation (not mocks)"""
+
+    @pytest.fixture
+    def cache(self):
+        """Create real ConversationCache instance for testing"""
+        return ConversationCache(redis_url="redis://localhost:6379", ttl=1800)
+
+    def test_get_cache_key(self):
+        """Test cache key generation"""
+        cache = ConversationCache()
+        thread_ts = "1234567890.123"
+        key = cache._get_cache_key(thread_ts)
+        assert key == "conversation:1234567890.123"
+
+    def test_get_metadata_key(self):
+        """Test metadata key generation"""
+        cache = ConversationCache()
+        thread_ts = "1234567890.123"
+        key = cache._get_metadata_key(thread_ts)
+        assert key == "conversation_meta:1234567890.123"
+
+    @pytest.mark.asyncio
+    async def test_get_redis_client_connection_failure(self):
+        """Test Redis client handling when connection fails"""
+        cache = ConversationCache(redis_url="redis://invalid:1234")
+
+        with patch("services.conversation_cache.redis.from_url") as mock_from_url:
+            mock_redis = AsyncMock()
+            mock_redis.ping.side_effect = Exception("Connection failed")
+            mock_from_url.return_value = mock_redis
+
+            client = await cache._get_redis_client()
+            assert client is None
+            assert cache._redis_available is False
+
+    @pytest.mark.asyncio
+    async def test_get_redis_client_success(self):
+        """Test successful Redis client creation"""
+        cache = ConversationCache()
+
+        with patch("services.conversation_cache.redis.from_url") as mock_from_url:
+            mock_redis = AsyncMock()
+            mock_redis.ping.return_value = "PONG"
+            mock_from_url.return_value = mock_redis
+
+            client = await cache._get_redis_client()
+            assert client == mock_redis
+            assert cache._redis_available is True
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_no_redis(self, cache):
+        """Test get_conversation when Redis is unavailable"""
+        mock_slack_service = AsyncMock(spec=SlackService)
+        mock_slack_service.get_thread_history.return_value = (
+            [{"role": "user", "content": "test"}],
+            True,
+        )
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_get_client.return_value = None  # No Redis client
+
+            messages, success, source = await cache.get_conversation(
+                "C123", "1234567890.123", mock_slack_service
+            )
+
+        assert success is True
+        assert source == "slack_api"
+        assert len(messages) == 1
+        mock_slack_service.get_thread_history.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_cache_hit(self, cache):
+        """Test successful cache retrieval"""
+        cached_messages = [{"role": "user", "content": "Hello"}]
+        cached_metadata = {"created_at": "2023-01-01T00:00:00Z", "ttl": 1800}
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.side_effect = [
+                json.dumps(cached_messages),  # cached_data
+                json.dumps(cached_metadata),  # cached_meta
+            ]
+            mock_get_client.return_value = mock_redis
+
+            with patch.object(cache, "_get_cache_age", return_value=300):
+                messages, success, source = await cache.get_conversation(
+                    "C123", "1234567890.123", AsyncMock()
+                )
+
+        assert success is True
+        assert source == "cache"
+        assert messages == cached_messages
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_cache_miss_slack_fallback(self, cache):
+        """Test cache miss with Slack API fallback"""
+        slack_messages = [{"role": "user", "content": "From Slack"}]
+
+        mock_slack_service = AsyncMock(spec=SlackService)
+        mock_slack_service.get_thread_history.return_value = (slack_messages, True)
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = None  # Cache miss
+            mock_get_client.return_value = mock_redis
+
+            messages, success, source = await cache.get_conversation(
+                "C123", "1234567890.123", mock_slack_service
+            )
+
+        assert success is True
+        assert source == "slack_api"
+        assert messages == slack_messages
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_no_redis(self, cache):
+        """Test update_conversation when Redis is unavailable"""
+        cache._redis_available = False
+        cache.redis_client = None
+
+        message = {"role": "user", "content": "test"}
+
+        # Should not raise exception when Redis unavailable
+        await cache.update_conversation("1234567890.123", message, is_bot_message=False)
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_success(self, cache):
+        """Test successful conversation update"""
+        message = {"role": "user", "content": "New message"}
+        existing_messages = [{"role": "assistant", "content": "Old message"}]
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = json.dumps(existing_messages)
+            mock_get_client.return_value = mock_redis
+
+            with patch("services.conversation_cache.datetime") as mock_datetime:
+                mock_datetime.now.return_value.isoformat.return_value = (
+                    "2023-01-01T00:00:00Z"
+                )
+                mock_datetime.UTC = UTC
+
+                await cache.update_conversation(
+                    "1234567890.123", message, is_bot_message=False
+                )
+
+        # Verify Redis operations
+        assert mock_redis.setex.call_count == 2  # Both data and metadata
+
+    @pytest.mark.asyncio
+    async def test_get_cache_stats_no_redis(self, cache):
+        """Test cache stats when Redis unavailable"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_get_client.return_value = None  # No Redis client
+
+            stats = await cache.get_cache_stats()
+
+        assert stats["status"] == "unavailable"
+
+    @pytest.mark.asyncio
+    async def test_get_cache_stats_with_redis(self, cache):
+        """Test cache stats with Redis available"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.keys.return_value = ["conversation:1", "conversation:2"]
+            mock_redis.info.return_value = {"used_memory_human": "1MB"}
+            mock_get_client.return_value = mock_redis
+
+            stats = await cache.get_cache_stats()
+
+        assert stats["status"] == "available"
+        assert stats["cached_conversations"] == 2
+
+    def test_get_cache_age(self, cache):
+        """Test cache age calculation"""
+        from datetime import UTC, datetime
+
+        # Mock metadata with timestamp (using cached_at key)
+        metadata = {"cached_at": "2023-01-01T00:00:00Z"}
+
+        with patch("services.conversation_cache.datetime") as mock_datetime:
+            mock_now = datetime(2023, 1, 1, 0, 5, 0, tzinfo=UTC)  # 5 minutes later
+            mock_datetime.now.return_value = mock_now
+            mock_datetime.fromisoformat = datetime.fromisoformat
+            mock_datetime.UTC = UTC
+
+            age = cache._get_cache_age(metadata)
+            assert age == 300  # 5 minutes in seconds
+
+    def test_get_cache_age_invalid_timestamp(self, cache):
+        """Test cache age with invalid timestamp"""
+        metadata = {"created_at": "invalid-timestamp"}
+
+        age = cache._get_cache_age(metadata)
+        assert age == 0  # Should return 0 for invalid timestamps
+
+    @pytest.mark.asyncio
+    async def test_close_no_redis(self, cache):
+        """Test close when Redis client not available"""
+        cache.redis_client = None
+
+        # Should not raise exception
+        await cache.close()
+
+    @pytest.mark.asyncio
+    async def test_close_with_redis(self, cache):
+        """Test close with active Redis client"""
+        mock_redis = AsyncMock()
+        cache.redis_client = mock_redis
+
+        await cache.close()
+
+        mock_redis.aclose.assert_called_once()
+        assert cache.redis_client is None
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_existing_cache(self, cache):
+        """Test updating existing cached conversation"""
+        existing_messages = [{"role": "user", "content": "First message"}]
+        new_message = {"role": "assistant", "content": "Response"}
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = json.dumps(existing_messages)
+            mock_get_client.return_value = mock_redis
+
+            with patch("services.conversation_cache.datetime") as mock_datetime:
+                mock_datetime.now.return_value.isoformat.return_value = (
+                    "2023-01-01T00:00:00Z"
+                )
+                mock_datetime.UTC = UTC
+
+                await cache.update_conversation(
+                    "1234567890.123", new_message, is_bot_message=True
+                )
+
+        # Should get existing conversation first
+        mock_redis.get.assert_called()
+        # Should update with both messages
+        assert mock_redis.setex.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_get_conversation_json_decode_error(self, cache):
+        """Test handling of JSON decode errors in cache"""
+        mock_slack_service = AsyncMock(spec=SlackService)
+        mock_slack_service.get_thread_history.return_value = (
+            [{"role": "user", "content": "fallback"}],
+            True,
+        )
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = "invalid json"  # Invalid JSON
+            mock_get_client.return_value = mock_redis
+
+            messages, success, source = await cache.get_conversation(
+                "C123", "1234567890.123", mock_slack_service
+            )
+
+        # Should fallback to Slack API
+        assert success is True
+        assert source == "slack_api"
+        mock_slack_service.get_thread_history.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_new_cache(self, cache):
+        """Test creating new cached conversation"""
+        message = {"role": "user", "content": "First message"}
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = None  # No existing conversation
+            mock_get_client.return_value = mock_redis
+
+            with patch("services.conversation_cache.datetime") as mock_datetime:
+                mock_datetime.now.return_value.isoformat.return_value = (
+                    "2023-01-01T00:00:00Z"
+                )
+                mock_datetime.UTC = UTC
+
+                await cache.update_conversation(
+                    "1234567890.123", message, is_bot_message=False
+                )
+
+        # Should create new conversation with single message
+        mock_redis.setex.assert_called()
+        assert mock_redis.setex.call_count == 2  # Data and metadata
+
+    @pytest.mark.asyncio
+    async def test_cache_conversation_helper(self, cache):
+        """Test the _cache_conversation helper method"""
+        messages = [{"role": "user", "content": "Test"}]
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_get_client.return_value = mock_redis
+
+            with patch("services.conversation_cache.datetime") as mock_datetime:
+                mock_datetime.now.return_value.isoformat.return_value = (
+                    "2023-01-01T00:00:00Z"
+                )
+                mock_datetime.UTC = UTC
+
+                await cache._cache_conversation(mock_redis, "1234567890.123", messages)
+
+        # Should cache both messages and metadata
+        assert mock_redis.setex.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_clear_conversation_success(self, cache):
+        """Test successful conversation clearing"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.delete.return_value = 2  # Deleted 2 keys
+            mock_get_client.return_value = mock_redis
+
+            result = await cache.clear_conversation("1234567890.123")
+
+        assert result is True
+        mock_redis.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_clear_conversation_no_redis(self, cache):
+        """Test conversation clearing when Redis unavailable"""
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_get_client.return_value = None
+
+            result = await cache.clear_conversation("1234567890.123")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_update_conversation_cache_error(self, cache):
+        """Test update conversation with caching error"""
+        message = {"role": "user", "content": "Test"}
+
+        with patch.object(cache, "_get_redis_client") as mock_get_client:
+            mock_redis = AsyncMock()
+            mock_redis.get.return_value = None
+            mock_redis.setex.side_effect = Exception("Redis error")
+            mock_get_client.return_value = mock_redis
+
+            # Should not raise exception despite Redis error
+            result = await cache.update_conversation(
+                "1234567890.123", message, is_bot_message=False
+            )
+            assert result is False
