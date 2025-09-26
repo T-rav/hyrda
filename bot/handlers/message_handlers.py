@@ -5,6 +5,34 @@ import time
 
 import requests
 
+try:
+    import fitz  # PyMuPDF
+
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
+try:
+    from docx import Document
+
+    PYTHON_DOCX_AVAILABLE = True
+except ImportError:
+    PYTHON_DOCX_AVAILABLE = False
+
+try:
+    from openpyxl import load_workbook
+
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
+try:
+    from pptx import Presentation
+
+    PYTHON_PPTX_AVAILABLE = True
+except ImportError:
+    PYTHON_PPTX_AVAILABLE = False
+
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
@@ -47,9 +75,11 @@ HTTP_OK = 200
 
 async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
     """Extract text from PDF using PyMuPDF"""
-    try:
-        import fitz  # PyMuPDF
+    if not PYMUPDF_AVAILABLE:
+        logger.error("PyMuPDF not available for PDF processing")
+        return f"[PDF file: {file_name} - PyMuPDF library not available]"
 
+    try:
         # Open PDF from bytes
         pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
         text_content = ""
@@ -67,9 +97,6 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
         else:
             return f"[PDF file: {file_name} - No extractable text content found]"
 
-    except ImportError:
-        logger.error("PyMuPDF not available for PDF processing")
-        return f"[PDF file: {file_name} - PyMuPDF library not available]"
     except Exception as e:
         logger.error(f"Error extracting text from PDF {file_name}: {e}")
         return f"[PDF file: {file_name} - Error extracting text: {str(e)}]"
@@ -96,9 +123,11 @@ async def extract_office_text(content: bytes, file_name: str, file_type: str) ->
 
 async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
     """Extract text from Word documents"""
-    try:
-        from docx import Document
+    if not PYTHON_DOCX_AVAILABLE:
+        logger.error("python-docx not available for Word processing")
+        return f"[Word document: {file_name} - python-docx library not available]"
 
+    try:
         doc = Document(content_stream)
         text_content = ""
 
@@ -121,9 +150,6 @@ async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
         else:
             return f"[Word document: {file_name} - No extractable text content found]"
 
-    except ImportError:
-        logger.error("python-docx not available for Word processing")
-        return f"[Word document: {file_name} - python-docx library not available]"
     except Exception as e:
         logger.error(f"Error extracting text from Word document {file_name}: {e}")
         return f"[Word document: {file_name} - Error extracting text: {str(e)}]"
@@ -131,9 +157,11 @@ async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
 
 async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
     """Extract text from Excel files"""
-    try:
-        from openpyxl import load_workbook
+    if not OPENPYXL_AVAILABLE:
+        logger.error("openpyxl not available for Excel processing")
+        return f"[Excel file: {file_name} - openpyxl library not available]"
 
+    try:
         workbook = load_workbook(content_stream, read_only=True, data_only=True)
         text_content = ""
 
@@ -157,9 +185,6 @@ async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
         else:
             return f"[Excel file: {file_name} - No extractable data found]"
 
-    except ImportError:
-        logger.error("openpyxl not available for Excel processing")
-        return f"[Excel file: {file_name} - openpyxl library not available]"
     except Exception as e:
         logger.error(f"Error extracting text from Excel file {file_name}: {e}")
         return f"[Excel file: {file_name} - Error extracting text: {str(e)}]"
@@ -167,9 +192,11 @@ async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
 
 async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) -> str:
     """Extract text from PowerPoint presentations"""
-    try:
-        from pptx import Presentation
+    if not PYTHON_PPTX_AVAILABLE:
+        logger.error("python-pptx not available for PowerPoint processing")
+        return f"[PowerPoint file: {file_name} - python-pptx library not available]"
 
+    try:
         prs = Presentation(content_stream)
         text_content = ""
 
@@ -185,9 +212,6 @@ async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) ->
         else:
             return f"[PowerPoint file: {file_name} - No extractable text content found]"
 
-    except ImportError:
-        logger.error("python-pptx not available for PowerPoint processing")
-        return f"[PowerPoint file: {file_name} - python-pptx library not available]"
     except Exception as e:
         logger.error(f"Error extracting text from PowerPoint file {file_name}: {e}")
         return f"[PowerPoint file: {file_name} - Error extracting text: {str(e)}]"
