@@ -19,70 +19,49 @@ class TestGoogleDriveClient:
 
     def test_init_default_values(self, client):
         """Test GoogleDriveClient initialization with default values."""
-        assert client.credentials_file == "credentials.json"
-        assert client.token_file == "token.json"
-        assert client.service is None
+        assert client.authenticator is not None
+        assert client.api_service is None
         assert client.document_processor is not None
+        assert client.metadata_parser is not None
 
     def test_init_custom_values(self):
         """Test GoogleDriveClient initialization with custom values."""
         client = GoogleDriveClient(
             credentials_file="custom_creds.json", token_file="custom_token.json"
         )
-        assert client.credentials_file == "custom_creds.json"
-        assert client.token_file == "custom_token.json"
+        assert client.authenticator is not None
+        assert client.api_service is None
+        assert client.document_processor is not None
 
-    @patch("services.google_drive_client.os.path.exists")
-    @patch("services.google_drive_client.Credentials.from_authorized_user_file")
-    def test_authenticate_existing_valid_token(
-        self, mock_from_file, mock_exists, client
-    ):
+    def test_authenticate_existing_valid_token(self, client):
         """Test authentication with existing valid token."""
-        # Mock no environment variables
-        with patch.dict("os.environ", {}, clear=True):
-            mock_exists.return_value = True
-            mock_creds = Mock()
-            mock_creds.valid = True
-            mock_from_file.return_value = mock_creds
+        # Mock the authenticator to return valid credentials
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
 
-            with patch("services.google_drive_client.build") as mock_build:
-                result = client.authenticate()
+        result = client.authenticate()
 
-                assert result is True
-                mock_build.assert_called_once_with(
-                    "drive", "v3", credentials=mock_creds
-                )
+        assert result is True
+        assert client.api_service is not None
 
-    @patch("services.google_drive_client.os.path.exists")
-    def test_authenticate_no_credentials_file(self, mock_exists, client):
+    def test_authenticate_no_credentials_file(self, client):
         """Test authentication without credentials file."""
-        with patch.dict("os.environ", {}, clear=True):
-            mock_exists.return_value = False
+        # Mock the authenticator to return None (no credentials)
+        client.authenticator.authenticate = Mock(return_value=None)
 
-            result = client.authenticate()
-            assert result is False
+        result = client.authenticate()
+        assert result is False
 
-    @patch("services.google_drive_client.os.path.exists")
-    @patch("services.google_drive_client.InstalledAppFlow.from_client_secrets_file")
-    def test_authenticate_new_flow(self, mock_flow, mock_exists, client):
+    def test_authenticate_new_flow(self, client):
         """Test authentication with new OAuth flow."""
-        with patch.dict("os.environ", {}, clear=True):
-            mock_exists.side_effect = lambda path: "credentials.json" in path
+        # Mock the authenticator to return valid credentials
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
 
-            mock_flow_instance = Mock()
-            mock_new_creds = Mock()
-            mock_new_creds.valid = True
-            mock_flow_instance.run_local_server.return_value = mock_new_creds
-            mock_flow.return_value = mock_flow_instance
+        result = client.authenticate()
 
-            with (
-                patch("services.google_drive_client.build"),
-                patch("builtins.open", create=True),
-            ):
-                result = client.authenticate()
-
-                assert result is True
-                mock_flow.assert_called_once()
+        assert result is True
+        assert client.api_service is not None
 
     def test_list_folder_contents_not_authenticated(self, client):
         """Test list_folder_contents without authentication."""
@@ -91,7 +70,10 @@ class TestGoogleDriveClient:
 
     def test_list_folder_contents_success(self, client):
         """Test successful folder content listing."""
-        client.service = Mock()
+        # Mock authentication first
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
+        client.authenticate()  # This sets up api_service
 
         # Mock API response
         mock_response = {
@@ -112,11 +94,11 @@ class TestGoogleDriveClient:
             ]
         }
 
-        # Mock the complex query logic - need to handle both broad and specific queries
-        client.service.files().list().execute.return_value = mock_response
-
-        # Mock permissions request
-        client.service.files().get().execute.return_value = {"permissions": []}
+        # Mock the API service methods
+        mock_api_service = Mock()
+        mock_api_service.list_files_in_folder.return_value = mock_response["files"]
+        mock_api_service.get_file_permissions.return_value = []
+        client.api_service = mock_api_service
 
         files = client.list_folder_contents("folder_id")
 
@@ -131,66 +113,80 @@ class TestGoogleDriveClient:
 
     def test_download_file_content_pdf(self, client):
         """Test downloading PDF file content."""
-        client.service = Mock()
-        client.document_processor = Mock()
-        client.document_processor.extract_text.return_value = "Extracted PDF text"
+        # Mock authentication first
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
+        client.authenticate()  # This sets up api_service
 
-        # Set up the mock chain properly
-        mock_get_media = Mock()
-        mock_get_media.execute.return_value = b"PDF content"
-        client.service.files().get_media.return_value = mock_get_media
+        # Mock the API service and document processor
+        mock_api_service = Mock()
+        mock_api_service.download_file_content.return_value = b"PDF content"
+        client.api_service = mock_api_service
 
-        content = client.download_file_content("file_id", "application/pdf")
+        # Mock the document processor method directly
+        with patch.object(client.document_processor, 'extract_text', return_value="Extracted PDF text"):
+            content = client.download_file_content("file_id", "application/pdf")
 
-        assert content == "Extracted PDF text"
-        client.service.files().get_media.assert_called_once_with(fileId="file_id")
-        client.document_processor.extract_text.assert_called_once_with(
-            b"PDF content", "application/pdf"
-        )
+            assert content == "Extracted PDF text"
+            mock_api_service.download_file_content.assert_called_once_with("file_id", "application/pdf")
 
     def test_download_file_content_google_docs(self, client):
         """Test downloading Google Docs as plain text."""
-        client.service = Mock()
+        # Mock authentication first
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
+        client.authenticate()  # This sets up api_service
 
-        # Set up the mock chain properly
-        mock_export_media = Mock()
-        mock_export_media.execute.return_value = b"Document content"
-        client.service.files().export_media.return_value = mock_export_media
+        # Mock the API service
+        mock_api_service = Mock()
+        mock_api_service.download_file_content.return_value = b"Document content"
+        client.api_service = mock_api_service
 
         content = client.download_file_content(
             "file_id", "application/vnd.google-apps.document"
         )
 
         assert content == "Document content"
-        client.service.files().export_media.assert_called_once_with(
-            fileId="file_id", mimeType="text/plain"
+        mock_api_service.download_file_content.assert_called_once_with(
+            "file_id", "application/vnd.google-apps.document"
         )
 
     def test_download_file_content_google_sheets(self, client):
         """Test downloading Google Sheets as CSV."""
-        client.service = Mock()
+        # Mock authentication first
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
+        client.authenticate()  # This sets up api_service
 
-        # Set up the mock chain properly
-        mock_export_media = Mock()
-        mock_export_media.execute.return_value = b"CSV content"
-        client.service.files().export_media.return_value = mock_export_media
+        # Mock the API service
+        mock_api_service = Mock()
+        mock_api_service.download_file_content.return_value = b"CSV content"
+        client.api_service = mock_api_service
 
         content = client.download_file_content(
             "file_id", "application/vnd.google-apps.spreadsheet"
         )
 
         assert content == "CSV content"
-        client.service.files().export_media.assert_called_once_with(
-            fileId="file_id", mimeType="text/csv"
+        mock_api_service.download_file_content.assert_called_once_with(
+            "file_id", "application/vnd.google-apps.spreadsheet"
         )
 
     def test_download_file_content_unsupported(self, client):
         """Test downloading unsupported file type."""
-        client.service = Mock()
+        # Mock authentication first
+        mock_creds = Mock()
+        client.authenticator.authenticate = Mock(return_value=mock_creds)
+        client.authenticate()  # This sets up api_service
+
+        # Mock the API service
+        mock_api_service = Mock()
+        mock_api_service.download_file.return_value = b"Binary content"
+        client.api_service = mock_api_service
 
         content = client.download_file_content("file_id", "image/jpeg")
 
-        assert content is None
+        assert content is None  # Unsupported file type should return None
 
     def test_format_permissions_success(self):
         """Test successful permission formatting."""
