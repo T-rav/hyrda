@@ -32,7 +32,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only restart db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -42,6 +42,7 @@ help:
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
+	@echo "  restart          🔄 Restart the full stack (stop + start)"
 	@echo "  stop             🛑 Stop everything"
 	@echo ""
 	@echo "$(GREEN)Environment Setup:$(RESET)"
@@ -295,6 +296,12 @@ stop: docker-down
 	@echo "$(BLUE)🛑 Stopping monitoring stack...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 	@echo "$(GREEN)✅ All services stopped!$(RESET)"
+
+# Restart command - stop everything and start the full stack
+restart: stop start
+	@echo "$(GREEN)🔄 ================================$(RESET)"
+	@echo "$(GREEN)✅ RESTART COMPLETED SUCCESSFULLY!$(RESET)"
+	@echo "$(GREEN)🔄 ================================$(RESET)"
 
 setup-dev: install-dev
 	@if [ ! -f $(PROJECT_ROOT_DIR).env.test ]; then cp $(BOT_DIR)/tests/.env.test $(PROJECT_ROOT_DIR).env.test; fi
