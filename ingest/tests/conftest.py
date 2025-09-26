@@ -81,36 +81,31 @@ def sample_text_content():
 def sample_file_metadata():
     """Sample file metadata for testing."""
     return {
-        'id': 'test_file_id',
-        'name': 'test_document.pdf',
-        'mimeType': 'application/pdf',
-        'size': '1024',
-        'modifiedTime': '2023-01-01T00:00:00.000Z',
-        'createdTime': '2023-01-01T00:00:00.000Z',
-        'webViewLink': 'https://drive.google.com/file/d/test_file_id/view',
-        'owners': [
-            {
-                'emailAddress': 'owner@example.com',
-                'displayName': 'Test Owner'
-            }
-        ],
-        'permissions': {
-            'readers': [],
-            'writers': [],
-            'owners': [
+        "id": "test_file_id",
+        "name": "test_document.pdf",
+        "mimeType": "application/pdf",
+        "size": "1024",
+        "modifiedTime": "2023-01-01T00:00:00.000Z",
+        "createdTime": "2023-01-01T00:00:00.000Z",
+        "webViewLink": "https://drive.google.com/file/d/test_file_id/view",
+        "owners": [{"emailAddress": "owner@example.com", "displayName": "Test Owner"}],
+        "permissions": {
+            "readers": [],
+            "writers": [],
+            "owners": [
                 {
-                    'type': 'user',
-                    'email': 'owner@example.com',
-                    'display_name': 'Test Owner',
-                    'role': 'owner'
+                    "type": "user",
+                    "email": "owner@example.com",
+                    "display_name": "Test Owner",
+                    "role": "owner",
                 }
             ],
-            'is_public': False,
-            'anyone_can_read': False,
-            'anyone_can_write': False
+            "is_public": False,
+            "anyone_can_read": False,
+            "anyone_can_write": False,
         },
-        'folder_path': 'Documents/Project',
-        'full_path': 'Documents/Project/test_document.pdf'
+        "folder_path": "Documents/Project",
+        "full_path": "Documents/Project/test_document.pdf",
     }
 
 
@@ -118,35 +113,37 @@ def sample_file_metadata():
 def sample_google_docs_metadata():
     """Sample Google Docs metadata for testing."""
     return {
-        'id': 'test_gdoc_id',
-        'name': 'Test Google Doc',
-        'mimeType': 'application/vnd.google-apps.document',
-        'size': None,
-        'modifiedTime': '2023-01-01T00:00:00.000Z',
-        'createdTime': '2023-01-01T00:00:00.000Z',
-        'webViewLink': 'https://docs.google.com/document/d/test_gdoc_id/edit',
-        'owners': [],
-        'permissions': {
-            'readers': [],
-            'writers': [],
-            'owners': [],
-            'is_public': False,
-            'anyone_can_read': False,
-            'anyone_can_write': False
+        "id": "test_gdoc_id",
+        "name": "Test Google Doc",
+        "mimeType": "application/vnd.google-apps.document",
+        "size": None,
+        "modifiedTime": "2023-01-01T00:00:00.000Z",
+        "createdTime": "2023-01-01T00:00:00.000Z",
+        "webViewLink": "https://docs.google.com/document/d/test_gdoc_id/edit",
+        "owners": [],
+        "permissions": {
+            "readers": [],
+            "writers": [],
+            "owners": [],
+            "is_public": False,
+            "anyone_can_read": False,
+            "anyone_can_write": False,
         },
-        'folder_path': '',
-        'full_path': 'Test Google Doc'
+        "folder_path": "",
+        "full_path": "Test Google Doc",
     }
 
 
 @pytest.fixture
 def mock_environment_variables(monkeypatch):
     """Mock environment variables for testing."""
-    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", "/path/to/service_account.json")
+    monkeypatch.setenv(
+        "GOOGLE_APPLICATION_CREDENTIALS", "/path/to/service_account.json"
+    )
     monkeypatch.setenv("VECTOR_ENABLED", "true")
     monkeypatch.setenv("VECTOR_PROVIDER", "chroma")
     monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
 
 
 # Async test marker for pytest-asyncio
-pytest_plugins = ['pytest_asyncio']
+pytest_plugins = ["pytest_asyncio"]

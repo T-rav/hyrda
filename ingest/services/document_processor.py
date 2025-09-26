@@ -31,15 +31,24 @@ class DocumentProcessor:
         Returns:
             Extracted text content, or None if extraction fails
         """
-        if mime_type == 'application/pdf':
+        if mime_type == "application/pdf":
             return self._extract_pdf_text(content)
-        elif mime_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+        elif (
+            mime_type
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ):
             return self._extract_docx_text(content)
-        elif mime_type == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+        elif (
+            mime_type
+            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ):
             return self._extract_xlsx_text(content)
-        elif mime_type == 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+        elif (
+            mime_type
+            == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        ):
             return self._extract_pptx_text(content)
-        elif mime_type.startswith('text/'):
+        elif mime_type.startswith("text/"):
             return self._extract_text_content(content)
         else:
             print(f"Unsupported MIME type for text extraction: {mime_type}")
@@ -48,9 +57,9 @@ class DocumentProcessor:
     def _extract_text_content(self, content: bytes) -> str | None:
         """Extract text from plain text content."""
         try:
-            return content.decode('utf-8')
+            return content.decode("utf-8")
         except UnicodeDecodeError:
-            return content.decode('latin-1', errors='ignore')
+            return content.decode("latin-1", errors="ignore")
 
     def _extract_pdf_text(self, pdf_content: bytes) -> str | None:
         """

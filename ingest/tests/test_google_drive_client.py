@@ -27,43 +27,46 @@ class TestGoogleDriveClient:
     def test_init_custom_values(self):
         """Test GoogleDriveClient initialization with custom values."""
         client = GoogleDriveClient(
-            credentials_file="custom_creds.json",
-            token_file="custom_token.json"
+            credentials_file="custom_creds.json", token_file="custom_token.json"
         )
         assert client.credentials_file == "custom_creds.json"
         assert client.token_file == "custom_token.json"
 
-    @patch('services.google_drive_client.os.path.exists')
-    @patch('services.google_drive_client.Credentials.from_authorized_user_file')
-    def test_authenticate_existing_valid_token(self, mock_from_file, mock_exists, client):
+    @patch("services.google_drive_client.os.path.exists")
+    @patch("services.google_drive_client.Credentials.from_authorized_user_file")
+    def test_authenticate_existing_valid_token(
+        self, mock_from_file, mock_exists, client
+    ):
         """Test authentication with existing valid token."""
         # Mock no environment variables
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             mock_exists.return_value = True
             mock_creds = Mock()
             mock_creds.valid = True
             mock_from_file.return_value = mock_creds
 
-            with patch('services.google_drive_client.build') as mock_build:
+            with patch("services.google_drive_client.build") as mock_build:
                 result = client.authenticate()
 
                 assert result is True
-                mock_build.assert_called_once_with('drive', 'v3', credentials=mock_creds)
+                mock_build.assert_called_once_with(
+                    "drive", "v3", credentials=mock_creds
+                )
 
-    @patch('services.google_drive_client.os.path.exists')
+    @patch("services.google_drive_client.os.path.exists")
     def test_authenticate_no_credentials_file(self, mock_exists, client):
         """Test authentication without credentials file."""
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             mock_exists.return_value = False
 
             result = client.authenticate()
             assert result is False
 
-    @patch('services.google_drive_client.os.path.exists')
-    @patch('services.google_drive_client.InstalledAppFlow.from_client_secrets_file')
+    @patch("services.google_drive_client.os.path.exists")
+    @patch("services.google_drive_client.InstalledAppFlow.from_client_secrets_file")
     def test_authenticate_new_flow(self, mock_flow, mock_exists, client):
         """Test authentication with new OAuth flow."""
-        with patch.dict('os.environ', {}, clear=True):
+        with patch.dict("os.environ", {}, clear=True):
             mock_exists.side_effect = lambda path: "credentials.json" in path
 
             mock_flow_instance = Mock()
@@ -72,9 +75,10 @@ class TestGoogleDriveClient:
             mock_flow_instance.run_local_server.return_value = mock_new_creds
             mock_flow.return_value = mock_flow_instance
 
-            with patch('services.google_drive_client.build') as mock_build, \
-                 patch('builtins.open', create=True):
-
+            with (
+                patch("services.google_drive_client.build") as mock_build,
+                patch("builtins.open", create=True),
+            ):
                 result = client.authenticate()
 
                 assert result is True
@@ -91,17 +95,19 @@ class TestGoogleDriveClient:
 
         # Mock API response
         mock_response = {
-            'files': [
+            "files": [
                 {
-                    'id': 'file1',
-                    'name': 'document.pdf',
-                    'mimeType': 'application/pdf',
-                    'size': '1024',
-                    'modifiedTime': '2023-01-01T00:00:00.000Z',
-                    'createdTime': '2023-01-01T00:00:00.000Z',
-                    'webViewLink': 'https://drive.google.com/file/d/file1/view',
-                    'owners': [{'emailAddress': 'owner@example.com', 'displayName': 'Owner'}],
-                    'parents': ['folder_id']
+                    "id": "file1",
+                    "name": "document.pdf",
+                    "mimeType": "application/pdf",
+                    "size": "1024",
+                    "modifiedTime": "2023-01-01T00:00:00.000Z",
+                    "createdTime": "2023-01-01T00:00:00.000Z",
+                    "webViewLink": "https://drive.google.com/file/d/file1/view",
+                    "owners": [
+                        {"emailAddress": "owner@example.com", "displayName": "Owner"}
+                    ],
+                    "parents": ["folder_id"],
                 }
             ]
         }
@@ -110,13 +116,13 @@ class TestGoogleDriveClient:
         client.service.files().list().execute.return_value = mock_response
 
         # Mock permissions request
-        client.service.files().get().execute.return_value = {'permissions': []}
+        client.service.files().get().execute.return_value = {"permissions": []}
 
         files = client.list_folder_contents("folder_id")
 
         assert len(files) == 1
-        assert files[0]['id'] == 'file1'
-        assert files[0]['name'] == 'document.pdf'
+        assert files[0]["id"] == "file1"
+        assert files[0]["name"] == "document.pdf"
 
     def test_download_file_content_not_authenticated(self, client):
         """Test download_file_content without authentication."""
@@ -138,7 +144,9 @@ class TestGoogleDriveClient:
 
         assert content == "Extracted PDF text"
         client.service.files().get_media.assert_called_once_with(fileId="file_id")
-        client.document_processor.extract_text.assert_called_once_with(b"PDF content", "application/pdf")
+        client.document_processor.extract_text.assert_called_once_with(
+            b"PDF content", "application/pdf"
+        )
 
     def test_download_file_content_google_docs(self, client):
         """Test downloading Google Docs as plain text."""
@@ -149,7 +157,9 @@ class TestGoogleDriveClient:
         mock_export_media.execute.return_value = b"Document content"
         client.service.files().export_media.return_value = mock_export_media
 
-        content = client.download_file_content("file_id", "application/vnd.google-apps.document")
+        content = client.download_file_content(
+            "file_id", "application/vnd.google-apps.document"
+        )
 
         assert content == "Document content"
         client.service.files().export_media.assert_called_once_with(
@@ -165,7 +175,9 @@ class TestGoogleDriveClient:
         mock_export_media.execute.return_value = b"CSV content"
         client.service.files().export_media.return_value = mock_export_media
 
-        content = client.download_file_content("file_id", "application/vnd.google-apps.spreadsheet")
+        content = client.download_file_content(
+            "file_id", "application/vnd.google-apps.spreadsheet"
+        )
 
         assert content == "CSV content"
         client.service.files().export_media.assert_called_once_with(
@@ -184,47 +196,44 @@ class TestGoogleDriveClient:
         """Test successful permission formatting."""
         mock_permissions = [
             {
-                'type': 'user',
-                'role': 'reader',
-                'emailAddress': 'user@example.com',
-                'displayName': 'Test User'
+                "type": "user",
+                "role": "reader",
+                "emailAddress": "user@example.com",
+                "displayName": "Test User",
             },
             {
-                'type': 'group',
-                'role': 'writer',
-                'emailAddress': 'group@example.com',
-                'displayName': 'Test Group'
+                "type": "group",
+                "role": "writer",
+                "emailAddress": "group@example.com",
+                "displayName": "Test Group",
             },
-            {
-                'type': 'anyone',
-                'role': 'reader'
-            }
+            {"type": "anyone", "role": "reader"},
         ]
 
         permissions = GoogleDriveClient.format_permissions(mock_permissions)
 
-        assert len(permissions['readers']) == 2
-        assert len(permissions['writers']) == 1
-        assert permissions['is_public'] is True
-        assert permissions['anyone_can_read'] is True
-        assert permissions['anyone_can_write'] is False
+        assert len(permissions["readers"]) == 2
+        assert len(permissions["writers"]) == 1
+        assert permissions["is_public"] is True
+        assert permissions["anyone_can_read"] is True
+        assert permissions["anyone_can_write"] is False
 
     def test_format_permissions_empty(self):
         """Test permission formatting with empty permissions."""
         permissions = GoogleDriveClient.format_permissions([])
 
-        assert permissions['readers'] == []
-        assert permissions['writers'] == []
-        assert permissions['owners'] == []
-        assert permissions['is_public'] is False
-        assert permissions['anyone_can_read'] is False
-        assert permissions['anyone_can_write'] is False
+        assert permissions["readers"] == []
+        assert permissions["writers"] == []
+        assert permissions["owners"] == []
+        assert permissions["is_public"] is False
+        assert permissions["anyone_can_read"] is False
+        assert permissions["anyone_can_write"] is False
 
     def test_get_permissions_summary(self):
         """Test getting permissions summary."""
         mock_permissions = [
-            {'type': 'anyone', 'role': 'reader'},
-            {'type': 'user', 'role': 'writer'}
+            {"type": "anyone", "role": "reader"},
+            {"type": "user", "role": "writer"},
         ]
 
         summary = GoogleDriveClient.get_permissions_summary(mock_permissions)
@@ -238,8 +247,8 @@ class TestGoogleDriveClient:
     def test_get_owner_emails(self):
         """Test getting owner emails."""
         mock_owners = [
-            {'emailAddress': 'owner1@example.com'},
-            {'emailAddress': 'owner2@example.com'}
+            {"emailAddress": "owner1@example.com"},
+            {"emailAddress": "owner2@example.com"},
         ]
 
         emails = GoogleDriveClient.get_owner_emails(mock_owners)
