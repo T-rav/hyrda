@@ -11,6 +11,73 @@ import pytest
 from app import create_app
 
 
+# TDD Factory Patterns for API Contract Tests
+class FlaskSettingsMockFactory:
+    """Factory for creating Flask settings mocks"""
+
+    @staticmethod
+    def create_test_settings() -> Mock:
+        """Create test Flask settings mock"""
+        return Mock(secret_key="test-secret", flask_env="testing")
+
+    @staticmethod
+    def create_production_settings() -> Mock:
+        """Create production-like Flask settings mock"""
+        return Mock(secret_key="production-secret-key", flask_env="production")
+
+
+class DatabaseQueryMockFactory:
+    """Factory for creating database query mocks"""
+
+    @staticmethod
+    def create_basic_query_mock() -> Mock:
+        """Create basic database query mock"""
+        mock_query = Mock()
+        mock_query.order_by.return_value.limit.return_value.offset.return_value = []
+        return mock_query
+
+    @staticmethod
+    def create_query_mock_with_results(results: list) -> Mock:
+        """Create database query mock with specific results"""
+        mock_query = Mock()
+        mock_query.order_by.return_value.limit.return_value.offset.return_value = (
+            results
+        )
+        return mock_query
+
+
+class APIContractDataFactory:
+    """Factory for creating API contract test data"""
+
+    @staticmethod
+    def create_scheduler_info_response() -> dict:
+        """Create scheduler info API response"""
+        return {
+            "running": True,
+            "jobs_count": 5,
+            "next_run_time": "2024-01-15T10:00:00Z",
+            "uptime_seconds": 3600,
+        }
+
+    @staticmethod
+    def create_task_run_data() -> list:
+        """Create task run data for API testing"""
+        return [
+            {
+                "id": 1,
+                "job_id": "job-1",
+                "status": "completed",
+                "started_at": "2024-01-15T09:00:00Z",
+                "completed_at": "2024-01-15T09:05:00Z",
+                "duration_seconds": 300,
+                "result": "Success",
+                "error": None,
+                "triggered_by": "scheduler",
+                "triggered_by_user": None,
+            }
+        ]
+
+
 class TestTasksAPIContracts:
     """Test Tasks/Scheduler API contracts"""
 
@@ -22,9 +89,7 @@ class TestTasksAPIContracts:
             patch("app.JobRegistry"),
             patch("app.get_settings") as mock_settings,
         ):
-            mock_settings.return_value = Mock(
-                secret_key="test-secret", flask_env="testing"
-            )
+            mock_settings.return_value = FlaskSettingsMockFactory.create_test_settings()
 
             app = create_app()
             app.config["TESTING"] = True
@@ -63,7 +128,7 @@ class TestTasksAPIContracts:
             # Type validation
             assert isinstance(data["running"], bool)
             assert isinstance(data["jobs_count"], int)
-            assert isinstance(data["uptime_seconds"], (int, float))
+            assert isinstance(data["uptime_seconds"], int | float)
 
     def test_jobs_list_contract(self, client):
         """Test /api/jobs returns expected structure for job list"""
@@ -150,24 +215,10 @@ class TestTasksAPIContracts:
 
     def test_task_runs_contract(self, client):
         """Test /api/task-runs returns expected structure for run history"""
-        mock_runs = [
-            {
-                "id": 1,
-                "job_id": "job-1",
-                "status": "completed",
-                "started_at": "2024-01-15T09:00:00Z",
-                "completed_at": "2024-01-15T09:05:00Z",
-                "duration_seconds": 300,
-                "result": "Success",
-                "error": None,
-                "triggered_by": "scheduler",
-                "triggered_by_user": None,
-            }
-        ]
+        mock_runs = APIContractDataFactory.create_task_run_data()
 
         with patch("app.get_db_session") as mock_session:
-            mock_query = Mock()
-            mock_query.order_by.return_value.limit.return_value.offset.return_value = (
+            mock_query = DatabaseQueryMockFactory.create_query_mock_with_results(
                 mock_runs
             )
             mock_session.return_value.__enter__.return_value.query.return_value = (
