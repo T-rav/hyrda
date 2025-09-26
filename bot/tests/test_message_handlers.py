@@ -1,6 +1,7 @@
 import io
 import os
 import sys
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -23,6 +24,242 @@ from handlers.message_handlers import (
     handle_message,
     process_file_attachments,
 )
+
+
+# TDD Factory Patterns for Message Handler Testing
+class SlackFileBuilder:
+    """Builder for creating Slack file attachment objects"""
+
+    def __init__(self):
+        self._name = "test.txt"
+        self._mimetype = "text/plain"
+        self._size = 1000
+        self._url_private = "https://test.com/file"
+        self._additional_fields = {}
+
+    def with_name(self, name: str) -> "SlackFileBuilder":
+        self._name = name
+        return self
+
+    def with_mimetype(self, mimetype: str) -> "SlackFileBuilder":
+        self._mimetype = mimetype
+        return self
+
+    def with_size(self, size: int) -> "SlackFileBuilder":
+        self._size = size
+        return self
+
+    def with_url(self, url: str) -> "SlackFileBuilder":
+        self._url_private = url
+        return self
+
+    def with_no_url(self) -> "SlackFileBuilder":
+        """Remove private URL to simulate files without download access"""
+        if "url_private" in self._additional_fields:
+            del self._additional_fields["url_private"]
+        self._url_private = None
+        return self
+
+    def with_large_size(self, size_mb: int = 200) -> "SlackFileBuilder":
+        """Set file size to exceed processing limits"""
+        self._size = size_mb * 1024 * 1024
+        return self
+
+    def build(self) -> dict[str, Any]:
+        """Build the file attachment dictionary"""
+        file_data = {
+            "name": self._name,
+            "mimetype": self._mimetype,
+            "size": self._size,
+            **self._additional_fields,
+        }
+        if self._url_private is not None:
+            file_data["url_private"] = self._url_private
+        return file_data
+
+    @classmethod
+    def pdf_file(cls, name: str = "test.pdf") -> "SlackFileBuilder":
+        return cls().with_name(name).with_mimetype("application/pdf")
+
+    @classmethod
+    def word_file(cls, name: str = "test.docx") -> "SlackFileBuilder":
+        return (
+            cls()
+            .with_name(name)
+            .with_mimetype(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        )
+
+    @classmethod
+    def excel_file(cls, name: str = "test.xlsx") -> "SlackFileBuilder":
+        return (
+            cls()
+            .with_name(name)
+            .with_mimetype(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        )
+
+    @classmethod
+    def powerpoint_file(cls, name: str = "test.pptx") -> "SlackFileBuilder":
+        return (
+            cls()
+            .with_name(name)
+            .with_mimetype(
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            )
+        )
+
+    @classmethod
+    def text_file(
+        cls, name: str = "test.txt", mimetype: str = "text/plain"
+    ) -> "SlackFileBuilder":
+        return cls().with_name(name).with_mimetype(mimetype)
+
+    @classmethod
+    def subtitle_file(
+        cls, name: str = "captions.vtt", mimetype: str = "text/vtt"
+    ) -> "SlackFileBuilder":
+        return cls().with_name(name).with_mimetype(mimetype).with_size(500)
+
+    @classmethod
+    def srt_subtitle_file(cls, name: str = "subtitles.srt") -> "SlackFileBuilder":
+        return (
+            cls().with_name(name).with_mimetype("application/x-subrip").with_size(300)
+        )
+
+    @classmethod
+    def large_file(
+        cls, name: str = "huge.pdf", size_mb: int = 200
+    ) -> "SlackFileBuilder":
+        return cls().pdf_file(name).with_large_size(size_mb)
+
+    @classmethod
+    def file_without_url(cls, name: str = "no_url.pdf") -> "SlackFileBuilder":
+        return cls().pdf_file(name).with_no_url()
+
+    @classmethod
+    def unsupported_file(cls, name: str = "test.unknown") -> "SlackFileBuilder":
+        return cls().with_name(name).with_mimetype("application/unknown")
+
+
+class HTTPResponseFactory:
+    """Factory for creating HTTP response mocks"""
+
+    @staticmethod
+    def success_response(
+        content: str = "test content", binary_content: bytes = None
+    ) -> Mock:
+        """Create successful HTTP response"""
+        response = Mock()
+        response.status_code = 200
+        response.text = content
+        response.content = binary_content or content.encode("utf-8")
+        return response
+
+    @staticmethod
+    def error_response(status_code: int = 404) -> Mock:
+        """Create error HTTP response"""
+        response = Mock()
+        response.status_code = status_code
+        return response
+
+    @staticmethod
+    def subtitle_response(
+        content: str = "00:00:01.000 --> 00:00:03.000\nHello world subtitle content",
+    ) -> Mock:
+        """Create response with subtitle content"""
+        return HTTPResponseFactory.success_response(content)
+
+    @staticmethod
+    def pdf_response(content: bytes = b"fake pdf content") -> Mock:
+        """Create response with PDF binary content"""
+        response = Mock()
+        response.status_code = 200
+        response.content = content
+        return response
+
+
+class SlackServiceFactory:
+    """Factory for creating Slack service mocks"""
+
+    @staticmethod
+    def create_service(bot_token: str = "test-token") -> Mock:
+        """Create basic Slack service mock"""
+        service = Mock()
+        service.settings = Mock()
+        service.settings.bot_token = bot_token
+        return service
+
+
+class FileProcessingTestDataFactory:
+    """Factory for creating comprehensive test data sets"""
+
+    @staticmethod
+    def all_supported_file_types() -> list[tuple]:
+        """Generate test data for all supported file types"""
+        return [
+            ("test.txt", "text/plain"),
+            ("test.md", "text/markdown"),
+            ("test.py", "text/x-python"),
+            ("test.js", "application/javascript"),
+            ("test.json", "application/json"),
+            ("test.csv", "text/csv"),
+            ("test.vtt", "text/vtt"),
+            ("test.srt", "application/x-subrip"),
+            ("subtitles.srt", "text/srt"),  # Alternative SRT MIME type
+            ("test.pdf", "application/pdf"),
+            (
+                "test.docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+            (
+                "test.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ),
+            (
+                "test.pptx",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ),
+            ("test.unknown", "application/unknown"),
+        ]
+
+    @staticmethod
+    def office_document_routing_test_data() -> dict[str, list[tuple]]:
+        """Generate test data for office document routing"""
+        return {
+            "word": [
+                (
+                    "test.docx",
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+                ("test.docx", "application/wordprocessingml"),
+            ],
+            "excel": [
+                (
+                    "test.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ),
+                ("test.xlsx", "application/spreadsheetml"),
+            ],
+            "powerpoint": [
+                (
+                    "test.pptx",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ),
+                ("test.pptx", "application/presentationml"),
+            ],
+        }
+
+    @staticmethod
+    def invalid_pdf_test_cases() -> list[tuple]:
+        """Generate test data for invalid PDF content scenarios"""
+        return [
+            (None, "none.pdf"),
+            (b"", "empty.pdf"),
+            (b"not a pdf", "invalid.pdf"),
+        ]
 
 
 class TestMessageHandlers:
@@ -94,12 +331,7 @@ class TestPDFProcessing:
         if not PYMUPDF_AVAILABLE:
             pytest.skip("PyMuPDF not available in test environment")
 
-        # Test with various invalid inputs
-        test_cases = [
-            (None, "none.pdf"),
-            (b"", "empty.pdf"),
-            (b"not a pdf", "invalid.pdf"),
-        ]
+        test_cases = FileProcessingTestDataFactory.invalid_pdf_test_cases()
 
         for content, filename in test_cases:
             if content is not None:
@@ -222,45 +454,27 @@ class TestOfficeDocumentRouting:
     @pytest.mark.asyncio
     async def test_extract_office_text_word_routing(self):
         """Test that Word documents are routed correctly"""
-        test_cases = [
-            (
-                "test.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ),
-            ("test.docx", "application/wordprocessingml"),
-        ]
+        routing_data = FileProcessingTestDataFactory.office_document_routing_test_data()
 
-        for filename, mimetype in test_cases:
+        for filename, mimetype in routing_data["word"]:
             result = await extract_office_text(b"test", filename, mimetype)
             assert filename in result
 
     @pytest.mark.asyncio
     async def test_extract_office_text_excel_routing(self):
         """Test that Excel files are routed correctly"""
-        test_cases = [
-            (
-                "test.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ),
-            ("test.xlsx", "application/spreadsheetml"),
-        ]
+        routing_data = FileProcessingTestDataFactory.office_document_routing_test_data()
 
-        for filename, mimetype in test_cases:
+        for filename, mimetype in routing_data["excel"]:
             result = await extract_office_text(b"test", filename, mimetype)
             assert filename in result
 
     @pytest.mark.asyncio
     async def test_extract_office_text_powerpoint_routing(self):
         """Test that PowerPoint files are routed correctly"""
-        test_cases = [
-            (
-                "test.pptx",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            ),
-            ("test.pptx", "application/presentationml"),
-        ]
+        routing_data = FileProcessingTestDataFactory.office_document_routing_test_data()
 
-        for filename, mimetype in test_cases:
+        for filename, mimetype in routing_data["powerpoint"]:
             result = await extract_office_text(b"test", filename, mimetype)
             assert filename in result
 
@@ -279,88 +493,55 @@ class TestFileAttachmentProcessing:
     @pytest.mark.asyncio
     async def test_process_file_attachments_empty_files(self):
         """Test processing with empty file list"""
-        mock_slack_service = Mock()
-        result = await process_file_attachments([], mock_slack_service)
+        slack_service = SlackServiceFactory.create_service()
+        result = await process_file_attachments([], slack_service)
         assert result == ""
 
     @pytest.mark.asyncio
     async def test_process_file_attachments_no_url(self):
         """Test processing file without private URL"""
-        mock_slack_service = Mock()
-        files = [{"name": "test.pdf", "mimetype": "application/pdf", "size": 1000}]
+        slack_service = SlackServiceFactory.create_service()
+        files = [SlackFileBuilder.file_without_url().build()]
 
-        result = await process_file_attachments(files, mock_slack_service)
+        result = await process_file_attachments(files, slack_service)
         assert result == ""  # Should skip files without URL
 
     @pytest.mark.asyncio
     async def test_process_file_attachments_large_file(self):
         """Test processing file that exceeds size limit"""
-        mock_slack_service = Mock()
-        files = [
-            {
-                "name": "huge.pdf",
-                "mimetype": "application/pdf",
-                "size": 200 * 1024 * 1024,  # 200MB, exceeds 100MB limit
-                "url_private": "https://test.com/file",
-            }
-        ]
+        slack_service = SlackServiceFactory.create_service()
+        files = [SlackFileBuilder.large_file("huge.pdf", 200).build()]
 
-        result = await process_file_attachments(files, mock_slack_service)
+        result = await process_file_attachments(files, slack_service)
         assert result == ""  # Should skip large files
 
     @pytest.mark.asyncio
     async def test_process_file_attachments_download_failure(self):
         """Test processing when file download fails"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
-        files = [
-            {
-                "name": "test.pdf",
-                "mimetype": "application/pdf",
-                "size": 1000,
-                "url_private": "https://test.com/file",
-            }
-        ]
+        slack_service = SlackServiceFactory.create_service("test-token")
+        files = [SlackFileBuilder.pdf_file().build()]
 
         with patch("requests.get") as mock_get:
-            mock_response = Mock()
-            mock_response.status_code = 404
-            mock_get.return_value = mock_response
-
-            result = await process_file_attachments(files, mock_slack_service)
+            mock_get.return_value = HTTPResponseFactory.error_response(404)
+            result = await process_file_attachments(files, slack_service)
             assert result == ""  # Should handle download failures gracefully
 
     @pytest.mark.asyncio
     async def test_process_file_attachments_subtitle_files(self):
         """Test processing of subtitle files (VTT, SRT) as text"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
+        slack_service = SlackServiceFactory.create_service("test-token")
         subtitle_files = [
-            {
-                "name": "captions.vtt",
-                "mimetype": "text/vtt",
-                "size": 500,
-                "url_private": "https://test.com/captions.vtt",
-            },
-            {
-                "name": "subtitles.srt",
-                "mimetype": "application/x-subrip",
-                "size": 300,
-                "url_private": "https://test.com/subtitles.srt",
-            },
+            SlackFileBuilder.subtitle_file("captions.vtt", "text/vtt")
+            .with_url("https://test.com/captions.vtt")
+            .build(),
+            SlackFileBuilder.srt_subtitle_file("subtitles.srt")
+            .with_url("https://test.com/subtitles.srt")
+            .build(),
         ]
 
         with patch("requests.get") as mock_get:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.text = (
-                "00:00:01.000 --> 00:00:03.000\nHello world subtitle content"
-            )
-            mock_get.return_value = mock_response
-
-            result = await process_file_attachments(subtitle_files, mock_slack_service)
+            mock_get.return_value = HTTPResponseFactory.subtitle_response()
+            result = await process_file_attachments(subtitle_files, slack_service)
 
             assert "captions.vtt" in result
             assert "subtitles.srt" in result
@@ -369,25 +550,14 @@ class TestFileAttachmentProcessing:
     @pytest.mark.asyncio
     async def test_process_file_attachments_text_file_success(self):
         """Test successful text file processing"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
-        files = [
-            {
-                "name": "test.txt",
-                "mimetype": "text/plain",
-                "size": 100,
-                "url_private": "https://test.com/file",
-            }
-        ]
+        slack_service = SlackServiceFactory.create_service("test-token")
+        files = [SlackFileBuilder.text_file().with_size(100).build()]
 
         with patch("requests.get") as mock_get:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.text = "This is test content"
-            mock_get.return_value = mock_response
-
-            result = await process_file_attachments(files, mock_slack_service)
+            mock_get.return_value = HTTPResponseFactory.success_response(
+                "This is test content"
+            )
+            result = await process_file_attachments(files, slack_service)
 
             assert "test.txt" in result
             assert "This is test content" in result
@@ -395,25 +565,12 @@ class TestFileAttachmentProcessing:
     @pytest.mark.asyncio
     async def test_process_file_attachments_pdf_success(self):
         """Test PDF file processing workflow"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
-        files = [
-            {
-                "name": "test.pdf",
-                "mimetype": "application/pdf",
-                "size": 1000,
-                "url_private": "https://test.com/file",
-            }
-        ]
+        slack_service = SlackServiceFactory.create_service("test-token")
+        files = [SlackFileBuilder.pdf_file().build()]
 
         with patch("requests.get") as mock_get:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.content = b"fake pdf content"
-            mock_get.return_value = mock_response
-
-            result = await process_file_attachments(files, mock_slack_service)
+            mock_get.return_value = HTTPResponseFactory.pdf_response()
+            result = await process_file_attachments(files, slack_service)
 
             assert "test.pdf" in result
             # Should contain either extracted text or error message
@@ -426,20 +583,11 @@ class TestFileProcessingErrorHandling:
     @pytest.mark.asyncio
     async def test_process_file_attachments_request_exception(self):
         """Test handling of request exceptions"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
-        files = [
-            {
-                "name": "test.pdf",
-                "mimetype": "application/pdf",
-                "size": 1000,
-                "url_private": "https://test.com/file",
-            }
-        ]
+        slack_service = SlackServiceFactory.create_service("test-token")
+        files = [SlackFileBuilder.pdf_file().build()]
 
         with patch("requests.get", side_effect=Exception("Network error")):
-            result = await process_file_attachments(files, mock_slack_service)
+            result = await process_file_attachments(files, slack_service)
             assert result == ""  # Should handle exceptions gracefully
 
     @pytest.mark.asyncio
@@ -456,52 +604,17 @@ class TestFileProcessingErrorHandling:
     @pytest.mark.asyncio
     async def test_supported_file_types_coverage(self):
         """Test that all supported file types are handled"""
-        mock_slack_service = Mock()
-        mock_slack_service.settings.bot_token = "test-token"
-
-        # Test various file types
-        test_files = [
-            ("test.txt", "text/plain"),
-            ("test.md", "text/markdown"),
-            ("test.py", "text/x-python"),
-            ("test.js", "application/javascript"),
-            ("test.json", "application/json"),
-            ("test.csv", "text/csv"),
-            ("test.vtt", "text/vtt"),
-            ("test.srt", "application/x-subrip"),
-            ("subtitles.srt", "text/srt"),  # Alternative SRT MIME type
-            ("test.pdf", "application/pdf"),
-            (
-                "test.docx",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ),
-            (
-                "test.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ),
-            (
-                "test.pptx",
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            ),
-            ("test.unknown", "application/unknown"),
-        ]
+        slack_service = SlackServiceFactory.create_service("test-token")
+        test_files = FileProcessingTestDataFactory.all_supported_file_types()
 
         for filename, mimetype in test_files:
             files = [
-                {
-                    "name": filename,
-                    "mimetype": mimetype,
-                    "size": 1000,
-                    "url_private": "https://test.com/file",
-                }
+                SlackFileBuilder().with_name(filename).with_mimetype(mimetype).build()
             ]
 
             with patch("requests.get") as mock_get:
-                mock_response = Mock()
-                mock_response.status_code = 200
-                mock_response.text = "test content"
-                mock_response.content = b"test content"
-                mock_get.return_value = mock_response
-
-                result = await process_file_attachments(files, mock_slack_service)
+                mock_get.return_value = HTTPResponseFactory.success_response(
+                    "test content", b"test content"
+                )
+                result = await process_file_attachments(files, slack_service)
                 assert isinstance(result, str)  # Should always return a string
