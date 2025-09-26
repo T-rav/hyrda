@@ -1,8 +1,8 @@
 import contextlib
 import logging
-
-# Import document processor from ingest module
 import time
+
+import requests
 
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
@@ -42,6 +42,81 @@ Remember: Your strength lies in connecting users with their organization's docum
 
 # Constants
 HTTP_OK = 200
+
+
+async def process_file_attachments(
+    files: list[dict], slack_service: SlackService
+) -> str:
+    """Process file attachments and extract text content"""
+    document_content = ""
+
+    for file_info in files:
+        try:
+            file_name = file_info.get("name", "unknown")
+            file_type = file_info.get("mimetype", "")
+            file_size = file_info.get("size", 0)
+
+            # Skip very large files (>10MB)
+            if file_size > 10 * 1024 * 1024:
+                logger.warning(f"Skipping large file: {file_name} ({file_size} bytes)")
+                continue
+
+            # Get file URL
+            file_url = file_info.get("url_private")
+            if not file_url:
+                logger.warning(f"No private URL for file: {file_name}")
+                continue
+
+            logger.info(
+                f"Processing file: {file_name} ({file_type}, {file_size} bytes)"
+            )
+
+            # Download file content
+            headers = {"Authorization": f"Bearer {slack_service.token}"}
+            response = requests.get(file_url, headers=headers, timeout=30)
+
+            if response.status_code != 200:
+                logger.error(
+                    f"Failed to download file {file_name}: {response.status_code}"
+                )
+                continue
+
+            file_content = ""
+
+            # Process based on file type
+            if file_type.startswith("text/") or file_name.endswith(
+                (".txt", ".md", ".py", ".js", ".json", ".csv")
+            ):
+                # Text files
+                try:
+                    file_content = response.text
+                except UnicodeDecodeError:
+                    file_content = response.content.decode("utf-8", errors="ignore")
+
+            elif file_type == "application/pdf" or file_name.endswith(".pdf"):
+                # Basic PDF text extraction (without external dependencies)
+                file_content = f"[PDF file: {file_name} - content extraction would require PyMuPDF library. Please use the ingest service for full PDF processing.]"
+
+            elif file_type.startswith(
+                "application/vnd.openxmlformats"
+            ) or file_name.endswith((".docx", ".xlsx", ".pptx")):
+                # Office documents
+                file_content = f"[Office document: {file_name} - content extraction would require specialized libraries. Please use the ingest service for full document processing.]"
+
+            else:
+                # Unknown file type
+                file_content = f"[File: {file_name} ({file_type}) - content extraction not supported for this file type.]"
+
+            if file_content:
+                document_content += f"\n\n--- Content from {file_name} ---\n{file_content}\n--- End of {file_name} ---"
+
+        except Exception as e:
+            logger.error(
+                f"Error processing file {file_info.get('name', 'unknown')}: {e}"
+            )
+            continue
+
+    return document_content.strip()
 
 
 def get_user_system_prompt() -> str:
@@ -170,11 +245,15 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # Handle file attachments (basic notification only)
+        # Handle file attachments
         document_content = ""
         if files:
             logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
-            # Note: Document processing functionality is handled by separate ingest service
+            document_content = await process_file_attachments(files, slack_service)
+            if document_content:
+                logger.info(
+                    f"Extracted {len(document_content)} characters from {len(files)} file(s)"
+                )
 
         # Get the thread history for context
         history, should_use_thread_context = await slack_service.get_thread_history(
