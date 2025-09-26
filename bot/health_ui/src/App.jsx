@@ -78,37 +78,12 @@ function App() {
               </div>
             </div>
 
-            {/* Services */}
-            <div className="grid-section">
-              <h2><Database size={20} /> Services</h2>
-              <div className="cards-row">
-                <ServiceCard
-                  service="cache"
-                  title="Cache"
-                  icon={<Database size={20} />}
-                  serviceData={ready?.checks?.cache}
-                  metricsData={metrics}
-                />
-                <ServiceCard
-                  service="langfuse"
-                  title="Langfuse"
-                  icon={<Activity size={20} />}
-                  serviceData={ready?.checks?.langfuse}
-                  metricsData={metrics}
-                />
-                <ServiceCard
-                  service="metrics"
-                  title="Metrics"
-                  icon={<Activity size={20} />}
-                  serviceData={ready?.checks?.metrics}
-                  metricsData={metrics}
-                />
-              </div>
-            </div>
 
             {/* Infrastructure Services */}
-            <InfrastructureServices />
+            <InfrastructureServices ready={ready} metrics={metrics} />
 
+            {/* RAG Metrics */}
+            <RAGMetricsSection ready={ready} metrics={metrics} />
 
             {/* API Endpoints */}
             {ready?.checks?.metrics?.endpoints && (
@@ -159,42 +134,6 @@ function App() {
               </div>
             )}
 
-            {/* Monitoring Tools */}
-            <div className="grid-section">
-              <h2>🔍 Monitoring Tools</h2>
-              <div className="api-links">
-                <a
-                  href="http://localhost:3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="api-link monitoring-link"
-                  title="Grafana Dashboard - Visualize RAG metrics and performance trends"
-                >
-                  📈 Grafana Dashboard
-                </a>
-                <a
-                  href="http://localhost:9090"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="api-link monitoring-link"
-                  title="Prometheus - Raw metrics and query interface"
-                >
-                  🔍 Prometheus
-                </a>
-                <a
-                  href="http://localhost:9093"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="api-link monitoring-link"
-                  title="AlertManager - Manage and view alerts"
-                >
-                  🚨 AlertManager
-                </a>
-                <div className="monitoring-note">
-                  <small>💡 Start monitoring stack with: <code>make docker-monitor</code></small>
-                </div>
-              </div>
-            </div>
           </div>
         </main>
 
@@ -210,7 +149,7 @@ function App() {
 }
 
 // Infrastructure Services Component
-function InfrastructureServices() {
+function InfrastructureServices({ ready, metrics }) {
   const [services, setServices] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -329,6 +268,103 @@ function InfrastructureServices() {
           </div>
         ))}
       </div>
+
+      {/* Application Services Row */}
+      <div className="cards-row" style={{ marginTop: '1rem' }}>
+        <ServiceCard
+          service="cache"
+          title="Cache"
+          icon={<Database size={20} />}
+          serviceData={ready?.checks?.cache}
+          metricsData={metrics}
+        />
+        <ServiceCard
+          service="langfuse"
+          title="Langfuse"
+          icon={<Activity size={20} />}
+          serviceData={ready?.checks?.langfuse}
+          metricsData={metrics}
+        />
+      </div>
+    </div>
+  )
+}
+
+// RAG Metrics Component
+function RAGMetricsSection({ ready }) {
+  const ragData = ready?.checks?.rag
+
+  if (!ragData || ragData.status === 'disabled') {
+    return null
+  }
+
+  const formatPercentage = (value) => {
+    if (typeof value === 'number') {
+      return `${value.toFixed(1)}%`
+    }
+    return 'N/A'
+  }
+
+  const formatNumber = (value) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString()
+    }
+    return 'N/A'
+  }
+
+  // const getStatusColor = (successRate) => {
+  //   if (typeof successRate !== 'number') return '#6b7280'
+  //   if (successRate >= 80) return '#10b981' // green
+  //   if (successRate >= 60) return '#f59e0b' // yellow
+  //   return '#ef4444' // red
+  // }
+
+  return (
+    <div className="grid-section">
+      <h2><Search size={20} /> RAG Performance Metrics</h2>
+      <div className="cards-row">
+        <MetricsCard
+          title="Cache Hit Rate"
+          value={formatPercentage(ragData.hit_rate)}
+          label="Documents found in cache"
+          icon={<Database size={20} />}
+          status={ragData.hit_rate >= 70 ? 'healthy' : ragData.hit_rate >= 40 ? 'warning' : 'error'}
+        />
+        <MetricsCard
+          title="Avg Chunks/Query"
+          value={typeof ragData.avg_chunks === 'number' ? ragData.avg_chunks.toFixed(1) : 'N/A'}
+          label="Documents retrieved per query"
+          icon={<Search size={20} />}
+          status="info"
+        />
+        <MetricsCard
+          title="Success Rate"
+          value={formatPercentage(ragData.success_rate)}
+          label="Successful retrievals"
+          icon={<CheckCircle size={20} />}
+          status={ragData.success_rate >= 80 ? 'healthy' : ragData.success_rate >= 60 ? 'warning' : 'error'}
+        />
+        <MetricsCard
+          title="Total Queries"
+          value={formatNumber(ragData.total_queries)}
+          label="Since last restart"
+          icon={<Activity size={20} />}
+          status="info"
+        />
+      </div>
+
+      {ragData.documents_used > 0 && (
+        <div className="rag-stats-detail">
+          <div className="stat-detail-item">
+            <span className="stat-detail-label">Documents Used:</span>
+            <span className="stat-detail-value">{formatNumber(ragData.documents_used)}</span>
+          </div>
+          <div className="stat-detail-item">
+            <span className="stat-detail-label">Miss Rate:</span>
+            <span className="stat-detail-value">{formatPercentage(ragData.miss_rate)}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 
 // API base URL - tasks service runs on port 5001
 const API_BASE = 'http://localhost:5001/api'

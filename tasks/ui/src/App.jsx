@@ -48,6 +48,7 @@ function App() {
               <Activity size={20} />
               Health
             </a>
+            <div className="nav-divider"></div>
           </nav>
         </div>
       </header>
