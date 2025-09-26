@@ -296,6 +296,50 @@ class OllamaResponseFactory:
         return mock_response
 
 
+class SessionMockFactory:
+    """Factory for creating session and client mocks"""
+
+    @staticmethod
+    def create_http_session() -> Mock:
+        """Create basic HTTP session mock"""
+        mock_session = Mock()
+        mock_session.closed = False
+        return mock_session
+
+    @staticmethod
+    def create_async_session() -> AsyncMock:
+        """Create async HTTP session mock"""
+        mock_session = AsyncMock()
+        return mock_session
+
+    @staticmethod
+    def create_client_mock() -> Mock:
+        """Create client mock for OpenAI/Anthropic"""
+        client_mock = Mock()
+        client_mock._client = Mock()
+        client_mock.close = AsyncMock()
+        return client_mock
+
+    @staticmethod
+    def create_langfuse_mock() -> Mock:
+        """Create Langfuse service mock"""
+        langfuse_mock = Mock()
+        langfuse_mock.trace_llm_call = Mock()
+        return langfuse_mock
+
+
+class AsyncContextFactory:
+    """Factory for creating async context managers"""
+
+    @staticmethod
+    def create_http_context(response_mock: Mock) -> AsyncMock:
+        """Create async HTTP context manager"""
+        async_context_mock = AsyncMock()
+        async_context_mock.__aenter__ = AsyncMock(return_value=response_mock)
+        async_context_mock.__aexit__ = AsyncMock(return_value=None)
+        return async_context_mock
+
+
 class LLMProviderFactory:
     """Factory for creating LLM provider instances with mocked clients"""
 
@@ -454,8 +498,7 @@ class TestOpenAIProvider:
     @pytest.mark.asyncio
     async def test_close(self, provider):
         """Test closing the provider"""
-        provider.client._client = Mock()
-        provider.client.close = AsyncMock()
+        provider.client = SessionMockFactory.create_client_mock()
 
         await provider.close()
 
@@ -550,16 +593,16 @@ class TestAnthropicProvider:
 
         provider.client.messages.create = AsyncMock(return_value=mock_response)
 
-        mock_langfuse = Mock()
+        langfuse_mock = SessionMockFactory.create_langfuse_mock()
         with patch(
             "bot.services.llm_providers.get_langfuse_service",
-            return_value=mock_langfuse,
+            return_value=langfuse_mock,
         ):
             messages = [MessageBuilder.user_message("Hello").build()]
             await provider.get_response(messages)
 
-            mock_langfuse.trace_llm_call.assert_called_once()
-            call_args = mock_langfuse.trace_llm_call.call_args[1]
+            langfuse_mock.trace_llm_call.assert_called_once()
+            call_args = langfuse_mock.trace_llm_call.call_args[1]
             assert call_args["provider"] == "anthropic"
             assert call_args["model"] == "claude-3-haiku-20240307"
             assert call_args["response"] == "Response"
@@ -581,8 +624,7 @@ class TestAnthropicProvider:
     @pytest.mark.asyncio
     async def test_close(self, provider):
         """Test closing the provider"""
-        provider.client._client = Mock()
-        provider.client.close = AsyncMock()
+        provider.client = SessionMockFactory.create_client_mock()
 
         await provider.close()
 
@@ -624,7 +666,7 @@ class TestOllamaProvider:
     async def test_ensure_session_creates_new(self, provider):
         """Test session creation"""
         with patch("aiohttp.ClientSession") as mock_session_class:
-            mock_session = Mock()
+            mock_session = SessionMockFactory.create_http_session()
             mock_session_class.return_value = mock_session
 
             session = await provider.ensure_session()
@@ -636,8 +678,7 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_ensure_session_reuses_existing(self, provider):
         """Test session reuse"""
-        mock_session = Mock()
-        mock_session.closed = False
+        mock_session = SessionMockFactory.create_http_session()
         provider.session = mock_session
 
         session = await provider.ensure_session()
@@ -652,11 +693,9 @@ class TestOllamaProvider:
         mock_response = OllamaResponseFactory.create_http_response_mock(json_data, 200)
 
         # Create async context manager mock
-        async_context_mock = AsyncMock()
-        async_context_mock.__aenter__ = AsyncMock(return_value=mock_response)
-        async_context_mock.__aexit__ = AsyncMock(return_value=None)
+        async_context_mock = AsyncContextFactory.create_http_context(mock_response)
 
-        mock_session = AsyncMock()
+        mock_session = SessionMockFactory.create_async_session()
         mock_session.post = Mock(return_value=async_context_mock)
 
         with (
@@ -682,7 +721,7 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_get_response_http_error(self, provider):
         """Test HTTP error handling"""
-        mock_session = AsyncMock()
+        mock_session = SessionMockFactory.create_async_session()
         mock_response = OllamaResponseFactory.create_error_response(
             500, "Internal server error"
         )
@@ -715,7 +754,7 @@ class TestOllamaProvider:
     @pytest.mark.asyncio
     async def test_get_response_with_langfuse(self, provider):
         """Test response with Langfuse tracing"""
-        mock_session = AsyncMock()
+        mock_session = SessionMockFactory.create_async_session()
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
@@ -723,26 +762,26 @@ class TestOllamaProvider:
         )
         mock_session.post.return_value.__aenter__.return_value = mock_response
 
-        mock_langfuse = Mock()
+        langfuse_mock = SessionMockFactory.create_langfuse_mock()
 
         with (
             patch.object(provider, "ensure_session", return_value=mock_session),
             patch(
                 "bot.services.llm_providers.get_langfuse_service",
-                return_value=mock_langfuse,
+                return_value=langfuse_mock,
             ),
         ):
             await provider.get_response([{"role": "user", "content": "Hello"}])
 
-            mock_langfuse.trace_llm_call.assert_called_once()
-            call_args = mock_langfuse.trace_llm_call.call_args[1]
+            langfuse_mock.trace_llm_call.assert_called_once()
+            call_args = langfuse_mock.trace_llm_call.call_args[1]
             assert call_args["provider"] == "ollama"
             assert call_args["model"] == "llama2"
 
     @pytest.mark.asyncio
     async def test_close_with_session(self, provider):
         """Test closing with active session"""
-        mock_session = AsyncMock()
+        mock_session = SessionMockFactory.create_async_session()
         mock_session.closed = False
         provider.session = mock_session
 
