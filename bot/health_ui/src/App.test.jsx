@@ -159,7 +159,7 @@ describe('Health Dashboard App', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(screen.getByText('Services')).toBeInTheDocument()
+      expect(screen.getByText('Infrastructure')).toBeInTheDocument()
     })
   })
 
