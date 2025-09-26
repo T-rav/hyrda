@@ -45,11 +45,16 @@ jobs:
           ls -la venv/bin/ || echo "venv/bin/ directory does not exist"
           exit 1
         fi
-        make install-dev
+        # Activate virtual environment and install dependencies
+        source venv/bin/activate
+        # Use the virtual environment's pip directly to avoid Makefile venv creation conflicts
+        cd bot && ../venv/bin/pip install -e ".[dev,test]"
 
     - name: Run unified linting and type checking
       if: matrix.task == 'lint'
-      run: make lint-check
+      run: |
+        source venv/bin/activate
+        make lint-check
 
     - name: Run tests with coverage
       if: matrix.task == 'test'
@@ -63,20 +68,25 @@ jobs:
         VECTOR_ENABLED: false
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
-      run: make test-coverage
+      run: |
+        source venv/bin/activate
+        make test-coverage
 
     - name: Run ingest linting
       if: matrix.task == 'ingest-lint'
       run: |
-        venv/bin/python -m ruff check ingest/ debug/ --no-fix
-        venv/bin/python -m pyright ingest/ debug/ --level error --project bot/
+        source venv/bin/activate
+        python -m ruff check ingest/ debug/ --no-fix
+        python -m pyright ingest/ debug/ --level error --project bot/
 
     - name: Run ingest tests
       if: matrix.task == 'ingest-test'
       env:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
-      run: make test-ingest
+      run: |
+        source venv/bin/activate
+        make test-ingest
 
   react-tests:
     runs-on: ubuntu-latest
