@@ -13,10 +13,9 @@ Run this to ensure everything works before deploying.
 """
 
 import asyncio
+import logging
 import os
 import sys
-import logging
-from typing import List
 from dataclasses import dataclass
 
 # Add bot directory to path
@@ -27,12 +26,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Test imports
-from services.title_injection_service import (
-    TitleInjectionService,
-    EnhancedChunkProcessor,
-)
+from config.settings import HybridSettings, VectorSettings
+
 from services.hybrid_retrieval_service import HybridRetrievalService, RetrievalResult
-from config.settings import VectorSettings, HybridSettings
+from services.title_injection_service import (
+    EnhancedChunkProcessor,
+    TitleInjectionService,
+)
 
 
 @dataclass
@@ -49,7 +49,7 @@ class HybridSystemTester:
     """Complete hybrid system test runner"""
 
     def __init__(self):
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
         self.title_service = TitleInjectionService()
         self.chunk_processor = EnhancedChunkProcessor(self.title_service)
 
@@ -183,7 +183,7 @@ class HybridSystemTester:
                     self.ingested_docs = []
 
                 async def add_documents(self, texts, embeddings, metadata):
-                    for text, emb, meta in zip(texts, embeddings, metadata):
+                    for text, emb, meta in zip(texts, embeddings, metadata, strict=False):
                         self.ingested_docs.append(
                             {"content": text, "embedding": emb, "metadata": meta}
                         )
@@ -209,7 +209,7 @@ class HybridSystemTester:
             # Prepare for dual indexing
             documents = [
                 {"content": text, "metadata": meta}
-                for text, meta in zip(original_texts, metadata)
+                for text, meta in zip(original_texts, metadata, strict=False)
             ]
             dual_docs = self.chunk_processor.prepare_for_dual_indexing(documents)
 
@@ -312,7 +312,7 @@ class HybridSystemTester:
 
             # Simulate embedding service
             class MockEmbeddingService:
-                def embed_texts(self, texts: List[str]) -> List[List[float]]:
+                def embed_texts(self, texts: list[str]) -> list[list[float]]:
                     # Create different embeddings based on content
                     embeddings = []
                     for text in texts:
@@ -368,8 +368,8 @@ class HybridSystemTester:
             # Test core service imports
             from services.hybrid_retrieval_service import RetrievalResult
             from services.title_injection_service import (
-                TitleInjectionService,
                 EnhancedChunkProcessor,
+                TitleInjectionService,
             )
 
             # Test config imports

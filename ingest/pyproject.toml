@@ -79,6 +79,16 @@ select = [
     "B",    # flake8-bugbear
     "UP",   # pyupgrade
 ]
+ignore = [
+    "E501",   # line too long, handled by ruff format
+    "E402",   # module level import not at top of file (for sys.path modifications)
+    "B904",   # within except clause, raise exceptions with raise ... from err
+    "B007",   # loop control variable not used within loop body
+]
+
+[tool.ruff.lint.per-file-ignores]
+"debug/*.py" = ["E402"]  # Allow imports after sys.path modifications in debug files
+"../debug/*.py" = ["E402"]  # Allow imports after sys.path modifications in debug files (from root)
 
 # Pyright configuration
 [tool.pyright]
