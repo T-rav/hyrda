@@ -16,6 +16,7 @@ load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "bot"))
 
 from config.settings import Settings
+
 from services.embedding_service import create_embedding_provider
 from services.vector_service import create_vector_store
 
