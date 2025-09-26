@@ -8,8 +8,8 @@ BOT_DIR := $(PROJECT_ROOT_DIR)bot
 
 # Virtual environment settings
 VENV := $(PROJECT_ROOT_DIR)venv
-PYTHON := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
+PYTHON ?= $(VENV)/bin/python
+PIP ?= $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 

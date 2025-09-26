@@ -29,6 +29,9 @@ jobs:
 
     - name: Run unified linting and type checking
       if: matrix.task == 'lint'
+      env:
+        PYTHON: python
+        PIP: pip
       run: make lint-check
 
     - name: Run tests with coverage
@@ -43,6 +46,8 @@ jobs:
         VECTOR_ENABLED: false
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
+        PYTHON: python
+        PIP: pip
       run: make test-coverage
 
     - name: Run ingest linting
@@ -56,6 +61,8 @@ jobs:
       env:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
+        PYTHON: python
+        PIP: pip
       run: make test-ingest
 
   react-tests:

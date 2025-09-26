@@ -10,13 +10,22 @@ import { useHealthData } from './hooks/useHealthData'
 import { formatUptime, getOverallStatus } from './utils/statusHelpers'
 import './App.css'
 
+// Custom hook for managing document title
+function useDocumentTitle(title) {
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = title
+    return () => {
+      document.title = previousTitle
+    }
+  }, [title])
+}
+
 function App() {
   const { health, metrics, ready, loading, error, lastUpdate, refetch } = useHealthData()
 
-  // Set document title
-  useEffect(() => {
-    document.title = 'InsightMesh - Health Dashboard'
-  }, [])
+  // Use the custom hook to set document title
+  useDocumentTitle('InsightMesh - Health Dashboard')
 
   if (loading && !health) {
     return <LoadingSpinner />
