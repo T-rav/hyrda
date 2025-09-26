@@ -332,6 +332,41 @@ class TestFileAttachmentProcessing:
             assert result == ""  # Should handle download failures gracefully
 
     @pytest.mark.asyncio
+    async def test_process_file_attachments_subtitle_files(self):
+        """Test processing of subtitle files (VTT, SRT) as text"""
+        mock_slack_service = Mock()
+        mock_slack_service.settings.bot_token = "test-token"
+
+        subtitle_files = [
+            {
+                "name": "captions.vtt",
+                "mimetype": "text/vtt",
+                "size": 500,
+                "url_private": "https://test.com/captions.vtt",
+            },
+            {
+                "name": "subtitles.srt",
+                "mimetype": "application/x-subrip",
+                "size": 300,
+                "url_private": "https://test.com/subtitles.srt",
+            },
+        ]
+
+        with patch("requests.get") as mock_get:
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.text = (
+                "00:00:01.000 --> 00:00:03.000\nHello world subtitle content"
+            )
+            mock_get.return_value = mock_response
+
+            result = await process_file_attachments(subtitle_files, mock_slack_service)
+
+            assert "captions.vtt" in result
+            assert "subtitles.srt" in result
+            assert "Hello world subtitle content" in result
+
+    @pytest.mark.asyncio
     async def test_process_file_attachments_text_file_success(self):
         """Test successful text file processing"""
         mock_slack_service = Mock()
@@ -432,6 +467,8 @@ class TestFileProcessingErrorHandling:
             ("test.js", "application/javascript"),
             ("test.json", "application/json"),
             ("test.csv", "text/csv"),
+            ("test.vtt", "text/vtt"),
+            ("test.srt", "application/x-subrip"),
             ("test.pdf", "application/pdf"),
             (
                 "test.docx",

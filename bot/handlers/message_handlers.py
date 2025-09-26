@@ -258,7 +258,7 @@ async def process_file_attachments(
 
             # Process based on file type
             if file_type.startswith("text/") or file_name.endswith(
-                (".txt", ".md", ".py", ".js", ".json", ".csv")
+                (".txt", ".md", ".py", ".js", ".json", ".csv", ".vtt", ".srt")
             ):
                 # Text files
                 try:
@@ -440,17 +440,23 @@ async def handle_message(
                 f"Using thread context with {len(history)} messages for response generation"
             )
 
-        # Add document content to cache if present and cache is available
+        # Add document reference to cache if present and cache is available
         if document_content and conversation_cache and thread_ts:
+            # Create a concise summary for chat history instead of full content
+            file_names = (
+                [f.get("name", "unknown") for f in files] if files else ["document"]
+            )
+            file_summary = f"[User shared {len(file_names)} file(s): {', '.join(file_names)} - content processed and analyzed]"
+
             document_message = {
                 "role": "user",
-                "content": f"[Document content shared by user]{document_content}",
+                "content": file_summary,
             }
             await conversation_cache.update_conversation(
                 thread_ts, document_message, is_bot_message=False
             )
             logger.info(
-                f"Added document content to conversation cache for thread {thread_ts}"
+                f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
             )
 
         # Prepare current query with document content if present
