@@ -36,7 +36,14 @@ jobs:
         # Ensure venv is properly set up (creates if missing, validates if cached)
         if [ ! -f venv/bin/python ] || [ ! -f venv/bin/pip ]; then
           echo "Creating or fixing virtual environment..."
+          rm -rf venv
           python3.11 -m venv venv
+        fi
+        # Verify the virtual environment was created properly
+        if [ ! -f venv/bin/python ] || [ ! -f venv/bin/pip ]; then
+          echo "ERROR: Virtual environment creation failed"
+          ls -la venv/bin/ || echo "venv/bin/ directory does not exist"
+          exit 1
         fi
         make install-dev
 
