@@ -2,7 +2,8 @@ import asyncio
 import json
 import os
 import sys
-from datetime import UTC
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +15,234 @@ from services.conversation_cache import ConversationCache
 from services.slack_service import SlackService
 
 
+# Test Data Builders
+class MessageBuilder:
+    """Builder for creating test messages"""
+
+    def __init__(self):
+        self._role = "user"
+        self._content = "test message"
+        self._metadata = {}
+
+    def with_role(self, role: str) -> "MessageBuilder":
+        self._role = role
+        return self
+
+    def with_content(self, content: str) -> "MessageBuilder":
+        self._content = content
+        return self
+
+    def with_metadata(self, **metadata) -> "MessageBuilder":
+        self._metadata.update(metadata)
+        return self
+
+    def build(self) -> dict[str, Any]:
+        message = {"role": self._role, "content": self._content}
+        if self._metadata:
+            message.update(self._metadata)
+        return message
+
+    @classmethod
+    def user_message(cls, content: str = "test user message") -> "MessageBuilder":
+        return cls().with_role("user").with_content(content)
+
+    @classmethod
+    def assistant_message(
+        cls, content: str = "test assistant message"
+    ) -> "MessageBuilder":
+        return cls().with_role("assistant").with_content(content)
+
+    @classmethod
+    def system_message(cls, content: str = "test system message") -> "MessageBuilder":
+        return cls().with_role("system").with_content(content)
+
+
+class ConversationBuilder:
+    """Builder for creating test conversations"""
+
+    def __init__(self):
+        self._messages = []
+        self._channel = "C12345"
+        self._thread_ts = "1234567890.123"
+
+    def with_messages(self, messages: list[dict[str, Any]]) -> "ConversationBuilder":
+        self._messages = messages
+        return self
+
+    def add_message(self, message: dict[str, Any]) -> "ConversationBuilder":
+        self._messages.append(message)
+        return self
+
+    def with_channel(self, channel: str) -> "ConversationBuilder":
+        self._channel = channel
+        return self
+
+    def with_thread_ts(self, thread_ts: str) -> "ConversationBuilder":
+        self._thread_ts = thread_ts
+        return self
+
+    def build(self) -> tuple:
+        return (self._messages, self._channel, self._thread_ts)
+
+    @classmethod
+    def simple_conversation(cls) -> "ConversationBuilder":
+        return (
+            cls()
+            .add_message(MessageBuilder.user_message("Hello").build())
+            .add_message(MessageBuilder.assistant_message("Hi there!").build())
+        )
+
+    @classmethod
+    def large_conversation(cls, message_count: int = 100) -> "ConversationBuilder":
+        builder = cls()
+        for i in range(message_count):
+            role = "user" if i % 2 == 0 else "assistant"
+            content = f"Message {i} content"
+            builder.add_message(
+                MessageBuilder().with_role(role).with_content(content).build()
+            )
+        return builder
+
+
+class CacheStatsBuilder:
+    """Builder for creating cache statistics"""
+
+    def __init__(self):
+        self._stats = {
+            "total_conversations": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "hit_rate": 0.0,
+            "redis_connection": "healthy",
+            "status": "available",
+        }
+
+    def with_conversations(self, count: int) -> "CacheStatsBuilder":
+        self._stats["total_conversations"] = count
+        return self
+
+    def with_hits(self, hits: int) -> "CacheStatsBuilder":
+        self._stats["cache_hits"] = hits
+        return self
+
+    def with_misses(self, misses: int) -> "CacheStatsBuilder":
+        self._stats["cache_misses"] = misses
+        return self
+
+    def with_hit_rate(self, rate: float) -> "CacheStatsBuilder":
+        self._stats["hit_rate"] = rate
+        return self
+
+    def with_status(self, status: str) -> "CacheStatsBuilder":
+        self._stats["status"] = status
+        return self
+
+    def unavailable(self) -> "CacheStatsBuilder":
+        self._stats["status"] = "unavailable"
+        self._stats["redis_connection"] = "unavailable"
+        return self
+
+    def with_error(self, error: str) -> "CacheStatsBuilder":
+        self._stats["status"] = "error"
+        self._stats["error"] = error
+        return self
+
+    def build(self) -> dict[str, Any]:
+        return self._stats.copy()
+
+
+# Factory Methods for Mock Setup
+class RedisFactory:
+    """Factory for creating Redis mocks with common configurations"""
+
+    @staticmethod
+    def create_healthy_redis() -> AsyncMock:
+        """Create a healthy Redis mock"""
+        mock_redis = AsyncMock()
+        mock_redis.ping.return_value = "PONG"
+        mock_redis.get.return_value = None  # Default to cache miss
+        mock_redis.setex.return_value = True
+        mock_redis.delete.return_value = 2
+        mock_redis.keys.return_value = []
+        mock_redis.info.return_value = {"used_memory_human": "1MB"}
+        mock_redis.aclose.return_value = None
+        return mock_redis
+
+    @staticmethod
+    def create_failing_redis(error: str = "Connection failed") -> AsyncMock:
+        """Create a Redis mock that fails connection"""
+        mock_redis = AsyncMock()
+        mock_redis.ping.side_effect = Exception(error)
+        return mock_redis
+
+    @staticmethod
+    def create_redis_with_cache(
+        messages: list[dict[str, Any]], metadata: dict[str, Any] | None = None
+    ) -> AsyncMock:
+        """Create Redis mock with cached data"""
+        mock_redis = RedisFactory.create_healthy_redis()
+
+        if metadata is None:
+            metadata = {"created_at": "2023-01-01T00:00:00Z", "ttl": 1800}
+
+        mock_redis.get.side_effect = [
+            json.dumps(messages),  # cached_data
+            json.dumps(metadata),  # cached_meta
+        ]
+        return mock_redis
+
+    @staticmethod
+    def create_redis_with_error(
+        error: str = "Redis error", operation: str = "get"
+    ) -> AsyncMock:
+        """Create Redis mock that fails on specific operations"""
+        mock_redis = RedisFactory.create_healthy_redis()
+        setattr(mock_redis, operation, AsyncMock(side_effect=Exception(error)))
+        return mock_redis
+
+
+class SlackServiceFactory:
+    """Factory for creating SlackService mocks"""
+
+    @staticmethod
+    def create_mock_slack_service(
+        messages: list[dict[str, Any]] | None = None, success: bool = True
+    ) -> AsyncMock:
+        """Create mock Slack service"""
+        service = AsyncMock(spec=SlackService)
+
+        if messages is None:
+            messages = [MessageBuilder.user_message("from slack").build()]
+
+        service.get_thread_history.return_value = (messages, success)
+        return service
+
+
+class ConversationCacheFactory:
+    """Factory for creating ConversationCache instances and mocks"""
+
+    @staticmethod
+    def create_mock_cache() -> MagicMock:
+        """Create a mock ConversationCache for testing"""
+        cache = MagicMock(spec=ConversationCache)
+
+        # Mock async methods
+        cache.get_conversation = AsyncMock()
+        cache.update_conversation = AsyncMock()
+        cache.get_cache_stats = AsyncMock()
+        cache.close = AsyncMock()
+
+        return cache
+
+    @staticmethod
+    def create_real_cache(
+        redis_url: str = "redis://localhost:6379", ttl: int = 1800
+    ) -> ConversationCache:
+        """Create a real ConversationCache instance"""
+        return ConversationCache(redis_url=redis_url, ttl=ttl)
+
+
+# Fixtures using factories
 @pytest.fixture
 def mock_redis_url():
     """Mock Redis URL for testing"""
@@ -23,23 +252,13 @@ def mock_redis_url():
 @pytest.fixture
 def mock_slack_service():
     """Create mock Slack service"""
-    service = AsyncMock(spec=SlackService)
-    service.get_thread_history = AsyncMock()
-    return service
+    return SlackServiceFactory.create_mock_slack_service()
 
 
 @pytest.fixture
 def mock_conversation_cache():
     """Create a mock ConversationCache for testing"""
-    cache = MagicMock(spec=ConversationCache)
-
-    # Mock async methods
-    cache.get_conversation = AsyncMock()
-    cache.update_conversation = AsyncMock()
-    cache.get_cache_stats = AsyncMock()
-    cache.close = AsyncMock()
-
-    return cache
+    return ConversationCacheFactory.create_mock_cache()
 
 
 class TestConversationCache:
@@ -49,10 +268,12 @@ class TestConversationCache:
     async def test_cache_initialization(self, mock_redis_url):
         """Test cache initialization with Redis connection"""
         with patch("services.conversation_cache.redis.Redis") as mock_redis_class:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis_class.return_value = mock_redis
 
-            cache = ConversationCache(redis_url=mock_redis_url, ttl=1800)
+            cache = ConversationCacheFactory.create_real_cache(
+                redis_url=mock_redis_url, ttl=1800
+            )
 
             assert cache.redis_url == mock_redis_url
             assert cache.ttl == 1800
@@ -63,13 +284,9 @@ class TestConversationCache:
         self, mock_conversation_cache, mock_slack_service
     ):
         """Test getting conversation from cache when data exists"""
-        channel = "C12345"
-        thread_ts = "1234567890.123"
-
-        cached_messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"},
-        ]
+        # Use builders for test data
+        conversation_data = ConversationBuilder.simple_conversation().build()
+        cached_messages, channel, thread_ts = conversation_data
 
         mock_conversation_cache.get_conversation.return_value = (
             cached_messages,
@@ -94,13 +311,12 @@ class TestConversationCache:
         self, mock_conversation_cache, mock_slack_service
     ):
         """Test getting conversation with cache miss, falling back to Slack API"""
-        channel = "C12345"
-        thread_ts = "1234567890.123"
-
+        # Use builders for test data
         slack_messages = [
-            {"role": "user", "content": "How are you?"},
-            {"role": "assistant", "content": "I'm doing well!"},
+            MessageBuilder.user_message("How are you?").build(),
+            MessageBuilder.assistant_message("I'm doing well!").build(),
         ]
+        _, channel, thread_ts = ConversationBuilder().build()
 
         # Mock cache miss, successful Slack fallback
         mock_conversation_cache.get_conversation.return_value = (
@@ -123,8 +339,7 @@ class TestConversationCache:
         self, mock_conversation_cache, mock_slack_service
     ):
         """Test getting conversation when both cache and Slack API fail"""
-        channel = "C12345"
-        thread_ts = "1234567890.123"
+        _, channel, thread_ts = ConversationBuilder().build()
 
         # Mock both cache and Slack API failure
         mock_conversation_cache.get_conversation.return_value = ([], False, "error")
@@ -140,8 +355,8 @@ class TestConversationCache:
     @pytest.mark.asyncio
     async def test_update_conversation_user_message(self, mock_conversation_cache):
         """Test updating conversation with user message"""
-        thread_ts = "1234567890.123"
-        message = {"role": "user", "content": "What is Python?"}
+        _, _, thread_ts = ConversationBuilder().build()
+        message = MessageBuilder.user_message("What is Python?").build()
 
         await mock_conversation_cache.update_conversation(
             thread_ts, message, is_bot_message=False
@@ -154,8 +369,10 @@ class TestConversationCache:
     @pytest.mark.asyncio
     async def test_update_conversation_bot_message(self, mock_conversation_cache):
         """Test updating conversation with bot message"""
-        thread_ts = "1234567890.123"
-        message = {"role": "assistant", "content": "Python is a programming language"}
+        _, _, thread_ts = ConversationBuilder().build()
+        message = MessageBuilder.assistant_message(
+            "Python is a programming language"
+        ).build()
 
         await mock_conversation_cache.update_conversation(
             thread_ts, message, is_bot_message=True
@@ -168,13 +385,14 @@ class TestConversationCache:
     @pytest.mark.asyncio
     async def test_get_cache_stats(self, mock_conversation_cache):
         """Test getting cache statistics"""
-        expected_stats = {
-            "total_conversations": 42,
-            "cache_hits": 100,
-            "cache_misses": 25,
-            "hit_rate": 0.8,
-            "redis_connection": "healthy",
-        }
+        expected_stats = (
+            CacheStatsBuilder()
+            .with_conversations(42)
+            .with_hits(100)
+            .with_misses(25)
+            .with_hit_rate(0.8)
+            .build()
+        )
 
         mock_conversation_cache.get_cache_stats.return_value = expected_stats
 
@@ -212,8 +430,7 @@ class TestConversationCache:
         self, mock_conversation_cache, mock_slack_service
     ):
         """Test handling Redis connection errors gracefully"""
-        channel = "C12345"
-        thread_ts = "1234567890.123"
+        _, channel, thread_ts = ConversationBuilder().build()
 
         # Mock Redis connection error, should fallback to Slack
         mock_conversation_cache.get_conversation.return_value = (
@@ -236,17 +453,19 @@ class TestConversationCache:
         custom_ttl = 3600  # 1 hour
 
         with patch("services.conversation_cache.redis.Redis") as mock_redis_class:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis_class.return_value = mock_redis
 
-            cache = ConversationCache(redis_url=mock_redis_url, ttl=custom_ttl)
+            cache = ConversationCacheFactory.create_real_cache(
+                redis_url=mock_redis_url, ttl=custom_ttl
+            )
 
             assert cache.ttl == custom_ttl
 
     def test_message_format_validation(self):
         """Test that messages follow expected format"""
-        valid_user_message = {"role": "user", "content": "Hello"}
-        valid_bot_message = {"role": "assistant", "content": "Hi there!"}
+        valid_user_message = MessageBuilder.user_message("Hello").build()
+        valid_bot_message = MessageBuilder.assistant_message("Hi there!").build()
 
         # Validate required fields
         assert "role" in valid_user_message
@@ -262,18 +481,9 @@ class TestConversationCache:
         self, mock_conversation_cache, mock_slack_service
     ):
         """Test handling large conversations that might hit cache limits"""
-        channel = "C12345"
-        thread_ts = "1234567890.123"
-
-        # Create a large conversation
-        large_conversation = []
-        for i in range(100):  # 100 messages
-            large_conversation.append(
-                {
-                    "role": "user" if i % 2 == 0 else "assistant",
-                    "content": f"Message {i} content",
-                }
-            )
+        # Use builder for large conversation
+        conversation_data = ConversationBuilder.large_conversation(100).build()
+        large_conversation, channel, thread_ts = conversation_data
 
         mock_conversation_cache.get_conversation.return_value = (
             large_conversation,
@@ -292,11 +502,15 @@ class TestConversationCache:
     @pytest.mark.asyncio
     async def test_concurrent_cache_operations(self, mock_conversation_cache):
         """Test concurrent cache operations don't interfere"""
-        thread_ts1 = "1234567890.123"
-        thread_ts2 = "1234567890.456"
+        _, _, thread_ts1 = (
+            ConversationBuilder().with_thread_ts("1234567890.123").build()
+        )
+        _, _, thread_ts2 = (
+            ConversationBuilder().with_thread_ts("1234567890.456").build()
+        )
 
-        message1 = {"role": "user", "content": "First conversation"}
-        message2 = {"role": "user", "content": "Second conversation"}
+        message1 = MessageBuilder.user_message("First conversation").build()
+        message2 = MessageBuilder.user_message("Second conversation").build()
 
         # Simulate concurrent updates
         await asyncio.gather(
@@ -318,30 +532,31 @@ class TestConversationCacheImplementation:
     @pytest.fixture
     def cache(self):
         """Create real ConversationCache instance for testing"""
-        return ConversationCache(redis_url="redis://localhost:6379", ttl=1800)
+        return ConversationCacheFactory.create_real_cache()
 
     def test_get_cache_key(self):
         """Test cache key generation"""
-        cache = ConversationCache()
-        thread_ts = "1234567890.123"
+        cache = ConversationCacheFactory.create_real_cache()
+        _, _, thread_ts = ConversationBuilder().build()
         key = cache._get_cache_key(thread_ts)
-        assert key == "conversation:1234567890.123"
+        assert key == f"conversation:{thread_ts}"
 
     def test_get_metadata_key(self):
         """Test metadata key generation"""
-        cache = ConversationCache()
-        thread_ts = "1234567890.123"
+        cache = ConversationCacheFactory.create_real_cache()
+        _, _, thread_ts = ConversationBuilder().build()
         key = cache._get_metadata_key(thread_ts)
-        assert key == "conversation_meta:1234567890.123"
+        assert key == f"conversation_meta:{thread_ts}"
 
     @pytest.mark.asyncio
     async def test_get_redis_client_connection_failure(self):
         """Test Redis client handling when connection fails"""
-        cache = ConversationCache(redis_url="redis://invalid:1234")
+        cache = ConversationCacheFactory.create_real_cache(
+            redis_url="redis://invalid:1234"
+        )
 
         with patch("services.conversation_cache.redis.from_url") as mock_from_url:
-            mock_redis = AsyncMock()
-            mock_redis.ping.side_effect = Exception("Connection failed")
+            mock_redis = RedisFactory.create_failing_redis("Connection failed")
             mock_from_url.return_value = mock_redis
 
             client = await cache._get_redis_client()
@@ -351,11 +566,10 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_get_redis_client_success(self):
         """Test successful Redis client creation"""
-        cache = ConversationCache()
+        cache = ConversationCacheFactory.create_real_cache()
 
         with patch("services.conversation_cache.redis.from_url") as mock_from_url:
-            mock_redis = AsyncMock()
-            mock_redis.ping.return_value = "PONG"
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_from_url.return_value = mock_redis
 
             client = await cache._get_redis_client()
@@ -365,17 +579,17 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_get_conversation_no_redis(self, cache):
         """Test get_conversation when Redis is unavailable"""
-        mock_slack_service = AsyncMock(spec=SlackService)
-        mock_slack_service.get_thread_history.return_value = (
-            [{"role": "user", "content": "test"}],
-            True,
+        test_messages = [MessageBuilder.user_message("test").build()]
+        mock_slack_service = SlackServiceFactory.create_mock_slack_service(
+            test_messages
         )
+        _, channel, thread_ts = ConversationBuilder().with_channel("C123").build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_get_client.return_value = None  # No Redis client
 
             messages, success, source = await cache.get_conversation(
-                "C123", "1234567890.123", mock_slack_service
+                channel, thread_ts, mock_slack_service
             )
 
         assert success is True
@@ -386,20 +600,19 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_get_conversation_cache_hit(self, cache):
         """Test successful cache retrieval"""
-        cached_messages = [{"role": "user", "content": "Hello"}]
+        cached_messages = [MessageBuilder.user_message("Hello").build()]
         cached_metadata = {"created_at": "2023-01-01T00:00:00Z", "ttl": 1800}
+        _, channel, thread_ts = ConversationBuilder().with_channel("C123").build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
-            mock_redis.get.side_effect = [
-                json.dumps(cached_messages),  # cached_data
-                json.dumps(cached_metadata),  # cached_meta
-            ]
+            mock_redis = RedisFactory.create_redis_with_cache(
+                cached_messages, cached_metadata
+            )
             mock_get_client.return_value = mock_redis
 
             with patch.object(cache, "_get_cache_age", return_value=300):
                 messages, success, source = await cache.get_conversation(
-                    "C123", "1234567890.123", AsyncMock()
+                    channel, thread_ts, AsyncMock()
                 )
 
         assert success is True
@@ -409,18 +622,19 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_get_conversation_cache_miss_slack_fallback(self, cache):
         """Test cache miss with Slack API fallback"""
-        slack_messages = [{"role": "user", "content": "From Slack"}]
-
-        mock_slack_service = AsyncMock(spec=SlackService)
-        mock_slack_service.get_thread_history.return_value = (slack_messages, True)
+        slack_messages = [MessageBuilder.user_message("From Slack").build()]
+        mock_slack_service = SlackServiceFactory.create_mock_slack_service(
+            slack_messages
+        )
+        _, channel, thread_ts = ConversationBuilder().with_channel("C123").build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.get.return_value = None  # Cache miss
             mock_get_client.return_value = mock_redis
 
             messages, success, source = await cache.get_conversation(
-                "C123", "1234567890.123", mock_slack_service
+                channel, thread_ts, mock_slack_service
             )
 
         assert success is True
@@ -433,19 +647,21 @@ class TestConversationCacheImplementation:
         cache._redis_available = False
         cache.redis_client = None
 
-        message = {"role": "user", "content": "test"}
+        message = MessageBuilder.user_message("test").build()
+        _, _, thread_ts = ConversationBuilder().build()
 
         # Should not raise exception when Redis unavailable
-        await cache.update_conversation("1234567890.123", message, is_bot_message=False)
+        await cache.update_conversation(thread_ts, message, is_bot_message=False)
 
     @pytest.mark.asyncio
     async def test_update_conversation_success(self, cache):
         """Test successful conversation update"""
-        message = {"role": "user", "content": "New message"}
-        existing_messages = [{"role": "assistant", "content": "Old message"}]
+        message = MessageBuilder.user_message("New message").build()
+        existing_messages = [MessageBuilder.assistant_message("Old message").build()]
+        _, _, thread_ts = ConversationBuilder().build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.get.return_value = json.dumps(existing_messages)
             mock_get_client.return_value = mock_redis
 
@@ -456,7 +672,7 @@ class TestConversationCacheImplementation:
                 mock_datetime.UTC = UTC
 
                 await cache.update_conversation(
-                    "1234567890.123", message, is_bot_message=False
+                    thread_ts, message, is_bot_message=False
                 )
 
         # Verify Redis operations
@@ -470,13 +686,14 @@ class TestConversationCacheImplementation:
 
             stats = await cache.get_cache_stats()
 
-        assert stats["status"] == "unavailable"
+        expected_stats = CacheStatsBuilder().unavailable().build()
+        assert stats["status"] == expected_stats["status"]
 
     @pytest.mark.asyncio
     async def test_get_cache_stats_with_redis(self, cache):
         """Test cache stats with Redis available"""
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.keys.return_value = ["conversation:1", "conversation:2"]
             mock_redis.info.return_value = {"used_memory_human": "1MB"}
             mock_get_client.return_value = mock_redis
@@ -488,8 +705,6 @@ class TestConversationCacheImplementation:
 
     def test_get_cache_age(self, cache):
         """Test cache age calculation"""
-        from datetime import UTC, datetime
-
         # Mock metadata with timestamp (using cached_at key)
         metadata = {"cached_at": "2023-01-01T00:00:00Z"}
 
@@ -520,7 +735,7 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_close_with_redis(self, cache):
         """Test close with active Redis client"""
-        mock_redis = AsyncMock()
+        mock_redis = RedisFactory.create_healthy_redis()
         cache.redis_client = mock_redis
 
         await cache.close()
@@ -531,11 +746,12 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_update_conversation_existing_cache(self, cache):
         """Test updating existing cached conversation"""
-        existing_messages = [{"role": "user", "content": "First message"}]
-        new_message = {"role": "assistant", "content": "Response"}
+        existing_messages = [MessageBuilder.user_message("First message").build()]
+        new_message = MessageBuilder.assistant_message("Response").build()
+        _, _, thread_ts = ConversationBuilder().build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.get.return_value = json.dumps(existing_messages)
             mock_get_client.return_value = mock_redis
 
@@ -546,7 +762,7 @@ class TestConversationCacheImplementation:
                 mock_datetime.UTC = UTC
 
                 await cache.update_conversation(
-                    "1234567890.123", new_message, is_bot_message=True
+                    thread_ts, new_message, is_bot_message=True
                 )
 
         # Should get existing conversation first
@@ -557,19 +773,19 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_get_conversation_json_decode_error(self, cache):
         """Test handling of JSON decode errors in cache"""
-        mock_slack_service = AsyncMock(spec=SlackService)
-        mock_slack_service.get_thread_history.return_value = (
-            [{"role": "user", "content": "fallback"}],
-            True,
+        fallback_messages = [MessageBuilder.user_message("fallback").build()]
+        mock_slack_service = SlackServiceFactory.create_mock_slack_service(
+            fallback_messages
         )
+        _, channel, thread_ts = ConversationBuilder().with_channel("C123").build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.get.return_value = "invalid json"  # Invalid JSON
             mock_get_client.return_value = mock_redis
 
             messages, success, source = await cache.get_conversation(
-                "C123", "1234567890.123", mock_slack_service
+                channel, thread_ts, mock_slack_service
             )
 
         # Should fallback to Slack API
@@ -580,10 +796,11 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_update_conversation_new_cache(self, cache):
         """Test creating new cached conversation"""
-        message = {"role": "user", "content": "First message"}
+        message = MessageBuilder.user_message("First message").build()
+        _, _, thread_ts = ConversationBuilder().build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.get.return_value = None  # No existing conversation
             mock_get_client.return_value = mock_redis
 
@@ -594,7 +811,7 @@ class TestConversationCacheImplementation:
                 mock_datetime.UTC = UTC
 
                 await cache.update_conversation(
-                    "1234567890.123", message, is_bot_message=False
+                    thread_ts, message, is_bot_message=False
                 )
 
         # Should create new conversation with single message
@@ -604,10 +821,11 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_cache_conversation_helper(self, cache):
         """Test the _cache_conversation helper method"""
-        messages = [{"role": "user", "content": "Test"}]
+        messages = [MessageBuilder.user_message("Test").build()]
+        _, _, thread_ts = ConversationBuilder().build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_get_client.return_value = mock_redis
 
             with patch("services.conversation_cache.datetime") as mock_datetime:
@@ -616,7 +834,7 @@ class TestConversationCacheImplementation:
                 )
                 mock_datetime.UTC = UTC
 
-                await cache._cache_conversation(mock_redis, "1234567890.123", messages)
+                await cache._cache_conversation(mock_redis, thread_ts, messages)
 
         # Should cache both messages and metadata
         assert mock_redis.setex.call_count == 2
@@ -624,12 +842,14 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_clear_conversation_success(self, cache):
         """Test successful conversation clearing"""
+        _, _, thread_ts = ConversationBuilder().build()
+
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_healthy_redis()
             mock_redis.delete.return_value = 2  # Deleted 2 keys
             mock_get_client.return_value = mock_redis
 
-            result = await cache.clear_conversation("1234567890.123")
+            result = await cache.clear_conversation(thread_ts)
 
         assert result is True
         mock_redis.delete.assert_called_once()
@@ -637,39 +857,42 @@ class TestConversationCacheImplementation:
     @pytest.mark.asyncio
     async def test_clear_conversation_no_redis(self, cache):
         """Test conversation clearing when Redis unavailable"""
+        _, _, thread_ts = ConversationBuilder().build()
+
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_get_client.return_value = None
 
-            result = await cache.clear_conversation("1234567890.123")
+            result = await cache.clear_conversation(thread_ts)
 
         assert result is False
 
     @pytest.mark.asyncio
     async def test_update_conversation_cache_error(self, cache):
         """Test update conversation with caching error"""
-        message = {"role": "user", "content": "Test"}
+        message = MessageBuilder.user_message("Test").build()
+        _, _, thread_ts = ConversationBuilder().build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
+            mock_redis = RedisFactory.create_redis_with_error("Redis error", "setex")
             mock_redis.get.return_value = None
-            mock_redis.setex.side_effect = Exception("Redis error")
             mock_get_client.return_value = mock_redis
 
             # Should not raise exception despite Redis error
             result = await cache.update_conversation(
-                "1234567890.123", message, is_bot_message=False
+                thread_ts, message, is_bot_message=False
             )
             assert result is False
 
     @pytest.mark.asyncio
     async def test_clear_conversation_redis_error(self, cache):
         """Test clear conversation with Redis error"""
+        _, _, thread_ts = ConversationBuilder().build()
+
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
-            mock_redis.delete.side_effect = Exception("Redis error")
+            mock_redis = RedisFactory.create_redis_with_error("Redis error", "delete")
             mock_get_client.return_value = mock_redis
 
-            result = await cache.clear_conversation("1234567890.123")
+            result = await cache.clear_conversation(thread_ts)
 
         assert result is False
 
@@ -677,31 +900,30 @@ class TestConversationCacheImplementation:
     async def test_get_cache_stats_redis_error(self, cache):
         """Test cache stats with Redis error"""
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
-            mock_redis.info.side_effect = Exception("Redis error")
+            mock_redis = RedisFactory.create_redis_with_error("Redis error", "info")
             mock_get_client.return_value = mock_redis
 
             stats = await cache.get_cache_stats()
 
-        assert stats["status"] == "error"
+        expected_stats = CacheStatsBuilder().with_error("Redis error").build()
+        assert stats["status"] == expected_stats["status"]
         assert "Redis error" in stats["error"]
 
     @pytest.mark.asyncio
     async def test_get_conversation_cache_fallback_after_error(self, cache):
         """Test cache falling back to Slack after Redis error during retrieve"""
-        mock_slack_service = AsyncMock(spec=SlackService)
-        mock_slack_service.get_thread_history.return_value = (
-            [{"role": "user", "content": "from slack"}],
-            True,
+        slack_messages = [MessageBuilder.user_message("from slack").build()]
+        mock_slack_service = SlackServiceFactory.create_mock_slack_service(
+            slack_messages
         )
+        _, channel, thread_ts = ConversationBuilder().with_channel("C123").build()
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
-            mock_redis = AsyncMock()
-            mock_redis.get.side_effect = Exception("Cache error")
+            mock_redis = RedisFactory.create_redis_with_error("Cache error", "get")
             mock_get_client.return_value = mock_redis
 
             messages, success, source = await cache.get_conversation(
-                "C123", "1234567890.123", mock_slack_service
+                channel, thread_ts, mock_slack_service
             )
 
         assert success is True
