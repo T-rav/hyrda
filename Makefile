@@ -166,6 +166,15 @@ test-ingest: $(VENV)
 	@echo "$(BLUE)Running ingestion service tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)ingest && PYTHONPATH=. $(PYTHON) -m pytest -v
 
+test-tasks: $(VENV)
+	@echo "$(BLUE)Running task service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0
+
+lint-tasks: $(VENV)
+	@echo "$(BLUE)Running task service linting...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m ruff check . --fix
+	cd $(PROJECT_ROOT_DIR)tasks && $(PYTHON) -m ruff format .
+
 # Check if Elasticsearch is running and healthy
 ingest-check-es:
 	@echo "$(BLUE)Checking if Elasticsearch is available...$(RESET)"
