@@ -213,7 +213,7 @@ lint:
 	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
 	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
-	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c ../pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
+	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
 	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
 
 lint-check:
@@ -230,7 +230,7 @@ lint-check:
 	@echo "$(BLUE)🔍 Running type checking...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON_LINT) -m pyright
 	@echo "$(BLUE)🔒 Running security checks...$(RESET)"
-	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c ../pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
+	cd $(BOT_DIR) && ($(PYTHON_LINT) -m bandit -r . -c pyproject.toml -f txt || echo "$(YELLOW)⚠️  Bandit check failed (non-blocking)$(RESET)")
 	@echo "$(GREEN)✅ All checks completed with ruff + pyright + bandit!$(RESET)"
 
 typecheck: $(VENV)

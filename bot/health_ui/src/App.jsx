@@ -291,7 +291,7 @@ function InfrastructureServices({ ready, metrics }) {
 }
 
 // RAG Metrics Component
-function RAGMetricsSection({ ready, metrics }) {
+function RAGMetricsSection({ ready }) {
   const ragData = ready?.checks?.rag
 
   if (!ragData || ragData.status === 'disabled') {
@@ -312,12 +312,12 @@ function RAGMetricsSection({ ready, metrics }) {
     return 'N/A'
   }
 
-  const getStatusColor = (successRate) => {
-    if (typeof successRate !== 'number') return '#6b7280'
-    if (successRate >= 80) return '#10b981' // green
-    if (successRate >= 60) return '#f59e0b' // yellow
-    return '#ef4444' // red
-  }
+  // const getStatusColor = (successRate) => {
+  //   if (typeof successRate !== 'number') return '#6b7280'
+  //   if (successRate >= 80) return '#10b981' // green
+  //   if (successRate >= 60) return '#f59e0b' // yellow
+  //   return '#ef4444' // red
+  // }
 
   return (
     <div className="grid-section">
