@@ -231,6 +231,8 @@ class TestLLMService:
             use_rag=False,
             session_id=None,
             user_id="U12345",
+            document_content=None,
+            document_filename=None,
         )
 
     @pytest.mark.asyncio
