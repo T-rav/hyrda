@@ -63,10 +63,10 @@ class ContextBuilder:
 
             # Debug logging
             if context_chunks:
-                logger.debug(
-                    f"Context chunks metadata: {[chunk.get('metadata', {}) for chunk in context_chunks]}"
+                logger.info(
+                    f"🔧 Context chunks metadata: {[chunk.get('metadata', {}) for chunk in context_chunks]}"
                 )
-                logger.info(f"Uploaded document detected: {has_uploaded_doc}")
+                logger.info(f"🔧 Uploaded document detected: {has_uploaded_doc}")
 
             if has_uploaded_doc:
                 rag_instruction = (
