@@ -178,8 +178,12 @@ class LLMService:
     ) -> str | None:
         """Get response without RAG retrieval"""
         return await self.get_response(
-            messages, user_id, use_rag=False, conversation_id=conversation_id,
-            document_content=None, document_filename=None
+            messages,
+            user_id,
+            use_rag=False,
+            conversation_id=conversation_id,
+            document_content=None,
+            document_filename=None,
         )
 
     async def ingest_documents(self, documents: list[dict]) -> int:

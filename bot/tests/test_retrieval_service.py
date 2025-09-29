@@ -629,6 +629,47 @@ class TestRetrievalService:
         assert service.elasticsearch_retrieval is not None
         assert service.pinecone_retrieval is not None
 
+    @pytest.mark.asyncio
+    async def test_retrieve_context_by_embedding_success(self):
+        """Test document-based vector similarity search"""
+        # Create services using factories
+        search_results = SearchResultsBuilder.basic_results().build()
+        mock_vector_service = VectorServiceFactory.create_service_with_results(
+            search_results
+        )
+
+        # Test document embedding
+        document_embedding = [0.1, 0.2, 0.3, 0.4, 0.5]  # Sample embedding
+
+        results = await self.retrieval_service.retrieve_context_by_embedding(
+            document_embedding, mock_vector_service
+        )
+
+        # Verify results
+        assert len(results) == 2  # Based on SearchResultsBuilder.basic_results()
+        assert all("content" in result for result in results)
+
+        # Verify vector service was called with document embedding
+        mock_vector_service.search.assert_called_once()
+        call_args = mock_vector_service.search.call_args
+        assert call_args[1]["query_embedding"] == document_embedding
+        assert call_args[1]["query_text"] == ""  # No text query for pure vector search
+
+    @pytest.mark.asyncio
+    async def test_retrieve_context_by_embedding_no_results(self):
+        """Test document-based search with no results"""
+        # Create vector service with no results
+        mock_vector_service = VectorServiceFactory.create_service_with_results([])
+
+        document_embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+        results = await self.retrieval_service.retrieve_context_by_embedding(
+            document_embedding, mock_vector_service
+        )
+
+        # Should return empty list when no results found
+        assert results == []
+
 
 class TestRetrievalServiceIntegration:
     """Integration tests for retrieval service"""
