@@ -176,6 +176,8 @@ class RAGService:
         use_rag: bool = True,
         session_id: str | None = None,
         user_id: str | None = None,
+        document_content: str | None = None,
+        document_filename: str | None = None,
     ) -> str:
         """
         Generate a response using RAG or direct LLM.
@@ -187,6 +189,8 @@ class RAGService:
             use_rag: Whether to use RAG retrieval
             session_id: Session ID for tracing
             user_id: User ID for tracing
+            document_content: Content of uploaded document for context
+            document_filename: Name of uploaded document
 
         Returns:
             Generated response with citations if RAG was used
@@ -196,9 +200,37 @@ class RAGService:
         try:
             # Retrieve context if RAG is enabled and requested
             if use_rag and self.vector_store:
-                context_chunks = await self.retrieval_service.retrieve_context(
-                    query, self.vector_store, self.embedding_provider
-                )
+                # If document content is provided, use document-based vector search
+                if document_content:
+                    logger.info(
+                        f"Performing document-based vector search for uploaded file: {document_filename}"
+                    )
+                    # Generate embedding for the uploaded document
+                    document_embeddings = await self.embedding_provider.get_embeddings(
+                        [document_content]
+                    )
+                    if document_embeddings:
+                        # Search vector store using document's embedding
+                        context_chunks = (
+                            await self.retrieval_service.retrieve_context_by_embedding(
+                                document_embeddings[0], self.vector_store
+                            )
+                        )
+                        logger.info(
+                            f"Found {len(context_chunks)} related chunks using document embedding"
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to generate embedding for uploaded document, falling back to query-based search"
+                        )
+                        context_chunks = await self.retrieval_service.retrieve_context(
+                            query, self.vector_store, self.embedding_provider
+                        )
+                else:
+                    # Standard query-based retrieval
+                    context_chunks = await self.retrieval_service.retrieve_context(
+                        query, self.vector_store, self.embedding_provider
+                    )
 
                 # Log retrieved documents to Langfuse and record metrics
                 if context_chunks:
@@ -305,7 +337,25 @@ class RAGService:
                     )
                     logger.info(f"🔍 {summary}")
 
-            # Build prompt with context
+            # Add uploaded document to context if provided
+            if document_content:
+                logger.info(
+                    f"💾 Adding uploaded document to context: {document_filename}"
+                )
+                # Create a document chunk for the uploaded content
+                document_chunk = {
+                    "content": document_content,
+                    "metadata": {
+                        "file_name": document_filename or "uploaded_document",
+                        "source": "uploaded_document",
+                        "chunk_id": "uploaded_doc_0",
+                    },
+                    "similarity": 1.0,  # Perfect match since it's the actual uploaded doc
+                }
+                # Add uploaded document as first context (highest priority)
+                context_chunks = [document_chunk] + context_chunks
+
+            # Build prompt with context (includes uploaded document + retrieved context)
             final_system_message, messages = self.context_builder.build_rag_prompt(
                 query, context_chunks, conversation_history, system_message
             )

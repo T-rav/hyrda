@@ -59,14 +59,32 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.client = AsyncOpenAI(api_key=api_key)
 
     async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings for multiple texts"""
+        """Generate embeddings for multiple texts with token limit safety check"""
         try:
+            # Safety check: ensure no text exceeds token limits
+            safe_texts = []
+            for i, text in enumerate(texts):
+                # Conservative limit: 6000 chars ≈ 1500 tokens (well under 8192 limit)
+                if len(text) > 6000:
+                    logger.warning(
+                        f"Text {i} is {len(text)} chars, chunking for token safety"
+                    )
+                    chunks = chunk_text(text, chunk_size=6000, chunk_overlap=200)
+                    safe_texts.extend(chunks)
+                else:
+                    safe_texts.append(text)
+
+            if len(safe_texts) != len(texts):
+                logger.info(
+                    f"Chunked {len(texts)} texts into {len(safe_texts)} safe chunks"
+                )
+
             logger.info(
-                f"Generating embeddings for {len(texts)} texts using {self.model}"
+                f"Generating embeddings for {len(safe_texts)} texts using {self.model}"
             )
 
             response = await self.client.embeddings.create(
-                model=self.model, input=texts
+                model=self.model, input=safe_texts
             )
 
             embeddings = [data.embedding for data in response.data]
@@ -75,7 +93,7 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                 f"Generated {len(embeddings)} embeddings",
                 extra={
                     "model": self.model,
-                    "text_count": len(texts),
+                    "text_count": len(safe_texts),
                     "embedding_dimensions": len(embeddings[0]) if embeddings else 0,
                     "event_type": "embeddings_success",
                 },
