@@ -195,6 +195,30 @@ class ContextChunkBuilder:
         self.chunks.append(chunk)
         return self
 
+    def with_high_similarity(self) -> "ContextChunkBuilder":
+        """Add high similarity Apple chunk - fluent method"""
+        return self.add_apple_chunk(similarity=0.95)
+
+    def with_medium_similarity(self) -> "ContextChunkBuilder":
+        """Add medium similarity chunk - fluent method"""
+        return self.add_apple_chunk(similarity=0.75)
+
+    def with_low_similarity(self) -> "ContextChunkBuilder":
+        """Add low similarity chunk - fluent method"""
+        return self.add_apple_chunk(similarity=0.45)
+
+    def and_3step_content(self) -> "ContextChunkBuilder":
+        """Chain 3Step content - fluent method"""
+        return self.add_3step_chunk()
+
+    def and_title_metadata(self) -> "ContextChunkBuilder":
+        """Chain title metadata - fluent method"""
+        return self.add_chunk_with_title()
+
+    def and_web_link(self) -> "ContextChunkBuilder":
+        """Chain web link metadata - fluent method"""
+        return self.add_chunk_with_web_link()
+
     def build(self) -> list[dict[str, Any]]:
         """Build the context chunks list"""
         return self.chunks.copy()
@@ -222,6 +246,40 @@ class ContextChunkBuilder:
             .add_chunk("Content 1...", 0.90, "Document.pdf")
             .add_chunk("Content 2...", 0.85, "Report.docx")
             .add_chunk("Content 3...", 0.80, "Notes.txt")
+        )
+
+    @staticmethod
+    def with_title_and_web_link() -> "ContextChunkBuilder":
+        """Create chunk with title and web link metadata - avoid in-test configuration"""
+        return ContextChunkBuilder().add_chunk_with_title()
+
+    @staticmethod
+    def with_web_view_link() -> "ContextChunkBuilder":
+        """Create chunk with web view link - avoid in-test configuration"""
+        return ContextChunkBuilder().add_chunk_with_web_link()
+
+    @staticmethod
+    def for_llm_formatting() -> "ContextChunkBuilder":
+        """Create chunk optimized for LLM context formatting"""
+        return ContextChunkBuilder().add_chunk(
+            content="This is test content for the LLM.",
+            similarity=0.95,
+            file_name="Test Document.pdf",
+        )
+
+    @staticmethod
+    def empty_chunks() -> "ContextChunkBuilder":
+        """Create empty chunks scenario"""
+        return ContextChunkBuilder()  # No chunks added
+
+    @staticmethod
+    def malformed_chunks() -> "ContextChunkBuilder":
+        """Create malformed chunks for error testing"""
+        return (
+            ContextChunkBuilder()
+            .add_empty_chunk()
+            .add_chunk_no_metadata()
+            .add_chunk_no_similarity()
         )
 
     @staticmethod
@@ -304,7 +362,7 @@ class TestCitationService:
         """Test citation with subtitle in metadata"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder().add_chunk_with_title().build()
+        context_chunks = ContextChunkBuilder.with_title_and_web_link().build()
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -314,7 +372,7 @@ class TestCitationService:
         """Test citation with web view link"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder().add_chunk_with_web_link().build()
+        context_chunks = ContextChunkBuilder.with_web_view_link().build()
 
         result = citation_service.add_source_citations(response, context_chunks)
 
