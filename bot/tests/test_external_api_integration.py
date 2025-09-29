@@ -14,6 +14,13 @@ from pydantic import SecretStr
 from config.settings import LangfuseSettings, LLMSettings, VectorSettings
 
 
+# TDD Factory Patterns for External API Integration Testing
+class TestDataFactory:
+    """Factory for creating test data for external API integration tests"""
+
+    pass
+
+
 class TestSlackAPIIntegration:
     """Test Slack API integration to catch breaking changes"""
 

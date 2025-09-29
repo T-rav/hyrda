@@ -13,6 +13,13 @@ from config.settings import HybridSettings, Settings, VectorSettings
 from services.hybrid_rag_service import HybridRAGService
 
 
+# TDD Factory Patterns for Hybrid RAG Integration Testing
+class TestDataFactory:
+    """Factory for creating test data for hybrid RAG integration tests"""
+
+    pass
+
+
 class MockEmbeddingService:
     """Mock embedding service for testing"""
 
