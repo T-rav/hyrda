@@ -11,12 +11,78 @@ from services.citation_service import CitationService
 
 # TDD Factory Patterns for Citation Service Testing
 class CitationServiceFactory:
-    """Factory for creating CitationService instances"""
+    """Factory for creating CitationService instances with complete test scenarios"""
 
     @staticmethod
     def create_basic_service() -> CitationService:
         """Create basic citation service"""
         return CitationService()
+
+    @staticmethod
+    def create_test_scenario(
+        response: str = "This is a test response.",
+        context_chunks: list[dict[str, Any]] | None = None,
+    ) -> tuple[CitationService, str, list[dict[str, Any]]]:
+        """Create complete test scenario with service, response, and chunks"""
+        service = CitationService()
+        chunks = context_chunks if context_chunks is not None else []
+        return service, response, chunks
+
+    @staticmethod
+    def create_apple_scenario() -> tuple[CitationService, str, list[dict[str, Any]]]:
+        """Create scenario with Apple company content"""
+        service = CitationService()
+        response = "Apple is a tech company."
+        context_chunks = ContextChunkBuilder.single_apple_chunk().build()
+        return service, response, context_chunks
+
+    @staticmethod
+    def create_multiple_files_scenario() -> (
+        tuple[CitationService, str, list[dict[str, Any]]]
+    ):
+        """Create scenario with multiple different files"""
+        service = CitationService()
+        response = "Information about companies."
+        context_chunks = ContextChunkBuilder.multiple_different_files().build()
+        return service, response, context_chunks
+
+    @staticmethod
+    def create_empty_chunks_scenario() -> (
+        tuple[CitationService, str, list[dict[str, Any]]]
+    ):
+        """Create scenario with empty chunks"""
+        service = CitationService()
+        response = "This is a test response."
+        context_chunks: list[dict[str, Any]] = []
+        return service, response, context_chunks
+
+    @staticmethod
+    def create_deduplication_scenario() -> (
+        tuple[CitationService, str, list[dict[str, Any]]]
+    ):
+        """Create scenario for testing deduplication of sources"""
+        service = CitationService()
+        response = "Test response."
+        context_chunks = [
+            {
+                "content": "Content 1...",
+                "similarity": 0.95,
+                "metadata": {"file_name": "Apple - Project Details File.pdf"},
+            },
+            {
+                "content": "Content 2...",
+                "similarity": 0.90,
+                "metadata": {
+                    "file_name": "Apple - PROJECT DETAILS File.PDF"
+                },  # Different case
+            },
+            {
+                "content": "Content 3...",
+                "similarity": 0.85,
+                "metadata": {"file_name": "Other Document.pdf"},
+            },
+        ]
+        return service, response, context_chunks
 
 
 class ContextChunkBuilder:
@@ -189,16 +255,17 @@ class TestCitationService:
 
     def test_add_source_citations_empty_chunks(self):
         """Test citation handling with empty context chunks"""
-        citation_service = CitationServiceFactory.create_basic_service()
-        response = "This is a test response."
-        result = citation_service.add_source_citations(response, [])
+        citation_service, response, context_chunks = (
+            CitationServiceFactory.create_empty_chunks_scenario()
+        )
+        result = citation_service.add_source_citations(response, context_chunks)
         assert result == response
 
     def test_add_source_citations_single_chunk(self):
         """Test citation with single context chunk"""
-        citation_service = CitationServiceFactory.create_basic_service()
-        response = "Apple is a tech company."
-        context_chunks = ContextChunkBuilder.single_apple_chunk().build()
+        citation_service, response, context_chunks = (
+            CitationServiceFactory.create_apple_scenario()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -222,9 +289,9 @@ class TestCitationService:
 
     def test_add_source_citations_multiple_different_files(self):
         """Test citation with chunks from different files"""
-        citation_service = CitationServiceFactory.create_basic_service()
-        response = "Information about companies."
-        context_chunks = ContextChunkBuilder.multiple_different_files().build()
+        citation_service, response, context_chunks = (
+            CitationServiceFactory.create_multiple_files_scenario()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -271,27 +338,9 @@ class TestCitationService:
 
     def test_add_source_citations_deduplication(self):
         """Test that duplicate sources are properly deduplicated"""
-        citation_service = CitationServiceFactory.create_basic_service()
-        response = "Test response."
-        context_chunks = [
-            {
-                "content": "Content 1...",
-                "similarity": 0.95,
-                "metadata": {"file_name": "Apple - Project Details File.pdf"},
-            },
-            {
-                "content": "Content 2...",
-                "similarity": 0.90,
-                "metadata": {
-                    "file_name": "Apple - PROJECT DETAILS File.PDF"
-                },  # Different case
-            },
-            {
-                "content": "Content 3...",
-                "similarity": 0.85,
-                "metadata": {"file_name": "Other Document.pdf"},
-            },
-        ]
+        citation_service, response, context_chunks = (
+            CitationServiceFactory.create_deduplication_scenario()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 

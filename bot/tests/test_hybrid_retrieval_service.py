@@ -200,7 +200,7 @@ class MockVectorStoreFactory:
 
 
 class HybridRetrievalServiceFactory:
-    """Factory for creating HybridRetrievalService instances"""
+    """Factory for creating HybridRetrievalService instances with complete test scenarios"""
 
     @staticmethod
     def create_basic_service(
@@ -229,6 +229,72 @@ class HybridRetrievalServiceFactory:
             reranker=reranker or AsyncMock(),
             final_top_k=1,
         )
+
+    @staticmethod
+    def create_search_scenario(
+        dense_results: list[dict[str, Any]] | None = None,
+        sparse_results: list[dict[str, Any]] | None = None,
+    ) -> tuple[HybridRetrievalService, MagicMock, MagicMock]:
+        """Create complete search scenario with configured stores and results"""
+        # Set up default results
+        default_dense = [
+            {"content": "Dense result", "similarity": 0.9, "metadata": {}, "id": "d1"}
+        ]
+        default_sparse = [
+            {"content": "Sparse result", "similarity": 0.8, "metadata": {}, "id": "s1"}
+        ]
+
+        # Create stores with configured results
+        dense_store = MockVectorStoreFactory.create_basic_store()
+        sparse_store = MockVectorStoreFactory.create_basic_store()
+
+        dense_store.search.return_value = dense_results or default_dense
+        sparse_store.bm25_search.return_value = sparse_results or default_sparse
+
+        # Create service
+        service = HybridRetrievalService(
+            dense_store=dense_store,
+            sparse_store=sparse_store,
+            dense_top_k=5,
+            sparse_top_k=5,
+            fusion_top_k=3,
+            final_top_k=2,
+            rrf_k=60,
+        )
+
+        return service, dense_store, sparse_store
+
+    @staticmethod
+    def create_threshold_scenario() -> (
+        tuple[HybridRetrievalService, MagicMock, MagicMock]
+    ):
+        """Create scenario for testing similarity threshold filtering"""
+        dense_results = [
+            {"content": "High sim", "similarity": 0.9, "metadata": {}, "id": "h1"},
+            {"content": "Low sim", "similarity": 0.3, "metadata": {}, "id": "l1"},
+        ]
+        sparse_results: list[dict[str, Any]] = []
+
+        return HybridRetrievalServiceFactory.create_search_scenario(
+            dense_results=dense_results, sparse_results=sparse_results
+        )
+
+    @staticmethod
+    def create_exception_scenario() -> (
+        tuple[HybridRetrievalService, MagicMock, MagicMock]
+    ):
+        """Create scenario for testing exception handling"""
+        service, dense_store, sparse_store = (
+            HybridRetrievalServiceFactory.create_search_scenario()
+        )
+
+        # Configure dense store to fail
+        dense_store.search.side_effect = Exception("Dense failed")
+        sparse_store.bm25_search.return_value = [
+            {"content": "Sparse only", "similarity": 0.7, "metadata": {}, "id": "s1"}
+        ]
+
+        return service, dense_store, sparse_store
 
 
 class CohereRerankerFactory:
@@ -458,20 +524,10 @@ class TestHybridRetrievalService:
     @pytest.mark.asyncio
     async def test_hybrid_search_full_pipeline(self):
         """Test complete hybrid search pipeline"""
-        # Create stores using factories
-        dense_store = MockVectorStoreFactory.create_basic_store()
-        sparse_store = MockVectorStoreFactory.create_basic_store()
-        service = HybridRetrievalServiceFactory.create_basic_service(
-            dense_store=dense_store, sparse_store=sparse_store
+        # Create complete scenario using factory
+        service, dense_store, sparse_store = (
+            HybridRetrievalServiceFactory.create_search_scenario()
         )
-
-        # Setup mock results
-        dense_store.search.return_value = [
-            {"content": "Dense result", "similarity": 0.9, "metadata": {}, "id": "d1"}
-        ]
-        sparse_store.bm25_search.return_value = [
-            {"content": "Sparse result", "similarity": 0.8, "metadata": {}, "id": "s1"}
-        ]
 
         # No reranker in this test
         results = await service.hybrid_search(
@@ -531,18 +587,10 @@ class TestHybridRetrievalService:
     @pytest.mark.asyncio
     async def test_hybrid_search_similarity_threshold(self):
         """Test hybrid search with similarity threshold"""
-        # Create stores and service using factories
-        dense_store = MockVectorStoreFactory.create_basic_store()
-        sparse_store = MockVectorStoreFactory.create_basic_store()
-        service = HybridRetrievalServiceFactory.create_basic_service(
-            dense_store=dense_store, sparse_store=sparse_store
+        # Create threshold scenario using factory
+        service, dense_store, sparse_store = (
+            HybridRetrievalServiceFactory.create_threshold_scenario()
         )
-
-        dense_store.search.return_value = [
-            {"content": "High sim", "similarity": 0.9, "metadata": {}, "id": "h1"},
-            {"content": "Low sim", "similarity": 0.3, "metadata": {}, "id": "l1"},
-        ]
-        sparse_store.bm25_search.return_value = []
 
         results = await service.hybrid_search(
             query="test",
@@ -558,18 +606,10 @@ class TestHybridRetrievalService:
     @pytest.mark.asyncio
     async def test_hybrid_search_exception_handling(self):
         """Test hybrid search with store exceptions"""
-        # Create stores and service using factories
-        dense_store = MockVectorStoreFactory.create_basic_store()
-        sparse_store = MockVectorStoreFactory.create_basic_store()
-        service = HybridRetrievalServiceFactory.create_basic_service(
-            dense_store=dense_store, sparse_store=sparse_store
+        # Create exception scenario using factory
+        service, dense_store, sparse_store = (
+            HybridRetrievalServiceFactory.create_exception_scenario()
         )
-
-        # Dense store fails
-        dense_store.search.side_effect = Exception("Dense failed")
-        sparse_store.bm25_search.return_value = [
-            {"content": "Sparse only", "similarity": 0.7, "metadata": {}, "id": "s1"}
-        ]
 
         # Should handle gracefully
         results = await service.hybrid_search(
