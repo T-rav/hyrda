@@ -28,18 +28,28 @@ class CitationService:
             return response
 
         # Extract sources with enhanced deduplication logic
+        # Filter out uploaded documents - user doesn't need their own document cited back to them
+        citation_chunks = [
+            chunk
+            for chunk in context_chunks
+            if chunk.get("metadata", {}).get("source") != "uploaded_document"
+        ]
+
+        if not citation_chunks:
+            return response
+
         sources = []
         file_chunk_counts = {}  # Track chunks per file
 
         # First pass: count chunks per file
-        for chunk in context_chunks:
+        for chunk in citation_chunks:
             metadata = chunk.get("metadata", {})
             file_name = metadata.get("file_name", "Unknown")
             file_chunk_counts[file_name] = file_chunk_counts.get(file_name, 0) + 1
 
         # Second pass: build citations with chunk info when needed
         seen_sources = set()
-        for i, chunk in enumerate(context_chunks, 1):
+        for i, chunk in enumerate(citation_chunks, 1):
             metadata = chunk.get("metadata", {})
             file_name = metadata.get("file_name", f"Document {i}")
             similarity = chunk.get("similarity", 0)
