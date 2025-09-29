@@ -74,12 +74,14 @@ HTTP_OK = 200
 
 
 async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
-    """Extract text from PDF using PyMuPDF"""
+    """Extract text from PDF using PyMuPDF and chunk for embedding compatibility"""
     if not PYMUPDF_AVAILABLE:
         logger.error("PyMuPDF not available for PDF processing")
         return f"[PDF file: {file_name} - PyMuPDF library not available]"
 
     try:
+        from services.embedding_service import chunk_text
+
         # Open PDF from bytes
         pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
         text_content = ""
@@ -93,7 +95,24 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
         pdf_document.close()
 
         if text_content.strip():
-            return text_content.strip()
+            full_text = text_content.strip()
+
+            # If content is too long, chunk it to prevent embedding failures
+            # Conservative limit: 6000 chars ≈ 1500 tokens (well under 8192 limit)
+            if len(full_text) > 6000:
+                logger.info(
+                    f"PDF content is {len(full_text)} chars, chunking for embedding compatibility"
+                )
+                chunks = chunk_text(full_text, chunk_size=6000, chunk_overlap=200)
+                # Return first chunk with indicator
+                chunked_content = chunks[0]
+                if len(chunks) > 1:
+                    chunked_content += (
+                        f"\n\n[Note: This is chunk 1 of {len(chunks)} from {file_name}]"
+                    )
+                return chunked_content
+            else:
+                return full_text
         else:
             return f"[PDF file: {file_name} - No extractable text content found]"
 
@@ -464,19 +483,15 @@ async def handle_message(
                 f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
             )
 
-        # Prepare current query with document content if present
-        current_query = text
-        if document_content:
-            current_query = f"{text}{document_content}"
-            logger.info(
-                f"Enhanced query with {len(document_content)} characters of document content"
-            )
-
-        # Generate response using LLM service
+        # Generate response using LLM service with document-aware RAG
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
-            current_query=current_query,
+            current_query=text,
+            document_content=document_content if document_content else None,
+            document_filename=files[0].get("name")
+            if files and document_content
+            else None,
         )
 
         # Clean up thinking message

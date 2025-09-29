@@ -147,3 +147,47 @@ class RetrievalService:
         )
 
         return final_results
+
+    async def retrieve_context_by_embedding(
+        self,
+        document_embedding: list[float],
+        vector_service,
+    ) -> list[dict[str, Any]]:
+        """
+        Retrieve relevant context chunks using a document's embedding for similarity search.
+
+        Args:
+            document_embedding: Embedding vector of uploaded document
+            vector_service: Vector storage service
+
+        Returns:
+            List of relevant chunks found using document similarity
+        """
+        try:
+            logger.info("🔍 Retrieving context using document embedding similarity")
+
+            # Search vector store using document embedding (no query text for pure vector search)
+            results = await vector_service.search(
+                query_embedding=document_embedding,
+                limit=self.settings.rag.max_results * 2,  # Get more for diversity
+                similarity_threshold=self.settings.rag.similarity_threshold,
+                query_text="",  # No text query, pure vector similarity
+            )
+
+            if not results:
+                logger.info("📭 No similar documents found in vector database")
+                return []
+
+            # Apply diversification to get chunks from different documents
+            diversified_results = self._apply_hybrid_search_boosting("", results)
+
+            logger.info(
+                f"📚 Retrieved {len(diversified_results)} context chunks "
+                f"using document similarity"
+            )
+
+            return diversified_results
+
+        except Exception as e:
+            logger.error(f"Error retrieving context by embedding: {e}")
+            return []
