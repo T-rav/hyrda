@@ -57,9 +57,7 @@ class ContextChunkBuilder:
     ) -> "ContextChunkBuilder":
         """Add Apple company chunk(s)"""
         for i in range(sections):
-            content = (
-                f"Apple content {i + 1}..." if sections > 1 else "Apple content..."
-            )
+            content = f"Apple content {i + 1}..." if sections > 1 else "Apple content..."
             self.add_chunk(
                 content=content,
                 similarity=similarity,
@@ -67,7 +65,9 @@ class ContextChunkBuilder:
             )
         return self
 
-    def add_3step_chunk(self, similarity: float = 0.88) -> "ContextChunkBuilder":
+    def add_3step_chunk(
+        self, similarity: float = 0.88
+    ) -> "ContextChunkBuilder":
         """Add 3Step company chunk"""
         return self.add_chunk(
             content="3Step content...",
@@ -237,7 +237,11 @@ class TestCitationService:
         """Test citation with subtitle in metadata"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder().add_chunk_with_title().build()
+        context_chunks = (
+            ContextChunkBuilder()
+            .add_chunk_with_title()
+            .build()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -247,7 +251,11 @@ class TestCitationService:
         """Test citation with web view link"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder().add_chunk_with_web_link().build()
+        context_chunks = (
+            ContextChunkBuilder()
+            .add_chunk_with_web_link()
+            .build()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -352,7 +360,7 @@ class TestCitationService:
             .add_chunk(
                 content="This is test content for the LLM.",
                 similarity=0.95,
-                file_name="Test Document.pdf",
+                file_name="Test Document.pdf"
             )
             .build()
         )
@@ -364,7 +372,6 @@ class TestCitationService:
 
     def test_format_context_for_llm_multiple_chunks(self):
         """Test LLM context formatting with multiple chunks"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "First content chunk.",
@@ -378,7 +385,7 @@ class TestCitationService:
             },
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Source: Document 1.pdf, Score: 0.95]" in result
         assert "First content chunk." in result
@@ -389,10 +396,9 @@ class TestCitationService:
 
     def test_format_context_for_llm_no_metadata(self):
         """Test LLM context formatting without metadata"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [{"content": "Content without metadata.", "similarity": 0.80}]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Score: 0.80]" in result
         assert "Content without metadata." in result
@@ -400,7 +406,6 @@ class TestCitationService:
 
     def test_format_context_for_llm_missing_similarity(self):
         """Test LLM context formatting without similarity score"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "Content without similarity.",
@@ -408,14 +413,13 @@ class TestCitationService:
             }
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Source: Test Document.pdf, Score: 0.00]" in result
         assert "Content without similarity." in result
 
     def test_format_context_for_llm_empty_metadata(self):
         """Test LLM context formatting with empty metadata dict"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "Content with empty metadata.",
@@ -424,7 +428,7 @@ class TestCitationService:
             }
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         # Empty metadata is treated as no metadata, so just score
         assert "[Score: 0.75]" in result
@@ -443,7 +447,9 @@ class TestCitationService:
 
         # Add citations to response
         response = "Both Apple and 3Step are technology companies with different specializations."
-        cited_response = citation_service.add_source_citations(response, context_chunks)
+        cited_response = citation_service.add_source_citations(
+            response, context_chunks
+        )
 
         assert "**📚 Sources:**" in cited_response
         # The citation format puts sections before the subtitle
@@ -481,7 +487,6 @@ class TestCitationServiceEdgeCases:
 
     def test_very_long_file_names(self):
         """Test handling of very long file names"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
         context_chunks = [
             {
@@ -493,7 +498,7 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         # Should still work but truncate file extension
         assert (
@@ -504,7 +509,6 @@ class TestCitationServiceEdgeCases:
 
     def test_special_characters_in_file_names(self):
         """Test handling of special characters in file names"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
         context_chunks = [
             {
@@ -516,7 +520,7 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         # Should preserve special characters but remove extension
         assert "Document with (special) [chars] & symbols!" in result
@@ -524,7 +528,6 @@ class TestCitationServiceEdgeCases:
 
     def test_unicode_characters_in_content(self):
         """Test handling of Unicode characters"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response with émojis 🚀."
         context_chunks = [
             {
@@ -534,11 +537,11 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         assert "Ünïcödé Document" in result
         assert "🚀" in result
 
         # Test LLM formatting too
-        llm_context = citation_service.format_context_for_llm(context_chunks)
+        llm_context = self.citation_service.format_context_for_llm(context_chunks)
         assert "Content with émojis 🎉 and ünïcödé characters." in llm_context

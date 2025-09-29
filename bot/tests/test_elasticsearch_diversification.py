@@ -8,6 +8,13 @@ from config.settings import Settings
 from services.vector_stores.elasticsearch_store import ElasticsearchVectorStore
 
 
+# TDD Factory Patterns for Elasticsearch Diversification Testing
+class TestDataFactory:
+    """Factory for creating test data for elasticsearch diversification tests"""
+
+    pass
+
+
 class TestElasticsearchDiversification:
     """Test diversification logic in Elasticsearch vector store"""
 

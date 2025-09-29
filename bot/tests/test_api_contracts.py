@@ -15,6 +15,34 @@ from bot.health import HealthChecker
 from config.settings import Settings
 
 
+# TDD Factory Patterns for API Contract Testing
+class APIContractFactory:
+    """Factory for creating API contract test data and configurations"""
+
+    @staticmethod
+    def create_mock_settings():
+        """Create mock settings for API testing"""
+        settings = Mock(spec=Settings)
+        settings.health_port = 8080
+        settings.environment = "test"
+        return settings
+
+    @staticmethod
+    def create_health_endpoints():
+        """Create list of health API endpoints"""
+        return [
+            "/api/health",
+            "/api/ready",
+            "/api/metrics",
+            "/api/prometheus",
+            "/api/services/health",
+            "/api/users/import",
+            "/api/ingest/completed",
+            "/api/metrics/usage",
+            "/api/metrics/performance",
+        ]
+
+
 class TestHealthAPIContracts(AioHTTPTestCase):
     """Test health API endpoint contracts to prevent dashboard breakage"""
 
