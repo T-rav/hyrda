@@ -354,6 +354,9 @@ class RAGService:
                 }
                 # Add uploaded document as first context (highest priority)
                 context_chunks = [document_chunk] + context_chunks
+                logger.debug(
+                    f"Created document chunk with metadata: {document_chunk['metadata']}"
+                )
 
             # Build prompt with context (includes uploaded document + retrieved context)
             final_system_message, messages = self.context_builder.build_rag_prompt(
