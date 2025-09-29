@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,49 +14,260 @@ from config.settings import SlackSettings
 from services.slack_service import SlackService
 
 
-class TestSlackService:
-    """Tests for the SlackService class"""
+# TDD Factory Patterns for Slack Service Testing
+class SlackSettingsFactory:
+    """Factory for creating Slack service settings with different configurations"""
 
-    @pytest.fixture
-    def slack_settings(self):
-        """Create Slack settings for testing"""
+    @staticmethod
+    def create_basic_settings(
+        bot_token: str = "xoxb-test-token",
+        app_token: str = "xapp-test-token",
+        bot_id: str = "B12345678",
+    ) -> SlackSettings:
+        """Create basic Slack settings"""
         with patch.dict(
             os.environ,
             {
-                "SLACK_BOT_TOKEN": "xoxb-test-token",
-                "SLACK_APP_TOKEN": "xapp-test-token",
-                "SLACK_BOT_ID": "B12345678",
+                "SLACK_BOT_TOKEN": bot_token,
+                "SLACK_APP_TOKEN": app_token,
+                "SLACK_BOT_ID": bot_id,
             },
         ):
             return SlackSettings()
 
-    @pytest.fixture
-    def mock_client(self):
-        """Create mock Slack client"""
+    @staticmethod
+    def create_production_settings() -> SlackSettings:
+        """Create production-like Slack settings"""
+        return SlackSettingsFactory.create_basic_settings(
+            bot_token="xoxb-prod-token-12345",
+            app_token="xapp-prod-token-67890",
+            bot_id="B08RGGA6QKS",
+        )
+
+    @staticmethod
+    def create_invalid_settings() -> SlackSettings:
+        """Create invalid Slack settings for error testing"""
+        return SlackSettingsFactory.create_basic_settings(
+            bot_token="invalid-token",
+            app_token="invalid-app-token",
+            bot_id="BINVALID",
+        )
+
+
+class SlackClientFactory:
+    """Factory for creating mock Slack clients"""
+
+    @staticmethod
+    def create_basic_client() -> AsyncMock:
+        """Create basic mock Slack client"""
         return AsyncMock(spec=WebClient)
 
-    @pytest.fixture
-    def slack_service(self, slack_settings, mock_client):
-        """Create SlackService instance for testing"""
-        return SlackService(slack_settings, mock_client)
+    @staticmethod
+    def create_client_with_success_response(
+        response: dict[str, Any] | None = None,
+    ) -> AsyncMock:
+        """Create mock client that returns successful responses"""
+        client = SlackClientFactory.create_basic_client()
+        default_response = {"ts": "1234567890.654321"}
+        client.chat_postMessage = AsyncMock(return_value=response or default_response)
+        return client
 
-    @pytest.mark.asyncio
-    async def test_init(self, slack_service, slack_settings, mock_client):
+    @staticmethod
+    def create_client_with_error(
+        error: Exception | None = None,
+    ) -> AsyncMock:
+        """Create mock client that raises errors"""
+        client = SlackClientFactory.create_basic_client()
+        default_error = SlackApiError(
+            message="Error", response={"error": "channel_not_found"}
+        )
+        client.chat_postMessage.side_effect = error or default_error
+        return client
+
+    @staticmethod
+    def create_client_with_thread_history(
+        messages: list[dict[str, Any]] | None = None,
+    ) -> AsyncMock:
+        """Create mock client with thread history responses"""
+        client = SlackClientFactory.create_basic_client()
+        default_messages = [
+            {"text": "Hello", "user": "U12345", "ts": "1234567890.123456"},
+            {"text": "Hi there!", "user": "B12345678", "ts": "1234567890.234567"},
+        ]
+        client.conversations_replies = AsyncMock(
+            return_value={"messages": messages or default_messages}
+        )
+        return client
+
+    @staticmethod
+    def create_client_with_auth_test(
+        user_id: str = "B12345678",
+        bot_id: str = "B08RGGA6QKS",
+    ) -> AsyncMock:
+        """Create mock client with auth test response"""
+        client = SlackClientFactory.create_basic_client()
+        client.auth_test = AsyncMock(
+            return_value={"user_id": user_id, "bot_id": bot_id}
+        )
+        return client
+
+
+class SlackServiceFactory:
+    """Factory for creating SlackService instances"""
+
+    @staticmethod
+    def create_service_with_basic_client(
+        settings: SlackSettings | None = None,
+        client: AsyncMock | None = None,
+    ) -> SlackService:
+        """Create SlackService with basic configuration"""
+        return SlackService(
+            settings or SlackSettingsFactory.create_basic_settings(),
+            client or SlackClientFactory.create_basic_client(),
+        )
+
+    @staticmethod
+    def create_service_with_successful_client(
+        response: dict[str, Any] | None = None,
+    ) -> SlackService:
+        """Create SlackService with client that returns successful responses"""
+        return SlackService(
+            SlackSettingsFactory.create_basic_settings(),
+            SlackClientFactory.create_client_with_success_response(response),
+        )
+
+    @staticmethod
+    def create_service_with_error_client(
+        error: Exception | None = None,
+    ) -> SlackService:
+        """Create SlackService with client that raises errors"""
+        return SlackService(
+            SlackSettingsFactory.create_basic_settings(),
+            SlackClientFactory.create_client_with_error(error),
+        )
+
+    @staticmethod
+    def create_service_with_thread_history(
+        messages: list[dict[str, Any]] | None = None,
+    ) -> SlackService:
+        """Create SlackService with mock thread history"""
+        return SlackService(
+            SlackSettingsFactory.create_basic_settings(),
+            SlackClientFactory.create_client_with_thread_history(messages),
+        )
+
+    @staticmethod
+    def create_service_without_bot_id() -> SlackService:
+        """Create SlackService without bot ID set"""
+        service = SlackServiceFactory.create_service_with_basic_client()
+        service.bot_id = None
+        if hasattr(service, "bot_user_id"):
+            service.bot_user_id = None
+        return service
+
+
+class ThreadHistoryBuilder:
+    """Builder for creating thread history test data"""
+
+    def __init__(self):
+        self.messages = []
+
+    def add_user_message(
+        self,
+        text: str = "Hello",
+        user_id: str = "U12345",
+        ts: str = "1234567890.123456",
+    ) -> "ThreadHistoryBuilder":
+        """Add user message to thread history"""
+        self.messages.append({"text": text, "user": user_id, "ts": ts})
+        return self
+
+    def add_bot_message(
+        self,
+        text: str = "Hi there!",
+        bot_id: str = "B12345678",
+        ts: str = "1234567890.234567",
+    ) -> "ThreadHistoryBuilder":
+        """Add bot message to thread history"""
+        self.messages.append({"text": text, "user": bot_id, "ts": ts})
+        return self
+
+    def add_empty_message(
+        self,
+        user_id: str = "U12345",
+        ts: str = "1234567890.345678",
+    ) -> "ThreadHistoryBuilder":
+        """Add empty message to thread history"""
+        self.messages.append({"text": "", "user": user_id, "ts": ts})
+        return self
+
+    def add_message_with_mention(
+        self,
+        text: str = "<@B12345678> hello",
+        user_id: str = "U12345",
+        ts: str = "1234567890.123456",
+    ) -> "ThreadHistoryBuilder":
+        """Add message with bot mention"""
+        self.messages.append({"text": text, "user": user_id, "ts": ts})
+        return self
+
+    def build(self) -> list[dict[str, Any]]:
+        """Build the thread history"""
+        return self.messages.copy()
+
+    @staticmethod
+    def basic_conversation() -> "ThreadHistoryBuilder":
+        """Create basic conversation thread"""
+        return (
+            ThreadHistoryBuilder()
+            .add_user_message("Hello")
+            .add_bot_message("Hi there!")
+            .add_user_message("How are you?", ts="1234567890.345678")
+        )
+
+    @staticmethod
+    def conversation_with_mentions() -> "ThreadHistoryBuilder":
+        """Create conversation with bot mentions"""
+        return (
+            ThreadHistoryBuilder()
+            .add_message_with_mention("<@B12345678> hello")
+            .add_bot_message("Hi there!")
+        )
+
+    @staticmethod
+    def conversation_with_empty_messages() -> "ThreadHistoryBuilder":
+        """Create conversation with empty messages"""
+        return (
+            ThreadHistoryBuilder()
+            .add_empty_message()
+            .add_empty_message(user_id="U12345", ts="1234567890.234567")
+            .add_user_message("Hello", ts="1234567890.345678")
+        )
+
+
+class TestSlackService:
+    """Tests for the SlackService class using factory patterns"""
+
+    def test_init(self):
         """Test SlackService initialization"""
-        assert slack_service.settings == slack_settings
-        assert slack_service.client == mock_client
+        settings = SlackSettingsFactory.create_basic_settings()
+        client = SlackClientFactory.create_basic_client()
+        slack_service = SlackService(settings, client)
+
+        assert slack_service.settings == settings
+        assert slack_service.client == client
         assert slack_service.bot_id == "B12345678"
 
     @pytest.mark.asyncio
-    async def test_send_message_success(self, slack_service):
+    async def test_send_message_success(self):
         """Test successful message sending"""
         channel = "C12345"
         text = "Hello, World!"
         thread_ts = "1234567890.123456"
+        expected_response = {"ts": "1234567890.654321"}
 
-        # Mock successful response
-        slack_service.client.chat_postMessage = AsyncMock(
-            return_value={"ts": "1234567890.654321"}
+        slack_service = SlackServiceFactory.create_service_with_successful_client(
+            expected_response
         )
 
         result = await slack_service.send_message(channel, text, thread_ts)
@@ -66,14 +278,15 @@ class TestSlackService:
         )
 
     @pytest.mark.asyncio
-    async def test_send_message_with_blocks(self, slack_service):
+    async def test_send_message_with_blocks(self):
         """Test message sending with blocks"""
         channel = "C12345"
         text = "Hello, World!"
         blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": "Hello"}}]
+        expected_response = {"ts": "1234567890.654321"}
 
-        slack_service.client.chat_postMessage = AsyncMock(
-            return_value={"ts": "1234567890.654321"}
+        slack_service = SlackServiceFactory.create_service_with_successful_client(
+            expected_response
         )
 
         result = await slack_service.send_message(channel, text, blocks=blocks)
@@ -84,28 +297,29 @@ class TestSlackService:
         )
 
     @pytest.mark.asyncio
-    async def test_send_message_error(self, slack_service):
+    async def test_send_message_error(self):
         """Test message sending with API error"""
         channel = "C12345"
         text = "Hello, World!"
-
-        # Mock API error
-        slack_service.client.chat_postMessage.side_effect = SlackApiError(
+        api_error = SlackApiError(
             message="Error", response={"error": "channel_not_found"}
         )
+
+        slack_service = SlackServiceFactory.create_service_with_error_client(api_error)
 
         result = await slack_service.send_message(channel, text)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_send_thinking_indicator_success(self, slack_service):
+    async def test_send_thinking_indicator_success(self):
         """Test successful thinking indicator"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
+        expected_response = {"ts": "1234567890.654321"}
 
-        slack_service.client.chat_postMessage = AsyncMock(
-            return_value={"ts": "1234567890.654321"}
+        slack_service = SlackServiceFactory.create_service_with_successful_client(
+            expected_response
         )
 
         result = await slack_service.send_thinking_indicator(channel, thread_ts)
@@ -116,21 +330,25 @@ class TestSlackService:
         )
 
     @pytest.mark.asyncio
-    async def test_send_thinking_indicator_error(self, slack_service):
+    async def test_send_thinking_indicator_error(self):
         """Test thinking indicator with error"""
         channel = "C12345"
+        network_error = Exception("Network error")
 
-        slack_service.client.chat_postMessage.side_effect = Exception("Network error")
+        slack_service = SlackServiceFactory.create_service_with_error_client(
+            network_error
+        )
 
         result = await slack_service.send_thinking_indicator(channel)
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_delete_thinking_indicator_success(self, slack_service):
+    async def test_delete_thinking_indicator_success(self):
         """Test successful thinking indicator deletion"""
         channel = "C12345"
         ts = "1234567890.654321"
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
 
         # Mock the delete_message function
         with patch(
@@ -144,29 +362,25 @@ class TestSlackService:
             mock_delete.assert_called_once_with(slack_service.client, channel, ts)
 
     @pytest.mark.asyncio
-    async def test_delete_thinking_indicator_no_ts(self, slack_service):
+    async def test_delete_thinking_indicator_no_ts(self):
         """Test thinking indicator deletion with no timestamp"""
         channel = "C12345"
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
 
         result = await slack_service.delete_thinking_indicator(channel, None)
 
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_success(self, slack_service):
+    async def test_get_thread_history_success(self):
         """Test successful thread history retrieval"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
-        # Mock API response
-        mock_messages = [
-            {"text": "Hello", "user": "U12345", "ts": "1234567890.123456"},
-            {"text": "Hi there!", "user": "B12345678", "ts": "1234567890.234567"},
-            {"text": "How are you?", "user": "U12345", "ts": "1234567890.345678"},
-        ]
-
-        slack_service.client.conversations_replies = AsyncMock(
-            return_value={"messages": mock_messages}
+        # Create thread history using builder pattern
+        mock_messages = ThreadHistoryBuilder.basic_conversation().build()
+        slack_service = SlackServiceFactory.create_service_with_thread_history(
+            mock_messages
         )
 
         messages, success = await slack_service.get_thread_history(channel, thread_ts)
@@ -178,18 +392,15 @@ class TestSlackService:
         assert messages[2] == {"role": "user", "content": "How are you?"}
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_with_mentions(self, slack_service):
+    async def test_get_thread_history_with_mentions(self):
         """Test thread history with mentions cleanup"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
-        mock_messages = [
-            {"text": "<@B12345678> hello", "user": "U12345", "ts": "1234567890.123456"},
-            {"text": "Hi there!", "user": "B12345678", "ts": "1234567890.234567"},
-        ]
-
-        slack_service.client.conversations_replies = AsyncMock(
-            return_value={"messages": mock_messages}
+        # Create thread history with mentions using builder pattern
+        mock_messages = ThreadHistoryBuilder.conversation_with_mentions().build()
+        slack_service = SlackServiceFactory.create_service_with_thread_history(
+            mock_messages
         )
 
         messages, success = await slack_service.get_thread_history(channel, thread_ts)
@@ -200,19 +411,18 @@ class TestSlackService:
         assert messages[1] == {"role": "assistant", "content": "Hi there!"}
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_empty_messages(self, slack_service):
+    async def test_get_thread_history_empty_messages(self):
         """Test thread history with empty messages"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
-        mock_messages = [
-            {"text": "", "user": "U12345", "ts": "1234567890.123456"},
-            {"text": "   ", "user": "U12345", "ts": "1234567890.234567"},
-            {"text": "Hello", "user": "U12345", "ts": "1234567890.345678"},
-        ]
+        # Create thread history with empty messages using builder pattern
+        mock_messages = ThreadHistoryBuilder.conversation_with_empty_messages().build()
+        # Add whitespace message manually since builder doesn't have this specific case
+        mock_messages[1]["text"] = "   "
 
-        slack_service.client.conversations_replies = AsyncMock(
-            return_value={"messages": mock_messages}
+        slack_service = SlackServiceFactory.create_service_with_thread_history(
+            mock_messages
         )
 
         messages, success = await slack_service.get_thread_history(channel, thread_ts)
@@ -222,11 +432,12 @@ class TestSlackService:
         assert messages[0] == {"role": "user", "content": "Hello"}
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_error(self, slack_service):
+    async def test_get_thread_history_error(self):
         """Test thread history with API error"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
         slack_service.client.conversations_replies.side_effect = Exception("API error")
 
         messages, success = await slack_service.get_thread_history(channel, thread_ts)
@@ -235,12 +446,13 @@ class TestSlackService:
         assert messages == []
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_no_bot_id(self, slack_service):
+    async def test_get_thread_history_no_bot_id(self):
         """Test thread history when bot ID is not set"""
-        slack_service.bot_id = None
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
+        # Create service without bot ID and set up auth test
+        slack_service = SlackServiceFactory.create_service_without_bot_id()
         mock_messages = [{"text": "Hello", "user": "U12345", "ts": "1234567890.123456"}]
 
         slack_service.client.conversations_replies = AsyncMock(
@@ -257,10 +469,11 @@ class TestSlackService:
         slack_service.client.auth_test.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_thread_history_none_thread_ts(self, slack_service):
+    async def test_get_thread_history_none_thread_ts(self):
         """Test thread history with None thread_ts (new conversation)"""
         channel = "C12345"
         thread_ts = None
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
 
         messages, success = await slack_service.get_thread_history(channel, thread_ts)
 
@@ -274,17 +487,19 @@ class TestSlackService:
         )
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_success(self, slack_service):
+    async def test_get_thread_info_success(self):
         """Test successful thread info retrieval"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
+        # Create thread info messages (simplified, no text needed)
         mock_messages = [
             {"user": "U12345", "ts": "1234567890.123456"},
             {"user": "B12345678", "ts": "1234567890.234567"},
             {"user": "U67890", "ts": "1234567890.345678"},
         ]
 
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
         slack_service.client.conversations_replies = AsyncMock(
             return_value={"messages": mock_messages}
         )
@@ -303,7 +518,7 @@ class TestSlackService:
         assert thread_info.error is None
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_bot_not_participant(self, slack_service):
+    async def test_get_thread_info_bot_not_participant(self):
         """Test thread info when bot is not a participant"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
@@ -313,6 +528,7 @@ class TestSlackService:
             {"user": "U67890", "ts": "1234567890.234567"},
         ]
 
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
         slack_service.client.conversations_replies = AsyncMock(
             return_value={"messages": mock_messages}
         )
@@ -330,15 +546,13 @@ class TestSlackService:
         assert set(thread_info.participant_ids) == {"U12345", "U67890"}
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_no_bot_id(self, slack_service):
+    async def test_get_thread_info_no_bot_id(self):
         """Test thread info when bot ID is not set"""
-        slack_service.bot_id = None
-        # Clear bot_user_id to trigger auth_test call
-        if hasattr(slack_service, "bot_user_id"):
-            slack_service.bot_user_id = None
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
+        # Create service without bot ID
+        slack_service = SlackServiceFactory.create_service_without_bot_id()
         mock_messages = [{"user": "U12345", "ts": "1234567890.123456"}]
 
         slack_service.client.conversations_replies = AsyncMock(
@@ -356,13 +570,15 @@ class TestSlackService:
         slack_service.client.auth_test.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_permission_error(self, slack_service):
+    async def test_get_thread_info_permission_error(self):
         """Test thread info with permission error"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
         error_msg = "missing_scope: needed: 'channels:history'"
-        slack_service.client.conversations_replies.side_effect = Exception(error_msg)
+        permission_error = Exception(error_msg)
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.conversations_replies.side_effect = permission_error
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
@@ -370,14 +586,14 @@ class TestSlackService:
         assert "Missing permission scope: channels:history" in thread_info.error
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_generic_error(self, slack_service):
+    async def test_get_thread_info_generic_error(self):
         """Test thread info with generic error"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
-        slack_service.client.conversations_replies.side_effect = Exception(
-            "Generic error"
-        )
+        generic_error = Exception("Generic error")
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.conversations_replies.side_effect = generic_error
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
@@ -385,11 +601,12 @@ class TestSlackService:
         assert thread_info.error == "Generic error"
 
     @pytest.mark.asyncio
-    async def test_get_thread_info_no_messages(self, slack_service):
+    async def test_get_thread_info_no_messages(self):
         """Test thread info with no messages"""
         channel = "C12345"
         thread_ts = "1234567890.123456"
 
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
         slack_service.client.conversations_replies.return_value = {}
 
         thread_info = await slack_service.get_thread_info(channel, thread_ts)

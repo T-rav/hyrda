@@ -183,7 +183,9 @@ class HybridSystemTester:
                     self.ingested_docs = []
 
                 async def add_documents(self, texts, embeddings, metadata):
-                    for text, emb, meta in zip(texts, embeddings, metadata, strict=False):
+                    for text, emb, meta in zip(
+                        texts, embeddings, metadata, strict=False
+                    ):
                         self.ingested_docs.append(
                             {"content": text, "embedding": emb, "metadata": meta}
                         )

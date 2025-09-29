@@ -124,11 +124,15 @@ class TestGoogleDriveClient:
         client.api_service = mock_api_service
 
         # Mock the document processor method directly
-        with patch.object(client.document_processor, 'extract_text', return_value="Extracted PDF text"):
+        with patch.object(
+            client.document_processor, "extract_text", return_value="Extracted PDF text"
+        ):
             content = client.download_file_content("file_id", "application/pdf")
 
             assert content == "Extracted PDF text"
-            mock_api_service.download_file_content.assert_called_once_with("file_id", "application/pdf")
+            mock_api_service.download_file_content.assert_called_once_with(
+                "file_id", "application/pdf"
+            )
 
     def test_download_file_content_google_docs(self, client):
         """Test downloading Google Docs as plain text."""

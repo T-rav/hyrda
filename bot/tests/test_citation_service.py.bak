@@ -11,78 +11,12 @@ from services.citation_service import CitationService
 
 # TDD Factory Patterns for Citation Service Testing
 class CitationServiceFactory:
-    """Factory for creating CitationService instances with complete test scenarios"""
+    """Factory for creating CitationService instances"""
 
     @staticmethod
     def create_basic_service() -> CitationService:
         """Create basic citation service"""
         return CitationService()
-
-    @staticmethod
-    def create_test_scenario(
-        response: str = "This is a test response.",
-        context_chunks: list[dict[str, Any]] | None = None,
-    ) -> tuple[CitationService, str, list[dict[str, Any]]]:
-        """Create complete test scenario with service, response, and chunks"""
-        service = CitationService()
-        chunks = context_chunks if context_chunks is not None else []
-        return service, response, chunks
-
-    @staticmethod
-    def create_apple_scenario() -> tuple[CitationService, str, list[dict[str, Any]]]:
-        """Create scenario with Apple company content"""
-        service = CitationService()
-        response = "Apple is a tech company."
-        context_chunks = ContextChunkBuilder.single_apple_chunk().build()
-        return service, response, context_chunks
-
-    @staticmethod
-    def create_multiple_files_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
-        """Create scenario with multiple different files"""
-        service = CitationService()
-        response = "Information about companies."
-        context_chunks = ContextChunkBuilder.multiple_different_files().build()
-        return service, response, context_chunks
-
-    @staticmethod
-    def create_empty_chunks_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
-        """Create scenario with empty chunks"""
-        service = CitationService()
-        response = "This is a test response."
-        context_chunks: list[dict[str, Any]] = []
-        return service, response, context_chunks
-
-    @staticmethod
-    def create_deduplication_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
-        """Create scenario for testing deduplication of sources"""
-        service = CitationService()
-        response = "Test response."
-        context_chunks = [
-            {
-                "content": "Content 1...",
-                "similarity": 0.95,
-                "metadata": {"file_name": "Apple - Project Details File.pdf"},
-            },
-            {
-                "content": "Content 2...",
-                "similarity": 0.90,
-                "metadata": {
-                    "file_name": "Apple - PROJECT DETAILS File.PDF"
-                },  # Different case
-            },
-            {
-                "content": "Content 3...",
-                "similarity": 0.85,
-                "metadata": {"file_name": "Other Document.pdf"},
-            },
-        ]
-        return service, response, context_chunks
 
 
 class ContextChunkBuilder:
@@ -123,9 +57,7 @@ class ContextChunkBuilder:
     ) -> "ContextChunkBuilder":
         """Add Apple company chunk(s)"""
         for i in range(sections):
-            content = (
-                f"Apple content {i + 1}..." if sections > 1 else "Apple content..."
-            )
+            content = f"Apple content {i + 1}..." if sections > 1 else "Apple content..."
             self.add_chunk(
                 content=content,
                 similarity=similarity,
@@ -133,7 +65,9 @@ class ContextChunkBuilder:
             )
         return self
 
-    def add_3step_chunk(self, similarity: float = 0.88) -> "ContextChunkBuilder":
+    def add_3step_chunk(
+        self, similarity: float = 0.88
+    ) -> "ContextChunkBuilder":
         """Add 3Step company chunk"""
         return self.add_chunk(
             content="3Step content...",
@@ -195,30 +129,6 @@ class ContextChunkBuilder:
         self.chunks.append(chunk)
         return self
 
-    def with_high_similarity(self) -> "ContextChunkBuilder":
-        """Add high similarity Apple chunk - fluent method"""
-        return self.add_apple_chunk(similarity=0.95)
-
-    def with_medium_similarity(self) -> "ContextChunkBuilder":
-        """Add medium similarity chunk - fluent method"""
-        return self.add_apple_chunk(similarity=0.75)
-
-    def with_low_similarity(self) -> "ContextChunkBuilder":
-        """Add low similarity chunk - fluent method"""
-        return self.add_apple_chunk(similarity=0.45)
-
-    def and_3step_content(self) -> "ContextChunkBuilder":
-        """Chain 3Step content - fluent method"""
-        return self.add_3step_chunk()
-
-    def and_title_metadata(self) -> "ContextChunkBuilder":
-        """Chain title metadata - fluent method"""
-        return self.add_chunk_with_title()
-
-    def and_web_link(self) -> "ContextChunkBuilder":
-        """Chain web link metadata - fluent method"""
-        return self.add_chunk_with_web_link()
-
     def build(self) -> list[dict[str, Any]]:
         """Build the context chunks list"""
         return self.chunks.copy()
@@ -246,40 +156,6 @@ class ContextChunkBuilder:
             .add_chunk("Content 1...", 0.90, "Document.pdf")
             .add_chunk("Content 2...", 0.85, "Report.docx")
             .add_chunk("Content 3...", 0.80, "Notes.txt")
-        )
-
-    @staticmethod
-    def with_title_and_web_link() -> "ContextChunkBuilder":
-        """Create chunk with title and web link metadata - avoid in-test configuration"""
-        return ContextChunkBuilder().add_chunk_with_title()
-
-    @staticmethod
-    def with_web_view_link() -> "ContextChunkBuilder":
-        """Create chunk with web view link - avoid in-test configuration"""
-        return ContextChunkBuilder().add_chunk_with_web_link()
-
-    @staticmethod
-    def for_llm_formatting() -> "ContextChunkBuilder":
-        """Create chunk optimized for LLM context formatting"""
-        return ContextChunkBuilder().add_chunk(
-            content="This is test content for the LLM.",
-            similarity=0.95,
-            file_name="Test Document.pdf",
-        )
-
-    @staticmethod
-    def empty_chunks() -> "ContextChunkBuilder":
-        """Create empty chunks scenario"""
-        return ContextChunkBuilder()  # No chunks added
-
-    @staticmethod
-    def malformed_chunks() -> "ContextChunkBuilder":
-        """Create malformed chunks for error testing"""
-        return (
-            ContextChunkBuilder()
-            .add_empty_chunk()
-            .add_chunk_no_metadata()
-            .add_chunk_no_similarity()
         )
 
     @staticmethod
@@ -313,17 +189,16 @@ class TestCitationService:
 
     def test_add_source_citations_empty_chunks(self):
         """Test citation handling with empty context chunks"""
-        citation_service, response, context_chunks = (
-            CitationServiceFactory.create_empty_chunks_scenario()
-        )
-        result = citation_service.add_source_citations(response, context_chunks)
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "This is a test response."
+        result = citation_service.add_source_citations(response, [])
         assert result == response
 
     def test_add_source_citations_single_chunk(self):
         """Test citation with single context chunk"""
-        citation_service, response, context_chunks = (
-            CitationServiceFactory.create_apple_scenario()
-        )
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "Apple is a tech company."
+        context_chunks = ContextChunkBuilder.single_apple_chunk().build()
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -347,9 +222,9 @@ class TestCitationService:
 
     def test_add_source_citations_multiple_different_files(self):
         """Test citation with chunks from different files"""
-        citation_service, response, context_chunks = (
-            CitationServiceFactory.create_multiple_files_scenario()
-        )
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "Information about companies."
+        context_chunks = ContextChunkBuilder.multiple_different_files().build()
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -362,7 +237,11 @@ class TestCitationService:
         """Test citation with subtitle in metadata"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder.with_title_and_web_link().build()
+        context_chunks = (
+            ContextChunkBuilder()
+            .add_chunk_with_title()
+            .build()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -372,7 +251,11 @@ class TestCitationService:
         """Test citation with web view link"""
         citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
-        context_chunks = ContextChunkBuilder.with_web_view_link().build()
+        context_chunks = (
+            ContextChunkBuilder()
+            .add_chunk_with_web_link()
+            .build()
+        )
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -396,9 +279,27 @@ class TestCitationService:
 
     def test_add_source_citations_deduplication(self):
         """Test that duplicate sources are properly deduplicated"""
-        citation_service, response, context_chunks = (
-            CitationServiceFactory.create_deduplication_scenario()
-        )
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "Test response."
+        context_chunks = [
+            {
+                "content": "Content 1...",
+                "similarity": 0.95,
+                "metadata": {"file_name": "Apple - Project Details File.pdf"},
+            },
+            {
+                "content": "Content 2...",
+                "similarity": 0.90,
+                "metadata": {
+                    "file_name": "Apple - PROJECT DETAILS File.PDF"
+                },  # Different case
+            },
+            {
+                "content": "Content 3...",
+                "similarity": 0.85,
+                "metadata": {"file_name": "Other Document.pdf"},
+            },
+        ]
 
         result = citation_service.add_source_citations(response, context_chunks)
 
@@ -459,7 +360,7 @@ class TestCitationService:
             .add_chunk(
                 content="This is test content for the LLM.",
                 similarity=0.95,
-                file_name="Test Document.pdf",
+                file_name="Test Document.pdf"
             )
             .build()
         )
@@ -471,7 +372,6 @@ class TestCitationService:
 
     def test_format_context_for_llm_multiple_chunks(self):
         """Test LLM context formatting with multiple chunks"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "First content chunk.",
@@ -485,7 +385,7 @@ class TestCitationService:
             },
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Source: Document 1.pdf, Score: 0.95]" in result
         assert "First content chunk." in result
@@ -496,10 +396,9 @@ class TestCitationService:
 
     def test_format_context_for_llm_no_metadata(self):
         """Test LLM context formatting without metadata"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [{"content": "Content without metadata.", "similarity": 0.80}]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Score: 0.80]" in result
         assert "Content without metadata." in result
@@ -507,7 +406,6 @@ class TestCitationService:
 
     def test_format_context_for_llm_missing_similarity(self):
         """Test LLM context formatting without similarity score"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "Content without similarity.",
@@ -515,14 +413,13 @@ class TestCitationService:
             }
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         assert "[Source: Test Document.pdf, Score: 0.00]" in result
         assert "Content without similarity." in result
 
     def test_format_context_for_llm_empty_metadata(self):
         """Test LLM context formatting with empty metadata dict"""
-        citation_service = CitationServiceFactory.create_basic_service()
         context_chunks = [
             {
                 "content": "Content with empty metadata.",
@@ -531,7 +428,7 @@ class TestCitationService:
             }
         ]
 
-        result = citation_service.format_context_for_llm(context_chunks)
+        result = self.citation_service.format_context_for_llm(context_chunks)
 
         # Empty metadata is treated as no metadata, so just score
         assert "[Score: 0.75]" in result
@@ -550,7 +447,9 @@ class TestCitationService:
 
         # Add citations to response
         response = "Both Apple and 3Step are technology companies with different specializations."
-        cited_response = citation_service.add_source_citations(response, context_chunks)
+        cited_response = citation_service.add_source_citations(
+            response, context_chunks
+        )
 
         assert "**📚 Sources:**" in cited_response
         # The citation format puts sections before the subtitle
@@ -588,7 +487,6 @@ class TestCitationServiceEdgeCases:
 
     def test_very_long_file_names(self):
         """Test handling of very long file names"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
         context_chunks = [
             {
@@ -600,7 +498,7 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         # Should still work but truncate file extension
         assert (
@@ -611,7 +509,6 @@ class TestCitationServiceEdgeCases:
 
     def test_special_characters_in_file_names(self):
         """Test handling of special characters in file names"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response."
         context_chunks = [
             {
@@ -623,7 +520,7 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         # Should preserve special characters but remove extension
         assert "Document with (special) [chars] & symbols!" in result
@@ -631,7 +528,6 @@ class TestCitationServiceEdgeCases:
 
     def test_unicode_characters_in_content(self):
         """Test handling of Unicode characters"""
-        citation_service = CitationServiceFactory.create_basic_service()
         response = "Test response with émojis 🚀."
         context_chunks = [
             {
@@ -641,11 +537,11 @@ class TestCitationServiceEdgeCases:
             }
         ]
 
-        result = citation_service.add_source_citations(response, context_chunks)
+        result = self.citation_service.add_source_citations(response, context_chunks)
 
         assert "Ünïcödé Document" in result
         assert "🚀" in result
 
         # Test LLM formatting too
-        llm_context = citation_service.format_context_for_llm(context_chunks)
+        llm_context = self.citation_service.format_context_for_llm(context_chunks)
         assert "Content with émojis 🎉 and ünïcödé characters." in llm_context
