@@ -483,19 +483,15 @@ async def handle_message(
                 f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
             )
 
-        # Prepare current query with document content if present
-        current_query = text
-        if document_content:
-            current_query = f"{text}{document_content}"
-            logger.info(
-                f"Enhanced query with {len(document_content)} characters of document content"
-            )
-
-        # Generate response using LLM service
+        # Generate response using LLM service with document-aware RAG
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
-            current_query=current_query,
+            current_query=text,
+            document_content=document_content if document_content else None,
+            document_filename=files[0].get("name")
+            if files and document_content
+            else None,
         )
 
         # Clean up thinking message

@@ -68,6 +68,8 @@ class LLMService:
         use_rag: bool = True,
         conversation_id: str | None = None,
         current_query: str | None = None,
+        document_content: str | None = None,
+        document_filename: str | None = None,
     ) -> str | None:
         """
         Get response from LLM with optional RAG enhancement
@@ -77,6 +79,9 @@ class LLMService:
             user_id: User ID for custom system prompts
             use_rag: Whether to use RAG retrieval (default: True)
             conversation_id: Conversation/thread ID for tracing
+            current_query: Override for the current user query
+            document_content: Content of uploaded document for context
+            document_filename: Name of uploaded document
 
         Returns:
             Generated response or None if failed
@@ -118,6 +123,8 @@ class LLMService:
                 use_rag=use_rag,
                 session_id=conversation_id,
                 user_id=user_id,
+                document_content=document_content,
+                document_filename=document_filename,
             )
 
             # Trace complete conversation with Langfuse
@@ -171,7 +178,8 @@ class LLMService:
     ) -> str | None:
         """Get response without RAG retrieval"""
         return await self.get_response(
-            messages, user_id, use_rag=False, conversation_id=conversation_id
+            messages, user_id, use_rag=False, conversation_id=conversation_id,
+            document_content=None, document_filename=None
         )
 
     async def ingest_documents(self, documents: list[dict]) -> int:
