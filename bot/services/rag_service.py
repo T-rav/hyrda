@@ -345,9 +345,9 @@ class RAGService:
                 # Chunk the document content properly for context
                 from services.embedding_service import chunk_text
 
-                document_chunks_content = chunk_text([document_content])[
-                    0
-                ]  # Get chunks for the document
+                document_chunks_content = chunk_text(
+                    document_content
+                )  # Get chunks for the document
 
                 # Create document chunks for each piece of the uploaded content
                 document_chunks = []
