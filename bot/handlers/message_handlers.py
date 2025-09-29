@@ -74,12 +74,14 @@ HTTP_OK = 200
 
 
 async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
-    """Extract text from PDF using PyMuPDF"""
+    """Extract text from PDF using PyMuPDF and chunk for embedding compatibility"""
     if not PYMUPDF_AVAILABLE:
         logger.error("PyMuPDF not available for PDF processing")
         return f"[PDF file: {file_name} - PyMuPDF library not available]"
 
     try:
+        from services.embedding_service import chunk_text
+
         # Open PDF from bytes
         pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
         text_content = ""
@@ -93,7 +95,24 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
         pdf_document.close()
 
         if text_content.strip():
-            return text_content.strip()
+            full_text = text_content.strip()
+
+            # If content is too long, chunk it to prevent embedding failures
+            # Conservative limit: 6000 chars ≈ 1500 tokens (well under 8192 limit)
+            if len(full_text) > 6000:
+                logger.info(
+                    f"PDF content is {len(full_text)} chars, chunking for embedding compatibility"
+                )
+                chunks = chunk_text(full_text, chunk_size=6000, chunk_overlap=200)
+                # Return first chunk with indicator
+                chunked_content = chunks[0]
+                if len(chunks) > 1:
+                    chunked_content += (
+                        f"\n\n[Note: This is chunk 1 of {len(chunks)} from {file_name}]"
+                    )
+                return chunked_content
+            else:
+                return full_text
         else:
             return f"[PDF file: {file_name} - No extractable text content found]"
 
