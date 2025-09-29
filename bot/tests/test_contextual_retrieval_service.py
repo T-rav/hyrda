@@ -9,6 +9,13 @@ import pytest
 from services.contextual_retrieval_service import ContextualRetrievalService
 
 
+# TDD Factory Patterns for Contextual Retrieval Service Testing
+class TestDataFactory:
+    """Factory for creating test data for contextual retrieval service tests"""
+
+    pass
+
+
 class TestContextualRetrievalService:
     """Test suite for ContextualRetrievalService"""
 
