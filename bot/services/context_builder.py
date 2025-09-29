@@ -61,6 +61,13 @@ class ContextBuilder:
                 for chunk in context_chunks
             )
 
+            # Debug logging
+            if context_chunks:
+                logger.debug(
+                    f"Context chunks metadata: {[chunk.get('metadata', {}) for chunk in context_chunks]}"
+                )
+                logger.info(f"Uploaded document detected: {has_uploaded_doc}")
+
             if has_uploaded_doc:
                 rag_instruction = (
                     "IMPORTANT: The user has uploaded a document that you CAN access and analyze. "
