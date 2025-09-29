@@ -98,6 +98,8 @@ class ContextChunkBuilder:
         file_name: str | None = None,
         title: str | None = None,
         web_view_link: str | None = None,
+        source: str | None = None,
+        chunk_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> "ContextChunkBuilder":
         """Add a context chunk with specified properties"""
@@ -109,6 +111,10 @@ class ContextChunkBuilder:
                 metadata["title"] = title
             if web_view_link:
                 metadata["web_view_link"] = web_view_link
+            if source:
+                metadata["source"] = source
+            if chunk_id:
+                metadata["chunk_id"] = chunk_id
 
         chunk = {
             "content": content,
@@ -280,6 +286,26 @@ class ContextChunkBuilder:
             .add_empty_chunk()
             .add_chunk_no_metadata()
             .add_chunk_no_similarity()
+        )
+
+    @staticmethod
+    def with_uploaded_document() -> "ContextChunkBuilder":
+        """Create chunks that include an uploaded document (should be filtered from citations)"""
+        return (
+            ContextChunkBuilder()
+            .add_chunk(
+                content="This is the content of the uploaded document.",
+                similarity=1.0,
+                file_name="uploaded_document.pdf",
+                source="uploaded_document",
+                chunk_id="uploaded_doc_0",
+            )
+            .add_chunk(
+                content="This is content from the knowledge base.",
+                similarity=0.85,
+                file_name="knowledge_base_doc.pdf",
+                source="vector_db",
+            )
         )
 
     @staticmethod
@@ -649,3 +675,46 @@ class TestCitationServiceEdgeCases:
         # Test LLM formatting too
         llm_context = citation_service.format_context_for_llm(context_chunks)
         assert "Content with émojis 🎉 and ünïcödé characters." in llm_context
+
+    def test_uploaded_document_excluded_from_citations(self):
+        """Test that uploaded documents are not cited back to the user"""
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "Here's information from both sources."
+
+        # Mix of uploaded document and knowledge base content
+        context_chunks = ContextChunkBuilder.with_uploaded_document().build()
+
+        result = citation_service.add_source_citations(response, context_chunks)
+
+        # Should only cite the knowledge base document, not the uploaded one
+        assert "knowledge_base_doc" in result
+        assert "uploaded_document" not in result
+        assert "Sources:" in result
+        assert "1. knowledge_base_doc" in result
+
+        # Should not have a second citation since uploaded doc was filtered out
+        assert "2." not in result
+
+    def test_only_uploaded_document_no_citations(self):
+        """Test that when only uploaded document is provided, no citations are added"""
+        citation_service = CitationServiceFactory.create_basic_service()
+        response = "Information from your uploaded document."
+
+        # Only uploaded document chunks
+        context_chunks = [
+            {
+                "content": "Content from uploaded document.",
+                "similarity": 1.0,
+                "metadata": {
+                    "file_name": "user_uploaded.pdf",
+                    "source": "uploaded_document",
+                    "chunk_id": "uploaded_doc_0",
+                },
+            }
+        ]
+
+        result = citation_service.add_source_citations(response, context_chunks)
+
+        # Should return original response with no citations
+        assert result == response
+        assert "Sources:" not in result
