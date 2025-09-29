@@ -72,7 +72,7 @@ class TaskRunMockFactory:
     def create_basic_run(
         run_id: str = "run-1",
         status: str = "completed",
-        job_type: str = "slack_user_import"
+        job_type: str = "slack_user_import",
     ) -> Mock:
         """Create a basic TaskRun mock object."""
         mock_run = Mock()
@@ -115,8 +115,7 @@ class TaskRunMockFactory:
         job_types = ["slack_user_import", "metrics_collection", "google_drive_ingest"]
         for i in range(count):
             run = TaskRunMockFactory.create_basic_run(
-                run_id=f"run-{i+1}",
-                job_type=job_types[i % len(job_types)]
+                run_id=f"run-{i+1}", job_type=job_types[i % len(job_types)]
             )
             runs.append(run)
         return runs
@@ -147,7 +146,9 @@ class SchedulerServiceMockFactory:
         """Create a scheduler service mock with jobs."""
         mock_scheduler = SchedulerServiceMockFactory.create_basic_scheduler()
         mock_scheduler.get_scheduler_info.return_value["jobs_count"] = job_count
-        mock_scheduler.get_scheduler_info.return_value["next_run_time"] = "2024-01-15T10:00:00Z"
+        mock_scheduler.get_scheduler_info.return_value["next_run_time"] = (
+            "2024-01-15T10:00:00Z"
+        )
         mock_scheduler.get_scheduler_info.return_value["uptime_seconds"] = 3600
 
         # Create mock jobs
@@ -386,7 +387,9 @@ class TestTasksAPIContracts:
     def test_jobs_list_contract(self, client):
         """Test /api/jobs returns expected structure for job list"""
         with patch("app.scheduler_service") as mock_scheduler:
-            mock_scheduler_instance = SchedulerServiceMockFactory.create_scheduler_with_jobs(1)
+            mock_scheduler_instance = (
+                SchedulerServiceMockFactory.create_scheduler_with_jobs(1)
+            )
             mock_scheduler.return_value = mock_scheduler_instance
 
             # Mock job info for the job
@@ -477,7 +480,9 @@ class TestTasksAPIContracts:
 
         with patch("app.get_db_session") as mock_session:
             # Create a proper mock query that returns iterable results
-            mock_query = DatabaseQueryMockFactory.create_query_mock_with_results(mock_runs)
+            mock_query = DatabaseQueryMockFactory.create_query_mock_with_results(
+                mock_runs
+            )
 
             mock_db_session = Mock()
             mock_db_session.query.return_value = mock_query
@@ -532,7 +537,10 @@ class TestTasksAPIContracts:
 
         # Update the global job_registry directly instead of patching
         import app
-        mock_registry_instance = JobRegistryMockFactory.create_registry_with_job_creation("new-job-123")
+
+        mock_registry_instance = (
+            JobRegistryMockFactory.create_registry_with_job_creation("new-job-123")
+        )
         app.job_registry = mock_registry_instance
 
         response = client.post(
@@ -589,6 +597,7 @@ class TestTasksAPIContracts:
         """Test /api/job-types returns available job types for UI dropdown"""
         # Update the global job_registry directly instead of patching
         import app
+
         mock_registry_instance = JobRegistryMockFactory.create_registry_with_job_types()
         app.job_registry = mock_registry_instance
 

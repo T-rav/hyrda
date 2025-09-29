@@ -58,7 +58,9 @@ class TestIngestionOrchestrator:
         assert result is True
         orchestrator.google_drive_client.authenticate.assert_called_once()
 
-    def test_set_services(self, orchestrator, mock_vector_service, mock_embedding_service):
+    def test_set_services(
+        self, orchestrator, mock_vector_service, mock_embedding_service
+    ):
         """Test setting vector and embedding services."""
         orchestrator.set_services(mock_vector_service, mock_embedding_service)
 
