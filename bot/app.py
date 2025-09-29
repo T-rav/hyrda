@@ -17,6 +17,7 @@ from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
 from services.metrics_service import initialize_metrics_service
+from services.prompt_service import initialize_prompt_service
 from services.slack_service import SlackService
 from utils.logging import configure_logging
 
@@ -52,6 +53,10 @@ def create_app():
     # Initialize metrics service
     metrics_service = initialize_metrics_service(enabled=True)
     logger.info("Metrics service initialized")
+
+    # Initialize prompt service
+    initialize_prompt_service(settings)
+    logger.info("Prompt service initialized")
 
     # Create LLM service
     llm_service = LLMService(settings)

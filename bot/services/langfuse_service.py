@@ -474,6 +474,43 @@ class LangfuseService:
             except Exception as e:
                 logger.error(f"Error flushing Langfuse traces: {e}")
 
+    def get_prompt_template(
+        self, template_name: str, version: str | None = None
+    ) -> str | None:
+        """
+        Fetch a prompt template from Langfuse
+
+        Args:
+            template_name: Name of the prompt template in Langfuse
+            version: Specific version to fetch (uses latest if None)
+
+        Returns:
+            The prompt template string or None if not found/failed
+        """
+        if not self.enabled or not self.client:
+            logger.warning("Langfuse not enabled - cannot fetch prompt template")
+            return None
+
+        try:
+            # Use Langfuse client to fetch prompt template
+            if version:
+                prompt = self.client.get_prompt(template_name, version=version)
+            else:
+                prompt = self.client.get_prompt(template_name)
+
+            if prompt and hasattr(prompt, "prompt"):
+                logger.debug(f"Fetched prompt template '{template_name}' from Langfuse")
+                return prompt.prompt
+            else:
+                logger.warning(
+                    f"Prompt template '{template_name}' not found in Langfuse"
+                )
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching prompt template '{template_name}': {e}")
+            return None
+
     async def close(self):
         """Close Langfuse client and flush pending traces"""
         if self.enabled and self.client:

@@ -10,7 +10,6 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from handlers.message_handlers import (
-    DEFAULT_SYSTEM_MESSAGE,
     OPENPYXL_AVAILABLE,
     PYMUPDF_AVAILABLE,
     PYTHON_DOCX_AVAILABLE,
@@ -266,11 +265,12 @@ class TestMessageHandlers:
     """Tests for message handler functions"""
 
     def test_default_system_message_exists(self):
-        """Test that DEFAULT_SYSTEM_MESSAGE is defined"""
-        assert DEFAULT_SYSTEM_MESSAGE is not None
-        assert isinstance(DEFAULT_SYSTEM_MESSAGE, str)
-        assert len(DEFAULT_SYSTEM_MESSAGE) > 0
-        assert "Insight Mesh" in DEFAULT_SYSTEM_MESSAGE
+        """Test that system prompt can be retrieved via PromptService"""
+        prompt = get_user_system_prompt()
+        assert prompt is not None
+        assert isinstance(prompt, str)
+        assert len(prompt) > 0
+        assert "Insight Mesh" in prompt
 
     def test_get_user_system_prompt(self):
         """Test get_user_system_prompt function"""
