@@ -52,6 +52,10 @@ class ConversationCache:
         """Generate metadata cache key for thread"""
         return f"conversation_meta:{thread_ts}"
 
+    def _get_document_key(self, thread_ts: str) -> str:
+        """Generate document cache key for thread"""
+        return f"conversation_documents:{thread_ts}"
+
     async def get_conversation(
         self, channel: str, thread_ts: str, slack_service: SlackService
     ) -> tuple[list[dict[str, str]], bool, str]:
@@ -113,6 +117,63 @@ class ConversationCache:
 
         source = "slack_api" if success else "failed"
         return messages, success, source
+
+    async def store_document_content(
+        self, thread_ts: str, document_content: str, document_filename: str
+    ) -> bool:
+        """Store document content for later retrieval in conversation"""
+        document_key = self._get_document_key(thread_ts)
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return False
+
+        try:
+            document_data = {
+                "content": document_content,
+                "filename": document_filename,
+                "stored_at": datetime.now(UTC).isoformat(),
+            }
+
+            await redis_client.setex(document_key, self.ttl, json.dumps(document_data))
+
+            logger.info(
+                f"Stored document content for thread {thread_ts}: {document_filename}"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to store document content: {e}")
+            return False
+
+    async def get_document_content(
+        self, thread_ts: str
+    ) -> tuple[str | None, str | None]:
+        """Retrieve stored document content for thread
+
+        Returns:
+            tuple: (document_content, document_filename) or (None, None) if not found
+        """
+        document_key = self._get_document_key(thread_ts)
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return None, None
+
+        try:
+            document_data = await redis_client.get(document_key)
+            if not document_data:
+                return None, None
+
+            data = json.loads(document_data)
+            logger.info(
+                f"Retrieved document content for thread {thread_ts}: {data.get('filename')}"
+            )
+            return data.get("content"), data.get("filename")
+
+        except Exception as e:
+            logger.warning(f"Failed to retrieve document content: {e}")
+            return None, None
 
     async def update_conversation(
         self, thread_ts: str, new_message: dict[str, str], is_bot_message: bool = False
@@ -197,8 +258,9 @@ class ConversationCache:
         try:
             cache_key = self._get_cache_key(thread_ts)
             meta_key = self._get_metadata_key(thread_ts)
+            document_key = self._get_document_key(thread_ts)
 
-            deleted = await redis_client.delete(cache_key, meta_key)
+            deleted = await redis_client.delete(cache_key, meta_key, document_key)
             logger.info(
                 f"Cleared conversation cache for {thread_ts}, deleted {deleted} keys"
             )
