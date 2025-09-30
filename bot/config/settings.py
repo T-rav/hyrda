@@ -194,6 +194,19 @@ class LangfuseSettings(BaseSettings):
     )
     debug: bool = Field(default=False, description="Enable Langfuse debug logging")
 
+    # Prompt template settings
+    use_prompt_templates: bool = Field(
+        default=True,
+        description="Use Langfuse prompt templates instead of hardcoded prompts",
+    )
+    system_prompt_template: str = Field(
+        default="System/Default", description="Langfuse template name for system prompt"
+    )
+    prompt_template_version: str | None = Field(
+        default=None,
+        description="Specific prompt template version (uses latest if None)",
+    )
+
     model_config = ConfigDict(env_prefix="LANGFUSE_")  # type: ignore[assignment,typeddict-unknown-key]
 
 

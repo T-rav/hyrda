@@ -55,30 +55,15 @@ class ContextBuilder:
             # Create RAG system message
             context_section = "\n\n".join(context_texts)
 
-            # Check if we have uploaded document content
-            has_uploaded_doc = any(
-                chunk.get("metadata", {}).get("source") == "uploaded_document"
-                for chunk in context_chunks
+            # Strong instruction for document analysis
+            rag_instruction = (
+                "IMPORTANT: The user has uploaded a document for you to analyze. You have direct access to the document content in the context below. "
+                "When asked about 'thoughts' or to analyze a document, provide specific insights based on the actual document content provided. "
+                "Reference specific details, concepts, and information from the document in your response. "
+                "Answer naturally without adding inline source citations like '[Source: ...]' since "
+                "complete source citations will be automatically added at the end of your response.\n\n"
+                f"Document Content and Context:\n{context_section}\n\n"
             )
-
-            if has_uploaded_doc:
-                rag_instruction = (
-                    "IMPORTANT: The user has uploaded a document that you CAN access and analyze. "
-                    "The document content is provided in the context below. Use this content to answer their questions about the document. "
-                    "Do not say you cannot access documents - you have the full content available. "
-                    "Answer naturally based on the provided document content without adding inline source citations like '[Source: ...]' since "
-                    "complete source citations will be automatically added at the end of your response.\n\n"
-                    f"Document Content and Related Information:\n{context_section}\n\n"
-                )
-            else:
-                rag_instruction = (
-                    "Use the following context to answer the user's question. "
-                    "Answer naturally without adding inline source citations like '[Source: ...]' since "
-                    "complete source citations will be automatically added at the end of your response. "
-                    "If the context doesn't contain relevant information, "
-                    "say so and provide a general response based on your knowledge.\n\n"
-                    f"Context:\n{context_section}\n\n"
-                )
 
             if final_system_message:
                 final_system_message = f"{final_system_message}\n\n{rag_instruction}"

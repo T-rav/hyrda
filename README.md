@@ -414,6 +414,25 @@ To add a new agent process:
    - Memory usage and active conversations
    - API endpoints and configuration status
 
+### System Prompt Evaluation
+
+Validate your system prompt behavior with comprehensive LLM-as-a-Judge evaluations:
+
+```bash
+cd evals
+pip install -e .
+python setup_langfuse_evals.py
+```
+
+This creates **12 test cases** and **10 evaluators** (5 custom + 5 managed) in Langfuse to test:
+- **Professional Communication** - Executive-appropriate tone
+- **Source Transparency** - Clear knowledge base vs general knowledge indication
+- **RAG Behavior** - Knowledge retrieval integration
+- **Executive Readiness** - Strategic decision support
+- **Plus managed evaluators** - Helpfulness, conciseness, coherence, correctness, harmlessness
+
+See [`evals/README.md`](evals/README.md) for complete evaluation setup and [`evals/evaluator_prompts.md`](evals/evaluator_prompts.md) for Langfuse configurations.
+
 ## 📊 Monitoring & Observability
 
 ### Health Dashboard (`http://localhost:8080/ui`)
