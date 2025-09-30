@@ -16,12 +16,12 @@ class LLMSettings(BaseSettings):
     """LLM API settings"""
 
     provider: str = Field(
-        default="openai", description="LLM provider (openai, anthropic, ollama)"
+        default="openai", description="LLM provider (only 'openai' is supported)"
     )
     api_key: SecretStr = Field(description="LLM API key")
     model: str = Field(default="gpt-4o-mini", description="LLM model name")
     base_url: str | None = Field(
-        default=None, description="Custom base URL (for ollama, etc.)"
+        default=None, description="Custom base URL (for OpenAI-compatible APIs)"
     )
     temperature: float = Field(default=0.7, description="Response temperature")
     max_tokens: int = Field(default=2000, description="Maximum response tokens")
