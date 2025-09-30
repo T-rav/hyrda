@@ -96,6 +96,8 @@ class ConversationCacheFactory:
         cache = AsyncMock()
         cache.get_conversation.return_value = ([], False, "miss")
         cache.update_conversation = AsyncMock()
+        cache.store_document_content = AsyncMock(return_value=True)
+        cache.get_document_content = AsyncMock(return_value=(None, None))
         cache.get_cache_stats.return_value = {
             "total_conversations": 10,
             "cache_hits": 8,
