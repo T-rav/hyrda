@@ -84,6 +84,8 @@ class LangfuseService:
         metadata: dict[str, Any] | None = None,
         usage: dict[str, Any] | None = None,
         error: str | None = None,
+        prompt_template_name: str | None = None,
+        prompt_template_version: str | None = None,
     ):
         """
         Trace an LLM call with Langfuse
@@ -96,6 +98,8 @@ class LangfuseService:
             metadata: Additional metadata
             usage: Token usage information
             error: Error message if call failed
+            prompt_template_name: Name of the Langfuse prompt template used
+            prompt_template_version: Version of the prompt template used
         """
         if not self.enabled:
             return
@@ -104,20 +108,44 @@ class LangfuseService:
             if not self.client:
                 return
 
-            # Create generation observation for LLM call
-            generation = self.client.start_generation(
-                name=f"{provider}_llm_call",
-                model=model,
-                input=messages,
-                output=response,
-                metadata={
+            # Prepare generation parameters
+            generation_params = {
+                "name": f"{provider}_llm_call",
+                "model": model,
+                "input": messages,
+                "output": response,
+                "metadata": {
                     "provider": provider,
                     "model": model,
                     "environment": self.environment,
                     **(metadata or {}),
                 },
-                usage=usage,
-            )
+                "usage": usage,
+            }
+
+            # Link to prompt template if provided
+            if prompt_template_name:
+                try:
+                    # Get the prompt template from Langfuse to link it
+                    if prompt_template_version:
+                        prompt = self.client.get_prompt(
+                            prompt_template_name, version=prompt_template_version
+                        )
+                    else:
+                        prompt = self.client.get_prompt(prompt_template_name)
+
+                    if prompt:
+                        generation_params["prompt"] = prompt
+                        logger.debug(
+                            f"Linked generation to prompt template: {prompt_template_name}"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not link prompt template {prompt_template_name}: {e}"
+                    )
+
+            # Create generation observation for LLM call
+            generation = self.client.start_generation(**generation_params)
 
             if error:
                 generation.end(status_message=error, level="ERROR")

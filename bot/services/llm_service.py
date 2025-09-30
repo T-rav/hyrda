@@ -13,6 +13,7 @@ from services.langfuse_service import (
     observe,
 )
 from services.metrics_service import get_metrics_service
+from services.prompt_service import PromptService
 from services.rag_service import RAGService  # Fallback for non-hybrid mode
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,10 @@ class LLMService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
+
+        # Initialize prompt service for system prompts
+        self.prompt_service = PromptService(settings)
+
         # Use hybrid RAG service if enabled, otherwise fallback to single vector
         if getattr(settings, "hybrid", None) and settings.hybrid.enabled:
             self.rag_service = None  # Will be initialized in async initialize method
@@ -91,8 +96,8 @@ class LLMService:
         start_time = time.time()
 
         try:
-            # No custom system prompts - using default only
-            system_message = None
+            # Get system prompt from PromptService (Langfuse or fallback)
+            system_message = self.prompt_service.get_system_prompt()
 
             # Use provided current_query or extract from messages
             if current_query:
@@ -136,7 +141,9 @@ class LLMService:
                     bot_response=response,
                     metadata={
                         "rag_enabled": use_rag,
-                        "custom_prompt_used": system_message is not None,
+                        "system_prompt_used": system_message is not None,
+                        "langfuse_prompt_template": self.settings.langfuse.system_prompt_template,
+                        "prompt_from_langfuse": self.settings.langfuse.use_prompt_templates,
                         "message_count": len(conversation_history),
                         "llm_provider": self.settings.llm.provider,
                         "llm_model": self.settings.llm.model,
