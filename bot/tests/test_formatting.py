@@ -125,48 +125,14 @@ class TestMessageFormatter:
     """Tests for the MessageFormatter class using factory patterns"""
 
     @pytest.mark.asyncio
-    async def test_format_code_blocks(self):
-        """Test formatting of code blocks"""
-        input_text = TextDataFactory.create_code_block_text()
-        expected = TextDataFactory.create_formatted_code_block_text()
+    async def test_format_markdown_for_slack(self):
+        """Test markdown conversion using slackify-markdown library"""
+        input_text = "**Bold text** and *italic text*"
+        result = MessageFormatter.format_markdown_for_slack(input_text)
 
-        result = MessageFormatter.format_code_blocks(input_text)
-        assert result == expected
-
-    @pytest.mark.asyncio
-    async def test_format_code_blocks_custom(self):
-        """Test formatting of code blocks with custom content"""
-        custom_code = "def hello():\n    return 'world'"
-        input_text = TextDataFactory.create_code_block_text(
-            code=custom_code, language="python"
-        )
-        expected = TextDataFactory.create_formatted_code_block_text(code=custom_code)
-
-        result = MessageFormatter.format_code_blocks(input_text)
-        assert result == expected
-
-    @pytest.mark.asyncio
-    async def test_format_bullet_points(self):
-        """Test formatting of bullet points"""
-        input_text = TextDataFactory.create_bullet_point_text()
-        expected = TextDataFactory.create_formatted_bullet_point_text()
-
-        result = MessageFormatter.format_bullet_points(input_text)
-        assert result == expected
-
-    @pytest.mark.asyncio
-    async def test_format_bullet_points_custom_items(self):
-        """Test formatting of bullet points with custom items"""
-        custom_items = ["Feature A", "Feature B", "Feature C"]
-        input_text = TextDataFactory.create_bullet_point_text(
-            items=custom_items, intro="Features:"
-        )
-        expected = TextDataFactory.create_formatted_bullet_point_text(
-            items=custom_items, intro="Features:"
-        )
-
-        result = MessageFormatter.format_bullet_points(input_text)
-        assert result == expected
+        # slackify-markdown converts ** to * and * to _
+        assert "*Bold text*" in result
+        assert "_italic text_" in result
 
     @pytest.mark.asyncio
     async def test_format_for_slack_with_sources(self):
