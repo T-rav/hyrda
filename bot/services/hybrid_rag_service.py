@@ -16,15 +16,13 @@ import logging
 from typing import Any
 
 from config.settings import Settings, VectorSettings
+from services.chunking import EnhancedChunkProcessor, TitleInjectionService
 from services.citation_service import CitationService
-from services.embedding_service import create_embedding_provider
-from services.hybrid_retrieval_service import CohereReranker, HybridRetrievalService
+from services.embedding import create_embedding_provider
+from services.hybrid_retrieval_service import HybridRetrievalService
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
-from services.title_injection_service import (
-    EnhancedChunkProcessor,
-    TitleInjectionService,
-)
+from services.rerankers import CohereReranker
 from services.vector_service import create_vector_store
 from services.vector_stores import (
     ElasticsearchVectorStore,
@@ -487,6 +485,10 @@ class HybridRAGService:
                 system_message=final_system_message,
                 session_id=session_id,
                 user_id=user_id,
+                prompt_template_name=self.settings.langfuse.system_prompt_template
+                if self.settings.langfuse.use_prompt_templates
+                else None,
+                prompt_template_version=self.settings.langfuse.prompt_template_version,
             )
 
             if not response:
