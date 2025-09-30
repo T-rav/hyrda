@@ -10,10 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from models.retrieval import RetrievalMethod, RetrievalResult
-from services.hybrid_retrieval_service import (
-    CohereReranker,
-    HybridRetrievalService,
-)
+from services.hybrid_retrieval_service import HybridRetrievalService
+from services.rerankers import CohereReranker
 
 
 # TDD Factory Patterns for Hybrid Retrieval Service Testing
