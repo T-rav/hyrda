@@ -184,7 +184,10 @@ class TestContextBuilder:
         )
 
         # Check system message contains context
-        assert "Use the following context to answer" in system_msg
+        assert (
+            "IMPORTANT: The user has uploaded a document for you to analyze"
+            in system_msg
+        )
         assert "You are a helpful assistant." in system_msg
         assert "doc1.pdf" in system_msg
         assert "doc2.pdf" in system_msg
@@ -227,7 +230,9 @@ class TestContextBuilder:
         )
 
         # Check system message is just the RAG instruction
-        assert system_msg.startswith("Use the following context to answer")
+        assert system_msg.startswith(
+            "IMPORTANT: The user has uploaded a document for you to analyze"
+        )
         assert "doc1.pdf" in system_msg
 
         # Check messages structure
@@ -268,7 +273,10 @@ class TestContextBuilder:
                 query, sample_context_chunks, conversation_history, system_message
             )
 
-            assert "Use the following context to answer" in system_msg
+            assert (
+                "IMPORTANT: The user has uploaded a document for you to analyze"
+                in system_msg
+            )
             assert messages[-1]["content"] == query
 
     def test_format_context_summary_with_context(self):

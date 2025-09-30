@@ -340,20 +340,34 @@ class RAGService:
             # Add uploaded document to context if provided
             if document_content:
                 logger.info(
-                    f"💾 Adding uploaded document to context: {document_filename}"
+                    f"💾 Adding chunked uploaded document to context: {document_filename}"
                 )
-                # Create a document chunk for the uploaded content
-                document_chunk = {
-                    "content": document_content,
-                    "metadata": {
-                        "file_name": document_filename or "uploaded_document",
-                        "source": "uploaded_document",
-                        "chunk_id": "uploaded_doc_0",
-                    },
-                    "similarity": 1.0,  # Perfect match since it's the actual uploaded doc
-                }
-                # Add uploaded document as first context (highest priority)
-                context_chunks = [document_chunk] + context_chunks
+                # Chunk the document content properly for context
+                from services.embedding_service import chunk_text
+
+                document_chunks_content = chunk_text(
+                    document_content
+                )  # Get chunks for the document
+
+                # Create document chunks for each piece of the uploaded content
+                document_chunks = []
+                for i, chunk_content in enumerate(document_chunks_content):
+                    document_chunk = {
+                        "content": chunk_content,
+                        "metadata": {
+                            "file_name": document_filename or "uploaded_document",
+                            "source": "uploaded_document",
+                            "chunk_id": f"uploaded_doc_{i}",
+                        },
+                        "similarity": 1.0,  # Perfect match since it's the actual uploaded doc
+                    }
+                    document_chunks.append(document_chunk)
+
+                # Add all uploaded document chunks as first context (highest priority)
+                context_chunks = document_chunks + context_chunks
+                logger.info(
+                    f"🔧 Added {len(document_chunks)} document chunks plus {len(context_chunks)-len(document_chunks)} RAG chunks"
+                )
 
             # Build prompt with context (includes uploaded document + retrieved context)
             final_system_message, messages = self.context_builder.build_rag_prompt(
