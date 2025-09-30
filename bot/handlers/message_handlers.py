@@ -54,7 +54,7 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
         return f"[PDF file: {file_name} - PyMuPDF library not available]"
 
     try:
-        from services.embedding_service import chunk_text
+        from services.embedding import chunk_text
 
         # Open PDF from bytes
         pdf_document = fitz.open(stream=pdf_content, filetype="pdf")

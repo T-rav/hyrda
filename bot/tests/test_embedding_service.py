@@ -216,13 +216,13 @@ class TestOpenAIEmbeddingProvider:
     @pytest.fixture
     def provider(self, embedding_settings):
         """Create OpenAI embedding provider for testing"""
-        with patch("bot.services.embedding_service.AsyncOpenAI"):
+        with patch("services.embedding.openai.AsyncOpenAI"):
             return OpenAIEmbeddingProvider(embedding_settings)
 
     def test_init_with_embedding_api_key(self, embedding_settings):
         """Test initialization with dedicated embedding API key"""
         with (
-            patch("bot.services.embedding_service.AsyncOpenAI") as mock_openai,
+            patch("services.embedding.openai.AsyncOpenAI") as mock_openai,
             patch.dict("os.environ", {}, clear=True),
         ):
             provider = OpenAIEmbeddingProvider(embedding_settings)
@@ -236,7 +236,7 @@ class TestOpenAIEmbeddingProvider:
         llm_settings = LLMSettingsFactory.create_openai_settings("gpt-4", "llm-api-key")
 
         # Instead of testing the actual AsyncOpenAI call, test the logic itself
-        with patch("bot.services.embedding_service.AsyncOpenAI") as mock_openai:
+        with patch("services.embedding.openai.AsyncOpenAI") as mock_openai:
             provider = OpenAIEmbeddingProvider(embedding_settings, llm_settings)
 
             # The important test is that the provider was created successfully with LLM key fallback
@@ -455,7 +455,7 @@ class TestCreateEmbeddingProvider:
         """Test creating OpenAI provider"""
         settings = EmbeddingSettingsFactory.create_openai_settings()
 
-        with patch("bot.services.embedding_service.AsyncOpenAI"):
+        with patch("services.embedding.openai.AsyncOpenAI"):
             provider = create_embedding_provider(settings)
 
             assert isinstance(provider, OpenAIEmbeddingProvider)
