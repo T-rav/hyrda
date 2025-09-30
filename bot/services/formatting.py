@@ -54,19 +54,6 @@ class MessageFormatter:
         return response
 
     @staticmethod
-    def format_code_blocks(text: str) -> str:
-        """Ensure code blocks are properly formatted for Slack"""
-        # Slack requires ```language instead of ```python etc.
-        pattern = r"```(\w+)"
-        return re.sub(pattern, "```", text)
-
-    @staticmethod
-    def format_bullet_points(text: str) -> str:
-        """Format bullet points for better Slack rendering"""
-        # Replace GitHub-style bullets with Slack-compatible ones with proper spacing
-        return text.replace("* ", "•   ").replace("- ", "•   ")
-
-    @staticmethod
     def format_markdown_for_slack(text: str) -> str:
         """Convert standard markdown to Slack-compatible markdown using slackify-markdown library"""
         if slackify_markdown is not None:
@@ -82,13 +69,13 @@ class MessageFormatter:
         if not text:
             return ""
 
-        # Apply all formatting rules
-        text = MessageFormatter.format_code_blocks(text)
-        text = MessageFormatter.format_bullet_points(text)
+        # Use slackify-markdown library to handle all markdown conversion
         text = MessageFormatter.format_markdown_for_slack(text)
+
+        # Handle source citations if present
         text = await MessageFormatter.format_for_slack(text)
 
-        # Compact blank lines for better Slack rendering in complete message formatting
-        text = re.sub(r"\n\s*\n", "\n", text)
+        # Compact excessive blank lines for better Slack rendering
+        text = re.sub(r"\n\s*\n\s*\n", "\n\n", text)
 
         return text
