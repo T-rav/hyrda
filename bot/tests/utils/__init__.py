@@ -1,19 +1,24 @@
 """
 Test utilities module
 
-Centralized test utilities for creating test data, mocks, and fixtures.
+Centralized test utilities following 1-class-per-file principle.
+Each utility class is in its own file within organized subdirectories.
 
-Current structure: Combined files (settings.py, services.py, etc.)
-Each file contains multiple related classes.
-
-Future: Can be split to 1-class-per-file in subdirectories if desired.
+Usage:
+    from tests.utils.settings import LLMSettingsFactory
+    from tests.utils.services import SlackServiceFactory
+    from tests.utils.models import MessageFactory
+    from tests.utils.builders import ConversationBuilder
+    from tests.utils.mocks import MockVectorStoreFactory
 """
 
-# Main utility modules
-# from .settings import *  # Settings factories
-# from .services import *  # Service factories
-# from .models import *    # Model factories
-# from .builders import *  # Builder patterns
-# from .mocks import *     # Mock factories
+# Import subdirectory modules
+from . import builders, mocks, models, services, settings
 
-__all__ = []
+__all__ = [
+    "settings",
+    "services",
+    "models",
+    "builders",
+    "mocks",
+]
