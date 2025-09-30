@@ -424,14 +424,37 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # Handle file attachments
+        # Handle file attachments and document persistence
         document_content = ""
+        document_filename = None
+
         if files:
             logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
             document_content = await process_file_attachments(files, slack_service)
+            document_filename = files[0].get("name") if files else None
+
             if document_content:
                 logger.info(
                     f"Extracted {len(document_content)} characters from {len(files)} file(s)"
+                )
+
+                # Store document content in conversation cache for future reference
+                if conversation_cache and thread_ts:
+                    await conversation_cache.store_document_content(
+                        thread_ts, document_content, document_filename or "unknown"
+                    )
+
+        # If no files in current message but we're in a thread, check for previously stored documents
+        elif thread_ts and conversation_cache:
+            (
+                stored_content,
+                stored_filename,
+            ) = await conversation_cache.get_document_content(thread_ts)
+            if stored_content:
+                document_content = stored_content
+                document_filename = stored_filename
+                logger.info(
+                    f"Retrieved previously stored document for thread {thread_ts}: {stored_filename}"
                 )
 
         # Get the thread history for context
@@ -469,9 +492,7 @@ async def handle_message(
             user_id=user_id,
             current_query=text,
             document_content=document_content if document_content else None,
-            document_filename=files[0].get("name")
-            if files and document_content
-            else None,
+            document_filename=document_filename,
         )
 
         # Clean up thinking message
