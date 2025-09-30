@@ -380,6 +380,10 @@ class RAGService:
                 system_message=final_system_message,
                 session_id=session_id,
                 user_id=user_id,
+                prompt_template_name=self.settings.langfuse.system_prompt_template
+                if self.settings.langfuse.use_prompt_templates
+                else None,
+                prompt_template_version=self.settings.langfuse.prompt_template_version,
             )
 
             if not response:
