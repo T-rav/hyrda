@@ -175,7 +175,7 @@ class TestHybridRAGService:
             patch(
                 "bot.services.hybrid_rag_service.create_vector_store"
             ) as mock_vector_store,
-            patch("bot.services.hybrid_rag_service.CohereReranker") as mock_reranker,
+            patch("services.rerankers.CohereReranker") as mock_reranker,
             patch(
                 "bot.services.hybrid_rag_service.HybridRetrievalService"
             ) as mock_hybrid_retrieval,
