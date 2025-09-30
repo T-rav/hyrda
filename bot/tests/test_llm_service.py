@@ -224,16 +224,18 @@ class TestLLMService:
 
         assert result == expected_response
         # Verify RAG service was called with use_rag=False
-        llm_service.rag_service.generate_response.assert_called_once_with(
-            query="Hello",
-            conversation_history=[],
-            system_message=None,
-            use_rag=False,
-            session_id=None,
-            user_id="U12345",
-            document_content=None,
-            document_filename=None,
-        )
+        # Note: system_message is now the actual prompt from PromptService
+        call_args = llm_service.rag_service.generate_response.call_args
+        assert call_args.kwargs["query"] == "Hello"
+        assert call_args.kwargs["conversation_history"] == []
+        assert (
+            call_args.kwargs["system_message"] is not None
+        )  # Prompt from Langfuse/PromptService
+        assert call_args.kwargs["use_rag"] is False
+        assert call_args.kwargs["session_id"] is None
+        assert call_args.kwargs["user_id"] == "U12345"
+        assert call_args.kwargs["document_content"] is None
+        assert call_args.kwargs["document_filename"] is None
 
     @pytest.mark.asyncio
     async def test_get_response_error(self, llm_service):
