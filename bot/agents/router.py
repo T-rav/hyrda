@@ -30,16 +30,19 @@ class CommandRouter:
 
         Extracts command name and query from messages like:
         - "-profile tell me about Charlotte"
+        - "profile tell me about Charlotte"
         - "-meddic analyze this deal"
+        - "meddic analyze this deal"
 
         Args:
             text: Message text to parse
 
         Returns:
             Tuple of (command_name, query) or (None, "") if no command found
+            Only returns a match if the command is registered
         """
-        # Match pattern: -command rest of text
-        match = re.match(r"^-(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
+        # Match pattern: optional dash + command + rest of text
+        match = re.match(r"^-?(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
 
         if not match:
             return None, ""
@@ -47,7 +50,11 @@ class CommandRouter:
         command_name = match.group(1).lower()
         query = match.group(2).strip()
 
-        return command_name, query
+        # Only return if this is a registered agent or alias
+        if self.registry.is_registered(command_name):
+            return command_name, query
+
+        return None, ""
 
     def route(self, text: str) -> tuple[dict[str, Any] | None, str, str | None]:
         """Parse command and route to appropriate agent.
