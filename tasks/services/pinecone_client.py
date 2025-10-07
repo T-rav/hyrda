@@ -1,7 +1,6 @@
 """Standalone Pinecone client for tasks service."""
 
 import asyncio
-import hashlib
 import logging
 import os
 from typing import Any
@@ -18,7 +17,9 @@ class PineconeClient:
         if not self.api_key:
             raise ValueError("VECTOR_API_KEY not found in environment")
 
-        self.index_name = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
+        self.index_name = os.getenv(
+            "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
+        )
         self.index = None
 
     async def initialize(self):
@@ -29,8 +30,10 @@ class PineconeClient:
             pc = Pinecone(api_key=self.api_key)
             self.index = pc.Index(self.index_name)
             logger.info(f"✅ Pinecone initialized with index: {self.index_name}")
-        except ImportError:
-            raise ImportError("pinecone package not installed. Run: pip install pinecone")
+        except ImportError as e:
+            raise ImportError(
+                "pinecone package not installed. Run: pip install pinecone"
+            ) from e
         except Exception as e:
             logger.error(f"Failed to initialize Pinecone: {e}")
             raise
@@ -63,7 +66,9 @@ class PineconeClient:
 
             doc_metadata["text"] = text
 
-            vectors.append({"id": doc_id, "values": embedding, "metadata": doc_metadata})
+            vectors.append(
+                {"id": doc_id, "values": embedding, "metadata": doc_metadata}
+            )
 
         # Upsert in batches
         batch_size = 100
@@ -75,7 +80,9 @@ class PineconeClient:
 
             await asyncio.get_event_loop().run_in_executor(None, upsert_batch)
 
-        logger.info(f"✅ Added {len(texts)} documents to Pinecone namespace '{namespace}'")
+        logger.info(
+            f"✅ Added {len(texts)} documents to Pinecone namespace '{namespace}'"
+        )
 
     async def close(self):
         """Close connection."""
