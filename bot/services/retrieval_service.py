@@ -3,6 +3,7 @@ Retrieval Service
 
 Handles document retrieval and context building for RAG.
 Routes to provider-specific retrieval implementations.
+Includes adaptive query rewriting for improved retrieval accuracy.
 """
 
 import logging
@@ -10,6 +11,7 @@ from typing import Any
 
 from config.settings import Settings
 
+from .query_rewriter import AdaptiveQueryRewriter
 from .retrieval import ElasticsearchRetrieval, PineconeRetrieval
 
 logger = logging.getLogger(__name__)
@@ -18,26 +20,37 @@ logger = logging.getLogger(__name__)
 class RetrievalService:
     """Service for retrieving and processing context from vector stores"""
 
-    def __init__(self, settings: Settings):
+    def __init__(
+        self, settings: Settings, llm_service=None, enable_query_rewriting: bool = True
+    ):
         self.settings = settings
+        self.llm_service = llm_service
+        self.enable_query_rewriting = enable_query_rewriting
 
         # Initialize provider-specific retrieval services
         self.elasticsearch_retrieval = ElasticsearchRetrieval(settings)
         self.pinecone_retrieval = PineconeRetrieval(settings)
+
+        # Initialize query rewriter (will be lazy-loaded when LLM service is available)
+        self.query_rewriter = None
 
     async def retrieve_context(
         self,
         query: str,
         vector_service,
         embedding_service,
+        conversation_history: list[dict] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Retrieve relevant context chunks for a query using provider-specific strategies.
+
+        Applies adaptive query rewriting before retrieval to improve accuracy.
 
         Args:
             query: User query
             vector_service: Vector database service
             embedding_service: Embedding service for query encoding
+            conversation_history: Recent conversation for context (optional)
 
         Returns:
             List of relevant context chunks with metadata
@@ -47,8 +60,37 @@ class RetrievalService:
             return []
 
         try:
-            # Get query embedding
-            query_embedding = await embedding_service.get_embedding(query)
+            # Initialize query rewriter if not already done and LLM service is available
+            if (
+                self.enable_query_rewriting
+                and not self.query_rewriter
+                and self.llm_service
+            ):
+                self.query_rewriter = AdaptiveQueryRewriter(
+                    self.llm_service, enable_rewriting=True
+                )
+                logger.info("✅ Query rewriter initialized")
+
+            # Apply query rewriting if enabled
+            rewritten_query = query
+
+            if self.query_rewriter:
+                rewrite_result = await self.query_rewriter.rewrite_query(
+                    query, conversation_history
+                )
+                rewritten_query = rewrite_result["query"]
+                # TODO: Apply query_filters to vector search when supported
+                # query_filters = rewrite_result.get("filters", {})
+
+                logger.info(
+                    f"🔄 Query rewriting: strategy={rewrite_result['strategy']}, "
+                    f"intent={rewrite_result.get('intent', {}).get('type', 'unknown')}"
+                )
+                logger.debug(f"Original query: {query}")
+                logger.debug(f"Rewritten query: {rewritten_query[:200]}...")
+
+            # Get query embedding (use rewritten query)
+            query_embedding = await embedding_service.get_embedding(rewritten_query)
 
             # Route to provider-specific search logic
             if self.settings.vector.provider.lower() == "elasticsearch":

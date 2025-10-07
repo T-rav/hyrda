@@ -496,16 +496,20 @@ class MetricSyncJob(BaseJob):
                         )
                         project_type = full_project.get("projectType", "Unknown")
 
-                    # Create enriched searchable text with context
+                    # Create enriched searchable text with context and common query keywords
                     text = (
-                        f"Employee Allocation: {employee_name} ({employee_email}) worked on {project_name}\n"
+                        f"Team Member Allocation: {employee_name} ({employee_email})\n"
+                        f"Role: Engineer/Developer working on {project_name}\n"
                         f"Client: {project_client}\n"
                         f"Practice Area: {project_practice}\n"
                         f"Delivery Owner: {delivery_owner}\n"
                         f"Project Type: {project_type}\n"
-                        f"Allocation Period: {allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}\n"
-                        f"Summary: {employee_name} was allocated to work on the {project_name} project for {project_client}, "
-                        f"under delivery owner {delivery_owner} in the {project_practice} practice area."
+                        f"Allocation Period: {allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}\n\n"
+                        f"Summary: {employee_name} is an engineer who worked on the {project_name} project for {project_client}. "
+                        f"This team member was allocated to {project_name} under delivery owner {delivery_owner} "
+                        f"in the {project_practice} practice area. "
+                        f"As a developer on this project, {employee_name} contributed engineering work from "
+                        f"{allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}."
                     )
 
                     # Create metadata with source="metric" and enriched fields
