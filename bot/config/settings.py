@@ -169,17 +169,13 @@ class RAGSettings(BaseSettings):
         default=5,
         description="Maximum number of unique documents to include in results",
     )
-    enable_contextual_retrieval: bool = Field(
-        default=False,
-        description="Enable Anthropic's contextual retrieval - adds context to chunks before embedding",
-    )
-    contextual_batch_size: int = Field(
-        default=10,
-        description="Number of chunks to process in parallel for contextual retrieval",
-    )
     enable_query_rewriting: bool = Field(
         default=True,
         description="Enable adaptive query rewriting to improve retrieval accuracy",
+    )
+    query_rewrite_model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model to use for query rewriting (fast model recommended)",
     )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]

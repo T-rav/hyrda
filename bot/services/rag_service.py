@@ -47,13 +47,24 @@ class RAGService:
 
         self.llm_provider = create_llm_provider(settings.llm)
 
-        # Initialize specialized services (pass LLM provider for query rewriting)
+        # Create separate LLM provider for query rewriting (uses different model)
+        query_rewrite_llm = None
+        if settings.rag.enable_query_rewriting:
+            # Create LLM settings for query rewriting model
+            from copy import deepcopy
+
+            query_llm_settings = deepcopy(settings.llm)
+            query_llm_settings.model = settings.rag.query_rewrite_model
+            query_rewrite_llm = create_llm_provider(query_llm_settings)
+            logger.info(
+                f"✅ Query rewriting enabled with model: {settings.rag.query_rewrite_model}"
+            )
+
+        # Initialize specialized services
         self.retrieval_service = RetrievalService(
             settings,
-            llm_service=self.llm_provider,
-            enable_query_rewriting=settings.rag.enable_query_rewriting
-            if hasattr(settings.rag, "enable_query_rewriting")
-            else True,
+            llm_service=query_rewrite_llm,  # Use separate model for query rewriting
+            enable_query_rewriting=settings.rag.enable_query_rewriting,
         )
         self.context_builder = ContextBuilder()
         self.citation_service = CitationService()
