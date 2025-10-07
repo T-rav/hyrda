@@ -13,17 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 class ProfileAgent(BaseAgent):
-    """Agent for employee profile search and analysis.
+    """Agent for company profile search and analysis.
 
     Handles queries like:
     - "Tell me about Charlotte Tregelles"
     - "Find employees in Marketplace Engineering"
     - "Who worked on the Ticketmaster project?"
+    - "Show me Acme Corp's profile"
     """
 
     name = "profile"
     aliases: list[str] = []
-    description = "Search and analyze employee profiles and project history"
+    description = "Search and analyze company profiles, employees, and project history"
 
     def __init__(self):
         """Initialize ProfileAgent."""
