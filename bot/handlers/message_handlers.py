@@ -480,19 +480,18 @@ async def handle_message(
         # Show typing indicator (skip if method doesn't exist)
         # Note: Typing indicators are handled by Slack automatically in most cases
 
-        # Check for bot agent commands: -profile, -meddic, -medic
-        # Router handles parsing internally
-        if text.strip().startswith("-"):
-            handled = await handle_bot_command(
-                text=text,
-                user_id=user_id,
-                slack_service=slack_service,
-                channel=channel,
-                thread_ts=thread_ts,
-            )
+        # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
+        # Router handles parsing and validation internally
+        handled = await handle_bot_command(
+            text=text,
+            user_id=user_id,
+            slack_service=slack_service,
+            channel=channel,
+            thread_ts=thread_ts,
+        )
 
-            if handled:
-                return
+        if handled:
+            return
 
         # Handle agent process commands
         if text.strip().lower().startswith("start "):
