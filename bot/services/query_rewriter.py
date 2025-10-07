@@ -198,44 +198,41 @@ Now classify this query. Return ONLY the JSON object:"""
     @observe(as_type="generation", name="hyde_rewrite")
     async def _hyde_rewrite(self, query: str, intent: dict) -> dict[str, Any]:
         """
-        HyDE (Hypothetical Document Embeddings) rewrite for allocation queries.
+        HyDE (Hypothetical Document Embeddings) rewrite for team allocation queries.
 
-        Generates a hypothetical allocation record that would answer the query,
-        then searches for records similar to this hypothetical one.
+        Generates a hypothetical employee record that would answer the query,
+        then searches for employee records similar to this hypothetical one.
 
         Args:
             query: Original query
             intent: Intent classification
 
         Returns:
-            Rewrite result with hypothetical document
+            Rewrite result with hypothetical employee record
         """
         entities = intent.get("entities", [])
         entity_context = f" for {entities[0]}" if entities else ""
 
-        prompt = f"""Generate a sample employee allocation record that would answer: "{query}"
+        prompt = f"""Generate a sample employee record that would answer: "{query}"
 
-Create a realistic allocation record{entity_context}. Format it like this:
+Create a realistic employee record{entity_context}. Format it like this:
 
-Team Member Allocation: [Full Name] ([email])
-Role: Engineer/Developer working on [Project Name]
-Client: [Client Name]
-Practice Area: [Practice Area]
-Delivery Owner: [Owner Name]
-Project Type: BILLABLE
-Allocation Period: [start date] to [end date]
+Employee: [Full Name]
+Email: [email@company.com]
+Status: Allocated
+Started: [start date]
+Ended: [end date or Active]
+Project History: [Project Name 1], [Project Name 2], [Project Name 3]
 
-Summary: [Name] is an engineer who worked on the [Project] project for [Client]. This team member was allocated to [Project] under delivery owner [Owner] in the [Practice] practice area. As a developer on this project, [Name] contributed engineering work from [start] to [end].
-
-Make it specific to the query context. Use realistic names, dates, and details."""
+Make it specific to the query context. Use realistic names, dates, and project names."""
 
         hypothetical_doc = await self.llm_service.generate_response(
-            prompt=prompt, max_tokens=300, temperature=0.3
+            prompt=prompt, max_tokens=200, temperature=0.3
         )
 
         return {
             "query": hypothetical_doc.strip(),
-            "filters": {"record_type": "allocation"},
+            "filters": {"record_type": "employee"},
             "strategy": "hyde",
         }
 
