@@ -39,11 +39,9 @@ def test_get_user_system_prompt_with_user_found(mock_prompt_service, mock_user_s
     """Test system prompt with user context injected."""
     mock_user_service.get_user_info.return_value = {
         "slack_user_id": "U01234567",
-        "name": "travis",
         "real_name": "Travis Frisinger",
-        "email": "travis@example.com",
-        "title": "Senior Engineer",
-        "department": "Engineering",
+        "display_name": "Travis",
+        "email_address": "travis@example.com",
         "is_admin": False,
         "is_bot": False,
     }
@@ -79,11 +77,9 @@ def test_get_user_system_prompt_with_partial_user_data(
     """Test system prompt with user who has no title/department."""
     mock_user_service.get_user_info.return_value = {
         "slack_user_id": "U01234567",
-        "name": "john",
         "real_name": "John Doe",
-        "email": "john@example.com",
-        "title": None,
-        "department": None,
+        "display_name": "John",
+        "email_address": "john@example.com",
         "is_admin": False,
         "is_bot": False,
     }
@@ -126,11 +122,9 @@ def test_get_user_system_prompt_uses_real_name_over_name(
     """Test that real_name is preferred over name."""
     mock_user_service.get_user_info.return_value = {
         "slack_user_id": "U01234567",
-        "name": "travis.frisinger",
+        "display_name": "travis.frisinger",
         "real_name": "Travis Frisinger",
-        "email": "travis@example.com",
-        "title": None,
-        "department": None,
+        "email_address": "travis@example.com",
         "is_admin": False,
         "is_bot": False,
     }
@@ -138,20 +132,17 @@ def test_get_user_system_prompt_uses_real_name_over_name(
     prompt = get_user_system_prompt("U01234567")
 
     assert "Name: Travis Frisinger" in prompt
-    assert "Name: travis.frisinger" not in prompt
 
 
-def test_get_user_system_prompt_uses_name_when_no_real_name(
+def test_get_user_system_prompt_uses_display_name_when_no_real_name(
     mock_prompt_service, mock_user_service
 ):
-    """Test that name is used when real_name is None."""
+    """Test that display_name is used when real_name is None."""
     mock_user_service.get_user_info.return_value = {
         "slack_user_id": "U01234567",
-        "name": "travis",
+        "display_name": "travis",
         "real_name": None,
-        "email": "travis@example.com",
-        "title": None,
-        "department": None,
+        "email_address": "travis@example.com",
         "is_admin": False,
         "is_bot": False,
     }

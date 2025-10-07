@@ -103,12 +103,9 @@ class UserService:
                 if user:
                     user_info = {
                         "slack_user_id": user.slack_user_id,
-                        "name": user.name,
                         "real_name": user.real_name,
-                        "email": user.email,
                         "display_name": user.display_name,
-                        "title": user.title,
-                        "department": user.department,
+                        "email_address": user.email_address,
                         "is_admin": user.is_admin,
                         "is_bot": user.is_bot,
                     }
