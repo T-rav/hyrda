@@ -16,7 +16,11 @@ class PineconeRetrieval(BaseRetrieval):
     """Pinecone-specific retrieval implementation"""
 
     async def search(
-        self, query: str, query_embedding: list[float], vector_service
+        self,
+        query: str,
+        query_embedding: list[float],
+        vector_service,
+        metadata_filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Pinecone-specific search logic.
@@ -25,6 +29,7 @@ class PineconeRetrieval(BaseRetrieval):
             query: User query
             query_embedding: Query embedding vector
             vector_service: Pinecone vector service
+            metadata_filter: Optional metadata filters from query rewriting
 
         Returns:
             Search results from Pinecone
@@ -32,7 +37,7 @@ class PineconeRetrieval(BaseRetrieval):
         if self.settings.rag.enable_hybrid_search:
             logger.info("🔍 Using Pinecone hybrid search with entity boosting")
             return await self._search_with_entity_filtering(
-                query, query_embedding, vector_service
+                query, query_embedding, vector_service, metadata_filter
             )
         else:
             logger.info("🔍 Using Pinecone pure vector similarity search")
@@ -43,6 +48,7 @@ class PineconeRetrieval(BaseRetrieval):
                 limit=self.settings.rag.max_results
                 * 3,  # Higher limit for entity boosting
                 similarity_threshold=initial_threshold,
+                filter=metadata_filter,
             )
 
     async def _search_with_entity_filtering(
@@ -50,6 +56,7 @@ class PineconeRetrieval(BaseRetrieval):
         query: str,
         query_embedding: list[float],
         vector_service,
+        metadata_filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Enhanced search with entity-aware filtering and boosting for Pinecone.
@@ -58,6 +65,7 @@ class PineconeRetrieval(BaseRetrieval):
             query: User query
             query_embedding: Query embedding vector
             vector_service: Pinecone vector database service
+            metadata_filter: Optional metadata filters from query rewriting
 
         Returns:
             Enhanced search results with entity boosting
@@ -74,6 +82,7 @@ class PineconeRetrieval(BaseRetrieval):
                 similarity_threshold=max(
                     0.05, self.settings.rag.similarity_threshold - 0.25
                 ),
+                filter=metadata_filter,
             )
 
             if not base_results:
@@ -129,4 +138,5 @@ class PineconeRetrieval(BaseRetrieval):
                 query_embedding=query_embedding,
                 limit=self.settings.rag.max_results,
                 similarity_threshold=self.settings.rag.similarity_threshold,
+                filter=metadata_filter,
             )

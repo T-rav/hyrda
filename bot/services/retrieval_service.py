@@ -73,19 +73,21 @@ class RetrievalService:
 
             # Apply query rewriting if enabled
             rewritten_query = query
+            query_filters = None
 
             if self.query_rewriter:
                 rewrite_result = await self.query_rewriter.rewrite_query(
                     query, conversation_history
                 )
                 rewritten_query = rewrite_result["query"]
-                # TODO: Apply query_filters to vector search when supported
-                # query_filters = rewrite_result.get("filters", {})
+                query_filters = rewrite_result.get("filters", {})
 
                 logger.info(
                     f"🔄 Query rewriting: strategy={rewrite_result['strategy']}, "
                     f"intent={rewrite_result.get('intent', {}).get('type', 'unknown')}"
                 )
+                if query_filters:
+                    logger.info(f"🔍 Applying metadata filters: {query_filters}")
                 logger.debug(f"Original query: {query}")
                 logger.debug(f"Rewritten query: {rewritten_query[:200]}...")
 
@@ -95,11 +97,17 @@ class RetrievalService:
             # Route to provider-specific search logic
             if self.settings.vector.provider.lower() == "elasticsearch":
                 results = await self.elasticsearch_retrieval.search(
-                    query, query_embedding, vector_service
+                    query,
+                    query_embedding,
+                    vector_service,
+                    metadata_filter=query_filters,
                 )
             elif self.settings.vector.provider.lower() == "pinecone":
                 results = await self.pinecone_retrieval.search(
-                    query, query_embedding, vector_service
+                    query,
+                    query_embedding,
+                    vector_service,
+                    metadata_filter=query_filters,
                 )
             else:
                 logger.warning(

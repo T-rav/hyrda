@@ -16,7 +16,11 @@ class ElasticsearchRetrieval(BaseRetrieval):
     """Elasticsearch-specific retrieval implementation"""
 
     async def search(
-        self, query: str, query_embedding: list[float], vector_service
+        self,
+        query: str,
+        query_embedding: list[float],
+        vector_service,
+        metadata_filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Elasticsearch-specific search logic.
@@ -25,6 +29,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
             query: User query
             query_embedding: Query embedding vector
             vector_service: Elasticsearch vector service
+            metadata_filter: Optional metadata filters from query rewriting
 
         Returns:
             Search results from Elasticsearch
@@ -32,7 +37,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
         if self.settings.rag.enable_hybrid_search:
             logger.info("🔍 Using Elasticsearch hybrid search with entity boosting")
             return await self._search_with_entity_filtering(
-                query, query_embedding, vector_service
+                query, query_embedding, vector_service, metadata_filter
             )
         elif hasattr(vector_service, "bm25_search"):
             logger.info("🔍 Using Elasticsearch BM25 + vector boost search")
@@ -43,6 +48,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
                 query_text=query,  # Pass query text for BM25 + vector boost
                 limit=50,  # Higher limit for Elasticsearch diversification
                 similarity_threshold=initial_threshold,
+                filter=metadata_filter,
             )
         else:
             logger.info("🔍 Using Elasticsearch pure vector similarity search")
@@ -52,6 +58,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
                 query_embedding=query_embedding,
                 limit=50,  # Higher limit for Elasticsearch diversification
                 similarity_threshold=initial_threshold,
+                filter=metadata_filter,
             )
 
     async def _search_with_entity_filtering(
@@ -59,6 +66,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
         query: str,
         query_embedding: list[float],
         vector_service,
+        metadata_filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Enhanced search with entity-aware filtering and boosting for Elasticsearch.
@@ -67,6 +75,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
             query: User query
             query_embedding: Query embedding vector
             vector_service: Elasticsearch vector database service
+            metadata_filter: Optional metadata filters from query rewriting
 
         Returns:
             Enhanced search results with entity boosting
@@ -83,6 +92,7 @@ class ElasticsearchRetrieval(BaseRetrieval):
                 similarity_threshold=max(
                     0.05, self.settings.rag.similarity_threshold - 0.25
                 ),
+                filter=metadata_filter,
             )
 
             if not base_results:
