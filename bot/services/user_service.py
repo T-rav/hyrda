@@ -88,39 +88,12 @@ class UserService:
         if cached_info:
             return cached_info
 
-        # Cache miss - fetch from database
-        try:
-            from models.base import get_db_session
-            from models.slack_user import SlackUser
-
-            with get_db_session() as session:
-                user = (
-                    session.query(SlackUser)
-                    .filter(SlackUser.slack_user_id == slack_user_id)
-                    .first()
-                )
-
-                if user:
-                    user_info = {
-                        "slack_user_id": user.slack_user_id,
-                        "real_name": user.real_name,
-                        "display_name": user.display_name,
-                        "email_address": user.email_address,
-                        "is_admin": user.is_admin,
-                        "is_bot": user.is_bot,
-                    }
-
-                    # Cache for next time
-                    self._set_in_cache(slack_user_id, user_info)
-
-                    return user_info
-                else:
-                    logger.warning(f"User {slack_user_id} not found in database")
-                    return None
-
-        except Exception as e:
-            logger.error(f"Error fetching user info for {slack_user_id}: {e}")
-            return None
+        # Cache miss - database lookup not yet implemented
+        # TODO: Implement database session management to fetch user from slack_users table
+        logger.warning(
+            f"User {slack_user_id} not in cache and database lookup not implemented"
+        )
+        return None
 
     def invalidate_cache(self, slack_user_id: str) -> None:
         """
