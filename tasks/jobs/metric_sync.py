@@ -170,16 +170,22 @@ class MetricSyncJob(BaseJob):
         # Build employee -> projects mapping
         employee_projects = {}
         for alloc in all_allocations:
-            if (
-                alloc
-                and alloc.get("employee", {}).get("id")
-                and alloc.get("project", {}).get("name")
-            ):
-                emp_id = alloc["employee"]["id"]
-                project_name = alloc["project"]["name"]
-                if emp_id not in employee_projects:
-                    employee_projects[emp_id] = set()
-                employee_projects[emp_id].add(project_name)
+            if not alloc or not alloc.get("id"):
+                continue
+
+            employee = alloc.get("employee")
+            if not employee or not isinstance(employee, dict) or not employee.get("id"):
+                continue
+
+            project = alloc.get("project")
+            if not project or not isinstance(project, dict) or not project.get("name"):
+                continue
+
+            emp_id = employee["id"]
+            project_name = project["name"]
+            if emp_id not in employee_projects:
+                employee_projects[emp_id] = set()
+            employee_projects[emp_id].add(project_name)
 
         texts, metadata_list = [], []
 
@@ -440,39 +446,58 @@ class MetricSyncJob(BaseJob):
         texts, metadata_list = [], []
 
         for allocation in unique_allocations:
-            # Skip allocations without employee or project
-            if not allocation or not allocation.get("employee", {}).get("id"):
-                continue
-            if not allocation.get("project", {}).get("id"):
-                continue
+            try:
+                # Skip allocations without valid employee or project
+                if not allocation or not allocation.get("id"):
+                    continue
 
-            employee_name = allocation["employee"].get("name", "Unknown")
-            project_name = allocation["project"].get("name", "Unknown")
+                employee = allocation.get("employee")
+                if (
+                    not employee
+                    or not isinstance(employee, dict)
+                    or not employee.get("id")
+                ):
+                    continue
 
-            # Create searchable text
-            text = (
-                f"Allocation: {employee_name} on {project_name}\n"
-                f"Start Date: {allocation.get('startDate', 'N/A')}\n"
-                f"End Date: {allocation.get('endDate', 'N/A')}"
-            )
+                project = allocation.get("project")
+                if (
+                    not project
+                    or not isinstance(project, dict)
+                    or not project.get("id")
+                ):
+                    continue
 
-            # Create metadata with source="metric"
-            metadata = {
-                "source": "metric",
-                "record_type": "allocation",
-                "data_type": "allocation",
-                "allocation_id": allocation["id"],
-                "employee_id": allocation["employee"]["id"],
-                "employee_name": employee_name,
-                "project_id": allocation["project"]["id"],
-                "project_name": project_name,
-                "start_date": allocation.get("startDate", ""),
-                "end_date": allocation.get("endDate", ""),
-                "synced_at": datetime.now(UTC).isoformat(),
-            }
+                employee_name = employee.get("name", "Unknown")
+                project_name = project.get("name", "Unknown")
 
-            texts.append(text)
-            metadata_list.append(clean_metadata(metadata))
+                # Create searchable text
+                text = (
+                    f"Allocation: {employee_name} on {project_name}\n"
+                    f"Start Date: {allocation.get('startDate', 'N/A')}\n"
+                    f"End Date: {allocation.get('endDate', 'N/A')}"
+                )
+
+                # Create metadata with source="metric"
+                metadata = {
+                    "source": "metric",
+                    "record_type": "allocation",
+                    "data_type": "allocation",
+                    "allocation_id": allocation["id"],
+                    "employee_id": employee["id"],
+                    "employee_name": employee_name,
+                    "project_id": project["id"],
+                    "project_name": project_name,
+                    "start_date": allocation.get("startDate", ""),
+                    "end_date": allocation.get("endDate", ""),
+                    "synced_at": datetime.now(UTC).isoformat(),
+                }
+
+                texts.append(text)
+                metadata_list.append(clean_metadata(metadata))
+            except Exception as e:
+                logger.warning(
+                    f"Skipping allocation due to error: {e}, allocation: {allocation}"
+                )
 
         if texts:
             db_records = [
@@ -483,9 +508,7 @@ class MetricSyncJob(BaseJob):
                     "pinecone_namespace": "metric",
                     "content_snapshot": text,
                 }
-                for alloc_id, text in zip(
-                    unique_allocations.keys(), texts, strict=False
-                )
+                for alloc_id, text in zip(unique_dict.keys(), texts, strict=False)
             ]
 
             # Upsert to Pinecone
