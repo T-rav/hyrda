@@ -1,7 +1,6 @@
 import contextlib
 import io
 import logging
-import re
 import time
 
 import requests
@@ -34,6 +33,7 @@ try:
 except ImportError:
     PYTHON_PPTX_AVAILABLE = False
 
+from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
@@ -337,18 +337,20 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
 
 
 async def handle_bot_command(
-    bot_type: str,
-    query: str,
+    text: str,
+    user_id: str,
     slack_service: SlackService,
     channel: str,
     thread_ts: str | None = None,
 ) -> bool:
     """
-    Handle bot agent commands like /profile and /meddic.
+    Handle bot agent commands using router pattern.
+
+    Routes commands like /profile and /meddic to registered agents.
 
     Args:
-        bot_type: The bot command (profile, meddic, medic)
-        query: The rest of the user's message
+        text: Full message text (e.g., "/profile tell me about Charlotte")
+        user_id: Slack user ID
         slack_service: Slack service for sending messages
         channel: Channel ID
         thread_ts: Thread timestamp if in a thread
@@ -356,18 +358,14 @@ async def handle_bot_command(
     Returns:
         True if bot command was handled, False otherwise
     """
-    # Normalize bot type
-    bot_type_lower = bot_type.lower()
+    # Use router to parse and route command
+    agent_info, query, primary_name = command_router.route(text)
 
-    # Alias handling: /medic -> /meddic
-    if bot_type_lower == "medic":
-        bot_type_lower = "meddic"
-
-    # Only handle known bot types
-    if bot_type_lower not in ["profile", "meddic"]:
+    # If no agent found, return False (not handled)
+    if not agent_info or not primary_name:
         return False
 
-    logger.info(f"Handling bot command: /{bot_type_lower} with query: {query}")
+    logger.info(f"Routing to agent '{primary_name}' with query: {query}")
 
     # Send thinking indicator
     thinking_message_ts = None
@@ -379,12 +377,21 @@ async def handle_bot_command(
         logger.error(f"Error posting thinking message: {e}")
 
     try:
-        # Placeholder response
-        response = (
-            f"🤖 **/{bot_type_lower.upper()} Bot Agent**\n\n"
-            f"TODO: Implement /{bot_type_lower} agent\n\n"
-            f"Query: {query}"
-        )
+        # Instantiate and run agent
+        agent_class = agent_info["agent_class"]
+        agent = agent_class()
+
+        # Build context for agent
+        context = {
+            "user_id": user_id,
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "slack_service": slack_service,
+        }
+
+        # Execute agent
+        result = await agent.run(query, context)
+        response = result.get("response", "No response from agent")
 
         # Clean up thinking message
         if thinking_message_ts:
@@ -410,8 +417,8 @@ async def handle_bot_command(
                     channel, thinking_message_ts
                 )
 
-        logger.error(f"Bot command /{bot_type_lower} failed: {e}")
-        error_response = f"❌ Bot command '/{bot_type_lower}' failed: {str(e)}"
+        logger.error(f"Bot command '{primary_name}' failed: {e}")
+        error_response = f"❌ Bot command '/{primary_name}' failed: {str(e)}"
         await slack_service.send_message(
             channel=channel, text=error_response, thread_ts=thread_ts
         )
@@ -473,15 +480,11 @@ async def handle_message(
         # Note: Typing indicators are handled by Slack automatically in most cases
 
         # Check for bot agent commands: /profile, /meddic, /medic
-        bot_command_match = re.match(r"^/(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
-        if bot_command_match:
-            bot_type = bot_command_match.group(1)
-            query = bot_command_match.group(2).strip()
-
-            # Try to handle as bot command
+        # Router handles parsing internally
+        if text.strip().startswith("/"):
             handled = await handle_bot_command(
-                bot_type=bot_type,
-                query=query,
+                text=text,
+                user_id=user_id,
                 slack_service=slack_service,
                 channel=channel,
                 thread_ts=thread_ts,
