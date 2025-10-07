@@ -20,12 +20,9 @@ def mock_user_data():
     """Sample user data."""
     return {
         "slack_user_id": "U01234567",
-        "name": "travis",
         "real_name": "Travis Frisinger",
-        "email": "travis@example.com",
+        "email_address": "travis@example.com",
         "display_name": "Travis",
-        "title": "Senior Engineer",
-        "department": "Engineering",
         "is_admin": False,
         "is_bot": False,
     }
@@ -61,12 +58,9 @@ def test_get_user_info_from_cache_miss_then_db(mock_redis, mock_user_data):
 
         mock_user = MagicMock()
         mock_user.slack_user_id = mock_user_data["slack_user_id"]
-        mock_user.name = mock_user_data["name"]
         mock_user.real_name = mock_user_data["real_name"]
-        mock_user.email = mock_user_data["email"]
+        mock_user.email_address = mock_user_data["email_address"]
         mock_user.display_name = mock_user_data["display_name"]
-        mock_user.title = mock_user_data["title"]
-        mock_user.department = mock_user_data["department"]
         mock_user.is_admin = mock_user_data["is_admin"]
         mock_user.is_bot = mock_user_data["is_bot"]
 
@@ -99,12 +93,9 @@ def test_get_user_info_without_redis(mock_user_data):
 
         mock_user = MagicMock()
         mock_user.slack_user_id = mock_user_data["slack_user_id"]
-        mock_user.name = mock_user_data["name"]
         mock_user.real_name = mock_user_data["real_name"]
-        mock_user.email = mock_user_data["email"]
+        mock_user.email_address = mock_user_data["email_address"]
         mock_user.display_name = mock_user_data["display_name"]
-        mock_user.title = mock_user_data["title"]
-        mock_user.department = mock_user_data["department"]
         mock_user.is_admin = mock_user_data["is_admin"]
         mock_user.is_bot = mock_user_data["is_bot"]
 
@@ -140,12 +131,9 @@ def test_cache_error_handling(mock_redis, mock_user_data):
 
         mock_user = MagicMock()
         mock_user.slack_user_id = mock_user_data["slack_user_id"]
-        mock_user.name = mock_user_data["name"]
         mock_user.real_name = mock_user_data["real_name"]
-        mock_user.email = mock_user_data["email"]
+        mock_user.email_address = mock_user_data["email_address"]
         mock_user.display_name = mock_user_data["display_name"]
-        mock_user.title = mock_user_data["title"]
-        mock_user.department = mock_user_data["department"]
         mock_user.is_admin = mock_user_data["is_admin"]
         mock_user.is_bot = mock_user_data["is_bot"]
 

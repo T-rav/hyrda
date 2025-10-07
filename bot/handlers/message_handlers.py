@@ -322,15 +322,9 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
 
             if user_info:
                 user_context = "\n\n**Current User Context:**\n"
-                user_context += (
-                    f"- Name: {user_info['real_name'] or user_info['name']}\n"
-                )
-                user_context += f"- Email: {user_info['email']}\n"
-
-                if user_info.get("title"):
-                    user_context += f"- Title: {user_info['title']}\n"
-                if user_info.get("department"):
-                    user_context += f"- Department: {user_info['department']}\n"
+                user_context += f"- Name: {user_info.get('real_name') or user_info.get('display_name', 'Unknown')}\n"
+                if user_info.get("email_address"):
+                    user_context += f"- Email: {user_info['email_address']}\n"
 
                 user_context += "\nWhen responding, you can personalize your responses knowing who the user is. Address them by name when appropriate."
 
