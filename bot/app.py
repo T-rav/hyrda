@@ -10,6 +10,7 @@ from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
 
+import agents  # noqa: F401 - Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
