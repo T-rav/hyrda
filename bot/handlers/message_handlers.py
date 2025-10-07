@@ -402,9 +402,10 @@ async def handle_bot_command(
             except Exception as e:
                 logger.warning(f"Error deleting thinking message: {e}")
 
-        # Send response
+        # Format and send response
+        formatted_response = await MessageFormatter.format_message(response)
         await slack_service.send_message(
-            channel=channel, text=response, thread_ts=thread_ts
+            channel=channel, text=formatted_response, thread_ts=thread_ts
         )
 
         return True
