@@ -342,6 +342,8 @@ async def handle_bot_command(
     slack_service: SlackService,
     channel: str,
     thread_ts: str | None = None,
+    files: list[dict] | None = None,
+    document_content: str | None = None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -354,6 +356,8 @@ async def handle_bot_command(
         slack_service: Slack service for sending messages
         channel: Channel ID
         thread_ts: Thread timestamp if in a thread
+        files: Optional list of file attachments
+        document_content: Optional processed file content
 
     Returns:
         True if bot command was handled, False otherwise
@@ -388,6 +392,13 @@ async def handle_bot_command(
             "thread_ts": thread_ts,
             "slack_service": slack_service,
         }
+
+        # Add file information if available
+        if document_content:
+            context["document_content"] = document_content
+        if files:
+            context["files"] = files
+            context["file_names"] = [f.get("name", "unknown") for f in files]
 
         # Execute agent
         result = await agent.run(query, context)
@@ -480,6 +491,20 @@ async def handle_message(
         # Show typing indicator (skip if method doesn't exist)
         # Note: Typing indicators are handled by Slack automatically in most cases
 
+        # Process file attachments first (needed for both bot commands and LLM)
+        document_content = ""
+        document_filename = None
+
+        if files:
+            logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
+            document_content = await process_file_attachments(files, slack_service)
+            document_filename = files[0].get("name") if files else None
+
+            if document_content:
+                logger.info(
+                    f"Extracted {len(document_content)} characters from {len(files)} file(s)"
+                )
+
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
         handled = await handle_bot_command(
@@ -488,6 +513,8 @@ async def handle_message(
             slack_service=slack_service,
             channel=channel,
             thread_ts=thread_ts,
+            files=files,
+            document_content=document_content,
         )
 
         if handled:
@@ -560,25 +587,13 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # Handle file attachments and document persistence
-        document_content = ""
-        document_filename = None
+        # File attachments already processed earlier (lines 491-499)
 
-        if files:
-            logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
-            document_content = await process_file_attachments(files, slack_service)
-            document_filename = files[0].get("name") if files else None
-
-            if document_content:
-                logger.info(
-                    f"Extracted {len(document_content)} characters from {len(files)} file(s)"
-                )
-
-                # Store document content in conversation cache for future reference
-                if conversation_cache and thread_ts:
-                    await conversation_cache.store_document_content(
-                        thread_ts, document_content, document_filename or "unknown"
-                    )
+        # Store document content in conversation cache for future reference
+        if conversation_cache and thread_ts and document_content:
+            await conversation_cache.store_document_content(
+                thread_ts, document_content, document_filename or "unknown"
+            )
 
         # If no files in current message but we're in a thread, check for previously stored documents
         elif thread_ts and conversation_cache:
