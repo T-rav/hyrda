@@ -12,6 +12,8 @@ import json
 import logging
 from typing import Any
 
+from services.langfuse_service import observe
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,6 +51,7 @@ class AdaptiveQueryRewriter:
         self.llm_service = llm_service
         self.enable_rewriting = enable_rewriting
 
+    @observe(as_type="generation", name="query_rewriting")
     async def rewrite_query(
         self, query: str, conversation_history: list[dict] | None = None
     ) -> dict[str, Any]:
@@ -116,6 +119,7 @@ class AdaptiveQueryRewriter:
                 "intent": {},
             }
 
+    @observe(as_type="generation", name="intent_classification")
     async def _classify_intent(
         self, query: str, conversation_history: list[dict]
     ) -> dict[str, Any]:
@@ -191,6 +195,7 @@ Now classify this query. Return ONLY the JSON object:"""
                 "confidence": 0.5,
             }
 
+    @observe(as_type="generation", name="hyde_rewrite")
     async def _hyde_rewrite(self, query: str, intent: dict) -> dict[str, Any]:
         """
         HyDE (Hypothetical Document Embeddings) rewrite for allocation queries.
