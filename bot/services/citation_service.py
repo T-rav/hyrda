@@ -51,7 +51,18 @@ class CitationService:
         seen_sources = set()
         for i, chunk in enumerate(citation_chunks, 1):
             metadata = chunk.get("metadata", {})
-            file_name = metadata.get("file_name", f"Document {i}")
+            source_type = metadata.get("source", "google_drive")
+
+            # Get name/title based on source type
+            if source_type == "metric":
+                # Metric.ai data uses "name" and "data_type"
+                file_name = metadata.get("name", f"Metric Record {i}")
+                data_type = metadata.get("data_type", "record")
+            else:
+                # Google Drive uses "file_name"
+                file_name = metadata.get("file_name", f"Document {i}")
+                data_type = "document"
+
             similarity = chunk.get("similarity", 0)
 
             # Create unique identifier for deduplication
@@ -61,12 +72,18 @@ class CitationService:
             seen_sources.add(source_key)
 
             # Build citation with improved formatting
-            # Extract document title from file_name (remove file extension)
-            doc_title = (
-                file_name.replace(".pdf", "").replace(".docx", "").replace(".txt", "")
-            )
+            if source_type == "metric":
+                # Metric.ai citation: Name (Type)
+                doc_title = file_name
+            else:
+                # Extract document title from file_name (remove file extension)
+                doc_title = (
+                    file_name.replace(".pdf", "")
+                    .replace(".docx", "")
+                    .replace(".txt", "")
+                )
 
-            # Format: Title • Subtitle (if available) (:file_folder: Knowledge Base) • Relevance: XX.X%
+            # Format: Title • Subtitle (if available) (Source Icon) • Relevance: XX.X%
             citation = f"{len(sources) + 1}. {doc_title}"
 
             # Add chunk count if multiple chunks from same file
@@ -75,20 +92,35 @@ class CitationService:
                 citation += f" • {chunk_count} sections"
 
             # Add subtitle/description if available in metadata
-            subtitle = metadata.get("title") or metadata.get("description")
-            if subtitle and subtitle != doc_title:
-                citation += f" • {subtitle}"
+            if source_type == "metric":
+                # For Metric.ai, show data type and additional context
+                if data_type == "employee":
+                    role = metadata.get("role")
+                    if role:
+                        citation += f" • {role}"
+                elif data_type == "project":
+                    client = metadata.get("client")
+                    if client:
+                        citation += f" • {client}"
+            else:
+                subtitle = metadata.get("title") or metadata.get("description")
+                if subtitle and subtitle != doc_title:
+                    citation += f" • {subtitle}"
 
-            # Add folder indication
-            citation += " (:file_folder: Knowledge Base)"
+            # Add source indication
+            if source_type == "metric":
+                citation += " (📊 Metric.ai)"
+            else:
+                citation += " (:file_folder: Knowledge Base)"
 
             # Add similarity score
             citation += f" • Match: {similarity:.1%}"
 
             # Add web view link if available (Google Drive)
-            web_view_link = metadata.get("web_view_link")
-            if web_view_link:
-                citation = f"[{citation}]({web_view_link})"
+            if source_type != "metric":
+                web_view_link = metadata.get("web_view_link")
+                if web_view_link:
+                    citation = f"[{citation}]({web_view_link})"
 
             sources.append(citation)
 
