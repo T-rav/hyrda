@@ -292,15 +292,53 @@ async def process_file_attachments(
     return document_content.strip()
 
 
-def get_user_system_prompt() -> str:
-    """Get the system prompt using PromptService (Langfuse or fallback)"""
-    prompt_service = get_prompt_service()
-    if prompt_service:
-        return prompt_service.get_system_prompt()
+def get_user_system_prompt(user_id: str | None = None) -> str:
+    """
+    Get the system prompt with user context injected.
 
-    # Ultimate fallback if PromptService is not available
-    logger.warning("PromptService not available, using minimal fallback prompt")
-    return "I'm Insight Mesh, your AI assistant. I help you find information from your organization's knowledge base and provide intelligent assistance with your questions."
+    Args:
+        user_id: Slack user ID to look up and inject context for
+
+    Returns:
+        System prompt with user context
+    """
+    prompt_service = get_prompt_service()
+    base_prompt = ""
+
+    if prompt_service:
+        base_prompt = prompt_service.get_system_prompt()
+    else:
+        # Ultimate fallback if PromptService is not available
+        logger.warning("PromptService not available, using minimal fallback prompt")
+        base_prompt = "I'm Insight Mesh, your AI assistant. I help you find information from your organization's knowledge base and provide intelligent assistance with your questions."
+
+    # Inject user context if user_id provided
+    if user_id:
+        try:
+            from services.user_service import get_user_service
+
+            user_service = get_user_service()
+            user_info = user_service.get_user_info(user_id)
+
+            if user_info:
+                user_context = "\n\n**Current User Context:**\n"
+                user_context += (
+                    f"- Name: {user_info['real_name'] or user_info['name']}\n"
+                )
+                user_context += f"- Email: {user_info['email']}\n"
+
+                if user_info.get("title"):
+                    user_context += f"- Title: {user_info['title']}\n"
+                if user_info.get("department"):
+                    user_context += f"- Department: {user_info['department']}\n"
+
+                user_context += "\nWhen responding, you can personalize your responses knowing who the user is. Address them by name when appropriate."
+
+                return base_prompt + user_context
+        except Exception as e:
+            logger.error(f"Error injecting user context: {e}")
+
+    return base_prompt
 
 
 async def handle_message(

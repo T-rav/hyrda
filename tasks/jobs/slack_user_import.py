@@ -63,15 +63,15 @@ class SlackUserImportJob(BaseJob):
         if self.settings.slack_bot_token:
             self.slack_client = WebClient(token=self.settings.slack_bot_token)
 
-        # Store bot database URL for later use (don't create engine in __init__)
-        self.bot_db_url = self.settings.database_url.replace(
-            "insightmesh_task", "insightmesh_bot"
+        # Store data database URL for later use (don't create engine in __init__)
+        self.data_db_url = self.settings.database_url.replace(
+            "insightmesh_task", "insightmesh_data"
         )
-        self.bot_db_url = self.bot_db_url.replace(
-            "insightmesh_tasks:", "insightmesh_bot:"
+        self.data_db_url = self.data_db_url.replace(
+            "insightmesh_tasks:", "insightmesh_data:"
         )
-        self.bot_db_url = self.bot_db_url.replace(
-            "insightmesh_tasks_password", "insightmesh_bot_password"
+        self.data_db_url = self.data_db_url.replace(
+            "insightmesh_tasks_password", "insightmesh_data_password"
         )
 
     def validate_params(self) -> bool:
@@ -83,11 +83,11 @@ class SlackUserImportJob(BaseJob):
 
         return True
 
-    def _get_bot_session(self):
-        """Create database session for bot database when needed."""
-        bot_engine = create_engine(self.bot_db_url)
-        BotSession = sessionmaker(bind=bot_engine)
-        return BotSession()
+    def _get_data_session(self):
+        """Create database session for data database when needed."""
+        data_engine = create_engine(self.data_db_url)
+        DataSession = sessionmaker(bind=data_engine)
+        return DataSession()
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the Slack user import job."""
@@ -259,7 +259,7 @@ class SlackUserImportJob(BaseJob):
         updated_users_count = 0
 
         try:
-            with self._get_bot_session() as session:
+            with self._get_data_session() as session:
                 for user_data in users:
                     # Check if user already exists
                     existing_user = session.execute(

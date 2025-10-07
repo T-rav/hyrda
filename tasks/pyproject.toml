@@ -46,6 +46,13 @@ dependencies = [
     # Slack SDK (for user import)
     "slack-sdk>=3.35.0",
 
+    # GraphQL client (for Metric.ai sync)
+    "gql[requests]>=3.4.0",
+
+    # Vector DB and Embeddings (for Metric.ai sync)
+    "pinecone>=5.0.0",
+    "openai>=1.0.0",
+
     # Logging
     "loguru>=0.7.0",
 ]

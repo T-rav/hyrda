@@ -8,7 +8,7 @@ from apscheduler.job import Job
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
-from .metrics_collection import MetricsCollectionJob
+from .metric_sync import MetricSyncJob
 from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ def execute_job_by_type(
     # Direct mapping - simpler than dynamic imports
     job_classes = {
         "slack_user_import": SlackUserImportJob,
-        "metrics_collection": MetricsCollectionJob,
+        "metric_sync": MetricSyncJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -116,7 +116,7 @@ class JobRegistry:
         # Job type mapping
         self.job_types = {
             "slack_user_import": SlackUserImportJob,
-            "metrics_collection": MetricsCollectionJob,
+            "metric_sync": MetricSyncJob,
         }
 
     def get_available_job_types(self) -> list[dict[str, Any]]:
