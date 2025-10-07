@@ -622,7 +622,7 @@ class TestFileProcessingErrorHandling:
 
 
 class TestBotCommandHandling:
-    """Tests for bot agent command routing (/profile, /meddic, /medic)"""
+    """Tests for bot agent command routing (/profile, "-meddic", "-medic")"""
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_profile(self):
@@ -633,9 +633,10 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         result = await handle_bot_command(
-            text="/profile tell me about Charlotte",
+            text="-profile tell me about Charlotte",
             user_id="U123",
             slack_service=slack_service,
             channel="C123",
@@ -656,16 +657,17 @@ class TestBotCommandHandling:
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
-        """Test /meddic bot command is handled correctly"""
+        """Test "-meddic" bot command is handled correctly"""
         from unittest.mock import AsyncMock
 
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         result = await handle_bot_command(
-            text="/meddic analyze this opportunity",
+            text="-meddic analyze this opportunity",
             user_id="U123",
             slack_service=slack_service,
             channel="C123",
@@ -688,16 +690,17 @@ class TestBotCommandHandling:
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_medic_alias(self):
-        """Test /medic alias resolves to /meddic"""
+        """Test -medic alias resolves to -meddic"""
         from unittest.mock import AsyncMock
 
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         result = await handle_bot_command(
-            text="/medic what's the decision process",
+            text="-medic what's the decision process",
             user_id="U123",
             slack_service=slack_service,
             channel="C123",
@@ -706,7 +709,7 @@ class TestBotCommandHandling:
 
         assert result is True
 
-        # Verify it resolves to /meddic
+        # Verify it resolves to "-meddic"
         call_args = slack_service.send_message.call_args
         response_text = call_args.kwargs["text"]
         assert "MEDDIC" in response_text or "meddic" in response_text.lower()
@@ -721,6 +724,7 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         result = await handle_bot_command(
             text="/unknown some query",
@@ -744,9 +748,10 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         result = await handle_bot_command(
-            text="/profile ",
+            text="-profile ",
             user_id="U123",  # Empty query
             slack_service=slack_service,
             channel="C123",
@@ -773,7 +778,7 @@ class TestBotCommandHandling:
         )
 
         result = await handle_bot_command(
-            text="/profile test query",
+            text="-profile test query",
             user_id="U123",
             slack_service=slack_service,
             channel="C123",
@@ -797,9 +802,10 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         await handle_bot_command(
-            text="/profile test",
+            text="-profile test",
             user_id="U123",
             slack_service=slack_service,
             channel="C123",
@@ -813,7 +819,7 @@ class TestBotCommandHandling:
 
     @pytest.mark.asyncio
     async def test_handle_message_routes_to_bot_command(self):
-        """Test that handle_message correctly routes /profile and /meddic commands"""
+        """Test that handle_message correctly routes /profile and "-meddic" commands"""
         from unittest.mock import AsyncMock
 
         from services.llm_service import LLMService
@@ -822,12 +828,13 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
 
         # Test /profile routing
         await handle_message(
-            text="/profile tell me about Charlotte",
+            text="-profile tell me about Charlotte",
             user_id="U123",
             slack_service=slack_service,
             llm_service=llm_service,
@@ -844,9 +851,9 @@ class TestBotCommandHandling:
         # Reset mocks
         slack_service.send_message.reset_mock()
 
-        # Test /meddic routing
+        # Test "-meddic" routing
         await handle_message(
-            text="/meddic analyze deal",
+            text="-meddic analyze deal",
             user_id="U123",
             slack_service=slack_service,
             llm_service=llm_service,
@@ -870,12 +877,13 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
 
         # Test uppercase
         await handle_message(
-            text="/PROFILE test",
+            text="-PROFILE test",
             user_id="U123",
             slack_service=slack_service,
             llm_service=llm_service,
@@ -890,7 +898,7 @@ class TestBotCommandHandling:
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
-        """Test that /medic alias routes through handle_message to /meddic"""
+        """Test that -medic alias routes through handle_message to -meddic"""
         from unittest.mock import AsyncMock
 
         from services.llm_service import LLMService
@@ -899,12 +907,13 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
 
-        # Test /medic alias routing through handle_message
+        # Test "-medic" alias routing through handle_message
         await handle_message(
-            text="/medic analyze this deal opportunity",
+            text="-medic analyze this deal opportunity",
             user_id="U123",
             slack_service=slack_service,
             llm_service=llm_service,
@@ -922,7 +931,7 @@ class TestBotCommandHandling:
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_case_variations(self):
-        """Test that /medic alias works with different casing"""
+        """Test that "-medic" alias works with different casing"""
         from unittest.mock import AsyncMock
 
         from services.llm_service import LLMService
@@ -931,11 +940,12 @@ class TestBotCommandHandling:
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
 
-        # Test various casings of /medic
-        test_cases = ["/medic", "/MEDIC", "/Medic", "/MeDiC"]
+        # Test various casings of "-medic"
+        test_cases = ["-medic", "-MEDIC", "-Medic", "-MeDiC"]
 
         for medic_variant in test_cases:
             slack_service.send_message.reset_mock()
