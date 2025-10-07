@@ -419,107 +419,121 @@ class MetricSyncJob(BaseJob):
 
     async def _sync_allocations(self) -> int:
         """Sync allocation data from Metric.ai to Pinecone."""
-        logger.info("Syncing allocations from Metric.ai...")
+        try:
+            logger.info("Syncing allocations from Metric.ai...")
 
-        current_year = datetime.now(UTC).year
-        all_allocations = []
+            current_year = datetime.now(UTC).year
+            all_allocations = []
 
-        # Query year by year from start year to current
-        for year in range(self.allocations_start_year, current_year + 1):
-            start_date = f"{year}-01-01"
-            end_date = f"{year + 1}-01-01"
+            # Query year by year from start year to current
+            for year in range(self.allocations_start_year, current_year + 1):
+                start_date = f"{year}-01-01"
+                end_date = f"{year + 1}-01-01"
 
-            try:
-                allocations = self.metric_client.get_allocations(start_date, end_date)
-                all_allocations.extend(allocations)
-                logger.info(f"Fetched {len(allocations)} allocations for {year}")
-            except Exception as e:
-                logger.warning(f"Failed to fetch allocations for {year}: {e}")
+                try:
+                    allocations = self.metric_client.get_allocations(
+                        start_date, end_date
+                    )
+                    all_allocations.extend(allocations)
+                    logger.info(f"Fetched {len(allocations)} allocations for {year}")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch allocations for {year}: {e}")
 
-        # Remove duplicates by allocation ID and filter None
-        unique_dict = {}
-        for alloc in all_allocations:
-            if alloc and alloc.get("id"):
-                unique_dict[alloc["id"]] = alloc
-        unique_allocations = unique_dict.values()
+            logger.info(f"Total allocations fetched: {len(all_allocations)}")
 
-        texts, metadata_list = [], []
+            # Remove duplicates by allocation ID and filter None
+            unique_dict = {}
+            for alloc in all_allocations:
+                if alloc and alloc.get("id"):
+                    unique_dict[alloc["id"]] = alloc
+            unique_allocations = unique_dict.values()
 
-        for allocation in unique_allocations:
-            try:
-                # Skip allocations without valid employee or project
-                if not allocation or not allocation.get("id"):
-                    continue
+            logger.info(f"Unique allocations after filtering: {len(unique_dict)}")
 
-                employee = allocation.get("employee")
-                if (
-                    not employee
-                    or not isinstance(employee, dict)
-                    or not employee.get("id")
-                ):
-                    continue
+            texts, metadata_list, allocation_ids = [], [], []
 
-                project = allocation.get("project")
-                if (
-                    not project
-                    or not isinstance(project, dict)
-                    or not project.get("id")
-                ):
-                    continue
+            for allocation in unique_allocations:
+                try:
+                    # Skip allocations without valid employee or project
+                    if not allocation or not allocation.get("id"):
+                        continue
 
-                employee_name = employee.get("name", "Unknown")
-                project_name = project.get("name", "Unknown")
+                    employee = allocation.get("employee")
+                    if (
+                        not employee
+                        or not isinstance(employee, dict)
+                        or not employee.get("id")
+                    ):
+                        continue
 
-                # Create searchable text
-                text = (
-                    f"Allocation: {employee_name} on {project_name}\n"
-                    f"Start Date: {allocation.get('startDate', 'N/A')}\n"
-                    f"End Date: {allocation.get('endDate', 'N/A')}"
+                    project = allocation.get("project")
+                    if (
+                        not project
+                        or not isinstance(project, dict)
+                        or not project.get("id")
+                    ):
+                        continue
+
+                    employee_name = employee.get("name", "Unknown")
+                    project_name = project.get("name", "Unknown")
+
+                    # Create searchable text
+                    text = (
+                        f"Allocation: {employee_name} on {project_name}\n"
+                        f"Start Date: {allocation.get('startDate', 'N/A')}\n"
+                        f"End Date: {allocation.get('endDate', 'N/A')}"
+                    )
+
+                    # Create metadata with source="metric"
+                    metadata = {
+                        "source": "metric",
+                        "record_type": "allocation",
+                        "data_type": "allocation",
+                        "allocation_id": allocation["id"],
+                        "employee_id": employee["id"],
+                        "employee_name": employee_name,
+                        "project_id": project["id"],
+                        "project_name": project_name,
+                        "start_date": allocation.get("startDate", ""),
+                        "end_date": allocation.get("endDate", ""),
+                        "synced_at": datetime.now(UTC).isoformat(),
+                    }
+
+                    texts.append(text)
+                    metadata_list.append(clean_metadata(metadata))
+                    allocation_ids.append(allocation["id"])
+                except Exception as e:
+                    logger.warning(
+                        f"Skipping allocation due to error: {e}, allocation: {allocation}"
+                    )
+
+            if texts:
+                db_records = [
+                    {
+                        "metric_id": alloc_id,
+                        "data_type": "allocation",
+                        "pinecone_id": f"metric_{alloc_id}",
+                        "pinecone_namespace": "metric",
+                        "content_snapshot": text,
+                    }
+                    for alloc_id, text in zip(allocation_ids, texts, strict=False)
+                ]
+
+                # Upsert to Pinecone
+                embeddings = self.embedding_client.embed_batch(texts)
+                await self.vector_client.upsert_with_namespace(
+                    texts, embeddings, metadata_list, namespace="metric"
                 )
 
-                # Create metadata with source="metric"
-                metadata = {
-                    "source": "metric",
-                    "record_type": "allocation",
-                    "data_type": "allocation",
-                    "allocation_id": allocation["id"],
-                    "employee_id": employee["id"],
-                    "employee_name": employee_name,
-                    "project_id": project["id"],
-                    "project_name": project_name,
-                    "start_date": allocation.get("startDate", ""),
-                    "end_date": allocation.get("endDate", ""),
-                    "synced_at": datetime.now(UTC).isoformat(),
-                }
-
-                texts.append(text)
-                metadata_list.append(clean_metadata(metadata))
-            except Exception as e:
-                logger.warning(
-                    f"Skipping allocation due to error: {e}, allocation: {allocation}"
+                # Write to database with synced_at timestamp
+                records_written = self._write_metric_records(db_records)
+                logger.info(
+                    f"✅ Synced {len(texts)} allocations to Pinecone and database ({records_written} records, unique from {len(all_allocations)} total)"
                 )
-
-        if texts:
-            db_records = [
-                {
-                    "metric_id": alloc_id,
-                    "data_type": "allocation",
-                    "pinecone_id": f"metric_{alloc_id}",
-                    "pinecone_namespace": "metric",
-                    "content_snapshot": text,
-                }
-                for alloc_id, text in zip(unique_dict.keys(), texts, strict=False)
-            ]
-
-            # Upsert to Pinecone
-            embeddings = self.embedding_client.embed_batch(texts)
-            await self.vector_client.upsert_with_namespace(
-                texts, embeddings, metadata_list, namespace="metric"
-            )
-
-            # Write to database with synced_at timestamp
-            records_written = self._write_metric_records(db_records)
-            logger.info(
-                f"✅ Synced {len(texts)} allocations to Pinecone and database ({records_written} records, unique from {len(all_allocations)} total)"
-            )
-        return len(texts)
+                return len(texts)
+            else:
+                logger.warning("No valid allocations to sync")
+                return 0
+        except Exception as e:
+            logger.error(f"Error in _sync_allocations: {e}", exc_info=True)
+            raise
