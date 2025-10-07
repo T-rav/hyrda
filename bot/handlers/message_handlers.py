@@ -1,6 +1,7 @@
 import contextlib
 import io
 import logging
+import re
 import time
 
 import requests
@@ -335,6 +336,88 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
     return base_prompt
 
 
+async def handle_bot_command(
+    bot_type: str,
+    query: str,
+    slack_service: SlackService,
+    channel: str,
+    thread_ts: str | None = None,
+) -> bool:
+    """
+    Handle bot agent commands like /profile and /meddic.
+
+    Args:
+        bot_type: The bot command (profile, meddic, medic)
+        query: The rest of the user's message
+        slack_service: Slack service for sending messages
+        channel: Channel ID
+        thread_ts: Thread timestamp if in a thread
+
+    Returns:
+        True if bot command was handled, False otherwise
+    """
+    # Normalize bot type
+    bot_type_lower = bot_type.lower()
+
+    # Alias handling: /medic -> /meddic
+    if bot_type_lower == "medic":
+        bot_type_lower = "meddic"
+
+    # Only handle known bot types
+    if bot_type_lower not in ["profile", "meddic"]:
+        return False
+
+    logger.info(f"Handling bot command: /{bot_type_lower} with query: {query}")
+
+    # Send thinking indicator
+    thinking_message_ts = None
+    try:
+        thinking_message_ts = await slack_service.send_thinking_indicator(
+            channel, thread_ts
+        )
+    except Exception as e:
+        logger.error(f"Error posting thinking message: {e}")
+
+    try:
+        # Placeholder response
+        response = (
+            f"🤖 **/{bot_type_lower.upper()} Bot Agent**\n\n"
+            f"TODO: Implement /{bot_type_lower} agent\n\n"
+            f"Query: {query}"
+        )
+
+        # Clean up thinking message
+        if thinking_message_ts:
+            try:
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+            except Exception as e:
+                logger.warning(f"Error deleting thinking message: {e}")
+
+        # Send response
+        await slack_service.send_message(
+            channel=channel, text=response, thread_ts=thread_ts
+        )
+
+        return True
+
+    except Exception as e:
+        # Clean up thinking message on error
+        if thinking_message_ts:
+            with contextlib.suppress(Exception):
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+
+        logger.error(f"Bot command /{bot_type_lower} failed: {e}")
+        error_response = f"❌ Bot command '/{bot_type_lower}' failed: {str(e)}"
+        await slack_service.send_message(
+            channel=channel, text=error_response, thread_ts=thread_ts
+        )
+        return True
+
+
 async def handle_message(
     text: str,
     user_id: str,
@@ -388,6 +471,24 @@ async def handle_message(
     try:
         # Show typing indicator (skip if method doesn't exist)
         # Note: Typing indicators are handled by Slack automatically in most cases
+
+        # Check for bot agent commands: /profile, /meddic, /medic
+        bot_command_match = re.match(r"^/(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
+        if bot_command_match:
+            bot_type = bot_command_match.group(1)
+            query = bot_command_match.group(2).strip()
+
+            # Try to handle as bot command
+            handled = await handle_bot_command(
+                bot_type=bot_type,
+                query=query,
+                slack_service=slack_service,
+                channel=channel,
+                thread_ts=thread_ts,
+            )
+
+            if handled:
+                return
 
         # Handle agent process commands
         if text.strip().lower().startswith("start "):
