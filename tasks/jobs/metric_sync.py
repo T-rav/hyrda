@@ -154,6 +154,33 @@ class MetricSyncJob(BaseJob):
         if not employees:
             return 0
 
+        # Get all allocations to build project history
+        logger.info("Fetching allocations for project history...")
+        current_year = datetime.now(UTC).year
+        all_allocations = []
+        for year in range(self.allocations_start_year, current_year + 1):
+            start_date = f"{year}-01-01"
+            end_date = f"{year + 1}-01-01"
+            try:
+                allocations = self.metric_client.get_allocations(start_date, end_date)
+                all_allocations.extend(allocations)
+            except Exception as e:
+                logger.warning(f"Failed to fetch allocations for {year}: {e}")
+
+        # Build employee -> projects mapping
+        employee_projects = {}
+        for alloc in all_allocations:
+            if (
+                alloc
+                and alloc.get("employee", {}).get("id")
+                and alloc.get("project", {}).get("name")
+            ):
+                emp_id = alloc["employee"]["id"]
+                project_name = alloc["project"]["name"]
+                if emp_id not in employee_projects:
+                    employee_projects[emp_id] = set()
+                employee_projects[emp_id].add(project_name)
+
         texts, metadata_list = [], []
 
         for employee in employees:
@@ -163,18 +190,26 @@ class MetricSyncJob(BaseJob):
                 for g in employee.get("groups", [])
             )
 
-            # Create searchable text
+            # Get project history for this employee
+            projects = employee_projects.get(employee["id"], set())
+            project_history = (
+                ", ".join(sorted(projects)) if projects else "No project history"
+            )
+
+            # Create searchable text with project history
             text = (
                 f"Employee: {employee['name']}\n"
                 f"Email: {employee.get('email', 'N/A')}\n"
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
-                f"Ended: {employee.get('endedWorking', 'Active')}"
+                f"Ended: {employee.get('endedWorking', 'Active')}\n"
+                f"Project History: {project_history}"
             )
 
             # Create metadata with source="metric"
             metadata = {
                 "source": "metric",
+                "record_type": "employee",
                 "data_type": "employee",
                 "employee_id": employee["id"],
                 "name": employee["name"],
@@ -182,6 +217,7 @@ class MetricSyncJob(BaseJob):
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
                 "ended_working": employee.get("endedWorking", ""),
+                "project_count": len(projects),
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
@@ -239,7 +275,7 @@ class MetricSyncJob(BaseJob):
             if client == "Unknown Client":
                 continue
 
-            # Extract delivery owner and billing frequency
+            # Extract delivery owner, billing frequency, and practice
             delivery_owner = next(
                 (
                     g["name"]
@@ -256,11 +292,20 @@ class MetricSyncJob(BaseJob):
                 ),
                 "Unknown",
             )
+            practice = next(
+                (
+                    g["name"]
+                    for g in project["groups"]
+                    if g["groupType"] == "GROUP_TYPE_23"
+                ),
+                "Unknown",
+            )
 
-            # Create searchable text
+            # Create searchable text with practice
             text = (
                 f"Project: {project['name']}\n"
                 f"Client: {client}\n"
+                f"Practice: {practice}\n"
                 f"Type: {project.get('projectType', 'Unknown')}\n"
                 f"Status: {project.get('projectStatus', 'Unknown')}\n"
                 f"Start Date: {project.get('startDate', 'N/A')}\n"
@@ -272,10 +317,12 @@ class MetricSyncJob(BaseJob):
             # Create metadata with source="metric"
             metadata = {
                 "source": "metric",
+                "record_type": "project",
                 "data_type": "project",
                 "project_id": project["id"],
                 "name": project["name"],
                 "client": client,
+                "practice": practice,
                 "project_type": project.get("projectType", ""),
                 "project_status": project.get("projectStatus", ""),
                 "start_date": project.get("startDate", ""),
@@ -330,6 +377,7 @@ class MetricSyncJob(BaseJob):
             # Create metadata with source="metric"
             metadata = {
                 "source": "metric",
+                "record_type": "client",
                 "data_type": "client",
                 "client_id": client["id"],
                 "name": client["name"],
@@ -411,6 +459,7 @@ class MetricSyncJob(BaseJob):
             # Create metadata with source="metric"
             metadata = {
                 "source": "metric",
+                "record_type": "allocation",
                 "data_type": "allocation",
                 "allocation_id": allocation["id"],
                 "employee_id": allocation["employee"]["id"],
