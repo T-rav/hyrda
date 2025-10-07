@@ -264,7 +264,7 @@ class TestMetricsCollectionJob:
 
     def test_metrics_collection_job_init(self, test_settings):
         """Test metrics collection job initialization."""
-        job = MetricsCollectionJob(test_settings)
+        job = MetricsCollectionJob(test_settings)  # noqa: F821
         assert job.JOB_NAME == "Metrics Collection"
 
     @patch("jobs.metrics_collection.requests")
@@ -277,7 +277,7 @@ class TestMetricsCollectionJob:
         mock_requests.get.return_value = mock_response
         mock_requests.post.return_value = mock_response
 
-        job = MetricsCollectionJob(test_settings)
+        job = MetricsCollectionJob(test_settings)  # noqa: F821
         result = job.execute()
 
         assert result["status"] == "success"
@@ -286,7 +286,7 @@ class TestMetricsCollectionJob:
 
     def test_metrics_aggregation(self, test_settings):
         """Test metrics aggregation logic."""
-        job = MetricsCollectionJob(test_settings)
+        job = MetricsCollectionJob(test_settings)  # noqa: F821
 
         sample_metrics = {
             "usage": {"data": [1, 2, 3]},
@@ -305,7 +305,7 @@ class TestMetricsCollectionJob:
         # Remove API URL
         test_settings.slack_bot_api_url = None
 
-        job = MetricsCollectionJob(test_settings)
+        job = MetricsCollectionJob(test_settings)  # noqa: F821
 
         # Use asyncio.run to run the async method
         result = asyncio.run(job._collect_usage_metrics(24))
