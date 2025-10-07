@@ -17,7 +17,7 @@ class TestCommandRouter:
         registry = AgentRegistryMockFactory.create_empty()
         router = CommandRouter(registry)
 
-        command, query = router.parse_command("/profile tell me about Charlotte")
+        command, query = router.parse_command("-profile tell me about Charlotte")
         assert command == "profile"
         assert query == "tell me about Charlotte"
 
@@ -26,7 +26,7 @@ class TestCommandRouter:
         registry = AgentRegistryMockFactory.create_empty()
         router = CommandRouter(registry)
 
-        command, query = router.parse_command("/agents")
+        command, query = router.parse_command("-agents")
         assert command == "agents"
         assert query == ""
 
@@ -35,7 +35,7 @@ class TestCommandRouter:
         registry = AgentRegistryMockFactory.create_empty()
         router = CommandRouter(registry)
 
-        command, query = router.parse_command("/PROFILE test")
+        command, query = router.parse_command("-PROFILE test")
         assert command == "profile"
         assert query == "test"
 
@@ -55,7 +55,7 @@ class TestCommandRouter:
         registry.register("test", test_agent, [])
 
         router = CommandRouter(registry)
-        agent_info, query, primary_name = router.route("/test hello world")
+        agent_info, query, primary_name = router.route("-test hello world")
 
         assert agent_info is not None
         assert agent_info["agent_class"] == test_agent
@@ -71,7 +71,7 @@ class TestCommandRouter:
         registry.register("test", test_agent, ["t"])
 
         router = CommandRouter(registry)
-        agent_info, query, primary_name = router.route("/t hello")
+        agent_info, query, primary_name = router.route("-t hello")
 
         assert agent_info is not None
         assert agent_info["agent_class"] == test_agent
@@ -83,7 +83,7 @@ class TestCommandRouter:
         registry = AgentRegistryMockFactory.create_empty()
         router = CommandRouter(registry)
 
-        agent_info, query, primary_name = router.route("/unknown test")
+        agent_info, query, primary_name = router.route("-unknown test")
 
         assert agent_info is None
         assert query == "test"

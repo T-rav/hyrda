@@ -16,8 +16,8 @@ class HelpAgent(BaseAgent):
     """Agent for listing available bot agents and their aliases.
 
     Handles queries like:
-    - "/agents" - List all available agents
-    - "/help" - Show help information
+    - "-agents" - List all available agents
+    - "-help" - Show help information
     """
 
     name = "agents"
@@ -66,18 +66,18 @@ class HelpAgent(BaseAgent):
             )
 
             # Format agent line
-            agent_line = f"\n**/{agent_name}**"
+            agent_line = f"\n**-{agent_name}**"
             if aliases:
-                alias_text = ", ".join([f"/{alias}" for alias in aliases])
+                alias_text = ", ".join([f"-{alias}" for alias in aliases])
                 agent_line += f" (aliases: {alias_text})"
 
             response_lines.append(agent_line)
             response_lines.append(f"  {description}")
 
         response_lines.append(
-            "\n\n**Usage:** Type `/<command> <your query>` to use an agent"
+            "\n\n**Usage:** Type `-<command> <your query>` to use an agent"
         )
-        response_lines.append("**Example:** `/profile tell me about Charlotte`")
+        response_lines.append("**Example:** `-profile tell me about Charlotte`")
 
         response = "\n".join(response_lines)
 
@@ -97,4 +97,4 @@ agent_registry.register(
     aliases=HelpAgent.aliases,
 )
 
-logger.info(f"HelpAgent registered: /{HelpAgent.name} (aliases: {HelpAgent.aliases})")
+logger.info(f"HelpAgent registered: -{HelpAgent.name} (aliases: {HelpAgent.aliases})")

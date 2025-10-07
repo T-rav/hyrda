@@ -29,8 +29,8 @@ class CommandRouter:
         """Parse bot command from message text.
 
         Extracts command name and query from messages like:
-        - "/profile tell me about Charlotte"
-        - "/meddic analyze this deal"
+        - "-profile tell me about Charlotte"
+        - "-meddic analyze this deal"
 
         Args:
             text: Message text to parse
@@ -38,8 +38,8 @@ class CommandRouter:
         Returns:
             Tuple of (command_name, query) or (None, "") if no command found
         """
-        # Match pattern: /command rest of text
-        match = re.match(r"^/(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
+        # Match pattern: -command rest of text
+        match = re.match(r"^-(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
 
         if not match:
             return None, ""
@@ -76,7 +76,7 @@ class CommandRouter:
         agent_info = self.registry.get(command_name)
         primary_name = self.registry.get_primary_name(command_name)
 
-        logger.info(f"Routing command '/{command_name}' to agent '{primary_name}'")
+        logger.info(f"Routing command '-{command_name}' to agent '{primary_name}'")
 
         return agent_info, query, primary_name
 
