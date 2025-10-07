@@ -316,9 +316,12 @@ class TestRAGService:
         response = await rag_service.generate_response("query", [])
 
         assert "Final response with citations" in response
-        # The actual method signature includes vector_store and embedding_provider
+        # The actual method signature includes vector_store, embedding_provider, and conversation_history
         rag_service.retrieval_service.retrieve_context.assert_called_once_with(
-            "query", rag_service.vector_store, rag_service.embedding_provider
+            "query",
+            rag_service.vector_store,
+            rag_service.embedding_provider,
+            conversation_history=[],
         )
 
     @pytest.mark.asyncio
