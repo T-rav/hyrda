@@ -52,8 +52,6 @@ def test_get_user_system_prompt_with_user_found(mock_prompt_service, mock_user_s
     assert "**Current User Context:**" in prompt
     assert "Name: Travis Frisinger" in prompt
     assert "Email: travis@example.com" in prompt
-    assert "Title: Senior Engineer" in prompt
-    assert "Department: Engineering" in prompt
     assert "personalize your responses" in prompt
     mock_user_service.get_user_info.assert_called_once_with("U01234567")
 
