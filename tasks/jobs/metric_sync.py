@@ -76,37 +76,47 @@ class MetricSyncJob(BaseJob):
         Returns:
             Number of records written
         """
+        session = None
         try:
-            with self._get_data_session() as session:
-                now = datetime.now(UTC)
-                for record in records:
-                    # Use raw SQL to insert or update
-                    session.execute(
-                        text("""
-                        INSERT INTO metric_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
-                         created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
-                                :now, :now, :now)
-                        ON DUPLICATE KEY UPDATE
-                            content_snapshot = :content,
-                            updated_at = :now,
-                            synced_at = :now
-                        """),
-                        {
-                            "metric_id": record["metric_id"],
-                            "data_type": record["data_type"],
-                            "pinecone_id": record["pinecone_id"],
-                            "namespace": record["pinecone_namespace"],
-                            "content": record["content_snapshot"],
-                            "now": now,
-                        },
-                    )
-                session.commit()
-                return len(records)
+            # Create engine and session without context manager
+            data_engine = create_engine(self.data_db_url)
+            DataSession = sessionmaker(bind=data_engine)
+            session = DataSession()
+
+            now = datetime.now(UTC)
+            for record in records:
+                # Use raw SQL to insert or update
+                session.execute(
+                    text("""
+                    INSERT INTO metric_records
+                    (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                     created_at, updated_at, synced_at)
+                    VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                            :now, :now, :now)
+                    ON DUPLICATE KEY UPDATE
+                        content_snapshot = :content,
+                        updated_at = :now,
+                        synced_at = :now
+                    """),
+                    {
+                        "metric_id": record["metric_id"],
+                        "data_type": record["data_type"],
+                        "pinecone_id": record["pinecone_id"],
+                        "namespace": record["pinecone_namespace"],
+                        "content": record["content_snapshot"],
+                        "now": now,
+                    },
+                )
+            session.commit()
+            return len(records)
         except Exception as e:
             logger.error(f"Error writing to metric_records: {e}")
+            if session:
+                session.rollback()
             return 0
+        finally:
+            if session:
+                session.close()
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the Metric.ai data sync."""
@@ -230,28 +240,15 @@ class MetricSyncJob(BaseJob):
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
 
-        # Write to database FIRST, then upsert to Pinecone
-        db_records = [
-            {
-                "metric_id": emp["id"],
-                "data_type": "employee",
-                "pinecone_id": f"metric_{emp['id']}",
-                "pinecone_namespace": "metric",
-                "content_snapshot": text,
-            }
-            for emp, text in zip(employees, texts, strict=False)
-        ]
-
         # Generate embeddings and upsert to Pinecone
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to database with current timestamp as synced_at
-        records_written = self._write_metric_records(db_records)
+        # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
         logger.info(
-            f"✅ Synced {len(employees)} employees to Pinecone and database ({records_written} records)"
+            f"✅ Synced {len(employees)} employees to Pinecone (database writes disabled)"
         )
         return len(employees)
 
@@ -342,27 +339,15 @@ class MetricSyncJob(BaseJob):
             metadata_list.append(clean_metadata(metadata))
 
         if texts:
-            db_records = [
-                {
-                    "metric_id": projects[i]["id"],
-                    "data_type": "project",
-                    "pinecone_id": f"metric_{projects[i]['id']}",
-                    "pinecone_namespace": "metric",
-                    "content_snapshot": text,
-                }
-                for i, text in enumerate(texts)
-            ]
-
             # Upsert to Pinecone
             embeddings = self.embedding_client.embed_batch(texts)
             await self.vector_client.upsert_with_namespace(
                 texts, embeddings, metadata_list, namespace="metric"
             )
 
-            # Write to database with synced_at timestamp
-            records_written = self._write_metric_records(db_records)
+            # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
             logger.info(
-                f"✅ Synced {len(texts)} projects to Pinecone and database ({records_written} records, filtered from {len(projects)} total)"
+                f"✅ Synced {len(texts)} projects to Pinecone (database writes disabled, filtered from {len(projects)} total)"
             )
         return len(texts)
 
@@ -393,27 +378,15 @@ class MetricSyncJob(BaseJob):
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
 
-        db_records = [
-            {
-                "metric_id": cli["id"],
-                "data_type": "client",
-                "pinecone_id": f"metric_{cli['id']}",
-                "pinecone_namespace": "metric",
-                "content_snapshot": text,
-            }
-            for cli, text in zip(clients, texts, strict=False)
-        ]
-
         # Generate embeddings and upsert to Pinecone
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to database with synced_at timestamp
-        records_written = self._write_metric_records(db_records)
+        # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
         logger.info(
-            f"✅ Synced {len(clients)} clients to Pinecone and database ({records_written} records)"
+            f"✅ Synced {len(clients)} clients to Pinecone (database writes disabled)"
         )
         return len(clients)
 
@@ -421,6 +394,12 @@ class MetricSyncJob(BaseJob):
         """Sync allocation data from Metric.ai to Pinecone."""
         try:
             logger.info("Syncing allocations from Metric.ai...")
+
+            # Build project lookup cache first
+            logger.info("Building project lookup cache for allocation enrichment...")
+            all_projects = self.metric_client.get_projects()
+            project_cache = {p["id"]: p for p in all_projects}
+            logger.info(f"Cached {len(project_cache)} projects for enrichment")
 
             current_year = datetime.now(UTC).year
             all_allocations = []
@@ -475,16 +454,61 @@ class MetricSyncJob(BaseJob):
                         continue
 
                     employee_name = employee.get("name", "Unknown")
+                    employee_email = employee.get("email", "")
+                    project_id = project.get("id")
                     project_name = project.get("name", "Unknown")
 
-                    # Create searchable text
+                    # Extract project details from cache for richer context
+                    project_client = "Unknown Client"
+                    project_practice = "Unknown Practice"
+                    delivery_owner = "Unknown"
+                    project_type = "Unknown"
+
+                    # Look up full project data from cache
+                    full_project = project_cache.get(project_id)
+                    if full_project and full_project.get("groups"):
+                        # Extract client
+                        project_client = next(
+                            (
+                                g["name"]
+                                for g in full_project["groups"]
+                                if g.get("groupType") == "CLIENT"
+                            ),
+                            "Unknown Client",
+                        )
+                        # Extract practice
+                        project_practice = next(
+                            (
+                                g["name"]
+                                for g in full_project["groups"]
+                                if g.get("groupType") == "GROUP_TYPE_21"
+                            ),
+                            "Unknown Practice",
+                        )
+                        # Extract delivery owner
+                        delivery_owner = next(
+                            (
+                                g["name"]
+                                for g in full_project["groups"]
+                                if g.get("groupType") == "GROUP_TYPE_12"
+                            ),
+                            "Unknown",
+                        )
+                        project_type = full_project.get("projectType", "Unknown")
+
+                    # Create enriched searchable text with context
                     text = (
-                        f"Allocation: {employee_name} on {project_name}\n"
-                        f"Start Date: {allocation.get('startDate', 'N/A')}\n"
-                        f"End Date: {allocation.get('endDate', 'N/A')}"
+                        f"Employee Allocation: {employee_name} ({employee_email}) worked on {project_name}\n"
+                        f"Client: {project_client}\n"
+                        f"Practice Area: {project_practice}\n"
+                        f"Delivery Owner: {delivery_owner}\n"
+                        f"Project Type: {project_type}\n"
+                        f"Allocation Period: {allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}\n"
+                        f"Summary: {employee_name} was allocated to work on the {project_name} project for {project_client}, "
+                        f"under delivery owner {delivery_owner} in the {project_practice} practice area."
                     )
 
-                    # Create metadata with source="metric"
+                    # Create metadata with source="metric" and enriched fields
                     metadata = {
                         "source": "metric",
                         "record_type": "allocation",
@@ -492,8 +516,13 @@ class MetricSyncJob(BaseJob):
                         "allocation_id": allocation["id"],
                         "employee_id": employee["id"],
                         "employee_name": employee_name,
+                        "employee_email": employee_email,
                         "project_id": project["id"],
                         "project_name": project_name,
+                        "client": project_client,
+                        "practice": project_practice,
+                        "delivery_owner": delivery_owner,
+                        "project_type": project_type,
                         "start_date": allocation.get("startDate", ""),
                         "end_date": allocation.get("endDate", ""),
                         "synced_at": datetime.now(UTC).isoformat(),
@@ -508,27 +537,15 @@ class MetricSyncJob(BaseJob):
                     )
 
             if texts:
-                db_records = [
-                    {
-                        "metric_id": alloc_id,
-                        "data_type": "allocation",
-                        "pinecone_id": f"metric_{alloc_id}",
-                        "pinecone_namespace": "metric",
-                        "content_snapshot": text,
-                    }
-                    for alloc_id, text in zip(allocation_ids, texts, strict=False)
-                ]
-
                 # Upsert to Pinecone
                 embeddings = self.embedding_client.embed_batch(texts)
                 await self.vector_client.upsert_with_namespace(
                     texts, embeddings, metadata_list, namespace="metric"
                 )
 
-                # Write to database with synced_at timestamp
-                records_written = self._write_metric_records(db_records)
+                # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
                 logger.info(
-                    f"✅ Synced {len(texts)} allocations to Pinecone and database ({records_written} records, unique from {len(all_allocations)} total)"
+                    f"✅ Synced {len(texts)} allocations to Pinecone (database writes disabled, unique from {len(all_allocations)} total)"
                 )
                 return len(texts)
             else:
