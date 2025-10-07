@@ -20,6 +20,7 @@ from handlers.message_handlers import (
     extract_powerpoint_text,
     extract_word_text,
     get_user_system_prompt,
+    handle_bot_command,
     handle_message,
     process_file_attachments,
 )
@@ -618,3 +619,340 @@ class TestFileProcessingErrorHandling:
                 )
                 result = await process_file_attachments(files, slack_service)
                 assert isinstance(result, str)  # Should always return a string
+
+
+class TestBotCommandHandling:
+    """Tests for bot agent command routing (/profile, /meddic, /medic)"""
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_profile(self):
+        """Test /profile bot command is handled correctly"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        result = await handle_bot_command(
+            bot_type="profile",
+            query="tell me about Charlotte",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        assert result is True
+        slack_service.send_thinking_indicator.assert_called_once_with("C123", None)
+        slack_service.delete_thinking_indicator.assert_called_once()
+        slack_service.send_message.assert_called_once()
+
+        # Verify response content
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/PROFILE Bot Agent" in response_text
+        assert "TODO: Implement /profile agent" in response_text
+        assert "tell me about Charlotte" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_meddic(self):
+        """Test /meddic bot command is handled correctly"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        result = await handle_bot_command(
+            bot_type="meddic",
+            query="analyze this opportunity",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts="1234.5678",
+        )
+
+        assert result is True
+        slack_service.send_thinking_indicator.assert_called_once_with(
+            "C123", "1234.5678"
+        )
+        slack_service.delete_thinking_indicator.assert_called_once()
+        slack_service.send_message.assert_called_once()
+
+        # Verify response content
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/MEDDIC Bot Agent" in response_text
+        assert "TODO: Implement /meddic agent" in response_text
+        assert "analyze this opportunity" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_medic_alias(self):
+        """Test /medic alias resolves to /meddic"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        result = await handle_bot_command(
+            bot_type="medic",  # Using alias
+            query="what's the decision process",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        assert result is True
+
+        # Verify it resolves to /meddic
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/MEDDIC Bot Agent" in response_text  # Should show MEDDIC not MEDIC
+        assert "TODO: Implement /meddic agent" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_unknown_bot_type(self):
+        """Test that unknown bot types return False (not handled)"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        result = await handle_bot_command(
+            bot_type="unknown",
+            query="some query",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        assert result is False
+        # Should not send any messages for unknown bot types
+        slack_service.send_thinking_indicator.assert_not_called()
+        slack_service.send_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_empty_query(self):
+        """Test bot command with empty query"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        result = await handle_bot_command(
+            bot_type="profile",
+            query="",  # Empty query
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        assert result is True
+        # Should still handle it, just with empty query
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/PROFILE Bot Agent" in response_text
+        assert "Query: " in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_error_handling(self):
+        """Test error handling when bot command processing fails"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock(
+            side_effect=[Exception("Slack API error"), None]
+        )
+
+        result = await handle_bot_command(
+            bot_type="profile",
+            query="test query",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        # Should still return True (handled), but send error message
+        assert result is True
+        assert slack_service.send_message.call_count == 2
+        # Second call should be the error message
+        error_call_args = slack_service.send_message.call_args
+        error_text = error_call_args.kwargs["text"]
+        assert "failed" in error_text.lower()
+
+    @pytest.mark.asyncio
+    async def test_handle_bot_command_thinking_indicator_cleanup(self):
+        """Test that thinking indicator is always cleaned up"""
+        from unittest.mock import AsyncMock
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        await handle_bot_command(
+            bot_type="profile",
+            query="test",
+            slack_service=slack_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        # Thinking indicator should be deleted
+        slack_service.delete_thinking_indicator.assert_called_once_with(
+            "C123", "thinking_ts"
+        )
+
+    @pytest.mark.asyncio
+    async def test_handle_message_routes_to_bot_command(self):
+        """Test that handle_message correctly routes /profile and /meddic commands"""
+        from unittest.mock import AsyncMock
+
+        from services.llm_service import LLMService
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        llm_service = Mock(spec=LLMService)
+
+        # Test /profile routing
+        await handle_message(
+            text="/profile tell me about Charlotte",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        # Should route to bot command, not LLM
+        slack_service.send_message.assert_called_once()
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/PROFILE Bot Agent" in response_text
+
+        # Reset mocks
+        slack_service.send_message.reset_mock()
+
+        # Test /meddic routing
+        await handle_message(
+            text="/meddic analyze deal",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        slack_service.send_message.assert_called_once()
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/MEDDIC Bot Agent" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_message_case_insensitive_bot_commands(self):
+        """Test that bot commands work with any casing"""
+        from unittest.mock import AsyncMock
+
+        from services.llm_service import LLMService
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        llm_service = Mock(spec=LLMService)
+
+        # Test uppercase
+        await handle_message(
+            text="/PROFILE test",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts=None,
+        )
+
+        slack_service.send_message.assert_called_once()
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        assert "/PROFILE Bot Agent" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_message_medic_alias_routing(self):
+        """Test that /medic alias routes through handle_message to /meddic"""
+        from unittest.mock import AsyncMock
+
+        from services.llm_service import LLMService
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        llm_service = Mock(spec=LLMService)
+
+        # Test /medic alias routing through handle_message
+        await handle_message(
+            text="/medic analyze this deal opportunity",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts="1234.5678",
+        )
+
+        slack_service.send_message.assert_called_once()
+        call_args = slack_service.send_message.call_args
+        response_text = call_args.kwargs["text"]
+        # Should show MEDDIC not MEDIC (alias resolved)
+        assert "/MEDDIC Bot Agent" in response_text
+        assert "TODO: Implement /meddic agent" in response_text
+        assert "analyze this deal opportunity" in response_text
+
+    @pytest.mark.asyncio
+    async def test_handle_message_medic_alias_case_variations(self):
+        """Test that /medic alias works with different casing"""
+        from unittest.mock import AsyncMock
+
+        from services.llm_service import LLMService
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock()
+
+        llm_service = Mock(spec=LLMService)
+
+        # Test various casings of /medic
+        test_cases = ["/medic", "/MEDIC", "/Medic", "/MeDiC"]
+
+        for medic_variant in test_cases:
+            slack_service.send_message.reset_mock()
+
+            await handle_message(
+                text=f"{medic_variant} test query",
+                user_id="U123",
+                slack_service=slack_service,
+                llm_service=llm_service,
+                channel="C123",
+                thread_ts=None,
+            )
+
+            slack_service.send_message.assert_called_once()
+            call_args = slack_service.send_message.call_args
+            response_text = call_args.kwargs["text"]
+            # All should resolve to MEDDIC
+            assert (
+                "/MEDDIC Bot Agent" in response_text
+            ), f"Failed for variant: {medic_variant}"
