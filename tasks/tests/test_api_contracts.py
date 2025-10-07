@@ -115,7 +115,7 @@ class TaskRunMockFactory:
         job_types = ["slack_user_import", "metrics_collection", "google_drive_ingest"]
         for i in range(count):
             run = TaskRunMockFactory.create_basic_run(
-                run_id=f"run-{i+1}", job_type=job_types[i % len(job_types)]
+                run_id=f"run-{i + 1}", job_type=job_types[i % len(job_types)]
             )
             runs.append(run)
         return runs
@@ -155,8 +155,8 @@ class SchedulerServiceMockFactory:
         mock_jobs = []
         for i in range(job_count):
             mock_job = Mock()
-            mock_job.id = f"job-{i+1}"
-            mock_job.name = f"Test Job {i+1}"
+            mock_job.id = f"job-{i + 1}"
+            mock_job.name = f"Test Job {i + 1}"
             mock_job.status = "running"
             mock_jobs.append(mock_job)
 
