@@ -306,3 +306,24 @@ class TestApp:
         assert anthropic_env["LLM_PROVIDER"] == "anthropic"
         assert ollama_env["LLM_PROVIDER"] == "ollama"
         assert "LLM_BASE_URL" in ollama_env
+
+    def test_agents_registered_on_import(self):
+        """Test that agents are registered when app module is imported"""
+        from agents.registry import agent_registry
+
+        # Verify agents are registered
+        agents = agent_registry.list_agents()
+        agent_names = [agent["name"] for agent in agents]
+
+        # Should have at least these core agents
+        assert "agents" in agent_names  # HelpAgent
+        assert "profile" in agent_names  # ProfileAgent
+        assert "meddic" in agent_names  # MeddicAgent
+
+        # Verify help agent has correct alias
+        help_agent = next(agent for agent in agents if agent["name"] == "agents")
+        assert "help" in help_agent["aliases"]
+
+        # Verify meddic agent has correct alias
+        meddic_agent = next(agent for agent in agents if agent["name"] == "meddic")
+        assert "medic" in meddic_agent["aliases"]

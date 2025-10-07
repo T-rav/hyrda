@@ -1,6 +1,5 @@
 """Base class for all scheduled jobs."""
 
-import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -39,22 +38,14 @@ class BaseJob(ABC):
         """Execute the actual job logic. Must be implemented by subclasses."""
         pass
 
-    def execute(self) -> dict[str, Any]:
+    async def execute(self) -> dict[str, Any]:
         """Execute the job with error handling and logging."""
         start_time = datetime.utcnow()
         logger.info(f"Starting job: {self.JOB_NAME} (ID: {self.job_id})")
 
         try:
-            # Execute the job (handle both sync and async)
-            result = self._execute_job()
-            if asyncio.iscoroutine(result):
-                # Run async method in event loop
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                result = loop.run_until_complete(result)
+            # Execute the job
+            result = await self._execute_job()
 
             # Calculate execution time
             execution_time = (datetime.utcnow() - start_time).total_seconds()

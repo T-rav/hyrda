@@ -102,44 +102,58 @@ class PineconeVectorStore(VectorStore):
         filter: dict[str, Any] | None = None,
         query_text: str = "",  # Ignored for Pinecone (compatibility with Elasticsearch)
     ) -> list[dict[str, Any]]:
-        """Search Pinecone for similar documents"""
+        """Search Pinecone for similar documents across all namespaces"""
         try:
             if self.index is None:
                 raise RuntimeError("Pinecone index not initialized")
 
-            # Run query in executor to avoid blocking
-            query_result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.index.query(
-                    vector=query_embedding,
-                    top_k=limit,
-                    include_metadata=True,
-                    include_values=False,
-                    filter=filter,
-                ),
-            )
+            # Query BOTH default namespace and metric namespace
+            namespaces = ["", "metric"]  # Default namespace and metric namespace
+            all_documents = []
 
-            documents = []
-            for match in query_result.matches:
-                if match.score >= similarity_threshold:
-                    documents.append(
-                        {
-                            "content": match.metadata.get("text", ""),
-                            "similarity": match.score,
-                            "metadata": match.metadata,
-                            "id": match.id,
-                        }
-                    )
+            for namespace in namespaces:
+                # Run query in executor to avoid blocking
+                query_result = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda ns=namespace: self.index.query(
+                        vector=query_embedding,
+                        top_k=limit,
+                        include_metadata=True,
+                        include_values=False,
+                        filter=filter,
+                        namespace=ns,
+                    ),
+                )
+
+                for match in query_result.matches:
+                    if match.score >= similarity_threshold:
+                        all_documents.append(
+                            {
+                                "content": match.metadata.get("text", ""),
+                                "similarity": match.score,
+                                "metadata": match.metadata,
+                                "id": match.id,
+                                "namespace": namespace if namespace else "default",
+                            }
+                        )
+
+            # Sort by similarity score (highest first)
+            all_documents.sort(key=lambda x: x["similarity"], reverse=True)
+
+            # Take top results after combining both namespaces
+            combined_documents = all_documents[:limit]
 
             logger.debug(
-                f"Pinecone returned {len(documents)} documents above threshold {similarity_threshold}"
+                f"Pinecone returned {len(combined_documents)} documents from {len(namespaces)} namespaces "
+                f"(above threshold {similarity_threshold})"
             )
 
             # Apply diversification to ensure variety across documents
-            diversified_documents = self._diversify_results(documents, limit)
+            diversified_documents = self._diversify_results(combined_documents, limit)
 
             logger.debug(
-                f"Pinecone diversified to {len(diversified_documents)} documents from {len({d.get('metadata', {}).get('file_name', 'Unknown') for d in documents})} unique files"
+                f"Pinecone diversified to {len(diversified_documents)} documents from "
+                f"{len({d.get('metadata', {}).get('file_name', d.get('metadata', {}).get('name', 'Unknown')) for d in combined_documents})} unique sources"
             )
 
             return diversified_documents

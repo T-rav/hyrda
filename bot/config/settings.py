@@ -55,7 +55,7 @@ class DatabaseSettings(BaseSettings):
     """MySQL database settings"""
 
     url: str = Field(
-        default="mysql+pymysql://insightmesh_bot:insightmesh_bot_password@localhost:3306/insightmesh_bot",
+        default="mysql+pymysql://insightmesh_data:insightmesh_data_password@localhost:3306/insightmesh_data",
         description="MySQL connection URL",
     )
     enabled: bool = Field(default=True, description="Enable database features")
