@@ -79,7 +79,7 @@ jobs:
         PYTHON: python
         PIP: pip
       run: |
-        pip install -e "tasks/.[test]"
+        pip install -e "tasks/[test]"
         make test-tasks
 
   react-tests:
