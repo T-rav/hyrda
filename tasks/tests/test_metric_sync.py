@@ -100,9 +100,9 @@ async def test_sync_employees(
 ):
     """Test employee sync."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -130,9 +130,9 @@ async def test_sync_projects(
 ):
     """Test project sync."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -156,9 +156,9 @@ async def test_sync_clients(
 ):
     """Test client sync."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -181,9 +181,9 @@ async def test_sync_allocations(
 ):
     """Test allocation sync."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -207,9 +207,9 @@ async def test_sync_all_data_types(
 ):
     """Test syncing all data types."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -230,9 +230,9 @@ async def test_employee_metadata_structure(
 ):
     """Test that employee metadata has correct structure."""
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -252,9 +252,9 @@ async def test_employee_metadata_structure(
 
         # Verify text contains expected fields
         assert "Employee: John Doe" in texts[0]
-        assert "Role: Engineer" in texts[0]
-        assert "Department: Engineering" in texts[0]
-        assert "Practice: Backend" in texts[0]
+        assert "Email: john@example.com" in texts[0]
+        assert "Status: Allocated" in texts[0]
+        assert "Started: 2020-01-01" in texts[0]
 
 
 @pytest.mark.asyncio
@@ -278,9 +278,9 @@ async def test_project_filtering(
     )
 
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -322,9 +322,9 @@ async def test_employee_project_history(
     ]
 
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -376,9 +376,9 @@ async def test_project_practice_field_group_type_21(
     ]
 
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):
@@ -422,9 +422,9 @@ async def test_project_practice_field_defaults_to_unknown(
     ]
 
     with (
-        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
         patch(
-            "jobs.metric_sync.create_embedding_provider",
+            "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
     ):

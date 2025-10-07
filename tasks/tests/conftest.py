@@ -25,6 +25,12 @@ def test_settings():
             "SLACK_BOT_TOKEN": "xoxb-test-token",
             "DATABASE_URL": f"sqlite:///{db_path}",
             "REDIS_URL": "redis://localhost:6379/15",
+            "METRIC_API_KEY": "test-metric-api-key",
+            "LLM_API_KEY": "test-llm-api-key",
+            "VECTOR_API_KEY": "test-vector-api-key",
+            "PINECONE_API_KEY": "test-pinecone-api-key",
+            "PINECONE_INDEX_NAME": "test-index",
+            "PINECONE_ENVIRONMENT": "test-env",
         }
     )
 
