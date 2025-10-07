@@ -34,8 +34,6 @@ class MetricSyncJob(BaseJob):
         "sync_employees",
         "sync_projects",
         "sync_clients",
-        "sync_allocations",
-        "allocations_start_year",
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
@@ -51,8 +49,9 @@ class MetricSyncJob(BaseJob):
         self.sync_employees = self.params.get("sync_employees", True)
         self.sync_projects = self.params.get("sync_projects", True)
         self.sync_clients = self.params.get("sync_clients", True)
-        self.sync_allocations = self.params.get("sync_allocations", True)
-        self.allocations_start_year = self.params.get("allocations_start_year", 2020)
+
+        # Allocations start year for building employee project history
+        self.allocations_start_year = 2020
 
         # Get data database URL (insightmesh_data)
         self.data_db_url = self.settings.database_url.replace(
@@ -141,9 +140,6 @@ class MetricSyncJob(BaseJob):
 
             if self.sync_projects:
                 stats["projects_synced"] = await self._sync_projects()
-
-            if self.sync_allocations:
-                stats["allocations_synced"] = await self._sync_allocations()
 
             # Close connections
             await self.vector_client.close()
@@ -389,172 +385,3 @@ class MetricSyncJob(BaseJob):
             f"✅ Synced {len(clients)} clients to Pinecone (database writes disabled)"
         )
         return len(clients)
-
-    async def _sync_allocations(self) -> int:
-        """Sync allocation data from Metric.ai to Pinecone."""
-        try:
-            logger.info("Syncing allocations from Metric.ai...")
-
-            # Build project lookup cache first
-            logger.info("Building project lookup cache for allocation enrichment...")
-            all_projects = self.metric_client.get_projects()
-            project_cache = {p["id"]: p for p in all_projects}
-            logger.info(f"Cached {len(project_cache)} projects for enrichment")
-
-            current_year = datetime.now(UTC).year
-            all_allocations = []
-
-            # Query year by year from start year to current
-            for year in range(self.allocations_start_year, current_year + 1):
-                start_date = f"{year}-01-01"
-                end_date = f"{year + 1}-01-01"
-
-                try:
-                    allocations = self.metric_client.get_allocations(
-                        start_date, end_date
-                    )
-                    all_allocations.extend(allocations)
-                    logger.info(f"Fetched {len(allocations)} allocations for {year}")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch allocations for {year}: {e}")
-
-            logger.info(f"Total allocations fetched: {len(all_allocations)}")
-
-            # Remove duplicates by allocation ID and filter None
-            unique_dict = {}
-            for alloc in all_allocations:
-                if alloc and alloc.get("id"):
-                    unique_dict[alloc["id"]] = alloc
-            unique_allocations = unique_dict.values()
-
-            logger.info(f"Unique allocations after filtering: {len(unique_dict)}")
-
-            texts, metadata_list, allocation_ids = [], [], []
-
-            for allocation in unique_allocations:
-                try:
-                    # Skip allocations without valid employee or project
-                    if not allocation or not allocation.get("id"):
-                        continue
-
-                    employee = allocation.get("employee")
-                    if (
-                        not employee
-                        or not isinstance(employee, dict)
-                        or not employee.get("id")
-                    ):
-                        continue
-
-                    project = allocation.get("project")
-                    if (
-                        not project
-                        or not isinstance(project, dict)
-                        or not project.get("id")
-                    ):
-                        continue
-
-                    employee_name = employee.get("name", "Unknown")
-                    employee_email = employee.get("email", "")
-                    project_id = project.get("id")
-                    project_name = project.get("name", "Unknown")
-
-                    # Extract project details from cache for richer context
-                    project_client = "Unknown Client"
-                    project_practice = "Unknown Practice"
-                    delivery_owner = "Unknown"
-                    project_type = "Unknown"
-
-                    # Look up full project data from cache
-                    full_project = project_cache.get(project_id)
-                    if full_project and full_project.get("groups"):
-                        # Extract client
-                        project_client = next(
-                            (
-                                g["name"]
-                                for g in full_project["groups"]
-                                if g.get("groupType") == "CLIENT"
-                            ),
-                            "Unknown Client",
-                        )
-                        # Extract practice
-                        project_practice = next(
-                            (
-                                g["name"]
-                                for g in full_project["groups"]
-                                if g.get("groupType") == "GROUP_TYPE_21"
-                            ),
-                            "Unknown Practice",
-                        )
-                        # Extract delivery owner
-                        delivery_owner = next(
-                            (
-                                g["name"]
-                                for g in full_project["groups"]
-                                if g.get("groupType") == "GROUP_TYPE_12"
-                            ),
-                            "Unknown",
-                        )
-                        project_type = full_project.get("projectType", "Unknown")
-
-                    # Create enriched searchable text with context and common query keywords
-                    text = (
-                        f"Team Member Allocation: {employee_name} ({employee_email})\n"
-                        f"Role: Engineer/Developer working on {project_name}\n"
-                        f"Client: {project_client}\n"
-                        f"Practice Area: {project_practice}\n"
-                        f"Delivery Owner: {delivery_owner}\n"
-                        f"Project Type: {project_type}\n"
-                        f"Allocation Period: {allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}\n\n"
-                        f"Summary: {employee_name} is an engineer who worked on the {project_name} project for {project_client}. "
-                        f"This team member was allocated to {project_name} under delivery owner {delivery_owner} "
-                        f"in the {project_practice} practice area. "
-                        f"As a developer on this project, {employee_name} contributed engineering work from "
-                        f"{allocation.get('startDate', 'N/A')} to {allocation.get('endDate', 'N/A')}."
-                    )
-
-                    # Create metadata with source="metric" and enriched fields
-                    metadata = {
-                        "source": "metric",
-                        "record_type": "allocation",
-                        "data_type": "allocation",
-                        "allocation_id": allocation["id"],
-                        "employee_id": employee["id"],
-                        "employee_name": employee_name,
-                        "employee_email": employee_email,
-                        "project_id": project["id"],
-                        "project_name": project_name,
-                        "client": project_client,
-                        "practice": project_practice,
-                        "delivery_owner": delivery_owner,
-                        "project_type": project_type,
-                        "start_date": allocation.get("startDate", ""),
-                        "end_date": allocation.get("endDate", ""),
-                        "synced_at": datetime.now(UTC).isoformat(),
-                    }
-
-                    texts.append(text)
-                    metadata_list.append(clean_metadata(metadata))
-                    allocation_ids.append(allocation["id"])
-                except Exception as e:
-                    logger.warning(
-                        f"Skipping allocation due to error: {e}, allocation: {allocation}"
-                    )
-
-            if texts:
-                # Upsert to Pinecone
-                embeddings = self.embedding_client.embed_batch(texts)
-                await self.vector_client.upsert_with_namespace(
-                    texts, embeddings, metadata_list, namespace="metric"
-                )
-
-                # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
-                logger.info(
-                    f"✅ Synced {len(texts)} allocations to Pinecone (database writes disabled, unique from {len(all_allocations)} total)"
-                )
-                return len(texts)
-            else:
-                logger.warning("No valid allocations to sync")
-                return 0
-        except Exception as e:
-            logger.error(f"Error in _sync_allocations: {e}", exc_info=True)
-            raise
