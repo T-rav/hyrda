@@ -298,6 +298,154 @@ async def test_project_filtering(
         assert result["projects_synced"] == 1
 
 
+@pytest.mark.asyncio
+async def test_employee_project_history(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that employee records include project history from allocations."""
+    # Mock allocations for project history
+    mock_metric_client.get_allocations.return_value = [
+        {
+            "id": "alloc1",
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31",
+            "employee": {"id": "emp1", "name": "John Doe"},
+            "project": {"id": "proj1", "name": "Project Alpha"},
+        },
+        {
+            "id": "alloc2",
+            "startDate": "2023-01-01",
+            "endDate": "2023-12-31",
+            "employee": {"id": "emp1", "name": "John Doe"},
+            "project": {"id": "proj2", "name": "Project Beta"},
+        },
+    ]
+
+    with (
+        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.create_embedding_provider",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=True,
+            sync_projects=False,
+            sync_clients=False,
+            sync_allocations=False,
+            allocations_start_year=2023,
+        )
+
+        await job._execute_job()
+
+        # Check that employee text includes project history
+        call_args = mock_embedding_provider.embed_batch.call_args
+        texts = call_args[0][0]
+        employee_text = texts[0]
+
+        assert "Project History:" in employee_text
+        assert "Project Alpha" in employee_text or "Project Beta" in employee_text
+
+
+@pytest.mark.asyncio
+async def test_project_practice_field_group_type_21(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that project practice field uses GROUP_TYPE_21 (not GROUP_TYPE_23)."""
+    # Mock project with GROUP_TYPE_21 for practice
+    mock_metric_client.get_projects.return_value = [
+        {
+            "id": "proj1",
+            "name": "Project Alpha",
+            "projectType": "BILLABLE",
+            "projectStatus": "ACTIVE",
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31",
+            "groups": [
+                {"id": "client1", "name": "Acme Corp", "groupType": "CLIENT"},
+                {
+                    "id": "practice1",
+                    "name": "Marketplace Engineering",
+                    "groupType": "GROUP_TYPE_21",
+                },
+                {"id": "owner1", "name": "Jane Smith", "groupType": "GROUP_TYPE_12"},
+                {"id": "freq1", "name": "Monthly", "groupType": "GROUP_TYPE_7"},
+            ],
+        }
+    ]
+
+    with (
+        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.create_embedding_provider",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=True,
+            sync_clients=False,
+            sync_allocations=False,
+        )
+
+        await job._execute_job()
+
+        # Check that project text includes practice field
+        call_args = mock_embedding_provider.embed_batch.call_args
+        texts = call_args[0][0]
+        project_text = texts[0]
+
+        assert "Practice: Marketplace Engineering" in project_text
+
+
+@pytest.mark.asyncio
+async def test_project_practice_field_defaults_to_unknown(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that project practice field defaults to 'Unknown' when GROUP_TYPE_21 is missing."""
+    # Mock project without GROUP_TYPE_21
+    mock_metric_client.get_projects.return_value = [
+        {
+            "id": "proj1",
+            "name": "Project Alpha",
+            "projectType": "BILLABLE",
+            "projectStatus": "ACTIVE",
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31",
+            "groups": [
+                {"id": "client1", "name": "Acme Corp", "groupType": "CLIENT"},
+                {"id": "owner1", "name": "Jane Smith", "groupType": "GROUP_TYPE_12"},
+            ],
+        }
+    ]
+
+    with (
+        patch("jobs.metric_sync.create_vector_store", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.create_embedding_provider",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=True,
+            sync_clients=False,
+            sync_allocations=False,
+        )
+
+        await job._execute_job()
+
+        # Check that project text shows Unknown practice
+        call_args = mock_embedding_provider.embed_batch.call_args
+        texts = call_args[0][0]
+        project_text = texts[0]
+
+        assert "Practice: Unknown" in project_text
+
+
 def test_job_metadata():
     """Test job metadata is correct."""
     assert MetricSyncJob.JOB_NAME == "Metric.ai Data Sync"
