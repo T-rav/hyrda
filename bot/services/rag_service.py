@@ -47,8 +47,14 @@ class RAGService:
 
         self.llm_provider = create_llm_provider(settings.llm)
 
-        # Initialize specialized services
-        self.retrieval_service = RetrievalService(settings)
+        # Initialize specialized services (pass LLM provider for query rewriting)
+        self.retrieval_service = RetrievalService(
+            settings,
+            llm_service=self.llm_provider,
+            enable_query_rewriting=settings.rag.enable_query_rewriting
+            if hasattr(settings.rag, "enable_query_rewriting")
+            else True,
+        )
         self.context_builder = ContextBuilder()
         self.citation_service = CitationService()
 
@@ -227,9 +233,12 @@ class RAGService:
                             query, self.vector_store, self.embedding_provider
                         )
                 else:
-                    # Standard query-based retrieval
+                    # Standard query-based retrieval (pass conversation history for context)
                     context_chunks = await self.retrieval_service.retrieve_context(
-                        query, self.vector_store, self.embedding_provider
+                        query,
+                        self.vector_store,
+                        self.embedding_provider,
+                        conversation_history=conversation_history,
                     )
 
                 # Log retrieved documents to Langfuse and record metrics

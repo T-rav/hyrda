@@ -177,6 +177,10 @@ class RAGSettings(BaseSettings):
         default=10,
         description="Number of chunks to process in parallel for contextual retrieval",
     )
+    enable_query_rewriting: bool = Field(
+        default=True,
+        description="Enable adaptive query rewriting to improve retrieval accuracy",
+    )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
 
