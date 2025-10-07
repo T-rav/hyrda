@@ -96,8 +96,10 @@ class LLMService:
         start_time = time.time()
 
         try:
-            # Get system prompt from PromptService (Langfuse or fallback)
-            system_message = self.prompt_service.get_system_prompt()
+            # Get system prompt with user context injected
+            from handlers.message_handlers import get_user_system_prompt
+
+            system_message = get_user_system_prompt(user_id)
 
             # Use provided current_query or extract from messages
             if current_query:

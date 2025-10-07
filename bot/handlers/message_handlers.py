@@ -33,6 +33,7 @@ try:
 except ImportError:
     PYTHON_PPTX_AVAILABLE = False
 
+from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.llm_service import LLMService
@@ -292,15 +293,148 @@ async def process_file_attachments(
     return document_content.strip()
 
 
-def get_user_system_prompt() -> str:
-    """Get the system prompt using PromptService (Langfuse or fallback)"""
-    prompt_service = get_prompt_service()
-    if prompt_service:
-        return prompt_service.get_system_prompt()
+def get_user_system_prompt(user_id: str | None = None) -> str:
+    """
+    Get the system prompt with user context injected.
 
-    # Ultimate fallback if PromptService is not available
-    logger.warning("PromptService not available, using minimal fallback prompt")
-    return "I'm Insight Mesh, your AI assistant. I help you find information from your organization's knowledge base and provide intelligent assistance with your questions."
+    Args:
+        user_id: Slack user ID to look up and inject context for
+
+    Returns:
+        System prompt with user context
+    """
+    prompt_service = get_prompt_service()
+    base_prompt = ""
+
+    if prompt_service:
+        base_prompt = prompt_service.get_system_prompt()
+    else:
+        # Ultimate fallback if PromptService is not available
+        logger.warning("PromptService not available, using minimal fallback prompt")
+        base_prompt = "I'm Insight Mesh, your AI assistant. I help you find information from your organization's knowledge base and provide intelligent assistance with your questions."
+
+    # Inject user context if user_id provided
+    if user_id:
+        try:
+            from services.user_service import get_user_service
+
+            user_service = get_user_service()
+            user_info = user_service.get_user_info(user_id)
+
+            if user_info:
+                user_context = "\n\n**Current User Context:**\n"
+                user_context += f"- Name: {user_info.get('real_name') or user_info.get('display_name', 'Unknown')}\n"
+                if user_info.get("email_address"):
+                    user_context += f"- Email: {user_info['email_address']}\n"
+
+                user_context += "\nWhen responding, you can personalize your responses knowing who the user is. Address them by name when appropriate."
+
+                return base_prompt + user_context
+        except Exception as e:
+            logger.error(f"Error injecting user context: {e}")
+
+    return base_prompt
+
+
+async def handle_bot_command(
+    text: str,
+    user_id: str,
+    slack_service: SlackService,
+    channel: str,
+    thread_ts: str | None = None,
+    files: list[dict] | None = None,
+    document_content: str | None = None,
+) -> bool:
+    """
+    Handle bot agent commands using router pattern.
+
+    Routes commands like /profile and /meddic to registered agents.
+
+    Args:
+        text: Full message text (e.g., "/profile tell me about Charlotte")
+        user_id: Slack user ID
+        slack_service: Slack service for sending messages
+        channel: Channel ID
+        thread_ts: Thread timestamp if in a thread
+        files: Optional list of file attachments
+        document_content: Optional processed file content
+
+    Returns:
+        True if bot command was handled, False otherwise
+    """
+    # Use router to parse and route command
+    agent_info, query, primary_name = command_router.route(text)
+
+    # If no agent found, return False (not handled)
+    if not agent_info or not primary_name:
+        return False
+
+    logger.info(f"Routing to agent '{primary_name}' with query: {query}")
+
+    # Send thinking indicator
+    thinking_message_ts = None
+    try:
+        thinking_message_ts = await slack_service.send_thinking_indicator(
+            channel, thread_ts
+        )
+    except Exception as e:
+        logger.error(f"Error posting thinking message: {e}")
+
+    try:
+        # Instantiate and run agent
+        agent_class = agent_info["agent_class"]
+        agent = agent_class()
+
+        # Build context for agent
+        context = {
+            "user_id": user_id,
+            "channel": channel,
+            "thread_ts": thread_ts,
+            "slack_service": slack_service,
+        }
+
+        # Add file information if available
+        if document_content:
+            context["document_content"] = document_content
+        if files:
+            context["files"] = files
+            context["file_names"] = [f.get("name", "unknown") for f in files]
+
+        # Execute agent
+        result = await agent.run(query, context)
+        response = result.get("response", "No response from agent")
+
+        # Clean up thinking message
+        if thinking_message_ts:
+            try:
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+            except Exception as e:
+                logger.warning(f"Error deleting thinking message: {e}")
+
+        # Format and send response
+        formatted_response = await MessageFormatter.format_message(response)
+        await slack_service.send_message(
+            channel=channel, text=formatted_response, thread_ts=thread_ts
+        )
+
+        return True
+
+    except Exception as e:
+        # Clean up thinking message on error
+        if thinking_message_ts:
+            with contextlib.suppress(Exception):
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+
+        logger.error(f"Bot command '{primary_name}' failed: {e}")
+        error_response = f"❌ Bot command '/{primary_name}' failed: {str(e)}"
+        await slack_service.send_message(
+            channel=channel, text=error_response, thread_ts=thread_ts
+        )
+        return True
 
 
 async def handle_message(
@@ -356,6 +490,35 @@ async def handle_message(
     try:
         # Show typing indicator (skip if method doesn't exist)
         # Note: Typing indicators are handled by Slack automatically in most cases
+
+        # Process file attachments first (needed for both bot commands and LLM)
+        document_content = ""
+        document_filename = None
+
+        if files:
+            logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
+            document_content = await process_file_attachments(files, slack_service)
+            document_filename = files[0].get("name") if files else None
+
+            if document_content:
+                logger.info(
+                    f"Extracted {len(document_content)} characters from {len(files)} file(s)"
+                )
+
+        # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
+        # Router handles parsing and validation internally
+        handled = await handle_bot_command(
+            text=text,
+            user_id=user_id,
+            slack_service=slack_service,
+            channel=channel,
+            thread_ts=thread_ts,
+            files=files,
+            document_content=document_content,
+        )
+
+        if handled:
+            return
 
         # Handle agent process commands
         if text.strip().lower().startswith("start "):
@@ -424,25 +587,13 @@ async def handle_message(
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # Handle file attachments and document persistence
-        document_content = ""
-        document_filename = None
+        # File attachments already processed earlier (lines 491-499)
 
-        if files:
-            logger.info(f"Files attached: {[f.get('name', 'unknown') for f in files]}")
-            document_content = await process_file_attachments(files, slack_service)
-            document_filename = files[0].get("name") if files else None
-
-            if document_content:
-                logger.info(
-                    f"Extracted {len(document_content)} characters from {len(files)} file(s)"
-                )
-
-                # Store document content in conversation cache for future reference
-                if conversation_cache and thread_ts:
-                    await conversation_cache.store_document_content(
-                        thread_ts, document_content, document_filename or "unknown"
-                    )
+        # Store document content in conversation cache for future reference
+        if conversation_cache and thread_ts and document_content:
+            await conversation_cache.store_document_content(
+                thread_ts, document_content, document_filename or "unknown"
+            )
 
         # If no files in current message but we're in a thread, check for previously stored documents
         elif thread_ts and conversation_cache:

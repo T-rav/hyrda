@@ -127,7 +127,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_bot
+      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
       - VECTOR_URL=http://elasticsearch:9200
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
@@ -142,7 +142,7 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
         alembic upgrade head &&
         python -u app.py
       "
