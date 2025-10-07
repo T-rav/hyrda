@@ -39,7 +39,7 @@ class TestJobRegistry:
         # Check for expected job types
         job_type_names = [jt["type"] for jt in job_types]
         assert "slack_user_import" in job_type_names
-        assert "metrics_collection" in job_type_names
+        assert "metric_sync" in job_type_names
 
     def test_create_slack_user_import_job(self, test_settings):
         """Test creating a Slack user import job."""
@@ -60,21 +60,20 @@ class TestJobRegistry:
         # Cleanup
         scheduler_service.shutdown(wait=False)
 
-    def test_create_metrics_collection_job(self, test_settings):
-        """Test creating a metrics collection job."""
+    def test_create_metric_sync_job(self, test_settings):
+        """Test creating a metric sync job."""
         scheduler_service = SchedulerService(test_settings)
         scheduler_service.start()
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metrics_collection",
+            job_type="metric_sync",
             job_id="test_metrics",
             schedule={"trigger": "interval", "minutes": 30},
-            metric_types=["usage", "performance"],
         )
 
         assert job.id == "test_metrics"
-        assert job.name == "Metrics Collection"
+        assert job.name == "Metric.ai Data Sync"
 
         # Cleanup
         scheduler_service.shutdown(wait=False)
@@ -86,7 +85,7 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metrics_collection", job_id="test_default_schedule"
+            job_type="metric_sync", job_id="test_default_schedule"
         )
 
         assert job.id == "test_default_schedule"
@@ -112,8 +111,8 @@ class TestJobRegistry:
         slack_class = registry.get_job_class("slack_user_import")
         assert slack_class is not None
 
-        metrics_class = registry.get_job_class("metrics_collection")
-        assert metrics_class is not None
+        metric_sync_class = registry.get_job_class("metric_sync")
+        assert metric_sync_class is not None
 
         # Test invalid job type
         invalid_class = registry.get_job_class("invalid_type")
@@ -126,7 +125,7 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metrics_collection",
+            job_type="metric_sync",
             job_id="test_cron_job",
             schedule={"trigger": "cron", "hour": 0, "minute": 0},
         )
@@ -143,12 +142,12 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metrics_collection",
+            job_type="metric_sync",
             # No job_id provided, should be auto-generated
             schedule={"trigger": "interval", "minutes": 15},
         )
 
-        assert job.id.startswith("metrics_collection_")
+        assert job.id.startswith("metric_sync_")
 
         # Cleanup
         scheduler_service.shutdown(wait=False)
