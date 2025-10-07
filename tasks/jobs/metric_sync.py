@@ -302,7 +302,7 @@ class MetricSyncJob(BaseJob):
                 (
                     g["name"]
                     for g in project["groups"]
-                    if g["groupType"] == "GROUP_TYPE_23"
+                    if g["groupType"] == "GROUP_TYPE_21"
                 ),
                 "Unknown",
             )
