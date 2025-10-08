@@ -111,7 +111,15 @@ async def main():
         # Import bot services (bot already in sys.path at top of file)
         from services.vector_service import create_vector_store
 
-        # Create a simple settings object compatible with bot services
+        # Create a simple SecretStr-like wrapper
+        class SimpleSecretStr:
+            def __init__(self, value):
+                self._value = value
+
+            def get_secret_value(self):
+                return self._value
+
+        # Create settings objects compatible with bot services
         class VectorSettings:
             def __init__(self, config):
                 self.provider = config.provider
@@ -124,14 +132,18 @@ async def main():
             def __init__(self, config):
                 self.provider = config.provider
                 self.model = config.model
-                self.api_key = config.api_key
+                # Wrap API key in SecretStr-like object
+                self.api_key = (
+                    SimpleSecretStr(config.api_key) if config.api_key else None
+                )
                 self.chunk_size = config.chunk_size
                 self.chunk_overlap = config.chunk_overlap
 
         class LLMSettings:
             def __init__(self, config):
                 self.provider = config.provider
-                self.api_key = config.api_key
+                # Wrap API key in SecretStr-like object
+                self.api_key = SimpleSecretStr(config.api_key)
                 self.model = config.model
                 self.base_url = config.base_url
                 self.temperature = config.temperature
