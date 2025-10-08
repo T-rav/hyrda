@@ -52,9 +52,15 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client
-            self.client = QdrantClient(
-                host=self.host, port=self.port, api_key=self.api_key, timeout=60
-            )
+            # Use http:// URL to avoid SSL when using API key in local Docker setup
+            if self.api_key:
+                self.client = QdrantClient(
+                    url=f"http://{self.host}:{self.port}",
+                    api_key=self.api_key,
+                    timeout=60,
+                )
+            else:
+                self.client = QdrantClient(host=self.host, port=self.port, timeout=60)
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
