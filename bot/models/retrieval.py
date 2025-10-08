@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .file_processing import DocumentChunk
 
@@ -42,8 +42,7 @@ class RetrievalResult(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     retrieved_at: datetime = Field(default_factory=datetime.now)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
     @property
     def document_chunk(self) -> DocumentChunk | None:

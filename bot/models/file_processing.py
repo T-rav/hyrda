@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileType(str, Enum):
@@ -78,8 +78,7 @@ class FileMetadata(BaseModel):
     page_count: int | None = None
     word_count: int | None = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 @dataclass(frozen=True)
@@ -162,5 +161,4 @@ class EmbeddingResult(BaseModel):
     processing_time_ms: float
     token_count: int | None = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
