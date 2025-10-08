@@ -6,7 +6,7 @@ The main Slack bot service that provides RAG-enabled AI assistance with comprehe
 
 - **RAG-Enabled Responses**: Retrieval-Augmented Generation using your knowledge base
 - **Multi-Provider LLM Support**: OpenAI, Anthropic, or local Ollama models
-- **Hybrid Search**: Dense vectors (Pinecone) + Sparse search (Elasticsearch BM25)
+- **Vector Search**: Dense vector search with Pinecone or Elasticsearch
 - **Thread Management**: Automatic conversation threading and context management
 - **Health Monitoring**: Real-time dashboard at `http://localhost:8080/ui`
 - **Prometheus Metrics**: Native metrics collection for monitoring
@@ -54,7 +54,6 @@ LLM_MODEL=gpt-4o-mini
 
 # RAG Configuration
 VECTOR_ENABLED=true
-HYBRID_ENABLED=true
 VECTOR_PROVIDER=pinecone
 VECTOR_API_KEY=your-pinecone-api-key
 

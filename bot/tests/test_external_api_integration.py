@@ -280,7 +280,7 @@ class TestLangfuseAPIIntegration:
             mock_client = Mock()
             mock_langfuse.return_value = mock_client
 
-            LangfuseService(settings)
+            LangfuseService(settings, environment="test")
 
             # Verify Langfuse client is initialized with correct parameters
             mock_langfuse.assert_called_once_with(
@@ -288,6 +288,7 @@ class TestLangfuseAPIIntegration:
                 secret_key="sk-test-456",
                 host="https://cloud.langfuse.com",
                 debug=False,
+                environment="test",
             )
 
     def test_langfuse_tracing_methods_contract(self):

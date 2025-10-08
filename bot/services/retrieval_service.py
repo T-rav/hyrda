@@ -121,13 +121,9 @@ class RetrievalService:
             else:
                 retrieval_service = self.pinecone_retrieval
 
-            # Apply entity boosting to all results (regardless of hybrid search setting)
+            # Apply entity boosting to all results
             if results:
                 results = retrieval_service._apply_entity_boosting(query, results)
-
-            # Apply hybrid search boosting if enabled
-            if self.settings.rag.enable_hybrid_search and results:
-                results = self._apply_hybrid_search_boosting(query, results)
 
             # Apply final similarity threshold filter
             filtered_results = [
@@ -150,53 +146,6 @@ class RetrievalService:
         except Exception as e:
             logger.error(f"Error retrieving context: {e}")
             return []
-
-    def _apply_hybrid_search_boosting(
-        self, query: str, results: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """
-        Apply hybrid search boosting to return multiple chunks per document.
-
-        Args:
-            query: User query for relevance scoring
-            results: Initial search results
-
-        Returns:
-            Boosted results with multiple chunks per top documents
-        """
-        if not results:
-            return results
-
-        logger.debug(f"🔄 Applying hybrid search boosting to {len(results)} results")
-
-        # Group results by document and get all chunks from top 5 documents
-        seen_documents = set()
-        final_results = []
-
-        for result in results:
-            metadata = result.get("metadata", {})
-            file_name = metadata.get("file_name", "Unknown")
-
-            # If we haven't seen this document, add it to our set
-            if file_name not in seen_documents:
-                seen_documents.add(file_name)
-                # Stop if we already have enough unique documents
-                if len(seen_documents) > self.settings.rag.max_results:
-                    break
-
-            # Add chunk if it's from one of our selected documents
-            if (
-                file_name in seen_documents
-                and len(seen_documents) <= self.settings.rag.max_results
-            ):
-                final_results.append(result)
-
-        logger.debug(
-            f"📊 Hybrid boosting: Selected {len(final_results)} chunks "
-            f"from {len(seen_documents)} documents"
-        )
-
-        return final_results
 
     async def retrieve_context_by_embedding(
         self,
@@ -228,8 +177,16 @@ class RetrievalService:
                 logger.info("📭 No similar documents found in vector database")
                 return []
 
+            # Get retrieval service for diversification
+            if self.settings.vector.provider.lower() == "elasticsearch":
+                retrieval_service = self.elasticsearch_retrieval
+            else:
+                retrieval_service = self.pinecone_retrieval
+
             # Apply diversification to get chunks from different documents
-            diversified_results = self._apply_hybrid_search_boosting("", results)
+            diversified_results = retrieval_service._apply_diversification_strategy(
+                results
+            )
 
             logger.info(
                 f"📚 Retrieved {len(diversified_results)} context chunks "

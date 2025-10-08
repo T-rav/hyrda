@@ -70,24 +70,15 @@ class LLMSettingsFactory:
         return settings
 
     @staticmethod
-    def create_hybrid_settings(enabled: bool = False) -> MagicMock:
-        """Create hybrid settings mock"""
-        settings = MagicMock()
-        settings.enabled = enabled
-        return settings
-
-    @staticmethod
     def create_complete_settings(
         llm_model: str = "gpt-4o-mini",
         vector_enabled: bool = False,
-        hybrid_enabled: bool = False,
     ) -> MagicMock:
         """Create complete settings mock with all components"""
         settings = LLMSettingsFactory.create_openai_settings(llm_model)
         settings.vector = LLMSettingsFactory.create_vector_settings(vector_enabled)
         settings.embedding = LLMSettingsFactory.create_embedding_settings()
         settings.rag = LLMSettingsFactory.create_rag_settings()
-        settings.hybrid = LLMSettingsFactory.create_hybrid_settings(hybrid_enabled)
         return settings
 
 

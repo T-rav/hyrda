@@ -61,10 +61,3 @@ class RetrievalResultFactory:
         return RetrievalResultFactory.create_basic_result(
             content=content, source=RetrievalMethod.SPARSE
         )
-
-    @staticmethod
-    def create_hybrid_result(content: str = "Hybrid content") -> RetrievalResult:
-        """Create hybrid retrieval result"""
-        return RetrievalResultFactory.create_basic_result(
-            content=content, source=RetrievalMethod.HYBRID
-        )

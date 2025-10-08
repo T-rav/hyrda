@@ -18,7 +18,6 @@ class RAGSettingsBuilder:
     """Builder for creating RAG settings configurations"""
 
     def __init__(self):
-        self._enable_hybrid_search = False
         self._max_results = 5
         self._similarity_threshold = 0.7
         self._entity_content_boost = 0.05
@@ -30,10 +29,6 @@ class RAGSettingsBuilder:
         self._entity_title_boost = 0.1
         self._diversification_mode = "balanced"
         self._max_unique_documents = 5
-
-    def with_hybrid_search(self, enabled: bool = True) -> "RAGSettingsBuilder":
-        self._enable_hybrid_search = enabled
-        return self
 
     def with_max_results(self, count: int) -> "RAGSettingsBuilder":
         self._max_results = count
@@ -71,7 +66,6 @@ class RAGSettingsBuilder:
 
     def build(self) -> MagicMock:
         mock_rag = MagicMock()
-        mock_rag.enable_hybrid_search = self._enable_hybrid_search
         mock_rag.max_results = self._max_results
         mock_rag.similarity_threshold = self._similarity_threshold
         mock_rag.results_similarity_threshold = self._results_similarity_threshold
@@ -126,10 +120,6 @@ class RetrievalSettingsBuilder:
         self._vector_settings = vector_builder
         return self
 
-    def with_hybrid_search(self, enabled: bool = True) -> "RetrievalSettingsBuilder":
-        self._rag_settings = self._rag_settings.with_hybrid_search(enabled)
-        return self
-
     def with_elasticsearch(self) -> "RetrievalSettingsBuilder":
         self._vector_settings = self._vector_settings.elasticsearch()
         return self
@@ -161,10 +151,6 @@ class RetrievalSettingsBuilder:
     @classmethod
     def default(cls) -> "RetrievalSettingsBuilder":
         return cls()
-
-    @classmethod
-    def with_hybrid(cls) -> "RetrievalSettingsBuilder":
-        return cls().with_hybrid_search(True)
 
     @classmethod
     def elasticsearch_config(cls) -> "RetrievalSettingsBuilder":
@@ -349,13 +335,6 @@ class RetrievalServiceFactory:
         return RetrievalServiceFactory.create_service()
 
     @staticmethod
-    def create_hybrid_service() -> RetrievalService:
-        """Create RetrievalService with hybrid search enabled"""
-        return RetrievalServiceFactory.create_service(
-            RetrievalSettingsBuilder.with_hybrid()
-        )
-
-    @staticmethod
     def create_elasticsearch_service() -> RetrievalService:
         """Create RetrievalService configured for Elasticsearch"""
         return RetrievalServiceFactory.create_service(
@@ -409,34 +388,6 @@ class TestRetrievalService:
         assert (
             results[0]["similarity"] >= 0.95
         )  # May be boosted higher by entity processing
-
-    @pytest.mark.asyncio
-    async def test_retrieve_context_hybrid_search_enabled(self):
-        """Test retrieval with hybrid search enabled"""
-        # Create hybrid search service
-        hybrid_service = RetrievalServiceFactory.create_hybrid_service()
-
-        # Create search results using builder
-        search_results = [
-            SearchResultBuilder()
-            .with_content("Hybrid search result")
-            .with_similarity(0.90)
-            .with_file_name("hybrid.pdf")
-            .build()
-        ]
-        mock_vector_service = VectorServiceFactory.create_service_with_results(
-            search_results
-        )
-        mock_embedding_service = EmbeddingServiceFactory.create_openai_service()
-
-        results = await hybrid_service.retrieve_context(
-            "test query", mock_vector_service, mock_embedding_service
-        )
-
-        # Should call embedding service and vector search
-        mock_embedding_service.get_embedding.assert_called_once_with("test query")
-        mock_vector_service.search.assert_called()
-        assert isinstance(results, list)
 
     @pytest.mark.asyncio
     async def test_retrieve_context_elasticsearch_bm25_search(self):
@@ -578,37 +529,6 @@ class TestRetrievalService:
         mock_vector_service.search.assert_called()
         assert isinstance(results, list)
 
-    def test_apply_hybrid_search_boosting_basic(self):
-        """Test hybrid search result boosting"""
-        # Create test results using builders
-        results = [
-            SearchResultBuilder()
-            .with_content("Apple company information")
-            .with_similarity(0.80)
-            .with_file_name("apple.pdf")
-            .build(),
-            SearchResultBuilder()
-            .with_content("Microsoft details")
-            .with_similarity(0.75)
-            .with_file_name("microsoft.pdf")
-            .build(),
-        ]
-
-        boosted_results = self.retrieval_service._apply_hybrid_search_boosting(
-            "Apple projects", results
-        )
-
-        # Should return results (hybrid boosting selects multiple chunks from top documents)
-        assert len(boosted_results) <= len(results)
-        assert isinstance(boosted_results, list)
-
-    def test_apply_hybrid_search_boosting_empty_results(self):
-        """Test boosting with empty results"""
-        boosted_results = self.retrieval_service._apply_hybrid_search_boosting(
-            "test query", []
-        )
-        assert boosted_results == []
-
     def test_provider_routing_elasticsearch(self):
         """Test that retrieval service routes correctly to Elasticsearch"""
         # Set provider to elasticsearch
@@ -676,7 +596,7 @@ class TestRetrievalServiceIntegration:
 
     def setup_method(self):
         """Set up test fixtures"""
-        # Create settings using factory with hybrid search enabled
+        # Create settings using factory
         self.mock_settings = (
             RetrievalSettingsBuilder.with_hybrid()
             .with_elasticsearch()
@@ -685,43 +605,6 @@ class TestRetrievalServiceIntegration:
             .build()
         )
         self.retrieval_service = RetrievalService(self.mock_settings)
-
-    @pytest.mark.asyncio
-    async def test_full_hybrid_search_pipeline(self):
-        """Test complete hybrid search pipeline"""
-        # Create services using factories
-        mock_embedding_service = EmbeddingServiceFactory.create_openai_service()
-        mock_vector_service = AsyncMock()
-
-        # Mock entity search returning varied results using builders
-        entity_results = [
-            SearchResultBuilder()
-            .with_content("Apple entity result")
-            .with_similarity(0.85)
-            .with_file_name("apple1.pdf")
-            .build()
-        ]
-
-        mock_vector_service.search.side_effect = [
-            # First call - entity search
-            entity_results,
-            # Second call - general search
-            [
-                {
-                    "content": "General search result",
-                    "similarity": 0.80,
-                    "metadata": {"file_name": "general.pdf"},
-                },
-            ],
-        ]
-
-        results = await self.retrieval_service.retrieve_context(
-            "Apple company projects", mock_vector_service, mock_embedding_service
-        )
-
-        # Should have called search multiple times for hybrid approach
-        assert mock_vector_service.search.call_count >= 1
-        assert len(results) >= 0
 
     @pytest.mark.asyncio
     async def test_elasticsearch_vs_pinecone_behavior(self):
@@ -772,7 +655,6 @@ class TestRetrievalServiceEdgeCases:
         """Set up test fixtures"""
         self.mock_settings = MagicMock()
         self.mock_settings.rag = MagicMock()
-        self.mock_settings.rag.enable_hybrid_search = False
         self.mock_settings.rag.max_results = 5
         self.mock_settings.rag.similarity_threshold = 0.7
         self.mock_settings.rag.results_similarity_threshold = 0.7
@@ -863,21 +745,6 @@ class TestRetrievalServiceEdgeCases:
         assert isinstance(boosted_results, list)
         assert len(boosted_results) == len(results)
 
-    def test_boosting_with_malformed_results(self):
-        """Test boosting with malformed result data"""
-        malformed_results = [
-            {},  # Empty result
-            {"content": "Valid result", "similarity": 0.80},  # No metadata
-            {"similarity": 0.75, "metadata": {}},  # No content
-        ]
-
-        boosted_results = self.retrieval_service._apply_hybrid_search_boosting(
-            "test query", malformed_results
-        )
-
-        # Should handle malformed data gracefully
-        assert isinstance(boosted_results, list)
-
     @pytest.mark.asyncio
     async def test_retrieve_context_with_empty_query(self):
         """Test retrieve_context with empty query"""
@@ -898,9 +765,6 @@ class TestRetrievalServiceEdgeCases:
     @pytest.mark.asyncio
     async def test_retrieval_service_settings_variations(self):
         """Test retrieval service with different settings"""
-        # Test with hybrid search disabled
-        self.mock_settings.rag.enable_hybrid_search = False
-
         mock_vector_service = AsyncMock()
         mock_embedding_service = AsyncMock()
         mock_embedding_service.get_embedding.return_value = [0.1] * 1536
@@ -910,7 +774,7 @@ class TestRetrievalServiceEdgeCases:
             "test", mock_vector_service, mock_embedding_service
         )
 
-        # Should use basic search without hybrid features
+        # Should use basic search
         assert isinstance(results, list)
 
         # Test with different max_results
