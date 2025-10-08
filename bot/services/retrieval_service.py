@@ -1,8 +1,7 @@
 """
 Retrieval Service
 
-Handles document retrieval and context building for RAG.
-Routes to provider-specific retrieval implementations.
+Handles document retrieval and context building for RAG using Pinecone.
 Includes adaptive query rewriting for improved retrieval accuracy.
 """
 
@@ -12,13 +11,13 @@ from typing import Any
 from config.settings import Settings
 
 from .query_rewriter import AdaptiveQueryRewriter
-from .retrieval import ElasticsearchRetrieval, PineconeRetrieval
+from .retrieval import PineconeRetrieval
 
 logger = logging.getLogger(__name__)
 
 
 class RetrievalService:
-    """Service for retrieving and processing context from vector stores"""
+    """Service for retrieving and processing context from Pinecone vector store"""
 
     def __init__(
         self, settings: Settings, llm_service=None, enable_query_rewriting: bool = True
@@ -27,8 +26,7 @@ class RetrievalService:
         self.llm_service = llm_service
         self.enable_query_rewriting = enable_query_rewriting
 
-        # Initialize provider-specific retrieval services
-        self.elasticsearch_retrieval = ElasticsearchRetrieval(settings)
+        # Initialize Pinecone retrieval service
         self.pinecone_retrieval = PineconeRetrieval(settings)
 
         # Initialize query rewriter (will be lazy-loaded when LLM service is available)
@@ -94,36 +92,17 @@ class RetrievalService:
             # Get query embedding (use rewritten query)
             query_embedding = await embedding_service.get_embedding(rewritten_query)
 
-            # Route to provider-specific search logic
-            if self.settings.vector.provider.lower() == "elasticsearch":
-                results = await self.elasticsearch_retrieval.search(
-                    query,
-                    query_embedding,
-                    vector_service,
-                    metadata_filter=query_filters,
-                )
-            elif self.settings.vector.provider.lower() == "pinecone":
-                results = await self.pinecone_retrieval.search(
-                    query,
-                    query_embedding,
-                    vector_service,
-                    metadata_filter=query_filters,
-                )
-            else:
-                logger.warning(
-                    f"Unknown vector provider: {self.settings.vector.provider}"
-                )
-                results = []
-
-            # Get the appropriate retrieval service for shared operations
-            if self.settings.vector.provider.lower() == "elasticsearch":
-                retrieval_service = self.elasticsearch_retrieval
-            else:
-                retrieval_service = self.pinecone_retrieval
+            # Search using Pinecone
+            results = await self.pinecone_retrieval.search(
+                query,
+                query_embedding,
+                vector_service,
+                metadata_filter=query_filters,
+            )
 
             # Apply entity boosting to all results
             if results:
-                results = retrieval_service._apply_entity_boosting(query, results)
+                results = self.pinecone_retrieval._apply_entity_boosting(query, results)
 
             # Apply final similarity threshold filter
             filtered_results = [
@@ -134,7 +113,7 @@ class RetrievalService:
             ]
 
             # Apply diversification strategy and limit to max results
-            final_results = retrieval_service._apply_diversification_strategy(
+            final_results = self.pinecone_retrieval._apply_diversification_strategy(
                 filtered_results
             )
 
@@ -177,15 +156,9 @@ class RetrievalService:
                 logger.info("📭 No similar documents found in vector database")
                 return []
 
-            # Get retrieval service for diversification
-            if self.settings.vector.provider.lower() == "elasticsearch":
-                retrieval_service = self.elasticsearch_retrieval
-            else:
-                retrieval_service = self.pinecone_retrieval
-
             # Apply diversification to get chunks from different documents
-            diversified_results = retrieval_service._apply_diversification_strategy(
-                results
+            diversified_results = (
+                self.pinecone_retrieval._apply_diversification_strategy(results)
             )
 
             logger.info(
