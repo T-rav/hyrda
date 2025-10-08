@@ -99,7 +99,7 @@ async def main():
     print("Initializing vector database and embedding service...")
     try:
         # Use local config (no dependencies on bot/tasks)
-        from config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
+        from ingest_config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
 
         vector_config = VectorConfig.from_env()
         embedding_config = EmbeddingConfig.from_env()
