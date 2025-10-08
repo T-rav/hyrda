@@ -1,5 +1,6 @@
 """Metric.ai data synchronization job - STANDALONE (no bot dependencies)."""
 
+import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -60,13 +61,51 @@ class MetricSyncJob(BaseJob):
         DataSession = sessionmaker(bind=data_engine)
         return DataSession()
 
+    def _compute_content_hash(self, content: str) -> str:
+        """Compute MD5 hash of content for change detection."""
+        return hashlib.md5(content.encode("utf-8")).hexdigest()
+
+    def _check_needs_update(
+        self, metric_id: str, data_type: str, content_hash: str
+    ) -> bool:
+        """Check if record needs updating based on content hash."""
+        session = None
+        try:
+            data_engine = create_engine(self.data_db_url)
+            DataSession = sessionmaker(bind=data_engine)
+            session = DataSession()
+
+            result = session.execute(
+                text("""
+                SELECT content_hash FROM metric_records
+                WHERE metric_id = :metric_id AND data_type = :data_type
+                """),
+                {"metric_id": metric_id, "data_type": data_type},
+            )
+            row = result.fetchone()
+
+            if not row:
+                return True  # New record
+
+            if row[0] != content_hash:
+                return True  # Content changed
+
+            return False  # No change needed
+
+        except Exception as e:
+            logger.warning(f"Error checking record hash: {e}")
+            return True  # Update on error to be safe
+        finally:
+            if session:
+                session.close()
+
     def _write_metric_records(self, records: list[dict[str, Any]]) -> int:
         """
         Write metric records to the insightmesh_data database.
 
         Args:
             records: List of dicts with keys: metric_id, data_type, vector_id,
-                    vector_namespace, content_snapshot
+                    vector_namespace, content_snapshot, content_hash
 
         Returns:
             Number of records written
@@ -88,9 +127,9 @@ class MetricSyncJob(BaseJob):
                         text("""
                         INSERT OR REPLACE INTO metric_records
                         (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
-                         created_at, updated_at, synced_at)
+                         content_hash, created_at, updated_at, synced_at)
                         VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
-                                :now, :now, :now)
+                                :content_hash, :now, :now, :now)
                         """),
                         {
                             "metric_id": record["metric_id"],
@@ -98,6 +137,7 @@ class MetricSyncJob(BaseJob):
                             "vector_id": record["vector_id"],
                             "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
+                            "content_hash": record["content_hash"],
                             "now": now,
                         },
                     )
@@ -107,11 +147,12 @@ class MetricSyncJob(BaseJob):
                         text("""
                         INSERT INTO metric_records
                         (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
-                         created_at, updated_at, synced_at)
+                         content_hash, created_at, updated_at, synced_at)
                         VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
-                                :now, :now, :now)
+                                :content_hash, :now, :now, :now)
                         ON DUPLICATE KEY UPDATE
                             content_snapshot = VALUES(content_snapshot),
+                            content_hash = VALUES(content_hash),
                             updated_at = VALUES(updated_at),
                             synced_at = VALUES(synced_at)
                         """),
@@ -121,6 +162,7 @@ class MetricSyncJob(BaseJob):
                             "vector_id": record["vector_id"],
                             "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
+                            "content_hash": record["content_hash"],
                             "now": now,
                         },
                     )
@@ -260,7 +302,7 @@ class MetricSyncJob(BaseJob):
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to metric_records table
+        # Write to metric_records table with content hashes
         db_records = [
             {
                 "metric_id": emp["id"],
@@ -268,6 +310,7 @@ class MetricSyncJob(BaseJob):
                 "vector_id": f"metric_employee_{emp['id']}",
                 "vector_namespace": "metric",
                 "content_snapshot": texts[i],
+                "content_hash": self._compute_content_hash(texts[i]),
             }
             for i, emp in enumerate(employees)
         ]
@@ -371,7 +414,7 @@ class MetricSyncJob(BaseJob):
                 texts, embeddings, metadata_list, namespace="metric"
             )
 
-            # Write to metric_records table
+            # Write to metric_records table with content hashes
             db_records = [
                 {
                     "metric_id": metadata_list[i]["project_id"],
@@ -379,6 +422,7 @@ class MetricSyncJob(BaseJob):
                     "vector_id": f"metric_project_{metadata_list[i]['project_id']}",
                     "vector_namespace": "metric",
                     "content_snapshot": texts[i],
+                    "content_hash": self._compute_content_hash(texts[i]),
                 }
                 for i in range(len(texts))
             ]
@@ -422,7 +466,7 @@ class MetricSyncJob(BaseJob):
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to metric_records table
+        # Write to metric_records table with content hashes
         db_records = [
             {
                 "metric_id": clients[i]["id"],
@@ -430,6 +474,7 @@ class MetricSyncJob(BaseJob):
                 "vector_id": f"metric_client_{clients[i]['id']}",
                 "vector_namespace": "metric",
                 "content_snapshot": texts[i],
+                "content_hash": self._compute_content_hash(texts[i]),
             }
             for i in range(len(clients))
         ]
