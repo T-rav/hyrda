@@ -36,6 +36,7 @@ dependencies = [
     # Database
     "sqlalchemy[asyncio]>=2.0.0",
     "pymysql>=1.1.0",
+    "cryptography>=41.0.0",  # Required for MySQL auth methods
     "alembic>=1.13.0",
 
     # Google Drive API (for scheduled ingestion)

@@ -53,10 +53,8 @@ class MetricSyncJob(BaseJob):
         # Allocations start year for building employee project history
         self.allocations_start_year = 2020
 
-        # Get data database URL (insightmesh_data)
-        self.data_db_url = self.settings.database_url.replace(
-            "insightmesh_task", "insightmesh_data"
-        )
+        # Get data database URL from settings (uses sync driver for database writes)
+        self.data_db_url = self.settings.data_database_url
 
     def _get_data_session(self):
         """Create database session for insightmesh_data database."""
@@ -84,7 +82,7 @@ class MetricSyncJob(BaseJob):
 
             now = datetime.now(UTC)
             for record in records:
-                # Use raw SQL to insert or update
+                # Use MySQL UPSERT syntax (ON DUPLICATE KEY UPDATE)
                 session.execute(
                     text("""
                     INSERT INTO metric_records
@@ -93,9 +91,9 @@ class MetricSyncJob(BaseJob):
                     VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
                             :now, :now, :now)
                     ON DUPLICATE KEY UPDATE
-                        content_snapshot = :content,
-                        updated_at = :now,
-                        synced_at = :now
+                        content_snapshot = VALUES(content_snapshot),
+                        updated_at = VALUES(updated_at),
+                        synced_at = VALUES(synced_at)
                     """),
                     {
                         "metric_id": record["metric_id"],
@@ -242,9 +240,21 @@ class MetricSyncJob(BaseJob):
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
+        # Write to metric_records table
+        db_records = [
+            {
+                "metric_id": emp["id"],
+                "data_type": "employee",
+                "pinecone_id": f"metric_employee_{emp['id']}",
+                "pinecone_namespace": "metric",
+                "content_snapshot": texts[i],
+            }
+            for i, emp in enumerate(employees)
+        ]
+        db_written = self._write_metric_records(db_records)
+
         logger.info(
-            f"✅ Synced {len(employees)} employees to Pinecone (database writes disabled)"
+            f"✅ Synced {len(employees)} employees to Pinecone and {db_written} to database"
         )
         return len(employees)
 
@@ -341,9 +351,21 @@ class MetricSyncJob(BaseJob):
                 texts, embeddings, metadata_list, namespace="metric"
             )
 
-            # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
+            # Write to metric_records table
+            db_records = [
+                {
+                    "metric_id": metadata_list[i]["project_id"],
+                    "data_type": "project",
+                    "pinecone_id": f"metric_project_{metadata_list[i]['project_id']}",
+                    "pinecone_namespace": "metric",
+                    "content_snapshot": texts[i],
+                }
+                for i in range(len(texts))
+            ]
+            db_written = self._write_metric_records(db_records)
+
             logger.info(
-                f"✅ Synced {len(texts)} projects to Pinecone (database writes disabled, filtered from {len(projects)} total)"
+                f"✅ Synced {len(texts)} projects to Pinecone and {db_written} to database (filtered from {len(projects)} total)"
             )
         return len(texts)
 
@@ -380,8 +402,20 @@ class MetricSyncJob(BaseJob):
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # TODO: Database writes disabled - requires 'cryptography' package and metric_records table setup
+        # Write to metric_records table
+        db_records = [
+            {
+                "metric_id": clients[i]["id"],
+                "data_type": "client",
+                "pinecone_id": f"metric_client_{clients[i]['id']}",
+                "pinecone_namespace": "metric",
+                "content_snapshot": texts[i],
+            }
+            for i in range(len(clients))
+        ]
+        db_written = self._write_metric_records(db_records)
+
         logger.info(
-            f"✅ Synced {len(clients)} clients to Pinecone (database writes disabled)"
+            f"✅ Synced {len(clients)} clients to Pinecone and {db_written} to database"
         )
         return len(clients)
