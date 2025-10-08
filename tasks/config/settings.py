@@ -58,12 +58,7 @@ class TasksSettings(BaseSettings):
         description="Email for Portal JWT authentication",
     )
 
-    # Vector database configuration
-    vector_provider: str = Field(
-        default="pinecone",
-        alias="VECTOR_PROVIDER",
-        description="Vector database provider (pinecone, qdrant)",
-    )
+    # Vector database configuration (Qdrant)
     qdrant_host: str = Field(
         default="localhost", alias="QDRANT_HOST", description="Qdrant host"
     )

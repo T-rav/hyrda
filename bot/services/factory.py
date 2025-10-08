@@ -90,10 +90,10 @@ class ServiceFactory:
         return service
 
     async def _create_vector_service(self):  # type: ignore[no-untyped-def]
-        """Create Pinecone vector service."""
-        from services.vector_stores.pinecone_store import PineconeVectorStore
+        """Create Qdrant vector service."""
+        from services.vector_stores.qdrant_store import QdrantVectorStore
 
-        service = PineconeVectorStore(self.settings.vector)
+        service = QdrantVectorStore(self.settings.vector)
         await service.initialize()
         return service
 

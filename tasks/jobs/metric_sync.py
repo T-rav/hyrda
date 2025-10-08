@@ -10,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from config.settings import TasksSettings
 from services.metric_client import MetricClient
 from services.openai_embeddings import OpenAIEmbeddings
-from services.pinecone_client import PineconeClient
 from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Remove null values from metadata (Pinecone doesn't accept nulls)."""
+    """Remove null values from metadata."""
     return {k: v for k, v in metadata.items() if v is not None}
 
 
@@ -27,7 +26,7 @@ class MetricSyncJob(BaseJob):
     """Job to sync employee, project, client, and allocation data from Metric.ai."""
 
     JOB_NAME = "Metric.ai Data Sync"
-    JOB_DESCRIPTION = "Sync employees, projects, and clients from Metric.ai to Pinecone"
+    JOB_DESCRIPTION = "Sync employees, projects, and clients from Metric.ai to Qdrant"
     REQUIRED_PARAMS = []
     OPTIONAL_PARAMS = [
         "sync_employees",
@@ -42,18 +41,7 @@ class MetricSyncJob(BaseJob):
         # Initialize clients
         self.metric_client = MetricClient()
         self.embedding_client = OpenAIEmbeddings()
-
-        # Initialize vector client based on provider
-        vector_provider = self.settings.vector_provider.lower()
-        if vector_provider == "qdrant":
-            self.vector_client = QdrantClient()
-        elif vector_provider == "pinecone":
-            self.vector_client = PineconeClient()
-        else:
-            raise ValueError(
-                f"Unsupported vector provider: {vector_provider}. "
-                f"Supported providers: pinecone, qdrant"
-            )
+        self.vector_client = QdrantClient()
 
         # Store which data types to sync (default: all)
         self.sync_employees = self.params.get("sync_employees", True)
@@ -77,8 +65,8 @@ class MetricSyncJob(BaseJob):
         Write metric records to the insightmesh_data database.
 
         Args:
-            records: List of dicts with keys: metric_id, data_type, pinecone_id,
-                    pinecone_namespace, content_snapshot
+            records: List of dicts with keys: metric_id, data_type, vector_id,
+                    vector_namespace, content_snapshot
 
         Returns:
             Number of records written
@@ -158,7 +146,7 @@ class MetricSyncJob(BaseJob):
         }
 
         try:
-            # Initialize Pinecone
+            # Initialize Qdrant
             await self.vector_client.initialize()
 
             # Sync each data type
@@ -183,7 +171,7 @@ class MetricSyncJob(BaseJob):
             raise
 
     async def _sync_employees(self) -> int:
-        """Sync employee data from Metric.ai to Pinecone."""
+        """Sync employee data from Metric.ai to Qdrant."""
         logger.info("Syncing employees from Metric.ai...")
 
         employees = self.metric_client.get_employees()
@@ -266,7 +254,7 @@ class MetricSyncJob(BaseJob):
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
 
-        # Generate embeddings and upsert to Pinecone
+        # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
@@ -286,12 +274,12 @@ class MetricSyncJob(BaseJob):
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(employees)} employees to Pinecone and {db_written} to database"
+            f"✅ Synced {len(employees)} employees to Qdrant and {db_written} to database"
         )
         return len(employees)
 
     async def _sync_projects(self) -> int:
-        """Sync project data from Metric.ai to Pinecone."""
+        """Sync project data from Metric.ai to Qdrant."""
         logger.info("Syncing projects from Metric.ai...")
 
         projects = self.metric_client.get_projects()
@@ -377,7 +365,7 @@ class MetricSyncJob(BaseJob):
             metadata_list.append(clean_metadata(metadata))
 
         if texts:
-            # Upsert to Pinecone
+            # Upsert to Qdrant
             embeddings = self.embedding_client.embed_batch(texts)
             await self.vector_client.upsert_with_namespace(
                 texts, embeddings, metadata_list, namespace="metric"
@@ -397,12 +385,12 @@ class MetricSyncJob(BaseJob):
             db_written = self._write_metric_records(db_records)
 
             logger.info(
-                f"✅ Synced {len(texts)} projects to Pinecone and {db_written} to database (filtered from {len(projects)} total)"
+                f"✅ Synced {len(texts)} projects to Qdrant and {db_written} to database (filtered from {len(projects)} total)"
             )
         return len(texts)
 
     async def _sync_clients(self) -> int:
-        """Sync client data from Metric.ai to Pinecone."""
+        """Sync client data from Metric.ai to Qdrant."""
         logger.info("Syncing clients from Metric.ai...")
 
         clients = self.metric_client.get_clients()
@@ -428,7 +416,7 @@ class MetricSyncJob(BaseJob):
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
 
-        # Generate embeddings and upsert to Pinecone
+        # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
@@ -448,6 +436,6 @@ class MetricSyncJob(BaseJob):
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(clients)} clients to Pinecone and {db_written} to database"
+            f"✅ Synced {len(clients)} clients to Qdrant and {db_written} to database"
         )
         return len(clients)
