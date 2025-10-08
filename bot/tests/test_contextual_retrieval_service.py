@@ -2,11 +2,10 @@
 Tests for ContextualRetrievalService
 """
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from services.contextual_retrieval_service import ContextualRetrievalService
+from tests.utils.services.llm_service_factory import LLMServiceFactory
 
 
 # TDD Factory Patterns for Contextual Retrieval Service Testing
@@ -21,12 +20,10 @@ class TestContextualRetrievalService:
 
     @pytest.fixture
     def mock_llm_service(self):
-        """Mock LLM service fixture"""
-        service = AsyncMock()
-        service.get_response.return_value = (
-            "This chunk discusses user authentication in the login system."
+        """Mock LLM service fixture using centralized factory"""
+        return LLMServiceFactory.create_mock_service(
+            response="This chunk discusses user authentication in the login system."
         )
-        return service
 
     @pytest.fixture
     def contextual_service(self, mock_llm_service):
