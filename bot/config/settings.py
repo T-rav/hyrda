@@ -64,20 +64,24 @@ class DatabaseSettings(BaseSettings):
 
 
 class VectorSettings(BaseSettings):
-    """Pinecone vector database settings for RAG"""
+    """Vector database settings for RAG (Pinecone or Qdrant)"""
 
     provider: str = Field(
-        default="pinecone", description="Vector database provider (pinecone)"
+        default="pinecone", description="Vector database provider (pinecone, qdrant)"
     )
     api_key: SecretStr | None = Field(
-        default=None, description="Pinecone API key (required)"
+        default=None, description="Pinecone API key (required for Pinecone)"
     )
     collection_name: str = Field(
-        default="insightmesh-knowledge-base", description="Pinecone index name"
+        default="insightmesh-knowledge-base", description="Index/collection name"
     )
     environment: str | None = Field(
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
     )
+    host: str = Field(
+        default="localhost", description="Qdrant host (for Qdrant provider)"
+    )
+    port: int = Field(default=6333, description="Qdrant port (for Qdrant provider)")
 
     model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]
 

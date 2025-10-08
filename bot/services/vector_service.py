@@ -1,21 +1,33 @@
 """
 Vector Service Factory
 
-Factory for creating Pinecone vector store instances.
+Factory for creating vector store instances (Pinecone or Qdrant).
 """
 
 from config.settings import VectorSettings
-from services.vector_stores import PineconeVectorStore, VectorStore
+from services.vector_stores import PineconeVectorStore, QdrantVectorStore, VectorStore
 
 
 def create_vector_store(settings: VectorSettings) -> VectorStore:
     """
-    Factory function to create Pinecone vector store instance.
+    Factory function to create vector store instance based on provider.
 
     Args:
-        settings: Pinecone configuration settings
+        settings: Vector database configuration settings
 
     Returns:
-        Initialized Pinecone vector store instance
+        Initialized vector store instance (Pinecone or Qdrant)
+
+    Raises:
+        ValueError: If provider is not supported
     """
-    return PineconeVectorStore(settings)
+    provider = settings.provider.lower()
+
+    if provider == "pinecone":
+        return PineconeVectorStore(settings)
+    elif provider == "qdrant":
+        return QdrantVectorStore(settings)
+    else:
+        raise ValueError(
+            f"Unsupported vector provider: {provider}. Supported providers: pinecone, qdrant"
+        )

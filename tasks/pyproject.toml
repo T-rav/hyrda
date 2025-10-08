@@ -52,6 +52,7 @@ dependencies = [
 
     # Vector DB and Embeddings (for Metric.ai sync)
     "pinecone>=5.0.0",
+    "qdrant-client>=1.7.0",
     "openai>=1.0.0",
 
     # Logging
