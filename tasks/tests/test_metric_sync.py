@@ -111,7 +111,6 @@ async def test_sync_employees(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
@@ -119,7 +118,6 @@ async def test_sync_employees(
         assert result["employees_synced"] == 1
         assert result["projects_synced"] == 0
         assert result["clients_synced"] == 0
-        assert result["allocations_synced"] == 0
         assert mock_vector_store.initialize.called
         assert mock_embedding_provider.embed_batch.called
 
@@ -141,7 +139,6 @@ async def test_sync_projects(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
@@ -167,38 +164,11 @@ async def test_sync_clients(
             sync_employees=False,
             sync_projects=False,
             sync_clients=True,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
 
         assert result["clients_synced"] == 1
-
-
-@pytest.mark.asyncio
-async def test_sync_allocations(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
-):
-    """Test allocation sync."""
-    with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
-        patch(
-            "jobs.metric_sync.OpenAIEmbeddings",
-            return_value=mock_embedding_provider,
-        ),
-    ):
-        job = MetricSyncJob(
-            settings,
-            sync_employees=False,
-            sync_projects=False,
-            sync_clients=False,
-            sync_allocations=True,
-            allocations_start_year=2024,
-        )
-
-        result = await job._execute_job()
-
-        assert result["allocations_synced"] == 1
 
 
 @pytest.mark.asyncio
@@ -220,7 +190,6 @@ async def test_sync_all_data_types(
         assert result["employees_synced"] == 1
         assert result["projects_synced"] == 1
         assert result["clients_synced"] == 1
-        assert result["allocations_synced"] == 1
         assert mock_vector_store.close.called
 
 
@@ -241,7 +210,6 @@ async def test_employee_metadata_structure(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -289,7 +257,6 @@ async def test_project_filtering(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
@@ -472,7 +439,6 @@ async def test_employee_project_history(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
             allocations_start_year=2023,
         )
 
@@ -526,7 +492,6 @@ async def test_project_practice_field_group_type_21(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -572,7 +537,6 @@ async def test_project_practice_field_defaults_to_unknown(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -592,4 +556,3 @@ def test_job_metadata():
     assert "sync_employees" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_projects" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_clients" in MetricSyncJob.OPTIONAL_PARAMS
-    assert "sync_allocations" in MetricSyncJob.OPTIONAL_PARAMS

@@ -27,7 +27,7 @@ class MetricSyncJob(BaseJob):
 
     JOB_NAME = "Metric.ai Data Sync"
     JOB_DESCRIPTION = (
-        "Sync employees, projects, clients, and allocations from Metric.ai to Pinecone"
+        "Sync employees, projects, and clients from Metric.ai to Pinecone"
     )
     REQUIRED_PARAMS = []
     OPTIONAL_PARAMS = [
@@ -81,29 +81,51 @@ class MetricSyncJob(BaseJob):
             session = DataSession()
 
             now = datetime.now(UTC)
+            is_sqlite = "sqlite" in self.data_db_url.lower()
+
             for record in records:
-                # Use MySQL UPSERT syntax (ON DUPLICATE KEY UPDATE)
-                session.execute(
-                    text("""
-                    INSERT INTO metric_records
-                    (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
-                     created_at, updated_at, synced_at)
-                    VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
-                            :now, :now, :now)
-                    ON DUPLICATE KEY UPDATE
-                        content_snapshot = VALUES(content_snapshot),
-                        updated_at = VALUES(updated_at),
-                        synced_at = VALUES(synced_at)
-                    """),
-                    {
-                        "metric_id": record["metric_id"],
-                        "data_type": record["data_type"],
-                        "pinecone_id": record["pinecone_id"],
-                        "namespace": record["pinecone_namespace"],
-                        "content": record["content_snapshot"],
-                        "now": now,
-                    },
-                )
+                if is_sqlite:
+                    # SQLite: Use INSERT OR REPLACE
+                    session.execute(
+                        text("""
+                        INSERT OR REPLACE INTO metric_records
+                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                         created_at, updated_at, synced_at)
+                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                                :now, :now, :now)
+                        """),
+                        {
+                            "metric_id": record["metric_id"],
+                            "data_type": record["data_type"],
+                            "pinecone_id": record["pinecone_id"],
+                            "namespace": record["pinecone_namespace"],
+                            "content": record["content_snapshot"],
+                            "now": now,
+                        },
+                    )
+                else:
+                    # MySQL: Use ON DUPLICATE KEY UPDATE
+                    session.execute(
+                        text("""
+                        INSERT INTO metric_records
+                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                         created_at, updated_at, synced_at)
+                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                                :now, :now, :now)
+                        ON DUPLICATE KEY UPDATE
+                            content_snapshot = VALUES(content_snapshot),
+                            updated_at = VALUES(updated_at),
+                            synced_at = VALUES(synced_at)
+                        """),
+                        {
+                            "metric_id": record["metric_id"],
+                            "data_type": record["data_type"],
+                            "pinecone_id": record["pinecone_id"],
+                            "namespace": record["pinecone_namespace"],
+                            "content": record["content_snapshot"],
+                            "now": now,
+                        },
+                    )
             session.commit()
             return len(records)
         except Exception as e:
