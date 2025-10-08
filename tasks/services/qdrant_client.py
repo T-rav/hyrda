@@ -1,8 +1,10 @@
 """Standalone Qdrant client for tasks service."""
 
 import asyncio
+import hashlib
 import logging
 import os
+import uuid
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -46,13 +48,13 @@ class QdrantClient:
             collection_names = [c.name for c in collections.collections]
 
             if self.collection_name not in collection_names:
-                # Create collection with OpenAI embedding dimensions (1536 for text-embedding-3-small)
+                # Create collection with OpenAI embedding dimensions (3072 for text-embedding-3-large)
                 await asyncio.get_event_loop().run_in_executor(
                     None,
                     lambda: self.client.create_collection(
                         collection_name=self.collection_name,
                         vectors_config=VectorParams(
-                            size=1536, distance=Distance.COSINE
+                            size=3072, distance=Distance.COSINE
                         ),
                     ),
                 )
@@ -87,8 +89,9 @@ class QdrantClient:
         for i, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
             doc_metadata = metadata[i] if metadata else {}
 
-            # Create stable ID based on actual record ID from metadata
+            # Create stable UUID based on actual record ID from metadata
             # This ensures upsert replaces existing records instead of creating duplicates
+            # Qdrant requires UUIDs or integers as point IDs
             record_id = (
                 doc_metadata.get("employee_id")
                 or doc_metadata.get("project_id")
@@ -96,7 +99,10 @@ class QdrantClient:
                 or doc_metadata.get("allocation_id")
                 or f"unknown_{i}"
             )
-            doc_id = f"{namespace}_{record_id}"
+            # Generate deterministic UUID from namespace + record_id
+            id_string = f"{namespace}_{record_id}"
+            id_hash = hashlib.md5(id_string.encode(), usedforsecurity=False).hexdigest()
+            doc_id = str(uuid.UUID(id_hash))
 
             # Add text and namespace to metadata
             doc_metadata["text"] = text
