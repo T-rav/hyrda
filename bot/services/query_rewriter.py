@@ -177,11 +177,19 @@ class AdaptiveQueryRewriter:
         # Format user context
         user_context_str = ""
         if user_context:
-            name = user_context.get("real_name") or user_context.get(
-                "display_name", "Unknown"
-            )
+            real_name = user_context.get("real_name", "")
+            display_name = user_context.get("display_name", "")
             email = user_context.get("email_address", "")
-            user_context_str = f"\n\nCurrent User:\n- Name: {name}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name}"
+
+            # Build names list - include both if different
+            names = []
+            if real_name:
+                names.append(real_name)
+            if display_name and display_name != real_name:
+                names.append(display_name)
+
+            name_str = " or ".join(names) if names else "Unknown"
+            user_context_str = f"\n\nCurrent User:\n- Name: {name_str}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name_str}"
 
         logger.info(
             f"🔍 Classifying intent for query: '{query}' with history: {history_context[:200]}"
