@@ -39,8 +39,10 @@ def find_and_load_env():
 # Load environment variables
 find_and_load_env()
 
-# Local imports (assuming we'll use the existing ingestion logic)
-sys.path.append(str(Path(__file__).parent.parent / "bot"))
+# CRITICAL: Add bot to path FIRST before any imports
+# This ensures bot's config.settings is found before tasks/config/settings
+bot_path = str(Path(__file__).parent.parent / "bot")
+sys.path.insert(0, bot_path)  # Insert at beginning to prioritize bot
 
 from services import IngestionOrchestrator
 
@@ -106,9 +108,7 @@ async def main():
         llm_config = LLMConfig.from_env()
         rag_config = RAGConfig.from_env()
 
-        # Add bot to path for services
-        sys.path.append(str(Path(__file__).parent.parent / "bot"))
-
+        # Import bot services (bot already in sys.path at top of file)
         from services.vector_service import create_vector_store
 
         # Create a simple settings object compatible with bot services
