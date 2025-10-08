@@ -38,36 +38,6 @@ services:
     networks:
       - insightmesh
 
-  # Elasticsearch for vector search
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: insightmesh-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - cluster.name=insightmesh-knowledge-base
-      - node.name=insightmesh-node
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    networks:
-      - insightmesh
-
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:latest
@@ -191,8 +161,6 @@ services:
 
 volumes:
   mysql_data:
-    driver: local
-  elasticsearch_data:
     driver: local
   qdrant_data:
     driver: local
