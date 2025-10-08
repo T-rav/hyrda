@@ -1,0 +1,84 @@
+"""Rename metric_id to employee_id in portal_records table
+
+Revision ID: 009
+Revises: 008
+Create Date: 2025-10-08
+
+"""
+
+import sqlalchemy as sa
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision = "009"
+down_revision = "008"
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    """Rename metric_id column to employee_id in portal_records."""
+    # Get connection to check if index exists
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+
+    # Check if table exists
+    if "portal_records" not in inspector.get_table_names():
+        # Table doesn't exist yet, skip this migration
+        return
+
+    # Get existing indexes
+    existing_indexes = [idx["name"] for idx in inspector.get_indexes("portal_records")]
+
+    # Drop the old index if it exists
+    if "idx_portal_metric_id" in existing_indexes:
+        op.drop_index("idx_portal_metric_id", table_name="portal_records")
+
+    # Check if column needs renaming
+    columns = [col["name"] for col in inspector.get_columns("portal_records")]
+
+    if "metric_id" in columns:
+        # Rename the column
+        op.alter_column(
+            "portal_records",
+            "metric_id",
+            new_column_name="employee_id",
+            existing_type=sa.String(255),
+            existing_nullable=False,
+        )
+
+        # Update the column comment
+        with op.batch_alter_table("portal_records") as batch_op:
+            batch_op.alter_column(
+                "employee_id",
+                comment="Employee ID from Portal",
+            )
+
+    # Create new index if it doesn't exist
+    if "idx_portal_employee_id" not in existing_indexes:
+        op.create_index("idx_portal_employee_id", "portal_records", ["employee_id"])
+
+
+def downgrade():
+    """Revert employee_id back to metric_id."""
+    # Drop the new index
+    op.drop_index("idx_portal_employee_id", table_name="portal_records")
+
+    # Rename the column back
+    op.alter_column(
+        "portal_records",
+        "employee_id",
+        new_column_name="metric_id",
+        existing_type=sa.String(255),
+        existing_nullable=False,
+    )
+
+    # Restore old column comment
+    with op.batch_alter_table("portal_records") as batch_op:
+        batch_op.alter_column(
+            "metric_id",
+            comment="Employee Metric.ai ID",
+        )
+
+    # Recreate old index
+    op.create_index("idx_portal_metric_id", "portal_records", ["metric_id"])

@@ -26,9 +26,7 @@ class MetricSyncJob(BaseJob):
     """Job to sync employee, project, client, and allocation data from Metric.ai."""
 
     JOB_NAME = "Metric.ai Data Sync"
-    JOB_DESCRIPTION = (
-        "Sync employees, projects, and clients from Metric.ai to Pinecone"
-    )
+    JOB_DESCRIPTION = "Sync employees, projects, and clients from Metric.ai to Pinecone"
     REQUIRED_PARAMS = []
     OPTIONAL_PARAMS = [
         "sync_employees",
