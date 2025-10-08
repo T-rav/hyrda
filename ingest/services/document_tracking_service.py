@@ -15,7 +15,7 @@ from typing import Any
 # Add tasks path for database access
 sys.path.append(str(Path(__file__).parent.parent.parent / "tasks"))
 
-from models.base import Base, get_db_session
+from models.base import Base, get_db_session, init_db
 from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 

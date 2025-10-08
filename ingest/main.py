@@ -86,6 +86,22 @@ async def main():
             print(f"🔄 Removing existing token file: {token_file}")
             os.remove(token_file)
 
+    # Initialize database connection for document tracking
+    # This must happen before creating orchestrator to avoid import conflicts
+    database_url = os.getenv(
+        "DATABASE_URL",
+        "mysql+pymysql://insightmesh_data:insightmesh_data_password@localhost:3306/insightmesh_data",
+    )
+
+    # Import and initialize database
+    tasks_path = str(Path(__file__).parent.parent / "tasks")
+    if tasks_path not in sys.path:
+        sys.path.append(tasks_path)
+
+    from models.base import init_db
+    init_db(database_url)
+    print("✅ Database connection initialized")
+
     # Initialize orchestrator
     orchestrator = IngestionOrchestrator(args.credentials, args.token)
 
