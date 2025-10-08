@@ -15,6 +15,7 @@ class QdrantClient:
         """Initialize Qdrant client."""
         self.host = os.getenv("QDRANT_HOST", "localhost")
         self.port = int(os.getenv("QDRANT_PORT", "6333"))
+        self.api_key = os.getenv("QDRANT_API_KEY")
         self.collection_name = os.getenv(
             "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
         )
@@ -26,7 +27,9 @@ class QdrantClient:
             from qdrant_client import QdrantClient as QdrantSDK
             from qdrant_client.models import Distance, VectorParams
 
-            self.client = QdrantSDK(host=self.host, port=self.port, timeout=60)
+            self.client = QdrantSDK(
+                host=self.host, port=self.port, api_key=self.api_key, timeout=60
+            )
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(

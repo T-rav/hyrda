@@ -74,6 +74,9 @@ class VectorSettings(BaseSettings):
     )
     host: str = Field(default="qdrant", description="Qdrant host (docker service name)")
     port: int = Field(default=6333, description="Qdrant REST API port")
+    api_key: str | None = Field(
+        default=None, description="Qdrant API key for authentication (optional)"
+    )
 
     model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]
 
