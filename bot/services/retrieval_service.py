@@ -38,6 +38,7 @@ class RetrievalService:
         vector_service,
         embedding_service,
         conversation_history: list[dict] | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Retrieve relevant context chunks for a query using provider-specific strategies.
@@ -49,6 +50,7 @@ class RetrievalService:
             vector_service: Vector database service
             embedding_service: Embedding service for query encoding
             conversation_history: Recent conversation for context (optional)
+            user_id: Slack user ID for resolving "me/I" references (optional)
 
         Returns:
             List of relevant context chunks with metadata
@@ -75,7 +77,7 @@ class RetrievalService:
 
             if self.query_rewriter:
                 rewrite_result = await self.query_rewriter.rewrite_query(
-                    query, conversation_history
+                    query, conversation_history, user_id
                 )
                 rewritten_query = rewrite_result["query"]
                 query_filters = rewrite_result.get("filters", {})

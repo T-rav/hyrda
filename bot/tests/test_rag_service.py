@@ -21,7 +21,7 @@ class SettingsFactory:
     def create_complete_rag_settings(
         embedding_provider: str = "openai",
         llm_provider: str = "openai",
-        vector_provider: str = "pinecone",
+        vector_provider: str = "qdrant",
     ) -> Settings:
         """Create complete RAG settings with all components"""
         return Settings(
@@ -36,7 +36,10 @@ class SettingsFactory:
                 api_key=SecretStr("test-key"),
             ),
             vector=VectorSettings(
-                api_key=SecretStr("test-key"),
+                provider=vector_provider,
+                host="localhost",
+                port=6333,
+                api_key="test-key",  # Changed from SecretStr to plain string
                 collection_name="test",
             ),
         )
@@ -307,12 +310,13 @@ class TestRAGService:
         response = await rag_service.generate_response("query", [])
 
         assert "Final response with citations" in response
-        # The actual method signature includes vector_store, embedding_provider, and conversation_history
+        # The actual method signature includes vector_store, embedding_provider, conversation_history, and user_id
         rag_service.retrieval_service.retrieve_context.assert_called_once_with(
             "query",
             rag_service.vector_store,
             rag_service.embedding_provider,
             conversation_history=[],
+            user_id=None,
         )
 
     @pytest.mark.asyncio

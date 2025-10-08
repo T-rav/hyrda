@@ -53,7 +53,10 @@ class AdaptiveQueryRewriter:
 
     @observe(as_type="generation", name="query_rewriting")
     async def rewrite_query(
-        self, query: str, conversation_history: list[dict] | None = None
+        self,
+        query: str,
+        conversation_history: list[dict] | None = None,
+        user_id: str | None = None,
     ) -> dict[str, Any]:
         """
         Rewrite query using adaptive strategy based on intent.
@@ -61,6 +64,7 @@ class AdaptiveQueryRewriter:
         Args:
             query: Original user query
             conversation_history: Recent conversation messages for context
+            user_id: Slack user ID for resolving "me/I" references
 
         Returns:
             Dictionary with:
@@ -80,8 +84,15 @@ class AdaptiveQueryRewriter:
             }
 
         try:
+            # Get user context if user_id provided
+            user_context = None
+            if user_id:
+                user_context = self._get_user_context(user_id)
+
             # Step 1: Classify query intent
-            intent = await self._classify_intent(query, conversation_history or [])
+            intent = await self._classify_intent(
+                query, conversation_history or [], user_context
+            )
 
             logger.info(
                 f"Query intent: {intent.get('type')} (confidence: {intent.get('confidence', 0):.2f})"
@@ -119,9 +130,35 @@ class AdaptiveQueryRewriter:
                 "intent": {},
             }
 
+    def _get_user_context(self, user_id: str) -> dict | None:
+        """
+        Get user context for resolving "me/I" references.
+
+        Args:
+            user_id: Slack user ID
+
+        Returns:
+            Dictionary with user info or None
+        """
+        try:
+            from services.user_service import get_user_service
+
+            user_service = get_user_service()
+            user_info = user_service.get_user_info(user_id)
+
+            if user_info:
+                logger.info(
+                    f"User context loaded: {user_info.get('real_name') or user_info.get('display_name', 'Unknown')}"
+                )
+                return user_info
+        except Exception as e:
+            logger.warning(f"Failed to get user context: {e}")
+
+        return None
+
     @observe(as_type="generation", name="intent_classification")
     async def _classify_intent(
-        self, query: str, conversation_history: list[dict]
+        self, query: str, conversation_history: list[dict], user_context: dict | None
     ) -> dict[str, Any]:
         """
         Classify query intent to determine rewriting strategy.
@@ -129,12 +166,22 @@ class AdaptiveQueryRewriter:
         Args:
             query: User query
             conversation_history: Recent conversation context
+            user_context: User information for resolving "me/I" references
 
         Returns:
             Dictionary with intent classification
         """
         # Format recent conversation history (last 3 messages)
         history_context = self._format_history(conversation_history[-3:])
+
+        # Format user context
+        user_context_str = ""
+        if user_context:
+            name = user_context.get("real_name") or user_context.get(
+                "display_name", "Unknown"
+            )
+            email = user_context.get("email_address", "")
+            user_context_str = f"\n\nCurrent User:\n- Name: {name}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name}"
 
         logger.info(
             f"🔍 Classifying intent for query: '{query}' with history: {history_context[:200]}"
@@ -145,7 +192,7 @@ class AdaptiveQueryRewriter:
 Query: "{query}"
 
 Recent conversation context:
-{history_context}
+{history_context}{user_context_str}
 
 Analyze the query and return a JSON object with:
 {{

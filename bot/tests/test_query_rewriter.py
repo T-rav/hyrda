@@ -175,7 +175,7 @@ class TestIntentClassification:
         query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
-            "who has react experience?", conversation_history=[]
+            "who has react experience?", conversation_history=[], user_context=None
         )
 
         assert result["type"] == "employee_search"
@@ -196,7 +196,9 @@ class TestIntentClassification:
         query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
-            "who worked on Project X in 2023?", conversation_history=[]
+            "who worked on Project X in 2023?",
+            conversation_history=[],
+            user_context=None,
         )
 
         assert result["type"] == "team_allocation"
@@ -210,7 +212,7 @@ class TestIntentClassification:
         query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
-            "test query", conversation_history=[]
+            "test query", conversation_history=[], user_context=None
         )
 
         # Should return general intent on parse error (not 'unknown')

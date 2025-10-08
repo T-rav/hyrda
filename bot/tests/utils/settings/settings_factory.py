@@ -21,7 +21,7 @@ class SettingsFactory:
     def create_complete_rag_settings(
         embedding_provider: str = "openai",
         llm_provider: str = "openai",
-        vector_provider: str = "pinecone",
+        vector_provider: str = "qdrant",
     ) -> Settings:
         """Create complete RAG settings with all components"""
         return Settings(
@@ -37,7 +37,9 @@ class SettingsFactory:
             ),
             vector=VectorSettings(
                 provider=vector_provider,
-                api_key=SecretStr("test-key"),
+                host="localhost",
+                port=6333,
+                api_key="test-key",  # Changed from SecretStr to plain string
                 collection_name="test",
             ),
         )
