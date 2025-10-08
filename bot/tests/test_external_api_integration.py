@@ -338,12 +338,6 @@ class TestVectorDatabaseIntegration:
     """Test vector database API integrations"""
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_api_contract(self):
-        """Test Elasticsearch API integration"""
-        # Elasticsearch no longer supported - skip this test
-        pytest.skip("Elasticsearch support has been removed - Pinecone only")
-
-    @pytest.mark.asyncio
     async def test_pinecone_api_contract(self):
         """Test Pinecone API integration"""
         from bot.services.vector_stores.pinecone_store import PineconeVectorStore
