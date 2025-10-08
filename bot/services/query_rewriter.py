@@ -181,12 +181,13 @@ class AdaptiveQueryRewriter:
             display_name = user_context.get("display_name", "")
             email = user_context.get("email_address", "")
 
-            # Build names list - include both if different
+            # Build names list - prioritize display_name (usually full name), then real_name
+            # Include both if different, but put display_name first since it's more formal
             names = []
-            if real_name:
-                names.append(real_name)
-            if display_name and display_name != real_name:
+            if display_name:
                 names.append(display_name)
+            if real_name and real_name != display_name:
+                names.append(real_name)
 
             name_str = " or ".join(names) if names else "Unknown"
             user_context_str = f"\n\nCurrent User:\n- Name: {name_str}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name_str}"
