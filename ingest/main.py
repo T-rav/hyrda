@@ -98,47 +98,70 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        # Import bot config (not tasks config)
-        bot_path = str(Path(__file__).parent.parent / "bot")
-        sys.path.insert(0, bot_path)  # Prioritize bot over tasks
+        # Use local config (no dependencies on bot/tasks)
+        from config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
 
-        from config.settings import (
-            EmbeddingSettings,
-            LLMSettings,
-            VectorSettings,
-        )
+        vector_config = VectorConfig.from_env()
+        embedding_config = EmbeddingConfig.from_env()
+        llm_config = LLMConfig.from_env()
+        rag_config = RAGConfig.from_env()
 
-        # Initialize vector store
-        vector_settings = VectorSettings()
-        embedding_settings = EmbeddingSettings()
-        llm_settings = LLMSettings()
+        # Add bot to path for services
+        sys.path.append(str(Path(__file__).parent.parent / "bot"))
 
         from services.vector_service import create_vector_store
 
+        # Create a simple settings object compatible with bot services
+        class VectorSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                self.host = config.host
+                self.port = config.port
+                self.api_key = config.api_key
+                self.collection_name = config.collection_name
+
+        class EmbeddingSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                self.model = config.model
+                self.api_key = config.api_key
+                self.chunk_size = config.chunk_size
+                self.chunk_overlap = config.chunk_overlap
+
+        class LLMSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                self.api_key = config.api_key
+                self.model = config.model
+                self.base_url = config.base_url
+                self.temperature = config.temperature
+                self.max_tokens = config.max_tokens
+
+        vector_settings = VectorSettings(vector_config)
+        embedding_settings = EmbeddingSettings(embedding_config)
+        llm_settings = LLMSettings(llm_config)
+
+        # Initialize vector store
         vector_store = create_vector_store(vector_settings)
         await vector_store.initialize()
 
         # Initialize embedding service
         from services.embedding_service import create_embedding_provider
 
-        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+        embedding_provider = create_embedding_provider(
+            embedding_settings, llm_settings
+        )
 
         # Initialize LLM service for contextual retrieval if enabled
         llm_service = None
-        try:
-            from config.settings import RAGSettings
+        if rag_config.enable_contextual_retrieval:
+            from services.llm_service import create_llm_service
 
-            rag_settings = RAGSettings()
-            if rag_settings.enable_contextual_retrieval:
-                from services.llm_service import create_llm_service
-
-                llm_service = await create_llm_service(llm_settings)
-                print(
-                    "✅ Contextual retrieval enabled - "
-                    "chunks will be enhanced with context"
-                )
-        except Exception:
-            pass  # Contextual retrieval settings not available
+            llm_service = await create_llm_service(llm_settings)
+            print(
+                "✅ Contextual retrieval enabled - "
+                "chunks will be enhanced with context"
+            )
 
         # Set services in orchestrator
         orchestrator.set_services(
