@@ -8,7 +8,7 @@ class TasksSettings(BaseSettings):
     """Tasks service configuration."""
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_ignore_empty=True, extra="ignore"
+        env_ignore_empty=True, extra="ignore"
     )
 
     # Server configuration
@@ -21,14 +21,14 @@ class TasksSettings(BaseSettings):
 
     # Database configuration
     task_database_url: str = Field(
-        default="mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@localhost:3306/insightmesh_task",
+        default="mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task",
         alias="TASK_DATABASE_URL",
         description="MySQL database for task management",
     )
     data_database_url: str = Field(
-        default="postgresql://postgres:password@localhost:5432/insightmesh_data",
+        default="mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data",
         alias="DATA_DATABASE_URL",
-        description="PostgreSQL database for metric_records table (sync driver)",
+        description="MySQL database for metric_records table",
     )
 
     # Main Slack Bot API integration
