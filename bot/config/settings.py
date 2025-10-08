@@ -161,6 +161,10 @@ class RAGSettings(BaseSettings):
         default=0.1,
         description="Similarity boost per entity found in document title/filename (0.1 = 10%)",
     )
+    max_chunks_per_document: int = Field(
+        default=3,
+        description="Maximum chunks to return from a single document (prevents one doc from dominating results)",
+    )
     enable_query_rewriting: bool = Field(
         default=True,
         description="Enable adaptive query rewriting to improve retrieval accuracy",

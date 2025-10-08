@@ -218,7 +218,7 @@ class BaseRetrieval:
         """
         Smart similarity-first diversification.
 
-        - For document chunks (has file_name): Limit to 3 chunks per document
+        - For document chunks (has file_name): Limit to RAG_MAX_CHUNKS_PER_DOCUMENT per document
         - For metric data (no file_name): Pure similarity order
 
         Args:
@@ -233,6 +233,7 @@ class BaseRetrieval:
 
         selected = []
         doc_chunk_count = {}  # Track chunks per document
+        max_per_doc = self.settings.rag.max_chunks_per_document
 
         for result in results:
             if len(selected) >= max_results:
@@ -240,10 +241,10 @@ class BaseRetrieval:
 
             file_name = result.get("metadata", {}).get("file_name")
 
-            # If it's a document chunk (has file_name), limit to 3 per document
+            # If it's a document chunk (has file_name), limit per document
             if file_name and file_name != "Unknown":
                 count = doc_chunk_count.get(file_name, 0)
-                if count >= 3:  # Max 3 chunks per document
+                if count >= max_per_doc:
                     continue
                 doc_chunk_count[file_name] = count + 1
 
@@ -252,7 +253,7 @@ class BaseRetrieval:
 
         logger.debug(
             f"Smart diversification: Selected {len(selected)} results "
-            f"({len(doc_chunk_count)} unique documents with chunk limiting)"
+            f"({len(doc_chunk_count)} unique documents, max {max_per_doc} chunks per doc)"
         )
 
         return selected
