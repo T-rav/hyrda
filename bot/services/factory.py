@@ -56,16 +56,12 @@ class ServiceFactory:
             )
 
         # Register vector services
-        if self.settings.vector.enabled:
-            self.container.register_factory(
-                VectorServiceProtocol, self._create_vector_service
-            )
+        self.container.register_factory(
+            VectorServiceProtocol, self._create_vector_service
+        )
 
         # Register RAG service (depends on vector service)
-        if self.settings.vector.enabled:
-            self.container.register_factory(
-                RAGServiceProtocol, self._create_rag_service
-            )
+        self.container.register_factory(RAGServiceProtocol, self._create_rag_service)
 
         # Register Slack service
         self.container.register_factory(
@@ -153,10 +149,7 @@ class ServiceFactory:
         """Create LLM service with all dependencies."""
         # Get dependencies from container
         metrics_service = await self.container.get(MetricsServiceProtocol)
-
-        rag_service = None
-        if self.settings.vector.enabled:
-            rag_service = await self.container.get(RAGServiceProtocol)
+        rag_service = await self.container.get(RAGServiceProtocol)
 
         langfuse_service = None
         if self.settings.langfuse.enabled:

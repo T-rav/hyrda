@@ -53,7 +53,6 @@ LLM_API_KEY=sk-your-openai-api-key
 LLM_MODEL=gpt-4o-mini
 
 # RAG Configuration
-VECTOR_ENABLED=true
 VECTOR_PROVIDER=pinecone
 VECTOR_API_KEY=your-pinecone-api-key
 

@@ -33,12 +33,9 @@ class LLMSettingsFactory:
         return settings
 
     @staticmethod
-    def create_vector_settings(
-        enabled: bool = False, provider: str = "chroma"
-    ) -> MagicMock:
+    def create_vector_settings(provider: str = "chroma") -> MagicMock:
         """Create vector settings mock"""
         settings = MagicMock()
-        settings.enabled = enabled
         settings.provider = provider
         settings.url = "./test_chroma"
         settings.collection_name = "test_collection"
@@ -70,13 +67,10 @@ class LLMSettingsFactory:
         return settings
 
     @staticmethod
-    def create_complete_settings(
-        llm_model: str = "gpt-4o-mini",
-        vector_enabled: bool = False,
-    ) -> MagicMock:
+    def create_complete_settings(llm_model: str = "gpt-4o-mini") -> MagicMock:
         """Create complete settings mock with all components"""
         settings = LLMSettingsFactory.create_openai_settings(llm_model)
-        settings.vector = LLMSettingsFactory.create_vector_settings(vector_enabled)
+        settings.vector = LLMSettingsFactory.create_vector_settings()
         settings.embedding = LLMSettingsFactory.create_embedding_settings()
         settings.rag = LLMSettingsFactory.create_rag_settings()
         return settings
@@ -255,17 +249,6 @@ class TestLLMService:
 
         assert result == 5
         llm_service.rag_service.ingest_documents.assert_called_once_with(documents)
-
-    @pytest.mark.asyncio
-    async def test_ingest_documents_disabled(self, llm_service):
-        """Test document ingestion when vector storage is disabled"""
-        documents = [{"content": "Test document"}]
-
-        llm_service.settings.vector.enabled = False
-
-        result = await llm_service.ingest_documents(documents)
-
-        assert result == 0
 
     @pytest.mark.asyncio
     async def test_get_system_status(self, llm_service):

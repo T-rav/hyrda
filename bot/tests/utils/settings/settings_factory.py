@@ -39,16 +39,8 @@ class SettingsFactory:
                 provider=vector_provider,
                 api_key=SecretStr("test-key"),
                 collection_name="test",
-                enabled=True,
             ),
         )
-
-    @staticmethod
-    def create_vector_disabled_settings() -> Settings:
-        """Create settings with vector storage disabled"""
-        settings = SettingsFactory.create_complete_rag_settings()
-        settings.vector.enabled = False
-        return settings
 
     @staticmethod
     def create_basic_mock_settings() -> MagicMock:
