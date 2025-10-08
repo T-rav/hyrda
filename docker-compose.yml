@@ -74,12 +74,13 @@ services:
     container_name: insightmesh-qdrant
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6333:6333"  # REST API - bound to localhost only
-      - "127.0.0.1:6334:6334"  # gRPC API - bound to localhost only
+      - "6333:6333"  # REST API + Dashboard
+      - "6334:6334"  # gRPC API
     volumes:
       - qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}  # Set in .env for security
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/"]
       interval: 10s
@@ -168,6 +169,7 @@ services:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${QDRANT_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:

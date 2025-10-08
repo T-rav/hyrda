@@ -41,6 +41,7 @@ class QdrantVectorStore(VectorStore):
         self.client = None
         self.host = getattr(settings, "host", "localhost")
         self.port = getattr(settings, "port", 6333)
+        self.api_key = getattr(settings, "api_key", None)
 
     async def initialize(self):
         """Initialize Qdrant client and collection"""
@@ -51,7 +52,9 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client
-            self.client = QdrantClient(host=self.host, port=self.port, timeout=60)
+            self.client = QdrantClient(
+                host=self.host, port=self.port, api_key=self.api_key, timeout=60
+            )
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
