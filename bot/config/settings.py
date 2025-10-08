@@ -64,55 +64,22 @@ class DatabaseSettings(BaseSettings):
 
 
 class VectorSettings(BaseSettings):
-    """Vector database settings for RAG"""
+    """Pinecone vector database settings for RAG"""
 
     provider: str = Field(
-        default="pinecone", description="Vector DB provider (pinecone, elasticsearch)"
+        default="pinecone", description="Vector database provider (pinecone)"
     )
-    url: str = Field(default="http://localhost:9200", description="Vector database URL")
     api_key: SecretStr | None = Field(
-        default=None, description="Vector DB API key (required for Pinecone)"
+        default=None, description="Pinecone API key (required)"
     )
     collection_name: str = Field(
-        default="insightmesh-knowledge-base", description="Collection/index name"
+        default="insightmesh-knowledge-base", description="Pinecone index name"
     )
     environment: str | None = Field(
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
     )
-    enabled: bool = Field(default=True, description="Enable RAG functionality")
 
     model_config = ConfigDict(env_prefix="VECTOR_")
-
-
-class HybridSettings(BaseSettings):
-    """Hybrid retrieval settings"""
-
-    enabled: bool = Field(
-        default=True, description="Enable hybrid dense+sparse retrieval"
-    )
-    dense_top_k: int = Field(default=100, description="Dense retrieval top-k")
-    sparse_top_k: int = Field(default=200, description="Sparse retrieval top-k")
-    fusion_top_k: int = Field(default=50, description="Post-fusion candidates")
-    final_top_k: int = Field(default=10, description="Final results after reranking")
-    rrf_k: int = Field(default=60, description="RRF parameter k")
-
-    # Reranker settings
-    reranker_enabled: bool = Field(
-        default=True, description="Enable cross-encoder reranking"
-    )
-    reranker_provider: str = Field(
-        default="cohere", description="Reranker provider (cohere)"
-    )
-    reranker_model: str = Field(
-        default="rerank-english-v3.0", description="Reranker model"
-    )
-    reranker_api_key: SecretStr | None = Field(
-        default=None, description="Reranker API key"
-    )
-
-    # Note: Title injection is now always enabled for better semantic search
-
-    model_config = ConfigDict(env_prefix="HYBRID_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class EmbeddingSettings(BaseSettings):
@@ -145,13 +112,8 @@ class RAGSettings(BaseSettings):
     results_similarity_threshold: float = Field(
         default=0.5, description="Final results minimum similarity threshold"
     )
-    rerank_enabled: bool = Field(default=False, description="Enable result reranking")
     include_metadata: bool = Field(
         default=True, description="Include document metadata in context"
-    )
-    enable_hybrid_search: bool = Field(
-        default=False,
-        description="Enable hybrid dense+sparse search (requires hybrid service)",
     )
     entity_content_boost: float = Field(
         default=0.05,
@@ -161,21 +123,17 @@ class RAGSettings(BaseSettings):
         default=0.1,
         description="Similarity boost per entity found in document title/filename (0.1 = 10%)",
     )
-    diversification_mode: str = Field(
-        default="balanced",
-        description="Document diversification strategy: 'balanced' (round-robin), 'document_first' (1 per doc then all), 'similarity_first' (pure similarity order)",
+    max_chunks_per_document: int = Field(
+        default=3,
+        description="Maximum chunks to return from a single document (prevents one doc from dominating results)",
     )
-    max_unique_documents: int = Field(
-        default=5,
-        description="Maximum number of unique documents to include in results",
+    enable_query_rewriting: bool = Field(
+        default=True,
+        description="Enable adaptive query rewriting to improve retrieval accuracy",
     )
-    enable_contextual_retrieval: bool = Field(
-        default=False,
-        description="Enable Anthropic's contextual retrieval - adds context to chunks before embedding",
-    )
-    contextual_batch_size: int = Field(
-        default=10,
-        description="Number of chunks to process in parallel for contextual retrieval",
+    query_rewrite_model: str = Field(
+        default="gpt-4o-mini",
+        description="LLM model to use for query rewriting (fast model recommended)",
     )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
@@ -223,7 +181,6 @@ class Settings(BaseSettings):
     cache: CacheSettings = Field(default_factory=CacheSettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)  # type: ignore[arg-type]
     vector: VectorSettings = Field(default_factory=VectorSettings)
-    hybrid: HybridSettings = Field(default_factory=HybridSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)

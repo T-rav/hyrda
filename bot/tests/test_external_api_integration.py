@@ -280,7 +280,7 @@ class TestLangfuseAPIIntegration:
             mock_client = Mock()
             mock_langfuse.return_value = mock_client
 
-            LangfuseService(settings)
+            LangfuseService(settings, environment="test")
 
             # Verify Langfuse client is initialized with correct parameters
             mock_langfuse.assert_called_once_with(
@@ -288,6 +288,7 @@ class TestLangfuseAPIIntegration:
                 secret_key="sk-test-456",
                 host="https://cloud.langfuse.com",
                 debug=False,
+                environment="test",
             )
 
     def test_langfuse_tracing_methods_contract(self):
@@ -337,58 +338,11 @@ class TestVectorDatabaseIntegration:
     """Test vector database API integrations"""
 
     @pytest.mark.asyncio
-    async def test_elasticsearch_api_contract(self):
-        """Test Elasticsearch API integration"""
-        from bot.services.vector_stores.elasticsearch_store import (
-            ElasticsearchVectorStore,
-        )
-
-        settings = VectorSettings(
-            provider="elasticsearch",
-            url="http://localhost:9200",
-            collection_name="test-index",
-        )
-
-        expected_search_response = {
-            "hits": {
-                "total": {"value": 1},
-                "max_score": 1.0,
-                "hits": [
-                    {
-                        "_id": "doc1",
-                        "_score": 0.95,
-                        "_source": {
-                            "content": "Test document content",
-                            "metadata": {"file_name": "test.pdf"},
-                        },
-                    }
-                ],
-            }
-        }
-
-        with patch("elasticsearch.AsyncElasticsearch") as mock_es_class:
-            mock_client = Mock()
-            mock_client.ping = AsyncMock(return_value=True)
-            mock_client.indices.exists = AsyncMock(return_value=True)
-            mock_client.search = AsyncMock(return_value=expected_search_response)
-            mock_es_class.return_value = mock_client
-
-            store = ElasticsearchVectorStore(settings)
-            await store.initialize()
-
-            # Test that we handle Elasticsearch response format correctly
-            results = await store.search([0.1, 0.2, 0.3], limit=5)
-
-            # Verify we parse Elasticsearch response correctly
-            assert isinstance(results, list)
-
-    @pytest.mark.asyncio
     async def test_pinecone_api_contract(self):
         """Test Pinecone API integration"""
         from bot.services.vector_stores.pinecone_store import PineconeVectorStore
 
         settings = VectorSettings(
-            provider="pinecone",
             api_key=SecretStr("test-key"),
             environment="test-env",
             collection_name="test-index",
@@ -486,13 +440,13 @@ class TestAPIBreakingChangeDetection:
         required_openai_fields = ["choices", "usage"]
         required_slack_message_fields = ["ok", "ts", "channel"]
         required_langfuse_fields = ["start_span", "start_generation", "flush"]
-        required_elasticsearch_fields = ["hits"]
+        required_pinecone_fields = ["matches"]
 
         # These assertions document our API dependencies
         assert required_openai_fields is not None
         assert required_slack_message_fields is not None
         assert required_langfuse_fields is not None
-        assert required_elasticsearch_fields is not None
+        assert required_pinecone_fields is not None
 
     def test_api_method_signatures_unchanged(self):
         """Test that API method signatures haven't changed"""

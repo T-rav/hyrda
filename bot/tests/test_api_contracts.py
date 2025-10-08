@@ -175,9 +175,9 @@ class TestHealthAPIContracts(AioHTTPTestCase):
 
             for metric in expected_metrics:
                 assert metric in data, f"Missing usage metric: {metric}"
-                assert isinstance(
-                    data[metric], int | float
-                ), f"Invalid type for {metric}"
+                assert isinstance(data[metric], int | float), (
+                    f"Invalid type for {metric}"
+                )
 
     @unittest_run_loop
     async def test_user_import_endpoint_contract(self):

@@ -66,8 +66,11 @@ class LangfuseService:
                     secret_key=self.settings.secret_key.get_secret_value(),
                     host=self.settings.host,
                     debug=self.settings.debug,
+                    environment=self.environment,  # Set environment for all traces
                 )
-                logger.info("Langfuse client initialized successfully")
+                logger.info(
+                    f"Langfuse client initialized successfully (environment: {self.environment})"
+                )
             else:
                 logger.warning("Langfuse credentials not provided - tracing disabled")
                 self.enabled = False
@@ -120,6 +123,7 @@ class LangfuseService:
                     "environment": self.environment,
                     **(metadata or {}),
                 },
+                "tags": [self.environment],  # Add environment as tag for filtering
                 "usage": usage,
             }
 
@@ -198,11 +202,6 @@ class LangfuseService:
                     "document_source": doc_name,
                     "metadata": chunk_metadata,
                 }
-
-                # Add hybrid-specific data if available
-                if result.get("_hybrid_source"):
-                    enhanced_chunk["retrieval_source"] = result.get("_hybrid_source")
-                    enhanced_chunk["hybrid_rank"] = result.get("_hybrid_rank", 0)
 
                 enhanced_chunks.append(enhanced_chunk)
 

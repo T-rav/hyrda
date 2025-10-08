@@ -57,7 +57,7 @@ class MetricsDataFactory:
 
     @staticmethod
     def create_rag_data(
-        provider: str = "elasticsearch",
+        provider: str = "pinecone",
         entity_filter: str = "apple",
         chunks_found: int = 5,
         avg_similarity: float = 0.85,
@@ -108,7 +108,7 @@ class MetricsDataFactory:
 
     @staticmethod
     def create_rag_operation_data(
-        operation: str = "search", provider: str = "elasticsearch"
+        operation: str = "search", provider: str = "pinecone"
     ) -> dict[str, str]:
         """Create RAG operation data"""
         return {"operation": operation, "provider": provider}
@@ -199,7 +199,7 @@ class TestMetricsService:
         """Test recording RAG retrieval with different providers"""
         metrics_service = MetricsServiceFactory.create_enabled_service()
 
-        providers = ["elasticsearch", "pinecone", "chroma"]
+        providers = ["pinecone", "chroma"]
         for provider in providers:
             rag_data = MetricsDataFactory.create_rag_data(provider=provider)
             metrics_service.record_rag_retrieval(

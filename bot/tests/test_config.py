@@ -5,7 +5,13 @@ from unittest.mock import patch
 # Add the parent directory to sys.path to allow importing the module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from config.settings import AgentSettings, LLMSettings, Settings, SlackSettings
+from config.settings import (
+    AgentSettings,
+    LLMSettings,
+    Settings,
+    SlackSettings,
+    VectorSettings,
+)
 
 
 # TDD Factory Patterns for Configuration Testing
@@ -242,3 +248,32 @@ class TestConfig:
         assert env_vars["LLM_API_KEY"] == "key123"
         assert env_vars["LLM_MODEL"] == "model456"
         assert env_vars["LLM_BASE_URL"] == "http://test.com"
+
+    def test_vector_settings_has_provider_field(self):
+        """Test that VectorSettings has provider field with default value"""
+        with patch.dict(
+            os.environ,
+            {
+                "VECTOR_API_KEY": "test-key",
+                "VECTOR_COLLECTION_NAME": "test-collection",
+            },
+        ):
+            settings = VectorSettings()
+
+            # Critical: provider field must exist to prevent AttributeError
+            assert hasattr(settings, "provider")
+            assert settings.provider == "pinecone"
+
+    def test_vector_settings_provider_can_be_set(self):
+        """Test that VectorSettings provider can be set via environment"""
+        with patch.dict(
+            os.environ,
+            {
+                "VECTOR_PROVIDER": "pinecone",
+                "VECTOR_API_KEY": "test-key",
+                "VECTOR_COLLECTION_NAME": "test-collection",
+            },
+        ):
+            settings = VectorSettings()
+
+            assert settings.provider == "pinecone"

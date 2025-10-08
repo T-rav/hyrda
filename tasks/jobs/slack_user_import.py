@@ -64,15 +64,7 @@ class SlackUserImportJob(BaseJob):
             self.slack_client = WebClient(token=self.settings.slack_bot_token)
 
         # Store data database URL for later use (don't create engine in __init__)
-        self.data_db_url = self.settings.database_url.replace(
-            "insightmesh_task", "insightmesh_data"
-        )
-        self.data_db_url = self.data_db_url.replace(
-            "insightmesh_tasks:", "insightmesh_data:"
-        )
-        self.data_db_url = self.data_db_url.replace(
-            "insightmesh_tasks_password", "insightmesh_data_password"
-        )
+        self.data_db_url = self.settings.data_database_url
 
     def validate_params(self) -> bool:
         """Validate job parameters."""

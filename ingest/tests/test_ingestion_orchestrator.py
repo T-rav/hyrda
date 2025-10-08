@@ -142,7 +142,7 @@ class TestIngestionOrchestrator:
 
             # Verify service calls
             orchestrator.google_drive_client.download_file_content.assert_called_once()
-            # For hybrid service, we expect ingest_documents to be called, not get_embeddings
+            # For RAG service with batch ingestion, we expect ingest_documents to be called
             mock_vector_service.ingest_documents.assert_called_once()
 
     @pytest.mark.asyncio

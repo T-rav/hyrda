@@ -3,7 +3,6 @@
 import logging
 from datetime import UTC, datetime
 
-from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
@@ -13,8 +12,7 @@ from models.base import get_db_session
 from models.task_run import TaskRun
 from services.scheduler_service import SchedulerService
 
-# Load environment variables
-load_dotenv()
+# Environment variables loaded by Pydantic from docker-compose.yml
 
 # Configure logging
 logging.basicConfig(

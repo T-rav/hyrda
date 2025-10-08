@@ -19,7 +19,7 @@ class TestSchedulerService:
     def test_scheduler_start_stop(self, test_settings):
         """Test starting and stopping the scheduler."""
         # Use in-memory database for tests
-        test_settings.database_url = "sqlite:///:memory:"
+        test_settings.task_database_url = "sqlite:///:memory:"
         service = SchedulerService(test_settings)
 
         # Test start
@@ -33,7 +33,7 @@ class TestSchedulerService:
     def test_add_job(self, test_settings):
         """Test adding a job to the scheduler."""
         # Use in-memory scheduler for tests
-        test_settings.database_url = "sqlite:///:memory:"
+        test_settings.task_database_url = "sqlite:///:memory:"
         service = SchedulerService(test_settings)
         service.start()
 
@@ -53,7 +53,7 @@ class TestSchedulerService:
 
     def test_get_jobs(self, test_settings):
         """Test getting all jobs."""
-        test_settings.database_url = "sqlite:///:memory:"
+        test_settings.task_database_url = "sqlite:///:memory:"
         service = SchedulerService(test_settings)
         service.start()
 

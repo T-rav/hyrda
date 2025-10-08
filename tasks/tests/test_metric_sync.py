@@ -111,7 +111,6 @@ async def test_sync_employees(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
@@ -119,7 +118,6 @@ async def test_sync_employees(
         assert result["employees_synced"] == 1
         assert result["projects_synced"] == 0
         assert result["clients_synced"] == 0
-        assert result["allocations_synced"] == 0
         assert mock_vector_store.initialize.called
         assert mock_embedding_provider.embed_batch.called
 
@@ -141,7 +139,6 @@ async def test_sync_projects(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
@@ -167,38 +164,11 @@ async def test_sync_clients(
             sync_employees=False,
             sync_projects=False,
             sync_clients=True,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
 
         assert result["clients_synced"] == 1
-
-
-@pytest.mark.asyncio
-async def test_sync_allocations(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
-):
-    """Test allocation sync."""
-    with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
-        patch(
-            "jobs.metric_sync.OpenAIEmbeddings",
-            return_value=mock_embedding_provider,
-        ),
-    ):
-        job = MetricSyncJob(
-            settings,
-            sync_employees=False,
-            sync_projects=False,
-            sync_clients=False,
-            sync_allocations=True,
-            allocations_start_year=2024,
-        )
-
-        result = await job._execute_job()
-
-        assert result["allocations_synced"] == 1
 
 
 @pytest.mark.asyncio
@@ -220,7 +190,6 @@ async def test_sync_all_data_types(
         assert result["employees_synced"] == 1
         assert result["projects_synced"] == 1
         assert result["clients_synced"] == 1
-        assert result["allocations_synced"] == 1
         assert mock_vector_store.close.called
 
 
@@ -241,7 +210,6 @@ async def test_employee_metadata_structure(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -289,13 +257,151 @@ async def test_project_filtering(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         result = await job._execute_job()
 
         # Only 1 billable project should be synced
         assert result["projects_synced"] == 1
+
+
+@pytest.mark.asyncio
+async def test_database_writes_for_employees(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that _write_metric_records is called with correct employee data."""
+    with (
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=True,
+            sync_projects=False,
+            sync_clients=False,
+        )
+
+        # Mock the database write method
+        with patch.object(job, "_write_metric_records") as mock_db_write:
+            mock_db_write.return_value = 1  # Return count of records written
+
+            await job._execute_job()
+
+            # Verify _write_metric_records was called once for employees
+            assert mock_db_write.call_count == 1
+
+            # Get the call arguments
+            call_args = mock_db_write.call_args[0][0]
+
+            # Verify the structure of database records
+            assert len(call_args) == 1
+            record = call_args[0]
+            assert record["metric_id"] == "emp1"
+            assert record["data_type"] == "employee"
+            assert record["pinecone_id"] == "metric_employee_emp1"
+            assert record["pinecone_namespace"] == "metric"
+            assert "Employee: John Doe" in record["content_snapshot"]
+
+
+@pytest.mark.asyncio
+async def test_database_writes_for_projects(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that _write_metric_records is called with correct project data."""
+    with (
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=True,
+            sync_clients=False,
+        )
+
+        with patch.object(job, "_write_metric_records") as mock_db_write:
+            mock_db_write.return_value = 1
+
+            await job._execute_job()
+
+            assert mock_db_write.call_count == 1
+
+            call_args = mock_db_write.call_args[0][0]
+            record = call_args[0]
+            assert record["metric_id"] == "proj1"
+            assert record["data_type"] == "project"
+            assert record["pinecone_id"] == "metric_project_proj1"
+            assert "Project: Project Alpha" in record["content_snapshot"]
+
+
+@pytest.mark.asyncio
+async def test_database_writes_for_clients(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that _write_metric_records is called with correct client data."""
+    with (
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=False,
+            sync_clients=True,
+        )
+
+        with patch.object(job, "_write_metric_records") as mock_db_write:
+            mock_db_write.return_value = 1
+
+            await job._execute_job()
+
+            assert mock_db_write.call_count == 1
+
+            call_args = mock_db_write.call_args[0][0]
+            record = call_args[0]
+            assert record["metric_id"] == "client1"
+            assert record["data_type"] == "client"
+            assert record["pinecone_id"] == "metric_client_client1"
+            assert "Client: Acme Corp" in record["content_snapshot"]
+
+
+@pytest.mark.asyncio
+async def test_database_write_failure_does_not_block_sync(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that database write failures don't prevent Pinecone sync."""
+    with (
+        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=True,
+            sync_projects=False,
+            sync_clients=False,
+        )
+
+        with patch.object(job, "_write_metric_records") as mock_db_write:
+            # Simulate database write failure
+            mock_db_write.return_value = 0
+
+            result = await job._execute_job()
+
+            # Pinecone sync should still succeed
+            assert result["employees_synced"] == 1
+            assert mock_vector_store.initialize.called
 
 
 @pytest.mark.asyncio
@@ -333,7 +439,6 @@ async def test_employee_project_history(
             sync_employees=True,
             sync_projects=False,
             sync_clients=False,
-            sync_allocations=False,
             allocations_start_year=2023,
         )
 
@@ -387,7 +492,6 @@ async def test_project_practice_field_group_type_21(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -433,7 +537,6 @@ async def test_project_practice_field_defaults_to_unknown(
             sync_employees=False,
             sync_projects=True,
             sync_clients=False,
-            sync_allocations=False,
         )
 
         await job._execute_job()
@@ -453,4 +556,3 @@ def test_job_metadata():
     assert "sync_employees" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_projects" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_clients" in MetricSyncJob.OPTIONAL_PARAMS
-    assert "sync_allocations" in MetricSyncJob.OPTIONAL_PARAMS
