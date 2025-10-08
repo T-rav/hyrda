@@ -145,7 +145,7 @@ class TestOpenAIProvider:
             call_args = mock_client.chat.completions.create.call_args[1]
             assert call_args["model"] == "gpt-4"
             assert call_args["temperature"] == 0.7
-            assert call_args["max_tokens"] == 1000
+            assert call_args["max_completion_tokens"] == 1000
             assert len(call_args["messages"]) == 2  # system + user message
 
     @pytest.mark.asyncio
