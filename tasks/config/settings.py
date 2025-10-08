@@ -51,6 +51,17 @@ class TasksSettings(BaseSettings):
     metrics_api_url: str | None = Field(default=None, alias="METRICS_API_URL")
     metrics_api_key: str | None = Field(default=None, alias="METRICS_API_KEY")
 
+    # Portal API (8th Light Employee Portal)
+    portal_secret: str | None = Field(default=None, alias="PORTAL_SECRET")
+    portal_url: str = Field(
+        default="https://portal.8thlight.com", alias="PORTAL_URL"
+    )
+    portal_email: str = Field(
+        default="bot@8thlight.com",
+        alias="PORTAL_EMAIL",
+        description="Email for Portal JWT authentication",
+    )
+
     # Scheduler configuration
     scheduler_timezone: str = Field(default="UTC", alias="SCHEDULER_TIMEZONE")
     scheduler_job_defaults_coalesce: bool = Field(
