@@ -11,6 +11,7 @@ from config.settings import TasksSettings
 from services.metric_client import MetricClient
 from services.openai_embeddings import OpenAIEmbeddings
 from services.pinecone_client import PineconeClient
+from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
 
@@ -41,7 +42,18 @@ class MetricSyncJob(BaseJob):
         # Initialize clients
         self.metric_client = MetricClient()
         self.embedding_client = OpenAIEmbeddings()
-        self.vector_client = PineconeClient()
+
+        # Initialize vector client based on provider
+        vector_provider = self.settings.vector_provider.lower()
+        if vector_provider == "qdrant":
+            self.vector_client = QdrantClient()
+        elif vector_provider == "pinecone":
+            self.vector_client = PineconeClient()
+        else:
+            raise ValueError(
+                f"Unsupported vector provider: {vector_provider}. "
+                f"Supported providers: pinecone, qdrant"
+            )
 
         # Store which data types to sync (default: all)
         self.sync_employees = self.params.get("sync_employees", True)

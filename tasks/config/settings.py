@@ -58,6 +58,19 @@ class TasksSettings(BaseSettings):
         description="Email for Portal JWT authentication",
     )
 
+    # Vector database configuration
+    vector_provider: str = Field(
+        default="pinecone",
+        alias="VECTOR_PROVIDER",
+        description="Vector database provider (pinecone, qdrant)",
+    )
+    qdrant_host: str = Field(
+        default="localhost", alias="QDRANT_HOST", description="Qdrant host"
+    )
+    qdrant_port: int = Field(
+        default=6333, alias="QDRANT_PORT", description="Qdrant port"
+    )
+
     # Scheduler configuration
     scheduler_timezone: str = Field(default="UTC", alias="SCHEDULER_TIMEZONE")
     scheduler_job_defaults_coalesce: bool = Field(
