@@ -20,12 +20,33 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: |
+          bot/pyproject.toml
+          tasks/pyproject.toml
+          ingest/pyproject.toml
+
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install project dependencies directly (no venv needed in CI)
-        pip install -e "bot/.[dev,test]"
+        # Install project dependencies based on task
+        if [[ "${{ matrix.task }}" == "lint" || "${{ matrix.task }}" == "test" ]]; then
+          pip install -e "bot/.[dev,test]"
+        elif [[ "${{ matrix.task }}" == "ingest-lint" || "${{ matrix.task }}" == "ingest-test" ]]; then
+          pip install -e "bot/.[dev,test]"
+          pip install -e "ingest/.[test]"
+        elif [[ "${{ matrix.task }}" == "task-lint" || "${{ matrix.task }}" == "task-test" ]]; then
+          pip install -e "bot/.[dev,test]"
+          pip install -e "tasks/[test]"
+        fi
 
     - name: Run unified linting and type checking
       if: matrix.task == 'lint'
@@ -67,9 +88,7 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
-      run: |
-        pip install -e "ingest/.[test]"
-        make test-ingest
+      run: make test-ingest
 
     - name: Run task tests
       if: matrix.task == 'task-test'
@@ -78,9 +97,7 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
-      run: |
-        pip install -e "tasks/[test]"
-        make test-tasks
+      run: make test-tasks
 
   react-tests:
     runs-on: ubuntu-latest
