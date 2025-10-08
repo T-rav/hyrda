@@ -7,9 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class TasksSettings(BaseSettings):
     """Tasks service configuration."""
 
-    model_config = SettingsConfigDict(
-        env_ignore_empty=True, extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
 
     # Server configuration
     port: int = Field(default=8081, alias="FLASK_PORT")
@@ -53,9 +51,7 @@ class TasksSettings(BaseSettings):
 
     # Portal API (8th Light Employee Portal)
     portal_secret: str | None = Field(default=None, alias="PORTAL_SECRET")
-    portal_url: str = Field(
-        default="https://portal.8thlight.com", alias="PORTAL_URL"
-    )
+    portal_url: str = Field(default="https://portal.8thlight.com", alias="PORTAL_URL")
     portal_email: str = Field(
         default="bot@8thlight.com",
         alias="PORTAL_EMAIL",

@@ -116,5 +116,7 @@ class PortalClient:
         """
         logger.info(f"Updating profile for employee {metric_id}")
         return self._make_request(
-            f"/employees/{metric_id}/profile", method="PUT", data={"profile": profile_data}
+            f"/employees/{metric_id}/profile",
+            method="PUT",
+            data={"profile": profile_data},
         )

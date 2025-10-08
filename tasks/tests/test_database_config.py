@@ -124,9 +124,9 @@ class TestTaskDatabaseSchema:
             "updated_at",
         }
 
-        assert required_columns.issubset(
-            columns
-        ), f"Missing columns: {required_columns - columns}"
+        assert required_columns.issubset(columns), (
+            f"Missing columns: {required_columns - columns}"
+        )
 
 
 class TestDataDatabaseSchema:
@@ -184,9 +184,9 @@ class TestDataDatabaseSchema:
             "synced_at",
         }
 
-        assert required_columns.issubset(
-            columns
-        ), f"Missing columns: {required_columns - columns}"
+        assert required_columns.issubset(columns), (
+            f"Missing columns: {required_columns - columns}"
+        )
 
     def test_metric_records_table_has_unique_constraint(self, data_db_engine):
         """Test that metric_records has unique constraint on metric_id and data_type."""
@@ -210,9 +210,9 @@ class TestDataDatabaseSchema:
                 has_unique = True
                 break
 
-        assert (
-            has_unique
-        ), "metric_records table must have unique constraint on (metric_id, data_type)"
+        assert has_unique, (
+            "metric_records table must have unique constraint on (metric_id, data_type)"
+        )
 
 
 class TestMigrationEnvironments:
@@ -251,9 +251,7 @@ class TestMigrationEnvironments:
         data_config = tasks_dir / "alembic_data.ini"
 
         assert task_config.exists(), "alembic.ini must exist for task migrations"
-        assert (
-            data_config.exists()
-        ), "alembic_data.ini must exist for data migrations"
+        assert data_config.exists(), "alembic_data.ini must exist for data migrations"
 
     def test_migration_directories_exist(self):
         """Test that both migration directories exist."""
@@ -263,15 +261,15 @@ class TestMigrationEnvironments:
         task_migrations = tasks_dir / "migrations"
         data_migrations = tasks_dir / "migrations_data"
 
-        assert (
-            task_migrations.exists()
-        ), "migrations/ directory must exist for task migrations"
-        assert (
-            data_migrations.exists()
-        ), "migrations_data/ directory must exist for data migrations"
+        assert task_migrations.exists(), (
+            "migrations/ directory must exist for task migrations"
+        )
+        assert data_migrations.exists(), (
+            "migrations_data/ directory must exist for data migrations"
+        )
 
         # Check for env.py in both
         assert (task_migrations / "env.py").exists(), "migrations/env.py must exist"
-        assert (
-            data_migrations / "env.py"
-        ).exists(), "migrations_data/env.py must exist"
+        assert (data_migrations / "env.py").exists(), (
+            "migrations_data/env.py must exist"
+        )

@@ -70,7 +70,7 @@ class PortalSyncJob(BaseJob):
                     # SQLite: Use INSERT OR REPLACE
                     session.execute(
                         text("""
-                        INSERT OR REPLACE INTO metric_records
+                        INSERT OR REPLACE INTO portal_records
                         (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
                         VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
@@ -89,7 +89,7 @@ class PortalSyncJob(BaseJob):
                     # MySQL: Use ON DUPLICATE KEY UPDATE
                     session.execute(
                         text("""
-                        INSERT INTO metric_records
+                        INSERT INTO portal_records
                         (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
                         VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
@@ -111,7 +111,7 @@ class PortalSyncJob(BaseJob):
             session.commit()
             return len(records)
         except Exception as e:
-            logger.error(f"Error writing to metric_records: {e}")
+            logger.error(f"Error writing to portal_records: {e}")
             if session:
                 session.rollback()
             return 0
@@ -132,9 +132,10 @@ class PortalSyncJob(BaseJob):
             await self.vector_client.initialize()
 
             # Sync employee profiles and skills
-            stats["employees_synced"], stats["skills_synced"] = (
-                await self._sync_employees()
-            )
+            (
+                stats["employees_synced"],
+                stats["skills_synced"],
+            ) = await self._sync_employees()
 
             # Close connections
             await self.vector_client.close()
@@ -184,9 +185,7 @@ class PortalSyncJob(BaseJob):
             interested_skills = [
                 s["skill"] for s in skills if s.get("interest") is True
             ]
-            expert_skills = [
-                s["skill"] for s in skills if s.get("level", 0) >= 3
-            ]
+            expert_skills = [s["skill"] for s in skills if s.get("level", 0) >= 3]
 
             # Build current and past allocations text
             current_allocations = employee.get("current_billable_allocations", [])
@@ -195,7 +194,9 @@ class PortalSyncJob(BaseJob):
             current_projects = [
                 alloc.get("project_name", "") for alloc in current_allocations
             ]
-            past_projects = [alloc.get("project_name", "") for alloc in past_allocations]
+            past_projects = [
+                alloc.get("project_name", "") for alloc in past_allocations
+            ]
 
             # Create searchable text with rich employee profile
             text = f"Employee: {employee['name']}\n"
