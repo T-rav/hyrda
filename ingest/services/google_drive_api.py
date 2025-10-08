@@ -64,10 +64,9 @@ class GoogleDriveAPI:
             List of file items
         """
         try:
-            if folder_path == "":  # Root folder - use broad query
-                return self._list_files_broad_query(folder_id)
-            else:  # Subfolder - use specific query
-                return self._list_files_specific_query(folder_id)
+            # Always use specific query - it works better for Shared Drives
+            # The broad query doesn't reliably return parents field
+            return self._list_files_specific_query(folder_id)
         except HttpError as e:
             logger.error(f"Error listing folder contents: {e}")
             return []
@@ -90,24 +89,34 @@ class GoogleDriveAPI:
 
         # Filter to only files that have our folder_id as parent
         all_files = all_results.get("files", [])
+
+        # DEBUG: Check if files have parents field
+        print(f"🔍 DEBUG: Checking {len(all_files)} files for parent {folder_id}")
+        files_with_parents = [f for f in all_files if "parents" in f]
+        print(f"   {len(files_with_parents)} files have 'parents' field")
+
+        # DEBUG: Show a few examples
+        for i, f in enumerate(all_files[:3]):
+            print(f"   Example {i+1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}")
+
         filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
         # DEBUG: Log what was found
         folders = [f for f in filtered_files if f.get("mimeType") == "application/vnd.google-apps.folder"]
         documents = [f for f in filtered_files if f.get("mimeType") != "application/vnd.google-apps.folder"]
-        logger.info(
-            f"✅ Found {len(all_files)} total accessible files, "
+        print(
+            f"DEBUG: Found {len(all_files)} total accessible files, "
             f"{len(filtered_files)} in target folder "
             f"({len(folders)} folders, {len(documents)} documents)"
         )
 
         # DEBUG: List the folders found
         if folders:
-            logger.info(f"📁 Folders found:")
+            print(f"📁 Folders found:")
             for folder in folders:
-                logger.info(f"   - {folder.get('name')} ({folder.get('id')})")
+                print(f"   - {folder.get('name')} ({folder.get('id')})")
         else:
-            logger.warning("⚠️ No folders found in target folder!")
+            print("⚠️ No folders found in target folder!")
 
         return filtered_files
 
