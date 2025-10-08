@@ -6,11 +6,11 @@ echo "🚀 Starting InsightMesh Task Scheduler..."
 # Run database migrations for task database
 echo "📦 Running task database migrations..."
 cd /app
-alembic -c migrations/alembic.ini upgrade head
+alembic -c alembic.ini upgrade head
 
 # Run database migrations for data database
 echo "📦 Running data database migrations..."
-alembic -c migrations_data/alembic.ini upgrade head
+alembic -c alembic_data.ini upgrade head
 
 echo "✅ Migrations completed successfully"
 
