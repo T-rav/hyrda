@@ -187,8 +187,8 @@ Query: "which people worked on them?"
 
 Now classify this query. Return ONLY the JSON object:"""
 
-        response = await self.llm_service.generate_response(
-            prompt=prompt, max_tokens=200, temperature=0.1
+        response = await self.llm_service.get_response(
+            messages=[{"role": "user", "content": prompt}]
         )
 
         try:
@@ -239,8 +239,8 @@ Project History: [Project Name 1], [Project Name 2], [Project Name 3]
 
 Make it specific to the query context. Use realistic names, dates, and project names."""
 
-        hypothetical_doc = await self.llm_service.generate_response(
-            prompt=prompt, max_tokens=200, temperature=0.3
+        hypothetical_doc = await self.llm_service.get_response(
+            messages=[{"role": "user", "content": prompt}]
         )
 
         return {
