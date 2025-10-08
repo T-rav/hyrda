@@ -30,7 +30,7 @@ class PortalClient:
     def _generate_token(self) -> str:
         """Generate JWT token signed with PORTAL_SECRET."""
         token = jwt.encode(
-            {"email": self.portal_email}, self.portal_secret, algorithm="HS256"
+            {"eMail": self.portal_email}, self.portal_secret, algorithm="HS256"
         )
         return token
 
@@ -41,7 +41,7 @@ class PortalClient:
         Make authenticated request to Portal API.
 
         Args:
-            endpoint: API endpoint (e.g., "/employees")
+            endpoint: API endpoint (e.g., "/employee")
             method: HTTP method (GET, POST, PUT, etc.)
             data: Optional request body data
 
@@ -52,7 +52,11 @@ class PortalClient:
             requests.HTTPError: If request fails
         """
         url = f"{self.portal_url}{endpoint}"
-        headers = {"Authorization": f"Bearer {self.token}"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Accept": "application/json",
+            "Cache": "no-store",
+        }
 
         logger.debug(f"Making {method} request to {url}")
 
@@ -75,7 +79,7 @@ class PortalClient:
             List of employee objects with complete profile and skills data
         """
         logger.info("Fetching all employees from Portal API")
-        employees = self._make_request("/employees")
+        employees = self._make_request("/employee")
 
         if not isinstance(employees, list):
             logger.error(f"Expected list of employees, got {type(employees)}")
@@ -95,7 +99,7 @@ class PortalClient:
             Employee object with complete profile, skills, allocations, and blog posts
         """
         logger.info(f"Fetching employee {metric_id} from Portal API")
-        employee = self._make_request(f"/employees/{metric_id}")
+        employee = self._make_request(f"/employee/{metric_id}")
         return employee
 
     def update_employee_profile(
