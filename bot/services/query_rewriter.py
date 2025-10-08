@@ -177,20 +177,12 @@ class AdaptiveQueryRewriter:
         # Format user context
         user_context_str = ""
         if user_context:
-            real_name = user_context.get("real_name", "")
-            display_name = user_context.get("display_name", "")
+            # Use real_name from Slack (this is the formal full name)
+            name = user_context.get("real_name") or user_context.get(
+                "display_name", "Unknown"
+            )
             email = user_context.get("email_address", "")
-
-            # Build names list - prioritize display_name (usually full name), then real_name
-            # Include both if different, but put display_name first since it's more formal
-            names = []
-            if display_name:
-                names.append(display_name)
-            if real_name and real_name != display_name:
-                names.append(real_name)
-
-            name_str = " or ".join(names) if names else "Unknown"
-            user_context_str = f"\n\nCurrent User:\n- Name: {name_str}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name_str}"
+            user_context_str = f"\n\nCurrent User:\n- Name: {name}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name}"
 
         logger.info(
             f"🔍 Classifying intent for query: '{query}' with history: {history_context[:200]}"
