@@ -253,7 +253,8 @@ class MetricSyncJob(BaseJob):
                 employee_projects[emp_id] = set()
             employee_projects[emp_id].add(project_name)
 
-        texts, metadata_list = [], []
+        texts, metadata_list, employees_to_sync = [], [], []
+        skipped_count = 0
 
         for employee in employees:
             # Extract bench status
@@ -293,8 +294,21 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(employee["id"], "employee", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            employees_to_sync.append(employee)
+
+        if not texts:
+            logger.info(
+                f"⏭️  Skipped all {skipped_count} employees (no changes detected)"
+            )
+            return 0
 
         # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
@@ -305,28 +319,29 @@ class MetricSyncJob(BaseJob):
         # Write to metric_records table with content hashes
         db_records = [
             {
-                "metric_id": emp["id"],
+                "metric_id": employees_to_sync[i]["id"],
                 "data_type": "employee",
-                "vector_id": f"metric_employee_{emp['id']}",
+                "vector_id": f"metric_employee_{employees_to_sync[i]['id']}",
                 "vector_namespace": "metric",
                 "content_snapshot": texts[i],
                 "content_hash": self._compute_content_hash(texts[i]),
             }
-            for i, emp in enumerate(employees)
+            for i in range(len(texts))
         ]
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(employees)} employees to Qdrant and {db_written} to database"
+            f"✅ Synced {len(texts)} employees to Qdrant and {db_written} to database (skipped {skipped_count} unchanged)"
         )
-        return len(employees)
+        return len(texts)
 
     async def _sync_projects(self) -> int:
         """Sync project data from Metric.ai to Qdrant."""
         logger.info("Syncing projects from Metric.ai...")
 
         projects = self.metric_client.get_projects()
-        texts, metadata_list = [], []
+        texts, metadata_list, projects_to_sync = [], [], []
+        skipped_count = 0
 
         for project in projects:
             # Skip non-billable projects
@@ -404,8 +419,15 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(project["id"], "project", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            projects_to_sync.append(project)
 
         if texts:
             # Upsert to Qdrant
@@ -417,9 +439,9 @@ class MetricSyncJob(BaseJob):
             # Write to metric_records table with content hashes
             db_records = [
                 {
-                    "metric_id": metadata_list[i]["project_id"],
+                    "metric_id": projects_to_sync[i]["id"],
                     "data_type": "project",
-                    "vector_id": f"metric_project_{metadata_list[i]['project_id']}",
+                    "vector_id": f"metric_project_{projects_to_sync[i]['id']}",
                     "vector_namespace": "metric",
                     "content_snapshot": texts[i],
                     "content_hash": self._compute_content_hash(texts[i]),
@@ -429,7 +451,11 @@ class MetricSyncJob(BaseJob):
             db_written = self._write_metric_records(db_records)
 
             logger.info(
-                f"✅ Synced {len(texts)} projects to Qdrant and {db_written} to database (filtered from {len(projects)} total)"
+                f"✅ Synced {len(texts)} projects to Qdrant and {db_written} to database (filtered from {len(projects)} total, skipped {skipped_count} unchanged)"
+            )
+        else:
+            logger.info(
+                f"⏭️  Skipped all projects (filtered {len(projects)} total, {skipped_count} unchanged)"
             )
         return len(texts)
 
@@ -441,7 +467,8 @@ class MetricSyncJob(BaseJob):
         if not clients:
             return 0
 
-        texts, metadata_list = [], []
+        texts, metadata_list, clients_to_sync = [], [], []
+        skipped_count = 0
 
         for client in clients:
             # Create searchable text
@@ -457,8 +484,21 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(client["id"], "client", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            clients_to_sync.append(client)
+
+        if not texts:
+            logger.info(
+                f"⏭️  Skipped all {skipped_count} clients (no changes detected)"
+            )
+            return 0
 
         # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
@@ -469,18 +509,18 @@ class MetricSyncJob(BaseJob):
         # Write to metric_records table with content hashes
         db_records = [
             {
-                "metric_id": clients[i]["id"],
+                "metric_id": clients_to_sync[i]["id"],
                 "data_type": "client",
-                "vector_id": f"metric_client_{clients[i]['id']}",
+                "vector_id": f"metric_client_{clients_to_sync[i]['id']}",
                 "vector_namespace": "metric",
                 "content_snapshot": texts[i],
                 "content_hash": self._compute_content_hash(texts[i]),
             }
-            for i in range(len(clients))
+            for i in range(len(texts))
         ]
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(clients)} clients to Qdrant and {db_written} to database"
+            f"✅ Synced {len(texts)} clients to Qdrant and {db_written} to database (skipped {skipped_count} unchanged)"
         )
-        return len(clients)
+        return len(texts)
