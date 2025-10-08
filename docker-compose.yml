@@ -155,8 +155,6 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        alembic upgrade head &&
         python -u app.py
       "
     networks:
