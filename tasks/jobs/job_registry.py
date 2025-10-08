@@ -9,6 +9,7 @@ from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
 from .metric_sync import MetricSyncJob
+from .portal_sync import PortalSyncJob
 from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ def execute_job_by_type(
     job_classes = {
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
+        "portal_sync": PortalSyncJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -118,6 +120,7 @@ class JobRegistry:
         self.job_types = {
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
+            "portal_sync": PortalSyncJob,
         }
 
     def get_available_job_types(self) -> list[dict[str, Any]]:
