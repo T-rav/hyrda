@@ -269,7 +269,7 @@ class ElasticsearchVectorStore(VectorStore):
         field_boosts: dict[str, float] | None = None,
         similarity_threshold: float = 0.0,
     ) -> list[dict[str, Any]]:
-        """BM25 sparse retrieval for hybrid search"""
+        """BM25 sparse retrieval for keyword search"""
         try:
             if self.client is None:
                 raise RuntimeError("Elasticsearch client not initialized")

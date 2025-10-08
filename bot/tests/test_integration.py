@@ -383,7 +383,6 @@ class TestIntegration:
         settings.rag.results_similarity_threshold = 0.7
         settings.rag.max_results = 5
         settings.vector.provider = "elasticsearch"
-        settings.rag.enable_hybrid_search = False
 
         retrieval_service = RetrievalService(settings)
 

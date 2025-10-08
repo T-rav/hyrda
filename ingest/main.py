@@ -101,101 +101,50 @@ async def main():
         from config.settings import (
             EmbeddingSettings,
             LLMSettings,
-            Settings,
             VectorSettings,
         )
 
-        # Try to use full settings first to detect hybrid mode
+        # Initialize vector store
+        vector_settings = VectorSettings()
+        embedding_settings = EmbeddingSettings()
+        llm_settings = LLMSettings()
+
+        from services.vector_service import create_vector_store
+
+        vector_store = create_vector_store(vector_settings)
+        await vector_store.initialize()
+
+        # Initialize embedding service
+        from services.embedding_service import create_embedding_provider
+
+        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
+
+        # Initialize LLM service for contextual retrieval if enabled
+        llm_service = None
         try:
-            # This will work if minimal .env is configured
-            settings = Settings()
-            use_hybrid = settings.hybrid.enabled and settings.vector.enabled
-            if use_hybrid:
-                print(
-                    "🔄 Hybrid RAG mode detected - "
-                    "using title injection and dual indexing"
-                )
-        except Exception:
-            # Fallback to individual settings if full Settings fails
-            use_hybrid = False
-            print("🔄 Single vector mode - using basic ingestion")
+            from config.settings import RAGSettings
 
-        if use_hybrid:
-            # Use hybrid RAG service with title injection
-            # Note: Elasticsearch migrations are handled by 'make db-upgrade'
-            from services.hybrid_rag_service import create_hybrid_rag_service
-
-            hybrid_service = await create_hybrid_rag_service(settings)
-
-            # Initialize LLM service for contextual retrieval if enabled
-            llm_service = None
-            if settings.rag.enable_contextual_retrieval:
+            rag_settings = RAGSettings()
+            if rag_settings.enable_contextual_retrieval:
                 from services.llm_service import create_llm_service
 
-                llm_service = await create_llm_service(settings.llm)
+                llm_service = await create_llm_service(llm_settings)
                 print(
                     "✅ Contextual retrieval enabled - "
                     "chunks will be enhanced with context"
                 )
+        except Exception:
+            pass  # Contextual retrieval settings not available
 
-            # Set hybrid service in orchestrator
-            orchestrator.set_services(
-                hybrid_service,
-                llm_service=llm_service,
-                enable_contextual_retrieval=settings.rag.enable_contextual_retrieval,
-            )
+        # Set services in orchestrator
+        orchestrator.set_services(
+            vector_store,
+            embedding_provider,
+            llm_service=llm_service,
+            enable_contextual_retrieval=llm_service is not None,
+        )
 
-        else:
-            # Fallback to single vector store
-            vector_settings = VectorSettings()
-            embedding_settings = EmbeddingSettings()
-            llm_settings = LLMSettings()
-
-            # Initialize vector store
-            from services.vector_service import create_vector_store
-
-            vector_store = create_vector_store(vector_settings)
-            await vector_store.initialize()
-
-            # Initialize embedding service
-            from services.embedding_service import create_embedding_provider
-
-            embedding_provider = create_embedding_provider(
-                embedding_settings, llm_settings
-            )
-
-            # Initialize LLM service for contextual retrieval if enabled
-            llm_service = None
-            try:
-                from config.settings import RAGSettings
-
-                rag_settings = RAGSettings()
-                if rag_settings.enable_contextual_retrieval:
-                    from services.llm_service import create_llm_service
-
-                    llm_service = await create_llm_service(llm_settings)
-                    print(
-                        "✅ Contextual retrieval enabled - "
-                        "chunks will be enhanced with context"
-                    )
-            except Exception:
-                pass  # Contextual retrieval settings not available
-
-            # Set services in orchestrator
-            orchestrator.set_services(
-                vector_store,
-                embedding_provider,
-                llm_service=llm_service,
-                enable_contextual_retrieval=llm_service is not None,
-            )
-
-        if use_hybrid:
-            print(
-                "✅ Hybrid RAG services initialized successfully "
-                "(Pinecone + Elasticsearch + Title Injection)"
-            )
-        else:
-            print("✅ Single vector services initialized successfully")
+        print("✅ Vector services initialized successfully")
     except Exception as e:
         print(f"❌ Service initialization failed: {e}")
         sys.exit(1)

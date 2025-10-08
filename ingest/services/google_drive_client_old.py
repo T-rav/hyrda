@@ -223,7 +223,7 @@ class GoogleDriveClient:
                     print("🔍 DEBUG: Sample of all accessible files (first 10):")
                     for i, f in enumerate(all_files[:10]):
                         parents_str = ", ".join(f.get("parents", []))
-                        print(f"   {i+1}. {f.get('name')} (parents: {parents_str})")
+                        print(f"   {i + 1}. {f.get('name')} (parents: {parents_str})")
                     if len(all_files) > 10:
                         print(f"   ... and {len(all_files) - 10} more files")
                 else:

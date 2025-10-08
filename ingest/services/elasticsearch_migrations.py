@@ -140,7 +140,7 @@ class ElasticsearchMigrations:
         dense_ok = await self.ensure_index_exists(dense_index, dense_mapping)
         results.append(dense_ok)
 
-        # Create sparse index (for BM25/hybrid operations)
+        # Create sparse index (for BM25 keyword search operations)
         sparse_mapping = self.get_sparse_index_mapping()
         sparse_ok = await self.ensure_index_exists(sparse_index, sparse_mapping)
         results.append(sparse_ok)

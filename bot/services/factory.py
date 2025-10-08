@@ -124,24 +124,14 @@ class ServiceFactory:
             langfuse_service = await self.container.get(LangfuseServiceProtocol)
 
         # Import and create service
-        if hasattr(self.settings, "hybrid") and self.settings.hybrid.enabled:
-            from services.hybrid_rag_service import HybridRAGService
+        from services.rag_service import RAGService
 
-            service = HybridRAGService(
-                settings=self.settings,
-                vector_service=vector_service,
-                metrics_service=metrics_service,
-                langfuse_service=langfuse_service,
-            )
-        else:
-            from services.rag_service import RAGService
-
-            service = RAGService(
-                settings=self.settings,
-                vector_service=vector_service,
-                metrics_service=metrics_service,
-                langfuse_service=langfuse_service,
-            )
+        service = RAGService(
+            settings=self.settings,
+            vector_service=vector_service,
+            metrics_service=metrics_service,
+            langfuse_service=langfuse_service,
+        )
 
         await service.initialize()
         return service

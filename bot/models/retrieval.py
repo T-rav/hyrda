@@ -17,7 +17,6 @@ class RetrievalMethod(str, Enum):
 
     DENSE = "dense"
     SPARSE = "sparse"
-    HYBRID = "hybrid"
     CONTEXTUAL = "contextual"
     RERANKED = "reranked"
 
@@ -27,7 +26,6 @@ class SearchType(str, Enum):
 
     SEMANTIC = "semantic"
     KEYWORD = "keyword"
-    HYBRID = "hybrid"
     SIMILARITY = "similarity"
 
 
@@ -63,7 +61,7 @@ class SearchQuery:
     """Structured search query with parameters."""
 
     text: str
-    search_type: SearchType = SearchType.HYBRID
+    search_type: SearchType = SearchType.SEMANTIC
     max_results: int = 10
     similarity_threshold: float = 0.7
     filters: dict[str, Any] | None = None
