@@ -20,9 +20,15 @@ class TasksSettings(BaseSettings):
     flask_env: str = Field(default="production", alias="FLASK_ENV")
 
     # Database configuration
-    database_url: str = Field(
+    task_database_url: str = Field(
         default="mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@localhost:3306/insightmesh_task",
-        alias="DATABASE_URL",
+        alias="TASK_DATABASE_URL",
+        description="MySQL database for task management",
+    )
+    data_database_url: str = Field(
+        default="postgresql://postgres:password@localhost:5432/insightmesh_data",
+        alias="DATA_DATABASE_URL",
+        description="PostgreSQL database for metric_records table (sync driver)",
     )
 
     # Main Slack Bot API integration
