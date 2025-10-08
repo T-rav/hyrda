@@ -22,20 +22,16 @@ class VectorSettingsFactory:
     ) -> VectorSettings:
         """Create Pinecone vector settings"""
         return VectorSettings(
-            provider="pinecone",
             api_key=SecretStr(api_key),
             environment=environment,
             collection_name=index_name,
-            enabled=True,
         )
 
     @staticmethod
     def create_disabled_settings() -> VectorSettings:
         """Create disabled vector settings"""
         return VectorSettings(
-            provider="chroma",
             collection_name="test",
-            enabled=False,
         )
 
     @staticmethod

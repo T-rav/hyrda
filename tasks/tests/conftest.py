@@ -14,7 +14,10 @@ from config.settings import TasksSettings
 def test_settings():
     """Create test settings with temporary database."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
+        task_db_path = f.name
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        data_db_path = f.name
 
     # Set environment variables for Pydantic to pick up
     os.environ.update(
@@ -23,7 +26,8 @@ def test_settings():
             "SLACK_BOT_API_URL": "http://localhost:8080",
             "SLACK_BOT_API_KEY": "test-api-key",
             "SLACK_BOT_TOKEN": "xoxb-test-token",
-            "DATABASE_URL": f"sqlite:///{db_path}",
+            "TASK_DATABASE_URL": f"sqlite:///{task_db_path}",
+            "DATA_DATABASE_URL": f"sqlite:///{data_db_path}",
             "REDIS_URL": "redis://localhost:6379/15",
             "METRIC_API_KEY": "test-metric-api-key",
             "LLM_API_KEY": "test-llm-api-key",
@@ -40,7 +44,9 @@ def test_settings():
 
     # Cleanup
     with contextlib.suppress(OSError):
-        os.unlink(db_path)
+        os.unlink(task_db_path)
+    with contextlib.suppress(OSError):
+        os.unlink(data_db_path)
 
 
 @pytest.fixture

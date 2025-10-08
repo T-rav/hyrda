@@ -56,16 +56,12 @@ class ServiceFactory:
             )
 
         # Register vector services
-        if self.settings.vector.enabled:
-            self.container.register_factory(
-                VectorServiceProtocol, self._create_vector_service
-            )
+        self.container.register_factory(
+            VectorServiceProtocol, self._create_vector_service
+        )
 
         # Register RAG service (depends on vector service)
-        if self.settings.vector.enabled:
-            self.container.register_factory(
-                RAGServiceProtocol, self._create_rag_service
-            )
+        self.container.register_factory(RAGServiceProtocol, self._create_rag_service)
 
         # Register Slack service
         self.container.register_factory(
@@ -94,22 +90,10 @@ class ServiceFactory:
         return service
 
     async def _create_vector_service(self) -> VectorServiceProtocol:
-        """Create vector service based on configuration."""
-        if self.settings.vector.provider == "elasticsearch":
-            from services.vector_stores.elasticsearch_store import (
-                ElasticsearchVectorStore,
-            )
+        """Create Pinecone vector service."""
+        from services.vector_stores.pinecone_store import PineconeVectorStore
 
-            service = ElasticsearchVectorStore(self.settings.vector)
-        elif self.settings.vector.provider == "pinecone":
-            from services.vector_stores.pinecone_store import PineconeVectorStore
-
-            service = PineconeVectorStore(self.settings.vector)
-        else:
-            raise ValueError(
-                f"Unsupported vector provider: {self.settings.vector.provider}"
-            )
-
+        service = PineconeVectorStore(self.settings.vector)
         await service.initialize()
         return service
 
@@ -124,24 +108,14 @@ class ServiceFactory:
             langfuse_service = await self.container.get(LangfuseServiceProtocol)
 
         # Import and create service
-        if self.settings.hybrid.enabled:
-            from services.hybrid_rag_service import HybridRAGService
+        from services.rag_service import RAGService
 
-            service = HybridRAGService(
-                settings=self.settings,
-                vector_service=vector_service,
-                metrics_service=metrics_service,
-                langfuse_service=langfuse_service,
-            )
-        else:
-            from services.rag_service import RAGService
-
-            service = RAGService(
-                settings=self.settings,
-                vector_service=vector_service,
-                metrics_service=metrics_service,
-                langfuse_service=langfuse_service,
-            )
+        service = RAGService(
+            settings=self.settings,
+            vector_service=vector_service,
+            metrics_service=metrics_service,
+            langfuse_service=langfuse_service,
+        )
 
         await service.initialize()
         return service
@@ -163,10 +137,7 @@ class ServiceFactory:
         """Create LLM service with all dependencies."""
         # Get dependencies from container
         metrics_service = await self.container.get(MetricsServiceProtocol)
-
-        rag_service = None
-        if self.settings.vector.enabled:
-            rag_service = await self.container.get(RAGServiceProtocol)
+        rag_service = await self.container.get(RAGServiceProtocol)
 
         langfuse_service = None
         if self.settings.langfuse.enabled:

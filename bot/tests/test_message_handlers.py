@@ -963,6 +963,6 @@ class TestBotCommandHandling:
             call_args = slack_service.send_message.call_args
             response_text = call_args.kwargs["text"]
             # All should resolve to MEDDIC
-            assert (
-                "MEDDIC Agent" in response_text
-            ), f"Failed for variant: {medic_variant}"
+            assert "MEDDIC Agent" in response_text, (
+                f"Failed for variant: {medic_variant}"
+            )

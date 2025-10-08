@@ -79,7 +79,8 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
+      - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
       - FLASK_PORT=8081
@@ -90,8 +91,20 @@ services:
         condition: service_healthy
     command: >
       sh -c "
+        echo '=== Creating databases ===' &&
         mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        echo '=== Creating database users ===' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_tasks'@'%' IDENTIFIED BY 'insightmesh_tasks_password';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_task.* TO 'insightmesh_tasks'@'%';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'FLUSH PRIVILEGES;' &&
+        echo '=== Running task database migrations ===' &&
         alembic upgrade head &&
+        echo '=== Running data database migrations ===' &&
+        alembic -c alembic_data.ini upgrade head &&
+        echo '=== Starting services ===' &&
         /usr/bin/supervisord
       "
     networks:
@@ -142,8 +155,6 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        alembic upgrade head &&
         python -u app.py
       "
     networks:

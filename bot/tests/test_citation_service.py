@@ -37,9 +37,9 @@ class CitationServiceFactory:
         return service, response, context_chunks
 
     @staticmethod
-    def create_multiple_files_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
+    def create_multiple_files_scenario() -> tuple[
+        CitationService, str, list[dict[str, Any]]
+    ]:
         """Create scenario with multiple different files"""
         service = CitationService()
         response = "Information about companies."
@@ -47,9 +47,9 @@ class CitationServiceFactory:
         return service, response, context_chunks
 
     @staticmethod
-    def create_empty_chunks_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
+    def create_empty_chunks_scenario() -> tuple[
+        CitationService, str, list[dict[str, Any]]
+    ]:
         """Create scenario with empty chunks"""
         service = CitationService()
         response = "This is a test response."
@@ -57,9 +57,9 @@ class CitationServiceFactory:
         return service, response, context_chunks
 
     @staticmethod
-    def create_deduplication_scenario() -> (
-        tuple[CitationService, str, list[dict[str, Any]]]
-    ):
+    def create_deduplication_scenario() -> tuple[
+        CitationService, str, list[dict[str, Any]]
+    ]:
         """Create scenario for testing deduplication of sources"""
         service = CitationService()
         response = "Test response."
