@@ -60,7 +60,7 @@ class TasksSettings(BaseSettings):
 
     # Vector database configuration (Qdrant)
     qdrant_host: str = Field(
-        default="localhost", alias="QDRANT_HOST", description="Qdrant host"
+        default="qdrant", alias="QDRANT_HOST", description="Qdrant host (docker service name)"
     )
     qdrant_port: int = Field(
         default=6333, alias="QDRANT_PORT", description="Qdrant port"

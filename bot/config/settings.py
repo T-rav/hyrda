@@ -72,7 +72,7 @@ class VectorSettings(BaseSettings):
     collection_name: str = Field(
         default="insightmesh-knowledge-base", description="Collection name"
     )
-    host: str = Field(default="localhost", description="Qdrant host")
+    host: str = Field(default="qdrant", description="Qdrant host (docker service name)")
     port: int = Field(default=6333, description="Qdrant REST API port")
 
     model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]
