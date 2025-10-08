@@ -87,16 +87,16 @@ class MetricSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT OR REPLACE INTO metric_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                        (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                        VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
                                 :now, :now, :now)
                         """),
                         {
                             "metric_id": record["metric_id"],
                             "data_type": record["data_type"],
-                            "pinecone_id": record["pinecone_id"],
-                            "namespace": record["pinecone_namespace"],
+                            "vector_id": record["vector_id"],
+                            "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
                             "now": now,
                         },
@@ -106,9 +106,9 @@ class MetricSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT INTO metric_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                        (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                        VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
                                 :now, :now, :now)
                         ON DUPLICATE KEY UPDATE
                             content_snapshot = VALUES(content_snapshot),
@@ -118,8 +118,8 @@ class MetricSyncJob(BaseJob):
                         {
                             "metric_id": record["metric_id"],
                             "data_type": record["data_type"],
-                            "pinecone_id": record["pinecone_id"],
-                            "namespace": record["pinecone_namespace"],
+                            "vector_id": record["vector_id"],
+                            "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
                             "now": now,
                         },
@@ -265,8 +265,8 @@ class MetricSyncJob(BaseJob):
             {
                 "metric_id": emp["id"],
                 "data_type": "employee",
-                "pinecone_id": f"metric_employee_{emp['id']}",
-                "pinecone_namespace": "metric",
+                "vector_id": f"metric_employee_{emp['id']}",
+                "vector_namespace": "metric",
                 "content_snapshot": texts[i],
             }
             for i, emp in enumerate(employees)
@@ -376,8 +376,8 @@ class MetricSyncJob(BaseJob):
                 {
                     "metric_id": metadata_list[i]["project_id"],
                     "data_type": "project",
-                    "pinecone_id": f"metric_project_{metadata_list[i]['project_id']}",
-                    "pinecone_namespace": "metric",
+                    "vector_id": f"metric_project_{metadata_list[i]['project_id']}",
+                    "vector_namespace": "metric",
                     "content_snapshot": texts[i],
                 }
                 for i in range(len(texts))
@@ -427,8 +427,8 @@ class MetricSyncJob(BaseJob):
             {
                 "metric_id": clients[i]["id"],
                 "data_type": "client",
-                "pinecone_id": f"metric_client_{clients[i]['id']}",
-                "pinecone_namespace": "metric",
+                "vector_id": f"metric_client_{clients[i]['id']}",
+                "vector_namespace": "metric",
                 "content_snapshot": texts[i],
             }
             for i in range(len(clients))
