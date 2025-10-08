@@ -136,6 +136,10 @@ class AdaptiveQueryRewriter:
         # Format recent conversation history (last 3 messages)
         history_context = self._format_history(conversation_history[-3:])
 
+        logger.info(
+            f"🔍 Classifying intent for query: '{query}' with history: {history_context[:200]}"
+        )
+
         prompt = f"""Classify the intent of this user query to optimize information retrieval.
 
 Query: "{query}"
@@ -184,6 +188,9 @@ Now classify this query. Return ONLY the JSON object:"""
         try:
             # Try to parse JSON from response
             intent = json.loads(response.strip())
+            logger.info(
+                f"✅ Intent classified as '{intent.get('type')}' with entities: {intent.get('entities')} (confidence: {intent.get('confidence', 0):.2f})"
+            )
             return intent
         except json.JSONDecodeError:
             # Fallback if JSON parsing fails
