@@ -90,22 +90,10 @@ class ServiceFactory:
         return service
 
     async def _create_vector_service(self) -> VectorServiceProtocol:
-        """Create vector service based on configuration."""
-        if self.settings.vector.provider == "elasticsearch":
-            from services.vector_stores.elasticsearch_store import (
-                ElasticsearchVectorStore,
-            )
+        """Create Pinecone vector service."""
+        from services.vector_stores.pinecone_store import PineconeVectorStore
 
-            service = ElasticsearchVectorStore(self.settings.vector)
-        elif self.settings.vector.provider == "pinecone":
-            from services.vector_stores.pinecone_store import PineconeVectorStore
-
-            service = PineconeVectorStore(self.settings.vector)
-        else:
-            raise ValueError(
-                f"Unsupported vector provider: {self.settings.vector.provider}"
-            )
-
+        service = PineconeVectorStore(self.settings.vector)
         await service.initialize()
         return service
 
