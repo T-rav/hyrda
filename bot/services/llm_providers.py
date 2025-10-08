@@ -94,14 +94,22 @@ class OpenAIProvider(LLMProvider):
             )
 
             # Prepare request parameters
-            # Note: Use max_completion_tokens for newer models (gpt-4o, etc.)
-            # max_tokens is deprecated and causes errors with these models
+            # Note: Newer models have parameter restrictions:
+            # - gpt-4o and newer: use max_completion_tokens (max_tokens deprecated)
+            # - gpt-5-mini and o1/o3: only support temperature=1.0 (default)
+            is_reasoning_model = any(
+                model_id in self.model.lower() for model_id in ["gpt-5", "o1-", "o3-"]
+            )
+
             request_params = {
                 "model": self.model,
                 "messages": formatted_messages,  # type: ignore[arg-type]
-                "temperature": self.temperature,
                 "max_completion_tokens": self.max_tokens,
             }
+
+            # Only add temperature for non-reasoning models
+            if not is_reasoning_model:
+                request_params["temperature"] = self.temperature
 
             # Add Langfuse tracking metadata if provided
             metadata = {}
