@@ -37,73 +37,34 @@ class ContextBuilder:
         final_system_message = system_message
 
         if context_chunks:
-            # Separate uploaded documents from RAG-retrieved chunks
-            uploaded_docs = []
-            retrieved_chunks = []
-
+            # Build context from retrieved chunks
+            context_texts = []
             for chunk in context_chunks:
+                content = chunk["content"]
+                similarity = chunk.get("similarity", 0)
+
+                # Include metadata if available
                 metadata = chunk.get("metadata", {})
-                source = metadata.get("source", "")
-
-                if source == "uploaded_document":
-                    uploaded_docs.append(chunk)
-                else:
-                    retrieved_chunks.append(chunk)
-
-            # Build context sections
-            context_parts = []
-
-            # Add uploaded document section first (highest priority)
-            if uploaded_docs:
-                uploaded_texts = []
-                for chunk in uploaded_docs:
-                    content = chunk["content"]
-                    metadata = chunk.get("metadata", {})
-                    doc_name = metadata.get("file_name", "uploaded_document")
-                    uploaded_texts.append(f"[From: {doc_name}]\n{content}")
-
-                uploaded_section = "\n\n".join(uploaded_texts)
-                context_parts.append(
-                    f"📄 **UPLOADED DOCUMENT** (User provided this document for your analysis):\n\n{uploaded_section}"
-                )
-                logger.info(
-                    f"📄 Including {len(uploaded_docs)} uploaded document chunks"
-                )
-
-            # Add retrieved knowledge section
-            if retrieved_chunks:
-                retrieved_texts = []
-                for chunk in retrieved_chunks:
-                    content = chunk["content"]
-                    similarity = chunk.get("similarity", 0)
-                    metadata = chunk.get("metadata", {})
+                if metadata:
                     source_doc = metadata.get("file_name", "Unknown")
-                    retrieved_texts.append(
+                    context_texts.append(
                         f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}"
                     )
+                else:
+                    context_texts.append(f"[Score: {similarity:.2f}]\n{content}")
 
-                retrieved_section = "\n\n".join(retrieved_texts)
-                context_parts.append(
-                    f"📚 **KNOWLEDGE BASE** (Retrieved relevant information):\n\n{retrieved_section}"
-                )
-                logger.info(
-                    f"📚 Including {len(retrieved_chunks)} retrieved knowledge chunks"
-                )
+            # Create RAG system message
+            context_section = "\n\n".join(context_texts)
 
-            # Combine all context
-            context_section = "\n\n---\n\n".join(context_parts)
-
-            # RAG instruction with clear guidance on uploaded documents
+            # RAG instruction for retrieved context
             rag_instruction = (
-                "You have access to information from multiple sources below. "
-                "**IMPORTANT**: If the user uploaded a document, it appears in the 'UPLOADED DOCUMENT' section - "
-                "this is the PRIMARY content the user wants you to analyze, review, or discuss. "
-                "The 'KNOWLEDGE BASE' section contains additional retrieved information that may provide context.\n\n"
+                "You have access to relevant information from the knowledge base below. "
                 "Use this context to answer the user's question directly and naturally. "
-                "Reference specific details when relevant. "
+                "The context may include structured data, document content, or other information. "
+                "Reference specific details when relevant and answer naturally based on what's provided. "
                 "Do not add inline source citations like '[Source: ...]' since "
                 "complete source citations will be automatically added at the end of your response.\n\n"
-                f"{context_section}\n\n"
+                f"Context:\n{context_section}\n\n"
             )
 
             if final_system_message:
@@ -111,9 +72,7 @@ class ContextBuilder:
             else:
                 final_system_message = rag_instruction
 
-            logger.info(
-                f"🔍 Using RAG with {len(context_chunks)} total context chunks ({len(uploaded_docs)} uploaded, {len(retrieved_chunks)} retrieved)"
-            )
+            logger.info(f"🔍 Using RAG with {len(context_chunks)} context chunks")
         else:
             logger.info("🤖 No relevant context found, using LLM knowledge only")
 
