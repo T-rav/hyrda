@@ -13,9 +13,9 @@ class QdrantClient:
 
     def __init__(self):
         """Initialize Qdrant client."""
-        self.host = os.getenv("QDRANT_HOST", "localhost")
+        self.host = os.getenv("QDRANT_HOST", "qdrant")
         self.port = int(os.getenv("QDRANT_PORT", "6333"))
-        self.api_key = os.getenv("QDRANT_API_KEY")
+        self.api_key = os.getenv("QDRANT_API_KEY")  # Set via docker-compose from VECTOR_API_KEY
         self.collection_name = os.getenv(
             "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
         )
