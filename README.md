@@ -5,12 +5,13 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capab
 ## ✨ Features
 
 ### 🧠 **Advanced RAG Intelligence**
-- **Hybrid Retrieval**: Dense vectors (Pinecone) + Sparse search (Elasticsearch BM25) with RRF fusion
-- **Cross-Encoder Reranking**: Cohere Rerank-3 for maximum search quality
-- **Title Injection**: Enhanced embeddings with document context
-- **Direct LLM Integration**: OpenAI, Anthropic, or local Ollama models
-- **Knowledge-Aware**: Responds using your ingested documentation and data
-- **Source Attribution**: Shows which documents informed the response
+- **Pinecone Vector Search**: Semantic document search using dense embeddings
+- **Adaptive Query Rewriting**: Automatically rewrites user queries for improved retrieval accuracy
+- **Entity Boosting**: Intelligently boosts document relevance based on detected entities
+- **Smart Diversification**: Returns chunks from multiple documents for comprehensive context
+- **Direct LLM Integration**: OpenAI GPT models (gpt-4o-mini, gpt-4, etc.)
+- **Knowledge-Aware Responses**: Uses your ingested documentation and data
+- **Source Attribution**: Shows which documents informed each response
 
 ### 🔧 **Production Ready**
 - **Thread Management**: Automatically manages conversation threads and context
@@ -20,19 +21,21 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capab
 - **Health Dashboard**: Real-time monitoring UI at `http://localhost:8080/ui`
 - **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
 - **Prometheus Metrics**: Native metrics collection for infrastructure monitoring
-- **Comprehensive Testing**: 154 tests with 100% reliability
-- **Dynamic Versioning**: Single source of truth via `pyproject.toml`
+- **Comprehensive Testing**: 245 tests with 72% code coverage
+- **Service Container**: Protocol-based dependency injection architecture
+- **Job Registry**: Scheduled tasks and background job management
+- **Metric.ai Integration**: Direct API integration for metrics and analytics
 
 ### 🚀 **Easy Setup & Monitoring**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
-- **Flexible Configuration**: Support for multiple LLM and vector database providers
-- **Document Ingestion**: CLI tool for loading your knowledge base
+- **Simple Configuration**: Pinecone-only vector storage for streamlined setup
+- **Document Ingestion**: CLI tool for loading from Google Drive
 - **Health Monitoring**: Beautiful dashboard with real-time service status
 - **Docker Deployment**: Full production deployment with comprehensive monitoring
 
 ## 🚀 Quick Start
 
-**Requirements:** Python 3.11
+**Requirements:** Python 3.11+
 
 ### 1. **Clone and Configure**
 ```bash
@@ -55,32 +58,23 @@ LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-api-key
 LLM_MODEL=gpt-4o-mini
 
-# RAG Configuration
-VECTOR_ENABLED=true
-
-# For Hybrid RAG (Recommended - Best Quality)
-HYBRID_ENABLED=true
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-api-key  # Get from https://app.pinecone.io
-VECTOR_ENVIRONMENT=us-east-1
-VECTOR_COLLECTION_NAME=knowledge-base
-VECTOR_URL=http://localhost:9200  # Elasticsearch for sparse search
-
-# Optional: Cross-encoder reranking for maximum quality
-HYBRID_RERANKER_ENABLED=true
-HYBRID_RERANKER_API_KEY=your-cohere-api-key  # Get from https://cohere.ai
+# Pinecone Vector Database (get from https://app.pinecone.io)
+VECTOR_API_KEY=your-pinecone-api-key
+VECTOR_ENVIRONMENT=us-east-1-aws
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
 
 # Database for user prompts and tasks
 DATABASE_URL=mysql+pymysql://insightmesh_bot:insightmesh_bot_password@localhost:3306/bot
+
+# Optional: Enable adaptive query rewriting (recommended)
+RAG_ENABLE_QUERY_REWRITING=true
+RAG_QUERY_REWRITE_MODEL=gpt-4o-mini
 ```
 
 ### 3. **Start Required Services**
 ```bash
 # Start MySQL database
 docker compose -f docker-compose.mysql.yml up -d
-
-# For Hybrid RAG: Start Elasticsearch  
-docker compose -f docker-compose.elasticsearch.yml up -d
 
 # Optional: Start Redis for caching
 docker run -d -p 6379:6379 redis:alpine
@@ -99,86 +93,88 @@ make run
 ```bash
 # Ingest documentation from Google Drive
 cd ingest && python main.py --folder-id "YOUR_GOOGLE_DRIVE_FOLDER_ID"
+
+# With custom metadata
 cd ingest && python main.py --folder-id "YOUR_FOLDER_ID" --metadata '{"department": "engineering"}'
 ```
 
 That's it! Your RAG-enabled Slack bot is now running with your custom knowledge base. 🎉
 
-## 🔧 RAG Configuration Options
+## 🔧 Pinecone Setup
 
-### Hybrid RAG (Recommended) - Maximum Quality
+### Create Your Pinecone Index
 
-**What it is:** Combines dense semantic search (Pinecone) with sparse keyword search (Elasticsearch BM25), then fuses results using Reciprocal Rank Fusion (RRF) and optionally reranks with cross-encoder.
-
-**Performance:** ~85% precision@10 vs ~65% with single vector search
-
-```bash
-# Enable hybrid mode
-HYBRID_ENABLED=true
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-key
-VECTOR_ENVIRONMENT=us-east-1
-VECTOR_URL=http://localhost:9200  # Elasticsearch
-
-# Optional: Cross-encoder reranking (+20% quality improvement)
-HYBRID_RERANKER_ENABLED=true
-HYBRID_RERANKER_API_KEY=your-cohere-key
-
-# Start Elasticsearch
-docker compose -f docker-compose.elasticsearch.yml up -d
-```
-
-### Single Vector Store - Simple Setup
-
-**Pinecone (Cloud):**
-```bash
-VECTOR_ENABLED=true
-HYBRID_ENABLED=false
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-key
-VECTOR_ENVIRONMENT=us-east-1
-```
-
-**ChromaDB (Local):**
-```bash
-VECTOR_ENABLED=true
-HYBRID_ENABLED=false
-VECTOR_PROVIDER=chroma
-VECTOR_URL=./chroma_db  # Local storage
-```
-
-### Cost Comparison (10K queries/month)
-
-| Setup | Monthly Cost | Quality |
-|-------|--------------|----------|
-| ChromaDB (Local) | ~$5 | Good |
-| Pinecone Only | ~$70 | Better |
-| **Hybrid + Reranking** | **~$150** | **Best** |
-
-### Setup Requirements
-
-**Pinecone Index Setup:**
 ```python
 import pinecone
-pc = pinecone.Pinecone(api_key="your-key")
+
+pc = pinecone.Pinecone(api_key="your-pinecone-api-key")
+
 pc.create_index(
-    name="knowledge-base",
-    dimension=1536,  # text-embedding-3-small
+    name="insightmesh-knowledge-base",
+    dimension=1536,  # for text-embedding-3-small
     metric="cosine",
-    spec=pinecone.ServerlessSpec(cloud="aws", region="us-east-1")
+    spec=pinecone.ServerlessSpec(
+        cloud="aws",
+        region="us-east-1"
+    )
 )
 ```
 
-**Required Dependencies:**
+### Pinecone Configuration
+
 ```bash
-# For hybrid mode
-../venv/bin/pip install pinecone elasticsearch cohere
+# Required settings
+VECTOR_API_KEY=your-pinecone-api-key
+VECTOR_ENVIRONMENT=us-east-1-aws  # or your Pinecone environment
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
 
-# For single Pinecone
-../venv/bin/pip install pinecone
+# Embedding model (matches index dimension)
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small  # 1536 dimensions
+```
 
-# For ChromaDB
-../venv/bin/pip install chromadb
+## Development Commands
+
+### Setup and Installation
+```bash
+make install      # Install Python dependencies
+make setup-dev    # Install dev tools + pre-commit hooks
+```
+
+### Running the Application
+```bash
+make run          # Run the Slack bot (requires .env file)
+```
+
+### Testing and Code Quality
+```bash
+make test         # Run test suite with pytest (245 tests)
+make lint         # Auto-fix linting, formatting, and import issues
+make lint-check   # Check code quality without fixing (used by pre-commit)
+make quality      # Run complete pipeline: linting + type checking + tests
+make test-coverage # Tests with coverage report (requires >70%, currently ~72%)
+```
+
+### Pre-commit and CI
+```bash
+make pre-commit   # Run all pre-commit hooks
+make ci           # Run complete CI pipeline locally
+```
+
+### Docker
+```bash
+make docker-build # Build Docker image
+make docker-run   # Run Docker container with .env
+```
+
+### Document Ingestion
+```bash
+# Ingest documents from Google Drive (THE ONLY SUPPORTED METHOD)
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
+cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering"}'
+
+# First-time setup requires Google OAuth2 credentials
+# See ingest/README.md for detailed setup instructions
 ```
 
 ## Slack App Setup Guide
@@ -206,7 +202,6 @@ This guide helps you configure your Slack app to work with the InsightMesh bot.
    - `channels:history` - View messages in public channels
    - `chat:write.customize` - Customize messages (for blocks)
    - `chat:write.public` - Send messages to channels the app isn't in
-   - `app_mentions:read` - Read @mentions
    - `commands` - Add slash commands
    - `users:read` - View users in the workspace
    - `users:write` - Set bot's online presence status
@@ -235,7 +230,6 @@ This guide helps you configure your Slack app to work with the InsightMesh bot.
    - `message.mpim` - When a message is sent in a group DM
    - `message.groups` - When a message is sent in a private channel
    - `message.channels` - When a message is sent in a public channel
-   - `message` - When a message is sent (general catch-all)
 4. Click "Save Changes"
 5. IMPORTANT: After adding these events, you MUST reinstall your app for the changes to take effect
 
@@ -260,22 +254,9 @@ This guide helps you configure your Slack app to work with the InsightMesh bot.
 3. Review permissions and click "Allow"
 4. Note the new Bot User OAuth Token (starts with `xoxb-`) for use in environment variables
 
-### Step 8: Set Environment Variables
+### Step 8: Configure Agent Processes
 
-Create a `.env` file in your project root with the following variables:
-
-```bash
-SLACK_BOT_TOKEN="xoxb-your-bot-token"
-SLACK_APP_TOKEN="xapp-your-app-token"
-SLACK_BOT_ID=""  # Optional, will be extracted from token if not provided
-LLM_API_URL="http://your-llm-api-url"
-LLM_API_KEY="your-llm-api-key"
-LLM_MODEL="gpt-4o-mini"  # or other model supported by your LLM API
-```
-
-### Step 9: Configure Agent Processes
-
-The bot supports running agent processes in response to user requests. These processes are defined in the `AGENT_PROCESSES` dictionary in `handlers/agent_processes.py`.
+The bot supports running agent processes in response to user requests. These processes are defined in the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`.
 
 By default, the following agent processes are available:
 
@@ -285,7 +266,7 @@ By default, the following agent processes are available:
 
 To add or modify agent processes:
 
-1. Edit the `AGENT_PROCESSES` dictionary in `handlers/agent_processes.py`
+1. Edit the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`
 2. Make sure commands have the correct paths to their scripts
 3. Ensure the scripts are available and executable in the expected locations
 
@@ -300,42 +281,96 @@ make docker-run
 
 ## Architecture
 
-The bot is built using:
+### Technology Stack
+
 - **slack-bolt**: Slack's official Python framework for building Slack apps
 - **aiohttp**: Asynchronous HTTP client/server for Python
 - **pydantic**: Data validation and settings management
-- **Direct LLM Integration**: OpenAI, Anthropic, or local Ollama models
-- **Vector Databases**: ChromaDB or Pinecone for semantic document search
+- **OpenAI**: Primary LLM provider (GPT models)
+- **Pinecone**: Vector database for semantic document search
 - **RAG Pipeline**: Retrieval-Augmented Generation for knowledge-aware responses
+- **MySQL**: Database for user prompts, tasks, and metrics
+- **Redis**: Conversation caching
+- **Langfuse**: LLM observability and prompt management
 
 ### Project Structure
 
 ```
-slack-bot/
+bot/
 ├── config/            # Configuration management
-│   ├── settings.py    # Pydantic settings models for LLM, vector DB, and RAG
+│   └── settings.py    # Pydantic settings models for LLM, vector DB, and RAG
 ├── handlers/          # Event handling
 │   ├── agent_processes.py  # Agent process functionality
 │   ├── event_handlers.py   # Slack event handlers
-│   ├── message_handlers.py # Message handling logic
+│   └── message_handlers.py # Message handling logic
 ├── services/          # Core services
+│   ├── protocols/          # Service protocol definitions
+│   ├── vector_stores/      # Vector database implementations
+│   ├── chunking/           # Document chunking services
+│   ├── retrieval/          # Retrieval implementations
 │   ├── llm_service.py      # RAG-enabled LLM service
 │   ├── rag_service.py      # RAG orchestration and retrieval
-│   ├── vector_service.py   # Vector database abstraction (ChromaDB/Pinecone)
+│   ├── query_rewriter.py   # Adaptive query rewriting
+│   ├── retrieval_service.py # Retrieval coordination
+│   ├── vector_service.py   # Vector database abstraction
 │   ├── embedding_service.py # Text embedding generation
-│   ├── llm_providers.py    # Direct LLM provider implementations
+│   ├── llm_providers.py    # LLM provider implementations
 │   ├── slack_service.py    # Slack API integration
-│   ├── formatting.py       # Message formatting utilities
+│   ├── factory.py          # Service factory with DI
+│   ├── container.py        # Service container
+│   └── formatting.py       # Message formatting utilities
+├── models/            # Data models
+│   ├── retrieval.py        # RAG models
+│   ├── metric_record.py    # Metric.ai integration
+│   └── slack_events.py     # Slack event models
+├── migrations/        # Database migrations
+├── tests/             # Comprehensive test suite (245 tests, 72% coverage)
 ├── utils/             # Utilities
 │   ├── errors.py           # Error handling
-│   ├── logging.py          # Logging configuration
-├── ingest/                 # Document ingestion services
-│   ├── main.py            # CLI entry point for Google Drive ingestion
-│   └── services/          # Modular ingestion services
+│   └── logging.py          # Logging configuration
 ├── app.py             # Main application entry point
-├── Dockerfile         # Docker configuration
-└── requirements.txt   # Python dependencies
+└── health.py          # Health check endpoints
+
+ingest/                # Document ingestion services
+├── main.py            # CLI entry point for Google Drive ingestion
+├── services/          # Modular ingestion services
+└── auth/              # Google OAuth2 authentication
+
+tasks/                 # Background task scheduler
+scripts/               # Utility scripts
+evals/                 # LLM evaluation framework
 ```
+
+### Core Architecture Patterns
+
+#### Service Container & Dependency Injection
+- Protocol-based service definitions in `services/protocols/`
+- Centralized dependency injection via `ServiceContainer`
+- Factory pattern for service creation with proper lifecycle management
+- All services implement `BaseService` with `initialize()` and `close()` methods
+
+#### RAG Pipeline
+1. **Document Ingestion**: Google Drive → chunking → embedding → Pinecone storage
+2. **Query Processing**: User question → adaptive query rewriting → embedding
+3. **Retrieval**: Similarity search in Pinecone with entity boosting
+4. **Diversification**: Smart selection from multiple documents
+5. **Augmentation**: Retrieved context added to LLM prompt
+6. **Generation**: LLM generates response with enhanced context
+7. **Citation**: Source documents included in response
+
+#### Adaptive Query Rewriting
+The bot automatically rewrites user queries to improve retrieval accuracy:
+- **Intent Classification**: Determines query type (greeting, fact, comparison, etc.)
+- **Context Integration**: Uses conversation history for follow-up questions
+- **Entity Extraction**: Identifies key entities for metadata filtering
+- **Query Expansion**: Adds relevant terms for better semantic matching
+
+#### Testing & Quality
+- **245 tests** with **72% coverage**
+- Unified quality tooling: Ruff (linting/formatting) + Pyright (type checking) + Bandit (security)
+- Pre-commit hooks ensure code quality
+- CI pipeline runs same checks as local development
+- Test-driven development workflow
 
 ## Slack Integration Features
 
@@ -387,7 +422,7 @@ Start a data indexing job
 
 To add a new agent process:
 
-1. Add it to the `AGENT_PROCESSES` dictionary in `handlers/agent_processes.py`:
+1. Add it to the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`:
    ```python
    "agent_your_process": {
        "name": "Your Process Name",
@@ -395,26 +430,56 @@ To add a new agent process:
        "command": "python path/to/script.py arg1 arg2"
    }
    ```
-2. Ensure the LLM system message (in `handlers/message_handlers.py`) mentions the capability
+2. Ensure the LLM system message (in `bot/handlers/message_handlers.py`) mentions the capability
 
-## Development
+## Testing Framework & Quality Standards
 
-### Local Setup
+### Test Suite Requirements
 
-1. (Optional) Create and activate a virtual environment
-2. Install dependencies and run via Make:
-   ```bash
-   make install
-   make run
-   ```
+**🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-3. **Monitor your bot** at `http://localhost:8080/ui` - the health dashboard shows:
-   - Real-time service status (LLM API, cache, metrics)
-   - System uptime and version
-   - Memory usage and active conversations
-   - API endpoints and configuration status
+The project maintains a **245/245 test success rate (100%)** with **72% code coverage** - this standard must be preserved.
 
-### System Prompt Evaluation
+#### Test Commands
+```bash
+# Run all tests (REQUIRED before any commit)
+make test                    # Full test suite (245 tests)
+make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
+
+# Quality checks (REQUIRED before commit)
+make lint                   # Auto-fix with ruff + pyright + bandit
+make lint-check            # Check-only mode (what CI uses)
+make quality               # Run complete pipeline: linting + type checking + tests
+```
+
+#### Pre-commit Requirements
+```bash
+# Setup (run once)
+make setup-dev             # Install dev tools + pre-commit hooks
+
+# Before every commit (MANDATORY)
+make pre-commit           # Run all pre-commit hooks
+git add . && git commit   # Hooks run automatically
+
+# CI simulation
+make ci                   # Run complete CI pipeline locally
+```
+
+### Code Quality Standards
+
+#### Unified Quality Tooling (Auto-enforced)
+- **Ruff**: Fast linting, formatting, and import sorting (replaces black + isort)
+- **Pyright**: Type checking (strict mode, replaces MyPy)
+- **Bandit**: Security vulnerability scanning
+
+**🎯 Unified Makefile**: `make lint-check` ensures identical behavior across:
+- Local development (`make lint`, `make lint-check`)
+- Pre-commit hooks (automatic on git commit)
+- CI pipeline (GitHub Actions)
+
+**Benefits**: Single modern toolchain, faster execution, zero conflicts between tools.
+
+## System Prompt Evaluation
 
 Validate your system prompt behavior with comprehensive LLM-as-a-Judge evaluations:
 
@@ -453,31 +518,27 @@ See [`evals/README.md`](evals/README.md) for complete evaluation setup and [`eva
 - **Performance analytics** and prompt optimization insights
 - **Conversation analytics** and user behavior patterns
 - **Error tracking** with detailed LLM debugging information
+- **Prompt management** - Store and version system prompts in Langfuse
+- **Query rewriting traces** - See how queries are rewritten for better retrieval
 
 See [`docs/LANGFUSE_SETUP.md`](docs/LANGFUSE_SETUP.md) for complete setup instructions.
-
-### Code Organization
-
-- **config/settings.py**: Comprehensive settings for LLM providers, vector databases, and RAG configuration
-- **handlers/**: Event and message handling with RAG integration
-- **services/**: RAG pipeline, vector storage, embedding generation, and direct LLM providers
-- **utils/**: Utility functions and helpers
-- **ingest/**: Modular document ingestion system supporting PDF, Office docs, and Google Workspace files
-- **app.py**: Main application entry point
 
 ## Troubleshooting
 
 If you're experiencing issues:
 
 1. **Slack Configuration**: Ensure all Slack app permissions and event subscriptions are configured correctly
-2. **Environment Variables**: Verify all required variables in `.env` are set (Slack tokens, LLM API key, vector DB credentials)
-3. **LLM Provider**: Test your OpenAI/Anthropic API key is valid and has sufficient quota
-4. **Vector Database**:
-   - **Pinecone**: Check your index exists and API key is correct
-   - **ChromaDB**: Ensure the directory is writable
+2. **Environment Variables**: Verify all required variables in `.env` are set (Slack tokens, LLM API key, Pinecone credentials)
+3. **LLM Provider**: Test your OpenAI API key is valid and has sufficient quota
+4. **Pinecone**:
+   - Check your index exists with `pc.list_indexes()`
+   - Verify API key is correct
+   - Ensure environment matches (e.g., `us-east-1-aws`)
+   - Confirm index dimension (1536 for text-embedding-3-small)
 5. **Document Ingestion**: Use `cd ingest && python main.py --folder-id YOUR_ID` to ingest from Google Drive
 6. **Bot Logs**: Look for specific error messages in the application logs
-7. **RAG Pipeline**: Test with `VECTOR_ENABLED=false` to isolate LLM vs vector DB issues
+7. **Query Rewriting**: Check Langfuse traces to see how queries are being rewritten
+8. **Pre-commit Hooks**: If commit fails, run `make lint` to auto-fix issues, then commit again
 
 ## Notes About Socket Mode
 
