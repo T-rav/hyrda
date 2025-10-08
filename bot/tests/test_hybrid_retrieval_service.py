@@ -263,9 +263,9 @@ class HybridRetrievalServiceFactory:
         return service, dense_store, sparse_store
 
     @staticmethod
-    def create_threshold_scenario() -> (
-        tuple[HybridRetrievalService, MagicMock, MagicMock]
-    ):
+    def create_threshold_scenario() -> tuple[
+        HybridRetrievalService, MagicMock, MagicMock
+    ]:
         """Create scenario for testing similarity threshold filtering"""
         dense_results = [
             {"content": "High sim", "similarity": 0.9, "metadata": {}, "id": "h1"},
@@ -278,9 +278,9 @@ class HybridRetrievalServiceFactory:
         )
 
     @staticmethod
-    def create_exception_scenario() -> (
-        tuple[HybridRetrievalService, MagicMock, MagicMock]
-    ):
+    def create_exception_scenario() -> tuple[
+        HybridRetrievalService, MagicMock, MagicMock
+    ]:
         """Create scenario for testing exception handling"""
         service, dense_store, sparse_store = (
             HybridRetrievalServiceFactory.create_search_scenario()
@@ -689,9 +689,9 @@ class TestRRFAlgorithm:
 
         # With our scaling, the top RRF result should be close to 0.95
         assert actual_score > 0.9, f"Expected scaled score > 0.9, got {actual_score}"
-        assert (
-            actual_score <= 0.95
-        ), f"Expected scaled score <= 0.95, got {actual_score}"
+        assert actual_score <= 0.95, (
+            f"Expected scaled score <= 0.95, got {actual_score}"
+        )
 
     def test_rrf_rank_order(self):
         """Test that RRF produces correct ranking"""

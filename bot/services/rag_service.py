@@ -386,7 +386,7 @@ class RAGService:
                 # Add all uploaded document chunks as first context (highest priority)
                 context_chunks = document_chunks + context_chunks
                 logger.info(
-                    f"🔧 Added {len(document_chunks)} document chunks plus {len(context_chunks)-len(document_chunks)} RAG chunks"
+                    f"🔧 Added {len(document_chunks)} document chunks plus {len(context_chunks) - len(document_chunks)} RAG chunks"
                 )
 
             # Build prompt with context (includes uploaded document + retrieved context)
