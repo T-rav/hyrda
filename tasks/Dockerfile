@@ -36,7 +36,9 @@ RUN rm -f /etc/nginx/sites-enabled/default && \
 # Copy React UI build to nginx directory
 COPY --chown=www-data:www-data ui/dist /usr/share/nginx/html
 
-# Startup script no longer needed - using supervisor
+# Copy and setup startup script
+COPY --chown=appuser:appuser start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \
