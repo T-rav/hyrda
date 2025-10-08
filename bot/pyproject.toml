@@ -76,12 +76,10 @@ test = [
 
 # Development tools with exact versions for reproducibility
 dev = [
-    "ruff==0.8.4",
-    "isort==5.13.2",
+    "ruff==0.14.0",
     "pyright==1.1.390",
     "bandit[toml]==1.8.0",
     "pre-commit==4.0.1",
-    "black==25.1.0",  # Legacy support (gradually being replaced by Ruff)
 ]
 
 [project.scripts]

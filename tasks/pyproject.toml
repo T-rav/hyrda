@@ -69,7 +69,7 @@ test = [
 
 # Development tools
 dev = [
-    "ruff==0.8.4",
+    "ruff==0.14.0",
     "pyright==1.1.390",
     "pre-commit==4.0.1",
 ]
