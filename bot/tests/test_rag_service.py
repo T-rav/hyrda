@@ -36,7 +36,6 @@ class SettingsFactory:
                 api_key=SecretStr("test-key"),
             ),
             vector=VectorSettings(
-                provider=vector_provider,
                 api_key=SecretStr("test-key"),
                 collection_name="test",
             ),
