@@ -49,7 +49,7 @@ class PortalSyncJob(BaseJob):
         Write portal records to the insightmesh_data database.
 
         Args:
-            records: List of dicts with keys: metric_id, data_type, pinecone_id,
+            records: List of dicts with keys: employee_id, data_type, pinecone_id,
                     pinecone_namespace, content_snapshot
 
         Returns:
@@ -71,13 +71,13 @@ class PortalSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT OR REPLACE INTO portal_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                        (employee_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                        VALUES (:employee_id, :data_type, :pinecone_id, :namespace, :content,
                                 :now, :now, :now)
                         """),
                         {
-                            "metric_id": record["metric_id"],
+                            "employee_id": record["employee_id"],
                             "data_type": record["data_type"],
                             "pinecone_id": record["pinecone_id"],
                             "namespace": record["pinecone_namespace"],
@@ -90,9 +90,9 @@ class PortalSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT INTO portal_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
+                        (employee_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
                          created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
+                        VALUES (:employee_id, :data_type, :pinecone_id, :namespace, :content,
                                 :now, :now, :now)
                         ON DUPLICATE KEY UPDATE
                             content_snapshot = VALUES(content_snapshot),
@@ -100,7 +100,7 @@ class PortalSyncJob(BaseJob):
                             synced_at = VALUES(synced_at)
                         """),
                         {
-                            "metric_id": record["metric_id"],
+                            "employee_id": record["employee_id"],
                             "data_type": record["data_type"],
                             "pinecone_id": record["pinecone_id"],
                             "namespace": record["pinecone_namespace"],
@@ -258,10 +258,10 @@ class PortalSyncJob(BaseJob):
             texts, embeddings, metadata_list, namespace="portal"
         )
 
-        # Write to metric_records table
+        # Write to portal_records table
         db_records = [
             {
-                "metric_id": emp["metric_id"],
+                "employee_id": emp["metric_id"],
                 "data_type": "employee_profile",
                 "pinecone_id": f"portal_employee_{emp['metric_id']}",
                 "pinecone_namespace": "portal",
