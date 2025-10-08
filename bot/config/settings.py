@@ -79,7 +79,7 @@ class VectorSettings(BaseSettings):
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
     )
 
-    model_config = ConfigDict(env_prefix="VECTOR_")
+    model_config = ConfigDict(env_prefix="VECTOR_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class EmbeddingSettings(BaseSettings):

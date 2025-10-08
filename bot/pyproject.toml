@@ -151,6 +151,8 @@ typeCheckingMode = "standard"
 reportMissingImports = true
 reportMissingTypeStubs = false
 reportGeneralTypeIssues = true
+# Allow optional dependencies that may not be installed
+reportMissingModuleSource = false
 reportOptionalMemberAccess = true
 reportOptionalSubscript = true
 reportPrivateImportUsage = true

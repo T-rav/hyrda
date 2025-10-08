@@ -23,7 +23,7 @@ tasks_path = Path(__file__).parent.parent / "tasks"
 sys.path.append(str(tasks_path))
 
 # Now import bot modules (including MetricClient from tasks/)
-from services.metric_client import MetricClient
+from services.metric_client import MetricClient  # type: ignore[reportMissingImports]
 
 from config.settings import EmbeddingSettings, VectorSettings
 from services.embedding import create_embedding_provider

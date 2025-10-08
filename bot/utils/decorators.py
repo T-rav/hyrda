@@ -95,7 +95,7 @@ def handle_service_errors(
                 return default_return
 
         # Return appropriate wrapper based on function type
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -188,7 +188,7 @@ def retry_on_failure(
                 raise last_exception
 
         # Return appropriate wrapper based on function type
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -265,7 +265,7 @@ def measure_performance(operation_name: str | None = None):
                     self._record_performance_metric(op_name, duration_ms, success)
 
         # Return appropriate wrapper based on function type
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]
 
     return decorator
 
@@ -385,6 +385,6 @@ def circuit_breaker(
                 raise
 
         # Return appropriate wrapper based on function type
-        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
+        return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]
 
     return decorator

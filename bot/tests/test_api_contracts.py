@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from aiohttp import web
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 
 from bot.health import HealthChecker
 from config.settings import Settings
@@ -74,7 +74,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
 
         return app
 
-    @unittest_run_loop
     async def test_health_endpoint_contract(self):
         """Test /api/health returns expected JSON structure"""
         resp = await self.client.request("GET", "/api/health")
@@ -97,7 +96,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         # Verify expected values
         assert data["status"] in ["healthy", "unhealthy"]
 
-    @unittest_run_loop
     async def test_metrics_endpoint_contract(self):
         """Test /api/metrics returns expected JSON structure for dashboard"""
         resp = await self.client.request("GET", "/api/metrics")
@@ -121,7 +119,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                 # Should have at least enabled or available status
                 assert "enabled" in service_info or "available" in service_info
 
-    @unittest_run_loop
     async def test_services_health_contract(self):
         """Test /api/services/health returns expected structure"""
         with patch("bot.health.get_metrics_service") as mock_metrics:
@@ -145,7 +142,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
             assert isinstance(data["services"], dict)
             assert data["status"] in ["healthy", "degraded", "unhealthy"]
 
-    @unittest_run_loop
     async def test_usage_metrics_contract(self):
         """Test /api/metrics/usage returns expected structure for dashboard charts"""
         with patch("bot.health.get_metrics_service") as mock_metrics:
@@ -179,7 +175,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                     f"Invalid type for {metric}"
                 )
 
-    @unittest_run_loop
     async def test_user_import_endpoint_contract(self):
         """Test /api/users/import POST endpoint contract"""
         test_payload = {
@@ -206,7 +201,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         for field in expected_fields:
             assert field in data, f"Missing response field: {field}"
 
-    @unittest_run_loop
     async def test_ingest_completed_webhook_contract(self):
         """Test /api/ingest/completed webhook endpoint contract"""
         test_payload = {

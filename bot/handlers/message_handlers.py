@@ -6,32 +6,32 @@ import time
 import requests
 
 try:
-    import fitz  # PyMuPDF
+    import fitz  # PyMuPDF  # type: ignore[reportMissingImports]
 
     PYMUPDF_AVAILABLE = True
 except ImportError:
-    PYMUPDF_AVAILABLE = False
+    PYMUPDF_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
 try:
-    from docx import Document
+    from docx import Document  # type: ignore[reportMissingImports]
 
     PYTHON_DOCX_AVAILABLE = True
 except ImportError:
-    PYTHON_DOCX_AVAILABLE = False
+    PYTHON_DOCX_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
 try:
-    from openpyxl import load_workbook
+    from openpyxl import load_workbook  # type: ignore[reportMissingModuleSource]
 
     OPENPYXL_AVAILABLE = True
 except ImportError:
-    OPENPYXL_AVAILABLE = False
+    OPENPYXL_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
 try:
-    from pptx import Presentation
+    from pptx import Presentation  # type: ignore[reportMissingImports]
 
     PYTHON_PPTX_AVAILABLE = True
 except ImportError:
-    PYTHON_PPTX_AVAILABLE = False
+    PYTHON_PPTX_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
 from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
@@ -533,12 +533,7 @@ async def handle_message(
                     )
 
                     # Run the agent process
-                    response = await run_agent_process(
-                        process_name=agent_process_name,
-                        slack_service=slack_service,
-                        channel_id=channel,
-                        thread_ts=thread_ts,
-                    )
+                    result = await run_agent_process(process_id=agent_process_name)
 
                     # Clean up thinking message before sending response
                     if thinking_message_ts:
@@ -551,8 +546,11 @@ async def handle_message(
                             logger.warning(f"Error deleting thinking message: {e}")
 
                     # Send response with agent blocks
-                    formatted_response = await MessageFormatter.format_message(response)
-                    agent_blocks = get_agent_blocks()
+                    response_text = result.data or "Process started"
+                    formatted_response = await MessageFormatter.format_message(
+                        response_text
+                    )
+                    agent_blocks = get_agent_blocks(result=result, user_id=user_id)
 
                     await slack_service.send_message(
                         channel=channel,

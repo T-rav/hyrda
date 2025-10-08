@@ -12,9 +12,9 @@ from typing import Any
 from .base import VectorStore
 
 try:
-    from pinecone import Pinecone
+    from pinecone import Pinecone  # type: ignore[reportMissingImports]
 except ImportError:
-    Pinecone = None
+    Pinecone = None  # type: ignore[misc,assignment]
 
 logger = logging.getLogger(__name__)
 

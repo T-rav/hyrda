@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageRole(str, Enum):
@@ -31,8 +31,7 @@ class ConversationMessage(BaseModel):
     function_call: dict[str, Any] | None = None
     tool_calls: list[dict[str, Any]] | None = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 @dataclass(frozen=True)
@@ -57,8 +56,7 @@ class LLMUsage(BaseModel):
     total_tokens: int
     cost_usd: float | None = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class LLMResponse(BaseModel):
@@ -74,8 +72,7 @@ class LLMResponse(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 @dataclass(frozen=True)

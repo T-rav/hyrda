@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SlackUser(BaseModel):
@@ -18,8 +18,7 @@ class SlackUser(BaseModel):
     is_owner: bool = False
     profile: dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
 
 
 class SlackChannel(BaseModel):
@@ -34,5 +33,4 @@ class SlackChannel(BaseModel):
     topic: str | None = None
     purpose: str | None = None
 
-    class Config:
-        frozen = True
+    model_config = ConfigDict(frozen=True)
