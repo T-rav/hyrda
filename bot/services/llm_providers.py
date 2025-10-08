@@ -94,11 +94,13 @@ class OpenAIProvider(LLMProvider):
             )
 
             # Prepare request parameters
+            # Note: Use max_completion_tokens for newer models (gpt-4o, etc.)
+            # max_tokens is deprecated and causes errors with these models
             request_params = {
                 "model": self.model,
                 "messages": formatted_messages,  # type: ignore[arg-type]
                 "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
+                "max_completion_tokens": self.max_tokens,
             }
 
             # Add Langfuse tracking metadata if provided
