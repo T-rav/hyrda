@@ -89,7 +89,7 @@ async def main():
     # Initialize database connection for document tracking
     # This must happen before creating orchestrator to avoid import conflicts
     database_url = os.getenv(
-        "DATABASE_URL",
+        "DATA_DATABASE_URL",
         "mysql+pymysql://insightmesh_data:insightmesh_data_password@localhost:3306/insightmesh_data",
     )
 
