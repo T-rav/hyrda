@@ -40,7 +40,7 @@ select = [
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
 ]
-
-[tool.black]
-line-length = 88
-target-version = ['py311']
+ignore = [
+    "E501",  # line too long, handled by ruff format
+    "E741",  # ambiguous variable name
+]
