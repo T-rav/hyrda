@@ -15,7 +15,9 @@ class QdrantClient:
         """Initialize Qdrant client."""
         self.host = os.getenv("QDRANT_HOST", "qdrant")
         self.port = int(os.getenv("QDRANT_PORT", "6333"))
-        self.api_key = os.getenv("QDRANT_API_KEY")  # Set via docker-compose from VECTOR_API_KEY
+        self.api_key = os.getenv(
+            "QDRANT_API_KEY"
+        )  # Set via docker-compose from VECTOR_API_KEY
         self.collection_name = os.getenv(
             "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
         )
@@ -35,9 +37,7 @@ class QdrantClient:
                     timeout=60,
                 )
             else:
-                self.client = QdrantSDK(
-                    host=self.host, port=self.port, timeout=60
-                )
+                self.client = QdrantSDK(host=self.host, port=self.port, timeout=60)
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
@@ -51,7 +51,9 @@ class QdrantClient:
                     None,
                     lambda: self.client.create_collection(
                         collection_name=self.collection_name,
-                        vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+                        vectors_config=VectorParams(
+                            size=1536, distance=Distance.COSINE
+                        ),
                     ),
                 )
                 logger.info(f"✅ Created Qdrant collection: {self.collection_name}")
