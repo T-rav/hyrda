@@ -192,32 +192,70 @@ class BaseRetrieval:
         self, results: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
         """
-        Apply the configured diversification strategy to results.
+        Apply smart similarity-first diversification with automatic document chunk limiting.
+
+        For document chunks (has file_name), limits to max 3 chunks per document to avoid
+        overwhelming context. For metric data (employees, projects - no file_name), returns
+        pure similarity order.
 
         Args:
             results: Filtered results ready for diversification
 
         Returns:
-            Diversified results according to the configured strategy
+            Diversified results
         """
         if not results:
             return []
 
-        mode = self.settings.rag.diversification_mode.lower()
         max_results = self.settings.rag.max_results
-        max_unique_docs = self.settings.rag.max_unique_documents
 
-        if mode == "similarity_first":
-            # Pure similarity order (no diversification)
-            return results[:max_results]
+        # Smart diversification: limit chunks per document, pure similarity for metric data
+        return self._smart_similarity_diversify(results, max_results)
 
-        elif mode == "document_first":
-            # Your requested strategy: 1 chunk per document first, then fill remaining
-            return self._diversify_document_first(results, max_results, max_unique_docs)
+    def _smart_similarity_diversify(
+        self, results: list[dict[str, Any]], max_results: int
+    ) -> list[dict[str, Any]]:
+        """
+        Smart similarity-first diversification.
 
-        else:  # "balanced" (default)
-            # Round-robin diversification
-            return self._diversify_balanced(results, max_results)
+        - For document chunks (has file_name): Limit to 3 chunks per document
+        - For metric data (no file_name): Pure similarity order
+
+        Args:
+            results: Input results sorted by similarity
+            max_results: Maximum total results to return
+
+        Returns:
+            Diversified results
+        """
+        if not results:
+            return []
+
+        selected = []
+        doc_chunk_count = {}  # Track chunks per document
+
+        for result in results:
+            if len(selected) >= max_results:
+                break
+
+            file_name = result.get("metadata", {}).get("file_name")
+
+            # If it's a document chunk (has file_name), limit to 3 per document
+            if file_name and file_name != "Unknown":
+                count = doc_chunk_count.get(file_name, 0)
+                if count >= 3:  # Max 3 chunks per document
+                    continue
+                doc_chunk_count[file_name] = count + 1
+
+            # For metric data (no file_name) or under limit, add by similarity
+            selected.append(result)
+
+        logger.debug(
+            f"Smart diversification: Selected {len(selected)} results "
+            f"({len(doc_chunk_count)} unique documents with chunk limiting)"
+        )
+
+        return selected
 
     def _diversify_document_first(
         self, results: list[dict[str, Any]], max_results: int, max_unique_docs: int
