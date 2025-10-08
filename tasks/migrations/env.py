@@ -34,7 +34,7 @@ target_metadata = Base.metadata
 
 def get_url():
     """Get database URL from environment or config."""
-    url = os.getenv("DATABASE_URL")
+    url = os.getenv("TASK_DATABASE_URL")
     if url:
         return url
     return config.get_main_option("sqlalchemy.url")

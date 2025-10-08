@@ -102,9 +102,9 @@ class MockServiceFactory:
         return mock_metrics
 
     @staticmethod
-    def create_all_mock_services() -> (
-        tuple[MagicMock, MagicMock, MagicMock, MagicMock, MagicMock]
-    ):
+    def create_all_mock_services() -> tuple[
+        MagicMock, MagicMock, MagicMock, MagicMock, MagicMock
+    ]:
         """Create all required mock services for app testing"""
         return (
             MockServiceFactory.create_mock_async_app(),

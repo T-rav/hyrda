@@ -4,7 +4,10 @@ OpenAI embedding provider implementation
 
 import logging
 
-from langfuse.openai import AsyncOpenAI
+try:
+    from langfuse.openai import AsyncOpenAI
+except ImportError:
+    from openai import AsyncOpenAI
 
 from config.settings import EmbeddingSettings, LLMSettings
 from services.embedding.base import EmbeddingProvider

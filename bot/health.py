@@ -677,40 +677,6 @@ class HealthChecker:
                 "details": {"error": str(e)},
             }
 
-        # Elasticsearch Health
-        try:
-            async with (
-                aiohttp.ClientSession() as session,
-                session.get(
-                    "http://elasticsearch:9200/_cluster/health", timeout=5
-                ) as resp,
-            ):
-                if resp.status == 200:
-                    es_data = await resp.json()
-                    services["elasticsearch"] = {
-                        "name": "Elasticsearch",
-                        "status": "healthy"
-                        if es_data.get("status") in ["green", "yellow"]
-                        else "unhealthy",
-                        "details": {
-                            "cluster_status": es_data.get("status"),
-                            "nodes": es_data.get("number_of_nodes"),
-                            "active_shards": es_data.get("active_shards"),
-                        },
-                    }
-                else:
-                    services["elasticsearch"] = {
-                        "name": "Elasticsearch",
-                        "status": "unhealthy",
-                        "details": {"error": f"HTTP {resp.status}"},
-                    }
-        except Exception as e:
-            services["elasticsearch"] = {
-                "name": "Elasticsearch",
-                "status": "error",
-                "details": {"error": str(e)},
-            }
-
         # Overall health status
         all_healthy = all(
             service["status"] == "healthy" for service in services.values()

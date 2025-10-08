@@ -27,7 +27,7 @@ class SchedulerService:
         """Set up the APScheduler instance."""
         # Job stores configuration - using SQLite only
         jobstores = {
-            "default": SQLAlchemyJobStore(url=self.settings.database_url),
+            "default": SQLAlchemyJobStore(url=self.settings.task_database_url),
         }
 
         # Executors configuration

@@ -375,7 +375,7 @@ async def main():
         host=os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com"),
     )
 
-    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    openai_client = AsyncOpenAI(api_key=os.getenv("LLM_API_KEY"))
 
     # Run evaluation
     evaluator = SystemPromptEvaluator(langfuse, openai_client)

@@ -43,7 +43,7 @@ async def main():
     load_dotenv()
 
     # Validate required environment variables
-    required_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "OPENAI_API_KEY"]
+    required_vars = ["LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LLM_API_KEY"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
 
     if missing_vars:
@@ -74,7 +74,7 @@ async def main():
 
     try:
         langfuse = Langfuse(**langfuse_kwargs)
-        openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        openai_client = AsyncOpenAI(api_key=os.getenv("LLM_API_KEY"))
 
         # Create evaluator
         evaluator = SystemPromptEvaluator(langfuse, openai_client, args.judge_model)

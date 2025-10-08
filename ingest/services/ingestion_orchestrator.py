@@ -55,8 +55,8 @@ class IngestionOrchestrator:
         Set the vector database and embedding services.
 
         Args:
-            vector_service: Vector database service instance (could be hybrid or single)
-            embedding_service: Embedding service instance (optional for hybrid service)
+            vector_service: Vector database service instance
+            embedding_service: Embedding service instance
             llm_service: LLM service for contextual retrieval
             enable_contextual_retrieval: Whether to use contextual retrieval
         """
@@ -65,7 +65,7 @@ class IngestionOrchestrator:
         self.llm_service = llm_service
         self.enable_contextual_retrieval = enable_contextual_retrieval
 
-        # For hybrid RAG service, embedding service is built-in
+        # Some services have built-in embedding service
         if hasattr(vector_service, "embedding_service"):
             self.embedding_service = vector_service.embedding_service
 
@@ -96,9 +96,9 @@ class IngestionOrchestrator:
                 "Vector service not initialized. Services must be set before calling ingest_files."
             )
 
-        # For hybrid services, embedding service is built-in
+        # Some services have built-in embedding service
         if hasattr(self.vector_service, "embedding_service"):
-            # Hybrid service has built-in embedding service
+            # Service has built-in embedding service
             pass
         elif not self.embedding_service:
             raise RuntimeError(
@@ -150,9 +150,9 @@ class IngestionOrchestrator:
                 if metadata:
                     doc_metadata.update(metadata)
 
-                # Check if we're using hybrid RAG service with title injection
+                # Check if we're using RAG service with batch ingestion
                 if hasattr(self.vector_service, "ingest_documents"):
-                    # For hybrid service, we need to chunk and generate embeddings first
+                    # For RAG service, we need to chunk and generate embeddings first
                     import sys
                     from pathlib import Path
 
@@ -192,7 +192,7 @@ class IngestionOrchestrator:
                             },
                         )
 
-                    # Generate embeddings using hybrid service's embedding service
+                    # Generate embeddings using service's embedding service
                     embeddings = (
                         await self.vector_service.embedding_service.get_embeddings(
                             chunks
@@ -208,12 +208,12 @@ class IngestionOrchestrator:
                         chunk_meta["total_chunks"] = len(chunks)
                         chunk_metadata.append(chunk_meta)
 
-                    # Use hybrid ingestion with proper parameters
+                    # Use batch ingestion with proper parameters
                     await self.vector_service.ingest_documents(
                         texts=chunks, embeddings=embeddings, metadata=chunk_metadata
                     )
                     print(
-                        f"   📊 Used hybrid ingestion with title injection ({len(chunks)} chunks)"
+                        f"   📊 Used batch ingestion with title injection ({len(chunks)} chunks)"
                     )
 
                 else:

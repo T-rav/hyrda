@@ -6,7 +6,8 @@ import logging
 import time
 
 from config.settings import Settings
-from services.hybrid_rag_service import create_hybrid_rag_service
+
+# Hybrid search removed
 from services.langfuse_service import (
     get_langfuse_service,
     initialize_langfuse_service,
@@ -14,7 +15,7 @@ from services.langfuse_service import (
 )
 from services.metrics_service import get_metrics_service
 from services.prompt_service import PromptService
-from services.rag_service import RAGService  # Fallback for non-hybrid mode
+from services.rag_service import RAGService
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +34,10 @@ class LLMService:
         # Initialize prompt service for system prompts
         self.prompt_service = PromptService(settings)
 
-        # Use hybrid RAG service if enabled, otherwise fallback to single vector
-        if getattr(settings, "hybrid", None) and settings.hybrid.enabled:
-            self.rag_service = None  # Will be initialized in async initialize method
-            self.use_hybrid = True
-            logger.info("Using hybrid RAG service (Pinecone + Elasticsearch)")
-        else:
-            self.rag_service = RAGService(settings)
-            self.use_hybrid = False
-            logger.info("Using single vector RAG service")
+        # Hybrid search removed - always use standard RAG
+        self.rag_service = RAGService(settings)
+        self.use_hybrid = False
+        logger.info("Using standard RAG service")
 
         # Initialize Langfuse service
         self.langfuse_service = initialize_langfuse_service(
@@ -60,10 +56,7 @@ class LLMService:
 
     async def initialize(self):
         """Initialize RAG service"""
-        if self.use_hybrid:
-            self.rag_service = await create_hybrid_rag_service(self.settings)
-        else:
-            await self.rag_service.initialize()
+        await self.rag_service.initialize()
 
     @observe(name="llm_service_response", as_type="generation")
     async def get_response(
@@ -195,7 +188,7 @@ class LLMService:
             document_filename=None,
         )
 
-    async def ingest_documents(self, documents: list[dict]) -> int:
+    async def ingest_documents(self, documents: list[dict]) -> tuple[int, int]:
         """
         Ingest documents into the knowledge base
 
@@ -203,17 +196,13 @@ class LLMService:
             documents: List of documents with 'content' and optional 'metadata'
 
         Returns:
-            Number of chunks ingested
+            Tuple of (success_count, error_count)
         """
-        if not self.settings.vector.enabled:
-            logger.warning("Vector storage disabled - cannot ingest documents")
-            return 0
-
         try:
             return await self.rag_service.ingest_documents(documents)
         except Exception as e:
             logger.error(f"Error ingesting documents: {e}")
-            return 0
+            return (0, len(documents))
 
     async def get_system_status(self) -> dict:
         """Get system status information"""
@@ -257,7 +246,6 @@ async def create_llm_service(llm_settings) -> LLMService:
                 self.llm = llm_settings
                 # Add minimal required attributes
                 self.langfuse = type("obj", (object,), {"enabled": False})()
-                self.hybrid = type("obj", (object,), {"enabled": False})()
                 self.vector = type("obj", (object,), {"enabled": True})()
 
         settings = MinimalSettings()

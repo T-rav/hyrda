@@ -22,12 +22,11 @@ logging.basicConfig(
 tasks_path = Path(__file__).parent.parent / "tasks"
 sys.path.append(str(tasks_path))
 
-# Now import bot modules
+# Now import bot modules (including MetricClient from tasks/)
+from services.metric_client import MetricClient
+
 from config.settings import EmbeddingSettings, VectorSettings
 from services.embedding import create_embedding_provider
-
-# Import MetricClient from tasks
-from services.metric_client import MetricClient
 from services.vector_service import create_vector_store
 
 
