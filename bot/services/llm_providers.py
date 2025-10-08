@@ -7,7 +7,7 @@ import time
 from abc import ABC, abstractmethod
 
 try:
-    from langfuse.openai import AsyncOpenAI
+    from langfuse.openai import AsyncOpenAI  # type: ignore[reportMissingImports]
 except ImportError:
     from openai import AsyncOpenAI
 

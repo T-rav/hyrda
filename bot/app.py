@@ -10,7 +10,7 @@ from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
 
-import agents  # noqa: F401 - Import to register agents
+from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
@@ -58,6 +58,11 @@ def create_app():
     # Initialize prompt service
     initialize_prompt_service(settings)
     logger.info("Prompt service initialized")
+
+    # Log registered agents
+    registered_agents = agent_registry.list_agents()
+    agent_names = [agent["name"] for agent in registered_agents]
+    logger.info(f"Registered {len(agent_names)} agents: {', '.join(agent_names)}")
 
     # Create LLM service
     llm_service = LLMService(settings)

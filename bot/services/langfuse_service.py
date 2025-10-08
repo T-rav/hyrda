@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING, Any
 from config.settings import LangfuseSettings
 
 if TYPE_CHECKING:
-    from langfuse import Langfuse
+    from langfuse import Langfuse  # type: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
 # Optional import to handle cases where langfuse isn't installed
 try:
-    from langfuse import (
+    from langfuse import (  # type: ignore[reportMissingImports]
         Langfuse,  # type: ignore[import-untyped]
         observe,  # type: ignore[import-untyped]
     )

@@ -355,8 +355,12 @@ class TestSentenceTransformerEmbeddingProvider:
         """Test initialization with missing sentence-transformers package"""
         with (
             patch(
-                "sentence_transformers.SentenceTransformer",
-                side_effect=ImportError,
+                "services.embedding.sentence_transformer._sentence_transformers_available",
+                False,
+            ),
+            patch(
+                "services.embedding.sentence_transformer.SentenceTransformer",
+                None,
             ),
             pytest.raises(
                 ImportError, match="sentence-transformers package not installed"

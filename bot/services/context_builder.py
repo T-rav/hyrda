@@ -20,7 +20,7 @@ class ContextBuilder:
         context_chunks: list[dict[str, Any]],
         conversation_history: list[dict[str, str]],
         system_message: str | None = None,
-    ) -> tuple[str, list[dict[str, str]]]:
+    ) -> tuple[str | None, list[dict[str, str]]]:
         """
         Build a complete RAG prompt with context and conversation history.
 
@@ -32,6 +32,7 @@ class ContextBuilder:
 
         Returns:
             Tuple of (final_system_message, messages_for_llm)
+            final_system_message can be None if no system message or context provided
         """
         final_system_message = system_message
 

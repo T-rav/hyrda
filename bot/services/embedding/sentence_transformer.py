@@ -4,11 +4,26 @@ Sentence Transformers embedding provider implementation (local)
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from config.settings import EmbeddingSettings
 from services.embedding.base import EmbeddingProvider
 
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer  # pyright: ignore
+
 logger = logging.getLogger(__name__)
+
+# Check if sentence_transformers is available at module level
+_sentence_transformers_available = False
+SentenceTransformer = None  # type: ignore[assignment]
+
+try:
+    from sentence_transformers import SentenceTransformer  # pyright: ignore
+
+    _sentence_transformers_available = True
+except ImportError:
+    pass
 
 
 class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
@@ -24,9 +39,13 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
         if self._initialized:
             return
 
-        try:
-            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+        if not _sentence_transformers_available or SentenceTransformer is None:
+            raise ImportError(
+                "sentence-transformers package not installed. "
+                "Run: pip install sentence-transformers"
+            )
 
+        try:
             # Load model in executor to avoid blocking
             self.model_instance = await asyncio.get_event_loop().run_in_executor(
                 None, SentenceTransformer, self.model
@@ -34,12 +53,6 @@ class SentenceTransformerEmbeddingProvider(EmbeddingProvider):
 
             self._initialized = True
             logger.info(f"Initialized SentenceTransformer model: {self.model}")
-
-        except ImportError:
-            raise ImportError(
-                "sentence-transformers package not installed. "
-                "Run: pip install sentence-transformers"
-            ) from None
         except Exception as e:
             logger.error(f"Failed to initialize SentenceTransformer: {e}")
             raise
