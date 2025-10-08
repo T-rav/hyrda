@@ -198,10 +198,6 @@ class LLMService:
         Returns:
             Tuple of (success_count, error_count)
         """
-        if not self.settings.vector.enabled:
-            logger.warning("Vector storage disabled - cannot ingest documents")
-            return (0, 0)
-
         try:
             return await self.rag_service.ingest_documents(documents)
         except Exception as e:

@@ -79,7 +79,6 @@ class VectorSettings(BaseSettings):
     environment: str | None = Field(
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
     )
-    enabled: bool = Field(default=True, description="Enable RAG functionality")
 
     model_config = ConfigDict(env_prefix="VECTOR_")
 

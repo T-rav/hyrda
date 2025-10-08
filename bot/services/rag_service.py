@@ -35,16 +35,10 @@ class RAGService:
         self.settings = settings
 
         # Initialize core components
-        self.vector_store = None
-        self.embedding_provider = None
-        self.llm_provider = None
-
-        if settings.vector.enabled:
-            self.vector_store = create_vector_store(settings.vector)
-            self.embedding_provider = create_embedding_provider(
-                settings.embedding, settings.llm
-            )
-
+        self.vector_store = create_vector_store(settings.vector)
+        self.embedding_provider = create_embedding_provider(
+            settings.embedding, settings.llm
+        )
         self.llm_provider = create_llm_provider(settings.llm)
 
         # Create separate LLM provider for query rewriting (uses different model)
