@@ -191,6 +191,16 @@ Now classify this query. Return ONLY the JSON object:"""
             messages=[{"role": "user", "content": prompt}]
         )
 
+        # Handle None response from LLM (e.g., API errors)
+        if response is None:
+            logger.warning("LLM returned None response for intent classification")
+            return {
+                "type": "general",
+                "entities": [],
+                "time_range": {"start": None, "end": None},
+                "confidence": 0.3,
+            }
+
         try:
             # Try to parse JSON from response
             intent = json.loads(response.strip())
@@ -242,6 +252,13 @@ Make it specific to the query context. Use realistic names, dates, and project n
         hypothetical_doc = await self.llm_service.get_response(
             messages=[{"role": "user", "content": prompt}]
         )
+
+        # Handle None response from LLM
+        if hypothetical_doc is None:
+            logger.warning(
+                "LLM returned None for HyDE generation, using original query"
+            )
+            return {"query": query, "filters": {}, "strategy": "passthrough"}
 
         return {
             "query": hypothetical_doc.strip(),
