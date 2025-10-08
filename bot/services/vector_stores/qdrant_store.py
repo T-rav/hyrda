@@ -7,6 +7,7 @@ Handles Qdrant-specific vector database operations.
 import asyncio
 import hashlib
 import logging
+import uuid
 from typing import Any
 
 from .base import VectorStore
@@ -103,10 +104,13 @@ class QdrantVectorStore(VectorStore):
         try:
             points = []
             for i, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
+                # Generate a deterministic UUID from text content + index
+                # This allows us to reupload the same content without duplicates
                 text_hash = hashlib.md5(
-                    text.encode(), usedforsecurity=False
+                    f"{text}_{i}".encode(), usedforsecurity=False
                 ).hexdigest()
-                doc_id = f"doc_{text_hash}_{i}"
+                # Convert MD5 hash to UUID (Qdrant requires UUID or integer)
+                doc_id = str(uuid.UUID(text_hash))
 
                 doc_metadata = metadata[i] if metadata else {}
 
