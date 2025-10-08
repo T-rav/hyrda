@@ -52,9 +52,10 @@ LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-api-key
 LLM_MODEL=gpt-4o-mini
 
-# RAG Configuration
-VECTOR_PROVIDER=pinecone
+# Pinecone Configuration
 VECTOR_API_KEY=your-pinecone-api-key
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+VECTOR_ENVIRONMENT=us-east-1-aws
 
 # Database
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/bot
