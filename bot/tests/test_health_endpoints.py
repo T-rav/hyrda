@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiohttp import web
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 
 # Add the parent directory to sys.path to allow importing the module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -359,7 +359,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
 
         return app
 
-    @unittest_run_loop
     async def test_health_check_endpoint(self):
         """Test basic health check endpoint"""
         resp = await self.client.request("GET", "/health")
@@ -373,7 +372,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert "version" in data
         assert isinstance(data["uptime_seconds"], int)
 
-    @unittest_run_loop
     async def test_readiness_check_healthy(self):
         """Test readiness check when all services are healthy"""
         resp = await self.client.request("GET", "/ready")
@@ -393,7 +391,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert "langfuse" in checks
         assert "metrics" in checks
 
-    @unittest_run_loop
     async def test_readiness_check_unhealthy_missing_config(self):
         """Test readiness check when configuration is missing"""
         # Override settings to simulate missing config
@@ -407,7 +404,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert data["status"] == "not_ready"
         assert data["checks"]["configuration"]["status"] == "unhealthy"
 
-    @unittest_run_loop
     async def test_metrics_endpoint(self):
         """Test metrics endpoint"""
         resp = await self.client.request("GET", "/metrics")
@@ -430,7 +426,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
     # Note: Prometheus metrics success case is complex to test due to service dependency
     # The failure case is tested in test_prometheus_metrics_no_service
 
-    @unittest_run_loop
     async def test_prometheus_metrics_no_service(self):
         """Test Prometheus metrics endpoint when service is unavailable"""
         # Just test that the endpoint exists and returns some form of response
@@ -445,7 +440,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         # Either has metrics content or an error message
         assert len(text) >= 0  # Just ensure we got some response
 
-    @unittest_run_loop
     async def test_health_ui_endpoint(self):
         """Test health UI endpoint when files are missing"""
         with patch("builtins.open", side_effect=FileNotFoundError("UI file not found")):
@@ -456,7 +450,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
             text = await resp.text()
             assert "Health UI not available" in text
 
-    @unittest_run_loop
     async def test_user_import_endpoint(self):
         """Test user import API endpoint"""
         test_data = {
@@ -473,7 +466,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert data["processed_count"] == 2
         assert data["job_id"] == "test-job-123"
 
-    @unittest_run_loop
     async def test_user_import_endpoint_invalid_json(self):
         """Test user import endpoint with invalid JSON"""
         resp = await self.client.request(
@@ -488,7 +480,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         data = await resp.json()
         assert data["status"] == "error"
 
-    @unittest_run_loop
     async def test_ingest_completed_endpoint(self):
         """Test ingestion completion API endpoint"""
         test_data = {
@@ -508,7 +499,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert data["status"] == "success"
         assert data["job_id"] == "ingest-job-456"
 
-    @unittest_run_loop
     async def test_metrics_store_endpoint(self):
         """Test metrics storage API endpoint"""
         test_data = {
@@ -528,7 +518,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert data["status"] == "success"
         assert data["job_id"] == "metrics-job-789"
 
-    @unittest_run_loop
     async def test_usage_metrics_endpoint(self):
         """Test usage metrics API endpoint"""
         resp = await self.client.request(
@@ -546,7 +535,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert "data" in data  # Should include details
         assert len(data["data"]) == 12  # 12 hours of data
 
-    @unittest_run_loop
     async def test_usage_metrics_endpoint_no_details(self):
         """Test usage metrics API endpoint without details"""
         resp = await self.client.request("GET", "/api/metrics/usage?hours=6")
@@ -558,7 +546,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert "total_messages" in data
         assert "data" not in data  # Should not include details
 
-    @unittest_run_loop
     async def test_performance_metrics_endpoint(self):
         """Test performance metrics API endpoint"""
         resp = await self.client.request(
@@ -581,7 +568,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         for item in data["data"]:
             assert "memory" in item
 
-    @unittest_run_loop
     async def test_performance_metrics_endpoint_no_system(self):
         """Test performance metrics API endpoint without system metrics"""
         resp = await self.client.request(
@@ -597,7 +583,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         for item in data["data"]:
             assert "memory" not in item
 
-    @unittest_run_loop
     async def test_error_metrics_endpoint(self):
         """Test error metrics API endpoint"""
         resp = await self.client.request(
@@ -614,7 +599,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert "data" in data
         assert len(data["data"]) == 24
 
-    @unittest_run_loop
     @patch("aiohttp.ClientSession.get")
     @patch("pymysql.connect")
     async def test_services_health_endpoint(self, mock_db_connect, mock_aiohttp_get):

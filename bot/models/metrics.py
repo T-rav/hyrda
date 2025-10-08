@@ -4,11 +4,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MetricsData(BaseModel):
     """Metrics collection data structure."""
+
+    model_config = ConfigDict(frozen=True)
 
     service_name: str
     metric_type: Literal["usage", "performance", "error", "custom"]
@@ -16,9 +18,6 @@ class MetricsData(BaseModel):
     unit: str
     timestamp: datetime = Field(default_factory=datetime.now)
     labels: dict[str, str] = Field(default_factory=dict)
-
-    class Config:
-        frozen = True
 
 
 @dataclass(frozen=True)
