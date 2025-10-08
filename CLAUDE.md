@@ -100,8 +100,9 @@ CACHE_REDIS_URL=redis://localhost:6379
 ```bash
 # Vector Database
 VECTOR_ENABLED=true
-VECTOR_PROVIDER=elasticsearch
-VECTOR_URL=http://localhost:9200
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=localhost
+VECTOR_PORT=6333
 
 # Embeddings
 EMBEDDING_PROVIDER=openai
@@ -114,20 +115,22 @@ RAG_SIMILARITY_THRESHOLD=0.7
 
 ### Quick Setup Examples
 
-**OpenAI + Elasticsearch (Recommended):**
+**OpenAI + Qdrant (Recommended):**
 ```bash
 LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-key
-VECTOR_PROVIDER=elasticsearch
-VECTOR_URL=http://localhost:9200
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=localhost
+VECTOR_PORT=6333
 ```
 
-**Anthropic + Elasticsearch:**
+**Anthropic + Qdrant:**
 ```bash
 LLM_PROVIDER=anthropic
 LLM_API_KEY=your-anthropic-key
-VECTOR_PROVIDER=elasticsearch
-VECTOR_URL=http://localhost:9200
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=localhost
+VECTOR_PORT=6333
 ```
 
 **Ollama (Local, No RAG):**
@@ -146,7 +149,7 @@ This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Gene
 
 #### New RAG-Enabled Design
 - **Direct LLM Integration**: OpenAI, Anthropic, or Ollama (no proxy required)
-- **Vector Database**: ChromaDB or Pinecone for knowledge storage
+- **Vector Database**: Qdrant for self-hosted vector search
 - **Embedding Service**: Configurable text vectorization
 - **RAG Pipeline**: Retrieval-augmented response generation
 - **Document Ingestion**: CLI tool for knowledge base management
@@ -179,7 +182,7 @@ Uses Pydantic with environment variable prefixes:
 2. Comprehensive metadata extraction → File paths, permissions, owners
 3. Document download and processing → Google Drive API
 4. Content chunking and embedding → `bot/services/vector_service.py`
-5. Vector storage with rich metadata → ChromaDB or Pinecone
+5. Vector storage with rich metadata → Qdrant
 
 #### Agent Processes
 Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. Users can trigger data processing jobs through natural language requests.
@@ -198,7 +201,7 @@ Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictiona
 - **Ollama**: Local models (Llama 2, Code Llama, etc.)
 
 #### Vector Database
-- **Elasticsearch**: Local or cloud deployment for vector search
+- **Qdrant**: Self-hosted vector database for semantic search
 
 #### RAG Pipeline Features
 - **Document Chunking**: Configurable size and overlap
