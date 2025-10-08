@@ -35,20 +35,31 @@ class RAGService:
         self.settings = settings
 
         # Initialize core components
-        self.vector_store = None
-        self.embedding_provider = None
-        self.llm_provider = None
-
-        if settings.vector.enabled:
-            self.vector_store = create_vector_store(settings.vector)
-            self.embedding_provider = create_embedding_provider(
-                settings.embedding, settings.llm
-            )
-
+        self.vector_store = create_vector_store(settings.vector)
+        self.embedding_provider = create_embedding_provider(
+            settings.embedding, settings.llm
+        )
         self.llm_provider = create_llm_provider(settings.llm)
 
+        # Create separate LLM provider for query rewriting (uses different model)
+        query_rewrite_llm = None
+        if settings.rag.enable_query_rewriting:
+            # Create LLM settings for query rewriting model
+            from copy import deepcopy
+
+            query_llm_settings = deepcopy(settings.llm)
+            query_llm_settings.model = settings.rag.query_rewrite_model
+            query_rewrite_llm = create_llm_provider(query_llm_settings)
+            logger.info(
+                f"✅ Query rewriting enabled with model: {settings.rag.query_rewrite_model}"
+            )
+
         # Initialize specialized services
-        self.retrieval_service = RetrievalService(settings)
+        self.retrieval_service = RetrievalService(
+            settings,
+            llm_service=query_rewrite_llm,  # Use separate model for query rewriting
+            enable_query_rewriting=settings.rag.enable_query_rewriting,
+        )
         self.context_builder = ContextBuilder()
         self.citation_service = CitationService()
 
@@ -227,9 +238,12 @@ class RAGService:
                             query, self.vector_store, self.embedding_provider
                         )
                 else:
-                    # Standard query-based retrieval
+                    # Standard query-based retrieval (pass conversation history for context)
                     context_chunks = await self.retrieval_service.retrieve_context(
-                        query, self.vector_store, self.embedding_provider
+                        query,
+                        self.vector_store,
+                        self.embedding_provider,
+                        conversation_history=conversation_history,
                     )
 
                 # Log retrieved documents to Langfuse and record metrics
@@ -366,7 +380,7 @@ class RAGService:
                 # Add all uploaded document chunks as first context (highest priority)
                 context_chunks = document_chunks + context_chunks
                 logger.info(
-                    f"🔧 Added {len(document_chunks)} document chunks plus {len(context_chunks)-len(document_chunks)} RAG chunks"
+                    f"🔧 Added {len(document_chunks)} document chunks plus {len(context_chunks) - len(document_chunks)} RAG chunks"
                 )
 
             # Build prompt with context (includes uploaded document + retrieved context)

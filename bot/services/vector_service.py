@@ -1,40 +1,21 @@
 """
-Vector Service Factory - Refactored
+Vector Service Factory
 
-Factory for creating vector store instances using the new organized structure.
+Factory for creating Pinecone vector store instances.
 """
 
 from config.settings import VectorSettings
-from services.vector_stores import (
-    ElasticsearchVectorStore,
-    PineconeVectorStore,
-    VectorStore,
-)
+from services.vector_stores import PineconeVectorStore, VectorStore
 
 
 def create_vector_store(settings: VectorSettings) -> VectorStore:
     """
-    Factory function to create vector store instances.
+    Factory function to create Pinecone vector store instance.
 
     Args:
-        settings: Vector store configuration settings
+        settings: Pinecone configuration settings
 
     Returns:
-        Initialized vector store instance
-
-    Raises:
-        ValueError: If unsupported provider is specified
+        Initialized Pinecone vector store instance
     """
-    store_map = {
-        "elasticsearch": ElasticsearchVectorStore,
-        "pinecone": PineconeVectorStore,
-    }
-
-    store_class = store_map.get(settings.provider.lower())
-    if not store_class:
-        supported = ", ".join(store_map.keys())
-        raise ValueError(
-            f"Unsupported vector store provider: {settings.provider}. Supported: {supported}"
-        )
-
-    return store_class(settings)
+    return PineconeVectorStore(settings)

@@ -18,6 +18,7 @@ def execute_job_by_type(
     job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler"
 ) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
+    import asyncio
     import uuid
     from datetime import UTC, datetime
 
@@ -56,8 +57,8 @@ def execute_job_by_type(
             session.commit()
             session.refresh(task_run)
 
-        # Execute the job
-        result = job_instance.execute()
+        # Execute the job (async - need to run in event loop)
+        result = asyncio.run(job_instance.execute())
 
         # Update TaskRun with success
         with get_db_session() as session:

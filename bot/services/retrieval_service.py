@@ -1,8 +1,8 @@
 """
 Retrieval Service
 
-Handles document retrieval and context building for RAG.
-Routes to provider-specific retrieval implementations.
+Handles document retrieval and context building for RAG using Pinecone.
+Includes adaptive query rewriting for improved retrieval accuracy.
 """
 
 import logging
@@ -10,34 +10,45 @@ from typing import Any
 
 from config.settings import Settings
 
-from .retrieval import ElasticsearchRetrieval, PineconeRetrieval
+from .query_rewriter import AdaptiveQueryRewriter
+from .retrieval import PineconeRetrieval
 
 logger = logging.getLogger(__name__)
 
 
 class RetrievalService:
-    """Service for retrieving and processing context from vector stores"""
+    """Service for retrieving and processing context from Pinecone vector store"""
 
-    def __init__(self, settings: Settings):
+    def __init__(
+        self, settings: Settings, llm_service=None, enable_query_rewriting: bool = True
+    ):
         self.settings = settings
+        self.llm_service = llm_service
+        self.enable_query_rewriting = enable_query_rewriting
 
-        # Initialize provider-specific retrieval services
-        self.elasticsearch_retrieval = ElasticsearchRetrieval(settings)
+        # Initialize Pinecone retrieval service
         self.pinecone_retrieval = PineconeRetrieval(settings)
+
+        # Initialize query rewriter (will be lazy-loaded when LLM service is available)
+        self.query_rewriter = None
 
     async def retrieve_context(
         self,
         query: str,
         vector_service,
         embedding_service,
+        conversation_history: list[dict] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Retrieve relevant context chunks for a query using provider-specific strategies.
+
+        Applies adaptive query rewriting before retrieval to improve accuracy.
 
         Args:
             query: User query
             vector_service: Vector database service
             embedding_service: Embedding service for query encoding
+            conversation_history: Recent conversation for context (optional)
 
         Returns:
             List of relevant context chunks with metadata
@@ -47,37 +58,53 @@ class RetrievalService:
             return []
 
         try:
-            # Get query embedding
-            query_embedding = await embedding_service.get_embedding(query)
-
-            # Route to provider-specific search logic
-            if self.settings.vector.provider.lower() == "elasticsearch":
-                results = await self.elasticsearch_retrieval.search(
-                    query, query_embedding, vector_service
+            # Initialize query rewriter if not already done and LLM service is available
+            if (
+                self.enable_query_rewriting
+                and not self.query_rewriter
+                and self.llm_service
+            ):
+                self.query_rewriter = AdaptiveQueryRewriter(
+                    self.llm_service, enable_rewriting=True
                 )
-            elif self.settings.vector.provider.lower() == "pinecone":
-                results = await self.pinecone_retrieval.search(
-                    query, query_embedding, vector_service
-                )
-            else:
-                logger.warning(
-                    f"Unknown vector provider: {self.settings.vector.provider}"
-                )
-                results = []
+                logger.info("✅ Query rewriter initialized")
 
-            # Get the appropriate retrieval service for shared operations
-            if self.settings.vector.provider.lower() == "elasticsearch":
-                retrieval_service = self.elasticsearch_retrieval
-            else:
-                retrieval_service = self.pinecone_retrieval
+            # Apply query rewriting if enabled
+            rewritten_query = query
+            query_filters = None
 
-            # Apply entity boosting to all results (regardless of hybrid search setting)
+            if self.query_rewriter:
+                rewrite_result = await self.query_rewriter.rewrite_query(
+                    query, conversation_history
+                )
+                rewritten_query = rewrite_result["query"]
+                query_filters = rewrite_result.get("filters", {})
+
+                logger.info(
+                    f"🔄 Query rewriting: strategy={rewrite_result['strategy']}, "
+                    f"intent={rewrite_result.get('intent', {}).get('type', 'unknown')}"
+                )
+                if query_filters:
+                    logger.info(f"🔍 Applying metadata filters: {query_filters}")
+                logger.info(f"📝 Original query: '{query}'")
+                logger.info(f"📝 Rewritten query: '{rewritten_query[:500]}'")
+                if len(rewritten_query) > 500:
+                    logger.info(f"   ... (truncated from {len(rewritten_query)} chars)")
+
+            # Get query embedding (use rewritten query)
+            query_embedding = await embedding_service.get_embedding(rewritten_query)
+
+            # Search using Pinecone
+            results = await self.pinecone_retrieval.search(
+                query,
+                query_embedding,
+                vector_service,
+                metadata_filter=query_filters,
+            )
+
+            # Apply entity boosting to all results
             if results:
-                results = retrieval_service._apply_entity_boosting(query, results)
-
-            # Apply hybrid search boosting if enabled
-            if self.settings.rag.enable_hybrid_search and results:
-                results = self._apply_hybrid_search_boosting(query, results)
+                results = self.pinecone_retrieval._apply_entity_boosting(query, results)
 
             # Apply final similarity threshold filter
             filtered_results = [
@@ -87,66 +114,28 @@ class RetrievalService:
                 >= self.settings.rag.results_similarity_threshold
             ]
 
+            logger.info(
+                f"🔽 Pre-filter: {len(results)} results, Post-filter: {len(filtered_results)} results (threshold: {self.settings.rag.results_similarity_threshold:.0%})"
+            )
+
             # Apply diversification strategy and limit to max results
-            final_results = retrieval_service._apply_diversification_strategy(
+            final_results = self.pinecone_retrieval._apply_diversification_strategy(
                 filtered_results
             )
 
-            logger.info(
-                f"📄 Retrieved {len(final_results)} context chunks (filtered by {self.settings.rag.results_similarity_threshold:.0%} threshold)"
-            )
+            logger.info(f"📄 Retrieved {len(final_results)} final context chunks")
+            if final_results:
+                # Log first result for debugging
+                first_result = final_results[0]
+                logger.info(
+                    f"   Top result: {first_result.get('metadata', {}).get('file_name', 'unknown')} "
+                    f"(similarity: {first_result.get('similarity', 0):.2f})"
+                )
             return final_results
 
         except Exception as e:
             logger.error(f"Error retrieving context: {e}")
             return []
-
-    def _apply_hybrid_search_boosting(
-        self, query: str, results: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
-        """
-        Apply hybrid search boosting to return multiple chunks per document.
-
-        Args:
-            query: User query for relevance scoring
-            results: Initial search results
-
-        Returns:
-            Boosted results with multiple chunks per top documents
-        """
-        if not results:
-            return results
-
-        logger.debug(f"🔄 Applying hybrid search boosting to {len(results)} results")
-
-        # Group results by document and get all chunks from top 5 documents
-        seen_documents = set()
-        final_results = []
-
-        for result in results:
-            metadata = result.get("metadata", {})
-            file_name = metadata.get("file_name", "Unknown")
-
-            # If we haven't seen this document, add it to our set
-            if file_name not in seen_documents:
-                seen_documents.add(file_name)
-                # Stop if we already have enough unique documents
-                if len(seen_documents) > self.settings.rag.max_results:
-                    break
-
-            # Add chunk if it's from one of our selected documents
-            if (
-                file_name in seen_documents
-                and len(seen_documents) <= self.settings.rag.max_results
-            ):
-                final_results.append(result)
-
-        logger.debug(
-            f"📊 Hybrid boosting: Selected {len(final_results)} chunks "
-            f"from {len(seen_documents)} documents"
-        )
-
-        return final_results
 
     async def retrieve_context_by_embedding(
         self,
@@ -179,7 +168,9 @@ class RetrievalService:
                 return []
 
             # Apply diversification to get chunks from different documents
-            diversified_results = self._apply_hybrid_search_boosting("", results)
+            diversified_results = (
+                self.pinecone_retrieval._apply_diversification_strategy(results)
+            )
 
             logger.info(
                 f"📚 Retrieved {len(diversified_results)} context chunks "

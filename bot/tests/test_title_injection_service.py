@@ -381,9 +381,9 @@ class TestTitleInjectionService:
 
         for metadata, expected in test_cases:
             result = service._extract_title(metadata)
-            assert (
-                result == expected
-            ), f"Failed for {metadata}, got {result}, expected {expected}"
+            assert result == expected, (
+                f"Failed for {metadata}, got {result}, expected {expected}"
+            )
 
     def test_is_filename(self):
         """Test filename detection logic"""
@@ -392,9 +392,9 @@ class TestTitleInjectionService:
 
         for text, expected in test_cases:
             result = service._is_filename(text)
-            assert (
-                result == expected
-            ), f"Failed for '{text}', got {result}, expected {expected}"
+            assert result == expected, (
+                f"Failed for '{text}', got {result}, expected {expected}"
+            )
 
     def test_extract_title_from_filename(self):
         """Test direct filename to title conversion"""
@@ -403,9 +403,9 @@ class TestTitleInjectionService:
 
         for filename, expected in test_cases:
             result = service._extract_title_from_filename(filename)
-            assert (
-                result == expected
-            ), f"Failed for '{filename}', got {result}, expected {expected}"
+            assert result == expected, (
+                f"Failed for '{filename}', got {result}, expected {expected}"
+            )
 
     def test_clean_filename_patterns(self):
         """Test filename pattern cleaning"""
@@ -414,9 +414,9 @@ class TestTitleInjectionService:
 
         for input_text, expected in test_cases:
             result = service._clean_filename_patterns(input_text)
-            assert (
-                result == expected
-            ), f"Failed for '{input_text}', got {result}, expected {expected}"
+            assert result == expected, (
+                f"Failed for '{input_text}', got {result}, expected {expected}"
+            )
 
 
 class TestEnhancedChunkProcessor:

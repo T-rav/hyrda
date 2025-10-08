@@ -37,7 +37,7 @@ def get_db_session():
         from config.settings import get_settings
 
         settings = get_settings()
-        init_db(settings.database_url)
+        init_db(settings.task_database_url)
 
     session = _SessionLocal()
     try:
