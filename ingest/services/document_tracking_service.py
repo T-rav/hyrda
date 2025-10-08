@@ -59,8 +59,8 @@ class GoogleDriveDocument(Base):
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # Additional metadata (JSON)
-    metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Additional metadata (JSON) - using 'extra_metadata' to avoid SQLAlchemy reserved name
+    extra_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True, name="metadata")
 
 
 class DocumentTrackingService:
@@ -185,7 +185,7 @@ class DocumentTrackingService:
                 existing_doc.last_ingested_at = datetime.utcnow()
                 existing_doc.ingestion_status = status
                 existing_doc.error_message = error_message
-                existing_doc.metadata = metadata
+                existing_doc.extra_metadata = metadata
             else:
                 # Create new record
                 new_doc = GoogleDriveDocument(
@@ -199,7 +199,7 @@ class DocumentTrackingService:
                     chunk_count=chunk_count,
                     ingestion_status=status,
                     error_message=error_message,
-                    metadata=metadata,
+                    extra_metadata=metadata,
                 )
                 session.add(new_doc)
 
@@ -243,5 +243,5 @@ class DocumentTrackingService:
                 else None,
                 "ingestion_status": doc.ingestion_status,
                 "error_message": doc.error_message,
-                "metadata": doc.metadata,
+                "metadata": doc.extra_metadata,
             }
