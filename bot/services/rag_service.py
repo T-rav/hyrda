@@ -235,7 +235,10 @@ class RAGService:
                             "Failed to generate embedding for uploaded document, falling back to query-based search"
                         )
                         context_chunks = await self.retrieval_service.retrieve_context(
-                            query, self.vector_store, self.embedding_provider
+                            query,
+                            self.vector_store,
+                            self.embedding_provider,
+                            user_id=user_id,
                         )
                 else:
                     # Standard query-based retrieval (pass conversation history for context)
@@ -244,6 +247,7 @@ class RAGService:
                         self.vector_store,
                         self.embedding_provider,
                         conversation_history=conversation_history,
+                        user_id=user_id,
                     )
 
                 # Log retrieved documents to Langfuse and record metrics
