@@ -56,14 +56,15 @@ class ContextBuilder:
             # Create RAG system message
             context_section = "\n\n".join(context_texts)
 
-            # Strong instruction for document analysis
+            # RAG instruction for retrieved context
             rag_instruction = (
-                "IMPORTANT: The user has uploaded a document for you to analyze. You have direct access to the document content in the context below. "
-                "When asked about 'thoughts' or to analyze a document, provide specific insights based on the actual document content provided. "
-                "Reference specific details, concepts, and information from the document in your response. "
-                "Answer naturally without adding inline source citations like '[Source: ...]' since "
+                "You have access to relevant information from the knowledge base below. "
+                "Use this context to answer the user's question directly and naturally. "
+                "The context may include structured data, document content, or other information. "
+                "Reference specific details when relevant and answer naturally based on what's provided. "
+                "Do not add inline source citations like '[Source: ...]' since "
                 "complete source citations will be automatically added at the end of your response.\n\n"
-                f"Document Content and Context:\n{context_section}\n\n"
+                f"Context:\n{context_section}\n\n"
             )
 
             if final_system_message:
