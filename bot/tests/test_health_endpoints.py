@@ -630,7 +630,7 @@ class TestHealthEndpoints(AioHTTPTestCase):
         mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
         mock_db_connect.return_value = mock_connection
 
-        # Mock HTTP responses for task scheduler and elasticsearch
+        # Mock HTTP responses for task scheduler
         mock_response = AsyncMock()
         mock_response.status = 200
         mock_response.json.return_value = {
@@ -638,23 +638,13 @@ class TestHealthEndpoints(AioHTTPTestCase):
             "jobs": [{"id": "job1"}, {"id": "job2"}],
         }
 
-        mock_es_response = AsyncMock()
-        mock_es_response.status = 200
-        mock_es_response.json.return_value = {
-            "status": "green",
-            "number_of_nodes": 1,
-            "active_shards": 5,
-        }
-
         # Configure the async context manager properly
         mock_session = AsyncMock()
-        mock_session.get.return_value.__aenter__.return_value = mock_es_response
         mock_aiohttp_get.return_value = mock_response
 
         with patch("aiohttp.ClientSession") as mock_session_class:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             mock_session_class.return_value.__aexit__.return_value = None
-            mock_session.get.return_value.__aenter__.return_value = mock_es_response
 
             resp = await self.client.request("GET", "/api/services/health")
 
@@ -668,7 +658,6 @@ class TestHealthEndpoints(AioHTTPTestCase):
         services = data["services"]
         assert "task_scheduler" in services
         assert "database" in services
-        assert "elasticsearch" in services
 
 
 class TestHealthEndpointsEdgeCases:

@@ -440,13 +440,13 @@ class TestAPIBreakingChangeDetection:
         required_openai_fields = ["choices", "usage"]
         required_slack_message_fields = ["ok", "ts", "channel"]
         required_langfuse_fields = ["start_span", "start_generation", "flush"]
-        required_elasticsearch_fields = ["hits"]
+        required_pinecone_fields = ["matches"]
 
         # These assertions document our API dependencies
         assert required_openai_fields is not None
         assert required_slack_message_fields is not None
         assert required_langfuse_fields is not None
-        assert required_elasticsearch_fields is not None
+        assert required_pinecone_fields is not None
 
     def test_api_method_signatures_unchanged(self):
         """Test that API method signatures haven't changed"""
