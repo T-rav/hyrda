@@ -103,12 +103,16 @@ services:
       - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SLACK_BOT_API_URL=http://bot:8080
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
       - ENVIRONMENT=production
       - FLASK_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
       mysql:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     command: >
       sh -c "
@@ -162,7 +166,8 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
-      - VECTOR_URL=http://elasticsearch:9200
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:
@@ -170,7 +175,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      elasticsearch:
+      qdrant:
         condition: service_healthy
       redis:
         condition: service_healthy
