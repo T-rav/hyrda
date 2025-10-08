@@ -215,7 +215,7 @@ class HealthChecker:
         else:
             # Check if langfuse package is available
             try:
-                import langfuse  # noqa: F401
+                import langfuse  # noqa: F401  # type: ignore[reportMissingImports,reportUnusedImport]
 
                 langfuse_available = True
                 message = "Langfuse package available but service not initialized"
@@ -256,7 +256,7 @@ class HealthChecker:
         else:
             # Check if prometheus client is actually available
             try:
-                import prometheus_client  # noqa: F401
+                import prometheus_client  # noqa: F401  # type: ignore[reportMissingImports,reportUnusedImport]
 
                 prometheus_available = True
                 message = "Metrics service not initialized - check app startup"
@@ -591,7 +591,7 @@ class HealthChecker:
     async def services_health(self, request):
         """Get health status of all services."""
         import aiohttp
-        import pymysql
+        import pymysql  # type: ignore[reportMissingModuleSource]
 
         services = {}
 

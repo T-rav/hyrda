@@ -73,7 +73,7 @@ class ServiceFactory:
 
         logger.info("Service factories registered successfully")
 
-    async def _create_metrics_service(self) -> MetricsServiceProtocol:
+    async def _create_metrics_service(self):  # type: ignore[no-untyped-def]
         """Create metrics service."""
         from services.metrics_service import MetricsService
 
@@ -81,7 +81,7 @@ class ServiceFactory:
         await service.initialize()
         return service
 
-    async def _create_langfuse_service(self) -> LangfuseServiceProtocol:
+    async def _create_langfuse_service(self):  # type: ignore[no-untyped-def]
         """Create Langfuse service."""
         from services.langfuse_service import LangfuseService
 
@@ -89,7 +89,7 @@ class ServiceFactory:
         await service.initialize()
         return service
 
-    async def _create_vector_service(self) -> VectorServiceProtocol:
+    async def _create_vector_service(self):  # type: ignore[no-untyped-def]
         """Create Pinecone vector service."""
         from services.vector_stores.pinecone_store import PineconeVectorStore
 
@@ -97,30 +97,17 @@ class ServiceFactory:
         await service.initialize()
         return service
 
-    async def _create_rag_service(self) -> RAGServiceProtocol:
+    async def _create_rag_service(self):  # type: ignore[no-untyped-def]
         """Create RAG service with dependencies."""
-        # Get dependencies from container
-        vector_service = await self.container.get(VectorServiceProtocol)
-        metrics_service = await self.container.get(MetricsServiceProtocol)
-
-        langfuse_service = None
-        if self.settings.langfuse.enabled:
-            langfuse_service = await self.container.get(LangfuseServiceProtocol)
-
         # Import and create service
         from services.rag_service import RAGService
 
-        service = RAGService(
-            settings=self.settings,
-            vector_service=vector_service,
-            metrics_service=metrics_service,
-            langfuse_service=langfuse_service,
-        )
+        service = RAGService(settings=self.settings)
 
         await service.initialize()
         return service
 
-    async def _create_slack_service(self) -> SlackServiceProtocol:
+    async def _create_slack_service(self):  # type: ignore[no-untyped-def]
         """Create Slack service."""
         from slack_sdk import WebClient
 
@@ -133,25 +120,12 @@ class ServiceFactory:
         await service.initialize()
         return service
 
-    async def _create_llm_service(self) -> LLMServiceProtocol:
+    async def _create_llm_service(self):  # type: ignore[no-untyped-def]
         """Create LLM service with all dependencies."""
-        # Get dependencies from container
-        metrics_service = await self.container.get(MetricsServiceProtocol)
-        rag_service = await self.container.get(RAGServiceProtocol)
-
-        langfuse_service = None
-        if self.settings.langfuse.enabled:
-            langfuse_service = await self.container.get(LangfuseServiceProtocol)
-
         # Import and create service
         from services.llm_service import LLMService
 
-        service = LLMService(
-            settings=self.settings,
-            rag_service=rag_service,
-            langfuse_service=langfuse_service,
-            metrics_service=metrics_service,
-        )
+        service = LLMService(settings=self.settings)
         await service.initialize()
         return service
 

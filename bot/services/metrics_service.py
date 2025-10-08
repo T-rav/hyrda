@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Optional Prometheus client import
 try:
-    from prometheus_client import (
+    from prometheus_client import (  # type: ignore[reportMissingImports]
         CONTENT_TYPE_LATEST,
         Counter,
         Gauge,

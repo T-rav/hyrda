@@ -3,11 +3,13 @@
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class CacheStats(BaseModel):
     """Cache statistics and health information."""
+
+    model_config = ConfigDict(frozen=True)
 
     hit_rate_percent: float
     miss_rate_percent: float
@@ -17,9 +19,6 @@ class CacheStats(BaseModel):
     expired_keys: int
     connections: int
     uptime_seconds: float
-
-    class Config:
-        frozen = True
 
 
 @dataclass(frozen=True)

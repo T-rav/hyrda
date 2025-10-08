@@ -5,7 +5,7 @@ OpenAI embedding provider implementation
 import logging
 
 try:
-    from langfuse.openai import AsyncOpenAI
+    from langfuse.openai import AsyncOpenAI  # type: ignore[reportMissingImports]
 except ImportError:
     from openai import AsyncOpenAI
 
