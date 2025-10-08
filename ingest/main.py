@@ -98,6 +98,10 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
+        # Import bot config (not tasks config)
+        bot_path = str(Path(__file__).parent.parent / "bot")
+        sys.path.insert(0, bot_path)  # Prioritize bot over tasks
+
         from config.settings import (
             EmbeddingSettings,
             LLMSettings,

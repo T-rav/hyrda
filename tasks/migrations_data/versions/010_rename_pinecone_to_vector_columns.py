@@ -24,7 +24,9 @@ def upgrade():
     # Rename columns in metric_records table
     if "metric_records" in inspector.get_table_names():
         # Drop old indexes
-        existing_indexes = [idx["name"] for idx in inspector.get_indexes("metric_records")]
+        existing_indexes = [
+            idx["name"] for idx in inspector.get_indexes("metric_records")
+        ]
         if "idx_pinecone_id" in existing_indexes:
             op.drop_index("idx_pinecone_id", table_name="metric_records")
 
@@ -53,7 +55,9 @@ def upgrade():
     # Rename columns in portal_records table
     if "portal_records" in inspector.get_table_names():
         # Drop old indexes
-        existing_indexes = [idx["name"] for idx in inspector.get_indexes("portal_records")]
+        existing_indexes = [
+            idx["name"] for idx in inspector.get_indexes("portal_records")
+        ]
         if "idx_portal_pinecone_id" in existing_indexes:
             op.drop_index("idx_portal_pinecone_id", table_name="portal_records")
 
@@ -88,7 +92,9 @@ def downgrade():
     # Rename columns in metric_records table
     if "metric_records" in inspector.get_table_names():
         # Drop new indexes
-        existing_indexes = [idx["name"] for idx in inspector.get_indexes("metric_records")]
+        existing_indexes = [
+            idx["name"] for idx in inspector.get_indexes("metric_records")
+        ]
         if "idx_vector_id" in existing_indexes:
             op.drop_index("idx_vector_id", table_name="metric_records")
 
@@ -117,7 +123,9 @@ def downgrade():
     # Rename columns in portal_records table
     if "portal_records" in inspector.get_table_names():
         # Drop new indexes
-        existing_indexes = [idx["name"] for idx in inspector.get_indexes("portal_records")]
+        existing_indexes = [
+            idx["name"] for idx in inspector.get_indexes("portal_records")
+        ]
         if "idx_portal_vector_id" in existing_indexes:
             op.drop_index("idx_portal_vector_id", table_name="portal_records")
 
