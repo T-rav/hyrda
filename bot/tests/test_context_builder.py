@@ -185,7 +185,7 @@ class TestContextBuilder:
 
         # Check system message contains context
         assert (
-            "IMPORTANT: The user has uploaded a document for you to analyze"
+            "You have access to relevant information from the knowledge base below"
             in system_msg
         )
         assert "You are a helpful assistant." in system_msg
@@ -231,7 +231,7 @@ class TestContextBuilder:
 
         # Check system message is just the RAG instruction
         assert system_msg.startswith(
-            "IMPORTANT: The user has uploaded a document for you to analyze"
+            "You have access to relevant information from the knowledge base below"
         )
         assert "doc1.pdf" in system_msg
 
@@ -274,7 +274,7 @@ class TestContextBuilder:
             )
 
             assert (
-                "IMPORTANT: The user has uploaded a document for you to analyze"
+                "You have access to relevant information from the knowledge base below"
                 in system_msg
             )
             assert messages[-1]["content"] == query

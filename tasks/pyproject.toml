@@ -56,6 +56,9 @@ dependencies = [
 
     # Logging
     "loguru>=0.7.0",
+
+    # JWT for Portal API authentication
+    "PyJWT>=2.8.0",
 ]
 
 [project.optional-dependencies]
