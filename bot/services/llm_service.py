@@ -188,7 +188,7 @@ class LLMService:
             document_filename=None,
         )
 
-    async def ingest_documents(self, documents: list[dict]) -> int:
+    async def ingest_documents(self, documents: list[dict]) -> tuple[int, int]:
         """
         Ingest documents into the knowledge base
 
@@ -196,17 +196,17 @@ class LLMService:
             documents: List of documents with 'content' and optional 'metadata'
 
         Returns:
-            Number of chunks ingested
+            Tuple of (success_count, error_count)
         """
         if not self.settings.vector.enabled:
             logger.warning("Vector storage disabled - cannot ingest documents")
-            return 0
+            return (0, 0)
 
         try:
             return await self.rag_service.ingest_documents(documents)
         except Exception as e:
             logger.error(f"Error ingesting documents: {e}")
-            return 0
+            return (0, len(documents))
 
     async def get_system_status(self) -> dict:
         """Get system status information"""
