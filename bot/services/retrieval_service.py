@@ -86,8 +86,10 @@ class RetrievalService:
                 )
                 if query_filters:
                     logger.info(f"🔍 Applying metadata filters: {query_filters}")
-                logger.debug(f"Original query: {query}")
-                logger.debug(f"Rewritten query: {rewritten_query[:200]}...")
+                logger.info(f"📝 Original query: '{query}'")
+                logger.info(f"📝 Rewritten query: '{rewritten_query[:500]}'")
+                if len(rewritten_query) > 500:
+                    logger.info(f"   ... (truncated from {len(rewritten_query)} chars)")
 
             # Get query embedding (use rewritten query)
             query_embedding = await embedding_service.get_embedding(rewritten_query)
@@ -112,14 +114,23 @@ class RetrievalService:
                 >= self.settings.rag.results_similarity_threshold
             ]
 
+            logger.info(
+                f"🔽 Pre-filter: {len(results)} results, Post-filter: {len(filtered_results)} results (threshold: {self.settings.rag.results_similarity_threshold:.0%})"
+            )
+
             # Apply diversification strategy and limit to max results
             final_results = self.pinecone_retrieval._apply_diversification_strategy(
                 filtered_results
             )
 
-            logger.info(
-                f"📄 Retrieved {len(final_results)} context chunks (filtered by {self.settings.rag.results_similarity_threshold:.0%} threshold)"
-            )
+            logger.info(f"📄 Retrieved {len(final_results)} final context chunks")
+            if final_results:
+                # Log first result for debugging
+                first_result = final_results[0]
+                logger.info(
+                    f"   Top result: {first_result.get('metadata', {}).get('file_name', 'unknown')} "
+                    f"(similarity: {first_result.get('similarity', 0):.2f})"
+                )
             return final_results
 
         except Exception as e:
