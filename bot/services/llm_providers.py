@@ -6,7 +6,10 @@ import logging
 import time
 from abc import ABC, abstractmethod
 
-from langfuse.openai import AsyncOpenAI
+try:
+    from langfuse.openai import AsyncOpenAI
+except ImportError:
+    from openai import AsyncOpenAI
 
 from config.settings import LLMSettings
 

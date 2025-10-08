@@ -66,6 +66,9 @@ class DatabaseSettings(BaseSettings):
 class VectorSettings(BaseSettings):
     """Pinecone vector database settings for RAG"""
 
+    provider: str = Field(
+        default="pinecone", description="Vector database provider (pinecone)"
+    )
     api_key: SecretStr | None = Field(
         default=None, description="Pinecone API key (required)"
     )
