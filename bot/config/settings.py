@@ -64,17 +64,13 @@ class DatabaseSettings(BaseSettings):
 
 
 class VectorSettings(BaseSettings):
-    """Vector database settings for RAG"""
+    """Pinecone vector database settings for RAG"""
 
-    provider: str = Field(
-        default="pinecone", description="Vector DB provider (pinecone, elasticsearch)"
-    )
-    url: str = Field(default="http://localhost:9200", description="Vector database URL")
     api_key: SecretStr | None = Field(
-        default=None, description="Vector DB API key (required for Pinecone)"
+        default=None, description="Pinecone API key (required)"
     )
     collection_name: str = Field(
-        default="insightmesh-knowledge-base", description="Collection/index name"
+        default="insightmesh-knowledge-base", description="Pinecone index name"
     )
     environment: str | None = Field(
         default=None, description="Pinecone environment (e.g., us-east-1-aws)"
