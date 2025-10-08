@@ -79,7 +79,8 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
+      - TASK_DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_task
+      - DATA_DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
       - SLACK_BOT_API_URL=http://bot:8080
       - ENVIRONMENT=production
       - FLASK_PORT=8081
