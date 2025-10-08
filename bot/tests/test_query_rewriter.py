@@ -1,41 +1,25 @@
 """Tests for query rewriting - focusing on preventing regression of LLM method calls."""
 
 import json
-from unittest.mock import AsyncMock
 
 import pytest
 
 from services.query_rewriter import AdaptiveQueryRewriter
-
-
-@pytest.fixture
-def mock_llm_service():
-    """Create a mock LLM service."""
-    service = AsyncMock()
-    service.get_response = AsyncMock()
-    return service
-
-
-@pytest.fixture
-def query_rewriter(mock_llm_service):
-    """Create an AdaptiveQueryRewriter instance with mocked dependencies."""
-    return AdaptiveQueryRewriter(llm_service=mock_llm_service)
+from tests.utils.services.llm_service_factory import LLMServiceFactory
 
 
 class TestLLMServiceMethodCalls:
     """Tests to prevent regression of LLM service method call bugs."""
 
     @pytest.mark.asyncio
-    async def test_rewrite_query_calls_get_response_not_generate_response(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_rewrite_query_calls_get_response_not_generate_response(self):
         """
         REGRESSION TEST: Verify query rewriter calls get_response() method.
 
         This test prevents the bug where query_rewriter called generate_response()
         which doesn't exist on the LLM provider, causing AttributeError.
         """
-        # Mock intent classification response
+        # Create LLM service with intent classification response
         mock_intent_response = json.dumps(
             {
                 "type": "general",
@@ -44,7 +28,10 @@ class TestLLMServiceMethodCalls:
                 "confidence": 0.5,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         conversation_history = []
 
@@ -52,16 +39,14 @@ class TestLLMServiceMethodCalls:
         await query_rewriter.rewrite_query("test query", conversation_history)
 
         # CRITICAL ASSERTION: get_response was called, not generate_response
-        mock_llm_service.get_response.assert_called()
-        assert mock_llm_service.get_response.call_count >= 1
+        llm_service.get_response.assert_called()
+        assert llm_service.get_response.call_count >= 1
 
         # The important thing is get_response was called successfully
         # (AsyncMock auto-creates attributes, so hasattr check isn't reliable)
 
     @pytest.mark.asyncio
-    async def test_get_response_called_with_correct_signature(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_get_response_called_with_correct_signature(self):
         """
         REGRESSION TEST: Verify get_response is called with correct parameters.
 
@@ -76,12 +61,15 @@ class TestLLMServiceMethodCalls:
                 "confidence": 0.8,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         await query_rewriter.rewrite_query("who has react experience?", [])
 
         # Verify the call signature
-        call_args = mock_llm_service.get_response.call_args
+        call_args = llm_service.get_response.call_args
         assert call_args is not None
         assert "messages" in call_args.kwargs
         assert isinstance(call_args.kwargs["messages"], list)
@@ -95,9 +83,7 @@ class TestLLMServiceMethodCalls:
         assert isinstance(first_message["content"], str)
 
     @pytest.mark.asyncio
-    async def test_classify_intent_with_conversation_history(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_classify_intent_with_conversation_history(self):
         """
         Test that conversation history is properly formatted when passed to LLM.
 
@@ -112,7 +98,10 @@ class TestLLMServiceMethodCalls:
                 "confidence": 0.9,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         conversation_history = [
             {"role": "user", "content": "who had react experience?"},
@@ -127,17 +116,16 @@ class TestLLMServiceMethodCalls:
         )
 
         # Verify get_response was called
-        assert mock_llm_service.get_response.called
+        assert llm_service.get_response.called
 
     @pytest.mark.asyncio
-    async def test_error_handling_returns_original_query(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_error_handling_returns_original_query(self):
         """Test that errors fall back to original query gracefully."""
-        # Make LLM service raise an exception
-        mock_llm_service.get_response.side_effect = Exception(
-            "Simulated LLM service error"
+        # Create an error-raising LLM service using factory
+        error_service = LLMServiceFactory.create_service_with_error(
+            Exception("Simulated LLM service error")
         )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=error_service)
 
         result = await query_rewriter.rewrite_query("test query", [])
 
@@ -146,7 +134,7 @@ class TestLLMServiceMethodCalls:
         assert result["strategy"] in ["error_fallback", "passthrough"]
 
     @pytest.mark.asyncio
-    async def test_empty_conversation_history(self, query_rewriter, mock_llm_service):
+    async def test_empty_conversation_history(self):
         """Test handling of empty conversation history."""
         mock_intent_response = json.dumps(
             {
@@ -156,23 +144,24 @@ class TestLLMServiceMethodCalls:
                 "confidence": 0.5,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter.rewrite_query("test query", [])
 
         # Should handle empty history gracefully
         assert result["query"] is not None
         assert result["strategy"] is not None
-        assert mock_llm_service.get_response.called
+        assert llm_service.get_response.called
 
 
 class TestIntentClassification:
     """Tests for intent classification."""
 
     @pytest.mark.asyncio
-    async def test_classify_intent_employee_search(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_classify_intent_employee_search(self):
         """Test classifying an employee search query."""
         mock_response = json.dumps(
             {
@@ -182,7 +171,8 @@ class TestIntentClassification:
                 "confidence": 0.95,
             }
         )
-        mock_llm_service.get_response.return_value = mock_response
+        llm_service = LLMServiceFactory.create_mock_service(response=mock_response)
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
             "who has react experience?", conversation_history=[]
@@ -192,9 +182,7 @@ class TestIntentClassification:
         assert "React" in result["entities"]
 
     @pytest.mark.asyncio
-    async def test_classify_intent_with_time_range(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_classify_intent_with_time_range(self):
         """Test intent classification with time range extraction."""
         mock_response = json.dumps(
             {
@@ -204,7 +192,8 @@ class TestIntentClassification:
                 "confidence": 0.9,
             }
         )
-        mock_llm_service.get_response.return_value = mock_response
+        llm_service = LLMServiceFactory.create_mock_service(response=mock_response)
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
             "who worked on Project X in 2023?", conversation_history=[]
@@ -215,11 +204,10 @@ class TestIntentClassification:
         assert result["time_range"]["end"] == "2023-12-31"
 
     @pytest.mark.asyncio
-    async def test_classify_intent_invalid_json_returns_general(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_classify_intent_invalid_json_returns_general(self):
         """Test handling of invalid JSON response from LLM."""
-        mock_llm_service.get_response.return_value = "not valid json"
+        llm_service = LLMServiceFactory.create_mock_service(response="not valid json")
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter._classify_intent(
             "test query", conversation_history=[]
@@ -234,17 +222,18 @@ class TestEdgeCases:
     """Tests for edge cases and error handling."""
 
     @pytest.mark.asyncio
-    async def test_empty_query(self, query_rewriter, mock_llm_service):
+    async def test_empty_query(self):
         """Test handling of empty query."""
+        llm_service = LLMServiceFactory.create_mock_service()
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
+
         result = await query_rewriter.rewrite_query("", conversation_history=[])
 
         # Should return original empty query
         assert result["query"] == ""
 
     @pytest.mark.asyncio
-    async def test_very_long_conversation_history(
-        self, query_rewriter, mock_llm_service
-    ):
+    async def test_very_long_conversation_history(self):
         """Test handling of very long conversation history."""
         # Create a very long history
         long_history = []
@@ -260,7 +249,10 @@ class TestEdgeCases:
                 "confidence": 0.5,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         result = await query_rewriter.rewrite_query("test query", long_history)
 
@@ -269,7 +261,7 @@ class TestEdgeCases:
         assert result["strategy"] is not None
 
     @pytest.mark.asyncio
-    async def test_special_characters_in_query(self, query_rewriter, mock_llm_service):
+    async def test_special_characters_in_query(self):
         """Test handling of special characters in query."""
         mock_intent_response = json.dumps(
             {
@@ -279,7 +271,10 @@ class TestEdgeCases:
                 "confidence": 0.5,
             }
         )
-        mock_llm_service.get_response.return_value = mock_intent_response
+        llm_service = LLMServiceFactory.create_mock_service(
+            response=mock_intent_response
+        )
+        query_rewriter = AdaptiveQueryRewriter(llm_service=llm_service)
 
         special_query = "who worked on C++ & Java (2023)?"
         result = await query_rewriter.rewrite_query(special_query, [])
