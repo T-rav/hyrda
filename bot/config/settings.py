@@ -161,14 +161,6 @@ class RAGSettings(BaseSettings):
         default=0.1,
         description="Similarity boost per entity found in document title/filename (0.1 = 10%)",
     )
-    diversification_mode: str = Field(
-        default="balanced",
-        description="Document diversification strategy: 'balanced' (round-robin), 'document_first' (1 per doc then all), 'similarity_first' (pure similarity order)",
-    )
-    max_unique_documents: int = Field(
-        default=5,
-        description="Maximum number of unique documents to include in results",
-    )
     enable_query_rewriting: bool = Field(
         default=True,
         description="Enable adaptive query rewriting to improve retrieval accuracy",
