@@ -92,9 +92,23 @@ class GoogleDriveAPI:
         all_files = all_results.get("files", [])
         filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
+        # DEBUG: Log what was found
+        folders = [f for f in filtered_files if f.get("mimeType") == "application/vnd.google-apps.folder"]
+        documents = [f for f in filtered_files if f.get("mimeType") != "application/vnd.google-apps.folder"]
         logger.info(
-            f"✅ Found {len(all_files)} total accessible files, {len(filtered_files)} in target folder"
+            f"✅ Found {len(all_files)} total accessible files, "
+            f"{len(filtered_files)} in target folder "
+            f"({len(folders)} folders, {len(documents)} documents)"
         )
+
+        # DEBUG: List the folders found
+        if folders:
+            logger.info(f"📁 Folders found:")
+            for folder in folders:
+                logger.info(f"   - {folder.get('name')} ({folder.get('id')})")
+        else:
+            logger.warning("⚠️ No folders found in target folder!")
+
         return filtered_files
 
     def _list_files_specific_query(self, folder_id: str) -> list[dict]:
