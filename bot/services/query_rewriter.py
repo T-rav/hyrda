@@ -163,11 +163,12 @@ Intent types:
 - "general": Everything else (technical questions, how-to, explanations)
 
 Rules:
-1. Use "team_allocation" for queries about people on projects (e.g., "who worked on X", "engineers on Y")
-2. Extract entities: project names, client names, person names mentioned in query
-3. Infer time ranges from phrases like "in 2023", "last year", "currently"
-4. Set confidence based on how clearly the query matches an intent type
-5. Return ONLY valid JSON, no explanation
+1. Use "team_allocation" for queries about people on projects (e.g., "who worked on X", "engineers on Y", "which people worked on them")
+2. Extract entities: project names, client names, person names mentioned in query OR conversation history
+3. IMPORTANT: Resolve pronouns (them, it, that, those) using conversation context - extract the actual entity names from history
+4. Infer time ranges from phrases like "in 2023", "last year", "currently"
+5. Set confidence based on how clearly the query matches an intent type
+6. Return ONLY valid JSON, no explanation
 
 Examples:
 Query: "who were the engineers on Ticketmaster projects?"
@@ -178,6 +179,11 @@ Query: "show me the architecture diagram for the API"
 
 Query: "what is the status of project X?"
 {{"type": "project_info", "entities": ["project X"], "time_range": {{"start": null, "end": null}}, "confidence": 0.85}}
+
+FOLLOW-UP QUESTION EXAMPLE:
+Previous context: "RecoveryOne and 3Step projects used React"
+Query: "which people worked on them?"
+{{"type": "team_allocation", "entities": ["RecoveryOne", "3Step"], "time_range": {{"start": null, "end": null}}, "confidence": 0.9}}
 
 Now classify this query. Return ONLY the JSON object:"""
 
