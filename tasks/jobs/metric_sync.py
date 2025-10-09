@@ -1,5 +1,6 @@
 """Metric.ai data synchronization job - STANDALONE (no bot dependencies)."""
 
+import hashlib
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -10,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from config.settings import TasksSettings
 from services.metric_client import MetricClient
 from services.openai_embeddings import OpenAIEmbeddings
-from services.pinecone_client import PineconeClient
+from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def clean_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    """Remove null values from metadata (Pinecone doesn't accept nulls)."""
+    """Remove null values from metadata."""
     return {k: v for k, v in metadata.items() if v is not None}
 
 
@@ -26,7 +27,7 @@ class MetricSyncJob(BaseJob):
     """Job to sync employee, project, client, and allocation data from Metric.ai."""
 
     JOB_NAME = "Metric.ai Data Sync"
-    JOB_DESCRIPTION = "Sync employees, projects, and clients from Metric.ai to Pinecone"
+    JOB_DESCRIPTION = "Sync employees, projects, and clients from Metric.ai to Qdrant"
     REQUIRED_PARAMS = []
     OPTIONAL_PARAMS = [
         "sync_employees",
@@ -41,7 +42,7 @@ class MetricSyncJob(BaseJob):
         # Initialize clients
         self.metric_client = MetricClient()
         self.embedding_client = OpenAIEmbeddings()
-        self.vector_client = PineconeClient()
+        self.vector_client = QdrantClient()
 
         # Store which data types to sync (default: all)
         self.sync_employees = self.params.get("sync_employees", True)
@@ -60,13 +61,48 @@ class MetricSyncJob(BaseJob):
         DataSession = sessionmaker(bind=data_engine)
         return DataSession()
 
+    def _compute_content_hash(self, content: str) -> str:
+        """Compute MD5 hash of content for change detection."""
+        return hashlib.md5(content.encode("utf-8")).hexdigest()
+
+    def _check_needs_update(
+        self, metric_id: str, data_type: str, content_hash: str
+    ) -> bool:
+        """Check if record needs updating based on content hash."""
+        session = None
+        try:
+            data_engine = create_engine(self.data_db_url)
+            DataSession = sessionmaker(bind=data_engine)
+            session = DataSession()
+
+            result = session.execute(
+                text("""
+                SELECT content_hash FROM metric_records
+                WHERE metric_id = :metric_id AND data_type = :data_type
+                """),
+                {"metric_id": metric_id, "data_type": data_type},
+            )
+            row = result.fetchone()
+
+            if not row:
+                return True  # New record
+
+            return row[0] != content_hash  # Content changed
+
+        except Exception as e:
+            logger.warning(f"Error checking record hash: {e}")
+            return True  # Update on error to be safe
+        finally:
+            if session:
+                session.close()
+
     def _write_metric_records(self, records: list[dict[str, Any]]) -> int:
         """
         Write metric records to the insightmesh_data database.
 
         Args:
-            records: List of dicts with keys: metric_id, data_type, pinecone_id,
-                    pinecone_namespace, content_snapshot
+            records: List of dicts with keys: metric_id, data_type, vector_id,
+                    vector_namespace, content_snapshot, content_hash
 
         Returns:
             Number of records written
@@ -87,17 +123,18 @@ class MetricSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT OR REPLACE INTO metric_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
-                         created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
-                                :now, :now, :now)
+                        (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
+                         content_hash, created_at, updated_at, synced_at)
+                        VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
+                                :content_hash, :now, :now, :now)
                         """),
                         {
                             "metric_id": record["metric_id"],
                             "data_type": record["data_type"],
-                            "pinecone_id": record["pinecone_id"],
-                            "namespace": record["pinecone_namespace"],
+                            "vector_id": record["vector_id"],
+                            "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
+                            "content_hash": record["content_hash"],
                             "now": now,
                         },
                     )
@@ -106,21 +143,23 @@ class MetricSyncJob(BaseJob):
                     session.execute(
                         text("""
                         INSERT INTO metric_records
-                        (metric_id, data_type, pinecone_id, pinecone_namespace, content_snapshot,
-                         created_at, updated_at, synced_at)
-                        VALUES (:metric_id, :data_type, :pinecone_id, :namespace, :content,
-                                :now, :now, :now)
+                        (metric_id, data_type, vector_id, vector_namespace, content_snapshot,
+                         content_hash, created_at, updated_at, synced_at)
+                        VALUES (:metric_id, :data_type, :vector_id, :namespace, :content,
+                                :content_hash, :now, :now, :now)
                         ON DUPLICATE KEY UPDATE
                             content_snapshot = VALUES(content_snapshot),
+                            content_hash = VALUES(content_hash),
                             updated_at = VALUES(updated_at),
                             synced_at = VALUES(synced_at)
                         """),
                         {
                             "metric_id": record["metric_id"],
                             "data_type": record["data_type"],
-                            "pinecone_id": record["pinecone_id"],
-                            "namespace": record["pinecone_namespace"],
+                            "vector_id": record["vector_id"],
+                            "namespace": record["vector_namespace"],
                             "content": record["content_snapshot"],
+                            "content_hash": record["content_hash"],
                             "now": now,
                         },
                     )
@@ -146,7 +185,7 @@ class MetricSyncJob(BaseJob):
         }
 
         try:
-            # Initialize Pinecone
+            # Initialize Qdrant
             await self.vector_client.initialize()
 
             # Sync each data type
@@ -171,7 +210,7 @@ class MetricSyncJob(BaseJob):
             raise
 
     async def _sync_employees(self) -> int:
-        """Sync employee data from Metric.ai to Pinecone."""
+        """Sync employee data from Metric.ai to Qdrant."""
         logger.info("Syncing employees from Metric.ai...")
 
         employees = self.metric_client.get_employees()
@@ -211,7 +250,8 @@ class MetricSyncJob(BaseJob):
                 employee_projects[emp_id] = set()
             employee_projects[emp_id].add(project_name)
 
-        texts, metadata_list = [], []
+        texts, metadata_list, employees_to_sync = [], [], []
+        skipped_count = 0
 
         for employee in employees:
             # Extract bench status
@@ -251,39 +291,54 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(employee["id"], "employee", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            employees_to_sync.append(employee)
 
-        # Generate embeddings and upsert to Pinecone
+        if not texts:
+            logger.info(
+                f"⏭️  Skipped all {skipped_count} employees (no changes detected)"
+            )
+            return 0
+
+        # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to metric_records table
+        # Write to metric_records table with content hashes
         db_records = [
             {
-                "metric_id": emp["id"],
+                "metric_id": employees_to_sync[i]["id"],
                 "data_type": "employee",
-                "pinecone_id": f"metric_employee_{emp['id']}",
-                "pinecone_namespace": "metric",
+                "vector_id": f"metric_employee_{employees_to_sync[i]['id']}",
+                "vector_namespace": "metric",
                 "content_snapshot": texts[i],
+                "content_hash": self._compute_content_hash(texts[i]),
             }
-            for i, emp in enumerate(employees)
+            for i in range(len(texts))
         ]
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(employees)} employees to Pinecone and {db_written} to database"
+            f"✅ Synced {len(texts)} employees to Qdrant and {db_written} to database (skipped {skipped_count} unchanged)"
         )
-        return len(employees)
+        return len(texts)
 
     async def _sync_projects(self) -> int:
-        """Sync project data from Metric.ai to Pinecone."""
+        """Sync project data from Metric.ai to Qdrant."""
         logger.info("Syncing projects from Metric.ai...")
 
         projects = self.metric_client.get_projects()
-        texts, metadata_list = [], []
+        texts, metadata_list, projects_to_sync = [], [], []
+        skipped_count = 0
 
         for project in projects:
             # Skip non-billable projects
@@ -361,43 +416,56 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(project["id"], "project", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            projects_to_sync.append(project)
 
         if texts:
-            # Upsert to Pinecone
+            # Upsert to Qdrant
             embeddings = self.embedding_client.embed_batch(texts)
             await self.vector_client.upsert_with_namespace(
                 texts, embeddings, metadata_list, namespace="metric"
             )
 
-            # Write to metric_records table
+            # Write to metric_records table with content hashes
             db_records = [
                 {
-                    "metric_id": metadata_list[i]["project_id"],
+                    "metric_id": projects_to_sync[i]["id"],
                     "data_type": "project",
-                    "pinecone_id": f"metric_project_{metadata_list[i]['project_id']}",
-                    "pinecone_namespace": "metric",
+                    "vector_id": f"metric_project_{projects_to_sync[i]['id']}",
+                    "vector_namespace": "metric",
                     "content_snapshot": texts[i],
+                    "content_hash": self._compute_content_hash(texts[i]),
                 }
                 for i in range(len(texts))
             ]
             db_written = self._write_metric_records(db_records)
 
             logger.info(
-                f"✅ Synced {len(texts)} projects to Pinecone and {db_written} to database (filtered from {len(projects)} total)"
+                f"✅ Synced {len(texts)} projects to Qdrant and {db_written} to database (filtered from {len(projects)} total, skipped {skipped_count} unchanged)"
+            )
+        else:
+            logger.info(
+                f"⏭️  Skipped all projects (filtered {len(projects)} total, {skipped_count} unchanged)"
             )
         return len(texts)
 
     async def _sync_clients(self) -> int:
-        """Sync client data from Metric.ai to Pinecone."""
+        """Sync client data from Metric.ai to Qdrant."""
         logger.info("Syncing clients from Metric.ai...")
 
         clients = self.metric_client.get_clients()
         if not clients:
             return 0
 
-        texts, metadata_list = [], []
+        texts, metadata_list, clients_to_sync = [], [], []
+        skipped_count = 0
 
         for client in clients:
             # Create searchable text
@@ -413,29 +481,41 @@ class MetricSyncJob(BaseJob):
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
+            # Check if content has changed
+            content_hash = self._compute_content_hash(text)
+            if not self._check_needs_update(client["id"], "client", content_hash):
+                skipped_count += 1
+                continue
+
             texts.append(text)
             metadata_list.append(clean_metadata(metadata))
+            clients_to_sync.append(client)
 
-        # Generate embeddings and upsert to Pinecone
+        if not texts:
+            logger.info(f"⏭️  Skipped all {skipped_count} clients (no changes detected)")
+            return 0
+
+        # Generate embeddings and upsert to Qdrant
         embeddings = self.embedding_client.embed_batch(texts)
         await self.vector_client.upsert_with_namespace(
             texts, embeddings, metadata_list, namespace="metric"
         )
 
-        # Write to metric_records table
+        # Write to metric_records table with content hashes
         db_records = [
             {
-                "metric_id": clients[i]["id"],
+                "metric_id": clients_to_sync[i]["id"],
                 "data_type": "client",
-                "pinecone_id": f"metric_client_{clients[i]['id']}",
-                "pinecone_namespace": "metric",
+                "vector_id": f"metric_client_{clients_to_sync[i]['id']}",
+                "vector_namespace": "metric",
                 "content_snapshot": texts[i],
+                "content_hash": self._compute_content_hash(texts[i]),
             }
-            for i in range(len(clients))
+            for i in range(len(texts))
         ]
         db_written = self._write_metric_records(db_records)
 
         logger.info(
-            f"✅ Synced {len(clients)} clients to Pinecone and {db_written} to database"
+            f"✅ Synced {len(texts)} clients to Qdrant and {db_written} to database (skipped {skipped_count} unchanged)"
         )
-        return len(clients)
+        return len(texts)

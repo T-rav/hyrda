@@ -12,6 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
 
 
@@ -29,6 +30,7 @@ class IngestionOrchestrator:
             token_file: Path to store/retrieve OAuth2 token
         """
         self.google_drive_client = GoogleDriveClient(credentials_file, token_file)
+        self.document_tracker = DocumentTrackingService()
         self.vector_service = None
         self.embedding_service = None
         self.contextual_retrieval_service = None
@@ -124,6 +126,26 @@ class IngestionOrchestrator:
                     print(f"Failed to download: {file_info['name']}")
                     error_count += 1
                     continue
+
+                # Check if document needs reindexing (idempotent ingestion)
+                needs_reindex, existing_uuid = (
+                    self.document_tracker.check_document_needs_reindex(
+                        file_info["id"], content
+                    )
+                )
+
+                if not needs_reindex:
+                    print(f"⏭️  Skipping (unchanged): {file_info['name']}")
+                    success_count += 1
+                    continue
+
+                if existing_uuid:
+                    print(f"🔄 Content changed, reindexing: {file_info['name']}")
+
+                # Generate or reuse UUID for this document
+                base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
+                    file_info["id"]
+                )
 
                 # Prepare comprehensive document metadata
                 doc_metadata = {
@@ -286,12 +308,64 @@ class IngestionOrchestrator:
                         f"   📊 Used single vector store ingestion with title injection ({len(enhanced_chunks)} chunks)"
                     )
 
+                # Record successful ingestion in tracking table
+                try:
+                    # Determine chunk count based on which path we took
+                    chunk_count = len(chunks)
+
+                    self.document_tracker.record_document_ingestion(
+                        google_drive_id=file_info["id"],
+                        file_path=file_info.get("full_path", file_info["name"]),
+                        document_name=file_info["name"],
+                        content=content,
+                        vector_uuid=base_uuid,
+                        chunk_count=chunk_count,
+                        mime_type=file_info["mimeType"],
+                        file_size=int(file_info.get("size", 0))
+                        if file_info.get("size")
+                        else None,
+                        metadata={
+                            "owner_emails": GoogleDriveClient.get_owner_emails(
+                                file_info.get("owners", [])
+                            ),
+                            "permissions_summary": GoogleDriveClient.get_permissions_summary(
+                                file_info.get("detailed_permissions", [])
+                            ),
+                            "web_view_link": file_info.get("webViewLink"),
+                        },
+                        status="success",
+                    )
+                except Exception as tracking_error:
+                    print(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
+
                 print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
 
             except Exception as e:
                 print(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
                 error_count += 1
+
+                # Record failed ingestion
+                try:
+                    base_uuid = self.document_tracker.generate_base_uuid(
+                        file_info["id"]
+                    )
+                    self.document_tracker.record_document_ingestion(
+                        google_drive_id=file_info["id"],
+                        file_path=file_info.get("full_path", file_info["name"]),
+                        document_name=file_info["name"],
+                        content="",  # No content on failure
+                        vector_uuid=base_uuid,
+                        chunk_count=0,
+                        mime_type=file_info["mimeType"],
+                        file_size=int(file_info.get("size", 0))
+                        if file_info.get("size")
+                        else None,
+                        status="failed",
+                        error_message=str(e),
+                    )
+                except Exception:
+                    pass  # Don't fail on tracking failures
 
         return success_count, error_count
 

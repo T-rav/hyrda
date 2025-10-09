@@ -1,30 +1,29 @@
 """
 Tests for Vector Service functionality.
 
-Tests vector store creation using Pinecone only.
+Tests vector store creation using Qdrant.
 """
 
 from unittest.mock import patch
-
-from pydantic import SecretStr
 
 from bot.services.vector_service import create_vector_store
 from config.settings import VectorSettings
 
 
 class TestCreateVectorStore:
-    """Test vector store creation (Pinecone only)"""
+    """Test vector store creation (Qdrant only)"""
 
-    @patch("bot.services.vector_service.PineconeVectorStore")
-    def test_create_pinecone_store(self, mock_pinecone_class):
-        """Test creating Pinecone vector store"""
+    @patch("bot.services.vector_service.QdrantVectorStore")
+    def test_create_qdrant_store(self, mock_qdrant_class):
+        """Test creating Qdrant vector store"""
         settings = VectorSettings(
-            api_key=SecretStr("test-key"),
+            provider="qdrant",
+            host="localhost",
+            port=6333,
             collection_name="test-collection",
-            environment="test-env",
         )
 
         result = create_vector_store(settings)
 
-        mock_pinecone_class.assert_called_once_with(settings)
-        assert result == mock_pinecone_class.return_value
+        mock_qdrant_class.assert_called_once_with(settings)
+        assert result == mock_qdrant_class.return_value

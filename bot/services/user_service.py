@@ -4,7 +4,29 @@ import json
 import logging
 from typing import Any
 
+from sqlalchemy import String, create_engine, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
 logger = logging.getLogger(__name__)
+
+
+# Simple SQLAlchemy model for slack_users table
+class Base(DeclarativeBase):
+    pass
+
+
+class SlackUser(Base):
+    """Slack user model."""
+
+    __tablename__ = "slack_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slack_user_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    email_address: Mapped[str | None] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    real_name: Mapped[str | None] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    user_type: Mapped[str | None] = mapped_column(String(50))
 
 
 class UserService:
@@ -13,14 +35,19 @@ class UserService:
     # Cache TTL: 1 hour (users don't change frequently)
     CACHE_TTL = 3600
 
-    def __init__(self, redis_client=None):
+    def __init__(self, redis_client=None, database_url: str | None = None):
         """
         Initialize the user service.
 
         Args:
             redis_client: Optional Redis client for caching
+            database_url: Database connection URL
         """
         self.redis_client = redis_client
+        self._session_factory = None
+        if database_url:
+            engine = create_engine(database_url, pool_pre_ping=True)
+            self._session_factory = sessionmaker(bind=engine)
 
     def _get_cache_key(self, slack_user_id: str) -> str:
         """Generate Redis cache key for user info."""
@@ -88,12 +115,53 @@ class UserService:
         if cached_info:
             return cached_info
 
-        # Cache miss - database lookup not yet implemented
-        # TODO: Implement database session management to fetch user from slack_users table
-        logger.warning(
-            f"User {slack_user_id} not in cache and database lookup not implemented"
-        )
+        # Cache miss - fetch from database
+        user_info = self._fetch_from_database(slack_user_id)
+
+        if user_info:
+            # Store in cache for future requests
+            self._set_in_cache(slack_user_id, user_info)
+            return user_info
+
+        logger.warning(f"User {slack_user_id} not found in cache or database")
         return None
+
+    def _fetch_from_database(self, slack_user_id: str) -> dict[str, Any] | None:
+        """
+        Fetch user info from database.
+
+        Args:
+            slack_user_id: The Slack user ID
+
+        Returns:
+            User info dictionary or None if not found
+        """
+        if not self._session_factory:
+            logger.warning("Database not configured, cannot fetch user info")
+            return None
+
+        try:
+            with self._session_factory() as session:
+                stmt = select(SlackUser).where(SlackUser.slack_user_id == slack_user_id)
+                user = session.execute(stmt).scalar_one_or_none()
+
+                if user:
+                    logger.debug(f"Database HIT for user {slack_user_id}")
+                    return {
+                        "slack_user_id": user.slack_user_id,
+                        "email_address": user.email_address,
+                        "display_name": user.display_name,
+                        "real_name": user.real_name,
+                        "is_active": user.is_active,
+                        "user_type": user.user_type,
+                    }
+
+                logger.debug(f"Database MISS for user {slack_user_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error fetching user from database: {e}")
+            return None
 
     def invalidate_cache(self, slack_user_id: str) -> None:
         """
@@ -118,12 +186,13 @@ class UserService:
 _user_service: UserService | None = None
 
 
-def get_user_service(redis_client=None) -> UserService:
+def get_user_service(redis_client=None, database_url: str | None = None) -> UserService:
     """
     Get or create the global user service instance.
 
     Args:
         redis_client: Optional Redis client for caching (only used on first init)
+        database_url: Optional database URL (only used on first init)
 
     Returns:
         UserService instance
@@ -145,5 +214,21 @@ def get_user_service(redis_client=None) -> UserService:
             except Exception as e:
                 logger.warning(f"Could not get Redis client: {e}")
 
-        _user_service = UserService(redis_client=redis_client)
+        # Get database URL from settings if not provided
+        if database_url is None:
+            try:
+                from config.settings import Settings
+
+                settings = Settings()
+                if settings.database.enabled:
+                    database_url = settings.database.url
+                    logger.info("UserService initialized with database connection")
+                else:
+                    logger.warning("Database disabled in settings")
+            except Exception as e:
+                logger.warning(f"Could not get database URL from settings: {e}")
+
+        _user_service = UserService(
+            redis_client=redis_client, database_url=database_url
+        )
     return _user_service

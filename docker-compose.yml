@@ -38,33 +38,25 @@ services:
     networks:
       - insightmesh
 
-  # Elasticsearch for vector search
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: insightmesh-elasticsearch
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - xpack.security.enrollment.enabled=false
-      - cluster.name=insightmesh-knowledge-base
-      - node.name=insightmesh-node
-      - bootstrap.memory_lock=true
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: insightmesh-qdrant
+    restart: unless-stopped
     ports:
-      - "9200:9200"
-      - "9300:9300"
+      - "6333:6333"  # REST API + Dashboard
+      - "6334:6334"  # gRPC API
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__API_KEY=${VECTOR_API_KEY:-}  # Set in .env for security
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 10s
     networks:
       - insightmesh
 
@@ -82,12 +74,17 @@ services:
       - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SLACK_BOT_API_URL=http://bot:8080
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_API_KEY=${VECTOR_API_KEY:-}
       - ENVIRONMENT=production
       - FLASK_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
       mysql:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
     command: >
       sh -c "
@@ -141,7 +138,9 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
-      - VECTOR_URL=http://elasticsearch:9200
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
     ports:
@@ -149,7 +148,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      elasticsearch:
+      qdrant:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -163,7 +162,7 @@ services:
 volumes:
   mysql_data:
     driver: local
-  elasticsearch_data:
+  qdrant_data:
     driver: local
   redis_data:
     driver: local

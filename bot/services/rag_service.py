@@ -211,40 +211,19 @@ class RAGService:
         try:
             # Retrieve context if RAG is enabled and requested
             if use_rag and self.vector_store:
-                # If document content is provided, use document-based vector search
-                if document_content:
-                    logger.info(
-                        f"Performing document-based vector search for uploaded file: {document_filename}"
-                    )
-                    # Generate embedding for the uploaded document
-                    document_embeddings = await self.embedding_provider.get_embeddings(
-                        [document_content]
-                    )
-                    if document_embeddings:
-                        # Search vector store using document's embedding
-                        context_chunks = (
-                            await self.retrieval_service.retrieve_context_by_embedding(
-                                document_embeddings[0], self.vector_store
-                            )
-                        )
-                        logger.info(
-                            f"Found {len(context_chunks)} related chunks using document embedding"
-                        )
-                    else:
-                        logger.warning(
-                            "Failed to generate embedding for uploaded document, falling back to query-based search"
-                        )
-                        context_chunks = await self.retrieval_service.retrieve_context(
-                            query, self.vector_store, self.embedding_provider
-                        )
-                else:
-                    # Standard query-based retrieval (pass conversation history for context)
-                    context_chunks = await self.retrieval_service.retrieve_context(
-                        query,
-                        self.vector_store,
-                        self.embedding_provider,
-                        conversation_history=conversation_history,
-                    )
+                # Always search for relevant knowledge based on the user's query
+                # This ensures we find internal knowledge even when a document is uploaded
+                logger.info(f"Searching knowledge base for query: {query[:100]}...")
+                context_chunks = await self.retrieval_service.retrieve_context(
+                    query,
+                    self.vector_store,
+                    self.embedding_provider,
+                    conversation_history=conversation_history,
+                    user_id=user_id,
+                )
+                logger.info(
+                    f"Found {len(context_chunks)} chunks from knowledge base for query"
+                )
 
                 # Log retrieved documents to Langfuse and record metrics
                 if context_chunks:

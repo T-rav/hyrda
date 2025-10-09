@@ -218,33 +218,28 @@ Provide your response in JSON format:
         self, test_name: str, user_query: str, expected_behavior: str, criteria: str
     ) -> EvalResult:
         """Run single eval with Langfuse tracking"""
-        # Create Langfuse trace for this evaluation
-        trace = self.langfuse.trace(
-            name="system_prompt_eval",
-            metadata={
-                "test_name": test_name,
-                "expected_behavior": expected_behavior,
-                "criteria": criteria,
-            },
-        )
-
         try:
             result = await self.run_single_eval(
                 test_name, user_query, expected_behavior, criteria
             )
 
-            # Log to Langfuse
-            trace.score(
-                name=test_name,
-                value=result.score,
-                comment=result.reasoning,
-            )
+            # Log to Langfuse via score API
+            # Note: Using simple score logging without traces for SDK compatibility
+            try:
+                self.langfuse.score(
+                    name=f"eval_{test_name}",
+                    value=result.score,
+                    comment=result.reasoning,
+                    data_type="NUMERIC",
+                    config_id=test_name,
+                )
+            except Exception as langfuse_err:
+                logger.warning(f"Failed to log score to Langfuse: {langfuse_err}")
 
             return result
 
         except Exception as e:
             logger.error(f"Error in eval {test_name}: {e}")
-            trace.score(name=test_name, value=0.0, comment=f"Error: {e}")
             raise
 
     def _get_test_cases(self) -> list[tuple[str, str, str, str]]:
@@ -329,6 +324,25 @@ Provide your response in JSON format:
                 "Provides strategic, well-sourced information suitable for executive decision-making",
                 "Should offer comprehensive analysis with clear source attribution, avoid making the decision",
             ),
+            # Uploaded Document Handling Tests
+            (
+                "uploaded_document_direct_analysis",
+                "thoughts? [User has uploaded a document: Cohort 0 - Module 3 Feedback.pdf]",
+                "Dives directly into document analysis without hedging or asking for clarification",
+                "Should immediately analyze the document content without preambles like 'It seems you want' or 'Could you clarify'. No hedging language.",
+            ),
+            (
+                "uploaded_document_recognition",
+                "review this [User has uploaded a document: Q3_Report.pdf]",
+                "Recognizes the uploaded document and provides substantive analysis",
+                "Must acknowledge the uploaded document and provide analysis without stating 'I don't have access' or similar disclaimers",
+            ),
+            (
+                "vague_query_with_document",
+                "what do you think? [User has uploaded a document: Design_Proposal.docx]",
+                "Understands vague questions with document uploads refer to the document itself",
+                "Should analyze the uploaded document directly. No requests for clarification about what to analyze.",
+            ),
         ]
 
     def _log_summary(self, suite: EvalSuite):
@@ -383,7 +397,7 @@ async def main():
 
     # Export results
     results_file = "eval_results.json"
-    with open(results_file, "w"):
+    with open(results_file, "w") as f:
         json.dump(
             {
                 "summary": {
@@ -405,6 +419,7 @@ async def main():
                     for r in suite.results
                 ],
             },
+            f,
             indent=2,
         )
 

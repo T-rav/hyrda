@@ -9,8 +9,8 @@ from sqlalchemy.orm import sessionmaker
 
 from config.settings import TasksSettings
 from services.openai_embeddings import OpenAIEmbeddings
-from services.pinecone_client import PineconeClient
 from services.portal_client import PortalClient
+from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
 
@@ -39,7 +39,7 @@ class PortalSyncJob(BaseJob):
         # Initialize clients
         self.portal_client = PortalClient()
         self.embedding_client = OpenAIEmbeddings()
-        self.vector_client = PineconeClient()
+        self.vector_client = QdrantClient()
 
         # Get data database URL from settings (uses sync driver for database writes)
         self.data_db_url = self.settings.data_database_url

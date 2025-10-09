@@ -39,8 +39,10 @@ def find_and_load_env():
 # Load environment variables
 find_and_load_env()
 
-# Local imports (assuming we'll use the existing ingestion logic)
-sys.path.append(str(Path(__file__).parent.parent / "bot"))
+# CRITICAL: Add bot to path FIRST before any imports
+# This ensures bot's config.settings is found before tasks/config/settings
+bot_path = str(Path(__file__).parent.parent / "bot")
+sys.path.insert(0, bot_path)  # Insert at beginning to prioritize bot
 
 from services import IngestionOrchestrator
 
@@ -84,6 +86,23 @@ async def main():
             print(f"🔄 Removing existing token file: {token_file}")
             os.remove(token_file)
 
+    # Initialize database connection for document tracking
+    # This must happen before creating orchestrator to avoid import conflicts
+    database_url = os.getenv(
+        "DATA_DATABASE_URL",
+        "mysql+pymysql://insightmesh_data:insightmesh_data_password@localhost:3306/insightmesh_data",
+    )
+
+    # Import and initialize database
+    tasks_path = str(Path(__file__).parent.parent / "tasks")
+    if tasks_path not in sys.path:
+        sys.path.append(tasks_path)
+
+    from models.base import init_db
+
+    init_db(database_url)
+    print("✅ Database connection initialized")
+
     # Initialize orchestrator
     orchestrator = IngestionOrchestrator(args.credentials, args.token)
 
@@ -98,19 +117,60 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        from config.settings import (
-            EmbeddingSettings,
-            LLMSettings,
-            VectorSettings,
-        )
+        # Use local config (no dependencies on bot/tasks)
+        from ingest_config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
 
-        # Initialize vector store
-        vector_settings = VectorSettings()
-        embedding_settings = EmbeddingSettings()
-        llm_settings = LLMSettings()
+        vector_config = VectorConfig.from_env()
+        embedding_config = EmbeddingConfig.from_env()
+        llm_config = LLMConfig.from_env()
+        rag_config = RAGConfig.from_env()
 
+        # Import bot services (bot already in sys.path at top of file)
         from services.vector_service import create_vector_store
 
+        # Create a simple SecretStr-like wrapper
+        class SimpleSecretStr:
+            def __init__(self, value):
+                self._value = value
+
+            def get_secret_value(self):
+                return self._value
+
+        # Create settings objects compatible with bot services
+        class VectorSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                self.host = config.host
+                self.port = config.port
+                self.api_key = config.api_key
+                self.collection_name = config.collection_name
+
+        class EmbeddingSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                self.model = config.model
+                # Wrap API key in SecretStr-like object
+                self.api_key = (
+                    SimpleSecretStr(config.api_key) if config.api_key else None
+                )
+                self.chunk_size = config.chunk_size
+                self.chunk_overlap = config.chunk_overlap
+
+        class LLMSettings:
+            def __init__(self, config):
+                self.provider = config.provider
+                # Wrap API key in SecretStr-like object
+                self.api_key = SimpleSecretStr(config.api_key)
+                self.model = config.model
+                self.base_url = config.base_url
+                self.temperature = config.temperature
+                self.max_tokens = config.max_tokens
+
+        vector_settings = VectorSettings(vector_config)
+        embedding_settings = EmbeddingSettings(embedding_config)
+        llm_settings = LLMSettings(llm_config)
+
+        # Initialize vector store
         vector_store = create_vector_store(vector_settings)
         await vector_store.initialize()
 
@@ -121,20 +181,13 @@ async def main():
 
         # Initialize LLM service for contextual retrieval if enabled
         llm_service = None
-        try:
-            from config.settings import RAGSettings
+        if rag_config.enable_contextual_retrieval:
+            from services.llm_service import create_llm_service
 
-            rag_settings = RAGSettings()
-            if rag_settings.enable_contextual_retrieval:
-                from services.llm_service import create_llm_service
-
-                llm_service = await create_llm_service(llm_settings)
-                print(
-                    "✅ Contextual retrieval enabled - "
-                    "chunks will be enhanced with context"
-                )
-        except Exception:
-            pass  # Contextual retrieval settings not available
+            llm_service = await create_llm_service(llm_settings)
+            print(
+                "✅ Contextual retrieval enabled - chunks will be enhanced with context"
+            )
 
         # Set services in orchestrator
         orchestrator.set_services(

@@ -21,7 +21,7 @@ class SettingsFactory:
     def create_complete_rag_settings(
         embedding_provider: str = "openai",
         llm_provider: str = "openai",
-        vector_provider: str = "pinecone",
+        vector_provider: str = "qdrant",
     ) -> Settings:
         """Create complete RAG settings with all components"""
         return Settings(
@@ -36,7 +36,10 @@ class SettingsFactory:
                 api_key=SecretStr("test-key"),
             ),
             vector=VectorSettings(
-                api_key=SecretStr("test-key"),
+                provider=vector_provider,
+                host="localhost",
+                port=6333,
+                api_key="test-key",  # Changed from SecretStr to plain string
                 collection_name="test",
             ),
         )
@@ -307,12 +310,13 @@ class TestRAGService:
         response = await rag_service.generate_response("query", [])
 
         assert "Final response with citations" in response
-        # The actual method signature includes vector_store, embedding_provider, and conversation_history
+        # The actual method signature includes vector_store, embedding_provider, conversation_history, and user_id
         rag_service.retrieval_service.retrieve_context.assert_called_once_with(
             "query",
             rag_service.vector_store,
             rag_service.embedding_provider,
             conversation_history=[],
+            user_id=None,
         )
 
     @pytest.mark.asyncio
@@ -335,3 +339,83 @@ class TestRAGService:
 
         # Only vector_store.close() is called in the actual implementation
         rag_service.vector_store.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_response_with_uploaded_document(self, rag_service):
+        """
+        REGRESSION TEST: Ensure uploaded documents work with KB search.
+
+        When a document is uploaded, the system should:
+        1. Search knowledge base using the user's query
+        2. Add uploaded document chunks to context (highest priority)
+        3. Combine both for comprehensive answers
+
+        This prevents the regression where uploaded docs were ignored
+        and only KB search results were used.
+        """
+        # Mock KB search to return relevant internal documents
+        kb_chunks = [
+            {
+                "content": "Internal knowledge about sales strategies",
+                "similarity": 0.75,
+                "metadata": {"file_name": "sales_handbook.pdf", "source": "vector_db"},
+            }
+        ]
+        rag_service.retrieval_service.retrieve_context = AsyncMock(
+            return_value=kb_chunks
+        )
+
+        # Mock other services
+        rag_service.context_builder.build_rag_prompt = Mock(
+            return_value=("system", [{"role": "user", "content": "query"}])
+        )
+        rag_service.llm_provider.get_response = AsyncMock(
+            return_value="Response using both uploaded doc and KB"
+        )
+        rag_service.citation_service.add_source_citations = Mock(
+            return_value="Final response with citations"
+        )
+
+        # Mock chunk_text to return fixed chunks
+        with patch("services.embedding.chunk_text") as mock_chunk:
+            mock_chunk.return_value = [
+                "Cohort 0 Module 3 feedback: Great progress on sales skills"
+            ]
+
+            # Generate response with uploaded document
+            document_content = "Cohort 0 Module 3 feedback: Great progress on sales skills. Students showed improvement in objection handling."
+            response = await rag_service.generate_response(
+                query="What are your thoughts on this?",
+                conversation_history=[],
+                document_content=document_content,
+                document_filename="Cohort 0 - Module 3 Feedback.pdf",
+            )
+
+        # Verify KB search was called with the QUERY (not document embedding)
+        rag_service.retrieval_service.retrieve_context.assert_called_once_with(
+            "What are your thoughts on this?",
+            rag_service.vector_store,
+            rag_service.embedding_provider,
+            conversation_history=[],
+            user_id=None,
+        )
+
+        # Verify response was generated
+        assert "Final response with citations" in response
+
+        # Verify context included BOTH uploaded doc chunks AND KB chunks
+        context_call = rag_service.context_builder.build_rag_prompt.call_args
+        context_chunks = context_call[0][1]  # Second argument is context_chunks
+
+        # Should have uploaded doc chunks (1) + KB chunks (1) = 2 total
+        assert len(context_chunks) == 2
+
+        # First chunk should be uploaded document (highest priority, similarity=1.0)
+        assert context_chunks[0]["similarity"] == 1.0
+        assert context_chunks[0]["metadata"]["source"] == "uploaded_document"
+        assert "Cohort 0" in context_chunks[0]["content"]
+
+        # Second chunk should be from KB search
+        assert context_chunks[1]["similarity"] == 0.75
+        assert context_chunks[1]["metadata"]["source"] == "vector_db"
+        assert "Internal knowledge" in context_chunks[1]["content"]
