@@ -346,13 +346,13 @@ setup-dev: install-dev
 
 health-ui:
 	@echo "$(BLUE)Building React health dashboard...$(RESET)"
-	cd $(BOT_DIR)/health_ui && npm install && npm run build
+	cd $(BOT_DIR)/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${HEALTH_PORT:-8080}/ui$(RESET)"
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install && npm run build
+	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
