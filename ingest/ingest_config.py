@@ -17,6 +17,7 @@ class VectorConfig:
     port: int
     api_key: str | None
     collection_name: str
+    use_https: bool
 
     @classmethod
     def from_env(cls):
@@ -28,6 +29,7 @@ class VectorConfig:
             collection_name=os.getenv(
                 "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
             ),
+            use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
         )
 
 
