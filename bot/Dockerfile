@@ -23,8 +23,9 @@ RUN mkdir -p /app/logs && \
 COPY --chown=appuser:appuser . .
 
 # Install Python dependencies from pyproject.toml
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+# Split into separate steps for better error visibility
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -e . --verbose
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \
