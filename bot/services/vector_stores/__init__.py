@@ -1,10 +1,10 @@
 """
 Vector Stores Package
 
-Pinecone vector store implementation.
+Qdrant vector store implementation.
 """
 
 from .base import VectorStore
-from .pinecone_store import PineconeVectorStore
+from .qdrant_store import QdrantVectorStore
 
-__all__ = ["VectorStore", "PineconeVectorStore"]
+__all__ = ["VectorStore", "QdrantVectorStore"]

@@ -262,18 +262,18 @@ class TestConfig:
 
             # Critical: provider field must exist to prevent AttributeError
             assert hasattr(settings, "provider")
-            assert settings.provider == "pinecone"
+            assert settings.provider == "qdrant"
 
     def test_vector_settings_provider_can_be_set(self):
         """Test that VectorSettings provider can be set via environment"""
         with patch.dict(
             os.environ,
             {
-                "VECTOR_PROVIDER": "pinecone",
+                "VECTOR_PROVIDER": "qdrant",
                 "VECTOR_API_KEY": "test-key",
                 "VECTOR_COLLECTION_NAME": "test-collection",
             },
         ):
             settings = VectorSettings()
 
-            assert settings.provider == "pinecone"
+            assert settings.provider == "qdrant"

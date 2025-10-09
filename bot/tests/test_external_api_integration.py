@@ -338,46 +338,53 @@ class TestVectorDatabaseIntegration:
     """Test vector database API integrations"""
 
     @pytest.mark.asyncio
-    async def test_pinecone_api_contract(self):
-        """Test Pinecone API integration"""
-        from bot.services.vector_stores.pinecone_store import PineconeVectorStore
+    async def test_qdrant_api_contract(self):
+        """Test Qdrant API integration"""
+        from bot.services.vector_stores.qdrant_store import QdrantVectorStore
 
         settings = VectorSettings(
-            api_key=SecretStr("test-key"),
-            environment="test-env",
-            collection_name="test-index",
+            provider="qdrant",
+            host="localhost",
+            port=6333,
+            collection_name="test-collection",
         )
 
-        # Expected Pinecone query response
-        expected_query_response = Mock()
-        expected_query_response.matches = [
-            Mock(
-                id="doc1",
-                score=0.95,
-                metadata={"text": "Test document", "file_name": "test.pdf"},
-            )
+        # Expected Qdrant search response
+        expected_results = [
+            {
+                "id": "doc1",
+                "score": 0.95,
+                "payload": {"text": "Test document", "file_name": "test.pdf"},
+            }
         ]
 
-        with patch(
-            "bot.services.vector_stores.pinecone_store.Pinecone"
-        ) as mock_pinecone_class:
-            mock_pc = Mock()
-            mock_index = Mock()
-            mock_index.query.return_value = expected_query_response
-            mock_pc.Index.return_value = mock_index
-            mock_pinecone_class.return_value = mock_pc
+        with (
+            patch(
+                "bot.services.vector_stores.qdrant_store.QdrantClient"
+            ) as mock_qdrant_class,
+            patch("bot.services.vector_stores.qdrant_store.Distance") as mock_distance,
+            patch(
+                "bot.services.vector_stores.qdrant_store.VectorParams"
+            ) as mock_vector_params,
+        ):
+            mock_client = Mock()
+            mock_client.search = AsyncMock(return_value=expected_results)
 
-            store = PineconeVectorStore(settings)
+            # Mock the get_collections response
+            mock_collections = Mock()
+            mock_collections.collections = [Mock(name="test-collection")]
+            mock_client.get_collections = Mock(return_value=mock_collections)
+            mock_client.create_collection = Mock()
+
+            mock_qdrant_class.return_value = mock_client
+            mock_distance.COSINE = "Cosine"
+            mock_vector_params.return_value = Mock()
+
+            store = QdrantVectorStore(settings)
             await store.initialize()
 
-            # Test with mocked executor
-            with patch("asyncio.get_event_loop") as mock_loop:
-                mock_loop.return_value.run_in_executor = AsyncMock(
-                    return_value=expected_query_response
-                )
-
-                results = await store.search([0.1, 0.2, 0.3], limit=5)
-                assert isinstance(results, list)
+            results = await store.search([0.1, 0.2, 0.3], limit=5)
+            assert isinstance(results, list)
 
 
 class TestAPIRateLimitingAndRetry:
@@ -440,13 +447,13 @@ class TestAPIBreakingChangeDetection:
         required_openai_fields = ["choices", "usage"]
         required_slack_message_fields = ["ok", "ts", "channel"]
         required_langfuse_fields = ["start_span", "start_generation", "flush"]
-        required_pinecone_fields = ["matches"]
+        required_qdrant_fields = ["id", "score", "payload"]
 
         # These assertions document our API dependencies
         assert required_openai_fields is not None
         assert required_slack_message_fields is not None
         assert required_langfuse_fields is not None
-        assert required_pinecone_fields is not None
+        assert required_qdrant_fields is not None
 
     def test_api_method_signatures_unchanged(self):
         """Test that API method signatures haven't changed"""
