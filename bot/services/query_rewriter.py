@@ -287,19 +287,32 @@ Now classify this query. Return ONLY the JSON object:"""
         entities = intent.get("entities", [])
         entity_context = f" for {entities[0]}" if entities else ""
 
-        # Add user context if available and query refers to the user
-        user_hint = ""
-        if user_context and any(
+        # Check if query refers to the current user
+        refers_to_user = user_context and any(
             word in query.lower() for word in ["i", "me", "my", "mine"]
-        ):
+        )
+
+        # Build prompt with user-specific template if applicable
+        if refers_to_user:
             user_name = user_context.get("real_name") or user_context.get(
                 "display_name", ""
             )
             user_email = user_context.get("email_address", "")
-            if user_name:
-                user_hint = f"\n\nIMPORTANT: The query refers to the current user: {user_name} ({user_email}). Generate a record for THIS specific person."
 
-        prompt = f"""Generate a sample employee record that would answer: "{query}"{user_hint}
+            prompt = f"""Generate a sample employee record for {user_name} that would answer: "{query}"
+
+Create a realistic employee record for this specific person{entity_context}. Format it EXACTLY like this:
+
+Employee: {user_name}
+Email: {user_email}
+Status: Allocated
+Started: [start date]
+Ended: [end date or Active]
+Project History: [Project Name 1], [Project Name 2], [Project Name 3]
+
+Fill in the dates and project history with realistic details that would match this person's background."""
+        else:
+            prompt = f"""Generate a sample employee record that would answer: "{query}"
 
 Create a realistic employee record{entity_context}. Format it like this:
 
