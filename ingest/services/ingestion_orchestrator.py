@@ -128,8 +128,10 @@ class IngestionOrchestrator:
                     continue
 
                 # Check if document needs reindexing (idempotent ingestion)
-                needs_reindex, existing_uuid = self.document_tracker.check_document_needs_reindex(
-                    file_info["id"], content
+                needs_reindex, existing_uuid = (
+                    self.document_tracker.check_document_needs_reindex(
+                        file_info["id"], content
+                    )
                 )
 
                 if not needs_reindex:
@@ -141,7 +143,9 @@ class IngestionOrchestrator:
                     print(f"🔄 Content changed, reindexing: {file_info['name']}")
 
                 # Generate or reuse UUID for this document
-                base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(file_info["id"])
+                base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
+                    file_info["id"]
+                )
 
                 # Prepare comprehensive document metadata
                 doc_metadata = {
@@ -317,7 +321,9 @@ class IngestionOrchestrator:
                         vector_uuid=base_uuid,
                         chunk_count=chunk_count,
                         mime_type=file_info["mimeType"],
-                        file_size=int(file_info.get("size", 0)) if file_info.get("size") else None,
+                        file_size=int(file_info.get("size", 0))
+                        if file_info.get("size")
+                        else None,
                         metadata={
                             "owner_emails": GoogleDriveClient.get_owner_emails(
                                 file_info.get("owners", [])
@@ -341,7 +347,9 @@ class IngestionOrchestrator:
 
                 # Record failed ingestion
                 try:
-                    base_uuid = self.document_tracker.generate_base_uuid(file_info["id"])
+                    base_uuid = self.document_tracker.generate_base_uuid(
+                        file_info["id"]
+                    )
                     self.document_tracker.record_document_ingestion(
                         google_drive_id=file_info["id"],
                         file_path=file_info.get("full_path", file_info["name"]),
@@ -350,7 +358,9 @@ class IngestionOrchestrator:
                         vector_uuid=base_uuid,
                         chunk_count=0,
                         mime_type=file_info["mimeType"],
-                        file_size=int(file_info.get("size", 0)) if file_info.get("size") else None,
+                        file_size=int(file_info.get("size", 0))
+                        if file_info.get("size")
+                        else None,
                         status="failed",
                         error_message=str(e),
                     )
