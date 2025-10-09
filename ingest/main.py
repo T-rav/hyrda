@@ -99,6 +99,7 @@ async def main():
         sys.path.append(tasks_path)
 
     from models.base import init_db
+
     init_db(database_url)
     print("✅ Database connection initialized")
 
@@ -176,9 +177,7 @@ async def main():
         # Initialize embedding service
         from services.embedding_service import create_embedding_provider
 
-        embedding_provider = create_embedding_provider(
-            embedding_settings, llm_settings
-        )
+        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
 
         # Initialize LLM service for contextual retrieval if enabled
         llm_service = None
@@ -187,8 +186,7 @@ async def main():
 
             llm_service = await create_llm_service(llm_settings)
             print(
-                "✅ Contextual retrieval enabled - "
-                "chunks will be enhanced with context"
+                "✅ Contextual retrieval enabled - chunks will be enhanced with context"
             )
 
         # Set services in orchestrator

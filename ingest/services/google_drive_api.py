@@ -97,13 +97,23 @@ class GoogleDriveAPI:
 
         # DEBUG: Show a few examples
         for i, f in enumerate(all_files[:3]):
-            print(f"   Example {i+1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}")
+            print(
+                f"   Example {i + 1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}"
+            )
 
         filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
         # DEBUG: Log what was found
-        folders = [f for f in filtered_files if f.get("mimeType") == "application/vnd.google-apps.folder"]
-        documents = [f for f in filtered_files if f.get("mimeType") != "application/vnd.google-apps.folder"]
+        folders = [
+            f
+            for f in filtered_files
+            if f.get("mimeType") == "application/vnd.google-apps.folder"
+        ]
+        documents = [
+            f
+            for f in filtered_files
+            if f.get("mimeType") != "application/vnd.google-apps.folder"
+        ]
         print(
             f"DEBUG: Found {len(all_files)} total accessible files, "
             f"{len(filtered_files)} in target folder "
@@ -112,7 +122,7 @@ class GoogleDriveAPI:
 
         # DEBUG: List the folders found
         if folders:
-            print(f"📁 Folders found:")
+            print("📁 Folders found:")
             for folder in folders:
                 print(f"   - {folder.get('name')} ({folder.get('id')})")
         else:

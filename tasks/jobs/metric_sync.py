@@ -492,9 +492,7 @@ class MetricSyncJob(BaseJob):
             clients_to_sync.append(client)
 
         if not texts:
-            logger.info(
-                f"⏭️  Skipped all {skipped_count} clients (no changes detected)"
-            )
+            logger.info(f"⏭️  Skipped all {skipped_count} clients (no changes detected)")
             return 0
 
         # Generate embeddings and upsert to Qdrant

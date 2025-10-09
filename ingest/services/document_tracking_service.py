@@ -16,8 +16,8 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks"))
 
 # Import from tasks/models/base.py (not bot/models/base.py)
-from models.base import Base, get_db_session, init_db  # noqa: E402
-from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, String, Text, text
+from models.base import Base, get_db_session  # noqa: E402
+from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -30,7 +30,9 @@ class GoogleDriveDocument(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Google Drive identifiers
-    google_drive_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    google_drive_id: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True
+    )
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     document_name: Mapped[str] = mapped_column(String(512), nullable=False)
 
@@ -44,7 +46,9 @@ class GoogleDriveDocument(Base):
     vector_namespace: Mapped[str] = mapped_column(
         String(100), nullable=False, server_default="google_drive"
     )
-    chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    chunk_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
 
     # Ingestion metadata
     first_ingested_at: Mapped[datetime] = mapped_column(
@@ -61,7 +65,9 @@ class GoogleDriveDocument(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Additional metadata (JSON) - using 'extra_metadata' to avoid SQLAlchemy reserved name
-    extra_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True, name="metadata")
+    extra_metadata: Mapped[dict | None] = mapped_column(
+        JSON, nullable=True, name="metadata"
+    )
 
 
 class DocumentTrackingService:
