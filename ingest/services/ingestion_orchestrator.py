@@ -67,18 +67,6 @@ class IngestionOrchestrator:
         self.llm_service = llm_service
         self.enable_contextual_retrieval = enable_contextual_retrieval
 
-        # Some services have built-in embedding service
-        if hasattr(vector_service, "embedding_service"):
-            self.embedding_service = vector_service.embedding_service
-
-        # Initialize contextual retrieval service if enabled
-        if enable_contextual_retrieval and llm_service:
-            # Import here to avoid circular dependencies
-            sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
-            from services.contextual_retrieval_service import ContextualRetrievalService
-
-            self.contextual_retrieval_service = ContextualRetrievalService(llm_service)
-
     async def ingest_files(
         self, files: list[dict], metadata: dict | None = None
     ) -> tuple[int, int]:
@@ -172,141 +160,43 @@ class IngestionOrchestrator:
                 if metadata:
                     doc_metadata.update(metadata)
 
-                # Check if we're using RAG service with batch ingestion
-                if hasattr(self.vector_service, "ingest_documents"):
-                    # For RAG service, we need to chunk and generate embeddings first
-                    import sys
-                    from pathlib import Path
+                # Chunk the content using embedding service
+                chunks = self.embedding_service.chunk_text(content)
 
-                    sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
-                    from services.embedding_service import chunk_text
-
-                    # Chunk the content
-                    chunk_size = getattr(self.vector_service, "embedding_service", None)
-                    if chunk_size and hasattr(chunk_size, "settings"):
-                        chunks = chunk_text(
-                            content,
-                            chunk_size=chunk_size.settings.chunk_size,
-                            chunk_overlap=chunk_size.settings.chunk_overlap,
+                # Add contextual descriptions if enabled
+                if self.enable_contextual_retrieval and self.llm_service:
+                    print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                    enhanced_chunks = []
+                    for chunk in chunks:
+                        context = await self.llm_service.generate_chunk_context(
+                            content, chunk
                         )
-                    else:
-                        # Use default chunking
-                        chunks = chunk_text(content, chunk_size=1000, chunk_overlap=200)
+                        enhanced_chunk = f"{context}\n\n{chunk}"
+                        enhanced_chunks.append(enhanced_chunk)
+                    chunks = enhanced_chunks
 
-                    # Add contextual descriptions if enabled
-                    if (
-                        self.enable_contextual_retrieval
-                        and self.contextual_retrieval_service
-                    ):
-                        print(
-                            f"Adding contextual descriptions to {len(chunks)} chunks..."
-                        )
-                        chunks = await self.contextual_retrieval_service.add_context_to_chunks(
-                            chunks,
-                            {
-                                "file_name": file_info["name"],
-                                "full_path": file_info.get(
-                                    "full_path", file_info["name"]
-                                ),
-                                "mimeType": file_info["mimeType"],
-                                "createdTime": file_info.get("createdTime"),
-                                "owners": file_info.get("owners", []),
-                            },
-                        )
+                # Generate embeddings
+                embeddings = await self.embedding_service.embed_texts(chunks)
 
-                    # Generate embeddings using service's embedding service
-                    embeddings = (
-                        await self.vector_service.embedding_service.get_embeddings(
-                            chunks
-                        )
-                    )
+                # Prepare metadata for each chunk
+                chunk_metadata = []
+                chunk_ids = []
+                for i, chunk in enumerate(chunks):
+                    chunk_meta = doc_metadata.copy()
+                    chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
+                    chunk_meta["chunk_index"] = i
+                    chunk_meta["total_chunks"] = len(chunks)
+                    chunk_metadata.append(chunk_meta)
+                    chunk_ids.append(f"{base_uuid}_{i}")
 
-                    # Prepare metadata for each chunk
-                    chunk_metadata = []
-                    for i, chunk in enumerate(chunks):
-                        chunk_meta = doc_metadata.copy()
-                        chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
-                        chunk_meta["chunk_index"] = i
-                        chunk_meta["total_chunks"] = len(chunks)
-                        chunk_metadata.append(chunk_meta)
-
-                    # Use batch ingestion with proper parameters
-                    await self.vector_service.ingest_documents(
-                        texts=chunks, embeddings=embeddings, metadata=chunk_metadata
-                    )
-                    print(
-                        f"   📊 Used batch ingestion with title injection ({len(chunks)} chunks)"
-                    )
-
-                else:
-                    # Fallback to single vector store ingestion with title injection
-                    # Import required functions
-                    import sys
-                    from pathlib import Path
-
-                    sys.path.append(str(Path(__file__).parent.parent.parent / "bot"))
-                    from services.embedding_service import chunk_text
-                    from services.title_injection_service import TitleInjectionService
-
-                    # Initialize title injection service
-                    title_injection = TitleInjectionService()
-
-                    # Chunk the content and generate embeddings
-                    chunks = chunk_text(
-                        content,
-                        chunk_size=self.embedding_service.settings.chunk_size,
-                        chunk_overlap=self.embedding_service.settings.chunk_overlap,
-                    )
-
-                    # Add contextual descriptions if enabled
-                    if (
-                        self.enable_contextual_retrieval
-                        and self.contextual_retrieval_service
-                    ):
-                        print(
-                            f"Adding contextual descriptions to {len(chunks)} chunks..."
-                        )
-                        chunks = await self.contextual_retrieval_service.add_context_to_chunks(
-                            chunks,
-                            {
-                                "file_name": file_info["name"],
-                                "full_path": file_info.get(
-                                    "full_path", file_info["name"]
-                                ),
-                                "mimeType": file_info["mimeType"],
-                                "createdTime": file_info.get("createdTime"),
-                                "owners": file_info.get("owners", []),
-                            },
-                        )
-
-                    # Apply title injection to chunks for better semantic search
-                    chunk_metadata = []
-                    for i, chunk in enumerate(chunks):
-                        chunk_meta = doc_metadata.copy()
-                        chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
-                        chunk_meta["chunk_index"] = i
-                        chunk_meta["total_chunks"] = len(chunks)
-                        chunk_metadata.append(chunk_meta)
-
-                    # Inject titles into chunk text for better embedding semantic understanding
-                    enhanced_chunks = title_injection.inject_titles(
-                        chunks, chunk_metadata
-                    )
-
-                    # Generate embeddings for enhanced chunks (with title injection)
-                    embeddings = await self.embedding_service.get_embeddings(
-                        enhanced_chunks
-                    )
-
-                    # Add documents to vector store
-                    await self.vector_service.add_documents(
-                        texts=enhanced_chunks,  # Use enhanced chunks with title injection
-                        embeddings=embeddings,
-                        metadata=chunk_metadata,
-                    )
-                    print(
-                        f"   📊 Used single vector store ingestion with title injection ({len(enhanced_chunks)} chunks)"
-                    )
+                # Upsert to vector store
+                await self.vector_service.upsert(
+                    ids=chunk_ids,
+                    embeddings=embeddings,
+                    metadatas=chunk_metadata,
+                    texts=chunks,
+                )
+                print(f"   📊 Ingested {len(chunks)} chunks")
 
                 # Record successful ingestion in tracking table
                 try:
