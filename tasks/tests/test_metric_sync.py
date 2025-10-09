@@ -76,7 +76,7 @@ def mock_vector_store():
     store.initialize = AsyncMock()
     store.add_documents = AsyncMock()
     store.close = AsyncMock()
-    store.index = MagicMock()  # Simulate Pinecone
+    store.index = MagicMock()  # Simulate Qdrant
     return store
 
 
@@ -100,7 +100,7 @@ async def test_sync_employees(
 ):
     """Test employee sync."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -128,7 +128,7 @@ async def test_sync_projects(
 ):
     """Test project sync."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -153,7 +153,7 @@ async def test_sync_clients(
 ):
     """Test client sync."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -177,7 +177,7 @@ async def test_sync_all_data_types(
 ):
     """Test syncing all data types."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -199,7 +199,7 @@ async def test_employee_metadata_structure(
 ):
     """Test that employee metadata has correct structure."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -246,7 +246,7 @@ async def test_project_filtering(
     )
 
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -271,7 +271,7 @@ async def test_database_writes_for_employees(
 ):
     """Test that _write_metric_records is called with correct employee data."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -301,8 +301,8 @@ async def test_database_writes_for_employees(
             record = call_args[0]
             assert record["metric_id"] == "emp1"
             assert record["data_type"] == "employee"
-            assert record["pinecone_id"] == "metric_employee_emp1"
-            assert record["pinecone_namespace"] == "metric"
+            assert record["vector_id"] == "metric_employee_emp1"
+            assert record["vector_namespace"] == "metric"
             assert "Employee: John Doe" in record["content_snapshot"]
 
 
@@ -312,7 +312,7 @@ async def test_database_writes_for_projects(
 ):
     """Test that _write_metric_records is called with correct project data."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -336,7 +336,7 @@ async def test_database_writes_for_projects(
             record = call_args[0]
             assert record["metric_id"] == "proj1"
             assert record["data_type"] == "project"
-            assert record["pinecone_id"] == "metric_project_proj1"
+            assert record["vector_id"] == "metric_project_proj1"
             assert "Project: Project Alpha" in record["content_snapshot"]
 
 
@@ -346,7 +346,7 @@ async def test_database_writes_for_clients(
 ):
     """Test that _write_metric_records is called with correct client data."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -370,7 +370,7 @@ async def test_database_writes_for_clients(
             record = call_args[0]
             assert record["metric_id"] == "client1"
             assert record["data_type"] == "client"
-            assert record["pinecone_id"] == "metric_client_client1"
+            assert record["vector_id"] == "metric_client_client1"
             assert "Client: Acme Corp" in record["content_snapshot"]
 
 
@@ -378,9 +378,9 @@ async def test_database_writes_for_clients(
 async def test_database_write_failure_does_not_block_sync(
     settings, mock_metric_client, mock_vector_store, mock_embedding_provider
 ):
-    """Test that database write failures don't prevent Pinecone sync."""
+    """Test that database write failures don't prevent Qdrant sync."""
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -399,7 +399,7 @@ async def test_database_write_failure_does_not_block_sync(
 
             result = await job._execute_job()
 
-            # Pinecone sync should still succeed
+            # Qdrant sync should still succeed
             assert result["employees_synced"] == 1
             assert mock_vector_store.initialize.called
 
@@ -428,7 +428,7 @@ async def test_employee_project_history(
     ]
 
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -481,7 +481,7 @@ async def test_project_practice_field_group_type_21(
     ]
 
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
@@ -526,7 +526,7 @@ async def test_project_practice_field_defaults_to_unknown(
     ]
 
     with (
-        patch("jobs.metric_sync.PineconeClient", return_value=mock_vector_store),
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
