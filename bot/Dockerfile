@@ -29,9 +29,16 @@ COPY --chown=appuser:appuser . .
 
 # Install Python dependencies from pyproject.toml with proper error logging
 RUN set -eux \
-    && pip install --no-cache-dir --upgrade pip wheel setuptools \
-    && pip install --no-cache-dir -e . -vvv --log /tmp/pip_install.log \
-    || { echo "=== PIP INSTALL FAILED ==="; cat /tmp/pip_install.log || true; exit 1; }
+    && pip install --no-cache-dir --upgrade pip wheel setuptools
+
+# Install package with detailed logging (split for better error visibility)
+RUN pip install --no-cache-dir -e . 2>&1 | tee /tmp/pip_install.log; \
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then \
+        echo "=== PIP INSTALL FAILED ==="; \
+        echo "Last 100 lines of pip install log:"; \
+        tail -100 /tmp/pip_install.log; \
+        exit 1; \
+    fi
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \
