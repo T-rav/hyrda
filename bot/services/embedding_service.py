@@ -10,7 +10,6 @@ Please import from services.embedding instead:
 from services.embedding import (
     EmbeddingProvider,
     OpenAIEmbeddingProvider,
-    SentenceTransformerEmbeddingProvider,
     chunk_text,
     create_embedding_provider,
 )
@@ -18,7 +17,6 @@ from services.embedding import (
 __all__ = [
     "EmbeddingProvider",
     "OpenAIEmbeddingProvider",
-    "SentenceTransformerEmbeddingProvider",
     "create_embedding_provider",
     "chunk_text",
 ]
