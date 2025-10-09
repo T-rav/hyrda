@@ -162,20 +162,25 @@ class IngestionOrchestrator:
                 # Chunk the content using embedding service
                 chunks = self.embedding_service.chunk_text(content)
 
+                # Inject title/filename into each chunk for better semantic search
+                # This ensures filename appears in embeddings for better retrieval
+                file_header = f"[{file_info.get('full_path', file_info['name'])}]\n\n"
+                chunks_with_title = [f"{file_header}{chunk}" for chunk in chunks]
+
                 # Add contextual descriptions if enabled
                 if self.enable_contextual_retrieval and self.llm_service:
                     print(f"Adding contextual descriptions to {len(chunks)} chunks...")
                     enhanced_chunks = []
-                    for chunk in chunks:
+                    for chunk in chunks_with_title:
                         context = await self.llm_service.generate_chunk_context(
                             content, chunk
                         )
                         enhanced_chunk = f"{context}\n\n{chunk}"
                         enhanced_chunks.append(enhanced_chunk)
-                    chunks = enhanced_chunks
+                    chunks_with_title = enhanced_chunks
 
-                # Generate embeddings
-                embeddings = await self.embedding_service.embed_texts(chunks)
+                # Generate embeddings (with title injected)
+                embeddings = await self.embedding_service.embed_texts(chunks_with_title)
 
                 # Prepare metadata for each chunk
                 chunk_metadata = []
@@ -191,12 +196,12 @@ class IngestionOrchestrator:
                     chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{i}"))
                     chunk_ids.append(chunk_uuid)
 
-                # Upsert to vector store
+                # Upsert to vector store (with title-injected chunks)
                 await self.vector_service.upsert(
                     ids=chunk_ids,
                     embeddings=embeddings,
                     metadatas=chunk_metadata,
-                    texts=chunks,
+                    texts=chunks_with_title,
                 )
                 print(f"   📊 Ingested {len(chunks)} chunks")
 
