@@ -39,11 +39,7 @@ def find_and_load_env():
 # Load environment variables
 find_and_load_env()
 
-# CRITICAL: Add bot to path FIRST before any imports
-# This ensures bot's config.settings is found before tasks/config/settings
-bot_path = str(Path(__file__).parent.parent / "bot")
-sys.path.insert(0, bot_path)  # Insert at beginning to prioritize bot
-
+# Import local ingestion orchestrator (no bot dependencies)
 from services import IngestionOrchestrator
 
 
@@ -117,74 +113,48 @@ async def main():
     # Initialize services
     print("Initializing vector database and embedding service...")
     try:
-        # Use local config (no dependencies on bot/tasks)
+        # Use local config and minimal services (no bot dependencies)
         from ingest_config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
+        from services.embedding_provider import OpenAIEmbeddingProvider
+        from services.llm_wrapper import SimpleLLMService
+        from services.vector_store import QdrantVectorStore
 
         vector_config = VectorConfig.from_env()
         embedding_config = EmbeddingConfig.from_env()
         llm_config = LLMConfig.from_env()
         rag_config = RAGConfig.from_env()
 
-        # Import bot services (bot already in sys.path at top of file)
-        from services.vector_service import create_vector_store
+        # Initialize minimal embedding provider FIRST (need dimension for vector store)
+        embedding_provider = OpenAIEmbeddingProvider(
+            api_key=embedding_config.api_key,
+            model=embedding_config.model,
+        )
 
-        # Create a simple SecretStr-like wrapper
-        class SimpleSecretStr:
-            def __init__(self, value):
-                self._value = value
+        # Initialize minimal vector store with correct dimension
+        vector_store = QdrantVectorStore(
+            host=vector_config.host,
+            port=vector_config.port,
+            collection_name=vector_config.collection_name,
+            api_key=vector_config.api_key,
+            use_https=vector_config.use_https,
+        )
+        print(
+            f"🔗 Connecting to Qdrant at {'https' if vector_config.use_https else 'http'}://{vector_config.host}:{vector_config.port}"
+        )
+        print(
+            f"📐 Using {embedding_config.model} with dimension: {embedding_provider.get_dimension()}"
+        )
+        await vector_store.initialize(
+            embedding_dimension=embedding_provider.get_dimension()
+        )
 
-            def get_secret_value(self):
-                return self._value
-
-        # Create settings objects compatible with bot services
-        class VectorSettings:
-            def __init__(self, config):
-                self.provider = config.provider
-                self.host = config.host
-                self.port = config.port
-                self.api_key = config.api_key
-                self.collection_name = config.collection_name
-
-        class EmbeddingSettings:
-            def __init__(self, config):
-                self.provider = config.provider
-                self.model = config.model
-                # Wrap API key in SecretStr-like object
-                self.api_key = (
-                    SimpleSecretStr(config.api_key) if config.api_key else None
-                )
-                self.chunk_size = config.chunk_size
-                self.chunk_overlap = config.chunk_overlap
-
-        class LLMSettings:
-            def __init__(self, config):
-                self.provider = config.provider
-                # Wrap API key in SecretStr-like object
-                self.api_key = SimpleSecretStr(config.api_key)
-                self.model = config.model
-                self.base_url = config.base_url
-                self.temperature = config.temperature
-                self.max_tokens = config.max_tokens
-
-        vector_settings = VectorSettings(vector_config)
-        embedding_settings = EmbeddingSettings(embedding_config)
-        llm_settings = LLMSettings(llm_config)
-
-        # Initialize vector store
-        vector_store = create_vector_store(vector_settings)
-        await vector_store.initialize()
-
-        # Initialize embedding service
-        from services.embedding_service import create_embedding_provider
-
-        embedding_provider = create_embedding_provider(embedding_settings, llm_settings)
-
-        # Initialize LLM service for contextual retrieval if enabled
+        # Initialize minimal LLM service for contextual retrieval if enabled
         llm_service = None
-        if rag_config.enable_contextual_retrieval:
-            from services.llm_service import create_llm_service
-
-            llm_service = await create_llm_service(llm_settings)
+        if rag_config.enable_contextual_retrieval and llm_config.api_key:
+            llm_service = SimpleLLMService(
+                api_key=llm_config.api_key,
+                model=llm_config.model,
+            )
             print(
                 "✅ Contextual retrieval enabled - chunks will be enhanced with context"
             )
@@ -200,6 +170,9 @@ async def main():
         print("✅ Vector services initialized successfully")
     except Exception as e:
         print(f"❌ Service initialization failed: {e}")
+        import traceback
+
+        traceback.print_exc()
         sys.exit(1)
 
     # Ingest folder

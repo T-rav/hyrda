@@ -103,7 +103,7 @@ class AdaptiveQueryRewriter:
                 intent["type"] == "team_allocation"
                 and intent.get("confidence", 0) > 0.7
             ):
-                result = await self._hyde_rewrite(query, intent)
+                result = await self._hyde_rewrite(query, intent, user_context)
             elif intent["type"] in ["project_info", "client_info"]:
                 result = await self._semantic_rewrite(query, intent)
             elif intent["type"] == "document_search":
@@ -267,7 +267,9 @@ Now classify this query. Return ONLY the JSON object:"""
             }
 
     @observe(as_type="generation", name="hyde_rewrite")
-    async def _hyde_rewrite(self, query: str, intent: dict) -> dict[str, Any]:
+    async def _hyde_rewrite(
+        self, query: str, intent: dict, user_context: dict | None = None
+    ) -> dict[str, Any]:
         """
         HyDE (Hypothetical Document Embeddings) rewrite for team allocation queries.
 
@@ -277,6 +279,7 @@ Now classify this query. Return ONLY the JSON object:"""
         Args:
             query: Original query
             intent: Intent classification
+            user_context: User information for resolving "me/I" references
 
         Returns:
             Rewrite result with hypothetical employee record
@@ -284,7 +287,32 @@ Now classify this query. Return ONLY the JSON object:"""
         entities = intent.get("entities", [])
         entity_context = f" for {entities[0]}" if entities else ""
 
-        prompt = f"""Generate a sample employee record that would answer: "{query}"
+        # Check if query refers to the current user
+        refers_to_user = user_context and any(
+            word in query.lower() for word in ["i", "me", "my", "mine"]
+        )
+
+        # Build prompt with user-specific template if applicable
+        if refers_to_user:
+            user_name = user_context.get("real_name") or user_context.get(
+                "display_name", ""
+            )
+            user_email = user_context.get("email_address", "")
+
+            prompt = f"""Generate a sample employee record for {user_name} that would answer: "{query}"
+
+Create a realistic employee record for this specific person{entity_context}. Format it EXACTLY like this:
+
+Employee: {user_name}
+Email: {user_email}
+Status: Allocated
+Started: [start date]
+Ended: [end date or Active]
+Project History: [Project Name 1], [Project Name 2], [Project Name 3]
+
+Fill in the dates and project history with realistic details that would match this person's background."""
+        else:
+            prompt = f"""Generate a sample employee record that would answer: "{query}"
 
 Create a realistic employee record{entity_context}. Format it like this:
 

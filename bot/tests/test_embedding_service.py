@@ -13,7 +13,6 @@ from pydantic import SecretStr
 from bot.services.embedding_service import (
     EmbeddingProvider,
     OpenAIEmbeddingProvider,
-    SentenceTransformerEmbeddingProvider,
     chunk_text,
     create_embedding_provider,
 )
@@ -42,16 +41,6 @@ class EmbeddingSettingsFactory:
         """Create OpenAI embedding settings without API key"""
         return EmbeddingSettings(
             provider="openai",
-            model=model,
-        )
-
-    @staticmethod
-    def create_sentence_transformer_settings(
-        model: str = "all-MiniLM-L6-v2",
-    ) -> EmbeddingSettings:
-        """Create SentenceTransformer embedding settings"""
-        return EmbeddingSettings(
-            provider="sentence-transformers",
             model=model,
         )
 
@@ -97,34 +86,6 @@ class EmbeddingResponseFactory:
         response = Mock()
         response.data = [Mock(embedding=emb) for emb in embeddings]
         return response
-
-
-class SentenceTransformerMockFactory:
-    """Factory for creating SentenceTransformer mocks"""
-
-    @staticmethod
-    def create_model_mock(embeddings: list[list[float]] = None) -> Mock:
-        """Create SentenceTransformer model mock"""
-        if embeddings is None:
-            embeddings = [[0.1, 0.2, 0.3]]
-
-        mock_model = Mock()
-        mock_model.encode.return_value = (
-            embeddings[0] if len(embeddings) == 1 else embeddings
-        )
-        return mock_model
-
-    @staticmethod
-    def create_initialization_mocks() -> dict[str, Mock]:
-        """Create mocks for SentenceTransformer initialization"""
-        mock_model = SentenceTransformerMockFactory.create_model_mock()
-        mock_loop = Mock()
-        mock_loop.run_in_executor = AsyncMock(return_value=mock_model)
-
-        return {
-            "model": mock_model,
-            "loop": mock_loop,
-        }
 
 
 class ClientMockFactory:
@@ -314,144 +275,6 @@ class TestOpenAIEmbeddingProvider:
         provider.client.close.assert_called_once()
 
 
-class TestSentenceTransformerEmbeddingProvider:
-    """Test cases for SentenceTransformerEmbeddingProvider"""
-
-    @pytest.fixture
-    def embedding_settings(self):
-        """Create embedding settings for testing"""
-        return EmbeddingSettingsFactory.create_sentence_transformer_settings()
-
-    @pytest.fixture
-    def provider(self, embedding_settings):
-        """Create SentenceTransformer provider for testing"""
-        return SentenceTransformerEmbeddingProvider(embedding_settings)
-
-    def test_init(self, provider):
-        """Test provider initialization"""
-        assert provider.model == "all-MiniLM-L6-v2"
-        assert provider.model_instance is None
-        assert provider._initialized is False
-
-    @pytest.mark.asyncio
-    async def test_initialize_success(self, provider):
-        """Test successful model initialization"""
-        mocks = SentenceTransformerMockFactory.create_initialization_mocks()
-
-        with (
-            patch(
-                "sentence_transformers.SentenceTransformer",
-                return_value=mocks["model"],
-            ),
-            patch("asyncio.get_event_loop", return_value=mocks["loop"]),
-        ):
-            await provider._initialize()
-
-            assert provider._initialized is True
-            assert provider.model_instance == mocks["model"]
-
-    @pytest.mark.asyncio
-    async def test_initialize_import_error(self, provider):
-        """Test initialization with missing sentence-transformers package"""
-        with (
-            patch(
-                "services.embedding.sentence_transformer._sentence_transformers_available",
-                False,
-            ),
-            patch(
-                "services.embedding.sentence_transformer.SentenceTransformer",
-                None,
-            ),
-            pytest.raises(
-                ImportError, match="sentence-transformers package not installed"
-            ),
-        ):
-            await provider._initialize()
-
-    @pytest.mark.asyncio
-    async def test_initialize_only_once(self, provider):
-        """Test that initialization only happens once"""
-        mocks = SentenceTransformerMockFactory.create_initialization_mocks()
-
-        with (
-            patch(
-                "sentence_transformers.SentenceTransformer",
-                return_value=mocks["model"],
-            ),
-            patch("asyncio.get_event_loop", return_value=mocks["loop"]),
-        ):
-            await provider._initialize()
-            await provider._initialize()  # Second call
-
-            # Should only be called once
-            mocks["loop"].run_in_executor.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_get_embeddings_success(self, provider):
-        """Test successful embedding generation"""
-        mock_embeddings = [
-            Mock(tolist=Mock(return_value=[0.1, 0.2, 0.3])),
-            Mock(tolist=Mock(return_value=[0.4, 0.5, 0.6])),
-        ]
-
-        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
-        provider._initialized = True
-
-        with patch("asyncio.get_event_loop") as mock_loop:
-            mock_loop.return_value.run_in_executor = AsyncMock(
-                return_value=mock_embeddings
-            )
-
-            texts = ["text 1", "text 2"]
-            embeddings = await provider.get_embeddings(texts)
-
-            assert embeddings == [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-
-    @pytest.mark.asyncio
-    async def test_get_embeddings_not_initialized(self, provider):
-        """Test embedding generation when model not initialized"""
-        provider.model_instance = None
-
-        with (
-            patch.object(provider, "_initialize", AsyncMock()),
-            patch("asyncio.get_event_loop") as mock_loop,
-        ):
-            mock_loop.return_value.run_in_executor = AsyncMock(
-                side_effect=RuntimeError("not initialized")
-            )
-
-            with pytest.raises(RuntimeError):
-                await provider.get_embeddings(["test"])
-
-    @pytest.mark.asyncio
-    async def test_get_embedding_single(self, provider):
-        """Test single embedding generation"""
-        mock_embeddings = [Mock(tolist=Mock(return_value=[0.1, 0.2, 0.3]))]
-
-        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
-        provider._initialized = True
-
-        with patch("asyncio.get_event_loop") as mock_loop:
-            mock_loop.return_value.run_in_executor = AsyncMock(
-                return_value=mock_embeddings
-            )
-
-            embedding = await provider.get_embedding("test text")
-
-            assert embedding == [0.1, 0.2, 0.3]
-
-    @pytest.mark.asyncio
-    async def test_close(self, provider):
-        """Test closing the provider"""
-        provider.model_instance = SentenceTransformerMockFactory.create_model_mock()
-        provider._initialized = True
-
-        await provider.close()
-
-        assert provider.model_instance is None
-        assert provider._initialized is False
-
-
 class TestCreateEmbeddingProvider:
     """Test cases for embedding provider factory"""
 
@@ -464,25 +287,6 @@ class TestCreateEmbeddingProvider:
 
             assert isinstance(provider, OpenAIEmbeddingProvider)
             assert provider.model == "text-embedding-ada-002"
-
-    def test_create_sentence_transformers_provider(self):
-        """Test creating SentenceTransformers provider"""
-        settings = EmbeddingSettingsFactory.create_sentence_transformer_settings()
-
-        provider = create_embedding_provider(settings)
-
-        assert isinstance(provider, SentenceTransformerEmbeddingProvider)
-        assert provider.model == "all-MiniLM-L6-v2"
-
-    def test_create_sentence_transformers_alternative_name(self):
-        """Test creating SentenceTransformers provider with alternative name"""
-        settings = EmbeddingSettings(
-            provider="sentence_transformers", model="all-MiniLM-L6-v2"
-        )
-
-        provider = create_embedding_provider(settings)
-
-        assert isinstance(provider, SentenceTransformerEmbeddingProvider)
 
     def test_create_unsupported_provider(self):
         """Test creating unsupported provider"""

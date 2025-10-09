@@ -1,8 +1,13 @@
 # Use Python 3.11 slim image
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
-# Install security updates and dependencies
-RUN apt-get update && apt-get install -y \
+# Use bash with pipefail for better error handling
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Install security updates and build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
     gcc \
     curl \
     default-mysql-client \
@@ -22,10 +27,24 @@ RUN mkdir -p /app/logs && \
 # Copy application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser . .
 
-# Install Python dependencies from pyproject.toml
-# Split into separate steps for better error visibility
-RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -e . --verbose
+# Verify Python version and upgrade pip
+RUN set -eux \
+    && python --version \
+    && pip --version \
+    && pip install --no-cache-dir --upgrade pip wheel setuptools \
+    && pip --version
+
+# Install package with detailed logging (split for better error visibility)
+RUN set -x \
+    && pip install --no-cache-dir -e . 2>&1 | tee /tmp/pip_install.log; \
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then \
+        echo "=== PIP INSTALL FAILED ==="; \
+        echo "Python version: $(python --version)"; \
+        echo "Pip version: $(pip --version)"; \
+        echo "Last 100 lines of pip install log:"; \
+        tail -100 /tmp/pip_install.log; \
+        exit 1; \
+    fi
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \

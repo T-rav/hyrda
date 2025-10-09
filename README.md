@@ -85,6 +85,11 @@ docker run -d -p 6379:6379 redis:alpine
 # Install dependencies
 make install
 
+# Optional: Install local embeddings support (adds ~2GB PyTorch/CUDA dependencies)
+# Only needed if using EMBEDDING_PROVIDER=sentence-transformers
+# Default OpenAI embeddings work via API without this
+pip install -e ".[local-embeddings]"
+
 # Run the bot
 make run
 ```
@@ -139,6 +144,9 @@ EMBEDDING_MODEL=text-embedding-3-small  # 1536 dimensions
 ```bash
 make install      # Install Python dependencies
 make setup-dev    # Install dev tools + pre-commit hooks
+
+# Optional: Install local embeddings (only if using sentence-transformers)
+pip install -e ".[local-embeddings]"  # Adds ~2GB PyTorch/CUDA dependencies
 ```
 
 ### Running the Application
