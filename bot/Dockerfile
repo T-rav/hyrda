@@ -25,7 +25,7 @@ COPY --chown=appuser:appuser . .
 # Install Python dependencies from pyproject.toml
 # Split into separate steps for better error visibility
 RUN pip install --no-cache-dir --upgrade pip
-RUN pip install --no-cache-dir -e . --verbose
+RUN set -x && pip install --no-cache-dir -e . 2>&1 || (echo "=== PIP INSTALL FAILED ===" && cat /tmp/pip-*.log 2>/dev/null || pip install --no-cache-dir -e . -vvv && exit 1)
 
 # Set production environment variables
 ENV PYTHONUNBUFFERED=1 \
