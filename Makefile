@@ -298,7 +298,7 @@ docker-restart: docker-down docker-up
 
 docker-build: health-ui tasks-ui
 	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose --progress=plain build
+	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"
 
 # Main stop command - stops everything
