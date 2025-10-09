@@ -5,7 +5,6 @@ Factory function for creating embedding providers
 from config.settings import EmbeddingSettings, LLMSettings
 from services.embedding.base import EmbeddingProvider
 from services.embedding.openai import OpenAIEmbeddingProvider
-from services.embedding.sentence_transformer import SentenceTransformerEmbeddingProvider
 
 
 def create_embedding_provider(
@@ -15,14 +14,14 @@ def create_embedding_provider(
 
     provider_map = {
         "openai": lambda: OpenAIEmbeddingProvider(settings, llm_settings),
-        "sentence-transformers": lambda: SentenceTransformerEmbeddingProvider(settings),
-        "sentence_transformers": lambda: SentenceTransformerEmbeddingProvider(
-            settings
-        ),  # Alternative name
     }
 
     provider_factory = provider_map.get(settings.provider.lower())
     if not provider_factory:
-        raise ValueError(f"Unsupported embedding provider: {settings.provider}")
+        raise ValueError(
+            f"Unsupported embedding provider: {settings.provider}. "
+            "Only 'openai' is supported. "
+            "For local embeddings, install with: pip install -e '.[local-embeddings]'"
+        )
 
     return provider_factory()

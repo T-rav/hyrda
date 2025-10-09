@@ -43,7 +43,6 @@ dependencies = [
     # RAG and LLM dependencies
     "openai>=1.35.0",
     "anthropic>=0.25.0",
-    "sentence-transformers>=2.2.0",
     "elasticsearch>=8.0.0",
     "qdrant-client>=1.7.0",
     "cohere>=5.0.0",  # For cross-encoder reranking
@@ -80,6 +79,13 @@ dev = [
     "pyright==1.1.390",
     "bandit[toml]==1.8.0",
     "pre-commit==4.0.1",
+]
+
+# Local embeddings (optional - adds ~2GB of dependencies including PyTorch/CUDA)
+# Only needed if using EMBEDDING_PROVIDER=sentence-transformers
+# Default configuration uses OpenAI API embeddings (no local models needed)
+local-embeddings = [
+    "sentence-transformers>=2.2.0",
 ]
 
 [project.scripts]
