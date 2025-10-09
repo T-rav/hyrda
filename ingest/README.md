@@ -29,9 +29,14 @@ Provides comprehensive metadata including file paths, permissions, and access co
 1. **Install dependencies:**
    ```bash
    cd ingest
-   pip install python-docx openpyxl python-pptx pymupdf
-   # Or install from pyproject.toml
+   # Install all dependencies from pyproject.toml (recommended)
    pip install -e .
+
+   # This includes:
+   # - Google Drive API dependencies
+   # - Document processing libraries (pymupdf, python-docx, openpyxl, python-pptx)
+   # - Vector database clients (Qdrant)
+   # - Database dependencies (SQLAlchemy, PyMySQL) for document tracking
    ```
 
 2. **Google Drive API Setup:**

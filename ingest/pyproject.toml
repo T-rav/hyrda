@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "google-drive-ingester"
-version = "1.2.5"
+version = "1.2.6"
 description = "Google Drive document ingester for RAG systems"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
@@ -35,6 +35,12 @@ dependencies = [
     "python-docx>=1.1.0",  # Word document (.docx) processing
     "openpyxl>=3.1.0",  # Excel spreadsheet (.xlsx) processing
     "python-pptx>=0.6.23",  # PowerPoint (.pptx) processing
+
+    # Database (for document tracking via tasks module)
+    "sqlalchemy[asyncio]>=2.0.0",  # ORM and database toolkit - must match tasks module
+    "pymysql>=1.1.0",  # MySQL driver - must match tasks module
+    "cryptography>=41.0.0",  # Required for MySQL auth methods - must match tasks module
+    "alembic>=1.13.0",  # Database migrations - must match tasks module
 ]
 
 [project.scripts]
