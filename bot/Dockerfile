@@ -27,14 +27,20 @@ RUN mkdir -p /app/logs && \
 # Copy application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser . .
 
-# Install Python dependencies from pyproject.toml with proper error logging
+# Verify Python version and upgrade pip
 RUN set -eux \
-    && pip install --no-cache-dir --upgrade pip wheel setuptools
+    && python --version \
+    && pip --version \
+    && pip install --no-cache-dir --upgrade pip wheel setuptools \
+    && pip --version
 
 # Install package with detailed logging (split for better error visibility)
-RUN pip install --no-cache-dir -e . 2>&1 | tee /tmp/pip_install.log; \
+RUN set -x \
+    && pip install --no-cache-dir -e . 2>&1 | tee /tmp/pip_install.log; \
     if [ ${PIPESTATUS[0]} -ne 0 ]; then \
         echo "=== PIP INSTALL FAILED ==="; \
+        echo "Python version: $(python --version)"; \
+        echo "Pip version: $(pip --version)"; \
         echo "Last 100 lines of pip install log:"; \
         tail -100 /tmp/pip_install.log; \
         exit 1; \
