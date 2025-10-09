@@ -17,6 +17,7 @@ from services.context_builder import ContextBuilder
 from services.embedding import create_embedding_provider
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
+from services.mcp_client import get_webcat_client
 from services.retrieval_service import RetrievalService
 from services.vector_service import create_vector_store
 
@@ -367,7 +368,14 @@ class RAGService:
                 query, context_chunks, conversation_history, system_message
             )
 
-            # Generate response from LLM
+            # Check if we should enable web search tools
+            webcat_client = get_webcat_client()
+            tools = None
+            if webcat_client and webcat_client.enabled:
+                tools = webcat_client.get_tool_definitions()
+                logger.info(f"🔍 Web search tools available: {len(tools)} tools")
+
+            # Generate response from LLM (with optional function calling)
             response = await self.llm_provider.get_response(
                 messages=messages,
                 system_message=final_system_message,
@@ -377,23 +385,178 @@ class RAGService:
                 if self.settings.langfuse.use_prompt_templates
                 else None,
                 prompt_template_version=self.settings.langfuse.prompt_template_version,
+                tools=tools,  # Pass web search tools
             )
+
+            # Handle tool calls if LLM requested web search
+            if isinstance(response, dict) and response.get("tool_calls"):
+                logger.info(f"🛠️ LLM requested {len(response['tool_calls'])} tool calls")
+                response_str = await self._handle_tool_calls(
+                    response,
+                    messages,
+                    final_system_message,
+                    session_id,
+                    user_id,
+                    tools,
+                )
+                response = response_str
 
             if not response:
                 logger.warning("Empty response from LLM provider")
                 return "I'm sorry, I couldn't generate a response right now."
 
+            # Ensure response is a string at this point
+            if isinstance(response, dict):
+                response = response.get("content", "")
+
             # Add citations if we used RAG
-            if context_chunks and use_rag:
+            if context_chunks and use_rag and response:
                 response = self.citation_service.add_source_citations(
                     response, context_chunks
                 )
 
-            return response
+            return response or ""
 
         except Exception as e:
             logger.error(f"Error generating RAG response: {e}")
             return "I'm sorry, I encountered an error while generating a response."
+
+    async def _handle_tool_calls(
+        self,
+        tool_call_response: dict,
+        messages: list[dict[str, str]],
+        system_message: str | None,
+        session_id: str | None,
+        user_id: str | None,
+        tools: list[dict] | None,
+    ) -> str:
+        """
+        Handle tool calls from the LLM (e.g., web search)
+
+        Args:
+            tool_call_response: Response containing tool calls
+            messages: Conversation messages
+            system_message: System prompt
+            session_id: Session ID
+            user_id: User ID
+            tools: Available tools
+
+        Returns:
+            Final response after executing tools
+        """
+        webcat_client = get_webcat_client()
+        if not webcat_client:
+            logger.warning("WebCat client not available for tool calls")
+            return tool_call_response.get("content", "")
+
+        # Execute each tool call
+        tool_results = []
+        langfuse_service = get_langfuse_service()
+
+        for tool_call in tool_call_response.get("tool_calls", []):
+            tool_name = tool_call.get("function", {}).get("name")
+            tool_args = tool_call.get("function", {}).get("arguments", {})
+            tool_id = tool_call.get("id", "unknown")
+
+            logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
+
+            try:
+                if tool_name == "web_search":
+                    # Execute web search
+                    query = tool_args.get("query", "")
+                    max_results = tool_args.get("max_results", 5)
+
+                    search_results = await webcat_client.search(query, max_results)
+
+                    # Format results for LLM
+                    formatted_results = "\n\n".join(
+                        [
+                            f"**{r.get('title', 'Untitled')}**\n{r.get('url', '')}\n{r.get('snippet', '')}"
+                            for r in search_results
+                        ]
+                    )
+
+                    tool_results.append(
+                        {
+                            "tool_call_id": tool_id,
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": formatted_results or "No results found",
+                        }
+                    )
+
+                    logger.info(f"✅ Web search returned {len(search_results)} results")
+
+                    # Trace tool execution to Langfuse
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name=tool_name,
+                            tool_input=tool_args,
+                            tool_output=search_results,
+                            metadata={
+                                "tool_id": tool_id,
+                                "results_count": len(search_results),
+                                "query": query,
+                                "max_results": max_results,
+                                "session_id": session_id,
+                                "user_id": user_id,
+                            },
+                        )
+                        logger.info(
+                            f"📊 Logged tool execution to Langfuse: {tool_name}"
+                        )
+                else:
+                    logger.warning(f"Unknown tool: {tool_name}")
+                    tool_results.append(
+                        {
+                            "tool_call_id": tool_id,
+                            "role": "tool",
+                            "name": tool_name,
+                            "content": f"Error: Unknown tool '{tool_name}'",
+                        }
+                    )
+
+            except Exception as e:
+                logger.error(f"Error executing tool {tool_name}: {e}")
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_id,
+                        "role": "tool",
+                        "name": tool_name,
+                        "content": f"Error executing tool: {str(e)}",
+                    }
+                )
+
+        # Add tool results to conversation and get final response
+        messages_with_tools = (
+            messages
+            + [
+                {
+                    "role": "assistant",
+                    "content": tool_call_response.get("content", ""),
+                    "tool_calls": tool_call_response.get("tool_calls", []),
+                },
+            ]
+            + tool_results
+        )
+
+        logger.info("🔄 Getting final response with tool results...")
+        final_response = await self.llm_provider.get_response(
+            messages=messages_with_tools,
+            system_message=system_message,
+            session_id=session_id,
+            user_id=user_id,
+            prompt_template_name=self.settings.langfuse.system_prompt_template
+            if self.settings.langfuse.use_prompt_templates
+            else None,
+            prompt_template_version=self.settings.langfuse.prompt_template_version,
+            tools=tools,
+        )
+
+        # Ensure we return a string (tool calls should not happen in second call)
+        if isinstance(final_response, dict):
+            return final_response.get("content", "")
+        return final_response or ""
 
     async def get_system_status(self) -> dict[str, Any]:
         """Get system status information"""
