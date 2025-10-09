@@ -4,12 +4,12 @@ Minimal Embedding Provider for Ingestion
 Stripped-down version with only OpenAI embeddings support.
 """
 
-from typing import Any
-
 from openai import AsyncOpenAI
 
 
-def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> list[str]:
+def chunk_text(
+    text: str, chunk_size: int = 1000, chunk_overlap: int = 200
+) -> list[str]:
     """
     Split text into overlapping chunks.
 

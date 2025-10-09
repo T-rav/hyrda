@@ -141,8 +141,12 @@ async def main():
         print(
             f"🔗 Connecting to Qdrant at {'https' if vector_config.use_https else 'http'}://{vector_config.host}:{vector_config.port}"
         )
-        print(f"📐 Using {embedding_config.model} with dimension: {embedding_provider.get_dimension()}")
-        await vector_store.initialize(embedding_dimension=embedding_provider.get_dimension())
+        print(
+            f"📐 Using {embedding_config.model} with dimension: {embedding_provider.get_dimension()}"
+        )
+        await vector_store.initialize(
+            embedding_dimension=embedding_provider.get_dimension()
+        )
 
         # Initialize minimal LLM service for contextual retrieval if enabled
         llm_service = None
@@ -167,6 +171,7 @@ async def main():
     except Exception as e:
         print(f"❌ Service initialization failed: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
