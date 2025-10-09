@@ -13,7 +13,14 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 class QdrantVectorStore:
     """Minimal Qdrant vector store for document ingestion."""
 
-    def __init__(self, host: str, port: int, collection_name: str, api_key: str | None = None):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        collection_name: str,
+        api_key: str | None = None,
+        use_https: bool = False,
+    ):
         """
         Initialize Qdrant client.
 
@@ -22,11 +29,27 @@ class QdrantVectorStore:
             port: Qdrant server port
             collection_name: Name of the collection to use
             api_key: Optional API key for authentication
+            use_https: Whether to use HTTPS (default: False for local instances)
         """
         self.host = host
         self.port = port
         self.collection_name = collection_name
-        self.client = QdrantClient(host=host, port=port, api_key=api_key)
+
+        # Build the URL based on protocol
+        if use_https:
+            url = f"https://{host}:{port}"
+        else:
+            url = f"http://{host}:{port}"
+
+        # Initialize client with URL instead of host/port for better control
+        # Explicitly set https=False when not using HTTPS to prevent SSL attempts
+        self.client = QdrantClient(
+            url=url,
+            api_key=api_key,
+            https=use_https,
+            prefer_grpc=False,  # Use REST API instead of gRPC to avoid SSL issues
+            timeout=30,  # 30 second timeout
+        )
 
     async def initialize(self):
         """Initialize the vector store (create collection if needed)."""

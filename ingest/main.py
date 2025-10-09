@@ -130,6 +130,10 @@ async def main():
             port=vector_config.port,
             collection_name=vector_config.collection_name,
             api_key=vector_config.api_key,
+            use_https=vector_config.use_https,
+        )
+        print(
+            f"🔗 Connecting to Qdrant at {'https' if vector_config.use_https else 'http'}://{vector_config.host}:{vector_config.port}"
         )
         await vector_store.initialize()
 
