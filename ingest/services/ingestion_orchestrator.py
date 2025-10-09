@@ -9,6 +9,7 @@ Main service that coordinates the ingestion process by:
 """
 
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -186,8 +187,11 @@ class IngestionOrchestrator:
                     chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
                     chunk_meta["chunk_index"] = i
                     chunk_meta["total_chunks"] = len(chunks)
+                    chunk_meta["base_uuid"] = base_uuid  # Store base UUID in metadata
                     chunk_metadata.append(chunk_meta)
-                    chunk_ids.append(f"{base_uuid}_{i}")
+                    # Generate proper UUID for each chunk using UUID5 (deterministic)
+                    chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{i}"))
+                    chunk_ids.append(chunk_uuid)
 
                 # Upsert to vector store
                 await self.vector_service.upsert(
