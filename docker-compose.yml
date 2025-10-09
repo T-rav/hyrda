@@ -126,6 +126,29 @@ services:
     networks:
       - insightmesh
 
+  # WebCat MCP Server (Web Search)
+  webcat:
+    image: tmfrisinger/webcat:2.3.0
+    container_name: insightmesh-webcat
+    restart: unless-stopped
+    ports:
+      - "${MCP_WEBCAT_PORT:-3000}:3000"
+    environment:
+      - PORT=3000
+      # Search provider API keys (WebCat will use whichever are available)
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - SERPER_API_KEY=${SERPER_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GOOGLE_CSE_ID=${GOOGLE_CSE_ID:-}
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/3000' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - insightmesh
+
   # AI Slack Bot Service
   bot:
     build:
@@ -142,6 +165,9 @@ services:
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
+      - MCP_WEBCAT_HOST=webcat
+      - MCP_WEBCAT_PORT=3000
+      - MCP_WEBCAT_ENABLED=true
       - ENVIRONMENT=production
     ports:
       - "${HEALTH_PORT:-8080}:8080"
@@ -151,6 +177,8 @@ services:
       qdrant:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      webcat:
         condition: service_healthy
     command: >
       sh -c "

@@ -34,8 +34,14 @@ class LLMProvider(ABC):
         user_id: str | None = None,
         prompt_template_name: str | None = None,
         prompt_template_version: str | None = None,
-    ) -> str | None:
-        """Generate a response from the LLM"""
+        tools: list[dict] | None = None,
+    ) -> str | dict | None:
+        """
+        Generate a response from the LLM
+
+        Returns:
+            String response, or dict with tool_calls if tools were used
+        """
         pass
 
     @abstractmethod
@@ -68,7 +74,8 @@ class OpenAIProvider(LLMProvider):
         user_id: str | None = None,
         prompt_template_name: str | None = None,
         prompt_template_version: str | None = None,
-    ) -> str | None:
+        tools: list[dict] | None = None,
+    ) -> str | dict | None:
         """Get response from OpenAI API"""
         start_time = time.time()
 
@@ -89,6 +96,7 @@ class OpenAIProvider(LLMProvider):
                     "message_count": len(formatted_messages),
                     "temperature": self.temperature,
                     "max_tokens": self.max_tokens,
+                    "tools_enabled": bool(tools),
                     "event_type": "openai_api_request",
                 },
             )
@@ -111,6 +119,13 @@ class OpenAIProvider(LLMProvider):
             if not is_reasoning_model:
                 request_params["temperature"] = self.temperature
 
+            # Add tools for function calling
+            if tools:
+                request_params["tools"] = tools
+                request_params["tool_choice"] = (
+                    "auto"  # Let model decide when to use tools
+                )
+
             # Add Langfuse tracking metadata if provided
             metadata = {}
             if session_id:
@@ -123,7 +138,9 @@ class OpenAIProvider(LLMProvider):
 
             response = await self.client.chat.completions.create(**request_params)
 
-            content = response.choices[0].message.content
+            message = response.choices[0].message
+            content = message.content
+            tool_calls = message.tool_calls
             duration = time.time() - start_time
 
             # Extract usage information
@@ -142,10 +159,30 @@ class OpenAIProvider(LLMProvider):
                     "response_length": len(content) if content else 0,
                     "tokens_used": response.usage.total_tokens if response.usage else 0,
                     "usage": usage,
+                    "tool_calls": len(tool_calls) if tool_calls else 0,
                     "event_type": "openai_api_success",
                     "duration": duration,
                 },
             )
+
+            # Return dict with tool calls if present
+            if tool_calls:
+                import json
+
+                return {
+                    "content": str(content) if content else "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": tc.type,
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": json.loads(tc.function.arguments),
+                            },
+                        }
+                        for tc in tool_calls
+                    ],
+                }
 
             return str(content) if content else None
 
