@@ -8,10 +8,8 @@ Main service that coordinates the ingestion process by:
 - Managing the overall ingestion workflow
 """
 
-import sys
 import uuid
 from datetime import datetime
-from pathlib import Path
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient

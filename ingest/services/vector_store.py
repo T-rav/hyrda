@@ -66,7 +66,9 @@ class QdrantVectorStore:
             # Create collection with specified embedding dimension
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=embedding_dimension, distance=Distance.COSINE),
+                vectors_config=VectorParams(
+                    size=embedding_dimension, distance=Distance.COSINE
+                ),
             )
 
     async def upsert(
@@ -91,7 +93,9 @@ class QdrantVectorStore:
                 vector=embedding,
                 payload={"text": text, **metadata},
             )
-            for doc_id, embedding, metadata, text in zip(ids, embeddings, metadatas, texts)
+            for doc_id, embedding, metadata, text in zip(
+                ids, embeddings, metadatas, texts, strict=False
+            )
         ]
 
         self.client.upsert(collection_name=self.collection_name, points=points)
