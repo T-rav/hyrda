@@ -87,10 +87,7 @@ class MetricSyncJob(BaseJob):
             if not row:
                 return True  # New record
 
-            if row[0] != content_hash:
-                return True  # Content changed
-
-            return False  # No change needed
+            return row[0] != content_hash  # Content changed
 
         except Exception as e:
             logger.warning(f"Error checking record hash: {e}")

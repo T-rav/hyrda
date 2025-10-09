@@ -9,8 +9,8 @@ from sqlalchemy.orm import sessionmaker
 
 from config.settings import TasksSettings
 from services.openai_embeddings import OpenAIEmbeddings
-from services.qdrant_client import QdrantClient
 from services.portal_client import PortalClient
+from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
 
