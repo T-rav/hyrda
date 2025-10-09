@@ -41,6 +41,13 @@ def chunk_text(text: str, chunk_size: int = 1000, chunk_overlap: int = 200) -> l
 class OpenAIEmbeddingProvider:
     """Minimal OpenAI embedding provider for document ingestion."""
 
+    # Embedding dimensions for different models
+    MODEL_DIMENSIONS = {
+        "text-embedding-3-small": 1536,
+        "text-embedding-3-large": 3072,
+        "text-embedding-ada-002": 1536,
+    }
+
     def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
         """
         Initialize OpenAI client.
@@ -51,6 +58,16 @@ class OpenAIEmbeddingProvider:
         """
         self.client = AsyncOpenAI(api_key=api_key)
         self.model = model
+        self.dimension = self.MODEL_DIMENSIONS.get(model, 1536)
+
+    def get_dimension(self) -> int:
+        """
+        Get the embedding dimension for the current model.
+
+        Returns:
+            Embedding dimension
+        """
+        return self.dimension
 
     async def embed_texts(self, texts: list[str]) -> list[list[float]]:
         """

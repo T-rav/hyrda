@@ -124,7 +124,13 @@ async def main():
         llm_config = LLMConfig.from_env()
         rag_config = RAGConfig.from_env()
 
-        # Initialize minimal vector store
+        # Initialize minimal embedding provider FIRST (need dimension for vector store)
+        embedding_provider = OpenAIEmbeddingProvider(
+            api_key=embedding_config.api_key,
+            model=embedding_config.model,
+        )
+
+        # Initialize minimal vector store with correct dimension
         vector_store = QdrantVectorStore(
             host=vector_config.host,
             port=vector_config.port,
@@ -135,13 +141,8 @@ async def main():
         print(
             f"🔗 Connecting to Qdrant at {'https' if vector_config.use_https else 'http'}://{vector_config.host}:{vector_config.port}"
         )
-        await vector_store.initialize()
-
-        # Initialize minimal embedding provider
-        embedding_provider = OpenAIEmbeddingProvider(
-            api_key=embedding_config.api_key,
-            model=embedding_config.model,
-        )
+        print(f"📐 Using {embedding_config.model} with dimension: {embedding_provider.get_dimension()}")
+        await vector_store.initialize(embedding_dimension=embedding_provider.get_dimension())
 
         # Initialize minimal LLM service for contextual retrieval if enabled
         llm_service = None

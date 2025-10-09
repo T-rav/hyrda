@@ -51,17 +51,22 @@ class QdrantVectorStore:
             timeout=30,  # 30 second timeout
         )
 
-    async def initialize(self):
-        """Initialize the vector store (create collection if needed)."""
+    async def initialize(self, embedding_dimension: int = 3072):
+        """
+        Initialize the vector store (create collection if needed).
+
+        Args:
+            embedding_dimension: Dimension of embeddings (default: 3072 for text-embedding-3-large)
+        """
         # Check if collection exists
         collections = self.client.get_collections().collections
         collection_exists = any(c.name == self.collection_name for c in collections)
 
         if not collection_exists:
-            # Create collection with default embedding dimension (1536 for OpenAI)
+            # Create collection with specified embedding dimension
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=embedding_dimension, distance=Distance.COSINE),
             )
 
     async def upsert(
