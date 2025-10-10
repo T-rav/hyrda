@@ -655,6 +655,8 @@ async def handle_message(
             current_query=text,
             document_content=document_content if document_content else None,
             document_filename=document_filename,
+            conversation_id=thread_ts or channel,  # Use thread_ts for conversation ID
+            conversation_cache=conversation_cache,  # Pass cache for summary management
         )
 
         # Clean up thinking message
