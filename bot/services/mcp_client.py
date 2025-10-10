@@ -310,12 +310,13 @@ class WebCatClient:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return {"success": False, "url": url, "error": str(e)}
 
-    async def deep_research(self, query: str) -> dict[str, Any]:
+    async def deep_research(self, query: str, effort: str = "medium") -> dict[str, Any]:
         """
         Perform deep research using Perplexity AI for comprehensive answers
 
         Args:
             query: Research query requiring in-depth analysis
+            effort: Research effort level - "low" (5 queries), "medium" (15 queries), "high" (25 queries)
 
         Returns:
             Dict with success, answer, sources, and metadata
@@ -340,11 +341,14 @@ class WebCatClient:
             payload = {
                 "jsonrpc": "2.0",
                 "method": "tools/call",
-                "params": {"name": "deep_research", "arguments": {"query": query}},
+                "params": {
+                    "name": "deep_research",
+                    "arguments": {"query": query, "effort": effort},
+                },
                 "id": 1,
             }
 
-            logger.info(f"WebCat deep research: {query}")
+            logger.info(f"WebCat deep research ({effort} effort): {query}")
 
             headers = {
                 "Content-Type": "application/json",
@@ -484,6 +488,12 @@ class WebCatClient:
                         "Perform comprehensive deep research on complex topics using Perplexity AI. "
                         "Returns detailed, well-researched answers with citations and sources. "
                         "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
+                        "**IMPORTANT - Cost Management:**\n"
+                        "This tool is EXPENSIVE. Use effort levels strategically:\n"
+                        "- 'low': Quick overviews, initial exploration (1-2 min)\n"
+                        "- 'medium': Standard research, balanced depth (2-3 min)\n"
+                        "- 'high': Deep comprehensive analysis - ONLY when critical (3-5 min)\n\n"
+                        "**Strategy:** Start with web_search to explore, then use deep_research on 1-2 key topics.\n\n"
                         "Best for:\n"
                         "- Complex research questions requiring comprehensive analysis\n"
                         "- Topics needing expert-level understanding and synthesis\n"
@@ -493,7 +503,8 @@ class WebCatClient:
                         "NOT for:\n"
                         "- Simple factual lookups (use web_search instead)\n"
                         "- Real-time data like stock prices or weather (use web_search)\n"
-                        "- Single-source information (use scrape_url instead)"
+                        "- Single-source information (use scrape_url instead)\n"
+                        "- Exploratory searches (use web_search first)"
                     ),
                     "parameters": {
                         "type": "object",
@@ -505,6 +516,18 @@ class WebCatClient:
                                     "Examples: 'What are the latest developments in quantum computing?', "
                                     "'How does CRISPR gene editing work and what are its ethical implications?', "
                                     "'Compare different approaches to carbon capture technology'"
+                                ),
+                            },
+                            "effort": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                                "default": "medium",
+                                "description": (
+                                    "Research effort level controlling depth and cost:\n"
+                                    "- 'low': Quick overview, initial exploration (~1-2 min, cheapest)\n"
+                                    "- 'medium': Standard depth, balanced research (~2-3 min, default)\n"
+                                    "- 'high': Maximum depth, comprehensive analysis (~3-5 min, most expensive)\n\n"
+                                    "Choose wisely based on importance and complexity."
                                 ),
                             },
                         },

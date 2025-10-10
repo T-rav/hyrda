@@ -611,7 +611,8 @@ class RAGService:
                 elif tool_name == "deep_research":
                     # Execute deep research via Perplexity
                     query = tool_args.get("query", "")
-                    research_result = await webcat_client.deep_research(query)
+                    effort = tool_args.get("effort", "medium")  # low, medium, or high
+                    research_result = await webcat_client.deep_research(query, effort)
 
                     if research_result.get("success") or research_result.get("answer"):
                         answer = research_result.get("answer", "")
@@ -636,10 +637,10 @@ class RAGService:
                         )
 
                         logger.info(
-                            f"✅ Deep research returned {len(answer)} chars with {len(sources)} sources for: {query}"
+                            f"✅ Deep research ({effort} effort) returned {len(answer)} chars with {len(sources)} sources for: {query}"
                         )
 
-                        # Trace tool execution to Langfuse
+                        # Trace tool execution to Langfuse with effort level
                         if langfuse_service:
                             langfuse_service.trace_tool_execution(
                                 tool_name=tool_name,
@@ -647,18 +648,21 @@ class RAGService:
                                 tool_output={
                                     "answer_length": len(answer),
                                     "sources_count": len(sources),
+                                    "effort": effort,
                                 },
                                 metadata={
                                     "tool_id": tool_id,
                                     "query": query,
+                                    "effort": effort,
                                     "answer_length": len(answer),
                                     "sources_count": len(sources),
                                     "session_id": session_id,
                                     "user_id": user_id,
+                                    "cost_indicator": f"{effort}_effort",  # Track cost implications
                                 },
                             )
                             logger.info(
-                                f"📊 Logged tool execution to Langfuse: {tool_name}"
+                                f"📊 Logged tool execution to Langfuse: {tool_name} (effort: {effort})"
                             )
                     else:
                         error = research_result.get("error", "Unknown error")
