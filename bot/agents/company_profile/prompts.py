@@ -490,10 +490,17 @@ Actionable opportunities based on research findings:
 - **Connect back to specific findings**: "Given [finding X] and [finding Y], 8th Light could..."
 
 ## Sources
-List all sources with citation numbers:
+List all **external** sources with citation numbers:
 1. [Source Title or URL] - Brief description
 2. [Source Title or URL] - Brief description
 (Continue numbering sequentially)
+
+IMPORTANT: Only include external, verifiable sources (news articles, company websites, official announcements, etc.).
+DO NOT include:
+- "Internal research summary"
+- "Research findings"
+- "Compressed notes"
+- Any internal/meta references to the research process itself
 
 </Mandatory Report Structure - 8th Light Company Profile>
 
