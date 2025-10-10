@@ -24,9 +24,9 @@ Respond with:
 """
 
 # Research brief generation
-transform_messages_into_research_topic_prompt = """You are a company profile research planner.
+transform_messages_into_research_topic_prompt = """You are an expert Business Development research planner creating company profiles for sales prospecting.
 
-Transform the user's query into a detailed research brief for profile generation.
+Transform the user's query into a structured research brief following the 8th Light company profiling methodology.
 
 <User Query>
 {query}
@@ -34,38 +34,68 @@ Transform the user's query into a detailed research brief for profile generation
 Profile Type: {profile_type}
 </User Query>
 
-<Guidelines for Research Brief>
-1. **Identify the subject**: Extract the exact company/person/project name
-2. **Define scope**: What aspects of the profile to research
-3. **Prioritize information**: Most important to least important
-4. **Set boundaries**: What NOT to research (irrelevant info)
-5. **Use specific language**: Be explicit about data needs
+<8th Light Company Profile Structure>
+Your research brief must plan for gathering information across these specific sections:
 
-For company profiles, consider:
-- Company history and founding
-- Leadership team and key employees
-- Products/services and market position
-- Recent news and developments
-- Partnerships and clients
-- Company culture and values
+1. **Company Overview**
+   - Company name, founding year, headquarters
+   - Core business and value proposition
+   - Size (employees, revenue if public)
+   - Market position and industry sector
 
-For employee profiles, consider:
-- Current role and responsibilities
-- Career history and experience
-- Projects and contributions
-- Skills and expertise
-- Publications or presentations
+2. **Company Priorities for Current/Next Year**
+   - Strategic initiatives and goals
+   - Sources: shareholder presentations, 10-K filings, annual reports
+   - Executive interviews and statements
+   - News stories about future direction
 
-For project profiles, consider:
-- Project overview and goals
-- Team members and roles
-- Timeline and milestones
-- Technologies and methodologies
-- Outcomes and impact
-- Related projects
-</Guidelines>
+3. **News Stories (Past Year)**
+   - Major announcements and developments
+   - Product launches, partnerships, acquisitions
+   - Leadership changes
+   - Industry recognition or challenges
 
-Generate a comprehensive research brief in first person (as the lead researcher).
+4. **Executive Team**
+   - C-suite executives (names, titles, backgrounds)
+   - Business units and department leaders
+   - Organizational structure
+
+5. **Relationships (8th Light Network)**
+   - Known contacts at the company
+   - Client network connections
+   - Past or current engagements
+
+6. **Industry Competitors**
+   - Direct competitors in their space
+   - Target companies in same industry
+   - Market positioning vs competitors
+
+7. **Boutique Consulting Partners**
+   - Consulting firms who have worked with the company
+   - Competitors 8th Light may encounter
+   - Case studies or news stories of consultancy work
+
+8. **Size of Teams**
+   - Product team size
+   - Design team size
+   - Technology/engineering team size
+
+9. **Solutions 8th Light Can Offer**
+   - Based on company initiatives and challenges
+   - How 8th Light's services align (see www.8thlight.com)
+   - Specific project opportunities
+
+</8th Light Company Profile Structure>
+
+<Research Brief Guidelines>
+1. **Identify the subject**: Extract exact company name
+2. **Map to structure**: Plan research tasks for each section above
+3. **Prioritize verification**: Focus on externally verifiable sources
+4. **Be specific**: Name exact sources to search (10-K, earnings calls, etc.)
+5. **Professional tone**: Trustworthy and pragmatic insights
+</Research Brief Guidelines>
+
+Generate a comprehensive research brief that structures the research work around these 9 sections. Write in first person as the lead researcher.
 """
 
 # Lead researcher (supervisor) prompt
@@ -218,7 +248,7 @@ Structured prose with clear headings and citations. Be comprehensive but concise
 """
 
 # Final report generation prompt
-final_report_generation_prompt = """You are generating a comprehensive company profile report.
+final_report_generation_prompt = """You are an expert Business Development associate generating a company profile for sales prospecting.
 
 <Profile Type>
 {profile_type}
@@ -229,64 +259,103 @@ final_report_generation_prompt = """You are generating a comprehensive company p
 </Research Notes>
 
 <Your Task>
-Create a well-structured, comprehensive profile report that synthesizes all research findings.
-The report should be professional, accurate, and easy to read.
+Create a comprehensive company profile following the 8th Light methodology.
+The report must be professional, accurate, and provide actionable insights for sales and consulting partners.
+Use ONLY externally verifiable information - do not invent details.
 </Your Task>
 
-<Report Structure>
-For **Company Profiles**:
-1. **Overview**: Brief summary, founding year, location, size
-2. **History**: Key milestones and development
-3. **Leadership**: Key executives and leadership team
-4. **Products/Services**: Core offerings and market position
-5. **Recent Developments**: Latest news and initiatives (past 12 months)
-6. **Culture & Values**: Company culture, mission, values
-7. **Key Facts**: Notable metrics, partnerships, achievements
+<Mandatory Report Structure - 8th Light Company Profile>
+IMPORTANT: Structure your report with EXACTLY these sections in this order:
 
-For **Employee Profiles**:
-1. **Current Role**: Position, responsibilities, tenure
-2. **Background**: Education, career history
-3. **Expertise**: Skills, specializations, technologies
-4. **Contributions**: Key projects and achievements
-5. **Recognition**: Awards, publications, presentations
-6. **Professional Network**: Collaborations, mentorship
+## Company Overview
+Brief summary covering:
+- Company name, founding year, headquarters
+- Core business and value proposition
+- Company size (employees, revenue if available)
+- Market position and industry sector
 
-For **Project Profiles**:
-1. **Overview**: Project goals, scope, timeline
-2. **Team**: Key team members and roles
-3. **Technology**: Tech stack, methodologies, tools
-4. **Approach**: Development process, challenges, solutions
-5. **Outcomes**: Results, impact, metrics
-6. **Lessons Learned**: Key takeaways, future directions
-</Report Structure>
+## Company Priorities for Current/Next Year
+Strategic initiatives and goals from:
+- Shareholder presentations and 10-K filings [cite sources]
+- Annual reports and earnings calls [cite sources]
+- Executive interviews and statements [cite sources]
+- News coverage of future direction [cite sources]
+
+## Recent News Stories (Past 12 Months)
+Key developments including:
+- Major announcements and partnerships [cite sources]
+- Product launches and acquisitions [cite sources]
+- Leadership changes [cite sources]
+- Industry recognition or challenges [cite sources]
+
+## Executive Team
+Leadership structure:
+- C-suite executives (names, titles, brief backgrounds)
+- Key business unit leaders
+- Organizational structure notes
+
+## Relationships via 8th Light Network
+Known connections:
+- Existing contacts at the company (if any)
+- Client network relationships (if any)
+- Past engagements or touchpoints (if any)
+- NOTE: If no known relationships exist, state "No known direct relationships identified"
+
+## Industry Competitors
+Competitive landscape:
+- Direct competitors in their market space
+- Market positioning relative to competitors
+- Other target companies in the same industry
+
+## Boutique Consulting Partners
+Consulting ecosystem:
+- Consulting firms that have worked with this company [cite case studies]
+- Potential 8th Light competitors in this account
+- Relevant consultancy partnerships from news or case studies
+
+## Size of Product, Design, and Technology Teams
+Team structure:
+- Estimated size of product team
+- Estimated size of design team
+- Estimated size of technology/engineering team
+- NOTE: If specific numbers unavailable, provide estimates based on company size/industry norms
+
+## Solutions 8th Light Can Offer
+Actionable opportunities based on research:
+- How 8th Light's services align with company needs
+- Specific challenges 8th Light could address
+- Project opportunities based on company initiatives
+- Reference www.8thlight.com capabilities
+
+## Sources
+List all sources with citation numbers:
+1. [Source Title or URL] - Brief description
+2. [Source Title or URL] - Brief description
+(Continue numbering sequentially)
+
+</Mandatory Report Structure - 8th Light Company Profile>
 
 <Writing Guidelines>
-- **Clear headings**: Use markdown headers (##, ###)
+- **Professional tone**: Trustworthy and pragmatic
+- **Citations required**: Use [1], [2] after every factual claim
+- **Clear headings**: Use exact section names from structure above
 - **Bullet points**: For lists and key facts
-- **Citations**: Include [1], [2] source numbers after facts
-- **Professional tone**: Formal but approachable
-- **Accuracy first**: Only include verified information
-- **Comprehensive**: Cover all major aspects from research
-- **Concise**: Avoid unnecessary repetition
+- **Accuracy first**: Only verified, externally sourced information
+- **Honest gaps**: If information unavailable, state clearly ("Information not available")
+- **Actionable insights**: Focus on sales-relevant details
 </Writing Guidelines>
 
-<Source Citations>
-- End report with "## Sources" section
-- List all sources with citation numbers
-- Include source titles/descriptions when available
-- Format: `1. [Source Title](URL) - Brief description`
-</Source Citations>
-
 <Quality Checklist>
-✓ All major aspects of the profile covered
-✓ Information well-organized with clear structure
-✓ Facts supported by citations
-✓ No obvious gaps or missing information
-✓ Professional and polished presentation
-✓ Sources properly cited at the end
+✓ ALL 9 mandatory sections included in exact order
+✓ Executive summary will be generated separately (don't include here)
+✓ Facts supported by numbered citations
+✓ Professional sales prospecting tone
+✓ Actionable insights for 8th Light business development
+✓ Sources properly cited at end with sequential numbers
+✓ No fabricated information
 </Quality Checklist>
 
-Generate the comprehensive profile report now.
+Generate the comprehensive company profile report now following this EXACT structure.
 """
 
 # Executive summary generation prompt

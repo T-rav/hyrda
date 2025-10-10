@@ -186,46 +186,15 @@ def format_research_context(
 def detect_profile_type(query: str) -> str:
     """Detect the type of profile from the query.
 
+    This agent is scoped to company profiles only.
+
     Args:
         query: User query
 
     Returns:
-        Profile type: "company", "employee", or "project"
+        Profile type: always "company"
     """
-    query_lower = query.lower()
-
-    # Employee indicators
-    employee_keywords = [
-        "tell me about",
-        "who is",
-        "profile of",
-        "employee",
-        "person",
-        "team member",
-        "engineer",
-        "manager",
-        "developer",
-    ]
-
-    # Project indicators
-    project_keywords = [
-        "project",
-        "worked on",
-        "built",
-        "developed",
-        "initiative",
-        "program",
-    ]
-
-    # Check for project
-    if any(keyword in query_lower for keyword in project_keywords):
-        return "project"
-
-    # Check for employee
-    if any(keyword in query_lower for keyword in employee_keywords):
-        return "employee"
-
-    # Default to company
+    # Scoped to company profiles only
     return "company"
 
 
