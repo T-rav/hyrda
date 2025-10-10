@@ -4,18 +4,20 @@ LangGraph Studio provides visual debugging for the profile agent's deep research
 
 ## Installation
 
-Install the LangGraph CLI:
+Install the LangGraph CLI with in-memory storage:
+
+```bash
+pip install -U "langgraph-cli[inmem]"
+```
+
+Or install via the project dev dependencies:
 
 ```bash
 cd bot
 pip install -e ".[dev]"
 ```
 
-Or install just the CLI:
-
-```bash
-pip install langgraph-cli
-```
+**Note:** The `[inmem]` extra includes the in-memory storage backend required for local development.
 
 ## Running LangGraph Studio
 
