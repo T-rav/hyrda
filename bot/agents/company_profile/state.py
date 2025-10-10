@@ -4,10 +4,10 @@ Defines data structures that flow through the LangGraph workflow for
 profile research, enrichment, and report generation.
 """
 
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import MessageLikeRepresentation
-from langgraph.graph import MessagesState
+from langgraph.graph import add
 from pydantic import BaseModel
 
 
@@ -39,11 +39,19 @@ class ProfileResearchBrief(BaseModel):
 
 
 # Main agent state - tracks entire workflow
-class ProfileAgentState(MessagesState):
+# Use two-class pattern to make query required while keeping other fields optional
+class _ProfileAgentStateRequired(TypedDict):
+    """Required fields for ProfileAgentState."""
+
+    query: str
+
+
+class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     """Main state for company profile research workflow.
 
     Attributes:
-        messages: LangGraph MessagesState for conversation history
+        query: Original user query (REQUIRED from input)
+        messages: Conversation history
         supervisor_messages: Supervisor agent conversation
         research_brief: Generated research plan for the profile
         raw_notes: Unprocessed research data from all researchers
@@ -51,17 +59,16 @@ class ProfileAgentState(MessagesState):
         final_report: Generated comprehensive profile report
         executive_summary: Short summary for Slack display (3-5 bullets)
         profile_type: Type of profile (company, employee, project)
-        query: Original user query
     """
 
+    messages: Annotated[list[MessageLikeRepresentation], add]
     supervisor_messages: list[MessageLikeRepresentation]
     research_brief: str
     raw_notes: list[str]
     notes: list[str]
     final_report: str
     executive_summary: str
-    profile_type: str  # "company", "employee", "project"
-    query: str
+    profile_type: str
 
 
 # Supervisor state - manages research delegation
@@ -111,3 +118,12 @@ class ProfileAgentInputState(TypedDict):
     messages: list[MessageLikeRepresentation]
     query: str
     profile_type: str
+
+
+# Output state from main graph
+class ProfileAgentOutputState(TypedDict):
+    """Output from the profile agent graph."""
+
+    messages: list[MessageLikeRepresentation]
+    final_report: str
+    executive_summary: str

@@ -16,6 +16,7 @@ from agents.company_profile.nodes.researcher import researcher, researcher_tools
 from agents.company_profile.nodes.supervisor import supervisor, supervisor_tools
 from agents.company_profile.state import (
     ProfileAgentInputState,
+    ProfileAgentOutputState,
     ProfileAgentState,
     ResearcherOutputState,
     ResearcherState,
@@ -91,8 +92,12 @@ def build_profile_researcher() -> CompiledStateGraph:
     # Build supervisor subgraph
     supervisor_subgraph = build_supervisor_subgraph()
 
-    # Build main graph
-    profile_builder = StateGraph(ProfileAgentState, input_schema=ProfileAgentInputState)
+    # Build main graph with explicit input/output schemas
+    profile_builder = StateGraph(
+        ProfileAgentState,
+        input=ProfileAgentInputState,
+        output=ProfileAgentOutputState,
+    )
 
     # Add nodes
     profile_builder.add_node("clarify_with_user", clarify_with_user)
