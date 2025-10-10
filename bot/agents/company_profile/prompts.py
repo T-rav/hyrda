@@ -274,14 +274,13 @@ Answer the investigative questions above by:
 
 2. **deep_research**: Comprehensive research using Perplexity AI (EXPENSIVE - use strategically)
    - Returns expert-level answers with citations and synthesis
-   - **COST MANAGEMENT - Choose effort level wisely:**
-     - **'low'**: Quick overviews, initial understanding (~1-2 min)
-     - **'medium'**: Standard depth, balanced analysis (~2-3 min, default)
-     - **'high'**: Deep comprehensive investigation - ONLY for critical questions (~3-5 min)
+   - **COST MANAGEMENT:**
+     - Takes 2-3 minutes per query
+     - Use strategically for complex topics needing comprehensive analysis
    - **Strategy:** Use web_search to explore first, then deep_research for 5-10 key topics
-   - Example: After web_search finds tech debt mentions, use deep_research(effort='medium') to synthesize what this means for consulting opportunities
-   - Example: For key product strategy question, use deep_research(effort='high') if this is THE critical insight
-   - **Budget carefully** - each call costs money, especially at 'high' effort
+   - Example: After web_search finds tech debt mentions, use deep_research to synthesize what this means for consulting opportunities
+   - Example: For key product strategy question, use deep_research for comprehensive analysis
+   - **Budget carefully** - each call takes time and costs money
 
 3. **think_tool**: Reflect and plan your investigation strategy
    - Use BEFORE your first search to plan your approach
@@ -314,7 +313,7 @@ Answer the investigative questions above by:
 - web_search: "company CTO interview challenges" → Found CTO mentioning technical debt concerns
 - web_search: "company glassdoor engineering reviews" → Engineers mention rapid growth causing process issues
 - Think: "Found strong signals! Now I need synthesis - what does this mean for 8th Light? This is critical, worth using deep_research."
-- deep_research(effort='medium'): "What are the specific engineering challenges and scaling pains this company faces with their rapid 3x growth and AI product launch, and what consulting opportunities does this create?" → Comprehensive analysis with expert synthesis
+- deep_research: "What are the specific engineering challenges and scaling pains this company faces with their rapid 3x growth and AI product launch, and what consulting opportunities does this create?" → Comprehensive analysis with expert synthesis
 - ResearchComplete with insight: "Series B funded, launching AI product, scaling eng 3x, CTO worried about tech debt, engineers mention process gaps, expert analysis indicates prime opportunities for 8th Light's software excellence, process improvement, and team development services"
 
 **For each question you're investigating**:
@@ -508,9 +507,12 @@ DO NOT include:
 - **Professional tone**: Trustworthy and pragmatic
 - **Citations required**: Use [1], [2] after every factual claim
 - **Clear headings**: Use exact section names from structure above
-- **Bullet points**: For lists and key facts
+- **Narrative prose**: Write in flowing paragraphs with detailed analysis and context
+- **Use bullets sparingly**: Only for lists of 3+ items where prose would be clunky (e.g., source lists, executive names)
+- **Tell the story**: Connect findings with transition sentences, explain significance, provide context
 - **Surface BD insights**: Prominently feature product strategy, engineering health signals, challenges, and opportunities discovered
 - **Connect dots**: Link findings to 8th Light opportunities (e.g., "Rapid 3x eng growth suggests need for process improvement")
+- **Depth over breadth**: Provide detailed analysis with specific examples, quotes, and evidence
 - **Accuracy first**: Only verified, externally sourced information
 - **Honest gaps**: If information unavailable, state clearly ("Information not available")
 - **Actionable insights**: Every section should reveal opportunities for 8th Light
