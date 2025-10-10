@@ -225,6 +225,46 @@ async def researcher_tools(
                     }
                 )
 
+        elif tool_name == "scrape_url" and webcat_client:
+            # Execute URL scraping
+            try:
+                url = tool_args.get("url", "")
+                scrape_result = await webcat_client.scrape_url(url)
+
+                if scrape_result.get("success"):
+                    content = scrape_result.get("content", "")
+                    title = scrape_result.get("title", "")
+                    result_text = f"# Scraped: {title}\n\nURL: {url}\n\n{content}\n\n"
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": result_text,
+                        }
+                    )
+                    raw_notes.append(result_text)
+                    logger.info(f"Successfully scraped {len(content)} chars from {url}")
+                else:
+                    error = scrape_result.get("error", "Unknown error")
+                    tool_results.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_id,
+                            "content": f"Scrape failed: {error}",
+                        }
+                    )
+                    logger.warning(f"Scrape failed for {url}: {error}")
+
+            except Exception as e:
+                logger.error(f"Scrape URL error: {e}")
+                tool_results.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_id,
+                        "content": f"Scrape error: {str(e)}",
+                    }
+                )
+
         else:
             tool_results.append(
                 {

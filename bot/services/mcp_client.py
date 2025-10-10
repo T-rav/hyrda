@@ -215,12 +215,106 @@ class WebCatClient:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return []
 
+    async def scrape_url(self, url: str) -> dict[str, Any]:
+        """
+        Scrape full content from a specific URL
+
+        Args:
+            url: URL to scrape
+
+        Returns:
+            Dict with success, url, title, content (markdown)
+        """
+        if not self.enabled:
+            logger.warning("WebCat is disabled")
+            return {"success": False, "url": url, "error": "WebCat disabled"}
+
+        if not self.session:
+            await self.initialize()
+
+        if not self.mcp_session_id:
+            await self._init_mcp_session()
+            if not self.mcp_session_id:
+                logger.error("Cannot scrape without MCP session")
+                return {"success": False, "url": url, "error": "No MCP session"}
+
+        try:
+            import json
+
+            mcp_url = f"{self.base_url}/mcp"
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "scrape_url", "arguments": {"url": url}},
+                "id": 1,
+            }
+
+            logger.info(f"WebCat scraping: {url}")
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "mcp-session-id": self.mcp_session_id,
+            }
+
+            if self.settings.webcat_api_key:
+                headers["Authorization"] = f"Bearer {self.settings.webcat_api_key}"
+
+            result = {}
+            async with self.session.post(
+                mcp_url, json=payload, headers=headers
+            ) as response:  # type: ignore
+                response.raise_for_status()
+
+                # Parse SSE stream
+                async for line in response.content:
+                    line_str = line.decode("utf-8").strip()
+
+                    if line_str.startswith("data: "):
+                        data_str = line_str[6:]
+
+                        if data_str and data_str != "[DONE]":
+                            try:
+                                data = json.loads(data_str)
+
+                                if "result" in data:
+                                    result_data = data["result"]
+
+                                    # Extract scraped content
+                                    if isinstance(result_data, dict):
+                                        if "content" in result_data:
+                                            for item in result_data["content"]:
+                                                if item.get("type") == "text":
+                                                    text = item.get("text", "")
+                                                    try:
+                                                        result = json.loads(text)
+                                                    except json.JSONDecodeError:
+                                                        result = {"content": text}
+                                        else:
+                                            result = result_data
+                                    break
+
+                            except json.JSONDecodeError:
+                                continue
+
+            logger.info(
+                f"WebCat scraped {len(result.get('content', ''))} chars from: {url}"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"WebCat scrape failed: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {"success": False, "url": url, "error": str(e)}
+
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """
         Get OpenAI-compatible tool definitions for WebCat
 
         Returns:
-            List of tool definitions for function calling
+            List of tool definitions for function calling (search + scrape)
         """
         if not self.enabled:
             return []
@@ -232,13 +326,14 @@ class WebCatClient:
                     "name": "web_search",
                     "description": (
                         "Search the web for current, real-time information. "
+                        "Returns search results with titles, URLs, and snippets. "
+                        "Use this first to find relevant URLs, then use scrape_url to get full content.\n\n"
                         "Use this tool when the user asks about:\n"
                         "- Recent news, current events, or today's happenings\n"
                         "- Latest information about any topic\n"
                         "- Real-time data, stock prices, weather, sports scores\n"
                         "- Information that changes frequently or is time-sensitive\n"
-                        "- Anything requiring up-to-date knowledge beyond your training cutoff\n\n"
-                        "The tool returns relevant web search results with titles, URLs, and snippets."
+                        "- Anything requiring up-to-date knowledge beyond your training cutoff"
                     ),
                     "parameters": {
                         "type": "object",
@@ -260,7 +355,32 @@ class WebCatClient:
                         "required": ["query"],
                     },
                 },
-            }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "scrape_url",
+                    "description": (
+                        "Scrape and extract full content from a specific URL. "
+                        "Converts webpage to clean markdown format for analysis. "
+                        "Use this AFTER web_search to get detailed content from promising URLs.\n\n"
+                        "Best practices:\n"
+                        "- First use web_search to find relevant URLs\n"
+                        "- Then scrape the 2-3 most relevant URLs for full content\n"
+                        "- Scraping provides much more detail than search snippets"
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": "The full URL to scrape (must start with http:// or https://)",
+                            },
+                        },
+                        "required": ["url"],
+                    },
+                },
+            },
         ]
 
 
