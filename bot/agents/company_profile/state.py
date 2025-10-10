@@ -7,7 +7,7 @@ profile research, enrichment, and report generation.
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import MessageLikeRepresentation
-from langgraph.graph import add
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel
 
 
@@ -61,7 +61,7 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         profile_type: Type of profile (company, employee, project)
     """
 
-    messages: Annotated[list[MessageLikeRepresentation], add]
+    messages: Annotated[list[MessageLikeRepresentation], add_messages]
     supervisor_messages: list[MessageLikeRepresentation]
     research_brief: str
     raw_notes: list[str]
