@@ -339,12 +339,14 @@ class WebCatClient:
             import json
 
             mcp_url = f"{self.base_url}/mcp"
+            # WebCat 2.5.0 deep_research doesn't accept 'effort' parameter
+            # Remove it from arguments to avoid validation error
             payload = {
                 "jsonrpc": "2.0",
                 "method": "tools/call",
                 "params": {
                     "name": "deep_research",
-                    "arguments": {"query": query, "effort": effort},
+                    "arguments": {"query": query},
                 },
                 "id": 1,
             }
@@ -490,11 +492,8 @@ class WebCatClient:
                         "Returns detailed, well-researched answers with citations and sources. "
                         "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
                         "**IMPORTANT - Cost Management:**\n"
-                        "This tool is EXPENSIVE. Use effort levels strategically:\n"
-                        "- 'low': Quick overviews, initial exploration (1-2 min)\n"
-                        "- 'medium': Standard research, balanced depth (2-3 min)\n"
-                        "- 'high': Deep comprehensive analysis - ONLY when critical (3-5 min)\n\n"
-                        "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics.\n\n"
+                        "This tool is EXPENSIVE - takes 2-3 minutes per query. Use strategically:\n\n"
+                        "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics that need comprehensive analysis.\n\n"
                         "Best for:\n"
                         "- Complex research questions requiring comprehensive analysis\n"
                         "- Topics needing expert-level understanding and synthesis\n"
@@ -517,18 +516,6 @@ class WebCatClient:
                                     "Examples: 'What are the latest developments in quantum computing?', "
                                     "'How does CRISPR gene editing work and what are its ethical implications?', "
                                     "'Compare different approaches to carbon capture technology'"
-                                ),
-                            },
-                            "effort": {
-                                "type": "string",
-                                "enum": ["low", "medium", "high"],
-                                "default": "medium",
-                                "description": (
-                                    "Research effort level controlling depth and cost:\n"
-                                    "- 'low': Quick overview, initial exploration (~1-2 min, cheapest)\n"
-                                    "- 'medium': Standard depth, balanced research (~2-3 min, default)\n"
-                                    "- 'high': Maximum depth, comprehensive analysis (~3-5 min, most expensive)\n\n"
-                                    "Choose wisely based on importance and complexity."
                                 ),
                             },
                         },
