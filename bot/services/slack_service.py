@@ -1,6 +1,7 @@
 import logging
 import re
 import traceback
+from io import BytesIO
 from typing import Any
 
 from slack_sdk import WebClient
@@ -128,6 +129,57 @@ class SlackService:
             logger.error(f"Thread history error traceback: {traceback.format_exc()}")
 
         return messages, success
+
+    async def upload_file(
+        self,
+        channel: str,
+        file_content: BytesIO | bytes,
+        filename: str,
+        title: str | None = None,
+        initial_comment: str | None = None,
+        thread_ts: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Upload a file to a Slack channel or thread.
+
+        Args:
+            channel: Channel ID to upload to
+            file_content: File content as BytesIO or bytes
+            filename: Name of the file
+            title: Optional file title
+            initial_comment: Optional comment to post with file
+            thread_ts: Optional thread timestamp to upload in thread
+
+        Returns:
+            Response dict with file info, or None on error
+        """
+        try:
+            logger.info(f"Uploading file '{filename}' to channel {channel}")
+
+            response = await self.client.files_upload_v2(  # type: ignore[misc]
+                channel=channel,
+                file=file_content,
+                filename=filename,
+                title=title or filename,
+                initial_comment=initial_comment,
+                thread_ts=thread_ts,
+            )
+
+            if response.get("ok"):
+                file_info = response.get("file", {})
+                logger.info(
+                    f"File uploaded successfully: {file_info.get('name')} ({file_info.get('size')} bytes)"
+                )
+                return response  # type: ignore[no-any-return]
+            else:
+                logger.error(f"File upload failed: {response.get('error')}")
+                return None
+
+        except SlackApiError as e:
+            logger.error(f"Error uploading file: {e.response.get('error')}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error uploading file: {e}")
+            return None
 
     async def get_thread_info(self, channel: str, thread_ts: str) -> ThreadInfo:
         """Get information about a thread, including whether the bot is part of it"""

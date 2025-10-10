@@ -63,6 +63,8 @@ dependencies = [
     "python-docx>=0.8.11",  # Word documents
     "openpyxl>=3.1.0",  # Excel files
     "python-pptx>=0.6.21",  # PowerPoint files
+    "weasyprint>=60.0",  # PDF generation from HTML/markdown
+    "markdown>=3.5.0",  # Markdown to HTML conversion
 
     # Observability and monitoring
     "prometheus-client>=0.19.0",
