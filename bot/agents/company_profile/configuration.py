@@ -61,10 +61,10 @@ class ProfileConfiguration(BaseModel):
         16000  # For researcher tool calling with large payloads
     )
     compression_model_max_tokens: int = (
-        64000  # Half of 128K - handles massive deep_research payloads!
+        8000  # Conservative limit - 3 researchers × 8K = 24K (safe for 128K context)
     )
     final_report_model_max_tokens: int = (
-        32000  # Half of compression (64K) - rich, well-cited deep research reports
+        32000  # Rich, well-cited deep research reports with comprehensive citations
     )
 
     # Profile-specific settings
@@ -101,9 +101,9 @@ class ProfileConfiguration(BaseModel):
                 settings["research_model_max_tokens"] = min(16000, context_window // 8)
             if not os.getenv("COMPRESSION_MODEL_MAX_TOKENS"):
                 settings["compression_model_max_tokens"] = min(
-                    64000,
+                    8000,
                     context_window
-                    // 2,  # Half context window - massive payload support
+                    // 16,  # Conservative - supports 3+ concurrent researchers
                 )
             if not os.getenv("FINAL_REPORT_MODEL_MAX_TOKENS"):
                 settings["final_report_model_max_tokens"] = min(
