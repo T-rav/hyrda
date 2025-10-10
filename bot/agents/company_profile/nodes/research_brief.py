@@ -55,6 +55,7 @@ async def write_research_brief(
         )
 
     # Generate research brief using LangChain ChatOpenAI
+    generation = None
     try:
         from langchain_openai import ChatOpenAI
 
@@ -68,7 +69,6 @@ async def write_research_brief(
         )
 
         # Trace LLM generation
-        generation = None
         if langfuse_service and langfuse_service.client:
             generation = langfuse_service.client.start_generation(
                 name="research_brief_llm_call",
