@@ -5,6 +5,7 @@ Includes Langfuse tracing for observability.
 """
 
 import logging
+from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 
@@ -68,20 +69,26 @@ async def final_report_generation(
             )
         return {"final_report": "No research findings available to generate report."}
 
-    # Get LLM service
-    llm_service = config.get("configurable", {}).get("llm_service")
-    if not llm_service:
-        logger.error("No LLM service for final report")
-        if span:
-            span.end(level="ERROR", status_message="No LLM service available")
-        return {"final_report": "Error: No LLM service for final report"}
+    # Use LangChain ChatOpenAI directly
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    settings = Settings()
+    llm = ChatOpenAI(
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
+        temperature=0.7,
+        max_tokens=configuration.final_report_model_max_tokens,
+    )
 
     # Format research context
     notes_text = format_research_context(research_brief, notes, profile_type)
 
     # Build final report prompt
+    current_date = datetime.now().strftime("%B %d, %Y")
     system_prompt = prompts.final_report_generation_prompt.format(
-        profile_type=profile_type, notes=notes_text
+        profile_type=profile_type, notes=notes_text, current_date=current_date
     )
 
     # Try generation with retry on token limits
@@ -109,12 +116,11 @@ async def final_report_generation(
                     },
                 )
 
-            response = await llm_service.get_response(
-                messages=messages,
-                max_tokens=configuration.final_report_model_max_tokens,
+            # Use LangChain ChatOpenAI
+            response = await llm.ainvoke(messages)
+            final_report = (
+                response.content if hasattr(response, "content") else str(response)
             )
-
-            final_report = response if isinstance(response, str) else str(response)
             logger.info(f"Final report generated: {len(final_report)} characters")
 
             # End generation trace
@@ -143,13 +149,19 @@ async def final_report_generation(
                 summary_prompt = prompts.executive_summary_prompt.format(
                     full_report=final_report
                 )
-                summary_response = await llm_service.get_response(
-                    messages=[create_human_message(summary_prompt)],
-                    max_tokens=500,  # Short summary
+                # Use LangChain ChatOpenAI with lower max_tokens for summary
+                summary_llm = ChatOpenAI(
+                    model=settings.llm.model,
+                    api_key=settings.llm.api_key,
+                    temperature=0.7,
+                    max_tokens=500,
+                )
+                summary_response = await summary_llm.ainvoke(
+                    [create_human_message(summary_prompt)]
                 )
                 executive_summary = (
-                    summary_response
-                    if isinstance(summary_response, str)
+                    summary_response.content
+                    if hasattr(summary_response, "content")
                     else str(summary_response)
                 )
                 logger.info(

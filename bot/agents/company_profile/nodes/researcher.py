@@ -5,6 +5,7 @@ Includes comprehensive Langfuse tracing for observability.
 """
 
 import logging
+from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
@@ -57,28 +58,29 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
             },
         )
 
-    # Get LLM service and WebCat client from config
-    llm_service = config.get("configurable", {}).get("llm_service")
+    # Get WebCat client from config
     webcat_client = config.get("configurable", {}).get("webcat_client")
 
-    if not llm_service:
-        logger.error("No LLM service provided in config")
-        if span:
-            span.end(level="ERROR", status_message="No LLM service available")
-        return Command(
-            goto="compress_research",
-            update={
-                "compressed_research": "Error: No LLM service available",
-                "raw_notes": [],
-            },
-        )
+    # Use LangChain ChatOpenAI directly
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    settings = Settings()
+    llm = ChatOpenAI(
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
+        temperature=0.7,
+    )
 
     # Prepare system prompt
+    current_date = datetime.now().strftime("%B %d, %Y")
     system_prompt = prompts.research_system_prompt.format(
         research_topic=research_topic,
         profile_type=profile_type,
         max_tool_calls=configuration.max_react_tool_calls,
         tool_call_iterations=tool_call_iterations,
+        current_date=current_date,
     )
 
     # Get search tools
@@ -92,9 +94,10 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     ):
         messages.insert(0, create_system_message(system_prompt))
 
-    # Call LLM with tools
+    # Call LLM with tools using LangChain
     try:
         # Trace LLM generation
+        generation = None
         if langfuse_service and langfuse_service.client:
             generation = langfuse_service.client.start_generation(
                 name="researcher_llm_call",
@@ -106,31 +109,27 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
                 },
             )
 
-        response = await llm_service.get_response(
-            messages=messages,
-            tools=all_tools if search_tools else None,
-        )
+        # Bind tools to LLM if available
+        if search_tools:
+            llm_with_tools = llm.bind_tools(all_tools)
+            response = await llm_with_tools.ainvoke(messages)
+        else:
+            response = await llm.ainvoke(messages)
 
         # End LLM generation trace
-        if langfuse_service and langfuse_service.client and "generation" in locals():
-            generation.end(output={"response": response})
+        if generation:
+            generation.end(output={"response": str(response)})
 
-        # Check if response contains tool calls
-        if isinstance(response, dict) and "tool_calls" in response:
-            # Model wants to use tools
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.get("content", ""),
-                    "tool_calls": response["tool_calls"],
-                }
-            )
+        # Check if response contains tool calls (LangChain AIMessage format)
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            # Model wants to use tools - append AIMessage to messages
+            messages.append(response)
 
             if span:
                 span.end(
                     output={
                         "decision": "call_tools",
-                        "tool_count": len(response["tool_calls"]),
+                        "tool_count": len(response.tool_calls),
                     }
                 )
 
@@ -143,8 +142,10 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
             )
         else:
             # Model provided final response, compress and return
-            final_content = response if isinstance(response, str) else str(response)
-            messages.append({"role": "assistant", "content": final_content})
+            final_content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+            messages.append(response)
 
             if span:
                 span.end(
@@ -192,17 +193,17 @@ async def researcher_tools(
     tool_call_iterations = state["tool_call_iterations"]
     raw_notes = list(state.get("raw_notes", []))
 
-    # Get last message with tool calls
+    # Get last message with tool calls (LangChain AIMessage format)
     last_message = messages[-1]
-    if not isinstance(last_message, dict) or "tool_calls" not in last_message:
+    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         logger.warning("No tool calls found in last message")
         return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
-    tool_calls = last_message["tool_calls"]
+    tool_calls = last_message.tool_calls
 
     # Check for ResearchComplete signal
     for tool_call in tool_calls:
-        if tool_call.get("function", {}).get("name") == "ResearchComplete":
+        if tool_call.get("name") == "ResearchComplete":
             logger.info("Research complete signal received")
             return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
@@ -216,18 +217,19 @@ async def researcher_tools(
     tool_results = []
 
     for tool_call in tool_calls:
-        tool_name = tool_call.get("function", {}).get("name")
-        tool_args = tool_call.get("function", {}).get("arguments", {})
+        # LangChain tool_call format: dict with 'name', 'args', 'id'
+        tool_name = tool_call.get("name")
+        tool_args = tool_call.get("args", {})
         tool_id = tool_call.get("id", "unknown")
 
         logger.info(f"Executing tool: {tool_name}")
 
         if tool_name == "think_tool":
             # Execute reflection tool
+            from langchain_core.messages import ToolMessage
+
             result = think_tool.invoke(tool_args)
-            tool_results.append(
-                {"role": "tool", "tool_call_id": tool_id, "content": str(result)}
-            )
+            tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
 
         elif tool_name == "web_search" and webcat_client:
             # Execute web search
@@ -271,19 +273,19 @@ async def researcher_tools(
                     snippet = result.get("snippet", "No description")
                     result_text += f"{i}. **{title}**\n{snippet}\nSource: {url}\n\n"
 
+                from langchain_core.messages import ToolMessage
+
                 tool_results.append(
-                    {"role": "tool", "tool_call_id": tool_id, "content": result_text}
+                    ToolMessage(content=result_text, tool_call_id=tool_id)
                 )
                 raw_notes.append(result_text)
 
             except Exception as e:
                 logger.error(f"Web search error: {e}")
+                from langchain_core.messages import ToolMessage
+
                 tool_results.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": f"Search error: {str(e)}",
-                    }
+                    ToolMessage(content=f"Search error: {str(e)}", tool_call_id=tool_id)
                 )
 
         elif tool_name == "scrape_url" and webcat_client:
@@ -318,12 +320,10 @@ async def researcher_tools(
                         )
 
                     result_text = f"# Scraped: {title}\n\nURL: {url}\n\n{content}\n\n"
+                    from langchain_core.messages import ToolMessage
+
                     tool_results.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "content": result_text,
-                        }
+                        ToolMessage(content=result_text, tool_call_id=tool_id)
                     )
                     raw_notes.append(result_text)
                     logger.info(f"Successfully scraped {len(content)} chars from {url}")
@@ -343,32 +343,30 @@ async def researcher_tools(
                             },
                         )
 
+                    from langchain_core.messages import ToolMessage
+
                     tool_results.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tool_id,
-                            "content": f"Scrape failed: {error}",
-                        }
+                        ToolMessage(
+                            content=f"Scrape failed: {error}", tool_call_id=tool_id
+                        )
                     )
                     logger.warning(f"Scrape failed for {url}: {error}")
 
             except Exception as e:
                 logger.error(f"Scrape URL error: {e}")
+                from langchain_core.messages import ToolMessage
+
                 tool_results.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": f"Scrape error: {str(e)}",
-                    }
+                    ToolMessage(content=f"Scrape error: {str(e)}", tool_call_id=tool_id)
                 )
 
         else:
+            from langchain_core.messages import ToolMessage
+
             tool_results.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_id,
-                    "content": f"Tool {tool_name} not available",
-                }
+                ToolMessage(
+                    content=f"Tool {tool_name} not available", tool_call_id=tool_id
+                )
             )
 
     # Add tool results to messages
