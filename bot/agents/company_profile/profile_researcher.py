@@ -33,6 +33,7 @@ from agents.company_profile.utils import (
     remove_up_to_last_ai_message,
     think_tool,
 )
+from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +60,32 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     logger.info(f"Researcher working on: {research_topic[:50]}...")
 
+    # Start Langfuse span for researcher node
+    langfuse_service = get_langfuse_service()
+    span = None
+    if langfuse_service and langfuse_service.client:
+        span = langfuse_service.client.start_span(
+            name="deep_research_researcher",
+            input={
+                "research_topic": research_topic,
+                "profile_type": profile_type,
+                "tool_call_iterations": tool_call_iterations,
+            },
+            metadata={
+                "node_type": "researcher",
+                "iteration": tool_call_iterations,
+                "max_iterations": configuration.max_react_tool_calls,
+            },
+        )
+
     # Get LLM service and WebCat client from config
     llm_service = config.get("configurable", {}).get("llm_service")
     webcat_client = config.get("configurable", {}).get("webcat_client")
 
     if not llm_service:
         logger.error("No LLM service provided in config")
+        if span:
+            span.end(level="ERROR", status_message="No LLM service available")
         return Command(
             goto="compress_research",
             update={
@@ -94,10 +115,26 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     # Call LLM with tools
     try:
+        # Trace LLM generation
+        if langfuse_service and langfuse_service.client:
+            generation = langfuse_service.client.start_generation(
+                name="researcher_llm_call",
+                input={"messages": messages, "tools_available": len(all_tools)},
+                metadata={
+                    "research_topic": research_topic,
+                    "iteration": tool_call_iterations,
+                    "has_tools": bool(search_tools),
+                },
+            )
+
         response = await llm_service.get_response(
             messages=messages,
             tools=all_tools if search_tools else None,
         )
+
+        # End LLM generation trace
+        if langfuse_service and langfuse_service.client and "generation" in locals():
+            generation.end(output={"response": response})
 
         # Check if response contains tool calls
         if isinstance(response, dict) and "tool_calls" in response:
@@ -109,6 +146,14 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
                     "tool_calls": response["tool_calls"],
                 }
             )
+
+            if span:
+                span.end(
+                    output={
+                        "decision": "call_tools",
+                        "tool_count": len(response["tool_calls"]),
+                    }
+                )
 
             return Command(
                 goto="researcher_tools",
@@ -122,6 +167,14 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
             final_content = response if isinstance(response, str) else str(response)
             messages.append({"role": "assistant", "content": final_content})
 
+            if span:
+                span.end(
+                    output={
+                        "decision": "complete",
+                        "response_length": len(final_content),
+                    }
+                )
+
             return Command(
                 goto="compress_research",
                 update={
@@ -132,6 +185,8 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     except Exception as e:
         logger.error(f"Researcher error: {e}")
+        if span:
+            span.end(level="ERROR", status_message=str(e))
         return Command(
             goto="compress_research",
             update={
@@ -200,7 +255,34 @@ async def researcher_tools(
             try:
                 query = tool_args.get("query", "")
                 max_results = tool_args.get("max_results", 5)
+
+                # Trace tool execution
+                langfuse_service = get_langfuse_service()
+                if langfuse_service:
+                    langfuse_service.trace_tool_execution(
+                        tool_name="web_search",
+                        tool_input={"query": query, "max_results": max_results},
+                        tool_output={"status": "executing"},
+                        metadata={
+                            "context": "deep_research_researcher",
+                            "research_topic": state["research_topic"],
+                        },
+                    )
+
                 search_results = await webcat_client.search(query, max_results)
+
+                # Trace results
+                if langfuse_service:
+                    langfuse_service.trace_tool_execution(
+                        tool_name="web_search",
+                        tool_input={"query": query, "max_results": max_results},
+                        tool_output=search_results,
+                        metadata={
+                            "context": "deep_research_researcher",
+                            "results_count": len(search_results),
+                            "research_topic": state["research_topic"],
+                        },
+                    )
 
                 # Format results
                 result_text = f"Found {len(search_results)} results:\n\n"
@@ -229,11 +311,33 @@ async def researcher_tools(
             # Execute URL scraping
             try:
                 url = tool_args.get("url", "")
+
+                # Trace tool execution
+                langfuse_service = get_langfuse_service()
+
                 scrape_result = await webcat_client.scrape_url(url)
 
                 if scrape_result.get("success"):
                     content = scrape_result.get("content", "")
                     title = scrape_result.get("title", "")
+
+                    # Trace successful scrape
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="scrape_url",
+                            tool_input={"url": url},
+                            tool_output={
+                                "success": True,
+                                "title": title,
+                                "content_length": len(content),
+                            },
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "url": url,
+                            },
+                        )
+
                     result_text = f"# Scraped: {title}\n\nURL: {url}\n\n{content}\n\n"
                     tool_results.append(
                         {
@@ -246,6 +350,20 @@ async def researcher_tools(
                     logger.info(f"Successfully scraped {len(content)} chars from {url}")
                 else:
                     error = scrape_result.get("error", "Unknown error")
+
+                    # Trace failed scrape
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="scrape_url",
+                            tool_input={"url": url},
+                            tool_output={"success": False, "error": error},
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "url": url,
+                            },
+                        )
+
                     tool_results.append(
                         {
                             "role": "tool",
