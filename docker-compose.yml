@@ -126,9 +126,9 @@ services:
     networks:
       - insightmesh
 
-  # WebCat MCP Server (Web Search) - v2.5.0+
+  # WebCat MCP Server (Search/Scrape/Research) - v2.5.0+
   webcat:
-    image: tmfrisinger/webcat:2.5.0
+    image: tmfrisinger/webcat:2.5.1
     container_name: insightmesh-webcat
     restart: unless-stopped
     ports:

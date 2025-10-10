@@ -172,6 +172,10 @@ class MCPSettings(BaseSettings):
     webcat_api_key: str | None = Field(
         default=None, description="WebCat API key for bearer token authentication"
     )
+    webcat_deep_research_enabled: bool = Field(
+        default=True,
+        description="Enable deep_research tool (requires Perplexity API key)",
+    )
 
     model_config = ConfigDict(env_prefix="MCP_")  # type: ignore[assignment,typeddict-unknown-key]
 

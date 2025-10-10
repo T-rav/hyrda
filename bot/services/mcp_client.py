@@ -416,12 +416,12 @@ class WebCatClient:
         Get OpenAI-compatible tool definitions for WebCat
 
         Returns:
-            List of tool definitions for function calling (search + scrape + deep_research)
+            List of tool definitions for function calling (search + scrape + optional deep_research)
         """
         if not self.enabled:
             return []
 
-        return [
+        tools = [
             {
                 "type": "function",
                 "function": {
@@ -483,7 +483,11 @@ class WebCatClient:
                     },
                 },
             },
-            {
+        ]
+
+        # Conditionally add deep_research tool if enabled
+        if self.settings.webcat_deep_research_enabled:
+            deep_research_tool = {
                 "type": "function",
                 "function": {
                     "name": "deep_research",
@@ -522,8 +526,14 @@ class WebCatClient:
                         "required": ["query"],
                     },
                 },
-            },
-        ]
+            }
+            tools.append(deep_research_tool)
+        else:
+            logger.info(
+                "deep_research tool disabled via MCP_WEBCAT_DEEP_RESEARCH_ENABLED=false"
+            )
+
+        return tools
 
 
 # Singleton instance
