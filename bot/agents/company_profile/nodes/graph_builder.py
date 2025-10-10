@@ -102,6 +102,8 @@ def build_profile_researcher() -> CompiledStateGraph:
 
     # Add edges
     profile_builder.add_edge(START, "clarify_with_user")
+    profile_builder.add_edge("clarify_with_user", "write_research_brief")
+    profile_builder.add_edge("write_research_brief", "research_supervisor")
     profile_builder.add_edge("research_supervisor", "final_report_generation")
     profile_builder.add_edge("final_report_generation", END)
 
