@@ -75,9 +75,10 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
     )
 
     # Create compression messages
+    # Use last 10 messages to capture deep_research results which can be large
     compression_messages = [
         create_system_message(system_prompt),
-        create_human_message("\n\n".join([str(msg) for msg in messages[-5:]])),
+        create_human_message("\n\n".join([str(msg) for msg in messages[-10:]])),
     ]
 
     # Try compression with retry on token limits
