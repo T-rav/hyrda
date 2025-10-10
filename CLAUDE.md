@@ -51,8 +51,21 @@ make quality      # Run complete pipeline: linting + type checking + tests
 
 ### Docker
 ```bash
-make docker-build # Build Docker image
-make docker-run   # Run Docker container with .env
+# Full stack (bot + services including WebCat)
+docker compose up -d
+
+# Individual services
+docker compose up -d webcat    # Start WebCat MCP server
+docker compose up -d bot       # Start Slack bot
+docker compose up -d qdrant    # Start vector database
+
+# Build and run
+make docker-build              # Build Docker images
+make docker-run                # Run Docker container with .env
+
+# Logs
+docker logs -f insightmesh-bot      # Bot logs
+docker logs -f insightmesh-webcat   # WebCat search logs
 ```
 
 ### Document Ingestion - Google Drive Only
@@ -111,6 +124,19 @@ EMBEDDING_MODEL=text-embedding-3-small
 # Retrieval Settings
 RAG_MAX_CHUNKS=5
 RAG_SIMILARITY_THRESHOLD=0.7
+```
+
+### MCP (Model Context Protocol) - Web Search
+```bash
+# WebCat MCP Server for web search
+MCP_WEBCAT_ENABLED=true
+MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
+MCP_WEBCAT_PORT=3000
+
+# Search Provider API Key (choose one)
+BRAVE_API_KEY=your-brave-search-api-key  # Get from https://brave.com/search/api/
+# SERPER_API_KEY=your-serper-key  # Alternative: https://serper.dev/
+# GOOGLE_API_KEY=your-google-key  # Alternative: Google Custom Search
 ```
 
 ### Quick Setup Examples
@@ -209,13 +235,22 @@ Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictiona
 - **Context Integration**: Retrieved chunks enhance LLM responses
 - **Metadata Support**: Track document sources and properties
 - **Configurable Retrieval**: Adjust chunk count and similarity thresholds
+- **Web Search (MCP)**: Automatic web search via WebCat MCP server for current events
 
 #### How It Works
 1. **Ingestion**: Documents are chunked and embedded into vector database
 2. **Query Processing**: User questions are embedded for similarity search
 3. **Retrieval**: Most relevant chunks are retrieved based on similarity
 4. **Augmentation**: Retrieved context is added to the LLM prompt
-5. **Generation**: LLM generates response with enhanced context
+5. **Web Search** (if needed): LLM can trigger web search for current information
+6. **Generation**: LLM generates response with enhanced context
+
+#### MCP (Model Context Protocol) Integration
+- **WebCat Server**: Docker service providing web search capabilities
+- **Function Calling**: LLM automatically decides when to search the web
+- **Search Providers**: Supports Brave Search, Serper, Google Custom Search
+- **Langfuse Tracing**: All tool calls are traced for observability
+- **Auto-discovery**: Bot detects when queries need real-time web data
 
 ## Testing Framework & Quality Standards
 

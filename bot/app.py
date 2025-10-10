@@ -17,6 +17,7 @@ from health import HealthChecker
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
+from services.mcp_client import initialize_webcat_client
 from services.metrics_service import initialize_metrics_service
 from services.prompt_service import initialize_prompt_service
 from services.slack_service import SlackService
@@ -125,6 +126,15 @@ async def run():
         await llm_service.initialize()
         logger.info("LLM service initialized")
 
+        # Initialize WebCat MCP client for web search
+        if settings.mcp.webcat_enabled:
+            await initialize_webcat_client(settings.mcp)
+            logger.info(
+                f"✅ WebCat MCP client initialized at {settings.mcp.webcat_host}:{settings.mcp.webcat_port}"
+            )
+        else:
+            logger.info("WebCat MCP client disabled")
+
         # Start health check server
         langfuse_service = get_langfuse_service()
         # If global langfuse service is None, get it directly from LLM service
@@ -202,6 +212,17 @@ async def run():
                 await llm_service.close()
             except Exception as e:
                 logger.error(f"Error closing LLM service: {e}")
+
+        # Close WebCat MCP client
+        from services.mcp_client import get_webcat_client
+
+        webcat_client = get_webcat_client()
+        if webcat_client:
+            try:
+                await webcat_client.close()
+                logger.info("WebCat MCP client closed")
+            except Exception as e:
+                logger.error(f"Error closing WebCat client: {e}")
 
         if "conversation_cache" in locals() and conversation_cache:
             try:

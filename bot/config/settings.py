@@ -138,6 +138,21 @@ class RAGSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
+class MCPSettings(BaseSettings):
+    """MCP (Model Context Protocol) server settings"""
+
+    webcat_enabled: bool = Field(
+        default=True, description="Enable WebCat web search MCP server"
+    )
+    webcat_host: str = Field(default="localhost", description="WebCat MCP server host")
+    webcat_port: int = Field(default=3000, description="WebCat MCP server port")
+    webcat_api_key: str | None = Field(
+        default=None, description="WebCat API key for bearer token authentication"
+    )
+
+    model_config = ConfigDict(env_prefix="MCP_")  # type: ignore[assignment,typeddict-unknown-key]
+
+
 class LangfuseSettings(BaseSettings):
     """Langfuse observability settings"""
 
@@ -182,6 +197,7 @@ class Settings(BaseSettings):
     vector: VectorSettings = Field(default_factory=VectorSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
+    mcp: MCPSettings = Field(default_factory=MCPSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     debug: bool = False
     log_level: str = "INFO"
