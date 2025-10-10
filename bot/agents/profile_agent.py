@@ -123,37 +123,86 @@ class ProfileAgent(BaseAgent):
             # Execute deep research workflow with streaming
             logger.info("Invoking profile researcher graph with streaming...")
 
-            # Map node names to user-friendly messages
+            # Map node names to user-friendly messages (in-progress and completed)
             node_messages = {
-                "clarify_with_user": "✅ Query clarified",
-                "write_research_brief": "📋 Research plan created",
-                "research_supervisor": "🔬 Conducting parallel research...",
-                "final_report_generation": "📝 Generating final report...",
+                "clarify_with_user": {
+                    "start": "🤔 Clarifying query...",
+                    "complete": "✅ Query clarified",
+                },
+                "write_research_brief": {
+                    "start": "📝 Creating research plan...",
+                    "complete": "✅ Research plan created",
+                },
+                "research_supervisor": {
+                    "start": "🔬 Conducting parallel research...",
+                    "complete": "✅ Research complete",
+                },
+                "final_report_generation": {
+                    "start": "📊 Generating final report...",
+                    "complete": "✅ Report generated",
+                },
             }
 
             # Track completed steps
+            # LangGraph events fire AFTER nodes complete, so we track what's done
             completed_steps = []
+            node_order = [
+                "write_research_brief",
+                "research_supervisor",
+                "final_report_generation",
+            ]
+
+            # Show first node as starting immediately
+            first_node_started = False
 
             result = None
             async for event in self.graph.astream(input_state, graph_config):
                 logger.debug(f"Graph event: {event}")
 
+                # Show first node starting on first event
+                if (
+                    not first_node_started
+                    and slack_service
+                    and channel
+                    and progress_msg_ts
+                ):
+                    first_node_started = True
+                    await slack_service.update_message(
+                        channel=channel,
+                        ts=progress_msg_ts,
+                        text=f"🔍 *Deep Research Progress*\n\n{node_messages[node_order[0]]['start']}",
+                    )
+
                 # Extract node name from event
                 if isinstance(event, dict):
                     for node_name, _ in event.items():
                         if node_name in node_messages:
-                            # Add step to completed list
-                            completed_steps.append(node_messages[node_name])
+                            # This node just completed
+                            completed_steps.append(node_messages[node_name]["complete"])
+                            logger.info(f"Completed node: {node_name}")
 
-                            # Update progress message with all steps
+                            # Show next in-progress step if available
                             if slack_service and channel and progress_msg_ts:
-                                steps_text = "\n".join(completed_steps)
+                                # Find next step to show as in-progress
+                                all_steps = list(completed_steps)
+
+                                # Add next step as in-progress if there is one
+                                try:
+                                    current_index = node_order.index(node_name)
+                                    if current_index + 1 < len(node_order):
+                                        next_node = node_order[current_index + 1]
+                                        all_steps.append(
+                                            node_messages[next_node]["start"]
+                                        )
+                                except (ValueError, IndexError):
+                                    pass
+
+                                steps_text = "\n".join(all_steps)
                                 await slack_service.update_message(
                                     channel=channel,
                                     ts=progress_msg_ts,
                                     text=f"🔍 *Deep Research Progress*\n\n{steps_text}",
                                 )
-                            logger.info(f"Completed node: {node_name}")
 
                 # Store final result
                 result = event
@@ -231,8 +280,8 @@ class ProfileAgent(BaseAgent):
                 response = executive_summary
                 logger.info("Sending executive summary (PDF attached)")
             else:
-                # Fallback to full markdown report
-                response = f"# {profile_type.title()} Profile\n\n{final_report}"
+                # Fallback to full markdown report (without profile type header)
+                response = final_report
                 logger.info("Sending full markdown report (no PDF)")
 
             return {

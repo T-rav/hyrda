@@ -56,15 +56,18 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
             },
         )
 
-    # Get LLM service
-    llm_service = config.get("configurable", {}).get("llm_service")
-    if not llm_service:
-        if span:
-            span.end(level="ERROR", status_message="No LLM service available")
-        return {
-            "compressed_research": "Error: No LLM service for compression",
-            "raw_notes": raw_notes,
-        }
+    # Use LangChain ChatOpenAI directly
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    settings = Settings()
+    llm = ChatOpenAI(
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
+        temperature=0.7,
+        max_tokens=configuration.compression_model_max_tokens,
+    )
 
     # Build compression prompt
     system_prompt = prompts.compress_research_system_prompt.format(
@@ -96,12 +99,11 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
                     },
                 )
 
-            response = await llm_service.get_response(
-                messages=compression_messages,
-                max_tokens=configuration.compression_model_max_tokens,
+            # Use LangChain ChatOpenAI
+            response = await llm.ainvoke(compression_messages)
+            compressed = (
+                response.content if hasattr(response, "content") else str(response)
             )
-
-            compressed = response if isinstance(response, str) else str(response)
             logger.info(f"Research compressed to {len(compressed)} characters")
 
             # End generation trace

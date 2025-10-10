@@ -26,6 +26,8 @@ Respond with:
 # Research brief generation
 transform_messages_into_research_topic_prompt = """You are an expert Business Development research planner creating company profiles for sales prospecting.
 
+**Current Date: {current_date}**
+
 Transform the user's query into a structured research brief following the 8th Light company profiling methodology.
 
 <User Query>
@@ -101,6 +103,8 @@ Generate a comprehensive research brief that structures the research work around
 # Lead researcher (supervisor) prompt
 lead_researcher_prompt = """You are the **Lead Researcher** coordinating a company profile research project.
 
+**Current Date: {current_date}**
+
 <Your Role>
 Break down the research brief into parallel research tasks and delegate to specialized researchers.
 Each researcher will gather specific information and return synthesized findings.
@@ -165,6 +169,8 @@ Notes Gathered: {notes_count}
 
 # Individual researcher prompt
 research_system_prompt = """You are a specialized researcher gathering information for a company profile.
+
+**Current Date: {current_date}**
 
 <Your Task>
 {research_topic}
@@ -249,6 +255,8 @@ Structured prose with clear headings and citations. Be comprehensive but concise
 
 # Final report generation prompt
 final_report_generation_prompt = """You are an expert Business Development associate generating a company profile for sales prospecting.
+
+**Current Date: {current_date}**
 
 <Profile Type>
 {profile_type}
@@ -346,9 +354,9 @@ List all sources with citation numbers:
 </Writing Guidelines>
 
 <Quality Checklist>
-✓ ALL 9 mandatory sections included in exact order
+✓ ALL 10 mandatory sections included in exact order (including Sources)
 ✓ Executive summary will be generated separately (don't include here)
-✓ Facts supported by numbered citations
+✓ Facts supported by numbered citations [1], [2], etc.
 ✓ Professional sales prospecting tone
 ✓ Actionable insights for 8th Light business development
 ✓ Sources properly cited at end with sequential numbers
@@ -407,6 +415,8 @@ For **Project Profiles**, highlight:
 • [Key point 5 - if needed]
 
 📎 _Full detailed report attached as PDF_
+
+IMPORTANT: Do NOT include a profile type heading (like "Company Profile", "Employee Profile", etc.) in your output. Start directly with the "📊 **Executive Summary**" line.
 </Output Format>
 
 Generate the executive summary now.

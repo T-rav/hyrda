@@ -5,6 +5,7 @@ Includes Langfuse tracing for observability.
 """
 
 import logging
+from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
@@ -53,17 +54,19 @@ async def write_research_brief(
             },
         )
 
-    llm_service = config.get("configurable", {}).get("llm_service")
-    if not llm_service:
-        logger.error("No LLM service for research brief")
-        if span:
-            span.end(level="ERROR", status_message="No LLM service available")
-        return Command(
-            goto=END, update={"final_report": "Error: No LLM service available"}
+    # Generate research brief using LangChain ChatOpenAI
+    try:
+        from langchain_openai import ChatOpenAI
+
+        from config.settings import Settings
+
+        settings = Settings()
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            api_key=settings.llm.api_key,
+            temperature=0.7,
         )
 
-    # Generate research brief
-    try:
         # Trace LLM generation
         generation = None
         if langfuse_service and langfuse_service.client:
@@ -75,14 +78,15 @@ async def write_research_brief(
                 },
             )
 
+        current_date = datetime.now().strftime("%B %d, %Y")
         prompt = prompts.transform_messages_into_research_topic_prompt.format(
-            query=query, profile_type=profile_type
+            query=query, profile_type=profile_type, current_date=current_date
         )
-        response = await llm_service.get_response(
-            messages=[create_human_message(prompt)],
-        )
+        response = await llm.ainvoke([create_human_message(prompt)])
 
-        research_brief = response if isinstance(response, str) else str(response)
+        research_brief = (
+            response.content if hasattr(response, "content") else str(response)
+        )
         logger.info(f"Research brief generated: {len(research_brief)} characters")
 
         # End generation trace

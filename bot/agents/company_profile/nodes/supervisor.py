@@ -6,6 +6,7 @@ Includes Langfuse tracing for observability.
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
@@ -82,6 +83,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     )
 
     # Build supervisor prompt
+    current_date = datetime.now().strftime("%B %d, %Y")
     system_prompt = prompts.lead_researcher_prompt.format(
         research_brief=research_brief,
         profile_type=profile_type,
@@ -89,6 +91,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         max_iterations=configuration.max_researcher_iterations,
         research_iterations=research_iterations,
         notes_count=len(notes),
+        current_date=current_date,
     )
 
     # Prepare messages
