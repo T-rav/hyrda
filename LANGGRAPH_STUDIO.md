@@ -40,15 +40,17 @@ This will:
 - Understand the workflow visually
 
 ### 2. **Run Test Queries**
-In the Studio UI, provide input with just the query:
 
+**UI Note:** The Studio UI shows ALL state fields in the input form (query, messages, supervisor_messages, research_brief, raw_notes, notes, final_report, executive_summary, profile_type). This is normal - it's showing the complete state schema. **Only fill in the fields you want to provide as input** - leave the rest empty.
+
+**Minimal input (recommended):**
 ```json
 {
   "query": "Tell me about Tesla"
 }
 ```
 
-Optional fields (auto-detected if not provided):
+**Optional fields (auto-detected if not provided):**
 ```json
 {
   "query": "Tell me about Tesla",
@@ -56,6 +58,14 @@ Optional fields (auto-detected if not provided):
   "profile_type": "company"
 }
 ```
+
+**Important:** Leave these fields empty - they are internal state populated during execution:
+- `supervisor_messages`
+- `research_brief`
+- `raw_notes`
+- `notes`
+- `final_report`
+- `executive_summary`
 
 ### 3. **Step Through Execution**
 - Watch each node execute in real-time
