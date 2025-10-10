@@ -147,6 +147,7 @@ class ProfileAgent(BaseAgent):
             # LangGraph events fire AFTER nodes complete, so we track what's done
             completed_steps = []
             node_order = [
+                "clarify_with_user",
                 "write_research_brief",
                 "research_supervisor",
                 "final_report_generation",
