@@ -493,7 +493,7 @@ class WebCatClient:
                         "- 'low': Quick overviews, initial exploration (1-2 min)\n"
                         "- 'medium': Standard research, balanced depth (2-3 min)\n"
                         "- 'high': Deep comprehensive analysis - ONLY when critical (3-5 min)\n\n"
-                        "**Strategy:** Start with web_search to explore, then use deep_research on 1-2 key topics.\n\n"
+                        "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics.\n\n"
                         "Best for:\n"
                         "- Complex research questions requiring comprehensive analysis\n"
                         "- Topics needing expert-level understanding and synthesis\n"
