@@ -408,11 +408,13 @@ Brief summary covering:
 - Market position and industry sector
 
 ## Company Priorities for Current/Next Year
-Strategic initiatives and goals from:
-- Shareholder presentations and 10-K filings [cite sources]
-- Annual reports and earnings calls [cite sources]
-- Executive interviews and statements [cite sources]
-- News coverage of future direction [cite sources]
+Strategic initiatives and goals including:
+- **Key product initiatives and roadmap** [cite sources]
+- Digital transformation or technology investments [cite sources]
+- Market expansion or new business lines [cite sources]
+- From: shareholder presentations, 10-K filings, annual reports, earnings calls [cite sources]
+- Executive interviews and statements about priorities [cite sources]
+- **Note any execution challenges or constraints mentioned** [cite sources]
 
 ## Recent News Stories (Past 12 Months)
 Key developments including:
@@ -424,7 +426,9 @@ Key developments including:
 ## Executive Team
 Leadership structure:
 - C-suite executives (names, titles, brief backgrounds)
-- Key business unit leaders
+- **What strategic priorities has each leader publicly championed?** [cite sources]
+- **Any mentioned challenges or pain points?** [cite sources]
+- Key business unit leaders (especially product, engineering, technology)
 - Organizational structure notes
 
 ## Relationships via 8th Light Network
@@ -447,18 +451,28 @@ Consulting ecosystem:
 - Relevant consultancy partnerships from news or case studies
 
 ## Size of Product, Design, and Technology Teams
-Team structure:
+Team structure and health signals:
 - Estimated size of product team
 - Estimated size of design team
 - Estimated size of technology/engineering team
+- **Growth trajectory**: rapid hiring, stable, or contracting? [cite sources]
+- **Engineering health signals** if available:
+  - Technical debt or quality concerns mentioned by leadership [cite sources]
+  - Glassdoor engineering team reviews or sentiment [cite sources]
+  - Notable hiring patterns (senior hires, DevOps, QA roles) [cite sources]
+  - Any public statements about engineering challenges or process improvements [cite sources]
 - NOTE: If specific numbers unavailable, provide estimates based on company size/industry norms
 
 ## Solutions 8th Light Can Offer
-Actionable opportunities based on research:
-- How 8th Light's services align with company needs
-- Specific challenges 8th Light could address
-- Project opportunities based on company initiatives
+Actionable opportunities based on research findings:
+- **Product development opportunities**: Based on product roadmap, delays, or quality concerns
+- **Engineering excellence**: Based on technical debt, scaling challenges, or quality issues discovered
+- **Process improvement**: Based on rapid growth, team scaling, or execution challenges mentioned
+- **Team development**: Based on hiring patterns, team growth, or capability gaps
+- How 8th Light's services align with discovered needs
+- Specific, concrete project opportunities
 - Reference www.8thlight.com capabilities
+- **Connect back to specific findings**: "Given [finding X] and [finding Y], 8th Light could..."
 
 ## Sources
 List all sources with citation numbers:
@@ -473,9 +487,11 @@ List all sources with citation numbers:
 - **Citations required**: Use [1], [2] after every factual claim
 - **Clear headings**: Use exact section names from structure above
 - **Bullet points**: For lists and key facts
+- **Surface BD insights**: Prominently feature product strategy, engineering health signals, challenges, and opportunities discovered
+- **Connect dots**: Link findings to 8th Light opportunities (e.g., "Rapid 3x eng growth suggests need for process improvement")
 - **Accuracy first**: Only verified, externally sourced information
 - **Honest gaps**: If information unavailable, state clearly ("Information not available")
-- **Actionable insights**: Focus on sales-relevant details
+- **Actionable insights**: Every section should reveal opportunities for 8th Light
 </Writing Guidelines>
 
 <Quality Checklist>
