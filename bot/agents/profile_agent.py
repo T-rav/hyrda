@@ -262,7 +262,15 @@ class ProfileAgent(BaseAgent):
                 style=self.config.pdf_style,
             )
 
-            # Upload PDF to Slack if available
+            # Prepare response text (executive summary or full report)
+            if executive_summary:
+                response_text = executive_summary
+                logger.info("Using executive summary as response")
+            else:
+                response_text = final_report
+                logger.info("Using full markdown report as response")
+
+            # Upload PDF to Slack with summary as initial comment
             pdf_uploaded = False
             if slack_service and channel:
                 try:
@@ -271,32 +279,39 @@ class ProfileAgent(BaseAgent):
                         profile_type=profile_type,
                     )
 
+                    # Use executive summary as initial comment if available
+                    # This ensures PDF and summary appear together (summary first, then PDF below)
+                    initial_comment = executive_summary if executive_summary else None
+
                     upload_response = await slack_service.upload_file(
                         channel=channel,
                         file_content=pdf_bytes,
                         filename=pdf_filename,
                         title=pdf_title,
-                        initial_comment=None,  # Summary sent separately
+                        initial_comment=initial_comment,
                         thread_ts=context.get("thread_ts"),
                     )
 
                     if upload_response:
                         pdf_uploaded = True
-                        logger.info(f"PDF report uploaded: {pdf_filename}")
+                        logger.info(f"PDF report uploaded with summary: {pdf_filename}")
                     else:
                         logger.warning("Failed to upload PDF to Slack")
 
                 except Exception as pdf_error:
                     logger.error(f"Error uploading PDF: {pdf_error}")
 
-            # Use executive summary if available and PDF uploaded, otherwise full report
+            # If PDF was uploaded with executive summary, return empty response
+            # (summary already posted as initial_comment)
+            # Otherwise return the full response text
             if executive_summary and pdf_uploaded:
-                response = executive_summary
-                logger.info("Sending executive summary (PDF attached)")
+                response = ""  # Already posted with PDF upload
+                logger.info(
+                    "Executive summary posted with PDF, returning empty response"
+                )
             else:
-                # Fallback to full markdown report (without profile type header)
-                response = final_report
-                logger.info("Sending full markdown report (no PDF)")
+                response = response_text
+                logger.info("Returning response text (PDF not uploaded or no summary)")
 
             return {
                 "response": response,
