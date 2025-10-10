@@ -78,6 +78,7 @@ class MockResponseFactory:
         response = Mock()
         response.choices = [Mock()]
         response.choices[0].message.content = content
+        response.choices[0].message.tool_calls = None  # No tool calls by default
         response.usage = Mock()
         response.usage.prompt_tokens = prompt_tokens
         response.usage.completion_tokens = completion_tokens
@@ -196,6 +197,7 @@ class TestOpenAIProvider:
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = None
+        mock_response.choices[0].message.tool_calls = None
         mock_response.usage = Mock()
         mock_response.usage.prompt_tokens = 10
         mock_response.usage.completion_tokens = 0

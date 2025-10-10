@@ -146,6 +146,9 @@ class MCPSettings(BaseSettings):
     )
     webcat_host: str = Field(default="localhost", description="WebCat MCP server host")
     webcat_port: int = Field(default=3000, description="WebCat MCP server port")
+    webcat_api_key: str | None = Field(
+        default=None, description="WebCat API key for bearer token authentication"
+    )
 
     model_config = ConfigDict(env_prefix="MCP_")  # type: ignore[assignment,typeddict-unknown-key]
 
