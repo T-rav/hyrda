@@ -43,9 +43,17 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     research_iterations = state.get("research_iterations", 0)
-    research_brief = state["research_brief"]
+    research_brief = state.get("research_brief", "")
     notes = state.get("notes", [])
     profile_type = state.get("profile_type", "company")
+
+    # Validate research_brief exists
+    if not research_brief:
+        logger.error("research_brief is missing or empty in supervisor state")
+        return Command(
+            goto=END,
+            update={"final_report": "Error: research brief not found in state"},
+        )
 
     logger.info(f"Supervisor iteration {research_iterations}")
 
