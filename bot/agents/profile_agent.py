@@ -183,7 +183,7 @@ class ProfileAgent(BaseAgent):
 
                 # Extract node name from event
                 if isinstance(event, dict):
-                    for node_name, _ in event.items():
+                    for node_name, node_data in event.items():
                         if node_name in node_messages:
                             # Calculate duration for this node
                             end_time = time.time()
@@ -191,15 +191,26 @@ class ProfileAgent(BaseAgent):
                             duration = end_time - start_time if start_time else 0
                             node_durations[node_name] = duration
 
-                            # This node just completed - add duration to completion message
+                            # Build completion message with duration
                             duration_text = (
                                 f" ({duration:.1f}s)" if duration > 0 else ""
                             )
+
+                            # Add summary for research_supervisor node
+                            summary_text = ""
+                            if node_name == "research_supervisor" and isinstance(
+                                node_data, dict
+                            ):
+                                notes = node_data.get("notes", [])
+                                raw_notes = node_data.get("raw_notes", [])
+                                if notes or raw_notes:
+                                    summary_text = f" - {len(notes)} researchers, {len(raw_notes)} sources"
+
                             completed_steps.append(
-                                f"{node_messages[node_name]['complete']}{duration_text}"
+                                f"{node_messages[node_name]['complete']}{duration_text}{summary_text}"
                             )
                             logger.info(
-                                f"✅ Completed node: {node_name} in {duration:.1f}s"
+                                f"✅ Completed node: {node_name} in {duration:.1f}s{summary_text}"
                             )
 
                             # Show next in-progress step if available
