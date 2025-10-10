@@ -89,7 +89,7 @@ help:
 	@echo "  tasks-ui        Build React tasks dashboard UI"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  db-start        🐳 Start MySQL databases in Docker"
+	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
 	@echo "  db-stop         🛑 Stop MySQL databases"
 	@echo "  db-migrate      📋 Generate new migration files"
 	@echo "  db-upgrade      ⬆️  Apply pending migrations"
@@ -138,7 +138,7 @@ start-redis:
 	fi
 	@echo "$(GREEN)✅ Redis service started$(RESET)"
 
-run: check-env db-start start-redis
+run: check-env start-redis
 	@echo "$(GREEN)🤖 Starting AI Slack Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
@@ -269,7 +269,6 @@ docker-prod:
 
 docker-stop:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.elasticsearch.yml down
-	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.mysql.yml down
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 
 # Full Docker Stack Commands
@@ -415,7 +414,7 @@ start-core: docker-build docker-up
 start-docker: start
 
 # Legacy local start
-start-local: install-dev health-ui check-env db-start start-redis
+start-local: install-dev health-ui check-env start-redis
 	@echo "$(GREEN)🎯 ================================$(RESET)"
 	@echo "$(GREEN)🚀 STARTING AI SLACK BOT WITH FULL STACK$(RESET)"
 	@echo "$(GREEN)🎯 ================================$(RESET)"
@@ -457,10 +456,10 @@ start-tasks-only:
 
 # ===== DATABASE MANAGEMENT =====
 
-# Start MySQL databases in Docker
+# Start MySQL databases in Docker (uses main docker-compose.yml)
 db-start:
 	@echo "$(BLUE)🐳 Starting MySQL databases...$(RESET)"
-	docker compose -f docker-compose.mysql.yml up -d
+	docker compose up -d mysql phpmyadmin
 	@echo "$(BLUE)Waiting for MySQL to be ready...$(RESET)"
 	@timeout=60; \
 	while [ $$timeout -gt 0 ]; do \
@@ -482,7 +481,7 @@ db-start:
 # Stop MySQL databases
 db-stop:
 	@echo "$(YELLOW)🛑 Stopping MySQL databases...$(RESET)"
-	docker compose -f docker-compose.mysql.yml down
+	docker compose stop mysql phpmyadmin
 	@echo "$(GREEN)✅ MySQL databases stopped$(RESET)"
 
 # Generate new migration files
