@@ -111,13 +111,21 @@ class ResearcherOutputState(TypedDict):
     raw_notes: list[str]
 
 
-# Input state for main graph
-class ProfileAgentInputState(TypedDict):
-    """Input to the profile agent graph."""
+# Input state for main graph - only query is required
+class _ProfileAgentInputRequired(TypedDict):
+    """Required input fields."""
 
-    messages: list[MessageLikeRepresentation]
     query: str
-    profile_type: str
+
+
+class ProfileAgentInputState(_ProfileAgentInputRequired, total=False):
+    """Input to the profile agent graph.
+
+    Only query is required - messages and profile_type are optional.
+    """
+
+    messages: list[MessageLikeRepresentation]  # Optional
+    profile_type: str  # Optional - will be auto-detected if not provided
 
 
 # Output state from main graph
