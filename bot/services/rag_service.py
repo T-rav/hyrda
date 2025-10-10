@@ -528,13 +528,26 @@ class RAGService:
                 )
 
         # Add tool results to conversation and get final response
+        # OpenAI expects tool_calls[].function.arguments to be a JSON string
+        import json
+
+        tool_calls_for_message = []
+        for tc in tool_call_response.get("tool_calls", []):
+            tool_call_copy = tc.copy()
+            # Ensure arguments is a JSON string
+            if isinstance(tool_call_copy.get("function", {}).get("arguments"), dict):
+                tool_call_copy["function"]["arguments"] = json.dumps(
+                    tool_call_copy["function"]["arguments"]
+                )
+            tool_calls_for_message.append(tool_call_copy)
+
         messages_with_tools = (
             messages
             + [
                 {
                     "role": "assistant",
                     "content": tool_call_response.get("content", ""),
-                    "tool_calls": tool_call_response.get("tool_calls", []),
+                    "tool_calls": tool_calls_for_message,
                 },
             ]
             + tool_results

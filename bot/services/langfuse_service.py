@@ -253,6 +253,55 @@ class LangfuseService:
         except Exception as e:
             logger.error(f"Error tracing retrieval: {e}")
 
+    def trace_tool_execution(
+        self,
+        tool_name: str,
+        tool_input: dict[str, Any],
+        tool_output: Any,
+        metadata: dict[str, Any] | None = None,
+    ):
+        """
+        Trace tool execution (e.g., web search, API calls)
+
+        Args:
+            tool_name: Name of the tool executed
+            tool_input: Input parameters to the tool
+            tool_output: Output/results from the tool
+            metadata: Additional metadata
+        """
+        if not self.enabled:
+            return
+
+        try:
+            if not self.client:
+                return
+
+            # Create span for tool execution
+            span = self.client.start_span(
+                name=f"tool_{tool_name}",
+                input={
+                    "tool_name": tool_name,
+                    "tool_parameters": tool_input,
+                },
+                output={
+                    "tool_result": tool_output,
+                    "result_count": len(tool_output)
+                    if isinstance(tool_output, list)
+                    else 1,
+                },
+                metadata={
+                    "tool_type": tool_name,
+                    "environment": self.environment,
+                    **(metadata or {}),
+                },
+            )
+            span.end()
+
+            logger.debug(f"Tool execution trace created: {tool_name}")
+
+        except Exception as e:
+            logger.error(f"Error tracing tool execution: {e}")
+
     def trace_document_ingestion(
         self,
         documents: list[dict[str, Any]],

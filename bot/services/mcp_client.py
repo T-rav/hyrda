@@ -14,108 +14,99 @@ from config.settings import MCPSettings
 logger = logging.getLogger(__name__)
 
 
-class MCPClient:
-    """Client for communicating with MCP servers"""
+class WebCatClient:
+    """WebCat-specific MCP client for web search using FastMCP protocol"""
 
     def __init__(self, settings: MCPSettings):
         self.settings = settings
+        self.enabled = settings.webcat_enabled
+        self.base_url = f"http://{settings.webcat_host}:{settings.webcat_port}"
         self.session: aiohttp.ClientSession | None = None
+        self.mcp_session_id: str | None = None
 
     async def initialize(self):
-        """Initialize the MCP client session"""
+        """Initialize the WebCat client and MCP session"""
+        if not self.enabled:
+            return
+
         if not self.session:
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(timeout=timeout)
-            logger.info("MCP client initialized")
 
-    async def close(self):
-        """Close the MCP client session"""
-        if self.session:
-            await self.session.close()
-            self.session = None
-            logger.info("MCP client closed")
-
-    async def call_tool(
-        self, server_url: str, tool_name: str, arguments: dict[str, Any]
-    ) -> dict[str, Any]:
-        """
-        Call a tool on an MCP server
-
-        Args:
-            server_url: Base URL of the MCP server
-            tool_name: Name of the tool to call
-            arguments: Tool arguments
-
-        Returns:
-            Tool response data
-        """
-        if not self.session:
-            await self.initialize()
-
-        url = f"{server_url}/tools/{tool_name}"
-
-        try:
-            logger.info(f"Calling MCP tool: {tool_name} at {url}")
-            logger.debug(f"Arguments: {arguments}")
-
-            async with self.session.post(  # type: ignore
-                url, json=arguments, headers={"Content-Type": "application/json"}
-            ) as response:
-                response.raise_for_status()
-                result = await response.json()
-                logger.info(f"MCP tool {tool_name} succeeded")
-                return result
-
-        except aiohttp.ClientError as e:
-            logger.error(f"MCP tool call failed: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error calling MCP tool: {e}")
-            raise
-
-    async def list_tools(self, server_url: str) -> list[dict[str, Any]]:
-        """
-        List available tools from an MCP server
-
-        Args:
-            server_url: Base URL of the MCP server
-
-        Returns:
-            List of tool definitions
-        """
-        if not self.session:
-            await self.initialize()
-
-        url = f"{server_url}/tools"
-
-        try:
-            async with self.session.get(url) as response:  # type: ignore
-                response.raise_for_status()
-                result = await response.json()
-                return result.get("tools", [])
-        except Exception as e:
-            logger.error(f"Failed to list MCP tools: {e}")
-            return []
-
-
-class WebCatClient:
-    """WebCat-specific MCP client for web search"""
-
-    def __init__(self, settings: MCPSettings):
-        self.settings = settings
-        self.mcp_client = MCPClient(settings)
-        self.enabled = settings.webcat_enabled
-        self.base_url = f"http://{settings.webcat_host}:{settings.webcat_port}"
-
-    async def initialize(self):
-        """Initialize the WebCat client"""
-        if self.enabled:
-            await self.mcp_client.initialize()
-            logger.info(f"WebCat MCP client initialized at {self.base_url}")
+        # Initialize MCP session
+        await self._init_mcp_session()
+        logger.info(f"WebCat MCP client initialized at {self.base_url}")
 
     async def close(self):
         """Close the WebCat client"""
-        await self.mcp_client.close()
+        self.mcp_session_id = None
+        if self.session:
+            await self.session.close()
+            self.session = None
+
+    async def _init_mcp_session(self):
+        """Initialize MCP session with WebCat"""
+        try:
+            url = f"{self.base_url}/mcp"
+            payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "InsightMesh", "version": "1.0.0"},
+                },
+            }
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            }
+
+            if self.settings.webcat_api_key:
+                headers["Authorization"] = f"Bearer {self.settings.webcat_api_key}"
+
+            async with self.session.post(
+                url, json=payload, headers=headers
+            ) as response:  # type: ignore
+                response.raise_for_status()
+                self.mcp_session_id = response.headers.get("mcp-session-id")
+
+                if not self.mcp_session_id:
+                    logger.warning("No MCP session ID received from WebCat")
+                else:
+                    logger.debug(f"MCP session initialized: {self.mcp_session_id}")
+
+            # Send initialized notification
+            if self.mcp_session_id:
+                initialized_payload = {
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized",
+                    "params": {},
+                }
+
+                initialized_headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json, text/event-stream",
+                    "mcp-session-id": self.mcp_session_id,
+                }
+
+                if self.settings.webcat_api_key:
+                    initialized_headers["Authorization"] = (
+                        f"Bearer {self.settings.webcat_api_key}"
+                    )
+
+                async with self.session.post(
+                    url, json=initialized_payload, headers=initialized_headers
+                ) as response:  # type: ignore
+                    response.raise_for_status()
+
+        except Exception as e:
+            logger.error(f"Failed to initialize MCP session: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
     async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         """
@@ -132,48 +123,97 @@ class WebCatClient:
             logger.warning("WebCat is disabled")
             return []
 
-        try:
-            result = await self.mcp_client.call_tool(
-                server_url=self.base_url,
-                tool_name="search",
-                arguments={"query": query, "maxResults": max_results},
-            )
+        if not self.session:
+            await self.initialize()
 
-            # Parse search results from MCP response
-            results = result.get("results", [])
+        if not self.mcp_session_id:
+            await self._init_mcp_session()
+            if not self.mcp_session_id:
+                logger.error("Cannot search without MCP session")
+                return []
+
+        try:
+            import json
+
+            url = f"{self.base_url}/mcp"
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "search", "arguments": {"query": query}},
+                "id": 1,
+            }
+
+            logger.info(f"WebCat search: {query}")
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "mcp-session-id": self.mcp_session_id,
+            }
+
+            if self.settings.webcat_api_key:
+                headers["Authorization"] = f"Bearer {self.settings.webcat_api_key}"
+
+            results = []
+            async with self.session.post(
+                url, json=payload, headers=headers
+            ) as response:  # type: ignore
+                response.raise_for_status()
+
+                # Parse SSE stream
+                async for line in response.content:
+                    line_str = line.decode("utf-8").strip()
+
+                    if line_str.startswith("data: "):
+                        data_str = line_str[6:]
+
+                        if data_str and data_str != "[DONE]":
+                            try:
+                                data = json.loads(data_str)
+
+                                # Check for result
+                                if "result" in data:
+                                    result_data = data["result"]
+
+                                    # Handle different response structures
+                                    if isinstance(result_data, dict):
+                                        # Check for content array
+                                        if "content" in result_data:
+                                            for item in result_data["content"]:
+                                                if item.get("type") == "text":
+                                                    text = item.get("text", "")
+                                                    try:
+                                                        parsed = json.loads(text)
+                                                        if "results" in parsed:
+                                                            results = parsed["results"]
+                                                    except json.JSONDecodeError:
+                                                        pass
+                                        # Or structured content
+                                        elif "structuredContent" in result_data:
+                                            structured = result_data[
+                                                "structuredContent"
+                                            ]
+                                            if "results" in structured:
+                                                results = structured["results"]
+                                        # Or direct results
+                                        elif "results" in result_data:
+                                            results = result_data["results"]
+                                    elif isinstance(result_data, list):
+                                        results = result_data
+                                    break
+
+                            except json.JSONDecodeError:
+                                continue
+
             logger.info(f"WebCat search returned {len(results)} results for: {query}")
             return results
 
         except Exception as e:
             logger.error(f"WebCat search failed: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
-
-    async def fetch_url(self, url: str) -> str | None:
-        """
-        Fetch content from a URL using WebCat
-
-        Args:
-            url: URL to fetch
-
-        Returns:
-            Page content or None if failed
-        """
-        if not self.enabled:
-            logger.warning("WebCat is disabled")
-            return None
-
-        try:
-            result = await self.mcp_client.call_tool(
-                server_url=self.base_url, tool_name="fetch", arguments={"url": url}
-            )
-
-            content = result.get("content", "")
-            logger.info(f"WebCat fetched {len(content)} characters from {url}")
-            return content
-
-        except Exception as e:
-            logger.error(f"WebCat fetch failed: {e}")
-            return None
 
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """
@@ -190,17 +230,30 @@ class WebCatClient:
                 "type": "function",
                 "function": {
                     "name": "web_search",
-                    "description": "Search the web for current information. Use this when the user asks about recent events, current data, or information not in your knowledge base.",
+                    "description": (
+                        "Search the web for current, real-time information. "
+                        "Use this tool when the user asks about:\n"
+                        "- Recent news, current events, or today's happenings\n"
+                        "- Latest information about any topic\n"
+                        "- Real-time data, stock prices, weather, sports scores\n"
+                        "- Information that changes frequently or is time-sensitive\n"
+                        "- Anything requiring up-to-date knowledge beyond your training cutoff\n\n"
+                        "The tool returns relevant web search results with titles, URLs, and snippets."
+                    ),
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "The search query",
+                                "description": (
+                                    "The web search query. Be specific and use keywords for relevant, "
+                                    "current information. Examples: 'latest AI news 2025', 'current bitcoin price', "
+                                    "'today's weather New York'"
+                                ),
                             },
                             "max_results": {
                                 "type": "integer",
-                                "description": "Maximum number of results to return (default: 5)",
+                                "description": "Maximum number of results (default: 5)",
                                 "default": 5,
                             },
                         },
