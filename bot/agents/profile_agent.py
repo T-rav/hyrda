@@ -83,13 +83,20 @@ class ProfileAgent(BaseAgent):
         profile_type = detect_profile_type(query)
         logger.info(f"Detected profile type: {profile_type}")
 
-        # Send initial status message
+        # Delete thinking indicator and send initial status message in the same thread
         progress_msg_ts = None
+        thread_ts = context.get("thread_ts")
         if slack_service and channel:
+            # Remove thinking indicator first
+            thinking_ts = context.get("thinking_ts")
+            if thinking_ts:
+                await slack_service.delete_thinking_indicator(channel, thinking_ts)
+
+            # Send initial progress message
             progress_response = await slack_service.send_message(
                 channel=channel,
-                text=f"🔍 Starting deep research for **{profile_type}** profile...\n"
-                f"This may take a minute as I gather and analyze information.",
+                text=f"🔍 *Deep Research Progress*\n\nStarting research for {profile_type} profile...",
+                thread_ts=thread_ts,
             )
             progress_msg_ts = progress_response.get("ts") if progress_response else None
 
@@ -124,6 +131,9 @@ class ProfileAgent(BaseAgent):
                 "final_report_generation": "📝 Generating final report...",
             }
 
+            # Track completed steps
+            completed_steps = []
+
             result = None
             async for event in self.graph.astream(input_state, graph_config):
                 logger.debug(f"Graph event: {event}")
@@ -132,13 +142,16 @@ class ProfileAgent(BaseAgent):
                 if isinstance(event, dict):
                     for node_name, _ in event.items():
                         if node_name in node_messages:
-                            # Update progress message in Slack
+                            # Add step to completed list
+                            completed_steps.append(node_messages[node_name])
+
+                            # Update progress message with all steps
                             if slack_service and channel and progress_msg_ts:
-                                status_msg = node_messages[node_name]
+                                steps_text = "\n".join(completed_steps)
                                 await slack_service.update_message(
                                     channel=channel,
                                     ts=progress_msg_ts,
-                                    text=f"🔍 Deep research progress:\n\n{status_msg}",
+                                    text=f"🔍 *Deep Research Progress*\n\n{steps_text}",
                                 )
                             logger.info(f"Completed node: {node_name}")
 
