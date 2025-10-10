@@ -634,7 +634,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         # Mock LLM service for profile agent
@@ -840,7 +841,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
@@ -893,7 +895,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
@@ -927,7 +930,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
@@ -960,7 +964,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)

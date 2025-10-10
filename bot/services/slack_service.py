@@ -29,8 +29,12 @@ class SlackService:
         thread_ts: str | None = None,
         blocks: list[dict[str, Any]] | None = None,
         mrkdwn: bool = True,
-    ) -> str | None:
-        """Send a message to a Slack channel"""
+    ) -> dict[str, Any] | None:
+        """Send a message to a Slack channel
+
+        Returns:
+            Response dict with 'ts' key for the message timestamp, or None on error
+        """
         try:
             response = await self.client.chat_postMessage(  # type: ignore[misc]
                 channel=channel,
@@ -39,9 +43,39 @@ class SlackService:
                 blocks=blocks,
                 mrkdwn=mrkdwn,
             )
-            return response.get("ts")  # type: ignore[no-any-return]
+            return response  # type: ignore[no-any-return]
         except SlackApiError as e:
             logger.error(f"Error sending message: {e}")
+            return None
+
+    async def update_message(
+        self,
+        channel: str,
+        ts: str,
+        text: str,
+        blocks: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Update an existing Slack message
+
+        Args:
+            channel: Channel ID containing the message
+            ts: Timestamp of the message to update
+            text: New text content
+            blocks: Optional blocks for rich formatting
+
+        Returns:
+            Response dict, or None on error
+        """
+        try:
+            response = await self.client.chat_update(  # type: ignore[misc]
+                channel=channel,
+                ts=ts,
+                text=text,
+                blocks=blocks,
+            )
+            return response  # type: ignore[no-any-return]
+        except SlackApiError as e:
+            logger.error(f"Error updating message: {e}")
             return None
 
     async def send_thinking_indicator(

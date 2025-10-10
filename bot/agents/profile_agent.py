@@ -84,12 +84,14 @@ class ProfileAgent(BaseAgent):
         logger.info(f"Detected profile type: {profile_type}")
 
         # Send initial status message
+        progress_msg_ts = None
         if slack_service and channel:
-            await slack_service.send_message(
+            progress_response = await slack_service.send_message(
                 channel=channel,
                 text=f"🔍 Starting deep research for **{profile_type}** profile...\n"
                 f"This may take a minute as I gather and analyze information.",
             )
+            progress_msg_ts = progress_response.get("ts") if progress_response else None
 
         try:
             # Prepare LangGraph configuration
@@ -111,9 +113,42 @@ class ProfileAgent(BaseAgent):
                 "profile_type": profile_type,
             }
 
-            # Execute deep research workflow
-            logger.info("Invoking profile researcher graph...")
-            result = await self.graph.ainvoke(input_state, graph_config)
+            # Execute deep research workflow with streaming
+            logger.info("Invoking profile researcher graph with streaming...")
+
+            # Map node names to user-friendly messages
+            node_messages = {
+                "clarify_with_user": "✅ Query clarified",
+                "write_research_brief": "📋 Research plan created",
+                "research_supervisor": "🔬 Conducting parallel research...",
+                "final_report_generation": "📝 Generating final report...",
+            }
+
+            result = None
+            async for event in self.graph.astream(input_state, graph_config):
+                logger.debug(f"Graph event: {event}")
+
+                # Extract node name from event
+                if isinstance(event, dict):
+                    for node_name, _ in event.items():
+                        if node_name in node_messages:
+                            # Update progress message in Slack
+                            if slack_service and channel and progress_msg_ts:
+                                status_msg = node_messages[node_name]
+                                await slack_service.update_message(
+                                    channel=channel,
+                                    ts=progress_msg_ts,
+                                    text=f"🔍 Deep research progress:\n\n{status_msg}",
+                                )
+                            logger.info(f"Completed node: {node_name}")
+
+                # Store final result
+                result = event
+
+            # Get the final state from the last event
+            if result and isinstance(result, dict):
+                # LangGraph returns the final state in the last event
+                result = list(result.values())[0] if result else {}
 
             # Extract final report and executive summary
             final_report = result.get("final_report", "")

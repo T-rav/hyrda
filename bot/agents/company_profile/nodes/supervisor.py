@@ -67,13 +67,19 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
             },
         )
 
-    # Get LLM service
-    llm_service = config.get("configurable", {}).get("llm_service")
-    if not llm_service:
-        logger.error("No LLM service in supervisor")
-        if span:
-            span.end(level="ERROR", status_message="No LLM service available")
-        return Command(goto=END, update={})
+    # Get LLM configuration from config
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    settings = Settings()
+
+    # Create ChatOpenAI instance with tool binding
+    llm = ChatOpenAI(
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
+        temperature=0.7,
+    )
 
     # Build supervisor prompt
     system_prompt = prompts.lead_researcher_prompt.format(
@@ -95,6 +101,9 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     # Define tools for supervisor
     tools = [ConductResearch, ResearchComplete, think_tool]
 
+    # Bind tools to LLM
+    llm_with_tools = llm.bind_tools(tools)
+
     # Call LLM with tools
     try:
         # Trace LLM generation
@@ -102,7 +111,10 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         if langfuse_service and langfuse_service.client:
             generation = langfuse_service.client.start_generation(
                 name="supervisor_llm_call",
-                input={"messages": messages, "tools_available": len(tools)},
+                input={
+                    "messages": [str(m)[:100] for m in messages],
+                    "tools_available": len(tools),
+                },
                 metadata={
                     "research_brief": research_brief[:200],
                     "iteration": research_iterations,
@@ -110,32 +122,20 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
                 },
             )
 
-        response = await llm_service.get_response(
-            messages=messages,
-            tools=tools,
-        )
+        # Invoke LLM with tools
+        response = await llm_with_tools.ainvoke(messages)
 
         # End generation trace
         if generation:
-            generation.end(output={"response": response})
+            generation.end()
 
-        # Check if response contains tool calls
-        if isinstance(response, dict) and "tool_calls" in response:
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.get("content", ""),
-                    "tool_calls": response["tool_calls"],
-                }
-            )
+        # Check if response contains tool calls (LangChain AIMessage format)
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            # Add AI message to history
+            messages.append(response)
 
             if span:
-                span.end(
-                    output={
-                        "decision": "call_tools",
-                        "tool_count": len(response["tool_calls"]),
-                    }
-                )
+                span.end()
 
             return Command(
                 goto="supervisor_tools",
@@ -146,11 +146,10 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
             )
         else:
             # No tool calls, end supervision
-            final_content = response if isinstance(response, str) else str(response)
-            messages.append({"role": "assistant", "content": final_content})
+            messages.append(response)
 
             if span:
-                span.end(output={"decision": "complete", "notes_count": len(notes)})
+                span.end()
 
             return Command(
                 goto=END,
@@ -203,22 +202,22 @@ async def supervisor_tools(
             },
         )
 
-    # Get last message with tool calls
+    # Get last message with tool calls (LangChain AIMessage)
     last_message = messages[-1]
-    if not isinstance(last_message, dict) or "tool_calls" not in last_message:
+    if not hasattr(last_message, "tool_calls") or not last_message.tool_calls:
         logger.warning("No tool calls in supervisor message")
         if span:
-            span.end(level="WARNING", status_message="No tool calls found")
+            span.end()
         return Command(goto=END, update={})
 
-    tool_calls = last_message["tool_calls"]
+    tool_calls = last_message.tool_calls
 
     # Check for ResearchComplete
     for tool_call in tool_calls:
-        if tool_call.get("function", {}).get("name") == "ResearchComplete":
+        if tool_call.get("name") == "ResearchComplete":
             logger.info("Supervisor signaled research complete")
             if span:
-                span.end(output={"decision": "complete", "notes_count": len(notes)})
+                span.end()
             return Command(goto=END, update={})
 
     # Check iteration limit
@@ -227,20 +226,12 @@ async def supervisor_tools(
             f"Max supervisor iterations ({configuration.max_researcher_iterations}) reached"
         )
         if span:
-            span.end(
-                output={
-                    "decision": "max_iterations",
-                    "iterations": research_iterations,
-                    "notes_count": len(notes),
-                }
-            )
+            span.end()
         return Command(goto=END, update={})
 
-    # Process ConductResearch calls
+    # Process ConductResearch calls (LangChain format)
     conduct_research_calls = [
-        tc
-        for tc in tool_calls
-        if tc.get("function", {}).get("name") == "ConductResearch"
+        tc for tc in tool_calls if tc.get("name") == "ConductResearch"
     ]
 
     # Limit concurrent research
@@ -249,16 +240,16 @@ async def supervisor_tools(
     ]
 
     # Execute think_tool calls synchronously
+    from langchain_core.messages import ToolMessage
+
     tool_results = []
     for tool_call in tool_calls:
-        tool_name = tool_call.get("function", {}).get("name")
+        tool_name = tool_call.get("name")
         if tool_name == "think_tool":
-            tool_args = tool_call.get("function", {}).get("arguments", {})
+            tool_args = tool_call.get("args", {})
             tool_id = tool_call.get("id", "unknown")
             result = think_tool.invoke(tool_args)
-            tool_results.append(
-                {"role": "tool", "tool_call_id": tool_id, "content": str(result)}
-            )
+            tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
 
             # Trace think_tool execution
             if langfuse_service:
@@ -283,9 +274,7 @@ async def supervisor_tools(
                 tool_input={
                     "task_count": len(conduct_research_calls),
                     "topics": [
-                        tc.get("function", {})
-                        .get("arguments", {})
-                        .get("research_topic", "")[:50]
+                        tc.get("args", {}).get("research_topic", "")[:50]
                         for tc in conduct_research_calls
                     ],
                 },
@@ -302,11 +291,7 @@ async def supervisor_tools(
         # Create tasks for parallel execution
         research_tasks = []
         for tool_call in conduct_research_calls:
-            research_topic = (
-                tool_call.get("function", {})
-                .get("arguments", {})
-                .get("research_topic", "")
-            )
+            research_topic = tool_call.get("args", {}).get("research_topic", "")
             tool_id = tool_call.get("id", "unknown")
 
             task = execute_researcher(
@@ -427,12 +412,13 @@ async def execute_researcher(
                 }
             )
 
+        from langchain_core.messages import ToolMessage
+
         return {
-            "tool_result": {
-                "role": "tool",
-                "tool_call_id": tool_id,
-                "content": compressed or "No research results",
-            },
+            "tool_result": ToolMessage(
+                content=compressed or "No research results",
+                tool_call_id=tool_id,
+            ),
             "compressed_research": compressed,
             "raw_notes": raw,
         }
@@ -440,14 +426,15 @@ async def execute_researcher(
     except Exception as e:
         logger.error(f"Researcher task error: {e}")
         if span:
-            span.end(level="ERROR", status_message=str(e))
+            span.end()
+
+        from langchain_core.messages import ToolMessage
 
         return {
-            "tool_result": {
-                "role": "tool",
-                "tool_call_id": tool_id,
-                "content": f"Research error: {str(e)}",
-            },
+            "tool_result": ToolMessage(
+                content=f"Research error: {str(e)}",
+                tool_call_id=tool_id,
+            ),
             "compressed_research": "",
             "raw_notes": [],
         }

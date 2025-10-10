@@ -272,7 +272,7 @@ class TestSlackService:
 
         result = await slack_service.send_message(channel, text, thread_ts)
 
-        assert result == "1234567890.654321"
+        assert result == expected_response
         slack_service.client.chat_postMessage.assert_called_once_with(
             channel=channel, text=text, thread_ts=thread_ts, blocks=None, mrkdwn=True
         )
@@ -291,7 +291,7 @@ class TestSlackService:
 
         result = await slack_service.send_message(channel, text, blocks=blocks)
 
-        assert result == "1234567890.654321"
+        assert result == expected_response
         slack_service.client.chat_postMessage.assert_called_once_with(
             channel=channel, text=text, thread_ts=None, blocks=blocks, mrkdwn=True
         )
