@@ -1,0 +1,10 @@
+{
+  "graphs": {
+    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher"
+  },
+  "env": ".env",
+  "dependencies": [
+    "./bot"
+  ],
+  "python_version": "3.11"
+}
