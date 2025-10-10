@@ -64,7 +64,7 @@ class ProfileConfiguration(BaseModel):
         64000  # Half of 128K - handles massive deep_research payloads!
     )
     final_report_model_max_tokens: int = (
-        32000  # Half of compression (64K) - comprehensive final reports
+        32000  # Half of compression (64K) - rich, well-cited deep research reports
     )
 
     # Profile-specific settings
