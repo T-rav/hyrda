@@ -608,6 +608,70 @@ class RAGService:
                         )
                         logger.warning(f"❌ Scrape failed for {url}: {error}")
 
+                elif tool_name == "deep_research":
+                    # Execute deep research via Perplexity
+                    query = tool_args.get("query", "")
+                    research_result = await webcat_client.deep_research(query)
+
+                    if research_result.get("success") or research_result.get("answer"):
+                        answer = research_result.get("answer", "")
+                        sources = research_result.get("sources", [])
+
+                        # Format answer with sources
+                        formatted_answer = f"{answer}\n\n"
+                        if sources:
+                            formatted_answer += "**Sources:**\n"
+                            for idx, source in enumerate(
+                                sources[:10], 1
+                            ):  # Limit to 10 sources
+                                formatted_answer += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": formatted_answer,
+                            }
+                        )
+
+                        logger.info(
+                            f"✅ Deep research returned {len(answer)} chars with {len(sources)} sources for: {query}"
+                        )
+
+                        # Trace tool execution to Langfuse
+                        if langfuse_service:
+                            langfuse_service.trace_tool_execution(
+                                tool_name=tool_name,
+                                tool_input=tool_args,
+                                tool_output={
+                                    "answer_length": len(answer),
+                                    "sources_count": len(sources),
+                                },
+                                metadata={
+                                    "tool_id": tool_id,
+                                    "query": query,
+                                    "answer_length": len(answer),
+                                    "sources_count": len(sources),
+                                    "session_id": session_id,
+                                    "user_id": user_id,
+                                },
+                            )
+                            logger.info(
+                                f"📊 Logged tool execution to Langfuse: {tool_name}"
+                            )
+                    else:
+                        error = research_result.get("error", "Unknown error")
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": f"Failed to perform deep research: {error}",
+                            }
+                        )
+                        logger.warning(f"❌ Deep research failed for {query}: {error}")
+
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
                     tool_results.append(

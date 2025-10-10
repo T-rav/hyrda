@@ -126,17 +126,19 @@ services:
     networks:
       - insightmesh
 
-  # WebCat MCP Server (Web Search)
+  # WebCat MCP Server (Web Search) - v2.5.0+
   webcat:
-    image: tmfrisinger/webcat:2.4.0
+    image: tmfrisinger/webcat:2.5.0
     container_name: insightmesh-webcat
     restart: unless-stopped
     ports:
       - "${MCP_WEBCAT_PORT}:${MCP_WEBCAT_PORT}"
     environment:
       - PORT=${MCP_WEBCAT_PORT}
-      - SERPER_API_KEY=${MCP_SERPER_API_KEY:-}
+      - SERPER_API_KEY=${MCP_WEBCAT_SERPER_API_KEY:-}
+      - PERPLEXITY_API_KEY=${MCP_WEBCAT_PERPLEXITY_API_KEY:-}
       - WEBCAT_API_KEY=${MCP_WEBCAT_API_KEY:-}
+      - MAX_LENGTH=${MCP_WEBCAT_MAX_LENGTH:-10000}
     healthcheck:
       test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/${MCP_WEBCAT_PORT}' || exit 1"]
       interval: 10s

@@ -310,12 +310,106 @@ class WebCatClient:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return {"success": False, "url": url, "error": str(e)}
 
+    async def deep_research(self, query: str) -> dict[str, Any]:
+        """
+        Perform deep research using Perplexity AI for comprehensive answers
+
+        Args:
+            query: Research query requiring in-depth analysis
+
+        Returns:
+            Dict with success, answer, sources, and metadata
+        """
+        if not self.enabled:
+            logger.warning("WebCat is disabled")
+            return {"success": False, "error": "WebCat disabled"}
+
+        if not self.session:
+            await self.initialize()
+
+        if not self.mcp_session_id:
+            await self._init_mcp_session()
+            if not self.mcp_session_id:
+                logger.error("Cannot perform deep research without MCP session")
+                return {"success": False, "error": "No MCP session"}
+
+        try:
+            import json
+
+            mcp_url = f"{self.base_url}/mcp"
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "params": {"name": "deep_research", "arguments": {"query": query}},
+                "id": 1,
+            }
+
+            logger.info(f"WebCat deep research: {query}")
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                "mcp-session-id": self.mcp_session_id,
+            }
+
+            if self.settings.webcat_api_key:
+                headers["Authorization"] = f"Bearer {self.settings.webcat_api_key}"
+
+            result = {}
+            async with self.session.post(
+                mcp_url, json=payload, headers=headers
+            ) as response:  # type: ignore
+                response.raise_for_status()
+
+                # Parse SSE stream
+                async for line in response.content:
+                    line_str = line.decode("utf-8").strip()
+
+                    if line_str.startswith("data: "):
+                        data_str = line_str[6:]
+
+                        if data_str and data_str != "[DONE]":
+                            try:
+                                data = json.loads(data_str)
+
+                                if "result" in data:
+                                    result_data = data["result"]
+
+                                    # Extract deep research results
+                                    if isinstance(result_data, dict):
+                                        if "content" in result_data:
+                                            for item in result_data["content"]:
+                                                if item.get("type") == "text":
+                                                    text = item.get("text", "")
+                                                    try:
+                                                        result = json.loads(text)
+                                                    except json.JSONDecodeError:
+                                                        result = {"answer": text}
+                                        else:
+                                            result = result_data
+                                    break
+
+                            except json.JSONDecodeError:
+                                continue
+
+            logger.info(
+                f"WebCat deep research completed for: {query} (answer length: {len(result.get('answer', ''))})"
+            )
+            return result
+
+        except Exception as e:
+            logger.error(f"WebCat deep research failed: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {"success": False, "error": str(e)}
+
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """
         Get OpenAI-compatible tool definitions for WebCat
 
         Returns:
-            List of tool definitions for function calling (search + scrape)
+            List of tool definitions for function calling (search + scrape + deep_research)
         """
         if not self.enabled:
             return []
@@ -379,6 +473,42 @@ class WebCatClient:
                             },
                         },
                         "required": ["url"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "deep_research",
+                    "description": (
+                        "Perform comprehensive deep research on complex topics using Perplexity AI. "
+                        "Returns detailed, well-researched answers with citations and sources. "
+                        "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
+                        "Best for:\n"
+                        "- Complex research questions requiring comprehensive analysis\n"
+                        "- Topics needing expert-level understanding and synthesis\n"
+                        "- Questions requiring multiple perspectives and sources\n"
+                        "- When you need authoritative, well-cited answers\n"
+                        "- Academic or professional research queries\n\n"
+                        "NOT for:\n"
+                        "- Simple factual lookups (use web_search instead)\n"
+                        "- Real-time data like stock prices or weather (use web_search)\n"
+                        "- Single-source information (use scrape_url instead)"
+                    ),
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": (
+                                    "The research question or topic. Be specific and clear about what you want to understand. "
+                                    "Examples: 'What are the latest developments in quantum computing?', "
+                                    "'How does CRISPR gene editing work and what are its ethical implications?', "
+                                    "'Compare different approaches to carbon capture technology'"
+                                ),
+                            },
+                        },
+                        "required": ["query"],
                     },
                 },
             },
