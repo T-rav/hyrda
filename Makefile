@@ -40,8 +40,8 @@ help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
-	@echo "  $(GREEN)make start$(RESET)           🔥 Build everything and run full stack with monitoring (recommended)"
-	@echo "  $(GREEN)make start DEV=true$(RESET) 🔧 DEV MODE: Volume mounts for hot-reload (no rebuild needed!)"
+	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring (recommended)"
+	@echo "  $(GREEN)make start-dev$(RESET)   🔧 DEV MODE: Hot-reload with volume mounts (no rebuild needed!)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
@@ -417,6 +417,17 @@ start: docker-build docker-up docker-monitor
 	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
 	@echo ""
 	@echo "$(GREEN)🎉 All services are running! Check the health dashboard for RAG metrics.$(RESET)"
+
+# DEV mode - hot-reload with volume mounts (no rebuild needed!)
+start-dev:
+	@echo "$(YELLOW)🔧 ================================$(RESET)"
+	@echo "$(YELLOW)🔥 STARTING IN DEV MODE$(RESET)"
+	@echo "$(YELLOW)🔧 ================================$(RESET)"
+	@$(MAKE) start DEV=true
+	@echo ""
+	@echo "$(GREEN)🔥 DEV MODE ACTIVE!$(RESET)"
+	@echo "$(YELLOW)💡 Code changes will hot-reload automatically$(RESET)"
+	@echo "$(YELLOW)💡 Edit files and test immediately - no rebuild needed!$(RESET)"
 
 # Core services only (without monitoring)
 start-core: docker-build docker-up
