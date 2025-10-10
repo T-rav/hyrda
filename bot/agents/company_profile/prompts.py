@@ -278,7 +278,7 @@ Answer the investigative questions above by:
      - **'low'**: Quick overviews, initial understanding (~1-2 min)
      - **'medium'**: Standard depth, balanced analysis (~2-3 min, default)
      - **'high'**: Deep comprehensive investigation - ONLY for critical questions (~3-5 min)
-   - **Strategy:** Use web_search to explore first, then deep_research for 1-2 critical topics
+   - **Strategy:** Use web_search to explore first, then deep_research for 5-10 key topics
    - Example: After web_search finds tech debt mentions, use deep_research(effort='medium') to synthesize what this means for consulting opportunities
    - Example: For key product strategy question, use deep_research(effort='high') if this is THE critical insight
    - **Budget carefully** - each call costs money, especially at 'high' effort
