@@ -153,6 +153,12 @@ class ProfileAgent(BaseAgent):
                 "final_report_generation",
             ]
 
+            # Track timing for each node
+            import time
+
+            node_start_times = {}
+            node_durations = {}
+
             # Show first node as starting immediately
             first_node_started = False
 
@@ -168,6 +174,7 @@ class ProfileAgent(BaseAgent):
                     and progress_msg_ts
                 ):
                     first_node_started = True
+                    node_start_times[node_order[0]] = time.time()
                     await slack_service.update_message(
                         channel=channel,
                         ts=progress_msg_ts,
@@ -178,9 +185,22 @@ class ProfileAgent(BaseAgent):
                 if isinstance(event, dict):
                     for node_name, _ in event.items():
                         if node_name in node_messages:
-                            # This node just completed
-                            completed_steps.append(node_messages[node_name]["complete"])
-                            logger.info(f"✅ Completed node: {node_name}")
+                            # Calculate duration for this node
+                            end_time = time.time()
+                            start_time = node_start_times.get(node_name)
+                            duration = end_time - start_time if start_time else 0
+                            node_durations[node_name] = duration
+
+                            # This node just completed - add duration to completion message
+                            duration_text = (
+                                f" ({duration:.1f}s)" if duration > 0 else ""
+                            )
+                            completed_steps.append(
+                                f"{node_messages[node_name]['complete']}{duration_text}"
+                            )
+                            logger.info(
+                                f"✅ Completed node: {node_name} in {duration:.1f}s"
+                            )
 
                             # Show next in-progress step if available
                             if slack_service and channel and progress_msg_ts:
@@ -195,6 +215,8 @@ class ProfileAgent(BaseAgent):
                                     )
                                     if current_index + 1 < len(node_order):
                                         next_node = node_order[current_index + 1]
+                                        # Record start time for next node
+                                        node_start_times[next_node] = time.time()
                                         all_steps.append(
                                             node_messages[next_node]["start"]
                                         )
