@@ -30,8 +30,9 @@ class WebCatClient:
             return
 
         if not self.session:
-            # Increase timeout for web search/scrape operations (2 minutes)
-            timeout = aiohttp.ClientTimeout(total=120)
+            # Increase timeout for deep_research operations (10 minutes)
+            # deep_research 'high' effort can take 3-5 minutes, allow generous buffer
+            timeout = aiohttp.ClientTimeout(total=600)
             self.session = aiohttp.ClientSession(timeout=timeout)
 
         # Initialize MCP session
