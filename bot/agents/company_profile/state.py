@@ -49,6 +49,7 @@ class ProfileAgentState(MessagesState):
         raw_notes: Unprocessed research data from all researchers
         notes: Compressed and synthesized research findings
         final_report: Generated comprehensive profile report
+        executive_summary: Short summary for Slack display (3-5 bullets)
         profile_type: Type of profile (company, employee, project)
         query: Original user query
     """
@@ -58,6 +59,7 @@ class ProfileAgentState(MessagesState):
     raw_notes: list[str]
     notes: list[str]
     final_report: str
+    executive_summary: str
     profile_type: str  # "company", "employee", "project"
     query: str
 

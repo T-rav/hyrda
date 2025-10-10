@@ -288,3 +288,57 @@ For **Project Profiles**:
 
 Generate the comprehensive profile report now.
 """
+
+# Executive summary generation prompt
+executive_summary_prompt = """You are creating an executive summary for a detailed profile report.
+
+<Full Report>
+{full_report}
+</Full Report>
+
+<Your Task>
+Create a concise executive summary (3-5 key bullet points) highlighting the most important insights.
+This will be shown in Slack, while the full report will be attached as a PDF.
+</Your Task>
+
+<Summary Guidelines>
+- **3-5 bullet points maximum** - must be concise for Slack readability
+- **Focus on key insights** - what are the most important takeaways?
+- **Actionable information** - what should the reader know immediately?
+- **No citations needed** - this is a high-level overview
+- **Professional tone** - clear and direct
+- **Start each point with an emoji** for visual clarity
+
+For **Company Profiles**, highlight:
+- Core business and market position
+- Recent major developments or news
+- Key leadership or strategic direction
+- Notable achievements or challenges
+
+For **Employee Profiles**, highlight:
+- Current role and main responsibilities
+- Key expertise and experience areas
+- Notable contributions or projects
+- Career trajectory or focus
+
+For **Project Profiles**, highlight:
+- Project goals and current status
+- Key technologies and approach
+- Main outcomes or impact
+- Current phase or next steps
+</Summary Guidelines>
+
+<Output Format>
+📊 **Executive Summary**
+
+• [Key point 1]
+• [Key point 2]
+• [Key point 3]
+• [Key point 4 - if needed]
+• [Key point 5 - if needed]
+
+📎 _Full detailed report attached as PDF_
+</Output Format>
+
+Generate the executive summary now.
+"""

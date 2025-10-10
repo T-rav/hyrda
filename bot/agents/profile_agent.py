@@ -5,6 +5,7 @@ through parallel web research and knowledge base retrieval.
 """
 
 import logging
+from datetime import datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
@@ -14,6 +15,7 @@ from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.profile_researcher import profile_researcher
 from agents.company_profile.utils import detect_profile_type
 from agents.registry import agent_registry
+from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +115,9 @@ class ProfileAgent(BaseAgent):
             logger.info("Invoking profile researcher graph...")
             result = await self.graph.ainvoke(input_state, graph_config)
 
-            # Extract final report
+            # Extract final report and executive summary
             final_report = result.get("final_report", "")
+            executive_summary = result.get("executive_summary", "")
             notes_count = len(result.get("notes", []))
 
             if not final_report:
@@ -132,8 +135,57 @@ class ProfileAgent(BaseAgent):
                 f"Profile research complete: {len(final_report)} chars, {notes_count} research notes"
             )
 
-            # Format response
-            response = f"# {profile_type.title()} Profile\n\n{final_report}"
+            # Generate PDF from full report
+            pdf_title = f"{profile_type.title()} Profile"
+            pdf_metadata = {
+                "Query": query,
+                "Profile Type": profile_type.title(),
+                "Research Notes": str(notes_count),
+                "Generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+
+            pdf_bytes = markdown_to_pdf(
+                markdown_content=final_report,
+                title=pdf_title,
+                metadata=pdf_metadata,
+                style=self.config.pdf_style,
+            )
+
+            # Upload PDF to Slack if available
+            pdf_uploaded = False
+            if slack_service and channel:
+                try:
+                    pdf_filename = get_pdf_filename(
+                        title=f"{profile_type.title()} Profile - {query[:30]}",
+                        profile_type=profile_type,
+                    )
+
+                    upload_response = await slack_service.upload_file(
+                        channel=channel,
+                        file_content=pdf_bytes,
+                        filename=pdf_filename,
+                        title=pdf_title,
+                        initial_comment=None,  # Summary sent separately
+                        thread_ts=context.get("thread_ts"),
+                    )
+
+                    if upload_response:
+                        pdf_uploaded = True
+                        logger.info(f"PDF report uploaded: {pdf_filename}")
+                    else:
+                        logger.warning("Failed to upload PDF to Slack")
+
+                except Exception as pdf_error:
+                    logger.error(f"Error uploading PDF: {pdf_error}")
+
+            # Use executive summary if available and PDF uploaded, otherwise full report
+            if executive_summary and pdf_uploaded:
+                response = executive_summary
+                logger.info("Sending executive summary (PDF attached)")
+            else:
+                # Fallback to full markdown report
+                response = f"# {profile_type.title()} Profile\n\n{final_report}"
+                logger.info("Sending full markdown report (no PDF)")
 
             return {
                 "response": response,
@@ -143,6 +195,8 @@ class ProfileAgent(BaseAgent):
                     "query": query,
                     "research_notes": notes_count,
                     "report_length": len(final_report),
+                    "pdf_generated": pdf_bytes is not None,
+                    "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
                 },
             }

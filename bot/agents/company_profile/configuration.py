@@ -18,6 +18,14 @@ class SearchAPI(str, Enum):
     NONE = "none"  # No search API
 
 
+class PDFStyle(str, Enum):
+    """Available PDF styling options."""
+
+    MINIMAL = "minimal"  # Clean, minimal styling
+    PROFESSIONAL = "professional"  # Professional business styling (default)
+    DETAILED = "detailed"  # Detailed with enhanced metadata
+
+
 class ProfileConfiguration(BaseModel):
     """Configuration for profile research agent.
 
@@ -50,6 +58,9 @@ class ProfileConfiguration(BaseModel):
     include_sources: bool = True  # Include source citations
     profile_depth: str = "detailed"  # "brief", "detailed", "comprehensive"
 
+    # PDF report settings
+    pdf_style: PDFStyle = PDFStyle.PROFESSIONAL  # PDF styling preset
+
     @classmethod
     def from_runnable_config(
         cls, config: RunnableConfig | None = None
@@ -73,6 +84,8 @@ class ProfileConfiguration(BaseModel):
                 # Handle enum types
                 if field_name == "search_api":
                     settings[field_name] = SearchAPI(env_value.lower())
+                elif field_name == "pdf_style":
+                    settings[field_name] = PDFStyle(env_value.lower())
                 # Handle boolean types
                 elif isinstance(cls.model_fields[field_name].default, bool):
                     settings[field_name] = env_value.lower() in ("true", "1", "yes")

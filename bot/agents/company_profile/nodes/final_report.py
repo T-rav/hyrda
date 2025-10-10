@@ -126,17 +126,69 @@ async def final_report_generation(
                     }
                 )
 
+            # Generate executive summary for Slack display
+            logger.info("Generating executive summary from full report")
+            summary_generation = None
+            if langfuse_service and langfuse_service.client:
+                summary_generation = langfuse_service.client.start_generation(
+                    name="executive_summary_generation",
+                    input={
+                        "full_report_length": len(final_report),
+                        "profile_type": profile_type,
+                    },
+                    metadata={"node_type": "executive_summary"},
+                )
+
+            try:
+                summary_prompt = prompts.executive_summary_prompt.format(
+                    full_report=final_report
+                )
+                summary_response = await llm_service.get_response(
+                    messages=[create_human_message(summary_prompt)],
+                    max_tokens=500,  # Short summary
+                )
+                executive_summary = (
+                    summary_response
+                    if isinstance(summary_response, str)
+                    else str(summary_response)
+                )
+                logger.info(
+                    f"Executive summary generated: {len(executive_summary)} characters"
+                )
+
+                if summary_generation:
+                    summary_generation.end(
+                        output={"summary_length": len(executive_summary)}
+                    )
+
+            except Exception as summary_error:
+                logger.warning(f"Failed to generate executive summary: {summary_error}")
+                # Fallback: use first paragraph of report
+                executive_summary = (
+                    "📊 **Executive Summary**\n\n"
+                    "• Full detailed report attached as PDF\n\n"
+                    "📎 _Unable to generate summary - see full report_"
+                )
+                if summary_generation:
+                    summary_generation.end(
+                        level="WARNING", status_message=str(summary_error)
+                    )
+
             # End span
             if span:
                 span.end(
                     output={
                         "success": True,
                         "report_length": len(final_report),
+                        "summary_length": len(executive_summary),
                         "attempts": attempt + 1,
                     }
                 )
 
-            return {"final_report": final_report}
+            return {
+                "final_report": final_report,
+                "executive_summary": executive_summary,
+            }
 
         except Exception as e:
             if is_token_limit_exceeded(e, configuration.final_report_model):
