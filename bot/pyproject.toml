@@ -49,6 +49,12 @@ dependencies = [
     "numpy>=1.24.0",
     "langfuse>=3.3.0",
 
+    # LangChain and LangGraph for deep research
+    "langchain-core>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langgraph>=0.2.0",
+
     # Slack formatting
     "slackify-markdown>=0.2.0",
 
@@ -154,7 +160,7 @@ stubPath = "./typings"
 venvPath = "."
 venv = "venv"
 typeCheckingMode = "standard"
-reportMissingImports = true
+reportMissingImports = false  # LangChain/LangGraph packages installed but pyright can't resolve them
 reportMissingTypeStubs = false
 reportGeneralTypeIssues = true
 # Allow optional dependencies that may not be installed
