@@ -39,8 +39,12 @@ class ProfileConfiguration(BaseModel):
 
     # Search configuration
     search_api: SearchAPI = SearchAPI.WEBCAT  # Use our WebCat integration
-    max_researcher_iterations: int = 5  # Supervisor reflection cycles
-    max_react_tool_calls: int = 8  # Max tool calls per researcher
+    max_researcher_iterations: int = (
+        8  # Supervisor reflection cycles (increased for deeper investigation)
+    )
+    max_react_tool_calls: int = (
+        15  # Max tool calls per researcher (increased for multi-angle investigation)
+    )
 
     # Model configuration (reuse existing LLM settings)
     # Format: "provider:model" but we'll use configured LLM
