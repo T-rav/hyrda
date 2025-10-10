@@ -40,7 +40,8 @@ help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
-	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring (recommended)"
+	@echo "  $(GREEN)make start$(RESET)           🔥 Build everything and run full stack with monitoring (recommended)"
+	@echo "  $(GREEN)make start DEV=true$(RESET) 🔧 DEV MODE: Volume mounts for hot-reload (no rebuild needed!)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
@@ -274,7 +275,12 @@ docker-stop:
 # Full Docker Stack Commands
 docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose up -d
+	@if [ "$(DEV)" = "true" ]; then \
+		echo "$(YELLOW)🔧 DEV MODE: Using volume mounts for hot-reload$(RESET)"; \
+		cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d; \
+	else \
+		cd $(PROJECT_ROOT_DIR) && docker compose up -d; \
+	fi
 	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
 	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
@@ -282,12 +288,17 @@ docker-up: check-env
 	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
 	@echo "$(BLUE)  - 📊 Metrics Endpoint: http://localhost:$${HEALTH_PORT:-8080}/metrics$(RESET)"
 	@echo ""
+	@if [ "$(DEV)" = "true" ]; then \
+		echo "$(YELLOW)🔥 DEV MODE ACTIVE: Code changes will hot-reload!$(RESET)"; \
+	fi
+	@echo ""
 	@echo "$(YELLOW)💡 For monitoring stack: make docker-monitor$(RESET)"
 	@echo "$(YELLOW)💡 For everything at once: make start$(RESET)"
+	@echo "$(YELLOW)💡 For dev mode: make start DEV=true$(RESET)"
 
 docker-down:
 	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose down
+	@cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.yml -f docker-compose.dev.yml down 2>/dev/null || docker compose down
 	@echo "$(GREEN)✅ Stack stopped!$(RESET)"
 
 docker-logs:

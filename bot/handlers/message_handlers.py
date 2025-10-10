@@ -394,6 +394,7 @@ async def handle_bot_command(
             "user_id": user_id,
             "channel": channel,
             "thread_ts": thread_ts,
+            "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
             "slack_service": slack_service,
             "llm_service": llm_service,
             "webcat_client": webcat_client,

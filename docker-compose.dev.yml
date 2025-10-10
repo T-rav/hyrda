@@ -1,0 +1,32 @@
+# Development override for docker-compose.yml
+# Use with: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# This adds volume mounts for hot-reload development
+
+services:
+  bot:
+    volumes:
+      # Mount source code for hot-reload
+      - ./bot:/app:delegated
+      # Preserve node_modules and build artifacts in container
+      - /app/health_ui/node_modules
+      - /app/health_ui/dist
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/.ruff_cache
+    environment:
+      # Enable Python unbuffered output for better logs
+      - PYTHONUNBUFFERED=1
+
+  tasks:
+    volumes:
+      # Mount source code for hot-reload
+      - ./tasks:/app:delegated
+      # Preserve node_modules and build artifacts in container
+      - /app/ui/node_modules
+      - /app/ui/dist
+      - /app/__pycache__
+      - /app/.pytest_cache
+      - /app/.ruff_cache
+    environment:
+      - PYTHONUNBUFFERED=1

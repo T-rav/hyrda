@@ -34,7 +34,7 @@ class ProfileConfiguration(BaseModel):
 
     # General settings
     max_structured_output_retries: int = 3
-    allow_clarification: bool = True
+    allow_clarification: bool = False  # Disabled - queries are typically clear enough
     max_concurrent_research_units: int = 3  # Conservative for company profiles
 
     # Search configuration
