@@ -64,6 +64,7 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
     supervisor_messages: list[MessageLikeRepresentation]
     research_brief: str
+    research_iterations: int  # Used by supervisor subgraph
     raw_notes: list[str]
     notes: list[str]
     final_report: str
@@ -72,11 +73,13 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
 
 
 # Supervisor state - manages research delegation
-class SupervisorState(TypedDict):
+class SupervisorState(TypedDict, total=False):
     """State for supervisor agent that delegates research tasks.
 
     The supervisor breaks down profile research into parallel sub-tasks
     and manages the overall research strategy.
+
+    All fields are optional to allow inheritance from parent ProfileAgentState.
     """
 
     supervisor_messages: list[MessageLikeRepresentation]
