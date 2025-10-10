@@ -40,12 +40,19 @@ This will:
 - Understand the workflow visually
 
 ### 2. **Run Test Queries**
-In the Studio UI, provide input like:
+In the Studio UI, provide input with just the query:
 
 ```json
 {
-  "messages": [{"type": "human", "content": "Tell me about Tesla"}],
+  "query": "Tell me about Tesla"
+}
+```
+
+Optional fields (auto-detected if not provided):
+```json
+{
   "query": "Tell me about Tesla",
+  "messages": [{"type": "human", "content": "Tell me about Tesla"}],
   "profile_type": "company"
 }
 ```
