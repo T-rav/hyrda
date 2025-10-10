@@ -63,7 +63,9 @@ class ProfileConfiguration(BaseModel):
     compression_model_max_tokens: int = (
         64000  # Half of 128K - handles massive deep_research payloads!
     )
-    final_report_model_max_tokens: int = 16000  # For comprehensive final reports
+    final_report_model_max_tokens: int = (
+        32000  # Half of compression (64K) - comprehensive final reports
+    )
 
     # Profile-specific settings
     min_profile_sections: int = 3  # Minimum sections in final report
@@ -105,7 +107,8 @@ class ProfileConfiguration(BaseModel):
                 )
             if not os.getenv("FINAL_REPORT_MODEL_MAX_TOKENS"):
                 settings["final_report_model_max_tokens"] = min(
-                    16000, context_window // 8
+                    32000,
+                    context_window // 4,  # 1/4 context, half of compression limit
                 )
         except Exception:  # nosec B110
             # Fallback to defaults if Settings import fails (intentional)
