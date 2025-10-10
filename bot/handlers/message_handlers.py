@@ -344,6 +344,8 @@ async def handle_bot_command(
     thread_ts: str | None = None,
     files: list[dict] | None = None,
     document_content: str | None = None,
+    llm_service: LLMService | None = None,
+    webcat_client=None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -358,6 +360,8 @@ async def handle_bot_command(
         thread_ts: Thread timestamp if in a thread
         files: Optional list of file attachments
         document_content: Optional processed file content
+        llm_service: Optional LLM service for agent use
+        webcat_client: Optional WebCat MCP client for web search
 
     Returns:
         True if bot command was handled, False otherwise
@@ -391,6 +395,8 @@ async def handle_bot_command(
             "channel": channel,
             "thread_ts": thread_ts,
             "slack_service": slack_service,
+            "llm_service": llm_service,
+            "webcat_client": webcat_client,
         }
 
         # Add file information if available
@@ -507,6 +513,11 @@ async def handle_message(
 
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
+        # Get WebCat client for agent use
+        from services.mcp_client import get_webcat_client
+
+        webcat_client = get_webcat_client()
+
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -515,6 +526,8 @@ async def handle_message(
             thread_ts=thread_ts,
             files=files,
             document_content=document_content,
+            llm_service=llm_service,
+            webcat_client=webcat_client,
         )
 
         if handled:
