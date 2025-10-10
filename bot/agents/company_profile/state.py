@@ -112,20 +112,13 @@ class ResearcherOutputState(TypedDict):
 
 
 # Input state for main graph - only query is required
-class _ProfileAgentInputRequired(TypedDict):
-    """Required input fields."""
-
-    query: str
-
-
-class ProfileAgentInputState(_ProfileAgentInputRequired, total=False):
+class ProfileAgentInputState(TypedDict):
     """Input to the profile agent graph.
 
-    Only query is required - messages and profile_type are optional.
+    Only query is required for input.
     """
 
-    messages: list[MessageLikeRepresentation]  # Optional
-    profile_type: str  # Optional - will be auto-detected if not provided
+    query: str
 
 
 # Output state from main graph
