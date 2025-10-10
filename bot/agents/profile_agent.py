@@ -180,7 +180,7 @@ class ProfileAgent(BaseAgent):
                         if node_name in node_messages:
                             # This node just completed
                             completed_steps.append(node_messages[node_name]["complete"])
-                            logger.info(f"Completed node: {node_name}")
+                            logger.info(f"✅ Completed node: {node_name}")
 
                             # Show next in-progress step if available
                             if slack_service and channel and progress_msg_ts:
@@ -190,19 +190,32 @@ class ProfileAgent(BaseAgent):
                                 # Add next step as in-progress if there is one
                                 try:
                                     current_index = node_order.index(node_name)
+                                    logger.info(
+                                        f"Node {node_name} at index {current_index}/{len(node_order) - 1}"
+                                    )
                                     if current_index + 1 < len(node_order):
                                         next_node = node_order[current_index + 1]
                                         all_steps.append(
                                             node_messages[next_node]["start"]
                                         )
-                                except (ValueError, IndexError):
-                                    pass
+                                        logger.info(
+                                            f"⏳ Starting next node: {next_node} - {node_messages[next_node]['start']}"
+                                        )
+                                    else:
+                                        logger.info("No more nodes to process")
+                                except (ValueError, IndexError) as e:
+                                    logger.warning(
+                                        f"Could not find node {node_name} in order: {e}"
+                                    )
 
                                 steps_text = "\n".join(all_steps)
                                 await slack_service.update_message(
                                     channel=channel,
                                     ts=progress_msg_ts,
                                     text=f"🔍 *Deep Research Progress*\n\n{steps_text}",
+                                )
+                                logger.info(
+                                    f"Updated progress UI: {len(all_steps)} steps"
                                 )
 
                 # Store final result
