@@ -629,11 +629,19 @@ class TestBotCommandHandling:
         """Test /profile bot command is handled correctly"""
         from unittest.mock import AsyncMock
 
+        from services.llm_service import LLMService
+
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
+
+        # Mock LLM service for profile agent
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
+        )
 
         result = await handle_bot_command(
             text="-profile tell me about Charlotte",
@@ -641,19 +649,24 @@ class TestBotCommandHandling:
             slack_service=slack_service,
             channel="C123",
             thread_ts=None,
+            llm_service=llm_service,
         )
 
         assert result is True
         slack_service.send_thinking_indicator.assert_called_once_with("C123", None)
         slack_service.delete_thinking_indicator.assert_called_once()
-        slack_service.send_message.assert_called_once()
 
-        # Verify response content
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text or "profile" in response_text.lower()
-        assert "TODO" in response_text
-        assert "tell me about Charlotte" in response_text
+        # Profile agent sends initial status message + final response
+        assert slack_service.send_message.call_count == 2
+
+        # Verify first call is status message
+        first_call = slack_service.send_message.call_args_list[0]
+        assert "Starting deep research" in first_call.kwargs["text"]
+
+        # Verify second call contains profile response
+        second_call = slack_service.send_message.call_args_list[1]
+        response_text = second_call.kwargs["text"]
+        assert "Profile" in response_text  # Contains "# Employee Profile" or similar
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
@@ -831,6 +844,9 @@ class TestBotCommandHandling:
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
+        )
 
         # Test /profile routing
         await handle_message(
@@ -842,11 +858,12 @@ class TestBotCommandHandling:
             thread_ts=None,
         )
 
-        # Should route to bot command, not LLM
-        slack_service.send_message.assert_called_once()
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text
+        # Should route to bot command - sends status + response (2 messages)
+        assert slack_service.send_message.call_count == 2
+        # Check the final response contains "Profile"
+        final_call = slack_service.send_message.call_args_list[1]
+        response_text = final_call.kwargs["text"]
+        assert "Profile" in response_text
 
         # Reset mocks
         slack_service.send_message.reset_mock()
@@ -880,6 +897,9 @@ class TestBotCommandHandling:
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
+        )
 
         # Test uppercase
         await handle_message(
@@ -891,10 +911,11 @@ class TestBotCommandHandling:
             thread_ts=None,
         )
 
-        slack_service.send_message.assert_called_once()
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text
+        # Profile agent sends status + response (2 messages)
+        assert slack_service.send_message.call_count == 2
+        final_call = slack_service.send_message.call_args_list[1]
+        response_text = final_call.kwargs["text"]
+        assert "Profile" in response_text
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
