@@ -138,6 +138,29 @@ class RAGSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
+class ConversationSettings(BaseSettings):
+    """Conversation context management settings"""
+
+    max_messages: int = Field(
+        default=20,
+        description="Maximum messages to keep in conversation context (sliding window)",
+    )
+    keep_recent: int = Field(
+        default=4,
+        description="Number of recent messages to keep when summarizing",
+    )
+    summarize_threshold: float = Field(
+        default=0.75,
+        description="Context usage percentage to trigger summarization (0.75 = 75%)",
+    )
+    model_context_window: int = Field(
+        default=128000,
+        description="Model's maximum context window in tokens (default: 128k for GPT-4o)",
+    )
+
+    model_config = ConfigDict(env_prefix="CONVERSATION_")  # type: ignore[assignment,typeddict-unknown-key]
+
+
 class MCPSettings(BaseSettings):
     """MCP (Model Context Protocol) server settings"""
 
@@ -197,6 +220,7 @@ class Settings(BaseSettings):
     vector: VectorSettings = Field(default_factory=VectorSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
+    conversation: ConversationSettings = Field(default_factory=ConversationSettings)
     mcp: MCPSettings = Field(default_factory=MCPSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     debug: bool = False

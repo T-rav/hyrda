@@ -68,6 +68,7 @@ class LLMService:
         current_query: str | None = None,
         document_content: str | None = None,
         document_filename: str | None = None,
+        conversation_cache=None,
     ) -> str | None:
         """
         Get response from LLM with optional RAG enhancement
@@ -80,6 +81,7 @@ class LLMService:
             current_query: Override for the current user query
             document_content: Content of uploaded document for context
             document_filename: Name of uploaded document
+            conversation_cache: Optional conversation cache for summary management
 
         Returns:
             Generated response or None if failed
@@ -125,6 +127,7 @@ class LLMService:
                 user_id=user_id,
                 document_content=document_content,
                 document_filename=document_filename,
+                conversation_cache=conversation_cache,
             )
 
             # Trace complete conversation with Langfuse
