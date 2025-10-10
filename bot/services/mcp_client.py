@@ -33,7 +33,14 @@ class WebCatClient:
             # Increase timeout for deep_research operations (10 minutes)
             # deep_research 'high' effort can take 3-5 minutes, allow generous buffer
             timeout = aiohttp.ClientTimeout(total=600)
-            self.session = aiohttp.ClientSession(timeout=timeout)
+            # Increase max_line_size to handle large SSE chunks from WebCat (default is 8KB)
+            # WebCat can send large search results that exceed aiohttp's readline limit
+            connector = aiohttp.TCPConnector(limit_per_host=10)
+            self.session = aiohttp.ClientSession(
+                timeout=timeout,
+                connector=connector,
+                read_bufsize=1024 * 1024,  # 1MB read buffer (default is 64KB)
+            )
 
         # Initialize MCP session
         await self._init_mcp_session()
