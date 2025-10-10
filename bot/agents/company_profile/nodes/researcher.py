@@ -360,6 +360,94 @@ async def researcher_tools(
                     ToolMessage(content=f"Scrape error: {str(e)}", tool_call_id=tool_id)
                 )
 
+        elif tool_name == "deep_research" and webcat_client:
+            # Execute deep research via Perplexity
+            try:
+                query = tool_args.get("query", "")
+                effort = tool_args.get("effort", "medium")
+
+                # Trace tool execution
+                langfuse_service = get_langfuse_service()
+
+                logger.info(
+                    f"Starting deep_research ({effort} effort): {query[:100]}..."
+                )
+                research_result = await webcat_client.deep_research(query, effort)
+
+                if research_result.get("success") or research_result.get("answer"):
+                    answer = research_result.get("answer", "")
+                    sources = research_result.get("sources", [])
+
+                    # Format answer with sources
+                    result_text = f"# Deep Research Results\n\n{answer}\n\n"
+                    if sources:
+                        result_text += "**Sources:**\n"
+                        for idx, source in enumerate(sources[:10], 1):
+                            result_text += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+
+                    # Trace successful research
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="deep_research",
+                            tool_input={"query": query, "effort": effort},
+                            tool_output={
+                                "success": True,
+                                "answer_length": len(answer),
+                                "sources_count": len(sources),
+                            },
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "effort": effort,
+                                "cost_indicator": f"{effort}_effort",
+                            },
+                        )
+
+                    from langchain_core.messages import ToolMessage
+
+                    tool_results.append(
+                        ToolMessage(content=result_text, tool_call_id=tool_id)
+                    )
+                    raw_notes.append(result_text)
+                    logger.info(
+                        f"Deep research completed: {len(answer)} chars, {len(sources)} sources"
+                    )
+                else:
+                    error = research_result.get("error", "Unknown error")
+
+                    # Trace failed research
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="deep_research",
+                            tool_input={"query": query, "effort": effort},
+                            tool_output={"success": False, "error": error},
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "effort": effort,
+                            },
+                        )
+
+                    from langchain_core.messages import ToolMessage
+
+                    tool_results.append(
+                        ToolMessage(
+                            content=f"Deep research failed: {error}",
+                            tool_call_id=tool_id,
+                        )
+                    )
+                    logger.warning(f"Deep research failed for {query[:100]}: {error}")
+
+            except Exception as e:
+                logger.error(f"Deep research error: {e}")
+                from langchain_core.messages import ToolMessage
+
+                tool_results.append(
+                    ToolMessage(
+                        content=f"Deep research error: {str(e)}", tool_call_id=tool_id
+                    )
+                )
+
         else:
             from langchain_core.messages import ToolMessage
 
