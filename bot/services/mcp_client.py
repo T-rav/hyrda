@@ -401,19 +401,32 @@ class WebCatClient:
                                             for item in result_data["content"]:
                                                 if item.get("type") == "text":
                                                     text = item.get("text", "")
+                                                    logger.debug(
+                                                        f"Received text response: {len(text)} chars"
+                                                    )
                                                     try:
                                                         result = json.loads(text)
+                                                        logger.debug(
+                                                            f"Parsed JSON successfully: {list(result.keys())}"
+                                                        )
                                                     except json.JSONDecodeError:
+                                                        logger.debug(
+                                                            "Failed to parse as JSON, using raw text"
+                                                        )
                                                         result = {"answer": text}
                                         else:
+                                            logger.debug(
+                                                f"Using result_data directly: {list(result_data.keys())}"
+                                            )
                                             result = result_data
                                     break
 
                             except json.JSONDecodeError:
                                 continue
 
+            answer_len = len(result.get("answer", ""))
             logger.info(
-                f"WebCat deep research completed for: {query} (answer length: {len(result.get('answer', ''))})"
+                f"WebCat deep research completed for: {query} (answer length: {answer_len}, keys: {list(result.keys())})"
             )
             return result
 
