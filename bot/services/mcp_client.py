@@ -32,7 +32,13 @@ class WebCatClient:
         if not self.session:
             # Increase timeout for deep_research operations (10 minutes)
             # deep_research 'high' effort can take 3-5 minutes, allow generous buffer
-            timeout = aiohttp.ClientTimeout(total=600)
+            # Set all timeout components to 600s to prevent premature disconnections
+            timeout = aiohttp.ClientTimeout(
+                total=600,  # Total request timeout (10 minutes)
+                connect=60,  # Connection timeout (1 minute)
+                sock_read=600,  # Socket read timeout (10 minutes) - CRITICAL for SSE streams
+                sock_connect=60,  # Socket connect timeout (1 minute)
+            )
             # Increase max_line_size to handle large SSE chunks from WebCat (default is 8KB)
             # WebCat can send large search results that exceed aiohttp's readline limit
             connector = aiohttp.TCPConnector(limit_per_host=10)
