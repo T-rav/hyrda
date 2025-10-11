@@ -106,6 +106,11 @@ class ProfileAgent(BaseAgent):
                 "metadata": {"error": "no_llm_service"},
             }
 
+        # Get internal deep research service for knowledge base search
+        from services.internal_deep_research import get_internal_deep_research_service
+
+        internal_deep_research = get_internal_deep_research_service()
+
         # Detect profile type
         profile_type = detect_profile_type(query)
         logger.info(f"Detected profile type: {profile_type}")
@@ -133,6 +138,7 @@ class ProfileAgent(BaseAgent):
                 "configurable": {
                     "llm_service": llm_service,
                     "webcat_client": webcat_client,
+                    "internal_deep_research": internal_deep_research,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
                     "max_researcher_iterations": self.config.max_researcher_iterations,
