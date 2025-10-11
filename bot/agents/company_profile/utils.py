@@ -201,17 +201,22 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig) -> str | None
 
 
 def format_research_context(
-    research_brief: str, notes: list[str], profile_type: str
+    research_brief: str,
+    notes: list[str],
+    profile_type: str,
+    max_sources: int = 25,
 ) -> str:
     """Format research context for final report generation.
 
     Extracts all sources from individual research notes and creates a consolidated
-    global source list, renumbering citations throughout.
+    global source list, renumbering citations throughout. Limits sources to top N
+    to fit within token budgets.
 
     Args:
         research_brief: Original research plan
         notes: List of compressed research findings
         profile_type: Type of profile (company, employee, project)
+        max_sources: Maximum number of sources to include (default 25)
 
     Returns:
         Formatted context string with global source numbering
@@ -268,6 +273,29 @@ def format_research_context(
             # No sources section found, keep note as-is
             renumbered_notes.append(note)
 
+    # Prune sources to max_sources if needed (keep first N)
+    original_source_count = len(global_sources)
+    if len(global_sources) > max_sources:
+        logger.warning(
+            f"Pruning sources from {len(global_sources)} to {max_sources} (keeping first {max_sources})"
+        )
+        global_sources = global_sources[:max_sources]
+
+        # Remove citations in notes that point to pruned sources
+        # This prevents citations [26], [27]... when we only have 25 sources
+        pruned_notes = []
+        for note in renumbered_notes:
+            # Remove citations beyond max_sources
+            pruned_note = re.sub(
+                r"\[(\d+)\]",
+                lambda m: (
+                    m.group(0) if int(m.group(1)) <= max_sources else ""
+                ),  # Keep if <= max, remove if >
+                note,
+            )
+            pruned_notes.append(pruned_note)
+        renumbered_notes = pruned_notes
+
     # Build context with renumbered notes
     context = "# Profile Research Context\n\n"
     context += f"**Profile Type**: {profile_type}\n\n"
@@ -291,9 +319,14 @@ def format_research_context(
         context += "**IMPORTANT**: When writing your report, use these source numbers [1] through"
         context += f" [{len(global_sources)}] and ensure your ## Sources section lists ALL {len(global_sources)} sources.\n"
 
-    logger.info(
-        f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
-    )
+    if original_source_count > max_sources:
+        logger.info(
+            f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} sources (pruned from {original_source_count})"
+        )
+    else:
+        logger.info(
+            f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
+        )
 
     return context
 
