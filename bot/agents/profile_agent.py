@@ -182,6 +182,10 @@ class ProfileAgent(BaseAgent):
                     "start": "📊 Generating final report...",
                     "complete": "✅ Report generated",
                 },
+                "quality_control": {
+                    "start": "🔍 Validating report quality...",
+                    "complete": "✅ Quality check passed",
+                },
             }
 
             # Track completed steps
@@ -192,6 +196,7 @@ class ProfileAgent(BaseAgent):
                 "write_research_brief",
                 "research_supervisor",
                 "final_report_generation",
+                "quality_control",
             ]
 
             # Track timing for each node
