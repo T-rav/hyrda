@@ -200,7 +200,7 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig) -> str | None
     return None
 
 
-def format_research_context(
+async def format_research_context(
     research_brief: str,
     notes: list[str],
     profile_type: str,
@@ -273,28 +273,119 @@ def format_research_context(
             # No sources section found, keep note as-is
             renumbered_notes.append(note)
 
-    # Prune sources to max_sources if needed (keep first N)
+    # Prune sources to max_sources if needed (use LLM to select top N)
     original_source_count = len(global_sources)
     if len(global_sources) > max_sources:
-        logger.warning(
-            f"Pruning sources from {len(global_sources)} to {max_sources} (keeping first {max_sources})"
+        logger.info(
+            f"Pruning sources from {len(global_sources)} to {max_sources} using LLM selection"
         )
-        global_sources = global_sources[:max_sources]
 
-        # Remove citations in notes that point to pruned sources
-        # This prevents citations [26], [27]... when we only have 25 sources
-        pruned_notes = []
-        for note in renumbered_notes:
-            # Remove citations beyond max_sources
-            pruned_note = re.sub(
-                r"\[(\d+)\]",
-                lambda m: (
-                    m.group(0) if int(m.group(1)) <= max_sources else ""
-                ),  # Keep if <= max, remove if >
-                note,
+        # Use LLM to intelligently select top N most relevant sources
+        import json
+
+        from langchain_openai import ChatOpenAI
+
+        from config.settings import Settings
+
+        settings = Settings()
+
+        # Build source list for LLM
+        sources_text = "\n".join(
+            [
+                f"{i}. {url} - {desc}" if desc else f"{i}. {url}"
+                for i, (url, desc) in enumerate(global_sources, 1)
+            ]
+        )
+
+        selection_prompt = f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
+
+**All Available Sources:**
+{sources_text}
+
+**Selection Criteria:**
+- Prioritize authoritative sources (official company sites, SEC filings, reputable news)
+- Include diverse source types (company site, news, financial data, industry analysis)
+- Prefer sources with detailed descriptions (indicates rich content)
+- Balance recency with authority
+- Avoid duplicate or redundant sources
+
+**Your Task:**
+Return a JSON array of the source numbers (1-{len(global_sources)}) you want to keep, in order of importance.
+You MUST select exactly {max_sources} sources.
+
+Example response format:
+```json
+[1, 5, 8, 12, 15, 18, 20, 23, 25, 28, 30, 32, 35, 38, 40, 42, 45, 48, 50, 52, 55, 58, 60, 62, 65]
+```
+
+Return ONLY the JSON array, no explanation."""
+
+        try:
+            llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                api_key=settings.llm.api_key,
+                temperature=0.0,
+                max_completion_tokens=200,
             )
-            pruned_notes.append(pruned_note)
-        renumbered_notes = pruned_notes
+
+            response = await llm.ainvoke(selection_prompt)
+            response_text = response.content.strip()
+
+            # Parse JSON response
+            json_match = re.search(
+                r"```json\s*(\[.*?\])\s*```", response_text, re.DOTALL
+            )
+            if json_match:
+                selected_indices = json.loads(json_match.group(1))
+            else:
+                # Try to parse directly
+                selected_indices = json.loads(response_text)
+
+            logger.info(
+                f"LLM selected {len(selected_indices)} sources: {selected_indices[:5]}..."
+            )
+
+            # Build mapping: old index -> new index (or None if pruned)
+            old_to_new = {}
+            new_sources = []
+            for new_idx, old_idx in enumerate(selected_indices, 1):
+                if 1 <= old_idx <= len(global_sources):
+                    old_to_new[old_idx] = new_idx
+                    new_sources.append(global_sources[old_idx - 1])  # 0-indexed
+
+            global_sources = new_sources
+
+            # Renumber citations in notes based on new mapping
+            remapped_notes = []
+            for note in renumbered_notes:
+                # Replace citations with new numbers or remove if pruned
+                remapped_note = re.sub(
+                    r"\[(\d+)\]",
+                    lambda m: f"[{old_to_new[int(m.group(1))]}]"
+                    if int(m.group(1)) in old_to_new
+                    else "",
+                    note,
+                )
+                remapped_notes.append(remapped_note)
+            renumbered_notes = remapped_notes
+
+        except Exception as e:
+            logger.error(
+                f"LLM source selection failed: {e}, falling back to first {max_sources}"
+            )
+            # Fallback: keep first N
+            global_sources = global_sources[:max_sources]
+
+            # Remove citations beyond max_sources
+            pruned_notes = []
+            for note in renumbered_notes:
+                pruned_note = re.sub(
+                    r"\[(\d+)\]",
+                    lambda m: (m.group(0) if int(m.group(1)) <= max_sources else ""),
+                    note,
+                )
+                pruned_notes.append(pruned_note)
+            renumbered_notes = pruned_notes
 
     # Build context with renumbered notes
     context = "# Profile Research Context\n\n"
