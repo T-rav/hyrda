@@ -16,6 +16,7 @@ from agents.company_profile.utils import (
     create_system_message,
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
+    select_messages_within_budget,
 )
 from services.langfuse_service import get_langfuse_service
 
@@ -74,11 +75,17 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
         research_topic=research_topic
     )
 
-    # Create compression messages
-    # Use last 40 messages to capture all research with reduced tool calls
+    # Create compression messages with smart token management
+    # Budget: 128K context - 16K output - 2K system prompt = ~110K available
+    # Use 80K to be conservative (allows for encoding overhead)
+    compression_cache = {}  # Cache compressed messages across retries
+    selected_content = select_messages_within_budget(
+        messages, max_tokens=80000, compression_cache=compression_cache
+    )
+
     compression_messages = [
         create_system_message(system_prompt),
-        create_human_message("\n\n".join([str(msg) for msg in messages[-40:]])),
+        create_human_message(selected_content),
     ]
 
     # Try compression with retry on token limits
