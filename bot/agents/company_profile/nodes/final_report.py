@@ -59,19 +59,26 @@ async def final_report_generation(
     settings = Settings()
 
     # Check if Gemini is enabled for final report generation
+    llm = None
     if settings.gemini.enabled and settings.gemini.api_key:
-        from langchain_google_genai import ChatGoogleGenerativeAI
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
 
-        logger.info(
-            f"Using Gemini ({settings.gemini.model}) for final report generation"
-        )
-        llm = ChatGoogleGenerativeAI(
-            model=settings.gemini.model,
-            google_api_key=settings.gemini.api_key,
-            temperature=0.7,
-            max_output_tokens=configuration.final_report_model_max_tokens,
-        )
-    else:
+            logger.info(
+                f"Using Gemini ({settings.gemini.model}) for final report generation"
+            )
+            llm = ChatGoogleGenerativeAI(
+                model=settings.gemini.model,
+                google_api_key=settings.gemini.api_key,
+                temperature=0.7,
+                max_output_tokens=configuration.final_report_model_max_tokens,
+            )
+        except ImportError:
+            logger.warning(
+                "langchain_google_genai not installed - falling back to OpenAI"
+            )
+
+    if llm is None:
         from langchain_openai import ChatOpenAI
 
         logger.info(f"Using OpenAI ({settings.llm.model}) for final report generation")
