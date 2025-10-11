@@ -95,8 +95,8 @@ def build_profile_researcher() -> CompiledStateGraph:
     # Build main graph with explicit input/output schemas
     profile_builder = StateGraph(
         ProfileAgentState,
-        input=ProfileAgentInputState,
-        output=ProfileAgentOutputState,
+        input_schema=ProfileAgentInputState,
+        output_schema=ProfileAgentOutputState,
     )
 
     # Add nodes
