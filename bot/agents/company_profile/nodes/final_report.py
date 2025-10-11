@@ -23,9 +23,7 @@ from agents.company_profile.utils import (
 logger = logging.getLogger(__name__)
 
 
-async def final_report_generation(
-    state: ProfileAgentState, config: RunnableConfig
-) -> dict:
+async def final_report_generation(state: ProfileAgentState, config: RunnableConfig):
     """Generate final comprehensive profile report.
 
     Args:
@@ -33,7 +31,7 @@ async def final_report_generation(
         config: Runtime configuration
 
     Returns:
-        Dict with final_report
+        Command to route to quality_control node
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     notes = state.get("notes", [])
@@ -159,10 +157,15 @@ async def final_report_generation(
                     "📎 _Unable to generate summary - see full report_"
                 )
 
-            return {
-                "final_report": final_report,
-                "executive_summary": executive_summary,
-            }
+            from langgraph.types import Command
+
+            return Command(
+                goto="quality_control",
+                update={
+                    "final_report": final_report,
+                    "executive_summary": executive_summary,
+                },
+            )
 
         except Exception as e:
             if is_token_limit_exceeded(e, configuration.final_report_model):
@@ -174,10 +177,18 @@ async def final_report_generation(
             break
 
     # Fallback: return notes summary
+    from langgraph.types import Command
+
     fallback_report = (
         "# Profile Report (Partial)\n\n"
         "Unable to generate full report. Research findings:\n\n"
         + "\n\n".join(notes[:3])
     )
 
-    return {"final_report": fallback_report}
+    return Command(
+        goto="quality_control",
+        update={
+            "final_report": fallback_report,
+            "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
+        },
+    )

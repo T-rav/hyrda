@@ -114,12 +114,11 @@ def build_profile_researcher() -> CompiledStateGraph:
 
     # Add edges
     profile_builder.add_edge(START, "clarify_with_user")
-    profile_builder.add_edge("clarify_with_user", "write_research_brief")
-    profile_builder.add_edge("write_research_brief", "research_supervisor")
+    # clarify_with_user returns Command to route to write_research_brief or END
+    # write_research_brief returns Command to route to research_supervisor
     profile_builder.add_edge("research_supervisor", "final_report_generation")
-    # Quality control loop: final_report -> quality_control -> (END or back to final_report)
-    profile_builder.add_edge("final_report_generation", "quality_control")
-    # quality_control node returns Command with goto="__end__" or goto="final_report_generation"
+    # final_report_generation returns Command to route to quality_control
+    # quality_control returns Command to route to END or back to final_report_generation (loop)
 
     # Compile and return
     return profile_builder.compile()
