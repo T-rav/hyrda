@@ -377,21 +377,23 @@ class ProfileAgent(BaseAgent):
                 except Exception as pdf_error:
                     logger.error(f"Error uploading PDF: {pdf_error}")
 
-            # If PDF was uploaded with executive summary, return empty response
-            # (summary already posted as initial_comment)
-            # Otherwise return the full response text
+            # If PDF was uploaded, ALWAYS return empty response
+            # (summary is posted as initial_comment with the PDF)
             logger.info(
                 f"Decision point: executive_summary={bool(executive_summary)}, pdf_uploaded={pdf_uploaded}"
             )
-            if executive_summary and pdf_uploaded:
-                response = ""  # Already posted with PDF upload
+            if pdf_uploaded:
+                # PDF was uploaded successfully - don't post anything else to Slack
+                # The summary is already attached to the PDF as initial_comment
+                response = ""
                 logger.info(
-                    "✅ Executive summary posted with PDF, returning EMPTY response"
+                    "✅ PDF uploaded with summary attached, returning EMPTY response"
                 )
             else:
+                # PDF upload failed - post the full report or summary as fallback
                 response = response_text
                 logger.info(
-                    f"⚠️ Returning response text (PDF uploaded={pdf_uploaded}, has summary={bool(executive_summary)})"
+                    f"⚠️ PDF upload failed, returning response text as fallback ({len(response_text)} chars)"
                 )
 
             return {
