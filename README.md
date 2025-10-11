@@ -14,8 +14,7 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 - **Internal Deep Research**: Multi-query RAG with compression for in-depth knowledge base exploration
 
 ### 🌐 **Web Search & Real-Time Data**
-- **WebCat MCP Integration**: Model Context Protocol server for web search and scraping
-- **Multi-Provider Search**: Serper, Brave, or Google Custom Search support
+- **Tavily Web Search**: Fast web search integration with Tavily API
 - **Perplexity Deep Research**: Long-form research reports with citations (5-15 minute tasks)
 - **Smart URL Scraping**: Extract content from web pages with automatic fallback
 - **Function Calling**: LLM automatically decides when to search the web vs use knowledge base
@@ -40,7 +39,7 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 
 ### 🚀 **Easy Setup & Deployment**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
-- **Docker Compose**: Full stack deployment (bot + Qdrant + WebCat + Redis + MySQL)
+- **Docker Compose**: Full stack deployment (bot + Qdrant + Redis + MySQL)
 - **Document Ingestion**: CLI tool for loading from Google Drive with OAuth2
 - **Multiple LLM Providers**: OpenAI, Anthropic, or Ollama support
 - **Flexible Configuration**: Environment-based settings with sensible defaults
@@ -77,11 +76,8 @@ VECTOR_HOST=localhost  # Use 'qdrant' in Docker
 VECTOR_PORT=6333
 VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
 
-# WebCat MCP Server for web search
-MCP_WEBCAT_ENABLED=true
-MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
-MCP_WEBCAT_PORT=3000
-MCP_SERPER_API_KEY=your-serper-api-key  # Get from https://serper.dev/
+# Web Search Configuration
+TAVILY_API_KEY=your-tavily-api-key  # Get from https://tavily.com
 
 # Perplexity for deep research (optional, recommended)
 PERPLEXITY_API_KEY=your-perplexity-api-key  # Get from https://www.perplexity.ai/settings/api
@@ -97,7 +93,7 @@ LANGFUSE_SECRET_KEY=sk_lf_your_secret_key_here
 
 ### 3. **Start Services with Docker Compose**
 ```bash
-# Start full stack: bot + Qdrant + WebCat + Redis + MySQL
+# Start full stack: bot + Qdrant + Redis + MySQL
 docker compose up -d
 
 # Check status
@@ -105,7 +101,6 @@ docker compose ps
 
 # View logs
 docker logs -f insightmesh-bot
-docker logs -f insightmesh-webcat
 ```
 
 ### 4. **Load Your Knowledge Base**
@@ -166,11 +161,9 @@ make ci           # Run complete CI pipeline locally
 docker compose up -d              # Start all services
 docker compose down               # Stop all services
 docker compose logs -f bot        # View bot logs
-docker compose logs -f webcat     # View WebCat logs
 
 # Individual services
 docker compose up -d qdrant       # Start Qdrant only
-docker compose up -d webcat       # Start WebCat only
 docker compose restart bot        # Restart bot after code changes
 
 # Build and run
@@ -232,51 +225,25 @@ Access the Qdrant dashboard at `http://localhost:6333/dashboard` to:
 - Monitor search performance
 - Debug retrieval issues
 
-## 🌐 WebCat MCP Server
+## 🌐 Web Search Configuration
 
-WebCat provides web search and scraping capabilities via the Model Context Protocol (MCP).
+The bot includes direct integration with Tavily and Perplexity for web search and deep research.
 
 ### Features
-- **Multi-Provider Search**: Serper (recommended), Brave, or Google Custom Search
-- **Smart URL Scraping**: Extract clean content from web pages
+- **Tavily Web Search**: Fast, high-quality web search results
 - **Perplexity Deep Research**: 5-15 minute long-form research with citations
+- **Smart URL Scraping**: Extract clean content from web pages
 - **Function Calling**: LLM decides when to search vs use knowledge base
 
 ### Configuration
 
 ```bash
 # In .env
-MCP_WEBCAT_ENABLED=true
-MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
-MCP_WEBCAT_PORT=3000
-
-# Search provider (choose one)
-MCP_SERPER_API_KEY=your-serper-api-key  # Recommended - https://serper.dev/
-# BRAVE_API_KEY=your-brave-key          # Alternative - https://brave.com/search/api/
-# GOOGLE_API_KEY=your-google-key        # Alternative - Google Custom Search
+# Web search via Tavily
+TAVILY_API_KEY=your-tavily-api-key  # Get from https://tavily.com
 
 # Deep research (optional but recommended)
 PERPLEXITY_API_KEY=your-perplexity-key  # Get from https://www.perplexity.ai/settings/api
-MCP_WEBCAT_DEEP_RESEARCH_ENABLED=true
-```
-
-### WebCat Docker Service
-
-The WebCat service runs automatically in `docker-compose.yml`:
-
-```yaml
-webcat:
-  image: webcat:latest
-  ports:
-    - "3000:3000"
-  environment:
-    - SERPER_API_KEY=${MCP_SERPER_API_KEY}
-    - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
-```
-
-Check WebCat logs:
-```bash
-docker logs -f insightmesh-webcat
 ```
 
 ## 🔬 Deep Research Agents
@@ -343,7 +310,7 @@ Access at `http://localhost:8123` - See `LANGGRAPH_STUDIO.md` for details.
 - **LangChain/LangGraph**: Agent orchestration and workflows
 - **OpenAI/Anthropic**: LLM providers (GPT-4o, Claude)
 - **Qdrant**: Self-hosted vector database
-- **WebCat (MCP)**: Web search via Model Context Protocol
+- **Tavily & Perplexity**: Direct web search and deep research integration
 - **MySQL**: Database for user prompts, tasks, and metrics
 - **Redis**: Conversation caching and session management
 - **Langfuse**: LLM observability and prompt management
@@ -365,7 +332,7 @@ bot/
 │   ├── event_handlers.py         # Slack event handlers
 │   └── message_handlers.py       # Message handling logic
 ├── services/                     # Core services
-│   ├── mcp_client.py             # WebCat MCP client
+│   ├── search_clients.py         # Web search clients (Tavily, Perplexity)
 │   ├── internal_deep_research.py # Internal knowledge base deep research
 │   ├── conversation_manager.py   # Conversation context management
 │   ├── llm_service.py            # RAG-enabled LLM service
@@ -630,7 +597,6 @@ docker compose ps
 
 # View logs
 docker logs -f insightmesh-bot
-docker logs -f insightmesh-webcat
 docker logs -f insightmesh-qdrant
 
 # Restart services
@@ -642,10 +608,9 @@ docker compose restart bot
 - **Wrong dimensions**: Ensure embedding model matches collection (1536 for text-embedding-3-small)
 - **Connection errors**: Check `VECTOR_HOST` is `localhost` locally or `qdrant` in Docker
 
-### WebCat Issues
-- **Search not working**: Check `MCP_SERPER_API_KEY` is set and valid
+### Web Search Issues
+- **Search not working**: Check `TAVILY_API_KEY` is set and valid
 - **Deep research failing**: Verify `PERPLEXITY_API_KEY` is set
-- **Connection refused**: Ensure WebCat is running (`docker compose ps webcat`)
 
 ### RAG Issues
 - **No relevant results**: Check similarity thresholds in `.env` (try lowering `RAG_SIMILARITY_THRESHOLD`)
@@ -697,7 +662,6 @@ LOG_LEVEL=INFO
 
 # Use Docker service names
 VECTOR_HOST=qdrant
-MCP_WEBCAT_HOST=webcat
 CACHE_REDIS_URL=redis://redis:6379
 
 # Database with strong password
@@ -707,7 +671,7 @@ DATABASE_URL=mysql+pymysql://user:strong_password@mysql:3306/bot
 ### Resource Requirements
 
 Minimum for 100 users:
-- **Memory**: 2GB (bot) + 1GB (Qdrant) + 512MB (WebCat)
+- **Memory**: 2GB (bot) + 1GB (Qdrant)
 - **CPU**: 2 cores
 - **Disk**: 10GB for vector storage + logs
 
@@ -715,7 +679,6 @@ Minimum for 100 users:
 
 - **Qdrant**: Can scale horizontally with sharding
 - **Bot instances**: Can run multiple replicas with shared Redis cache
-- **WebCat**: Stateless, can scale horizontally
 - **MySQL**: Use read replicas for high read workloads
 
 ## 📝 License

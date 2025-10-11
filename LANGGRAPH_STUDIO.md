@@ -102,15 +102,14 @@ The `langgraph.json` file configures:
 
 Studio uses your `.env` file automatically, so all these work:
 - `LLM_PROVIDER`, `LLM_API_KEY`
-- `MCP_WEBCAT_ENABLED`, `MCP_WEBCAT_HOST`
-- `MCP_WEBCAT_DEEP_RESEARCH_ENABLED`
+- `TAVILY_API_KEY`, `PERPLEXITY_API_KEY`
 - All other config from `.env.example`
 
 ## Debugging Tips
 
 ### Check Tool Execution
 In the Studio, expand nodes to see:
-- **web_search** results from WebCat/Serper
+- **web_search** results from Tavily
 - **scrape_url** extracted content
 - **deep_research** Perplexity responses
 
@@ -140,9 +139,7 @@ langgraph dev --port 8124
 - Verify `.env` file exists with required keys
 
 **Tool calls failing:**
-- Check `MCP_WEBCAT_ENABLED=true` in `.env`
-- Ensure WebCat is running: `docker compose up -d webcat`
-- Verify API keys: `PERPLEXITY_API_KEY`, `SERPER_API_KEY`
+- Verify API keys in `.env`: `TAVILY_API_KEY`, `PERPLEXITY_API_KEY`
 
 ## LangGraph Studio vs Langfuse
 

@@ -13,8 +13,7 @@ from pydantic import BaseModel
 class SearchAPI(str, Enum):
     """Available search API options."""
 
-    WEBCAT = "webcat"  # Our integrated WebCat MCP server
-    TAVILY = "tavily"  # Tavily search (if available)
+    TAVILY = "tavily"  # Tavily search (direct integration)
     NONE = "none"  # No search API
 
 
@@ -38,7 +37,7 @@ class ProfileConfiguration(BaseModel):
     max_concurrent_research_units: int = 6  # Increased parallelization for speed
 
     # Search configuration
-    search_api: SearchAPI = SearchAPI.WEBCAT  # Use our WebCat integration
+    search_api: SearchAPI = SearchAPI.TAVILY  # Use direct Tavily integration
     max_researcher_iterations: int = 3  # Optimized for speed (was 5, originally 8)
     max_react_tool_calls: int = 6  # Optimized for speed (was 12, originally 15)
 
@@ -48,12 +47,12 @@ class ProfileConfiguration(BaseModel):
     compression_model: str = "openai:gpt-4o-mini"  # Compression model
     final_report_model: str = "openai:gpt-4o"  # Final report generation
 
-    # Token limits - hardcoded for 128K context window
+    # Token limits
+    # Note: Gemini 2.0 Flash has 1M input + 8K output tokens
+    # OpenAI GPT-4o has 128K input + configurable output
     research_model_max_tokens: int = 16000  # For researcher tool calling
     compression_model_max_tokens: int = 16000  # For compression synthesis
-    final_report_model_max_tokens: int = (
-        32000  # For final report (~8K words, ~29 pages)
-    )
+    final_report_model_max_tokens: int = 8000  # Gemini 2.5: 8K max output (was 32K)
 
     # Profile-specific settings
     min_profile_sections: int = 3  # Minimum sections in final report

@@ -69,18 +69,34 @@ async def final_report_generation(
             )
         return {"final_report": "No research findings available to generate report."}
 
-    # Use LangChain ChatOpenAI directly
-    from langchain_openai import ChatOpenAI
-
+    # Use LangChain with Gemini or OpenAI
     from config.settings import Settings
 
     settings = Settings()
-    llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.7,
-        max_tokens=configuration.final_report_model_max_tokens,
-    )
+
+    # Check if Gemini is enabled for final report generation
+    if settings.gemini.enabled and settings.gemini.api_key:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        logger.info(
+            f"Using Gemini ({settings.gemini.model}) for final report generation"
+        )
+        llm = ChatGoogleGenerativeAI(
+            model=settings.gemini.model,
+            google_api_key=settings.gemini.api_key,
+            temperature=0.7,
+            max_output_tokens=configuration.final_report_model_max_tokens,
+        )
+    else:
+        from langchain_openai import ChatOpenAI
+
+        logger.info(f"Using OpenAI ({settings.llm.model}) for final report generation")
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            api_key=settings.llm.api_key,
+            temperature=0.7,
+            max_tokens=configuration.final_report_model_max_tokens,
+        )
 
     # Format research context
     notes_text = format_research_context(research_brief, notes, profile_type)
@@ -149,13 +165,25 @@ async def final_report_generation(
                 summary_prompt = prompts.executive_summary_prompt.format(
                     full_report=final_report
                 )
-                # Use LangChain ChatOpenAI with lower max_tokens for summary
-                summary_llm = ChatOpenAI(
-                    model=settings.llm.model,
-                    api_key=settings.llm.api_key,
-                    temperature=0.7,
-                    max_tokens=500,
-                )
+                # Use same LLM as final report with lower max_tokens for summary
+                if settings.gemini.enabled and settings.gemini.api_key:
+                    from langchain_google_genai import ChatGoogleGenerativeAI
+
+                    summary_llm = ChatGoogleGenerativeAI(
+                        model=settings.gemini.model,
+                        google_api_key=settings.gemini.api_key,
+                        temperature=0.7,
+                        max_output_tokens=500,
+                    )
+                else:
+                    from langchain_openai import ChatOpenAI
+
+                    summary_llm = ChatOpenAI(
+                        model=settings.llm.model,
+                        api_key=settings.llm.api_key,
+                        temperature=0.7,
+                        max_tokens=500,
+                    )
                 summary_response = await summary_llm.ainvoke(
                     [create_human_message(summary_prompt)]
                 )
