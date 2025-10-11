@@ -199,145 +199,91 @@ async def quality_control_node(
 
     logger.info(f"Quality control check (revision {revision_count})")
 
-    # Extract actual citations and sources using reliable regex-based functions
+    # Extract actual citations and sources for logging
     citations = extract_citations_from_report(final_report)
     sources_count = count_sources_in_section(final_report)
-    highest_citation = max(citations) if citations else 0
 
     logger.info(
-        f"Report stats: {len(citations)} unique citations (highest: {highest_citation}), "
+        f"Report stats: {len(citations)} unique citations (highest: {max(citations) if citations else 0}), "
         f"{sources_count} source entries"
     )
 
-    # Programmatic validation (deterministic, no LLM hallucinations)
-    issues = []
-    missing_sources = []
-
-    # Check 1: Sources section present
-    if sources_count == 0:
-        issues.append("Report is missing the ## Sources section entirely")
-
-    # Check 2: All citations have corresponding sources
-    if highest_citation > sources_count:
-        missing_sources = list(range(sources_count + 1, highest_citation + 1))
-        issues.append(
-            f"Sources section only lists {sources_count} sources, but report uses citations [1] through [{highest_citation}]"
-        )
-        issues.append(f"Missing source entries for citations {missing_sources}")
-
-    # Check 3: Validate structure has required sections (use LLM for this)
-    # Check for meta-references like "Internal research" (use LLM for this)
+    # Initialize LLM judge
     try:
-        import json
-
         settings = Settings()
         judge_llm = ChatOpenAI(
-            model="gpt-4o",
+            model="gpt-4o",  # Use GPT-4o for accurate validation (no hallucinations)
             api_key=settings.llm.api_key,
-            temperature=0.0,
-            max_completion_tokens=300,
+            temperature=0.0,  # Deterministic evaluation
+            max_completion_tokens=500,
         )
 
-        # Simplified prompt - LLM only checks structure and meta-references
-        structure_prompt = f"""You are checking a company profile report for structural completeness.
-
-<Report>
-{final_report}
-</Report>
-
-Check ONLY these two things:
-1. **Required sections present**: The report should have sections like Overview, Priorities, News, Executive Team (some variation is OK)
-2. **No meta-references in Sources**: The ## Sources section should contain ONLY external URLs, not phrases like "Internal research" or "Research findings"
-
-Return ONLY JSON:
-{{
-  "structure_complete": true/false,
-  "meta_references_found": true/false,
-  "structure_issues": ["description of missing section 1", "description of missing section 2"],
-  "meta_reference_examples": ["example 1", "example 2"]
-}}
-"""
-        response = await judge_llm.ainvoke(structure_prompt)
+        # Run quality evaluation
+        prompt = QUALITY_JUDGE_PROMPT.format(report=final_report)
+        response = await judge_llm.ainvoke(prompt)
         response_text = response.content.strip()
 
-        # Parse JSON
+        logger.debug(f"Judge response: {response_text[:200]}...")
+
+        # Parse JSON response
+        import json
+
+        # Extract JSON from markdown code blocks if present
         json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
         if json_match:
             json_text = json_match.group(1)
         else:
+            # Try to find raw JSON
             json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
             json_text = json_match.group(0) if json_match else response_text
 
-        structure_eval = json.loads(json_text)
+        evaluation = json.loads(json_text)
 
-        # Add structure issues
-        if not structure_eval.get("structure_complete", True):
-            for issue in structure_eval.get("structure_issues", []):
-                issues.append(f"Structure: {issue}")
+        passes_quality = evaluation.get("passes_quality", False)
+        issues = evaluation.get("issues", [])
+        revision_instructions = evaluation.get("revision_instructions", "")
+        highest_citation = evaluation.get("highest_citation", 0)
+        sources_count_judge = evaluation.get("sources_count", 0)
+        missing_sources = evaluation.get("missing_sources", [])
+        evidence = evaluation.get("evidence", "No evidence provided")
 
-        # Add meta-reference issues
-        if structure_eval.get("meta_references_found", False):
-            for example in structure_eval.get("meta_reference_examples", []):
-                issues.append(f"Meta-reference found in Sources: {example}")
+        if passes_quality:
+            logger.info("✅ Report PASSED quality control")
+            logger.info(f"   Evidence: {evidence}")
+            return Command(goto="__end__", update={})
 
-    except Exception as e:
-        logger.warning(f"Structure validation failed: {e}, skipping structure check")
+        # Report failed quality check
+        logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
+        logger.warning(f"   Citations used: [1] through [{highest_citation}]")
+        logger.warning(f"   Sources listed: {sources_count_judge}")
+        if missing_sources:
+            logger.warning(f"   Missing sources: {missing_sources}")
+        logger.warning(f"   Evidence: {evidence}")
+        for issue in issues:
+            logger.warning(f"  - {issue}")
 
-    # Determine pass/fail
-    passes_quality = len(issues) == 0
-    evidence = (
-        f"Programmatic validation: Found {len(citations)} unique citations (highest: [{highest_citation}]). "
-        f"Counted {sources_count} source entries in ## Sources section. "
-    )
-    if missing_sources:
-        evidence += f"Missing sources: {missing_sources}. "
-    else:
-        evidence += "All sources present. "
+        # Check if we've exceeded max revisions
+        # revision_count 0 = initial attempt, 1 = 1st revision (max)
+        if revision_count >= 1:
+            logger.error(
+                "❌ Max revisions (1) exceeded, proceeding with imperfect report"
+            )
+            # Add warning to report about quality issues
+            warning_text = (
+                "\n\n---\n\n"
+                "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 2 attempts (1 initial + 1 revision). "
+                f"Known issues: {', '.join(issues)}\n\n"
+            )
+            updated_report = final_report + warning_text
+            return Command(goto="__end__", update={"final_report": updated_report})
 
-    if passes_quality:
-        logger.info("✅ Report PASSED quality control")
-        logger.info(f"   Evidence: {evidence}")
-        return Command(goto="__end__", update={})
-
-    # Report failed quality check
-    logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
-    logger.warning(f"   Citations used: [1] through [{highest_citation}]")
-    logger.warning(f"   Sources listed: {sources_count}")
-    if missing_sources:
-        logger.warning(f"   Missing sources: {missing_sources}")
-    logger.warning(f"   Evidence: {evidence}")
-    for issue in issues:
-        logger.warning(f"  - {issue}")
-
-    # Build revision instructions
-    if missing_sources:
-        revision_instructions = (
-            f"Add sources {missing_sources[0]}-{missing_sources[-1]} to the ## Sources section. "
-            "Each should have full URL and description matching the citations used in the report."
+        # Request revision
+        logger.info(
+            f"🔄 Requesting revision {revision_count + 1}/1: {revision_instructions}"
         )
-    else:
-        revision_instructions = "Fix the identified structural issues."
 
-    # Check if we've exceeded max revisions
-    # revision_count 0 = initial attempt, 1 = 1st revision (max)
-    if revision_count >= 1:
-        logger.error("❌ Max revisions (1) exceeded, proceeding with imperfect report")
-        # Add warning to report about quality issues
-        warning_text = (
-            "\n\n---\n\n"
-            "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 2 attempts (1 initial + 1 revision). "
-            f"Known issues: {', '.join(issues)}\n\n"
-        )
-        updated_report = final_report + warning_text
-        return Command(goto="__end__", update={"final_report": updated_report})
-
-    # Request revision
-    logger.info(
-        f"🔄 Requesting revision {revision_count + 1}/1: {revision_instructions}"
-    )
-
-    # Build revision prompt with specific instructions
-    revision_prompt = f"""Your previous report did not pass quality control. Please revise it to fix these issues:
+        # Build revision prompt with specific instructions
+        revision_prompt = f"""Your previous report did not pass quality control. Please revise it to fix these issues:
 
 {chr(10).join(f"{i + 1}. {issue}" for i, issue in enumerate(issues))}
 
@@ -359,10 +305,16 @@ Example: If consolidated list shows 25 sources, your report should:
 Generate the complete revised report now.
 """
 
-    return Command(
-        goto="final_report_generation",
-        update={
-            "revision_count": revision_count + 1,
-            "revision_prompt": revision_prompt,
-        },
-    )
+        return Command(
+            goto="final_report_generation",
+            update={
+                "revision_count": revision_count + 1,
+                "revision_prompt": revision_prompt,
+            },
+        )
+
+    except Exception as e:
+        logger.error(f"Quality control error: {e}", exc_info=True)
+        # On error, proceed anyway (don't block the workflow)
+        logger.warning("⚠️ Quality control failed, proceeding with report")
+        return Command(goto="__end__", update={})
