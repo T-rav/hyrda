@@ -52,7 +52,7 @@ class ProfileConfiguration(BaseModel):
     research_model_max_tokens: int = 16000  # For researcher tool calling
     compression_model_max_tokens: int = 16000  # For compression synthesis
     final_report_model_max_tokens: int = (
-        24000  # For final report generation (50% larger)
+        32000  # For final report (~8K words, ~29 pages)
     )
 
     # Profile-specific settings
