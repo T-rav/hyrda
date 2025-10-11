@@ -174,7 +174,7 @@ async def quality_control_node(
     try:
         settings = Settings()
         judge_llm = ChatOpenAI(
-            model="gpt-4o-mini",  # Fast, cheap model for validation
+            model="gpt-4o",  # Use GPT-4o for accurate validation (no hallucinations)
             api_key=settings.llm.api_key,
             temperature=0.0,  # Deterministic evaluation
             max_completion_tokens=500,
