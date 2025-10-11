@@ -166,18 +166,24 @@ class SearchSettings(BaseSettings):
 
     # Tavily settings
     tavily_api_key: str | None = Field(
-        default=None, description="Tavily API key for web search and scraping"
+        default=None,
+        description="Tavily API key for web search and scraping",
+        alias="TAVILY_API_KEY",
     )
 
     # Perplexity settings
     perplexity_api_key: str | None = Field(
-        default=None, description="Perplexity API key for deep research"
+        default=None,
+        description="Perplexity API key for deep research",
+        alias="PERPLEXITY_API_KEY",
     )
     perplexity_enabled: bool = Field(
-        default=True, description="Enable deep_research tool (requires API key)"
+        default=True,
+        description="Enable deep_research tool (requires API key)",
+        alias="PERPLEXITY_ENABLED",
     )
 
-    model_config = ConfigDict(env_prefix="SEARCH_")  # type: ignore[assignment,typeddict-unknown-key]
+    model_config = ConfigDict(populate_by_name=True)  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class GeminiSettings(BaseSettings):
