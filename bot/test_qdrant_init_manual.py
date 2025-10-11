@@ -52,7 +52,7 @@ async def test_empty_query_validation():
         print("✅ Returns proper error response")
     else:
         print("❌ Should have rejected empty query")
-        assert False
+        raise AssertionError("Empty query should have been rejected")
 
     print("\n✅ Manual test PASSED: Empty query validation works!")
 
