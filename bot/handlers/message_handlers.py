@@ -365,11 +365,20 @@ async def handle_bot_command(
     Returns:
         True if bot command was handled, False otherwise
     """
+    # Debug: Log what text we're receiving
+    logger.info(f"handle_bot_command called with text: '{text}'")
+
     # Use router to parse and route command
     agent_info, query, primary_name = command_router.route(text)
 
+    # Debug: Log router results
+    logger.info(
+        f"Router results: agent_info={agent_info is not None}, primary_name={primary_name}, query='{query}'"
+    )
+
     # If no agent found, return False (not handled)
     if not agent_info or not primary_name:
+        logger.info("No agent found, returning False")
         return False
 
     logger.info(f"Routing to agent '{primary_name}' with query: {query}")
