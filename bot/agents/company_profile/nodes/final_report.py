@@ -23,7 +23,9 @@ from agents.company_profile.utils import (
 logger = logging.getLogger(__name__)
 
 
-async def final_report_generation(state: ProfileAgentState, config: RunnableConfig):
+async def final_report_generation(
+    state: ProfileAgentState, config: RunnableConfig
+) -> dict:
     """Generate final comprehensive profile report.
 
     Args:
@@ -31,7 +33,7 @@ async def final_report_generation(state: ProfileAgentState, config: RunnableConf
         config: Runtime configuration
 
     Returns:
-        Command to route to quality_control node
+        Dict with final_report and executive_summary
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     notes = state.get("notes", [])
@@ -157,15 +159,10 @@ async def final_report_generation(state: ProfileAgentState, config: RunnableConf
                     "📎 _Unable to generate summary - see full report_"
                 )
 
-            from langgraph.types import Command
-
-            return Command(
-                goto="quality_control",
-                update={
-                    "final_report": final_report,
-                    "executive_summary": executive_summary,
-                },
-            )
+            return {
+                "final_report": final_report,
+                "executive_summary": executive_summary,
+            }
 
         except Exception as e:
             if is_token_limit_exceeded(e, configuration.final_report_model):
@@ -177,18 +174,13 @@ async def final_report_generation(state: ProfileAgentState, config: RunnableConf
             break
 
     # Fallback: return notes summary
-    from langgraph.types import Command
-
     fallback_report = (
         "# Profile Report (Partial)\n\n"
         "Unable to generate full report. Research findings:\n\n"
         + "\n\n".join(notes[:3])
     )
 
-    return Command(
-        goto="quality_control",
-        update={
-            "final_report": fallback_report,
-            "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
-        },
-    )
+    return {
+        "final_report": fallback_report,
+        "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
+    }
