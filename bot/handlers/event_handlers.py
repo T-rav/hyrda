@@ -190,7 +190,7 @@ async def process_message_by_context(
             thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
             # Only respond if the bot is already a participant in this thread
-            if thread_info.get("bot_is_participant", False):
+            if thread_info.bot_is_participant:
                 logger.info("Bot responding to thread message")
                 await handle_message(
                     text=text,
