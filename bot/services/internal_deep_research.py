@@ -8,8 +8,6 @@ Uses query decomposition, adaptive rewriting, and iterative retrieval for thorou
 import logging
 from typing import Any
 
-from services.langfuse_service import observe
-
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +43,6 @@ class InternalDeepResearchService:
         self.embedding_service = embedding_service
         self.enable_query_rewriting = enable_query_rewriting
 
-    @observe(as_type="generation", name="internal_deep_research")
     async def deep_research(
         self,
         query: str,
@@ -77,6 +74,15 @@ class InternalDeepResearchService:
             return {
                 "success": False,
                 "error": "Vector database not configured",
+                "query": query,
+            }
+
+        # Validate query is not empty
+        if not query or not query.strip():
+            logger.warning("Internal deep research called with empty query")
+            return {
+                "success": False,
+                "error": "Empty query provided",
                 "query": query,
             }
 
@@ -158,7 +164,6 @@ class InternalDeepResearchService:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return {"success": False, "error": str(e), "query": query}
 
-    @observe(as_type="generation", name="query_decomposition")
     async def _decompose_query(self, query: str, num_queries: int) -> list[str]:
         """
         Decompose complex query into multiple focused sub-queries.
@@ -243,7 +248,6 @@ Return ONLY the JSON array, no explanation."""
         # Sort by similarity score (already included from retrieval)
         return sorted(chunks, key=lambda x: x.get("similarity", 0), reverse=True)
 
-    @observe(as_type="generation", name="research_synthesis")
     async def _synthesize_findings(
         self, query: str, chunks: list[dict], sub_queries: list[str]
     ) -> str:
