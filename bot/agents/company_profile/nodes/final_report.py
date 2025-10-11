@@ -165,25 +165,16 @@ async def final_report_generation(
                 summary_prompt = prompts.executive_summary_prompt.format(
                     full_report=final_report
                 )
-                # Use same LLM as final report with lower max_tokens for summary
-                if settings.gemini.enabled and settings.gemini.api_key:
-                    from langchain_google_genai import ChatGoogleGenerativeAI
+                # Always use GPT-4o for executive summary (more reliable than Gemini)
+                from langchain_openai import ChatOpenAI
 
-                    summary_llm = ChatGoogleGenerativeAI(
-                        model=settings.gemini.model,
-                        google_api_key=settings.gemini.api_key,
-                        temperature=0.7,
-                        max_output_tokens=500,
-                    )
-                else:
-                    from langchain_openai import ChatOpenAI
-
-                    summary_llm = ChatOpenAI(
-                        model=settings.llm.model,
-                        api_key=settings.llm.api_key,
-                        temperature=0.7,
-                        max_tokens=500,
-                    )
+                logger.info("Using GPT-4o for executive summary generation")
+                summary_llm = ChatOpenAI(
+                    model="gpt-4o",
+                    api_key=settings.llm.api_key,
+                    temperature=0.7,
+                    max_tokens=500,
+                )
                 summary_response = await summary_llm.ainvoke(
                     [create_human_message(summary_prompt)]
                 )
@@ -192,6 +183,11 @@ async def final_report_generation(
                     if hasattr(summary_response, "content")
                     else str(summary_response)
                 )
+
+                # Validate that summary is not empty
+                if not executive_summary or len(executive_summary.strip()) == 0:
+                    raise ValueError("LLM returned empty executive summary")
+
                 logger.info(
                     f"Executive summary generated: {len(executive_summary)} characters"
                 )
