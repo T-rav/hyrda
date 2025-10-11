@@ -368,8 +368,19 @@ async def handle_bot_command(
     # Debug: Log what text we're receiving
     logger.info(f"handle_bot_command called with text: '{text}'")
 
+    # Strip Slack markdown formatting (bold, italic, etc.) before routing
+    # Slack sends *bold* and _italic_ which breaks command parsing
+    clean_text = text.strip()
+    # Remove leading/trailing markdown characters
+    while clean_text and clean_text[0] in ["*", "_", "~"]:
+        clean_text = clean_text[1:]
+    while clean_text and clean_text[-1] in ["*", "_", "~"]:
+        clean_text = clean_text[:-1]
+
+    logger.info(f"Cleaned text for routing: '{clean_text}'")
+
     # Use router to parse and route command
-    agent_info, query, primary_name = command_router.route(text)
+    agent_info, query, primary_name = command_router.route(clean_text)
 
     # Debug: Log router results
     logger.info(
