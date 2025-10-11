@@ -322,8 +322,44 @@ class ProfileAgent(BaseAgent):
                 f"Profile research complete: {len(final_report)} chars, {notes_count} research notes"
             )
 
-            # Generate PDF from full report
-            pdf_title = f"{profile_type.title()} Profile"
+            # Generate PDF title with entity name extracted by LLM
+            try:
+                extraction_prompt = f"""Extract ONLY the main entity name from this query. Return just the entity name, nothing else.
+
+Query: "{query}"
+
+Examples:
+- "tell me about Tesla" → "Tesla"
+- "profile of Elon Musk" → "Elon Musk"
+- "what is the Cybertruck project?" → "Cybertruck"
+- "SpaceX" → "SpaceX"
+- "research Microsoft Azure" → "Microsoft Azure"
+
+Entity name:"""
+
+                entity_response = await llm_service.get_response(
+                    messages=[{"role": "user", "content": extraction_prompt}],
+                    model="gpt-4o-mini",  # Fast and cheap for this simple task
+                    temperature=0.0,  # Deterministic
+                    max_tokens=20,  # Just need the entity name
+                )
+
+                entity_name = entity_response.strip().strip("\"'").strip()
+
+                if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
+                    pdf_title = f"{entity_name} - {profile_type.title()} Profile"
+                    logger.info(f"Extracted entity name for PDF title: {entity_name}")
+                else:
+                    # Fallback to generic title
+                    pdf_title = f"{profile_type.title()} Profile"
+                    logger.warning("Failed to extract entity name, using generic title")
+
+            except Exception as e:
+                logger.warning(
+                    f"Error extracting entity name: {e}, using generic title"
+                )
+                pdf_title = f"{profile_type.title()} Profile"
+
             pdf_metadata = {
                 "Query": query,
                 "Profile Type": profile_type.title(),
