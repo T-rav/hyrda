@@ -7,7 +7,7 @@ This verifies that:
 """
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 
 async def test_qdrant_initialization():
@@ -99,4 +99,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
