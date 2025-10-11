@@ -1,46 +1,58 @@
 # InsightMesh Slack AI Bot
 
-A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities that provides intelligent, context-aware assistance using your own knowledge base.
+A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **Deep Research Agents**, and **Web Search** capabilities that provides intelligent, context-aware assistance using your own knowledge base and real-time web data.
 
 ## ✨ Features
 
 ### 🧠 **Advanced RAG Intelligence**
-- **Pinecone Vector Search**: Semantic document search using dense embeddings
-- **Adaptive Query Rewriting**: Automatically rewrites user queries for improved retrieval accuracy
-- **Entity Boosting**: Intelligently boosts document relevance based on detected entities
+- **Qdrant Vector Search**: Fast, self-hosted semantic search with dense embeddings
+- **Hybrid Retrieval**: Dense + sparse retrieval with Reciprocal Rank Fusion (RRF)
+- **Cross-Encoder Reranking**: Cohere reranking for improved result relevance
+- **Adaptive Query Rewriting**: Automatically rewrites user queries for better retrieval accuracy
 - **Smart Diversification**: Returns chunks from multiple documents for comprehensive context
-- **Direct LLM Integration**: OpenAI GPT models (gpt-4o-mini, gpt-4, etc.)
-- **Knowledge-Aware Responses**: Uses your ingested documentation and data
 - **Source Attribution**: Shows which documents informed each response
+- **Internal Deep Research**: Multi-query RAG with compression for in-depth knowledge base exploration
+
+### 🌐 **Web Search & Real-Time Data**
+- **WebCat MCP Integration**: Model Context Protocol server for web search and scraping
+- **Multi-Provider Search**: Serper, Brave, or Google Custom Search support
+- **Perplexity Deep Research**: Long-form research reports with citations (5-15 minute tasks)
+- **Smart URL Scraping**: Extract content from web pages with automatic fallback
+- **Function Calling**: LLM automatically decides when to search the web vs use knowledge base
+
+### 🔬 **Deep Research Agents (LangGraph)**
+- **Company Profile Researcher**: Multi-agent system for comprehensive company analysis
+- **Supervisor-Researcher Architecture**: Parallel research execution with compression
+- **Research Brief Generation**: Structured research plans from natural language queries
+- **Final Report Synthesis**: Professional, well-cited reports with PDF export
+- **LangGraph Studio Support**: Visual debugging and development via `langgraph dev`
 
 ### 🔧 **Production Ready**
 - **Thread Management**: Automatically manages conversation threads and context
+- **Conversation Summarization**: Sliding window with smart summarization at 75% context threshold
 - **Typing Indicators**: Shows typing states while generating responses
 - **Online Presence**: Shows as "online" with a green status indicator
-- **Custom User Prompts**: Users can customize bot behavior with `@prompt` commands
 - **Health Dashboard**: Real-time monitoring UI at `http://localhost:8080/ui`
 - **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
 - **Prometheus Metrics**: Native metrics collection for infrastructure monitoring
 - **Comprehensive Testing**: 245 tests with 72% code coverage
-- **Service Container**: Protocol-based dependency injection architecture
-- **Job Registry**: Scheduled tasks and background job management
-- **Metric.ai Integration**: Direct API integration for metrics and analytics
+- **Pre-commit Hooks**: Unified quality checks (Ruff + Pyright + Bandit)
 
-### 🚀 **Easy Setup & Monitoring**
+### 🚀 **Easy Setup & Deployment**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
-- **Simple Configuration**: Pinecone-only vector storage for streamlined setup
-- **Document Ingestion**: CLI tool for loading from Google Drive
-- **Health Monitoring**: Beautiful dashboard with real-time service status
-- **Docker Deployment**: Full production deployment with comprehensive monitoring
+- **Docker Compose**: Full stack deployment (bot + Qdrant + WebCat + Redis + MySQL)
+- **Document Ingestion**: CLI tool for loading from Google Drive with OAuth2
+- **Multiple LLM Providers**: OpenAI, Anthropic, or Ollama support
+- **Flexible Configuration**: Environment-based settings with sensible defaults
 
 ## 🚀 Quick Start
 
-**Requirements:** Python 3.11+
+**Requirements:** Python 3.11+, Docker (for services)
 
 ### 1. **Clone and Configure**
 ```bash
-git clone https://github.com/8thlight/ai-slack-bot.git
-cd ai-slack-bot
+git clone https://github.com/8thlight/insightmesh.git
+cd insightmesh
 
 # Copy example configuration
 cp .env.example .env
@@ -48,6 +60,7 @@ cp .env.example .env
 
 ### 2. **Set Up Your Environment**
 Edit `.env` with your credentials:
+
 ```bash
 # Slack (get from https://api.slack.com/apps)
 SLACK_BOT_TOKEN=xoxb-your-bot-token
@@ -58,107 +71,85 @@ LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-api-key
 LLM_MODEL=gpt-4o-mini
 
-# Pinecone Vector Database (get from https://app.pinecone.io)
-VECTOR_API_KEY=your-pinecone-api-key
-VECTOR_ENVIRONMENT=us-east-1-aws
+# Qdrant Vector Database (runs in Docker)
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=localhost  # Use 'qdrant' in Docker
+VECTOR_PORT=6333
 VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+
+# WebCat MCP Server for web search
+MCP_WEBCAT_ENABLED=true
+MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
+MCP_WEBCAT_PORT=3000
+MCP_SERPER_API_KEY=your-serper-api-key  # Get from https://serper.dev/
+
+# Perplexity for deep research (optional, recommended)
+PERPLEXITY_API_KEY=your-perplexity-api-key  # Get from https://www.perplexity.ai/settings/api
 
 # Database for user prompts and tasks
 DATABASE_URL=mysql+pymysql://insightmesh_bot:insightmesh_bot_password@localhost:3306/bot
 
-# Optional: Enable adaptive query rewriting (recommended)
-RAG_ENABLE_QUERY_REWRITING=true
-RAG_QUERY_REWRITE_MODEL=gpt-4o-mini
+# Optional: Langfuse observability
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk_lf_your_public_key_here
+LANGFUSE_SECRET_KEY=sk_lf_your_secret_key_here
 ```
 
-### 3. **Start Required Services**
+### 3. **Start Services with Docker Compose**
 ```bash
-# Start MySQL database
-docker compose -f docker-compose.mysql.yml up -d
+# Start full stack: bot + Qdrant + WebCat + Redis + MySQL
+docker compose up -d
 
-# Optional: Start Redis for caching
-docker run -d -p 6379:6379 redis:alpine
+# Check status
+docker compose ps
+
+# View logs
+docker logs -f insightmesh-bot
+docker logs -f insightmesh-webcat
 ```
 
-### 4. **Install and Run**
-```bash
-# Install dependencies
-make install
-
-# Optional: Install local embeddings support (adds ~2GB PyTorch/CUDA dependencies)
-# Only needed if using EMBEDDING_PROVIDER=sentence-transformers
-# Default OpenAI embeddings work via API without this
-pip install -e ".[local-embeddings]"
-
-# Run the bot
-make run
-```
-
-### 5. **Load Your Knowledge Base**
+### 4. **Load Your Knowledge Base**
 ```bash
 # Ingest documentation from Google Drive
 cd ingest && python main.py --folder-id "YOUR_GOOGLE_DRIVE_FOLDER_ID"
 
 # With custom metadata
 cd ingest && python main.py --folder-id "YOUR_FOLDER_ID" --metadata '{"department": "engineering"}'
+
+# First-time setup requires Google OAuth2 credentials
+# See ingest/README.md for detailed instructions
 ```
 
-That's it! Your RAG-enabled Slack bot is now running with your custom knowledge base. 🎉
+### 5. **Test Your Bot**
+Message your bot in Slack:
+- "What is our refund policy?" (uses knowledge base)
+- "What's the latest news about AI?" (uses web search)
+- "Research Tesla's AI strategy" (triggers deep research agent)
 
-## 🔧 Pinecone Setup
+That's it! Your RAG-enabled Slack bot with deep research capabilities is now running. 🎉
 
-### Create Your Pinecone Index
-
-```python
-import pinecone
-
-pc = pinecone.Pinecone(api_key="your-pinecone-api-key")
-
-pc.create_index(
-    name="insightmesh-knowledge-base",
-    dimension=1536,  # for text-embedding-3-small
-    metric="cosine",
-    spec=pinecone.ServerlessSpec(
-        cloud="aws",
-        region="us-east-1"
-    )
-)
-```
-
-### Pinecone Configuration
-
-```bash
-# Required settings
-VECTOR_API_KEY=your-pinecone-api-key
-VECTOR_ENVIRONMENT=us-east-1-aws  # or your Pinecone environment
-VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
-
-# Embedding model (matches index dimension)
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small  # 1536 dimensions
-```
-
-## Development Commands
+## 📊 Development Commands
 
 ### Setup and Installation
 ```bash
 make install      # Install Python dependencies
 make setup-dev    # Install dev tools + pre-commit hooks
-
-# Optional: Install local embeddings (only if using sentence-transformers)
-pip install -e ".[local-embeddings]"  # Adds ~2GB PyTorch/CUDA dependencies
 ```
 
 ### Running the Application
 ```bash
 make run          # Run the Slack bot (requires .env file)
+
+# Or with Docker
+docker compose up -d
+docker logs -f insightmesh-bot
 ```
 
 ### Testing and Code Quality
 ```bash
 make test         # Run test suite with pytest (245 tests)
 make lint         # Auto-fix linting, formatting, and import issues
-make lint-check   # Check code quality without fixing (used by pre-commit)
+make lint-check   # Check code quality without fixing (used by pre-commit and CI)
 make quality      # Run complete pipeline: linting + type checking + tests
 make test-coverage # Tests with coverage report (requires >70%, currently ~72%)
 ```
@@ -169,15 +160,27 @@ make pre-commit   # Run all pre-commit hooks
 make ci           # Run complete CI pipeline locally
 ```
 
-### Docker
+### Docker Operations
 ```bash
-make docker-build # Build Docker image
-make docker-run   # Run Docker container with .env
+# Full stack
+docker compose up -d              # Start all services
+docker compose down               # Stop all services
+docker compose logs -f bot        # View bot logs
+docker compose logs -f webcat     # View WebCat logs
+
+# Individual services
+docker compose up -d qdrant       # Start Qdrant only
+docker compose up -d webcat       # Start WebCat only
+docker compose restart bot        # Restart bot after code changes
+
+# Build and run
+make docker-build                 # Build Docker images
+make docker-run                   # Run Docker container with .env
 ```
 
 ### Document Ingestion
 ```bash
-# Ingest documents from Google Drive (THE ONLY SUPPORTED METHOD)
+# THE ONLY SUPPORTED METHOD: Google Drive with OAuth2
 cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
 cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering"}'
 
@@ -185,375 +188,556 @@ cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"depa
 # See ingest/README.md for detailed setup instructions
 ```
 
-## Slack App Setup Guide
+## 🔧 Qdrant Setup
 
-This guide helps you configure your Slack app to work with the InsightMesh bot.
+Qdrant runs automatically in Docker Compose. No manual setup required!
 
-### Step 1: Create or Update App Configuration in Slack
+### Manual Collection Creation (Optional)
 
-1. Go to the Slack API Apps page (`https://api.slack.com/apps`) and select your bot application (or create a new one)
-2. Provide a description (e.g., "InsightMesh Assistant helps you interact with your data using RAG and run agent processes")
-3. Upload an app icon if desired
-4. Click "Save Changes"
+If you need to create collections manually:
 
-### Step 2: Configure OAuth Scopes
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance
 
-1. Navigate to "OAuth & Permissions" in the left navigation panel
-2. Under "Scopes" > "Bot Token Scopes", add the following:
-   - `app_mentions:read` - Read mentions of your app
-   - `chat:write` - Send messages
-   - `im:history` - View messages in direct messages
-   - `im:read` - View basic information about direct messages
-   - `im:write` - Send messages in direct messages
-   - `mpim:history` - View messages in group direct messages
-   - `groups:history` - View messages in private channels
-   - `channels:history` - View messages in public channels
-   - `chat:write.customize` - Customize messages (for blocks)
-   - `chat:write.public` - Send messages to channels the app isn't in
-   - `commands` - Add slash commands
-   - `users:read` - View users in the workspace
-   - `users:write` - Set bot's online presence status
-   - `channels:read` - View basic info about public channels
-   - `reactions:write` - Add reactions to messages
-   - `files:write` - Upload, edit, and delete files
-3. Click "Save Changes"
+client = QdrantClient(host="localhost", port=6333)
 
-### Step 3: Enable Socket Mode (for development)
-
-1. Navigate to "Socket Mode" in the left navigation panel
-2. Toggle on "Enable Socket Mode"
-3. Create an app-level token if prompted:
-   - Name your token (e.g., "InsightMesh Socket Token")
-   - Ensure the `connections:write` scope is added
-   - Click "Generate"
-   - Save the token (starts with `xapp-`) for use in environment variables
-
-### Step 4: Configure Event Subscriptions
-
-1. Navigate to "Event Subscriptions" in the left navigation panel
-2. Toggle on "Enable Events"
-3. Under "Subscribe to bot events" add the following:
-   - `app_mention` - When the app is mentioned in a channel
-   - `message.im` - When a message is sent in a DM with the app
-   - `message.mpim` - When a message is sent in a group DM
-   - `message.groups` - When a message is sent in a private channel
-   - `message.channels` - When a message is sent in a public channel
-4. Click "Save Changes"
-5. IMPORTANT: After adding these events, you MUST reinstall your app for the changes to take effect
-
-### Step 5: Disable App Home
-
-1. Navigate to "App Home" in the left navigation panel
-2. Toggle OFF "Home Tab"
-3. Toggle ON "Allow users to send messages in app home"
-4. Click "Save Changes"
-
-### Step 6: Configure Interactivity
-
-1. Navigate to "Interactivity & Shortcuts" in the left navigation panel
-2. Toggle on "Interactivity"
-3. You can leave the Request URL blank for Socket Mode
-4. Click "Save Changes"
-
-### Step 7: Reinstall App
-
-1. Navigate to "Install App" in the left navigation panel
-2. Click "Reinstall to Workspace" (required after adding new scopes)
-3. Review permissions and click "Allow"
-4. Note the new Bot User OAuth Token (starts with `xoxb-`) for use in environment variables
-
-### Step 8: Configure Agent Processes
-
-The bot supports running agent processes in response to user requests. These processes are defined in the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`.
-
-By default, the following agent processes are available:
-
-1. Data Indexing Job - Indexes documents into the RAG system
-2. Slack Import Job - Imports data from Slack channels
-3. Job Status Check - Checks status of running jobs
-
-To add or modify agent processes:
-
-1. Edit the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`
-2. Make sure commands have the correct paths to their scripts
-3. Ensure the scripts are available and executable in the expected locations
-
-## Docker Deployment
-
-Build and run the Docker container using Make targets:
-
-```bash
-make docker-build
-make docker-run
+client.create_collection(
+    collection_name="insightmesh-knowledge-base",
+    vectors_config=VectorParams(
+        size=1536,  # text-embedding-3-small dimension
+        distance=Distance.COSINE
+    )
+)
 ```
 
-## Architecture
+### Qdrant Configuration
+
+```bash
+# Required settings in .env
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=localhost  # Use 'qdrant' when bot runs in Docker
+VECTOR_PORT=6333
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+
+# Embedding model (must match collection dimension)
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small  # 1536 dimensions
+```
+
+### Qdrant Web UI
+
+Access the Qdrant dashboard at `http://localhost:6333/dashboard` to:
+- View collections and vectors
+- Monitor search performance
+- Debug retrieval issues
+
+## 🌐 WebCat MCP Server
+
+WebCat provides web search and scraping capabilities via the Model Context Protocol (MCP).
+
+### Features
+- **Multi-Provider Search**: Serper (recommended), Brave, or Google Custom Search
+- **Smart URL Scraping**: Extract clean content from web pages
+- **Perplexity Deep Research**: 5-15 minute long-form research with citations
+- **Function Calling**: LLM decides when to search vs use knowledge base
+
+### Configuration
+
+```bash
+# In .env
+MCP_WEBCAT_ENABLED=true
+MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
+MCP_WEBCAT_PORT=3000
+
+# Search provider (choose one)
+MCP_SERPER_API_KEY=your-serper-api-key  # Recommended - https://serper.dev/
+# BRAVE_API_KEY=your-brave-key          # Alternative - https://brave.com/search/api/
+# GOOGLE_API_KEY=your-google-key        # Alternative - Google Custom Search
+
+# Deep research (optional but recommended)
+PERPLEXITY_API_KEY=your-perplexity-key  # Get from https://www.perplexity.ai/settings/api
+MCP_WEBCAT_DEEP_RESEARCH_ENABLED=true
+```
+
+### WebCat Docker Service
+
+The WebCat service runs automatically in `docker-compose.yml`:
+
+```yaml
+webcat:
+  image: webcat:latest
+  ports:
+    - "3000:3000"
+  environment:
+    - SERPER_API_KEY=${MCP_SERPER_API_KEY}
+    - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY}
+```
+
+Check WebCat logs:
+```bash
+docker logs -f insightmesh-webcat
+```
+
+## 🔬 Deep Research Agents
+
+The bot includes a multi-agent deep research system built with LangGraph for comprehensive company analysis.
+
+### Features
+- **Natural Language Queries**: "Research Tesla's AI strategy" → structured research plan → parallel execution
+- **Supervisor-Researcher Architecture**: 1 supervisor delegates to 3 concurrent researchers
+- **Web + Knowledge Base**: Combines internal docs with real-time web data
+- **Research Compression**: Summarizes findings at each stage to manage context
+- **Professional Reports**: Well-cited markdown reports with optional PDF export
+
+### How to Use
+
+In Slack, ask the bot to research a company:
+```
+Research Tesla's AI initiatives and competitive positioning
+```
+
+The bot will:
+1. **Clarify** (optional): Ask follow-up questions if query is ambiguous
+2. **Plan**: Generate a structured research brief with focused questions
+3. **Execute**: Launch 3 parallel researchers with web search + deep research tools
+4. **Compress**: Summarize findings from each researcher
+5. **Synthesize**: Generate final professional report with citations
+
+### Configuration
+
+```bash
+# Deep research agent settings (optional overrides)
+MAX_RESEARCHER_ITERATIONS=8         # Supervisor reflection cycles
+MAX_REACT_TOOL_CALLS=15            # Max tool calls per researcher
+MAX_CONCURRENT_RESEARCH_UNITS=3    # Parallel researchers
+
+# Token limits for deep research workflow
+RESEARCH_MODEL_MAX_TOKENS=16000       # Researcher tool calling
+COMPRESSION_MODEL_MAX_TOKENS=8000     # Compression output per researcher
+FINAL_REPORT_MODEL_MAX_TOKENS=32000   # Final report generation
+
+# PDF export styling
+PDF_STYLE=professional  # Options: minimal, professional, detailed
+```
+
+### LangGraph Studio
+
+Debug and visualize the research agent with LangGraph Studio:
+
+```bash
+# Start LangGraph dev server
+langgraph dev
+
+# Or with Docker
+docker compose -f docker-compose.dev.yml up -d langgraph-studio
+```
+
+Access at `http://localhost:8123` - See `LANGGRAPH_STUDIO.md` for details.
+
+## 🏗️ Architecture
 
 ### Technology Stack
 
-- **slack-bolt**: Slack's official Python framework for building Slack apps
-- **aiohttp**: Asynchronous HTTP client/server for Python
-- **pydantic**: Data validation and settings management
-- **OpenAI**: Primary LLM provider (GPT models)
-- **Pinecone**: Vector database for semantic document search
-- **RAG Pipeline**: Retrieval-Augmented Generation for knowledge-aware responses
+- **slack-bolt**: Slack's official Python framework
+- **LangChain/LangGraph**: Agent orchestration and workflows
+- **OpenAI/Anthropic**: LLM providers (GPT-4o, Claude)
+- **Qdrant**: Self-hosted vector database
+- **WebCat (MCP)**: Web search via Model Context Protocol
 - **MySQL**: Database for user prompts, tasks, and metrics
-- **Redis**: Conversation caching
+- **Redis**: Conversation caching and session management
 - **Langfuse**: LLM observability and prompt management
+- **Docker Compose**: Service orchestration
 
 ### Project Structure
 
 ```
 bot/
-├── config/            # Configuration management
-│   └── settings.py    # Pydantic settings models for LLM, vector DB, and RAG
-├── handlers/          # Event handling
-│   ├── agent_processes.py  # Agent process functionality
-│   ├── event_handlers.py   # Slack event handlers
-│   └── message_handlers.py # Message handling logic
-├── services/          # Core services
-│   ├── protocols/          # Service protocol definitions
-│   ├── vector_stores/      # Vector database implementations
-│   ├── chunking/           # Document chunking services
-│   ├── retrieval/          # Retrieval implementations
-│   ├── llm_service.py      # RAG-enabled LLM service
-│   ├── rag_service.py      # RAG orchestration and retrieval
-│   ├── query_rewriter.py   # Adaptive query rewriting
-│   ├── retrieval_service.py # Retrieval coordination
-│   ├── vector_service.py   # Vector database abstraction
-│   ├── embedding_service.py # Text embedding generation
-│   ├── llm_providers.py    # LLM provider implementations
-│   ├── slack_service.py    # Slack API integration
-│   ├── factory.py          # Service factory with DI
-│   ├── container.py        # Service container
-│   └── formatting.py       # Message formatting utilities
-├── models/            # Data models
-│   ├── retrieval.py        # RAG models
-│   ├── metric_record.py    # Metric.ai integration
-│   └── slack_events.py     # Slack event models
-├── migrations/        # Database migrations
-├── tests/             # Comprehensive test suite (245 tests, 72% coverage)
-├── utils/             # Utilities
-│   ├── errors.py           # Error handling
-│   └── logging.py          # Logging configuration
-├── app.py             # Main application entry point
-└── health.py          # Health check endpoints
+├── agents/
+│   └── company_profile/          # Deep research agent (LangGraph)
+│       ├── nodes/                # Graph nodes: supervisor, researcher, compression, etc.
+│       ├── state.py              # State definitions
+│       ├── prompts.py            # LLM prompts
+│       └── configuration.py      # Agent config
+├── config/                       # Configuration management
+│   └── settings.py               # Pydantic settings for LLM, RAG, etc.
+├── handlers/                     # Event handling
+│   ├── event_handlers.py         # Slack event handlers
+│   └── message_handlers.py       # Message handling logic
+├── services/                     # Core services
+│   ├── mcp_client.py             # WebCat MCP client
+│   ├── internal_deep_research.py # Internal knowledge base deep research
+│   ├── conversation_manager.py   # Conversation context management
+│   ├── llm_service.py            # RAG-enabled LLM service
+│   ├── rag_service.py            # RAG orchestration and retrieval
+│   ├── retrieval_service.py      # Retrieval coordination
+│   ├── vector_service.py         # Qdrant integration
+│   ├── embedding_service.py      # Text embedding generation
+│   ├── langfuse_service.py       # Observability and tracing
+│   └── slack_service.py          # Slack API integration
+├── tests/                        # Test suite (245 tests, 72% coverage)
+├── utils/                        # Utilities
+│   ├── pdf_generator.py          # PDF report generation
+│   └── errors.py                 # Error handling
+├── app.py                        # Main application entry point
+└── health.py                     # Health check endpoints
 
-ingest/                # Document ingestion services
-├── main.py            # CLI entry point for Google Drive ingestion
-├── services/          # Modular ingestion services
-└── auth/              # Google OAuth2 authentication
+ingest/                           # Document ingestion
+├── main.py                       # Google Drive ingestion CLI
+├── services/                     # Modular ingestion services
+└── auth/                         # Google OAuth2
 
-tasks/                 # Background task scheduler
-scripts/               # Utility scripts
-evals/                 # LLM evaluation framework
+tasks/                            # Background task scheduler
+evals/                            # LLM evaluation framework
 ```
 
-### Core Architecture Patterns
-
-#### Service Container & Dependency Injection
-- Protocol-based service definitions in `services/protocols/`
-- Centralized dependency injection via `ServiceContainer`
-- Factory pattern for service creation with proper lifecycle management
-- All services implement `BaseService` with `initialize()` and `close()` methods
+### Core Workflows
 
 #### RAG Pipeline
-1. **Document Ingestion**: Google Drive → chunking → embedding → Pinecone storage
+1. **Document Ingestion**: Google Drive → chunking → embedding → Qdrant storage
 2. **Query Processing**: User question → adaptive query rewriting → embedding
-3. **Retrieval**: Similarity search in Pinecone with entity boosting
-4. **Diversification**: Smart selection from multiple documents
+3. **Retrieval**: Hybrid dense + sparse search with RRF fusion
+4. **Reranking**: Cohere cross-encoder reranking (optional)
 5. **Augmentation**: Retrieved context added to LLM prompt
 6. **Generation**: LLM generates response with enhanced context
 7. **Citation**: Source documents included in response
 
-#### Adaptive Query Rewriting
-The bot automatically rewrites user queries to improve retrieval accuracy:
-- **Intent Classification**: Determines query type (greeting, fact, comparison, etc.)
-- **Context Integration**: Uses conversation history for follow-up questions
-- **Entity Extraction**: Identifies key entities for metadata filtering
-- **Query Expansion**: Adds relevant terms for better semantic matching
+#### Deep Research Agent Flow
+1. **Clarification**: Check if query needs clarification (optional)
+2. **Research Brief**: Generate structured plan with focused questions
+3. **Supervisor**: Delegate research tasks to parallel researchers
+4. **Researchers**: Execute web_search, deep_research, scrape_url, internal_search
+5. **Compression**: Summarize findings to manage context
+6. **Final Report**: Synthesize comprehensive, well-cited report
 
-#### Testing & Quality
-- **245 tests** with **72% coverage**
-- Unified quality tooling: Ruff (linting/formatting) + Pyright (type checking) + Bandit (security)
-- Pre-commit hooks ensure code quality
-- CI pipeline runs same checks as local development
-- Test-driven development workflow
+#### Conversation Management
+1. **Sliding Window**: Keep last 20 messages in context
+2. **Summarization Trigger**: At 75% of model context window
+3. **Smart Compression**: Keep 4 most recent messages + summary of older messages
+4. **Cache**: Redis caching for fast retrieval
 
-## Slack Integration Features
+## 📱 Slack Integration
 
-The bot implements several key Slack integration features:
+### Thread-Based Conversations
+The bot automatically creates and maintains threads for organized discussions.
 
-### 1. Thread-Based Conversations
-The bot automatically creates and maintains threads for all conversations, keeping discussions organized.
+### Typing Indicators
+Shows when the bot is "thinking" while generating responses.
 
-### 2. Typing Indicators
-Shows when the bot is "thinking" while generating a response.
+### Universal Thread Response
+The bot responds to any message in a thread it's part of, without requiring explicit mentions.
 
-### 3. Universal Thread Response
-The bot will respond to any message in a thread it's part of, without requiring explicit mentions.
-
-### 4. Channel and Thread Support
-The bot works in all types of Slack conversations with the following behavior:
-
+### Channel and Thread Support
 - **Direct Messages (DMs)**: Always responds to all messages
-- **Group Direct Messages**: Requires the `mpim:history` permission
-- **Private Channels**: Requires the `groups:history` permission
-- **Public Channels**: Requires the `channels:history` permission
+- **Group Direct Messages**: Requires `mpim:history` permission
+- **Private Channels**: Requires `groups:history` permission
+- **Public Channels**: Requires `channels:history` permission
 
-In all non-DM contexts (channels, group DMs), the bot:
-- Will respond to any message that directly @mentions it
-- Will automatically respond to all subsequent messages in a thread once it has been mentioned in that thread
-- No need to @mention the bot again for follow-up messages in the same thread
+In all non-DM contexts, the bot:
+- Responds to any message that directly @mentions it
+- Automatically responds to all subsequent messages in that thread
+- No need to @mention again for follow-ups in the same thread
 
-If the bot doesn't respond in threads where it was previously mentioned, check that you have all the required permission scopes configured in your Slack app settings.
-
-### 5. Online Status
+### Online Status
 The bot maintains an online presence with a green status indicator.
 
-## Agent Processes
+### Required Scopes
 
-The bot enables users to start and manage data processing jobs directly from Slack:
+See "Slack App Setup Guide" section below for complete OAuth scope configuration.
 
-### Available Processes:
+## 🔐 Slack App Setup Guide
 
-- **Data Indexing Job**: Index documents into the RAG system
-- **Slack Import Job**: Import data from Slack channels
-- **Check Job Status**: Check the status of running jobs
+### Step 1: Create Slack App
 
-To start an agent process, users can type the command in chat:
+1. Go to https://api.slack.com/apps
+2. Click "Create New App" → "From scratch"
+3. Name your app (e.g., "InsightMesh")
+4. Select your workspace
+
+### Step 2: Configure OAuth Scopes
+
+Navigate to "OAuth & Permissions" and add these **Bot Token Scopes**:
+
 ```
-Start a data indexing job
+app_mentions:read       # Read mentions
+chat:write              # Send messages
+chat:write.customize    # Customize messages
+chat:write.public       # Send to channels app isn't in
+im:history              # View DM messages
+im:read                 # View DM info
+im:write                # Send DMs
+mpim:history            # View group DM messages
+groups:history          # View private channel messages
+channels:history        # View public channel messages
+channels:read           # View channel info
+users:read              # View users
+users:write             # Set presence status
+commands                # Add slash commands
+reactions:write         # Add reactions
+files:write             # Upload files
 ```
 
-### Adding Custom Agent Processes
+### Step 3: Enable Socket Mode
 
-To add a new agent process:
+1. Navigate to "Socket Mode"
+2. Toggle on "Enable Socket Mode"
+3. Create app-level token with `connections:write` scope
+4. Save the token (starts with `xapp-`) for your `.env`
 
-1. Add it to the `AGENT_PROCESSES` dictionary in `bot/handlers/agent_processes.py`:
-   ```python
-   "agent_your_process": {
-       "name": "Your Process Name",
-       "description": "What your process does",
-       "command": "python path/to/script.py arg1 arg2"
-   }
-   ```
-2. Ensure the LLM system message (in `bot/handlers/message_handlers.py`) mentions the capability
+### Step 4: Configure Event Subscriptions
 
-## Testing Framework & Quality Standards
+Navigate to "Event Subscriptions" and add:
+
+```
+app_mention         # App mentions
+message.im          # Direct messages
+message.mpim        # Group DMs
+message.groups      # Private channels
+message.channels    # Public channels
+```
+
+**Important**: Reinstall your app after adding events!
+
+### Step 5: Disable App Home
+
+1. Navigate to "App Home"
+2. Toggle OFF "Home Tab"
+3. Toggle ON "Allow users to send messages in app home"
+
+### Step 6: Configure Interactivity
+
+1. Navigate to "Interactivity & Shortcuts"
+2. Toggle on "Interactivity"
+3. Leave Request URL blank for Socket Mode
+
+### Step 7: Install App
+
+1. Navigate to "Install App"
+2. Click "Install to Workspace"
+3. Review permissions and click "Allow"
+4. Copy the Bot User OAuth Token (starts with `xoxb-`) for your `.env`
+
+## 📊 Monitoring & Observability
+
+### Health Dashboard
+
+Access at `http://localhost:8080/ui`:
+- **Real-time status** of all services (LLM, Qdrant, Langfuse, WebCat, etc.)
+- **System metrics**: Memory usage, active conversations, uptime
+- **Error handling**: Detailed troubleshooting information
+- **Auto-refresh**: Updates every 10 seconds
+
+### Prometheus Metrics
+
+Metrics endpoint at `http://localhost:8080/api/prometheus`:
+- **Grafana-compatible** metrics
+- **Active conversation tracking**
+- **Performance metrics**
+
+### Langfuse Observability
+
+- **Cost tracking** per user, conversation, and model
+- **Performance analytics** and prompt optimization
+- **Conversation analytics** and user behavior patterns
+- **Error tracking** with detailed LLM debugging
+- **Prompt management**: Store and version system prompts
+- **Query rewriting traces**: See how queries are rewritten
+- **Agent traces**: Visualize deep research agent execution
+
+See `docs/LANGFUSE_SETUP.md` for complete setup instructions.
+
+## 🧪 Testing Framework
 
 ### Test Suite Requirements
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **245/245 test success rate (100%)** with **72% code coverage** - this standard must be preserved.
+The project maintains a **245/245 test success rate (100%)** with **72% code coverage**.
 
 #### Test Commands
 ```bash
-# Run all tests (REQUIRED before any commit)
-make test                    # Full test suite (245 tests)
-make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
-
-# Quality checks (REQUIRED before commit)
-make lint                   # Auto-fix with ruff + pyright + bandit
-make lint-check            # Check-only mode (what CI uses)
-make quality               # Run complete pipeline: linting + type checking + tests
+make test              # Run all 245 tests
+make test-coverage     # Tests with coverage report (>70% required)
+make test-file FILE=test_name.py  # Run specific test file
 ```
 
-#### Pre-commit Requirements
+#### Quality Checks
 ```bash
-# Setup (run once)
-make setup-dev             # Install dev tools + pre-commit hooks
-
-# Before every commit (MANDATORY)
-make pre-commit           # Run all pre-commit hooks
-git add . && git commit   # Hooks run automatically
-
-# CI simulation
-make ci                   # Run complete CI pipeline locally
+make lint              # Auto-fix with ruff + pyright + bandit
+make lint-check        # Check-only mode (used by pre-commit and CI)
+make quality           # Complete pipeline: linting + type checking + tests
 ```
 
 ### Code Quality Standards
 
-#### Unified Quality Tooling (Auto-enforced)
-- **Ruff**: Fast linting, formatting, and import sorting (replaces black + isort)
-- **Pyright**: Type checking (strict mode, replaces MyPy)
+#### Unified Quality Tooling
+- **Ruff**: Fast linting, formatting, and import sorting
+- **Pyright**: Type checking (strict mode)
 - **Bandit**: Security vulnerability scanning
 
 **🎯 Unified Makefile**: `make lint-check` ensures identical behavior across:
-- Local development (`make lint`, `make lint-check`)
-- Pre-commit hooks (automatic on git commit)
+- Local development
+- Pre-commit hooks
 - CI pipeline (GitHub Actions)
 
-**Benefits**: Single modern toolchain, faster execution, zero conflicts between tools.
-
-## System Prompt Evaluation
-
-Validate your system prompt behavior with comprehensive LLM-as-a-Judge evaluations:
-
+#### Pre-commit Hooks
 ```bash
-cd evals
-pip install -e .
-python setup_langfuse_evals.py
+make setup-dev        # Install dev tools + pre-commit hooks
+make pre-commit       # Run all hooks manually
+git commit            # Hooks run automatically
 ```
 
-This creates **12 test cases** and **10 evaluators** (5 custom + 5 managed) in Langfuse to test:
-- **Professional Communication** - Executive-appropriate tone
-- **Source Transparency** - Clear knowledge base vs general knowledge indication
-- **RAG Behavior** - Knowledge retrieval integration
-- **Executive Readiness** - Strategic decision support
-- **Plus managed evaluators** - Helpfulness, conciseness, coherence, correctness, harmlessness
+See `CLAUDE.md` for complete development workflow and testing standards.
 
-See [`evals/README.md`](evals/README.md) for complete evaluation setup and [`evals/evaluator_prompts.md`](evals/evaluator_prompts.md) for Langfuse configurations.
+## 🚨 Important Notes
 
-## 📊 Monitoring & Observability
+### Never Skip Commit Hooks
+**NEVER** use `git commit --no-verify`. Always fix code issues first:
+1. Run `make lint` to auto-fix issues
+2. Run `make test` to ensure tests pass
+3. Commit normally
 
-### Health Dashboard (`http://localhost:8080/ui`)
-- **🟢 Real-time status** of all services (LLM, cache, Langfuse, metrics)
-- **📈 Big metrics display** showing memory usage, active conversations, system uptime
-- **⚡ Smart error handling** with detailed troubleshooting information
-- **🔄 Auto-refresh** every 10 seconds with manual refresh option
-- **📱 Mobile-friendly** responsive design
+### Document Ingestion
+Google Drive is the **ONLY** supported ingestion method:
+```bash
+cd ingest && python main.py --folder-id "YOUR_FOLDER_ID"
+```
 
-### Prometheus Integration
-- **Native metrics collection** for infrastructure monitoring
-- **Standard /metrics endpoint** at `http://localhost:8080/api/prometheus`
-- **Grafana-compatible** metrics for advanced dashboards
-- **Active conversation tracking** and performance metrics
+First-time setup requires Google OAuth2 credentials. See `ingest/README.md`.
 
-### LLM Observability with Langfuse
-- **Cost tracking** per user, conversation, and model
-- **Performance analytics** and prompt optimization insights
-- **Conversation analytics** and user behavior patterns
-- **Error tracking** with detailed LLM debugging information
-- **Prompt management** - Store and version system prompts in Langfuse
-- **Query rewriting traces** - See how queries are rewritten for better retrieval
+### LangGraph Recursion Limits
+The deep research agent has recursion limits set to 100 (increased from default 25) to support complex research tasks with many tool calls. This is safe because:
+- `max_react_tool_calls=15` limits researcher tool calls
+- `max_researcher_iterations=8` limits supervisor iterations
+- Proper termination via `ResearchComplete` signal
 
-See [`docs/LANGFUSE_SETUP.md`](docs/LANGFUSE_SETUP.md) for complete setup instructions.
+## 🔧 Troubleshooting
 
-## Troubleshooting
+### Slack Issues
+- **Bot not responding**: Check OAuth scopes and event subscriptions
+- **Thread responses missing**: Verify `channels:history`, `groups:history`, etc. scopes
+- **Mentions not working**: Reinstall app after adding scopes
 
-If you're experiencing issues:
+### Environment Variables
+- **Missing .env values**: Compare `.env` with `.env.example`
+- **API key errors**: Test keys with provider's playground/console
+- **Database connection**: Ensure MySQL is running via `docker compose ps`
 
-1. **Slack Configuration**: Ensure all Slack app permissions and event subscriptions are configured correctly
-2. **Environment Variables**: Verify all required variables in `.env` are set (Slack tokens, LLM API key, Pinecone credentials)
-3. **LLM Provider**: Test your OpenAI API key is valid and has sufficient quota
-4. **Pinecone**:
-   - Check your index exists with `pc.list_indexes()`
-   - Verify API key is correct
-   - Ensure environment matches (e.g., `us-east-1-aws`)
-   - Confirm index dimension (1536 for text-embedding-3-small)
-5. **Document Ingestion**: Use `cd ingest && python main.py --folder-id YOUR_ID` to ingest from Google Drive
-6. **Bot Logs**: Look for specific error messages in the application logs
-7. **Query Rewriting**: Check Langfuse traces to see how queries are being rewritten
-8. **Pre-commit Hooks**: If commit fails, run `make lint` to auto-fix issues, then commit again
+### Services Not Starting
+```bash
+# Check service status
+docker compose ps
 
-## Notes About Socket Mode
+# View logs
+docker logs -f insightmesh-bot
+docker logs -f insightmesh-webcat
+docker logs -f insightmesh-qdrant
 
-While this implementation uses Socket Mode for development convenience, we recommend:
+# Restart services
+docker compose restart bot
+```
 
-1. Using Socket Mode during development for easy testing
-2. Switching to HTTP endpoints for production deployments by:
-   - Disabling Socket Mode in your Slack app settings
-   - Setting up a public HTTP endpoint for your bot
-   - Updating your app to use that endpoint instead of Socket Mode
+### Qdrant Issues
+- **Collection not found**: Run `cd ingest && python main.py --folder-id YOUR_ID`
+- **Wrong dimensions**: Ensure embedding model matches collection (1536 for text-embedding-3-small)
+- **Connection errors**: Check `VECTOR_HOST` is `localhost` locally or `qdrant` in Docker
+
+### WebCat Issues
+- **Search not working**: Check `MCP_SERPER_API_KEY` is set and valid
+- **Deep research failing**: Verify `PERPLEXITY_API_KEY` is set
+- **Connection refused**: Ensure WebCat is running (`docker compose ps webcat`)
+
+### RAG Issues
+- **No relevant results**: Check similarity thresholds in `.env` (try lowering `RAG_SIMILARITY_THRESHOLD`)
+- **Query rewriting errors**: Disable with `RAG_ENABLE_QUERY_REWRITING=false`
+- **Empty responses**: Verify documents are ingested (`docker logs insightmesh-qdrant`)
+
+### Agent Issues
+- **Recursion limit errors**: Should be fixed with limit of 100, check logs for actual issue
+- **Agent stuck**: Check `max_react_tool_calls` and `max_researcher_iterations` limits
+- **PDF generation failing**: Install `markdown` package: `pip install markdown`
+
+### Debugging
+- **Health dashboard**: Check `http://localhost:8080/ui` for service status
+- **Langfuse traces**: View detailed execution in Langfuse dashboard
+- **Bot logs**: `docker logs -f insightmesh-bot` for real-time debugging
+- **Pre-commit failures**: Run `make lint` to auto-fix, then commit again
+
+## 📚 Additional Documentation
+
+- **CLAUDE.md**: Complete development workflow and coding standards
+- **DEEP_RESEARCH_TRANSFER_GUIDE.md**: Deep research agent architecture and implementation
+- **LANGGRAPH_STUDIO.md**: LangGraph Studio setup and debugging
+- **ingest/README.md**: Document ingestion setup and Google OAuth2
+- **docs/LANGFUSE_SETUP.md**: Langfuse observability setup
+- **evals/README.md**: LLM evaluation framework
+
+## 🎯 Production Deployment
+
+### Docker Deployment (Recommended)
+
+```bash
+# Build and start all services
+docker compose up -d
+
+# View status
+docker compose ps
+
+# View logs
+docker logs -f insightmesh-bot
+```
+
+### Environment Variables for Production
+
+Update `.env` for production:
+```bash
+# Set to production
+DEBUG=false
+LOG_LEVEL=INFO
+
+# Use Docker service names
+VECTOR_HOST=qdrant
+MCP_WEBCAT_HOST=webcat
+CACHE_REDIS_URL=redis://redis:6379
+
+# Database with strong password
+DATABASE_URL=mysql+pymysql://user:strong_password@mysql:3306/bot
+```
+
+### Resource Requirements
+
+Minimum for 100 users:
+- **Memory**: 2GB (bot) + 1GB (Qdrant) + 512MB (WebCat)
+- **CPU**: 2 cores
+- **Disk**: 10GB for vector storage + logs
+
+### Scaling Considerations
+
+- **Qdrant**: Can scale horizontally with sharding
+- **Bot instances**: Can run multiple replicas with shared Redis cache
+- **WebCat**: Stateless, can scale horizontally
+- **MySQL**: Use read replicas for high read workloads
+
+## 📝 License
+
+MIT License - See LICENSE file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following code quality standards
+4. Run tests: `make quality`
+5. Commit with pre-commit hooks
+6. Push to your branch
+7. Open a Pull Request
+
+All PRs must:
+- Pass all 245 tests
+- Maintain >70% code coverage
+- Pass unified quality checks (Ruff + Pyright + Bandit)
+- Include comprehensive tests for new features
+
+---
+
+**Questions?** Open an issue or check the documentation in the `/docs` directory.
