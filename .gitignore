@@ -205,3 +205,7 @@ bot/health_ui/node_modules/
 # UI test coverage
 tasks/ui/coverage/
 bot/health_ui/coverage/
+tasks/supervisord.pid
+
+# LangGraph Studio checkpoint files (development only)
+.langgraph_api/*.pckl

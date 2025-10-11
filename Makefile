@@ -41,6 +41,7 @@ help:
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
 	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring (recommended)"
+	@echo "  $(GREEN)make start-dev$(RESET)   🔧 DEV MODE: Hot-reload with volume mounts (no rebuild needed!)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
@@ -89,7 +90,7 @@ help:
 	@echo "  tasks-ui        Build React tasks dashboard UI"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  db-start        🐳 Start MySQL databases in Docker"
+	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
 	@echo "  db-stop         🛑 Stop MySQL databases"
 	@echo "  db-migrate      📋 Generate new migration files"
 	@echo "  db-upgrade      ⬆️  Apply pending migrations"
@@ -138,7 +139,7 @@ start-redis:
 	fi
 	@echo "$(GREEN)✅ Redis service started$(RESET)"
 
-run: check-env db-start start-redis
+run: check-env start-redis
 	@echo "$(GREEN)🤖 Starting AI Slack Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
@@ -269,13 +270,17 @@ docker-prod:
 
 docker-stop:
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.elasticsearch.yml down
-	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.mysql.yml down
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.monitoring.yml down
 
 # Full Docker Stack Commands
 docker-up: check-env
 	@echo "$(BLUE)🐳 Starting full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose up -d
+	@if [ "$(DEV)" = "true" ]; then \
+		echo "$(YELLOW)🔧 DEV MODE: Using volume mounts for hot-reload$(RESET)"; \
+		cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d; \
+	else \
+		cd $(PROJECT_ROOT_DIR) && docker compose up -d; \
+	fi
 	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
 	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
@@ -283,12 +288,17 @@ docker-up: check-env
 	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
 	@echo "$(BLUE)  - 📊 Metrics Endpoint: http://localhost:$${HEALTH_PORT:-8080}/metrics$(RESET)"
 	@echo ""
+	@if [ "$(DEV)" = "true" ]; then \
+		echo "$(YELLOW)🔥 DEV MODE ACTIVE: Code changes will hot-reload!$(RESET)"; \
+	fi
+	@echo ""
 	@echo "$(YELLOW)💡 For monitoring stack: make docker-monitor$(RESET)"
 	@echo "$(YELLOW)💡 For everything at once: make start$(RESET)"
+	@echo "$(YELLOW)💡 For dev mode: make start DEV=true$(RESET)"
 
 docker-down:
 	@echo "$(BLUE)🐳 Stopping full InsightMesh stack...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose down
+	@cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.yml -f docker-compose.dev.yml down 2>/dev/null || docker compose down
 	@echo "$(GREEN)✅ Stack stopped!$(RESET)"
 
 docker-logs:
@@ -408,6 +418,17 @@ start: docker-build docker-up docker-monitor
 	@echo ""
 	@echo "$(GREEN)🎉 All services are running! Check the health dashboard for RAG metrics.$(RESET)"
 
+# DEV mode - hot-reload with volume mounts (no rebuild needed!)
+start-dev:
+	@echo "$(YELLOW)🔧 ================================$(RESET)"
+	@echo "$(YELLOW)🔥 STARTING IN DEV MODE$(RESET)"
+	@echo "$(YELLOW)🔧 ================================$(RESET)"
+	@$(MAKE) start DEV=true
+	@echo ""
+	@echo "$(GREEN)🔥 DEV MODE ACTIVE!$(RESET)"
+	@echo "$(YELLOW)💡 Code changes will hot-reload automatically$(RESET)"
+	@echo "$(YELLOW)💡 Edit files and test immediately - no rebuild needed!$(RESET)"
+
 # Core services only (without monitoring)
 start-core: docker-build docker-up
 
@@ -415,7 +436,7 @@ start-core: docker-build docker-up
 start-docker: start
 
 # Legacy local start
-start-local: install-dev health-ui check-env db-start start-redis
+start-local: install-dev health-ui check-env start-redis
 	@echo "$(GREEN)🎯 ================================$(RESET)"
 	@echo "$(GREEN)🚀 STARTING AI SLACK BOT WITH FULL STACK$(RESET)"
 	@echo "$(GREEN)🎯 ================================$(RESET)"
@@ -457,10 +478,10 @@ start-tasks-only:
 
 # ===== DATABASE MANAGEMENT =====
 
-# Start MySQL databases in Docker
+# Start MySQL databases in Docker (uses main docker-compose.yml)
 db-start:
 	@echo "$(BLUE)🐳 Starting MySQL databases...$(RESET)"
-	docker compose -f docker-compose.mysql.yml up -d
+	docker compose up -d mysql phpmyadmin
 	@echo "$(BLUE)Waiting for MySQL to be ready...$(RESET)"
 	@timeout=60; \
 	while [ $$timeout -gt 0 ]; do \
@@ -482,7 +503,7 @@ db-start:
 # Stop MySQL databases
 db-stop:
 	@echo "$(YELLOW)🛑 Stopping MySQL databases...$(RESET)"
-	docker compose -f docker-compose.mysql.yml down
+	docker compose stop mysql phpmyadmin
 	@echo "$(GREEN)✅ MySQL databases stopped$(RESET)"
 
 # Generate new migration files

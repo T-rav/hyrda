@@ -272,7 +272,7 @@ class TestSlackService:
 
         result = await slack_service.send_message(channel, text, thread_ts)
 
-        assert result == "1234567890.654321"
+        assert result == expected_response
         slack_service.client.chat_postMessage.assert_called_once_with(
             channel=channel, text=text, thread_ts=thread_ts, blocks=None, mrkdwn=True
         )
@@ -291,7 +291,7 @@ class TestSlackService:
 
         result = await slack_service.send_message(channel, text, blocks=blocks)
 
-        assert result == "1234567890.654321"
+        assert result == expected_response
         slack_service.client.chat_postMessage.assert_called_once_with(
             channel=channel, text=text, thread_ts=None, blocks=blocks, mrkdwn=True
         )
@@ -614,3 +614,171 @@ class TestSlackService:
         assert thread_info.exists is False
         assert thread_info.message_count == 0
         assert thread_info.bot_is_participant is False
+
+    @pytest.mark.asyncio
+    async def test_upload_file_success(self):
+        """Test successful file upload"""
+        from io import BytesIO
+
+        channel = "C12345"
+        file_content = BytesIO(b"PDF content here")
+        filename = "test_report.pdf"
+        title = "Test Report"
+
+        expected_response = {
+            "ok": True,
+            "file": {
+                "name": filename,
+                "size": 100,
+                "id": "F12345",
+            },
+        }
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(return_value=expected_response)
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+            title=title,
+        )
+
+        assert result is not None
+        assert result["ok"] is True
+        assert result["file"]["name"] == filename
+        slack_service.client.files_upload_v2.assert_called_once_with(
+            channel=channel,
+            file=file_content,
+            filename=filename,
+            title=title,
+            initial_comment=None,
+            thread_ts=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_upload_file_with_thread(self):
+        """Test file upload in a thread"""
+        from io import BytesIO
+
+        channel = "C12345"
+        thread_ts = "1234567890.123456"
+        file_content = BytesIO(b"PDF content")
+        filename = "report.pdf"
+        comment = "Here's the report!"
+
+        expected_response = {
+            "ok": True,
+            "file": {"name": filename, "size": 50},
+        }
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(return_value=expected_response)
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+            initial_comment=comment,
+            thread_ts=thread_ts,
+        )
+
+        assert result is not None
+        assert result["ok"] is True
+        slack_service.client.files_upload_v2.assert_called_once()
+        call_kwargs = slack_service.client.files_upload_v2.call_args.kwargs
+        assert call_kwargs["thread_ts"] == thread_ts
+        assert call_kwargs["initial_comment"] == comment
+
+    @pytest.mark.asyncio
+    async def test_upload_file_with_bytes(self):
+        """Test file upload with bytes instead of BytesIO"""
+        channel = "C12345"
+        file_content = b"Raw bytes content"
+        filename = "data.bin"
+
+        expected_response = {
+            "ok": True,
+            "file": {"name": filename, "size": len(file_content)},
+        }
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(return_value=expected_response)
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+        )
+
+        assert result is not None
+        assert result["ok"] is True
+
+    @pytest.mark.asyncio
+    async def test_upload_file_api_error(self):
+        """Test file upload with Slack API error"""
+        from io import BytesIO
+
+        channel = "C12345"
+        file_content = BytesIO(b"content")
+        filename = "test.pdf"
+
+        api_error = SlackApiError(message="Error", response={"error": "invalid_auth"})
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(side_effect=api_error)
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_upload_file_failed_response(self):
+        """Test file upload with failed response (ok=false)"""
+        from io import BytesIO
+
+        channel = "C12345"
+        file_content = BytesIO(b"content")
+        filename = "test.pdf"
+
+        failed_response = {
+            "ok": False,
+            "error": "file_too_large",
+        }
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(return_value=failed_response)
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_upload_file_generic_exception(self):
+        """Test file upload with generic exception"""
+        from io import BytesIO
+
+        channel = "C12345"
+        file_content = BytesIO(b"content")
+        filename = "test.pdf"
+
+        slack_service = SlackServiceFactory.create_service_with_basic_client()
+        slack_service.client.files_upload_v2 = AsyncMock(
+            side_effect=Exception("Network error")
+        )
+
+        result = await slack_service.upload_file(
+            channel=channel,
+            file_content=file_content,
+            filename=filename,
+        )
+
+        assert result is None

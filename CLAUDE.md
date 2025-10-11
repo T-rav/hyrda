@@ -219,6 +219,43 @@ Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictiona
 - Shows typing indicators during response generation
 - Maintains online presence status
 
+### File Attachment Handling
+
+#### In-Thread File Access
+The bot can process file attachments (PDF, Word, Excel, PowerPoint, text files) and maintain context within threads:
+
+**✅ What Works:**
+- Upload file with bot present → Bot downloads and caches content
+- Continue discussion in same thread → Bot remembers file content
+- Reference the file later in thread → Bot has access to cached content
+
+**❌ Slack API Limitation - Retroactive File Access:**
+The bot **cannot access files uploaded before it joined a channel**, even though it can see the message history.
+
+**Why this limitation exists:**
+- **Message history**: Bot can read via `conversations.history` API ✅
+- **File downloads**: Require the bot to have been present when file was shared ❌
+- Slack's file URLs are permission-gated at **upload time**, not view time
+- This is a Slack security/privacy feature, not a bot limitation
+
+**Example scenario:**
+1. Private channel exists with `company_financials.pdf` uploaded
+2. Users discuss the document
+3. Bot is added to channel later
+4. Bot can see messages: "Check out the financial report" ✅
+5. Bot **cannot** download `company_financials.pdf` ❌ (403 Forbidden)
+
+**Workarounds:**
+1. **Re-upload the document** after adding the bot (recommended)
+2. **Add bot BEFORE** sharing sensitive documents
+3. **Use RAG knowledge base** - Pre-ingest documents via `ingest/` module so bot can search them without Slack file access
+
+**Technical details:**
+- Bot sees file metadata (name, ID) in thread history
+- File download requires bot to have `files:read` permission **at upload time**
+- Human users don't have this limitation (inherit channel permissions retroactively)
+- Other platforms (Discord, Teams) have similar restrictions
+
 ### RAG & LLM Integration
 
 #### Supported LLM Providers

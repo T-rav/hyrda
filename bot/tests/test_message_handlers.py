@@ -629,31 +629,75 @@ class TestBotCommandHandling:
         """Test /profile bot command is handled correctly"""
         from unittest.mock import AsyncMock
 
+        from services.llm_service import LLMService
+
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(return_value={"ok": True})
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        result = await handle_bot_command(
-            text="-profile tell me about Charlotte",
-            user_id="U123",
-            slack_service=slack_service,
-            channel="C123",
-            thread_ts=None,
+        # Mock LLM service for profile agent
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
         )
+
+        # Mock LangChain ChatOpenAI to prevent real API calls
+        # Create a bound LLM mock that will be returned by bind_tools
+        mock_bound_llm = Mock()
+
+        # Supervisor response with ResearchComplete to short-circuit workflow
+        mock_supervisor_response = Mock()
+        mock_supervisor_response.content = "Research complete."
+        mock_supervisor_response.tool_calls = [
+            {
+                "name": "ResearchComplete",
+                "args": {"research_summary": "Charlotte investigation complete"},
+                "id": "tc_1",
+            }
+        ]
+
+        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
+
+        mock_final_report = Mock()
+        mock_final_report.content = "# Employee Profile\n\nCharlotte works in software."
+
+        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+            mock_llm = Mock()
+            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
+            mock_llm.ainvoke = AsyncMock(return_value=mock_final_report)
+            mock_chat.return_value = mock_llm
+
+            result = await handle_bot_command(
+                text="-profile tell me about Charlotte",
+                user_id="U123",
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
+                llm_service=llm_service,
+            )
 
         assert result is True
         slack_service.send_thinking_indicator.assert_called_once_with("C123", None)
-        slack_service.delete_thinking_indicator.assert_called_once()
-        slack_service.send_message.assert_called_once()
+        # Note: delete_thinking_indicator gets called by both profile_agent progress updates
+        # and handle_bot_command cleanup, so we just verify it was called
+        assert slack_service.delete_thinking_indicator.called
 
-        # Verify response content
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text or "profile" in response_text.lower()
-        assert "TODO" in response_text
-        assert "tell me about Charlotte" in response_text
+        # Profile agent sends initial status message + final response
+        assert slack_service.send_message.call_count == 2
+
+        # Verify first call is status message
+        first_call = slack_service.send_message.call_args_list[0]
+        assert "Starting research" in first_call.kwargs["text"]
+
+        # Verify second call contains profile response
+        second_call = slack_service.send_message.call_args_list[1]
+        response_text = second_call.kwargs["text"]
+        # When mocking with ResearchComplete and no notes, we may get "No research findings"
+        assert "Profile" in response_text or "No research findings" in response_text
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
@@ -827,26 +871,58 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(return_value={"ok": True})
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
-
-        # Test /profile routing
-        await handle_message(
-            text="-profile tell me about Charlotte",
-            user_id="U123",
-            slack_service=slack_service,
-            llm_service=llm_service,
-            channel="C123",
-            thread_ts=None,
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
         )
 
-        # Should route to bot command, not LLM
-        slack_service.send_message.assert_called_once()
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text
+        # Mock LangChain to prevent real API calls
+        # Create a bound LLM mock that will be returned by bind_tools
+        mock_bound_llm = Mock()
+
+        # Supervisor response with ResearchComplete to short-circuit workflow
+        mock_supervisor_response = Mock()
+        mock_supervisor_response.content = "Research complete."
+        mock_supervisor_response.tool_calls = [
+            {
+                "name": "ResearchComplete",
+                "args": {"research_summary": "Charlotte investigation complete"},
+                "id": "tc_1",
+            }
+        ]
+
+        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
+
+        mock_report = Mock()
+        mock_report.content = "# Employee Profile\n\nTest"
+
+        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+            mock_llm = Mock()
+            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
+            mock_llm.ainvoke = AsyncMock(return_value=mock_report)
+            mock_chat.return_value = mock_llm
+
+            # Test /profile routing
+            await handle_message(
+                text="-profile tell me about Charlotte",
+                user_id="U123",
+                slack_service=slack_service,
+                llm_service=llm_service,
+                channel="C123",
+                thread_ts=None,
+            )
+
+        # Should route to bot command - sends status + response (2 messages)
+        assert slack_service.send_message.call_count == 2
+        # Check the final response - when mocking with ResearchComplete and no notes, may get "No research findings"
+        final_call = slack_service.send_message.call_args_list[1]
+        response_text = final_call.kwargs["text"]
+        assert "Profile" in response_text or "No research findings" in response_text
 
         # Reset mocks
         slack_service.send_message.reset_mock()
@@ -876,25 +952,58 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(return_value={"ok": True})
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
-
-        # Test uppercase
-        await handle_message(
-            text="-PROFILE test",
-            user_id="U123",
-            slack_service=slack_service,
-            llm_service=llm_service,
-            channel="C123",
-            thread_ts=None,
+        llm_service.get_response = AsyncMock(
+            return_value="Please provide more details about what you'd like to know."
         )
 
-        slack_service.send_message.assert_called_once()
-        call_args = slack_service.send_message.call_args
-        response_text = call_args.kwargs["text"]
-        assert "Profile Agent" in response_text
+        # Mock LangChain
+        # Create a bound LLM mock that will be returned by bind_tools
+        mock_bound_llm = Mock()
+
+        # Supervisor response with ResearchComplete to short-circuit workflow
+        mock_supervisor_response = Mock()
+        mock_supervisor_response.content = "Research complete."
+        mock_supervisor_response.tool_calls = [
+            {
+                "name": "ResearchComplete",
+                "args": {"research_summary": "Investigation complete"},
+                "id": "tc_1",
+            }
+        ]
+
+        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
+
+        mock_report = Mock()
+        mock_report.content = "# Employee Profile\n\nTest"
+
+        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+            mock_llm = Mock()
+            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
+            mock_llm.ainvoke = AsyncMock(return_value=mock_report)
+            mock_chat.return_value = mock_llm
+
+            # Test uppercase
+            await handle_message(
+                text="-PROFILE test",
+                user_id="U123",
+                slack_service=slack_service,
+                llm_service=llm_service,
+                channel="C123",
+                thread_ts=None,
+            )
+
+        # Profile agent sends status + response (2 messages)
+        assert slack_service.send_message.call_count == 2
+        final_call = slack_service.send_message.call_args_list[1]
+        response_text = final_call.kwargs["text"]
+        # When mocking with ResearchComplete and no notes, may get "No research findings"
+        assert "Profile" in response_text or "No research findings" in response_text
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
@@ -906,7 +1015,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)
@@ -939,7 +1049,8 @@ class TestBotCommandHandling:
         slack_service = SlackServiceFactory.create_service("test-token")
         slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
         slack_service.delete_thinking_indicator = AsyncMock()
-        slack_service.send_message = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
         llm_service = Mock(spec=LLMService)

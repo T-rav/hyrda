@@ -239,8 +239,9 @@ async def process_file_attachments(
             )
 
             # Download file content
+            # Use 10-minute timeout for large files (up to 100MB allowed)
             headers = {"Authorization": f"Bearer {slack_service.settings.bot_token}"}
-            response = requests.get(file_url, headers=headers, timeout=30)
+            response = requests.get(file_url, headers=headers, timeout=600)
 
             if response.status_code != 200:
                 logger.error(
@@ -344,6 +345,8 @@ async def handle_bot_command(
     thread_ts: str | None = None,
     files: list[dict] | None = None,
     document_content: str | None = None,
+    llm_service: LLMService | None = None,
+    webcat_client=None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -358,6 +361,8 @@ async def handle_bot_command(
         thread_ts: Thread timestamp if in a thread
         files: Optional list of file attachments
         document_content: Optional processed file content
+        llm_service: Optional LLM service for agent use
+        webcat_client: Optional WebCat MCP client for web search
 
     Returns:
         True if bot command was handled, False otherwise
@@ -390,7 +395,10 @@ async def handle_bot_command(
             "user_id": user_id,
             "channel": channel,
             "thread_ts": thread_ts,
+            "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
             "slack_service": slack_service,
+            "llm_service": llm_service,
+            "webcat_client": webcat_client,
         }
 
         # Add file information if available
@@ -507,6 +515,11 @@ async def handle_message(
 
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
+        # Get WebCat client for agent use
+        from services.mcp_client import get_webcat_client
+
+        webcat_client = get_webcat_client()
+
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -515,6 +528,8 @@ async def handle_message(
             thread_ts=thread_ts,
             files=files,
             document_content=document_content,
+            llm_service=llm_service,
+            webcat_client=webcat_client,
         )
 
         if handled:
@@ -642,6 +657,8 @@ async def handle_message(
             current_query=text,
             document_content=document_content if document_content else None,
             document_filename=document_filename,
+            conversation_id=thread_ts or channel,  # Use thread_ts for conversation ID
+            conversation_cache=conversation_cache,  # Pass cache for summary management
         )
 
         # Clean up thinking message

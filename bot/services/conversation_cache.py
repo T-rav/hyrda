@@ -56,6 +56,10 @@ class ConversationCache:
         """Generate document cache key for thread"""
         return f"conversation_documents:{thread_ts}"
 
+    def _get_summary_key(self, thread_ts: str) -> str:
+        """Generate summary cache key for thread"""
+        return f"conversation_summary:{thread_ts}"
+
     async def get_conversation(
         self, channel: str, thread_ts: str, slack_service: SlackService
     ) -> tuple[list[dict[str, str]], bool, str]:
@@ -175,6 +179,71 @@ class ConversationCache:
             logger.warning(f"Failed to retrieve document content: {e}")
             return None, None
 
+    async def store_summary(self, thread_ts: str, summary: str) -> bool:
+        """
+        Store conversation summary in cache.
+
+        Args:
+            thread_ts: Thread timestamp
+            summary: Summary text
+
+        Returns:
+            True if summary was stored successfully
+        """
+        summary_key = self._get_summary_key(thread_ts)
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return False
+
+        try:
+            summary_data = {
+                "summary": summary,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+
+            await redis_client.setex(summary_key, self.ttl, json.dumps(summary_data))
+
+            logger.info(
+                f"Stored conversation summary for thread {thread_ts}: {len(summary)} chars"
+            )
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to store summary: {e}")
+            return False
+
+    async def get_summary(self, thread_ts: str) -> str | None:
+        """
+        Retrieve conversation summary from cache.
+
+        Args:
+            thread_ts: Thread timestamp
+
+        Returns:
+            Summary text or None if not found
+        """
+        summary_key = self._get_summary_key(thread_ts)
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return None
+
+        try:
+            summary_data = await redis_client.get(summary_key)
+            if not summary_data:
+                return None
+
+            data = json.loads(summary_data)
+            logger.info(
+                f"Retrieved summary for thread {thread_ts}: {len(data.get('summary', ''))} chars"
+            )
+            return data.get("summary")
+
+        except Exception as e:
+            logger.warning(f"Failed to retrieve summary: {e}")
+            return None
+
     async def update_conversation(
         self, thread_ts: str, new_message: dict[str, str], is_bot_message: bool = False
     ) -> bool:
@@ -259,8 +328,11 @@ class ConversationCache:
             cache_key = self._get_cache_key(thread_ts)
             meta_key = self._get_metadata_key(thread_ts)
             document_key = self._get_document_key(thread_ts)
+            summary_key = self._get_summary_key(thread_ts)
 
-            deleted = await redis_client.delete(cache_key, meta_key, document_key)
+            deleted = await redis_client.delete(
+                cache_key, meta_key, document_key, summary_key
+            )
             logger.info(
                 f"Cleared conversation cache for {thread_ts}, deleted {deleted} keys"
             )

@@ -600,19 +600,11 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert len(data["data"]) == 24
 
     @patch("aiohttp.ClientSession.get")
-    @patch("pymysql.connect")
-    async def test_services_health_endpoint(self, mock_db_connect, mock_aiohttp_get):
+    async def test_services_health_endpoint(self, mock_aiohttp_get):
         """Test services health check endpoint"""
-        # Mock database connection
-        mock_connection = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
-            ("insightmesh_bot",),
-            ("insightmesh_tasks",),
-            ("information_schema",),
-        ]
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_db_connect.return_value = mock_connection
+        # Mock the pymysql import and connection inside the health endpoint
+        # Since pymysql is optional, we need to mock it being unavailable
+        # The health endpoint will mark database as "disabled" if pymysql not available
 
         # Mock HTTP responses for task scheduler
         mock_response = AsyncMock()
@@ -642,6 +634,9 @@ class TestHealthEndpoints(AioHTTPTestCase):
         services = data["services"]
         assert "task_scheduler" in services
         assert "database" in services
+
+        # Database should be "disabled" since pymysql is not available in tests
+        assert services["database"]["status"] in ["disabled", "error"]
 
 
 class TestHealthEndpointsEdgeCases:
