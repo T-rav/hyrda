@@ -26,21 +26,30 @@ QUALITY_JUDGE_PROMPT = """You are a quality control judge evaluating a company p
 <Quality Criteria - ALL MUST PASS>
 
 1. **Sources Section Present**: Report MUST end with "## Sources" section
-2. **All Citations Listed**: Every citation [1], [2], [3]... in the report MUST have a corresponding entry in Sources section
+2. **All Citations Listed**: Sources section must list entries 1, 2, 3... up to the HIGHEST citation number used
 3. **No Gaps in Numbering**: Sources must be numbered sequentially (1, 2, 3, 4...) with NO gaps
 4. **External Sources Only**: No meta-references like "Internal research" or "Research findings" in Sources
 5. **Complete Structure**: All required sections present (Overview, Priorities, News, Executive Team, etc.)
 
 <Your Task>
 
-**CRITICAL: If you claim sources are missing, you MUST provide evidence by quoting the actual citation numbers you found and the source entries you counted.**
+**CRITICAL RULE**: The report may use citations out of order (e.g., [1], [5], [10]). That's OK!
+What matters is: If the HIGHEST citation is [10], then the ## Sources section MUST list sources 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (all of them, sequentially, no gaps).
+
+**If you claim sources are missing, you MUST provide evidence by quoting the actual citation numbers you found and the source entries you counted.**
 
 Step-by-step evaluation process:
 1. Find the ## Sources section
-2. Count the numbered source entries (1. 2. 3. etc.)
-3. Scan the report for ALL citations [1], [2], [3]... and note the highest number
-4. Compare: Does the highest citation number match the sources count?
+2. Count the numbered source entries (1. 2. 3. etc.) - count ALL entries
+3. Scan the report for ALL citations [1], [2], [3]... and note the HIGHEST number (not which ones are used!)
+4. Compare: Does the sources count match the highest citation number?
 5. If NO match, provide EXACT EVIDENCE of what you found
+
+**EXAMPLE OF CORRECT EVALUATION**:
+- Report uses citations: [1], [5], [10] (out of order - that's fine!)
+- Highest citation: 10
+- Sources section has: 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. (10 entries)
+- **RESULT: PASS** ✅ (all sources 1-10 are present, even though only [1], [5], [10] were cited)
 
 Return ONLY a JSON object:
 
@@ -108,6 +117,20 @@ Report has no ## Sources section at all.
   "missing_sources": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
   "evidence": "Scanned entire report - no ## Sources section found. Found citations up to [20].",
   "revision_instructions": "Add a complete ## Sources section at the end of the report listing all 20 sources corresponding to citations [1] through [20] used in the report."
+}}
+```
+
+**Example 4: PASS - Out of Order Citations**
+Report uses citations [1], [5], [10] (out of order), Sources section lists 1-10.
+```json
+{{
+  "passes_quality": true,
+  "issues": [],
+  "highest_citation": 10,
+  "sources_count": 10,
+  "missing_sources": [],
+  "evidence": "Report uses citations [1], [5], [10]. Highest citation is [10]. Counted sources: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (10 entries). All sources 1-10 are present - PASS.",
+  "revision_instructions": ""
 }}
 ```
 
