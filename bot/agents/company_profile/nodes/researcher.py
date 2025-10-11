@@ -59,9 +59,6 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
             },
         )
 
-    # Get WebCat client from config
-    webcat_client = config.get("configurable", {}).get("webcat_client")
-
     # Use LangChain ChatOpenAI directly
     from langchain_openai import ChatOpenAI
 
@@ -86,9 +83,13 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     # Get search tools based on research phase
     # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
-    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis
+    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis (if enabled)
     research_phase = "initial" if tool_call_iterations < 3 else "deep"
-    search_tools = await get_search_tool(config, webcat_client, phase=research_phase)
+    search_tools = await get_search_tool(
+        config,
+        phase=research_phase,
+        perplexity_enabled=settings.search.perplexity_enabled,
+    )
     all_tools = [*search_tools, internal_search_tool, think_tool]
 
     # Prepare messages
@@ -217,7 +218,10 @@ async def researcher_tools(
         return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
     # Execute tools
-    webcat_client = config.get("configurable", {}).get("webcat_client")
+    from services.search_clients import get_perplexity_client, get_tavily_client
+
+    tavily_client = get_tavily_client()
+    perplexity_client = get_perplexity_client()
     tool_results = []
 
     for tool_call in tool_calls:
@@ -364,7 +368,7 @@ async def researcher_tools(
                     )
                 )
 
-        elif tool_name == "web_search" and webcat_client:
+        elif tool_name == "web_search" and tavily_client:
             # Execute web search
             try:
                 query = tool_args.get("query", "")
@@ -383,7 +387,7 @@ async def researcher_tools(
                         },
                     )
 
-                search_results = await webcat_client.search(query, max_results)
+                search_results = await tavily_client.search(query, max_results)
 
                 # Trace results
                 if langfuse_service:
@@ -421,7 +425,7 @@ async def researcher_tools(
                     ToolMessage(content=f"Search error: {str(e)}", tool_call_id=tool_id)
                 )
 
-        elif tool_name == "scrape_url" and webcat_client:
+        elif tool_name == "scrape_url" and tavily_client:
             # Execute URL scraping
             try:
                 url = tool_args.get("url", "")
@@ -429,7 +433,7 @@ async def researcher_tools(
                 # Trace tool execution
                 langfuse_service = get_langfuse_service()
 
-                scrape_result = await webcat_client.scrape_url(url)
+                scrape_result = await tavily_client.scrape_url(url)
 
                 if scrape_result.get("success"):
                     content = scrape_result.get("content", "")
@@ -493,19 +497,16 @@ async def researcher_tools(
                     ToolMessage(content=f"Scrape error: {str(e)}", tool_call_id=tool_id)
                 )
 
-        elif tool_name == "deep_research" and webcat_client:
+        elif tool_name == "deep_research" and perplexity_client:
             # Execute deep research via Perplexity
             try:
                 query = tool_args.get("query", "")
-                effort = tool_args.get("effort", "medium")
 
                 # Trace tool execution
                 langfuse_service = get_langfuse_service()
 
-                logger.info(
-                    f"Starting deep_research ({effort} effort): {query[:100]}..."
-                )
-                research_result = await webcat_client.deep_research(query, effort)
+                logger.info(f"Starting deep_research: {query[:100]}...")
+                research_result = await perplexity_client.deep_research(query)
 
                 # Log the result structure for debugging
                 logger.info(
@@ -544,7 +545,7 @@ async def researcher_tools(
                     if langfuse_service:
                         langfuse_service.trace_tool_execution(
                             tool_name="deep_research",
-                            tool_input={"query": query, "effort": effort},
+                            tool_input={"query": query},
                             tool_output={
                                 "success": True,
                                 "answer_length": len(answer),
@@ -553,8 +554,6 @@ async def researcher_tools(
                             metadata={
                                 "context": "deep_research_researcher",
                                 "research_topic": state["research_topic"],
-                                "effort": effort,
-                                "cost_indicator": f"{effort}_effort",
                             },
                         )
 
@@ -574,12 +573,11 @@ async def researcher_tools(
                     if langfuse_service:
                         langfuse_service.trace_tool_execution(
                             tool_name="deep_research",
-                            tool_input={"query": query, "effort": effort},
+                            tool_input={"query": query},
                             tool_output={"success": False, "error": error},
                             metadata={
                                 "context": "deep_research_researcher",
                                 "research_topic": state["research_topic"],
-                                "effort": effort,
                             },
                         )
 

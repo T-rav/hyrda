@@ -96,7 +96,6 @@ class ProfileAgent(BaseAgent):
 
         # Get required services from context
         llm_service = context.get("llm_service")
-        webcat_client = context.get("webcat_client")
         slack_service = context.get("slack_service")
         channel = context.get("channel")
 
@@ -132,7 +131,6 @@ class ProfileAgent(BaseAgent):
             graph_config = {
                 "configurable": {
                     "llm_service": llm_service,
-                    "webcat_client": webcat_client,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
                     "max_researcher_iterations": self.config.max_researcher_iterations,

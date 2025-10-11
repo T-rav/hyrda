@@ -10,8 +10,6 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from agents.company_profile.configuration import ProfileConfiguration, SearchAPI
-
 logger = logging.getLogger(__name__)
 
 
@@ -57,58 +55,43 @@ def internal_search_tool(query: str, effort: str = "medium") -> str:
 
 
 async def get_search_tool(
-    config: RunnableConfig, webcat_client: Any = None, phase: str = "initial"
+    config: RunnableConfig, phase: str = "initial", perplexity_enabled: bool = False
 ) -> list[Any]:
     """Get appropriate search tool based on configuration and research phase.
 
     Args:
         config: RunnableConfig with configuration settings
-        webcat_client: Optional WebCatClient instance for web search
         phase: Research phase - "initial" (cheap tools only) or "deep" (all tools)
+        perplexity_enabled: Whether deep_research is enabled (from SEARCH_PERPLEXITY_ENABLED)
 
     Returns:
         List of search tools appropriate for the research phase
     """
-    configuration = ProfileConfiguration.from_runnable_config(config)
-    search_api = configuration.search_api
+    from services.search_clients import get_tavily_client, get_tool_definitions
 
-    if search_api == SearchAPI.WEBCAT and webcat_client:
-        # Use our integrated WebCat MCP server
-        all_tools = webcat_client.get_tool_definitions()
+    tavily_client = get_tavily_client()
 
-        if phase == "initial":
-            # Phase 1: Only provide cheap, fast tools for initial exploration
-            # Filter out expensive deep_research tool
-            cheap_tools = [
-                tool
-                for tool in all_tools
-                if tool.get("function", {}).get("name") != "deep_research"
-            ]
-            logger.info(
-                f"Phase 1 (initial): Using {len(cheap_tools)} exploration tools (web_search, scrape_url)"
-            )
-            return cheap_tools
-        else:
-            # Phase 2: Provide all tools including deep_research for targeted deep dives
-            logger.info(
-                f"Phase 2 (deep): Using all {len(all_tools)} tools including deep_research"
-            )
-            return all_tools
-
-    elif search_api == SearchAPI.TAVILY:
-        # Use Tavily if available
-        try:
-            from langchain_community.tools.tavily_search import TavilySearchResults
-
-            logger.info("Using Tavily search for profile research")
-            return [TavilySearchResults(max_results=5)]
-        except ImportError:
-            logger.warning("Tavily not available, falling back to no search")
-            return []
-
-    else:
-        logger.warning("No search API configured for profile research")
+    if not tavily_client:
+        logger.warning("No search client available for profile research")
         return []
+
+    # Determine if we should include deep_research based on phase and settings
+    include_deep_research = False
+    if phase == "deep" and perplexity_enabled:
+        # Phase 2 + Perplexity enabled: Include deep_research
+        include_deep_research = True
+        logger.info(
+            "Phase 2 (deep): Using all tools including deep_research (Tavily + Perplexity)"
+        )
+    else:
+        # Phase 1 or Perplexity disabled: Only Tavily tools
+        logger.info(
+            "Phase 1 (initial): Using exploration tools only (web_search, scrape_url)"
+        )
+
+    # Get tool definitions
+    tools = get_tool_definitions(include_deep_research=include_deep_research)
+    return tools
 
 
 def is_token_limit_exceeded(exception: Exception, model_name: str) -> bool:

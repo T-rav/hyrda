@@ -19,8 +19,8 @@ from services.embedding import create_embedding_provider
 from services.internal_deep_research import create_internal_deep_research_service
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
-from services.mcp_client import get_webcat_client
 from services.retrieval_service import RetrievalService
+from services.search_clients import get_perplexity_client, get_tavily_client
 from services.vector_service import create_vector_store
 
 logger = logging.getLogger(__name__)
@@ -435,11 +435,16 @@ class RAGService:
             )
 
             # Check if we should enable web search tools
-            webcat_client = get_webcat_client()
+            # Regular chat only gets Tavily (web_search + scrape_url), NOT deep_research
+            tavily_client = get_tavily_client()
             tools = None
-            if webcat_client and webcat_client.enabled:
-                tools = webcat_client.get_tool_definitions()
-                logger.info(f"🔍 Web search tools available: {len(tools)} tools")
+            if tavily_client:
+                from services.search_clients import get_tool_definitions
+
+                tools = get_tool_definitions(include_deep_research=False)
+                logger.info(
+                    f"🔍 Web search tools available: {len(tools)} tools (Tavily only)"
+                )
 
             # Generate response from LLM (with optional function calling)
             response = await self.llm_provider.get_response(
@@ -513,9 +518,11 @@ class RAGService:
         Returns:
             Final response after executing tools
         """
-        webcat_client = get_webcat_client()
-        if not webcat_client:
-            logger.warning("WebCat client not available for tool calls")
+        tavily_client = get_tavily_client()
+        perplexity_client = get_perplexity_client()
+
+        if not tavily_client:
+            logger.warning("Tavily client not available for tool calls")
             return tool_call_response.get("content", "")
 
         # Execute each tool call
@@ -535,7 +542,7 @@ class RAGService:
                     query = tool_args.get("query", "")
                     max_results = tool_args.get("max_results", 15)
 
-                    search_results = await webcat_client.search(query, max_results)
+                    search_results = await tavily_client.search(query, max_results)
 
                     # Format results for LLM
                     formatted_results = "\n\n".join(
@@ -578,7 +585,7 @@ class RAGService:
                 elif tool_name == "scrape_url":
                     # Execute URL scraping
                     url = tool_args.get("url", "")
-                    scrape_result = await webcat_client.scrape_url(url)
+                    scrape_result = await tavily_client.scrape_url(url)
 
                     if scrape_result.get("success"):
                         content = scrape_result.get("content", "")
@@ -633,9 +640,20 @@ class RAGService:
 
                 elif tool_name == "deep_research":
                     # Execute deep research via Perplexity
+                    if not perplexity_client:
+                        logger.warning("Perplexity client not available")
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": "Deep research is not available (Perplexity API key not configured)",
+                            }
+                        )
+                        continue
+
                     query = tool_args.get("query", "")
-                    effort = tool_args.get("effort", "medium")  # low, medium, or high
-                    research_result = await webcat_client.deep_research(query, effort)
+                    research_result = await perplexity_client.deep_research(query)
 
                     if research_result.get("success") or research_result.get("answer"):
                         answer = research_result.get("answer", "")
@@ -660,10 +678,10 @@ class RAGService:
                         )
 
                         logger.info(
-                            f"✅ Deep research ({effort} effort) returned {len(answer)} chars with {len(sources)} sources for: {query}"
+                            f"✅ Deep research returned {len(answer)} chars with {len(sources)} sources for: {query}"
                         )
 
-                        # Trace tool execution to Langfuse with effort level
+                        # Trace tool execution to Langfuse
                         if langfuse_service:
                             langfuse_service.trace_tool_execution(
                                 tool_name=tool_name,
@@ -671,21 +689,18 @@ class RAGService:
                                 tool_output={
                                     "answer_length": len(answer),
                                     "sources_count": len(sources),
-                                    "effort": effort,
                                 },
                                 metadata={
                                     "tool_id": tool_id,
                                     "query": query,
-                                    "effort": effort,
                                     "answer_length": len(answer),
                                     "sources_count": len(sources),
                                     "session_id": session_id,
                                     "user_id": user_id,
-                                    "cost_indicator": f"{effort}_effort",  # Track cost implications
                                 },
                             )
                             logger.info(
-                                f"📊 Logged tool execution to Langfuse: {tool_name} (effort: {effort})"
+                                f"📊 Logged tool execution to Langfuse: {tool_name}"
                             )
                     else:
                         error = research_result.get("error", "Unknown error")
