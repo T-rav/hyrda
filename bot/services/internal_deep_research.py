@@ -170,15 +170,18 @@ class InternalDeepResearchService:
         Returns:
             List of sub-queries covering different aspects
         """
-        prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} focused sub-queries that will help retrieve comprehensive information from an internal knowledge base.
+        prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} DIVERSE sub-queries that will help retrieve comprehensive information from an internal knowledge base.
 
 Original Query: "{query}"
 
-Generate {num_queries} specific sub-queries that:
-1. Cover different aspects/angles of the main query
-2. Are specific enough to retrieve relevant documents
-3. Together provide comprehensive coverage of the topic
-4. Avoid redundancy between queries
+Generate {num_queries} DISTINCT sub-queries that:
+1. **Each query must explore a DIFFERENT aspect or angle** of the main query
+2. **Vary the terminology and phrasing** - don't repeat the same words across queries
+3. **Target different information types**: concepts, definitions, examples, use cases, comparisons, etc.
+4. Are specific enough to retrieve relevant documents
+5. Together provide comprehensive coverage of the topic from multiple perspectives
+
+IMPORTANT: Each sub-query should be SUBSTANTIALLY DIFFERENT from the others. If you find yourself using similar wording, reframe the question completely.
 
 Format your response as a JSON array of strings:
 ["sub-query 1", "sub-query 2", ..., "sub-query {num_queries}"]
