@@ -9,8 +9,6 @@ from enum import Enum
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel
 
-from config.settings import Settings
-
 
 class SearchAPI(str, Enum):
     """Available search API options."""
@@ -50,18 +48,10 @@ class ProfileConfiguration(BaseModel):
     compression_model: str = "openai:gpt-4o-mini"  # Compression model
     final_report_model: str = "openai:gpt-4o"  # Final report generation
 
-    # Token limits (uses centralized Settings.conversation.model_context_window)
-    # Default to reasonable portions of the 128K context window
-    # These can be overridden via environment variables
-    research_model_max_tokens: int = (
-        16000  # For researcher tool calling with large payloads
-    )
-    compression_model_max_tokens: int = (
-        16000  # Increased to preserve more research detail (was 12K)
-    )
-    final_report_model_max_tokens: int = (
-        100000  # Significantly increased for comprehensive 15-page reports (was 32K)
-    )
+    # Token limits - hardcoded for 128K context window
+    research_model_max_tokens: int = 16000  # For researcher tool calling
+    compression_model_max_tokens: int = 16000  # For compression synthesis
+    final_report_model_max_tokens: int = 16000  # For final report generation
 
     # Profile-specific settings
     min_profile_sections: int = 3  # Minimum sections in final report
@@ -86,31 +76,7 @@ class ProfileConfiguration(BaseModel):
         # Start with defaults
         settings = {}
 
-        # Try to use centralized Settings for model context window
-        # This respects CONVERSATION_MODEL_CONTEXT_WINDOW from .env
-        try:
-            app_settings = Settings()
-            context_window = app_settings.conversation.model_context_window
-
-            # If no specific token limits set, use reasonable portions of context window
-            if not os.getenv("RESEARCH_MODEL_MAX_TOKENS"):
-                settings["research_model_max_tokens"] = min(16000, context_window // 8)
-            if not os.getenv("COMPRESSION_MODEL_MAX_TOKENS"):
-                settings["compression_model_max_tokens"] = min(
-                    8000,
-                    context_window
-                    // 16,  # Conservative - supports 3+ concurrent researchers
-                )
-            if not os.getenv("FINAL_REPORT_MODEL_MAX_TOKENS"):
-                settings["final_report_model_max_tokens"] = min(
-                    32000,
-                    context_window // 4,  # 1/4 context, half of compression limit
-                )
-        except Exception:  # nosec B110
-            # Fallback to defaults if Settings import fails (intentional)
-            pass
-
-        # Override with environment variables if present
+        # Override with environment variables if present (for other settings)
         for field_name in cls.model_fields:
             env_var = field_name.upper()
             env_value = os.getenv(env_var)
