@@ -132,7 +132,7 @@ class ProfileAgent(BaseAgent):
                 get_internal_deep_research_service,
             )
 
-            internal_deep_research = get_internal_deep_research_service()
+            internal_deep_research = await get_internal_deep_research_service()
             if internal_deep_research:
                 logger.info(
                     "Internal deep research service initialized for profile agent"
