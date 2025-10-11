@@ -314,27 +314,42 @@ class ProfileAgent(BaseAgent):
 
             # Generate PDF title with entity name extracted by LLM
             try:
-                extraction_prompt = f"""Extract ONLY the main entity name from this query. Return just the entity name, nothing else.
+                import json
+
+                from langchain_openai import ChatOpenAI
+
+                from config.settings import Settings
+
+                settings = Settings()
+
+                extraction_prompt = f"""Extract the main entity name from this query and return it as a JSON object.
 
 Query: "{query}"
 
 Examples:
-- "tell me about Tesla" → "Tesla"
-- "profile of Elon Musk" → "Elon Musk"
-- "what is the Cybertruck project?" → "Cybertruck"
-- "SpaceX" → "SpaceX"
-- "research Microsoft Azure" → "Microsoft Azure"
+- "tell me about Tesla" → {{"entity": "Tesla"}}
+- "profile of Elon Musk" → {{"entity": "Elon Musk"}}
+- "what is the Cybertruck project?" → {{"entity": "Cybertruck"}}
+- "SpaceX" → {{"entity": "SpaceX"}}
+- "research Microsoft Azure" → {{"entity": "Microsoft Azure"}}
 
-Entity name:"""
+Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
 
-                entity_response = await llm_service.get_response(
-                    messages=[{"role": "user", "content": extraction_prompt}],
-                    model="gpt-4o-mini",  # Fast and cheap for this simple task
-                    temperature=0.0,  # Deterministic
-                    max_tokens=20,  # Just need the entity name
+                # Use ChatOpenAI directly (same as other LangGraph nodes)
+                llm = ChatOpenAI(
+                    model="gpt-4o-mini",
+                    api_key=settings.llm.api_key,
+                    temperature=0.0,
+                    max_completion_tokens=30,
                 )
 
-                entity_name = entity_response.strip().strip("\"'").strip()
+                entity_response = await llm.ainvoke(extraction_prompt)
+                entity_text = entity_response.content.strip()
+
+                # Parse JSON response
+                entity_data = json.loads(entity_text)
+                entity_name = entity_data.get("entity", "").strip()
+
                 logger.info(
                     f"LLM returned entity name: '{entity_name}' (length: {len(entity_name)})"
                 )

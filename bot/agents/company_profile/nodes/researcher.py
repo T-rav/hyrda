@@ -15,8 +15,8 @@ from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.state import ResearcherState
 from agents.company_profile.utils import (
     create_system_message,
-    get_search_tool,
     internal_search_tool,
+    search_tool,
     think_tool,
 )
 
@@ -66,12 +66,19 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
     # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis (if enabled)
     research_phase = "initial" if tool_call_iterations < 3 else "deep"
-    search_tools = await get_search_tool(
+    search_tools = await search_tool(
         config,
         phase=research_phase,
         perplexity_enabled=settings.search.perplexity_enabled,
     )
-    all_tools = [*search_tools, internal_search_tool, think_tool]
+
+    # Get internal search tool
+    internal_search = internal_search_tool()
+
+    # Build tool list
+    all_tools = [*search_tools, think_tool]
+    if internal_search:
+        all_tools.append(internal_search)
 
     # Prepare messages
     messages = list(state["researcher_messages"])
@@ -186,21 +193,14 @@ async def researcher_tools(
             tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
 
         elif tool_name == "internal_search_tool":
-            # Execute internal knowledge base search
+            # Execute internal knowledge base search using the LangChain tool
             try:
-                query = tool_args.get("query", "")
-                effort = tool_args.get("effort", "medium")
+                from langchain_core.messages import ToolMessage
 
-                # Lazy-load internal deep research service
-                from services.internal_deep_research import (
-                    get_internal_deep_research_service,
-                )
+                # Get the tool and invoke it
+                internal_search = internal_search_tool()
 
-                internal_deep_research = get_internal_deep_research_service()
-
-                if not internal_deep_research:
-                    from langchain_core.messages import ToolMessage
-
+                if not internal_search:
                     tool_results.append(
                         ToolMessage(
                             content="Internal search service not available (vector database not configured)",
@@ -208,67 +208,18 @@ async def researcher_tools(
                         )
                     )
                     logger.info(
-                        "Internal deep research service not available - vector DB may be disabled"
+                        "Internal search tool not available - vector DB may be disabled"
                     )
                     continue
 
-                logger.info(
-                    f"Starting internal_search ({effort} effort): {query[:100]}..."
+                # Invoke the tool
+                result_text = await internal_search.ainvoke(tool_args)
+
+                tool_results.append(
+                    ToolMessage(content=result_text, tool_call_id=tool_id)
                 )
-                research_result = await internal_deep_research.deep_research(
-                    query=query,
-                    effort=effort,
-                    conversation_history=[],
-                    user_id=None,
-                )
-
-                if research_result.get("success"):
-                    summary = research_result.get("summary", "")
-                    chunks = research_result.get("chunks", [])
-                    sub_queries = research_result.get("sub_queries", [])
-                    unique_documents = research_result.get("unique_documents", 0)
-                    total_chunks = research_result.get("total_chunks", 0)
-
-                    # Format results
-                    result_text = f"# Internal Knowledge Base Search\n\n{summary}\n\n"
-                    if chunks:
-                        result_text += f"**Found in {unique_documents} internal documents ({total_chunks} sections):**\n"
-                        docs_seen = set()
-                        for chunk in chunks[:10]:
-                            doc_name = chunk.get("metadata", {}).get(
-                                "file_name", "unknown"
-                            )
-                            if doc_name not in docs_seen:
-                                docs_seen.add(doc_name)
-                                similarity = chunk.get("similarity", 0)
-                                result_text += (
-                                    f"- {doc_name} (relevance: {similarity:.0%})\n"
-                                )
-                        result_text += f"\n**Search Strategy:** {len(sub_queries)} focused queries\n"
-                    else:
-                        result_text += "**No relevant internal documents found.**\n"
-
-                    from langchain_core.messages import ToolMessage
-
-                    tool_results.append(
-                        ToolMessage(content=result_text, tool_call_id=tool_id)
-                    )
-                    raw_notes.append(result_text)
-                    logger.info(
-                        f"Internal search completed: {unique_documents} docs, {total_chunks} chunks"
-                    )
-                else:
-                    error = research_result.get("error", "Unknown error")
-
-                    from langchain_core.messages import ToolMessage
-
-                    tool_results.append(
-                        ToolMessage(
-                            content=f"Internal search failed: {error}",
-                            tool_call_id=tool_id,
-                        )
-                    )
-                    logger.warning(f"Internal search failed for {query[:100]}: {error}")
+                raw_notes.append(result_text)
+                logger.info("Internal search completed")
 
             except Exception as e:
                 logger.error(f"Internal search error: {e}")

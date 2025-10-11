@@ -29,32 +29,46 @@ def think_tool(reflection: str) -> str:
     return f"Reflection recorded: {reflection}"
 
 
-# Internal search tool definition for LangChain tool binding
-@tool
-def internal_search_tool(query: str, effort: str = "medium") -> str:
-    """Search the internal knowledge base (Qdrant vector database) for existing information.
+# Internal search tool - singleton pattern
+class _InternalSearchToolSingleton:
+    """Singleton holder for internal search tool."""
 
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        """Get or create singleton instance."""
+        if cls._instance is not None:
+            return cls._instance
+
+        try:
+            from agents.company_profile.tools import InternalSearchTool
+
+            cls._instance = InternalSearchTool()
+            logger.info("Internal search tool singleton initialized")
+            return cls._instance
+        except Exception as e:
+            logger.warning(f"Failed to create internal search tool: {e}")
+            return None
+
+
+def internal_search_tool():
+    """Get internal search tool singleton instance.
+
+    The tool searches the internal knowledge base (vector database) for existing information.
     Use this FIRST before web search to check if we already have information about:
     - Existing customers or past clients
     - Previous projects or engagements
     - Internal documentation
     - Historical company data
 
-    Args:
-        query: What to search for in internal knowledge base.
-               Be specific about what you're looking for.
-        effort: Research depth - "low" (3 queries), "medium" (5 queries), "high" (8 queries).
-               Default: "medium"
-
     Returns:
-        Search results from internal knowledge base with document citations.
+        InternalSearchTool singleton instance or None if not available
     """
-    # This is just the tool definition for LangChain
-    # The actual execution happens in researcher_tools node
-    return f"Internal search: {query} (effort: {effort})"
+    return _InternalSearchToolSingleton.get_instance()
 
 
-async def get_search_tool(
+async def search_tool(
     config: RunnableConfig, phase: str = "initial", perplexity_enabled: bool = False
 ) -> list[Any]:
     """Get appropriate search tool based on configuration and research phase.
