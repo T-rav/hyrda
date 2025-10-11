@@ -184,7 +184,7 @@ class ProfileAgent(BaseAgent):
                 },
                 "quality_control": {
                     "start": "🔍 Validating report quality...",
-                    "complete": "✅ Quality check passed",
+                    "complete": "✅ Quality check complete",
                 },
             }
 
