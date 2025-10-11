@@ -377,13 +377,14 @@ Preserve all important information while removing redundancy and organizing logi
 - Place citations immediately after relevant information
 - End with "### Sources" section listing all sources with numbers
 - IMPORTANT: Number sources sequentially without gaps (1,2,3,4...)
+- IMPORTANT: Include brief description after each URL to explain what it contains
 - Example format:
   ```
   Tesla announced new factory in Berlin [1]. The facility will produce Model Y vehicles [2].
 
   ### Sources
-  1. https://tesla.com/news/berlin-announcement
-  2. https://reuters.com/tesla-berlin-production
+  1. https://tesla.com/news/berlin-announcement - Tesla official press release about Berlin Gigafactory
+  2. https://reuters.com/tesla-berlin-production - Reuters article on Model Y production plans
   ```
 </Citation Rules>
 
