@@ -49,8 +49,9 @@ class ConversationManager:
         """
         Check if conversation should be summarized.
 
-        Uses simple heuristic: if message count exceeds max_messages.
-        More sophisticated: could count tokens.
+        Triggers summarization if EITHER condition is met:
+        1. Message count exceeds max_messages threshold
+        2. Estimated tokens exceed summarize_threshold % of context window
 
         Args:
             messages: Conversation messages
@@ -58,7 +59,23 @@ class ConversationManager:
         Returns:
             True if summarization needed
         """
-        return len(messages) > self.max_messages
+        # Check message count threshold
+        if len(messages) > self.max_messages:
+            logger.info(
+                f"Summarization triggered: {len(messages)} messages > {self.max_messages} limit"
+            )
+            return True
+
+        # Check token usage threshold (anti-overflow protection)
+        estimated_tokens = self.estimate_tokens(messages)
+        if estimated_tokens > self.max_context_tokens:
+            logger.info(
+                f"Summarization triggered: ~{estimated_tokens} tokens > {self.max_context_tokens} "
+                f"({int(self.summarize_threshold * 100)}% threshold)"
+            )
+            return True
+
+        return False
 
     def estimate_tokens(self, messages: list[dict[str, str]]) -> int:
         """
