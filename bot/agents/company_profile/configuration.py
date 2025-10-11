@@ -41,10 +41,8 @@ class ProfileConfiguration(BaseModel):
 
     # Search configuration
     search_api: SearchAPI = SearchAPI.WEBCAT  # Use our WebCat integration
-    max_researcher_iterations: int = (
-        5  # Reduced iterations for faster completion (was 8)
-    )
-    max_react_tool_calls: int = 12  # Optimized tool calls per researcher (was 15)
+    max_researcher_iterations: int = 3  # Optimized for speed (was 5, originally 8)
+    max_react_tool_calls: int = 6  # Optimized for speed (was 12, originally 15)
 
     # Model configuration (reuse existing LLM settings)
     # Format: "provider:model" but we'll use configured LLM
