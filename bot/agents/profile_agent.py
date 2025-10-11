@@ -204,6 +204,7 @@ class ProfileAgent(BaseAgent):
 
             node_start_times = {}
             node_durations = {}
+            node_execution_counts = {}  # Track how many times each node executes
 
             # Show first node as starting immediately
             first_node_started = False
@@ -231,6 +232,12 @@ class ProfileAgent(BaseAgent):
                 if isinstance(event, dict):
                     for node_name, _node_data in event.items():
                         if node_name in node_messages:
+                            # Track execution count for this node
+                            node_execution_counts[node_name] = (
+                                node_execution_counts.get(node_name, 0) + 1
+                            )
+                            execution_count = node_execution_counts[node_name]
+
                             # Calculate duration for this node
                             end_time = time.time()
                             start_time = node_start_times.get(node_name)
@@ -244,11 +251,20 @@ class ProfileAgent(BaseAgent):
                                 else ""
                             )
 
+                            # Add revision indicator for nodes that loop
+                            revision_text = ""
+                            if (
+                                node_name
+                                in ["final_report_generation", "quality_control"]
+                                and execution_count > 1
+                            ):
+                                revision_text = f" [Attempt {execution_count}]"
+
                             completed_steps.append(
-                                f"{node_messages[node_name]['complete']}{duration_text}"
+                                f"{node_messages[node_name]['complete']}{duration_text}{revision_text}"
                             )
                             logger.info(
-                                f"✅ Completed node: {node_name} in {duration:.1f}s"
+                                f"✅ Completed node: {node_name} in {duration:.1f}s (attempt {execution_count})"
                             )
 
                             # Show next in-progress step if available
