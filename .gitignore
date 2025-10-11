@@ -209,4 +209,3 @@ tasks/supervisord.pid
 
 # LangGraph Studio checkpoint files (development only)
 .langgraph_api/*.pckl
-.langgraph_api/.langgraph_ops.pckl
