@@ -317,13 +317,13 @@ class _InternalDeepResearchServiceSingleton:
 
         try:
             # Import here to avoid circular dependencies
-            from config.settings import get_settings
+            from config.settings import Settings
             from services.embedding_service import get_embedding_service
             from services.llm_service import LLMService
             from services.retrieval_service import RetrievalService
             from services.vector_service import get_vector_service
 
-            settings = get_settings()
+            settings = Settings()
 
             # Check if vector storage is enabled
             if not settings.vector.enabled:
