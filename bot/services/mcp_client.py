@@ -401,19 +401,115 @@ class WebCatClient:
                                             for item in result_data["content"]:
                                                 if item.get("type") == "text":
                                                     text = item.get("text", "")
+                                                    logger.debug(
+                                                        f"Received text response: {len(text)} chars"
+                                                    )
                                                     try:
-                                                        result = json.loads(text)
+                                                        parsed = json.loads(text)
+                                                        logger.debug(
+                                                            f"Parsed JSON successfully: {list(parsed.keys())}"
+                                                        )
+
+                                                        # WebCat returns SearchResponse format:
+                                                        # {"query": "...", "results": [{"content": "..."}], "error": null}
+                                                        # Extract the actual research content from results[0].content
+                                                        # The content is markdown with embedded sources at the bottom
+                                                        if (
+                                                            "results" in parsed
+                                                            and parsed["results"]
+                                                        ):
+                                                            result_item = parsed[
+                                                                "results"
+                                                            ][0]
+                                                            content = result_item.get(
+                                                                "content", ""
+                                                            )
+
+                                                            # Extract sources from markdown (they're at the bottom after "## Sources")
+                                                            sources = []
+                                                            if "## Sources" in content:
+                                                                sources_section = (
+                                                                    content.split(
+                                                                        "## Sources"
+                                                                    )[1]
+                                                                )
+                                                                # Parse numbered sources like "1. https://..."
+                                                                for raw_line in sources_section.split(
+                                                                    "\n"
+                                                                ):
+                                                                    stripped_line = (
+                                                                        raw_line.strip()
+                                                                    )
+                                                                    if (
+                                                                        stripped_line
+                                                                        and (
+                                                                            stripped_line[
+                                                                                0
+                                                                            ].isdigit()
+                                                                            or stripped_line.startswith(
+                                                                                "- "
+                                                                            )
+                                                                        )
+                                                                    ):
+                                                                        # Remove leading number/dash and whitespace
+                                                                        url = stripped_line.lstrip(
+                                                                            "0123456789.-() \t"
+                                                                        )
+                                                                        if url.startswith(
+                                                                            "http"
+                                                                        ):
+                                                                            sources.append(
+                                                                                url
+                                                                            )
+
+                                                            result = {
+                                                                "answer": content,
+                                                                "query": parsed.get(
+                                                                    "query", query
+                                                                ),
+                                                                "source": parsed.get(
+                                                                    "search_source",
+                                                                    "Perplexity Deep Research",
+                                                                ),
+                                                                "sources": sources,  # Extracted from markdown
+                                                                "success": True,
+                                                            }
+                                                        elif (
+                                                            "error" in parsed
+                                                            and parsed["error"]
+                                                        ):
+                                                            result = {
+                                                                "success": False,
+                                                                "error": parsed[
+                                                                    "error"
+                                                                ],
+                                                                "query": query,
+                                                            }
+                                                        else:
+                                                            # Fallback: use parsed directly
+                                                            result = parsed
                                                     except json.JSONDecodeError:
-                                                        result = {"answer": text}
+                                                        logger.debug(
+                                                            "Failed to parse as JSON, using raw text"
+                                                        )
+                                                        result = {
+                                                            "answer": text,
+                                                            "success": True,
+                                                        }
                                         else:
+                                            logger.debug(
+                                                f"Using result_data directly: {list(result_data.keys())}"
+                                            )
                                             result = result_data
                                     break
 
                             except json.JSONDecodeError:
                                 continue
 
+            answer_len = len(result.get("answer", ""))
+            success = result.get("success", answer_len > 0)
             logger.info(
-                f"WebCat deep research completed for: {query} (answer length: {len(result.get('answer', ''))})"
+                f"WebCat deep research completed for: {query} (answer length: {answer_len}, success: {success}, keys: {list(result.keys())})"
             )
             return result
 
