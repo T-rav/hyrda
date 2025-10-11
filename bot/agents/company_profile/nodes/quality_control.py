@@ -263,15 +263,15 @@ async def quality_control_node(
             logger.warning(f"  - {issue}")
 
         # Check if we've exceeded max revisions
-        # revision_count 0 = initial attempt, 1 = 1st revision, 2 = 2nd revision (max)
-        if revision_count >= 2:
+        # revision_count 0 = initial attempt, 1 = 1st revision (max)
+        if revision_count >= 1:
             logger.error(
-                "❌ Max revisions (2) exceeded, proceeding with imperfect report"
+                "❌ Max revisions (1) exceeded, proceeding with imperfect report"
             )
             # Add warning to report about quality issues
             warning_text = (
                 "\n\n---\n\n"
-                "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 3 attempts (1 initial + 2 revisions). "
+                "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 2 attempts (1 initial + 1 revision). "
                 f"Known issues: {', '.join(issues)}\n\n"
             )
             updated_report = final_report + warning_text
@@ -279,7 +279,7 @@ async def quality_control_node(
 
         # Request revision
         logger.info(
-            f"🔄 Requesting revision {revision_count + 1}/2: {revision_instructions}"
+            f"🔄 Requesting revision {revision_count + 1}/1: {revision_instructions}"
         )
 
         # Build revision prompt with specific instructions
