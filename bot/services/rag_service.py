@@ -757,7 +757,7 @@ class RAGService:
             if self.settings.langfuse.use_prompt_templates
             else None,
             prompt_template_version=self.settings.langfuse.prompt_template_version,
-            tools=tools,
+            tools=None,  # Don't allow more tool calls - LLM should synthesize answer from results
         )
 
         # Ensure we return a string (tool calls should not happen in second call)
