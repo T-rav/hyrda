@@ -39,8 +39,15 @@ async def final_report_generation(
     notes = state.get("notes", [])
     profile_type = state.get("profile_type", "company")
     research_brief = state.get("research_brief", "")
+    revision_count = state.get("revision_count", 0)
+    revision_prompt = state.get("revision_prompt", "")
 
-    logger.info(f"Generating final report from {len(notes)} research notes")
+    if revision_count > 0:
+        logger.info(
+            f"Generating REVISED report (attempt {revision_count}) from {len(notes)} research notes"
+        )
+    else:
+        logger.info(f"Generating final report from {len(notes)} research notes")
 
     if not notes:
         logger.warning("No research notes available for final report")
@@ -86,10 +93,19 @@ async def final_report_generation(
 
     # Try generation with retry on token limits
     max_attempts = 3
-    messages = [
-        create_system_message(system_prompt),
-        create_human_message("Generate the comprehensive profile report now."),
-    ]
+
+    # If this is a revision, add the revision prompt
+    if revision_count > 0 and revision_prompt:
+        logger.info(f"Using revision prompt: {revision_prompt[:100]}...")
+        messages = [
+            create_system_message(system_prompt),
+            create_human_message(revision_prompt),
+        ]
+    else:
+        messages = [
+            create_system_message(system_prompt),
+            create_human_message("Generate the comprehensive profile report now."),
+        ]
 
     for attempt in range(max_attempts):
         try:
