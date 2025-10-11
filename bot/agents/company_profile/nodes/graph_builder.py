@@ -31,7 +31,7 @@ def build_researcher_subgraph() -> CompiledStateGraph:
 
     The researcher subgraph handles individual research tasks with tool calling.
     It consists of:
-    - researcher: Makes LLM calls with web search/scrape tools
+    - researcher: Makes LLM calls with tools (web search, scrape, internal search)
     - researcher_tools: Executes tool calls
     - compress_research: Compresses findings into summary
 
