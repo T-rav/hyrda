@@ -49,8 +49,10 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     researcher_builder.add_edge(START, "researcher")
     researcher_builder.add_edge("compress_research", END)
 
-    # Compile and return
-    return researcher_builder.compile()
+    # Compile with increased recursion limit
+    # Researcher can loop many times (researcher -> researcher_tools -> researcher)
+    # Default limit of 25 is too low for deep research tasks
+    return researcher_builder.compile({"recursion_limit": 100})
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -73,8 +75,9 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Add edges
     supervisor_builder.add_edge(START, "supervisor")
 
-    # Compile and return
-    return supervisor_builder.compile()
+    # Compile with increased recursion limit
+    # Supervisor can loop many times for complex research briefs
+    return supervisor_builder.compile({"recursion_limit": 100})
 
 
 def build_profile_researcher() -> CompiledStateGraph:
