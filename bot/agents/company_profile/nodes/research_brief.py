@@ -90,9 +90,11 @@ async def write_research_brief(
                     )
 
                     # Get internal deep research service from config
-                    internal_deep_research = config.get("configurable", {}).get(
-                        "internal_deep_research"
+                    configurable = config.get("configurable", {})
+                    logger.debug(
+                        f"Config keys: {list(config.keys())}, Configurable keys: {list(configurable.keys())}"
                     )
+                    internal_deep_research = configurable.get("internal_deep_research")
 
                     if not internal_deep_research:
                         tool_result = ToolMessage(
