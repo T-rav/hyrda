@@ -123,7 +123,7 @@ class WebCatClient:
 
             logger.error(f"Traceback: {traceback.format_exc()}")
 
-    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 15) -> list[dict[str, Any]]:
         """
         Search the web using WebCat
 
@@ -559,8 +559,8 @@ class WebCatClient:
                             },
                             "max_results": {
                                 "type": "integer",
-                                "description": "Maximum number of results (default: 5)",
-                                "default": 5,
+                                "description": "Maximum number of results (default: 15, max: 20)",
+                                "default": 15,
                             },
                         },
                         "required": ["query"],

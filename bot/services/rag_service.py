@@ -533,7 +533,7 @@ class RAGService:
                 if tool_name == "web_search":
                     # Execute web search
                     query = tool_args.get("query", "")
-                    max_results = tool_args.get("max_results", 5)
+                    max_results = tool_args.get("max_results", 15)
 
                     search_results = await webcat_client.search(query, max_results)
 
