@@ -406,44 +406,64 @@ final_report_generation_prompt = """You are an expert Business Development assoc
 </Research Notes>
 
 <Your Task>
-Create a comprehensive company profile following the 8th Light methodology.
-The report must be professional, accurate, and provide actionable insights for sales and consulting partners.
+Create a COMPREHENSIVE, IN-DEPTH company profile following the 8th Light methodology.
+TARGET LENGTH: 12-15 pages of detailed analysis (approximately 8,000-10,000 words).
+The report must be professional, accurate, and provide extensive actionable insights for sales and consulting partners.
 Use ONLY externally verifiable information - do not invent details.
+
+**Depth Requirements:**
+- Each section should be DETAILED and THOROUGH, not just summaries
+- Provide extensive analysis, context, and connecting insights
+- Include specific examples, quotes, and evidence throughout
+- Expand on implications and opportunities in each section
+- Write in rich narrative prose with comprehensive coverage
 </Your Task>
 
 <Mandatory Report Structure - 8th Light Company Profile>
 IMPORTANT: Structure your report with EXACTLY these sections in this order:
 
 ## Company Overview
-Brief summary covering:
-- Company name, founding year, headquarters
-- Core business and value proposition
-- Company size (employees, revenue if available)
-- Market position and industry sector
+COMPREHENSIVE overview (2-3 paragraphs minimum) covering:
+- Company name, founding year, headquarters, and founding story [cite sources]
+- Core business, products/services, and detailed value proposition [cite sources]
+- Company size (employees, revenue, growth trajectory if available) [cite sources]
+- Market position, industry sector, and competitive differentiation [cite sources]
+- Key milestones and evolution of the company [cite sources]
+- Financial performance indicators and market presence [cite sources]
 
 ## Company Priorities for Current/Next Year
-Strategic initiatives and goals including:
-- **Key product initiatives and roadmap** [cite sources]
-- Digital transformation or technology investments [cite sources]
-- Market expansion or new business lines [cite sources]
-- From: shareholder presentations, 10-K filings, annual reports, earnings calls [cite sources]
-- Executive interviews and statements about priorities [cite sources]
-- **Note any execution challenges or constraints mentioned** [cite sources]
+DETAILED strategic initiatives and goals (3-4 paragraphs minimum) including:
+- **Key product initiatives and detailed roadmap**: What are they building? Why? What's the timeline? [cite sources]
+- **Technology investments**: AI/ML initiatives, cloud migrations, platform modernizations [cite sources]
+- **Market expansion or new business lines**: Geographic expansion, new markets, M&A strategy [cite sources]
+- **Operational priorities**: Efficiency improvements, cost optimization, scaling challenges [cite sources]
+- **Evidence from multiple sources**: Synthesize shareholder presentations, 10-K filings, annual reports, earnings calls [cite sources]
+- **Executive vision**: What have C-suite leaders said about strategic direction? [cite sources]
+- **Execution challenges and constraints**: Technical debt, talent gaps, regulatory hurdles, competitive pressures [cite sources]
+- **Investment signals**: Funding rounds, budget allocations, hiring sprees [cite sources]
+- **Risk factors and concerns**: What keeps leadership up at night? [cite sources]
 
 ## Recent News Stories (Past 12 Months)
-Key developments including:
-- Major announcements and partnerships [cite sources]
-- Product launches and acquisitions [cite sources]
-- Leadership changes [cite sources]
-- Industry recognition or challenges [cite sources]
+COMPREHENSIVE news analysis (2-3 paragraphs minimum) including:
+- **Major announcements and partnerships**: Who, what, why, and strategic implications [cite sources]
+- **Product launches**: What launched? Reception? Market impact? [cite sources]
+- **Acquisitions and investments**: M&A activity, strategic rationale, integration challenges [cite sources]
+- **Leadership changes**: New hires, departures, organizational restructuring [cite sources]
+- **Industry recognition or challenges**: Awards, controversies, regulatory issues [cite sources]
+- **Market performance**: Stock performance, analyst ratings, investor sentiment [cite sources]
+- **Competitive moves**: How are they responding to market dynamics? [cite sources]
+- **Customer wins/losses**: Notable deals, contract renewals, churn signals [cite sources]
 
 ## Executive Team
-Leadership structure:
-- C-suite executives (names, titles, brief backgrounds)
-- **What strategic priorities has each leader publicly championed?** [cite sources]
-- **Any mentioned challenges or pain points?** [cite sources]
-- Key business unit leaders (especially product, engineering, technology)
-- Organizational structure notes
+DETAILED leadership analysis (3-4 paragraphs minimum):
+- **C-suite executives**: For EACH executive, provide name, title, background, tenure [cite sources]
+- **Individual priorities and initiatives**: What has each leader publicly championed? What are their pet projects? [cite sources]
+- **Leadership philosophy**: What do they say in interviews, blog posts, conference talks? [cite sources]
+- **Challenges and pain points**: What problems have they publicly acknowledged? [cite sources]
+- **Key business unit leaders**: Especially product, engineering, technology - who are they and what are they focused on? [cite sources]
+- **Team dynamics**: Recent leadership changes, organizational restructuring, reporting structure [cite sources]
+- **Technical vs business orientation**: Is leadership engineering-focused or business-focused? [cite sources]
+- **External reputation**: What do analysts, employees (Glassdoor), and industry observers say about leadership? [cite sources]
 
 ## Relationships via 8th Light Network
 Known connections:
@@ -465,28 +485,37 @@ Consulting ecosystem:
 - Relevant consultancy partnerships from news or case studies
 
 ## Size of Product, Design, and Technology Teams
-Team structure and health signals:
-- Estimated size of product team
-- Estimated size of design team
-- Estimated size of technology/engineering team
-- **Growth trajectory**: rapid hiring, stable, or contracting? [cite sources]
-- **Engineering health signals** if available:
-  - Technical debt or quality concerns mentioned by leadership [cite sources]
-  - Glassdoor engineering team reviews or sentiment [cite sources]
-  - Notable hiring patterns (senior hires, DevOps, QA roles) [cite sources]
-  - Any public statements about engineering challenges or process improvements [cite sources]
-- NOTE: If specific numbers unavailable, provide estimates based on company size/industry norms
+EXTENSIVE team analysis and health assessment (3-4 paragraphs minimum):
+- **Product team size and structure**: Estimated size, product management approach, PM-to-engineer ratio [cite sources]
+- **Design team size and maturity**: UX/UI team size, design system investment, design leadership [cite sources]
+- **Technology/engineering team size and composition**: Total engineers, backend/frontend/data/infrastructure breakdown [cite sources]
+- **Growth trajectory and hiring patterns**: Rapid hiring? Stable? Contracting? What roles are they hiring? [cite sources]
+- **Engineering health signals - CRITICAL SECTION**:
+  - Technical debt: Has leadership mentioned tech debt, legacy systems, or modernization needs? [cite sources]
+  - Quality concerns: Bug reports, outages, customer complaints about reliability? [cite sources]
+  - Glassdoor engineering reviews: What are engineers saying about codebase, processes, culture? [cite sources]
+  - Hiring patterns: Senior engineers, architects, DevOps, SRE, QA - what does this signal? [cite sources]
+  - Public engineering challenges: Blog posts, conference talks, job postings revealing pain points [cite sources]
+  - Process maturity: Mentions of agile adoption, CI/CD, testing practices, dev velocity [cite sources]
+  - Team scaling challenges: Growing 2x or 3x? How are they handling it? [cite sources]
+- **Technology stack and modernization**: What technologies do they use? Any migrations or modernization efforts? [cite sources]
+- **Engineering culture signals**: Open source contributions, tech blog activity, conference presence [cite sources]
+- NOTE: If specific numbers unavailable, provide DETAILED estimates based on company size/industry norms and explain reasoning
 
 ## Solutions 8th Light Can Offer
-Actionable opportunities based on research findings:
-- **Product development opportunities**: Based on product roadmap, delays, or quality concerns
-- **Engineering excellence**: Based on technical debt, scaling challenges, or quality issues discovered
-- **Process improvement**: Based on rapid growth, team scaling, or execution challenges mentioned
-- **Team development**: Based on hiring patterns, team growth, or capability gaps
-- How 8th Light's services align with discovered needs
-- Specific, concrete project opportunities
-- Reference www.8thlight.com capabilities
-- **Connect back to specific findings**: "Given [finding X] and [finding Y], 8th Light could..."
+COMPREHENSIVE opportunity analysis (3-4 paragraphs minimum) - THIS IS THE PAYOFF SECTION:
+- **Product development opportunities**: Given specific product roadmap challenges, delays, or quality concerns discovered, what can 8th Light offer? Be specific and tie back to research findings
+- **Engineering excellence opportunities**: Given technical debt signals, scaling challenges, or quality issues discovered, what consulting engagements make sense? Detailed project scoping
+- **Process improvement opportunities**: Given rapid growth, team scaling, execution challenges, or process gaps mentioned in research, what services apply? Agile coaching, DevOps transformation, etc.
+- **Team development and training opportunities**: Given hiring patterns, team growth, skill gaps, or capability challenges, what training or embedded consulting would help?
+- **Platform and architecture opportunities**: Given technology stack, modernization needs, or legacy system challenges, what architecture consulting applies?
+- **Quality and reliability opportunities**: Given production issues, testing gaps, or reliability concerns, what QA and SRE services fit?
+- **How 8th Light's services align**: Reference specific services from www.8thlight.com and explain fit
+- **Specific, concrete project opportunities**: Propose 3-5 specific engagement types with estimated scope
+- **Prioritized approach**: What should 8th Light lead with? What's the door-opener project?
+- **Decision maker targeting**: Who should 8th Light talk to first? Which exec owns these problems?
+- **Compelling narrative**: Craft the pitch - "Given [finding X], [finding Y], and [finding Z] from our research, 8th Light is positioned to help with..."
+- **Competitive differentiation**: Why 8th Light vs other consulting firms for these specific challenges?
 
 ## Sources
 List all **external** sources with citation numbers:
@@ -503,20 +532,24 @@ DO NOT include:
 
 </Mandatory Report Structure - 8th Light Company Profile>
 
-<Writing Guidelines>
-- **Professional tone**: Trustworthy and pragmatic
-- **Citations required**: Use [1], [2] after every factual claim
-- **Clear headings**: Use exact section names from structure above
-- **Narrative prose**: Write in flowing paragraphs with detailed analysis and context
-- **Use bullets sparingly**: Only for lists of 3+ items where prose would be clunky (e.g., source lists, executive names)
-- **Tell the story**: Connect findings with transition sentences, explain significance, provide context
-- **Surface BD insights**: Prominently feature product strategy, engineering health signals, challenges, and opportunities discovered
-- **Connect dots**: Link findings to 8th Light opportunities (e.g., "Rapid 3x eng growth suggests need for process improvement")
-- **Depth over breadth**: Provide detailed analysis with specific examples, quotes, and evidence
-- **Accuracy first**: Only verified, externally sourced information
-- **Honest gaps**: If information unavailable, state clearly ("Information not available")
-- **Actionable insights**: Every section should reveal opportunities for 8th Light
-</Writing Guidelines>
+<Writing Guidelines - CRITICAL FOR 15-PAGE DEPTH>
+- **LENGTH TARGET**: Aim for 12-15 pages (8,000-10,000 words). Be COMPREHENSIVE, not brief
+- **Professional tone**: Trustworthy, analytical, and pragmatic - like a top-tier consulting report
+- **Citations required**: Use [1], [2] after EVERY factual claim - no unsourced statements
+- **Clear headings**: Use exact section names from structure above with ## markdown
+- **Rich narrative prose**: Write in detailed, flowing paragraphs with extensive analysis and context
+- **Minimize bullets**: Prefer prose paragraphs over bullet lists. Use bullets ONLY for executive names, source lists, or 5+ item lists
+- **Tell the complete story**: Use transition sentences, explain significance, provide historical context, show cause-and-effect
+- **Surface BD insights throughout**: Every paragraph should reveal product strategy, engineering health, challenges, or opportunities
+- **Connect dots explicitly**: Link findings across sections (e.g., "The rapid 3x engineering growth mentioned in the news section, combined with the CTO's comments about technical debt in the executive team section, suggests urgent need for process improvement and architecture consulting")
+- **Maximum depth**: For every finding, ask "so what?" and "what does this mean for 8th Light?" - then write that analysis
+- **Specific examples always**: Include quotes, numbers, dates, names - make it concrete and credible
+- **Accuracy first**: Only verified, externally sourced information - but interpret and analyze it deeply
+- **Honest gaps**: If information unavailable after thorough research, state clearly and explain what this absence might signal
+- **Actionable insights**: Every section should build the case for 8th Light engagement
+- **Write for decision makers**: Imagine 8th Light partners reading this before a sales call - give them everything they need
+- **Synthesis over summary**: Don't just list facts - synthesize patterns, identify implications, make connections
+</Writing Guidelines - CRITICAL FOR 15-PAGE DEPTH>
 
 <Quality Checklist>
 ✓ ALL 10 mandatory sections included in exact order (including Sources)

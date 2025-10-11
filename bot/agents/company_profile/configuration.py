@@ -37,16 +37,14 @@ class ProfileConfiguration(BaseModel):
     # General settings
     max_structured_output_retries: int = 3
     allow_clarification: bool = False  # Disabled - queries are typically clear enough
-    max_concurrent_research_units: int = 3  # Conservative for company profiles
+    max_concurrent_research_units: int = 6  # Increased parallelization for speed
 
     # Search configuration
     search_api: SearchAPI = SearchAPI.WEBCAT  # Use our WebCat integration
     max_researcher_iterations: int = (
-        8  # Supervisor reflection cycles (increased for deeper investigation)
+        5  # Reduced iterations for faster completion (was 8)
     )
-    max_react_tool_calls: int = (
-        15  # Max tool calls per researcher (increased for multi-angle investigation)
-    )
+    max_react_tool_calls: int = 12  # Optimized tool calls per researcher (was 15)
 
     # Model configuration (reuse existing LLM settings)
     # Format: "provider:model" but we'll use configured LLM
@@ -61,10 +59,10 @@ class ProfileConfiguration(BaseModel):
         16000  # For researcher tool calling with large payloads
     )
     compression_model_max_tokens: int = (
-        8000  # Conservative limit - 3 researchers × 8K = 24K (safe for 128K context)
+        12000  # Increased for more detailed research summaries (was 8K)
     )
     final_report_model_max_tokens: int = (
-        32000  # Rich, well-cited deep research reports with comprehensive citations
+        100000  # Significantly increased for comprehensive 15-page reports (was 32K)
     )
 
     # Profile-specific settings
