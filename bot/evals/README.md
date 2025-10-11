@@ -7,6 +7,7 @@ LLM-as-a-judge evaluations for testing prompt quality and model accuracy.
 ```bash
 # From bot/ directory
 PYTHONPATH=. venv/bin/python evals/eval_quality_judge.py
+PYTHONPATH=. venv/bin/python evals/eval_source_selection.py
 ```
 
 ## Quality Judge Evals
@@ -31,6 +32,44 @@ Tests the quality control judge's accuracy at counting citations and matching th
 - Evidence requirement forces the judge to show its work, improving accuracy
 - Out-of-order citations ([1], [5], [10]) are common in production reports
 - Judge must understand: "If highest citation is [10], sources 1-10 must ALL exist"
+
+## Source Selection Evals
+
+Tests the LLM's ability to intelligently select the top N most relevant sources from a larger set.
+
+**Exports**: `evals/results_source_selection.json` with structured results
+
+### Test Cases
+
+1. ✅ Mix of official and news sources - should prioritize official sites and SEC filings
+2. ✅ Duplicate/redundant sources - should deduplicate and pick best coverage
+3. ✅ Technical depth indicators - should prefer detailed content over brief articles
+4. ✅ Authority hierarchy - should rank official > tier-1 news > tier-2 news > random
+5. ✅ Diversity of source types - should balance variety (not all news)
+
+### Selection Criteria
+
+The LLM evaluates sources based on:
+- **Authority**: Official sites, SEC filings, reputable news outlets
+- **Diversity**: Mix of company site, news, financial data, reviews, analysis
+- **Content depth**: Detailed descriptions indicate richer content
+- **Recency vs authority**: Balance between fresh and authoritative
+- **Deduplication**: Avoid redundant sources on same topic
+
+### Metrics Tracked
+
+- `count`: Number of sources selected
+- `expected_overlap`: How many expected sources were included
+- `expected_overlap_pct`: Percentage match with expected sources
+- `diversity`: Breakdown by source type (official, news, financial, reviews)
+- `reasoning_length`: Length of LLM's explanation
+
+### Key Learnings
+
+- GPT-4o-mini performs well at prioritizing authoritative sources
+- LLM successfully deduplicates redundant coverage of same events
+- Diversity requirement prevents overloading single source type
+- Reasoning field helps debug unexpected selections
 
 ## Adding New Evals
 
