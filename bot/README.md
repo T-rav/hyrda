@@ -61,6 +61,31 @@ VECTOR_ENVIRONMENT=us-east-1-aws
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/bot
 ```
 
+## Slack Bot Permissions
+
+The bot requires the following OAuth scopes in your Slack app configuration (https://api.slack.com/apps):
+
+### Bot Token Scopes (xoxb-*)
+- `app_mentions:read` - Receive messages that mention the bot
+- `channels:history` - View messages in public channels
+- `channels:read` - View basic channel information
+- `chat:write` - Send messages as the bot
+- `groups:history` - View messages in private channels
+- `groups:read` - View basic private channel information
+- `im:history` - View direct messages
+- `im:read` - View basic DM information
+- `im:write` - Send direct messages
+- `mpim:history` - View messages in group DMs
+- `mpim:read` - View basic group DM information
+- `mpim:write` - Send messages in group DMs
+- `users:read` - View people in the workspace
+- `files:write` - Upload files and PDFs (required for profile agent reports)
+
+### App-Level Token (xapp-*)
+- `connections:write` - Required for Socket Mode
+
+After adding or modifying scopes, you must reinstall the app to your workspace for changes to take effect.
+
 ## Architecture
 
 ```

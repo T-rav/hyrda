@@ -5,12 +5,19 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install security updates and build dependencies
+# WeasyPrint requirements for PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     python3-dev \
     gcc \
     curl \
     default-mysql-client \
+    libgobject-2.0-0 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    shared-mime-info \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 

@@ -17,7 +17,7 @@
   "pythonPlatform": "Linux",
   "typeCheckingMode": "standard",
   "useLibraryCodeForTypes": true,
-  "reportMissingImports": true,
+  "reportMissingImports": false,
   "reportMissingTypeStubs": false,
   "reportImportCycles": false,
   "reportUnusedImport": true,

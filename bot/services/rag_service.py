@@ -14,7 +14,9 @@ from typing import Any
 from config.settings import Settings
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
+from services.conversation_manager import ConversationManager
 from services.embedding import create_embedding_provider
+from services.internal_deep_research import create_internal_deep_research_service
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.mcp_client import get_webcat_client
@@ -63,6 +65,25 @@ class RAGService:
         )
         self.context_builder = ContextBuilder()
         self.citation_service = CitationService()
+
+        # Initialize conversation manager for context management
+        self.conversation_manager = ConversationManager(
+            llm_provider=self.llm_provider,
+            max_messages=settings.conversation.max_messages,
+            keep_recent=settings.conversation.keep_recent,
+            summarize_threshold=settings.conversation.summarize_threshold,
+            model_context_window=settings.conversation.model_context_window,
+        )
+
+        # Initialize internal deep research service
+        self.internal_deep_research = create_internal_deep_research_service(
+            llm_service=query_rewrite_llm
+            or self.llm_provider,  # Use query rewrite LLM or fallback to main LLM
+            retrieval_service=self.retrieval_service,
+            vector_service=self.vector_store,
+            embedding_service=self.embedding_provider,
+        )
+        logger.info("✅ Internal deep research service initialized")
 
     async def initialize(self):
         """Initialize all services"""
@@ -190,6 +211,7 @@ class RAGService:
         user_id: str | None = None,
         document_content: str | None = None,
         document_filename: str | None = None,
+        conversation_cache=None,
     ) -> str:
         """
         Generate a response using RAG or direct LLM.
@@ -203,6 +225,7 @@ class RAGService:
             user_id: User ID for tracing
             document_content: Content of uploaded document for context
             document_filename: Name of uploaded document
+            conversation_cache: Optional conversation cache for summary storage
 
         Returns:
             Generated response with citations if RAG was used
@@ -210,6 +233,40 @@ class RAGService:
         context_chunks = []
 
         try:
+            # Manage conversation context with summarization
+            existing_summary = None
+            if conversation_cache and session_id:
+                existing_summary = await conversation_cache.get_summary(session_id)
+
+            (
+                managed_system_message,
+                managed_history,
+            ) = await self.conversation_manager.manage_context(
+                messages=conversation_history,
+                system_message=system_message,
+                existing_summary=existing_summary,
+            )
+
+            # Store updated summary if context was managed
+            if (
+                managed_system_message
+                and managed_system_message != system_message
+                and conversation_cache
+                and session_id
+                and "**Previous Conversation Summary:**" in managed_system_message
+            ):
+                # Extract summary from system message (it's appended after "---")
+                summary_start = managed_system_message.index(
+                    "**Previous Conversation Summary:**"
+                )
+                summary_section = managed_system_message[summary_start:]
+                # Store summary for next time
+                await conversation_cache.store_summary(session_id, summary_section)
+                logger.info(f"✅ Stored conversation summary for session {session_id}")
+
+            # Use managed context for the rest of the generation
+            system_message = managed_system_message
+            conversation_history = managed_history
             # Retrieve context if RAG is enabled and requested
             if use_rag and self.vector_store:
                 # Always search for relevant knowledge based on the user's query
@@ -388,7 +445,7 @@ class RAGService:
                 tools=tools,  # Pass web search tools
             )
 
-            # Handle tool calls if LLM requested web search
+            # Handle tool calls if LLM requested web search or internal research
             if isinstance(response, dict) and response.get("tool_calls"):
                 logger.info(f"🛠️ LLM requested {len(response['tool_calls'])} tool calls")
                 response_str = await self._handle_tool_calls(
@@ -398,6 +455,7 @@ class RAGService:
                     session_id,
                     user_id,
                     tools,
+                    conversation_history,  # Pass conversation history for internal research
                 )
                 response = response_str
 
@@ -429,9 +487,10 @@ class RAGService:
         session_id: str | None,
         user_id: str | None,
         tools: list[dict] | None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """
-        Handle tool calls from the LLM (e.g., web search)
+        Handle tool calls from the LLM (e.g., web search, internal research)
 
         Args:
             tool_call_response: Response containing tool calls
@@ -440,6 +499,7 @@ class RAGService:
             session_id: Session ID
             user_id: User ID
             tools: Available tools
+            conversation_history: Conversation history for context
 
         Returns:
             Final response after executing tools
@@ -505,6 +565,131 @@ class RAGService:
                         logger.info(
                             f"📊 Logged tool execution to Langfuse: {tool_name}"
                         )
+
+                elif tool_name == "scrape_url":
+                    # Execute URL scraping
+                    url = tool_args.get("url", "")
+                    scrape_result = await webcat_client.scrape_url(url)
+
+                    if scrape_result.get("success"):
+                        content = scrape_result.get("content", "")
+                        title = scrape_result.get("title", "")
+                        formatted_content = f"# {title}\n\nURL: {url}\n\n{content[:5000]}"  # Limit to 5k chars
+
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": formatted_content,
+                            }
+                        )
+
+                        logger.info(
+                            f"✅ URL scrape returned {len(content)} chars from {url}"
+                        )
+
+                        # Trace tool execution to Langfuse
+                        if langfuse_service:
+                            langfuse_service.trace_tool_execution(
+                                tool_name=tool_name,
+                                tool_input=tool_args,
+                                tool_output={
+                                    "success": True,
+                                    "content_length": len(content),
+                                },
+                                metadata={
+                                    "tool_id": tool_id,
+                                    "url": url,
+                                    "title": title,
+                                    "content_length": len(content),
+                                    "session_id": session_id,
+                                    "user_id": user_id,
+                                },
+                            )
+                            logger.info(
+                                f"📊 Logged tool execution to Langfuse: {tool_name}"
+                            )
+                    else:
+                        error = scrape_result.get("error", "Unknown error")
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": f"Failed to scrape URL: {error}",
+                            }
+                        )
+                        logger.warning(f"❌ Scrape failed for {url}: {error}")
+
+                elif tool_name == "deep_research":
+                    # Execute deep research via Perplexity
+                    query = tool_args.get("query", "")
+                    effort = tool_args.get("effort", "medium")  # low, medium, or high
+                    research_result = await webcat_client.deep_research(query, effort)
+
+                    if research_result.get("success") or research_result.get("answer"):
+                        answer = research_result.get("answer", "")
+                        sources = research_result.get("sources", [])
+
+                        # Format answer with sources
+                        formatted_answer = f"{answer}\n\n"
+                        if sources:
+                            formatted_answer += "**Sources:**\n"
+                            for idx, source in enumerate(
+                                sources[:10], 1
+                            ):  # Limit to 10 sources
+                                formatted_answer += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": formatted_answer,
+                            }
+                        )
+
+                        logger.info(
+                            f"✅ Deep research ({effort} effort) returned {len(answer)} chars with {len(sources)} sources for: {query}"
+                        )
+
+                        # Trace tool execution to Langfuse with effort level
+                        if langfuse_service:
+                            langfuse_service.trace_tool_execution(
+                                tool_name=tool_name,
+                                tool_input=tool_args,
+                                tool_output={
+                                    "answer_length": len(answer),
+                                    "sources_count": len(sources),
+                                    "effort": effort,
+                                },
+                                metadata={
+                                    "tool_id": tool_id,
+                                    "query": query,
+                                    "effort": effort,
+                                    "answer_length": len(answer),
+                                    "sources_count": len(sources),
+                                    "session_id": session_id,
+                                    "user_id": user_id,
+                                    "cost_indicator": f"{effort}_effort",  # Track cost implications
+                                },
+                            )
+                            logger.info(
+                                f"📊 Logged tool execution to Langfuse: {tool_name} (effort: {effort})"
+                            )
+                    else:
+                        error = research_result.get("error", "Unknown error")
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_id,
+                                "role": "tool",
+                                "name": tool_name,
+                                "content": f"Failed to perform deep research: {error}",
+                            }
+                        )
+                        logger.warning(f"❌ Deep research failed for {query}: {error}")
+
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
                     tool_results.append(

@@ -46,8 +46,17 @@ class UserService:
         self.redis_client = redis_client
         self._session_factory = None
         if database_url:
-            engine = create_engine(database_url, pool_pre_ping=True)
-            self._session_factory = sessionmaker(bind=engine)
+            try:
+                engine = create_engine(database_url, pool_pre_ping=True)
+                self._session_factory = sessionmaker(bind=engine)
+            except ImportError as e:
+                # Database driver not installed (e.g., pymysql, asyncpg)
+                logger.warning(
+                    f"Database driver not available: {e}. "
+                    "Install optional database dependencies: pip install '.[database]'"
+                )
+            except Exception as e:
+                logger.error(f"Failed to initialize database engine: {e}")
 
     def _get_cache_key(self, slack_user_id: str) -> str:
         """Generate Redis cache key for user info."""
