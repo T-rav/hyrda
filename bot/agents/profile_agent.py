@@ -224,7 +224,7 @@ class ProfileAgent(BaseAgent):
 
                 # Extract node name from event
                 if isinstance(event, dict):
-                    for node_name, node_data in event.items():
+                    for node_name, _node_data in event.items():
                         if node_name in node_messages:
                             # Calculate duration for this node
                             end_time = time.time()
@@ -239,21 +239,11 @@ class ProfileAgent(BaseAgent):
                                 else ""
                             )
 
-                            # Add summary for research_supervisor node
-                            summary_text = ""
-                            if node_name == "research_supervisor" and isinstance(
-                                node_data, dict
-                            ):
-                                notes = node_data.get("notes", [])
-                                raw_notes = node_data.get("raw_notes", [])
-                                if notes or raw_notes:
-                                    summary_text = f" - {len(notes)} researchers, {len(raw_notes)} sources"
-
                             completed_steps.append(
-                                f"{node_messages[node_name]['complete']}{duration_text}{summary_text}"
+                                f"{node_messages[node_name]['complete']}{duration_text}"
                             )
                             logger.info(
-                                f"✅ Completed node: {node_name} in {duration:.1f}s{summary_text}"
+                                f"✅ Completed node: {node_name} in {duration:.1f}s"
                             )
 
                             # Show next in-progress step if available
