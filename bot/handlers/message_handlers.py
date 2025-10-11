@@ -421,11 +421,15 @@ async def handle_bot_command(
             except Exception as e:
                 logger.warning(f"Error deleting thinking message: {e}")
 
-        # Format and send response
-        formatted_response = await MessageFormatter.format_message(response)
-        await slack_service.send_message(
-            channel=channel, text=formatted_response, thread_ts=thread_ts
-        )
+        # Format and send response (only if non-empty)
+        # Agent may return empty response if it already posted the message (e.g., PDF upload with summary)
+        if response:
+            formatted_response = await MessageFormatter.format_message(response)
+            await slack_service.send_message(
+                channel=channel, text=formatted_response, thread_ts=thread_ts
+            )
+        else:
+            logger.info("Agent returned empty response (likely already posted message)")
 
         return True
 
