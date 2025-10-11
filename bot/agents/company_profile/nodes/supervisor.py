@@ -103,7 +103,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     )
 
     # Prepare messages
-    messages = list(state["supervisor_messages"])
+    messages = list(state.get("supervisor_messages", []))
     if not messages or not any(
         hasattr(msg, "type") and msg.type == "system" for msg in messages
     ):
@@ -191,10 +191,10 @@ async def supervisor_tools(
     from agents.company_profile.nodes.graph_builder import build_researcher_subgraph
 
     configuration = ProfileConfiguration.from_runnable_config(config)
-    messages = state["supervisor_messages"]
+    messages = state.get("supervisor_messages", [])
     notes = list(state.get("notes", []))
     raw_notes = list(state.get("raw_notes", []))
-    research_iterations = state["research_iterations"]
+    research_iterations = state.get("research_iterations", 0)
     profile_type = state.get("profile_type", "company")
 
     # Start Langfuse span for supervisor tools

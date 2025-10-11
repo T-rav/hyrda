@@ -591,7 +591,6 @@ class HealthChecker:
     async def services_health(self, request):
         """Get health status of all services."""
         import aiohttp
-        import pymysql  # type: ignore[reportMissingModuleSource]
 
         services = {}
 
@@ -636,6 +635,19 @@ class HealthChecker:
 
         # Database Health
         try:
+            # Try to import pymysql - skip if not available
+            try:
+                import pymysql  # type: ignore[reportMissingModuleSource]
+            except ImportError:
+                services["database"] = {
+                    "name": "MySQL Database",
+                    "status": "disabled",
+                    "details": {
+                        "message": "pymysql not installed (optional dependency)"
+                    },
+                }
+                raise  # Re-raise to skip to outer except
+
             # Try to connect to MySQL and list databases
             import os
 
@@ -670,6 +682,9 @@ class HealthChecker:
                     "total_databases": len(user_databases),
                 },
             }
+        except ImportError:
+            # Already handled above - pymysql not available
+            pass
         except Exception as e:
             services["database"] = {
                 "name": "MySQL Database",
