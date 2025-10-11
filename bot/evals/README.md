@@ -14,7 +14,7 @@ PYTHONPATH=. venv/bin/python evals/eval_source_selection.py
 
 Tests the quality control judge's accuracy at counting citations and matching them to sources.
 
-**Current Results**: 5-6/7 passing (71-85%)
+**Current Results**: 6-7/8 passing (75-87.5%) - Test 8 reproduces production bug
 
 ### Test Cases
 
@@ -25,6 +25,7 @@ Tests the quality control judge's accuracy at counting citations and matching th
 5. ✅ No sources section
 6. ⚠️ Duplicate citations (flaky - sometimes passes)
 7. ✅ **Out-of-order citations** (CRITICAL for production)
+8. 🐛 **BUG REPRODUCTION - 25 citations with all 25 sources present** (Tests multi-line URL handling)
 
 ### Key Learnings
 
