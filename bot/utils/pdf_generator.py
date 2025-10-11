@@ -329,7 +329,7 @@ def _get_css_for_style(style: str) -> str:
         }
 
         /* Page breaks */
-        h3, h4 {
+        h2, h3, h4 {
             page-break-after: avoid;
         }
 

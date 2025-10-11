@@ -37,33 +37,35 @@ async def clarify_with_user(
         return Command(goto="write_research_brief", update={})
 
     query = state["query"]
-    llm_service = config.get("configurable", {}).get("llm_service")
-
-    if not llm_service:
-        logger.warning("No LLM service, skipping clarification")
-        return Command(goto="write_research_brief", update={})
 
     # Check if clarification needed
     try:
+        from langchain_openai import ChatOpenAI
+
+        from config.settings import Settings
+
+        settings = Settings()
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            api_key=settings.llm.api_key,
+            temperature=0.0,
+        )
+
         prompt = prompts.clarify_with_user_instructions.format(query=query)
-        response = await llm_service.get_response(
-            messages=[create_human_message(prompt)],
+        response = await llm.ainvoke(create_human_message(prompt))
+
+        # Extract content from response
+        response_text = (
+            response.content if hasattr(response, "content") else str(response)
         )
 
         # Parse response (simplified - in production use structured output)
-        if (
-            isinstance(response, str)
-            and "need_clarification: false" in response.lower()
-        ):
+        if "need_clarification: false" in response_text.lower():
             logger.info("No clarification needed")
             return Command(goto="write_research_brief", update={})
         else:
             logger.info("Clarification needed, returning question")
-            clarification_msg = (
-                response
-                if isinstance(response, str)
-                else "Please provide more details about what you'd like to know."
-            )
+            clarification_msg = response_text
 
             return Command(
                 goto=END,
