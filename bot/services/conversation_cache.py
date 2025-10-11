@@ -56,9 +56,15 @@ class ConversationCache:
         """Generate document cache key for thread"""
         return f"conversation_documents:{thread_ts}"
 
-    def _get_summary_key(self, thread_ts: str) -> str:
-        """Generate summary cache key for thread"""
-        return f"conversation_summary:{thread_ts}"
+    def _get_summary_key(self, thread_ts: str, version: int | None = None) -> str:
+        """Generate summary cache key for thread (with optional version)"""
+        if version is not None:
+            return f"conversation_summary:{thread_ts}:v{version}"
+        return f"conversation_summary:{thread_ts}:current"
+
+    def _get_summary_history_key(self, thread_ts: str) -> str:
+        """Generate summary history metadata key"""
+        return f"conversation_summary:{thread_ts}:history"
 
     async def get_conversation(
         self, channel: str, thread_ts: str, slack_service: SlackService
@@ -179,33 +185,97 @@ class ConversationCache:
             logger.warning(f"Failed to retrieve document content: {e}")
             return None, None
 
-    async def store_summary(self, thread_ts: str, summary: str) -> bool:
+    async def store_summary(
+        self,
+        thread_ts: str,
+        summary: str,
+        message_count: int = 0,
+        compressed_from: int = 0,
+        max_versions: int = 5,
+    ) -> bool:
         """
-        Store conversation summary in cache.
+        Store conversation summary in cache with structured metadata and versioning.
 
         Args:
             thread_ts: Thread timestamp
             summary: Summary text
+            message_count: Number of messages in current context
+            compressed_from: Number of messages that were compressed into this summary
+            max_versions: Maximum number of summary versions to keep (default: 5)
 
         Returns:
             True if summary was stored successfully
         """
-        summary_key = self._get_summary_key(thread_ts)
-
         redis_client = await self._get_redis_client()
         if not redis_client:
             return False
 
         try:
+            # Estimate token count for summary (chars / 4)
+            token_count = len(summary) // 4
+
+            # Get current version number from history
+            history_key = self._get_summary_history_key(thread_ts)
+            history_data = await redis_client.get(history_key)
+
+            if history_data:
+                history = json.loads(history_data)
+                current_version = history.get("current_version", 0)
+                versions = history.get("versions", [])
+            else:
+                current_version = 0
+                versions = []
+
+            # Increment version
+            new_version = current_version + 1
+
+            # Create structured summary data with metadata
             summary_data = {
                 "summary": summary,
-                "updated_at": datetime.now(UTC).isoformat(),
+                "version": new_version,
+                "token_count": token_count,
+                "message_count": message_count,
+                "compressed_from_messages": compressed_from,
+                "created_at": datetime.now(UTC).isoformat(),
             }
 
-            await redis_client.setex(summary_key, self.ttl, json.dumps(summary_data))
+            # Store current summary (for quick access)
+            current_key = self._get_summary_key(thread_ts)
+            await redis_client.setex(current_key, self.ttl, json.dumps(summary_data))
+
+            # Store versioned summary
+            version_key = self._get_summary_key(thread_ts, new_version)
+            await redis_client.setex(version_key, self.ttl, json.dumps(summary_data))
+
+            # Update version history
+            versions.append(
+                {
+                    "version": new_version,
+                    "token_count": token_count,
+                    "created_at": summary_data["created_at"],
+                }
+            )
+
+            # Keep only last N versions
+            if len(versions) > max_versions:
+                # Remove oldest version from history
+                old_version = versions.pop(0)
+                # Delete old versioned summary from Redis
+                old_key = self._get_summary_key(thread_ts, old_version["version"])
+                await redis_client.delete(old_key)
+
+            # Store updated history
+            history_data = {
+                "current_version": new_version,
+                "versions": versions,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+            await redis_client.setex(history_key, self.ttl, json.dumps(history_data))
 
             logger.info(
-                f"Stored conversation summary for thread {thread_ts}: {len(summary)} chars"
+                f"Stored conversation summary v{new_version} for thread {thread_ts}: "
+                f"{len(summary)} chars (~{token_count} tokens), "
+                f"compressed from {compressed_from} messages"
             )
             return True
 
@@ -213,17 +283,24 @@ class ConversationCache:
             logger.warning(f"Failed to store summary: {e}")
             return False
 
-    async def get_summary(self, thread_ts: str) -> str | None:
+    async def get_summary(
+        self, thread_ts: str, version: int | None = None
+    ) -> str | None:
         """
         Retrieve conversation summary from cache.
 
         Args:
             thread_ts: Thread timestamp
+            version: Optional specific version to retrieve (default: current)
 
         Returns:
             Summary text or None if not found
         """
-        summary_key = self._get_summary_key(thread_ts)
+        summary_key = (
+            self._get_summary_key(thread_ts, version)
+            if version
+            else self._get_summary_key(thread_ts)
+        )
 
         redis_client = await self._get_redis_client()
         if not redis_client:
@@ -235,13 +312,92 @@ class ConversationCache:
                 return None
 
             data = json.loads(summary_data)
+            version_str = (
+                f"v{data.get('version', '?')}" if data.get("version") else "current"
+            )
             logger.info(
-                f"Retrieved summary for thread {thread_ts}: {len(data.get('summary', ''))} chars"
+                f"Retrieved summary {version_str} for thread {thread_ts}: "
+                f"{len(data.get('summary', ''))} chars (~{data.get('token_count', '?')} tokens)"
             )
             return data.get("summary")
 
         except Exception as e:
             logger.warning(f"Failed to retrieve summary: {e}")
+            return None
+
+    async def get_summary_metadata(
+        self, thread_ts: str, version: int | None = None
+    ) -> dict | None:
+        """
+        Retrieve summary metadata without the full summary text.
+
+        Args:
+            thread_ts: Thread timestamp
+            version: Optional specific version (default: current)
+
+        Returns:
+            Dictionary with metadata (version, token_count, message_count, etc.) or None
+        """
+        summary_key = (
+            self._get_summary_key(thread_ts, version)
+            if version
+            else self._get_summary_key(thread_ts)
+        )
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return None
+
+        try:
+            summary_data = await redis_client.get(summary_key)
+            if not summary_data:
+                return None
+
+            data = json.loads(summary_data)
+            # Return metadata without the full summary text
+            return {
+                "version": data.get("version"),
+                "token_count": data.get("token_count"),
+                "message_count": data.get("message_count"),
+                "compressed_from_messages": data.get("compressed_from_messages"),
+                "created_at": data.get("created_at"),
+                "summary_length": len(data.get("summary", "")),
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to retrieve summary metadata: {e}")
+            return None
+
+    async def get_summary_history(self, thread_ts: str) -> dict | None:
+        """
+        Retrieve summary version history.
+
+        Args:
+            thread_ts: Thread timestamp
+
+        Returns:
+            Dictionary with version history or None
+        """
+        history_key = self._get_summary_history_key(thread_ts)
+
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return None
+
+        try:
+            history_data = await redis_client.get(history_key)
+            if not history_data:
+                return None
+
+            history = json.loads(history_data)
+            logger.info(
+                f"Retrieved summary history for thread {thread_ts}: "
+                f"{len(history.get('versions', []))} versions"
+            )
+            return history
+
+        except Exception as e:
+            logger.warning(f"Failed to retrieve summary history: {e}")
             return None
 
     async def update_conversation(
@@ -319,7 +475,7 @@ class ConversationCache:
             return 0
 
     async def clear_conversation(self, thread_ts: str) -> bool:
-        """Clear specific conversation from cache"""
+        """Clear specific conversation from cache, including all summary versions"""
         redis_client = await self._get_redis_client()
         if not redis_client:
             return False
@@ -329,12 +485,31 @@ class ConversationCache:
             meta_key = self._get_metadata_key(thread_ts)
             document_key = self._get_document_key(thread_ts)
             summary_key = self._get_summary_key(thread_ts)
+            history_key = self._get_summary_history_key(thread_ts)
 
-            deleted = await redis_client.delete(
-                cache_key, meta_key, document_key, summary_key
-            )
+            keys_to_delete = [
+                cache_key,
+                meta_key,
+                document_key,
+                summary_key,
+                history_key,
+            ]
+
+            # Get version history to delete all versioned summaries
+            history_data = await redis_client.get(history_key)
+            if history_data:
+                history = json.loads(history_data)
+                versions = history.get("versions", [])
+                for version_info in versions:
+                    version_key = self._get_summary_key(
+                        thread_ts, version_info["version"]
+                    )
+                    keys_to_delete.append(version_key)
+
+            deleted = await redis_client.delete(*keys_to_delete)
             logger.info(
-                f"Cleared conversation cache for {thread_ts}, deleted {deleted} keys"
+                f"Cleared conversation cache for {thread_ts}, deleted {deleted} keys "
+                f"(including {len(keys_to_delete) - 5} versioned summaries)"
             )
             return deleted > 0
 

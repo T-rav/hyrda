@@ -247,3 +247,133 @@ def create_human_message(content: str) -> HumanMessage:
         HumanMessage instance
     """
     return HumanMessage(content=content)
+
+
+def estimate_tokens(text: str) -> int:
+    """Estimate token count for text (rough approximation).
+
+    Args:
+        text: Text to estimate
+
+    Returns:
+        Estimated token count (chars / 4)
+    """
+    return len(str(text)) // 4
+
+
+def compress_message_if_needed(
+    message: Any, max_tokens: int = 2000, compression_cache: dict | None = None
+) -> str:
+    """Compress a message if it exceeds token budget.
+
+    Caches compressed summaries to avoid re-compression.
+
+    Args:
+        message: Message to compress (LangChain message object or string)
+        max_tokens: Maximum tokens for this message
+        compression_cache: Optional cache dict to store summaries
+
+    Returns:
+        Message content (compressed if needed)
+    """
+    # Extract content from message
+    if hasattr(message, "content"):
+        content = message.content
+        msg_type = getattr(message, "type", "unknown")
+    else:
+        content = str(message)
+        msg_type = "string"
+
+    # Estimate current size
+    estimated_tokens = estimate_tokens(content)
+
+    # If under budget, return as-is
+    if estimated_tokens <= max_tokens:
+        return content
+
+    # Check cache first
+    if compression_cache is not None:
+        cache_key = f"{msg_type}:{hash(str(content)[:1000])}"
+        if cache_key in compression_cache:
+            logger.debug(f"Using cached compression for {msg_type} message")
+            return compression_cache[cache_key]
+
+    # Compress by truncating intelligently
+    # For ToolMessages: Keep first and last portions (usually have results)
+    # For AIMessages: Keep reasoning summary
+    if msg_type == "tool":
+        # Keep beginning (context) and end (results)
+        max_chars = max_tokens * 4
+        quarter = max_chars // 4
+        compressed = (
+            content[: quarter * 2]
+            + f"\n\n... [compressed {estimated_tokens - max_tokens} tokens] ...\n\n"
+            + content[-quarter:]
+        )
+    else:
+        # Simple truncation for other message types
+        max_chars = max_tokens * 4
+        compressed = (
+            content[:max_chars]
+            + f"\n\n... [compressed {estimated_tokens - max_tokens} tokens] ..."
+        )
+
+    # Cache result
+    if compression_cache is not None:
+        cache_key = f"{msg_type}:{hash(str(content)[:1000])}"
+        compression_cache[cache_key] = compressed
+
+    logger.info(
+        f"Compressed {msg_type} message: {estimated_tokens} → {estimate_tokens(compressed)} tokens"
+    )
+    return compressed
+
+
+def select_messages_within_budget(
+    messages: list,
+    max_tokens: int = 80000,
+    compression_cache: dict | None = None,
+) -> str:
+    """Select and compress messages to fit within token budget.
+
+    Args:
+        messages: List of messages to process
+        max_tokens: Maximum total tokens allowed
+        compression_cache: Optional cache for compressed messages
+
+    Returns:
+        Formatted string of selected messages within budget
+    """
+    # Start from most recent messages (they're usually most relevant)
+    selected = []
+    total_tokens = 0
+    tokens_per_message_budget = max_tokens // 40  # ~2000 tokens per message budget
+
+    for msg in reversed(messages[-40:]):  # Start with last 40
+        # Compress message if needed
+        compressed_content = compress_message_if_needed(
+            msg,
+            max_tokens=tokens_per_message_budget,
+            compression_cache=compression_cache,
+        )
+
+        msg_tokens = estimate_tokens(compressed_content)
+
+        # Check if adding this message exceeds budget
+        if total_tokens + msg_tokens > max_tokens:
+            logger.info(
+                f"Reached token budget at {total_tokens} tokens with {len(selected)} messages"
+            )
+            break
+
+        selected.append(compressed_content)
+        total_tokens += msg_tokens
+
+    # Reverse back to chronological order
+    selected.reverse()
+
+    logger.info(
+        f"Selected {len(selected)} messages totaling ~{total_tokens} tokens (budget: {max_tokens})"
+    )
+
+    return "\n\n".join(selected)

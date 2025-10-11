@@ -238,21 +238,25 @@ async def researcher_tools(
                 query = tool_args.get("query", "")
                 effort = tool_args.get("effort", "medium")
 
-                # Get internal deep research service from config
-                internal_deep_research = config.get("configurable", {}).get(
-                    "internal_deep_research"
+                # Lazy-load internal deep research service
+                from services.internal_deep_research import (
+                    get_internal_deep_research_service,
                 )
+
+                internal_deep_research = get_internal_deep_research_service()
 
                 if not internal_deep_research:
                     from langchain_core.messages import ToolMessage
 
                     tool_results.append(
                         ToolMessage(
-                            content="Internal search service not available",
+                            content="Internal search service not available (vector database not configured)",
                             tool_call_id=tool_id,
                         )
                     )
-                    logger.warning("Internal deep research service not available")
+                    logger.info(
+                        "Internal deep research service not available - vector DB may be disabled"
+                    )
                     continue
 
                 # Trace tool execution

@@ -58,7 +58,7 @@ class InternalDeepResearchService:
 
         Args:
             query: Research query
-            effort: Research effort level - "low" (3 queries), "medium" (5 queries), "high" (8 queries)
+            effort: Research effort level - "low" (3 queries), "medium" (2 queries), "high" (1 query)
             conversation_history: Recent conversation for context
             user_id: User ID for resolving "me/I" references
 
@@ -81,8 +81,8 @@ class InternalDeepResearchService:
             }
 
         try:
-            # Determine number of sub-queries based on effort
-            num_queries = {"low": 3, "medium": 5, "high": 8}.get(effort, 5)
+            # Determine number of sub-queries based on effort (reduced by ~50% for cost savings)
+            num_queries = {"low": 3, "medium": 2, "high": 1}.get(effort, 2)
 
             logger.info(
                 f"🔍 Starting internal deep research ({effort} effort): {query}"
@@ -291,6 +291,83 @@ Keep your response focused and informative (2-3 paragraphs)."""
         )
 
         return synthesis or "Unable to synthesize findings."
+
+
+class _InternalDeepResearchServiceSingleton:
+    """Singleton holder for internal deep research service."""
+
+    _instance: InternalDeepResearchService | None = None
+
+    @classmethod
+    def get_instance(cls) -> InternalDeepResearchService | None:
+        """
+        Get singleton internal deep research service instance.
+
+        Lazy-loads the service with dependencies from the global service registry.
+        Returns None if required services are not available.
+
+        Returns:
+            Initialized InternalDeepResearchService or None if services unavailable
+        """
+        if cls._instance is not None:
+            return cls._instance
+
+        try:
+            # Import here to avoid circular dependencies
+            from config.settings import get_settings
+            from services.embedding_service import get_embedding_service
+            from services.llm_service import LLMService
+            from services.retrieval_service import RetrievalService
+            from services.vector_service import get_vector_service
+
+            settings = get_settings()
+
+            # Check if vector storage is enabled
+            if not settings.vector.enabled:
+                logger.info(
+                    "Vector storage disabled - internal deep research unavailable"
+                )
+                return None
+
+            # Get required services
+            vector_service = get_vector_service()
+            embedding_service = get_embedding_service()
+            llm_service = LLMService(settings)
+            retrieval_service = RetrievalService(settings)
+
+            if not all(
+                [vector_service, embedding_service, llm_service, retrieval_service]
+            ):
+                logger.warning(
+                    "Required services unavailable for internal deep research"
+                )
+                return None
+
+            # Create singleton instance
+            cls._instance = InternalDeepResearchService(
+                llm_service=llm_service,
+                retrieval_service=retrieval_service,
+                vector_service=vector_service,
+                embedding_service=embedding_service,
+                enable_query_rewriting=True,
+            )
+
+            logger.info("Internal deep research service initialized")
+            return cls._instance
+
+        except Exception as e:
+            logger.error(f"Failed to initialize internal deep research service: {e}")
+            return None
+
+
+def get_internal_deep_research_service() -> InternalDeepResearchService | None:
+    """
+    Get singleton internal deep research service instance.
+
+    Returns:
+        Initialized InternalDeepResearchService or None if services unavailable
+    """
+    return _InternalDeepResearchServiceSingleton.get_instance()
 
 
 # Factory function

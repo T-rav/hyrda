@@ -36,19 +36,37 @@ class SlackServiceFactory:
     @staticmethod
     def create_basic_service(bot_id: str = "B12345678") -> AsyncMock:
         """Create basic Slack service mock"""
+        from models import ThreadInfo
+
         service = AsyncMock()
         service.bot_id = bot_id
         service.send_message = AsyncMock()
-        service.get_thread_info = AsyncMock(return_value={"bot_is_participant": True})
+        service.get_thread_info = AsyncMock(
+            return_value=ThreadInfo(
+                exists=True,
+                message_count=1,
+                bot_is_participant=True,
+                messages=[],
+                participant_ids=[bot_id],
+            )
+        )
         return service
 
     @staticmethod
-    def create_service_with_thread_info(thread_info: dict = None) -> AsyncMock:
-        """Create service with specific thread info"""
-        if thread_info is None:
-            thread_info = {"bot_is_participant": True}
+    def create_service_with_thread_info(bot_is_participant: bool = True) -> AsyncMock:
+        """Create service with specific thread participation status"""
+        from models import ThreadInfo
+
         service = SlackServiceFactory.create_basic_service()
-        service.get_thread_info = AsyncMock(return_value=thread_info)
+        service.get_thread_info = AsyncMock(
+            return_value=ThreadInfo(
+                exists=True,
+                message_count=1,
+                bot_is_participant=bot_is_participant,
+                messages=[],
+                participant_ids=["B12345678"] if bot_is_participant else [],
+            )
+        )
         return service
 
 
@@ -385,7 +403,7 @@ class TestProcessMessageByContext:
         """Test processing message in thread where bot is participant"""
         # Use factory to create service with specific thread info
         mock_slack_service = SlackServiceFactory.create_service_with_thread_info(
-            {"bot_is_participant": True}
+            bot_is_participant=True
         )
 
         with patch(
@@ -415,7 +433,7 @@ class TestProcessMessageByContext:
         """Test processing message in thread where bot is not participant"""
         # Use factory to create service with specific thread info
         mock_slack_service = SlackServiceFactory.create_service_with_thread_info(
-            {"bot_is_participant": False}
+            bot_is_participant=False
         )
 
         with patch(
@@ -604,11 +622,30 @@ class TestProcessMessageByContext:
         self, mock_slack_service, mock_llm_service
     ):
         """Test edge cases in thread participation checking"""
+        from models import ThreadInfo
+
         # Test with various thread_info responses
         thread_info_cases = [
-            ({"bot_is_participant": True}, True),  # Should respond
-            ({"bot_is_participant": False}, False),  # Should not respond
-            ({}, False),  # Should not respond (missing key)
+            (
+                ThreadInfo(
+                    exists=True,
+                    message_count=1,
+                    bot_is_participant=True,
+                    messages=[],
+                    participant_ids=["B12345678"],
+                ),
+                True,
+            ),  # Should respond
+            (
+                ThreadInfo(
+                    exists=True,
+                    message_count=1,
+                    bot_is_participant=False,
+                    messages=[],
+                    participant_ids=[],
+                ),
+                False,
+            ),  # Should not respond
         ]
 
         for thread_info, should_respond in thread_info_cases:
