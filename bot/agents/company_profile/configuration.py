@@ -51,7 +51,9 @@ class ProfileConfiguration(BaseModel):
     # Token limits - hardcoded for 128K context window
     research_model_max_tokens: int = 16000  # For researcher tool calling
     compression_model_max_tokens: int = 16000  # For compression synthesis
-    final_report_model_max_tokens: int = 16000  # For final report generation
+    final_report_model_max_tokens: int = (
+        24000  # For final report generation (50% larger)
+    )
 
     # Profile-specific settings
     min_profile_sections: int = 3  # Minimum sections in final report
