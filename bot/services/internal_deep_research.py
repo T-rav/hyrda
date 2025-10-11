@@ -58,7 +58,7 @@ class InternalDeepResearchService:
 
         Args:
             query: Research query
-            effort: Research effort level - "low" (3 queries), "medium" (5 queries), "high" (8 queries)
+            effort: Research effort level - "low" (3 queries), "medium" (2 queries), "high" (1 query)
             conversation_history: Recent conversation for context
             user_id: User ID for resolving "me/I" references
 
@@ -81,8 +81,8 @@ class InternalDeepResearchService:
             }
 
         try:
-            # Determine number of sub-queries based on effort
-            num_queries = {"low": 3, "medium": 5, "high": 8}.get(effort, 5)
+            # Determine number of sub-queries based on effort (reduced by ~50% for cost savings)
+            num_queries = {"low": 3, "medium": 2, "high": 1}.get(effort, 2)
 
             logger.info(
                 f"🔍 Starting internal deep research ({effort} effort): {query}"
