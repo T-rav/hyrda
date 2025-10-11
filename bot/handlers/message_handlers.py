@@ -239,8 +239,9 @@ async def process_file_attachments(
             )
 
             # Download file content
+            # Use 10-minute timeout for large files (up to 100MB allowed)
             headers = {"Authorization": f"Bearer {slack_service.settings.bot_token}"}
-            response = requests.get(file_url, headers=headers, timeout=30)
+            response = requests.get(file_url, headers=headers, timeout=600)
 
             if response.status_code != 200:
                 logger.error(
