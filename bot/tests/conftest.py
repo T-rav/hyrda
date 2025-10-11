@@ -41,9 +41,8 @@ def mock_langfuse():
                     "langfuse.openai": langfuse_mock.openai,
                 },
             ),
-            patch("services.langfuse_service.get_langfuse_service", return_value=None),
-            patch("services.langfuse_service.observe", side_effect=mock_observe),
         ):
+            # Note: Removed langfuse_service patches since internal_deep_research no longer uses Langfuse
             yield
 
 
@@ -174,17 +173,21 @@ def sample_thread_messages():
 @pytest.fixture(autouse=True)
 def clean_prometheus_registry():
     """Clean up Prometheus metrics registry before and after each test."""
-    import prometheus_client
+    try:
+        import prometheus_client
 
-    # Clear registry before test
-    prometheus_client.REGISTRY._names_to_collectors.clear()
-    prometheus_client.REGISTRY._collector_to_names.clear()
+        # Clear registry before test
+        prometheus_client.REGISTRY._names_to_collectors.clear()
+        prometheus_client.REGISTRY._collector_to_names.clear()
 
-    yield
+        yield
 
-    # Clear registry after test
-    prometheus_client.REGISTRY._names_to_collectors.clear()
-    prometheus_client.REGISTRY._collector_to_names.clear()
+        # Clear registry after test
+        prometheus_client.REGISTRY._names_to_collectors.clear()
+        prometheus_client.REGISTRY._collector_to_names.clear()
+    except ImportError:
+        # prometheus_client not installed, skip cleanup
+        yield
 
 
 # Auto-mock external APIs to prevent real API calls in tests
