@@ -84,8 +84,11 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         current_date=current_date,
     )
 
-    # Get search tools
-    search_tools = await get_search_tool(config, webcat_client)
+    # Get search tools based on research phase
+    # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
+    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis
+    research_phase = "initial" if tool_call_iterations < 3 else "deep"
+    search_tools = await get_search_tool(config, webcat_client, phase=research_phase)
     all_tools = [*search_tools, internal_search_tool, think_tool]
 
     # Prepare messages

@@ -57,24 +57,43 @@ def internal_search_tool(query: str, effort: str = "medium") -> str:
 
 
 async def get_search_tool(
-    config: RunnableConfig, webcat_client: Any = None
+    config: RunnableConfig, webcat_client: Any = None, phase: str = "initial"
 ) -> list[Any]:
-    """Get appropriate search tool based on configuration.
+    """Get appropriate search tool based on configuration and research phase.
 
     Args:
         config: RunnableConfig with configuration settings
         webcat_client: Optional WebCatClient instance for web search
+        phase: Research phase - "initial" (cheap tools only) or "deep" (all tools)
 
     Returns:
-        List of search tools
+        List of search tools appropriate for the research phase
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     search_api = configuration.search_api
 
     if search_api == SearchAPI.WEBCAT and webcat_client:
         # Use our integrated WebCat MCP server
-        logger.info("Using WebCat search for profile research")
-        return webcat_client.get_tool_definitions()
+        all_tools = webcat_client.get_tool_definitions()
+
+        if phase == "initial":
+            # Phase 1: Only provide cheap, fast tools for initial exploration
+            # Filter out expensive deep_research tool
+            cheap_tools = [
+                tool
+                for tool in all_tools
+                if tool.get("function", {}).get("name") != "deep_research"
+            ]
+            logger.info(
+                f"Phase 1 (initial): Using {len(cheap_tools)} exploration tools (web_search, scrape_url)"
+            )
+            return cheap_tools
+        else:
+            # Phase 2: Provide all tools including deep_research for targeted deep dives
+            logger.info(
+                f"Phase 2 (deep): Using all {len(all_tools)} tools including deep_research"
+            )
+            return all_tools
 
     elif search_api == SearchAPI.TAVILY:
         # Use Tavily if available
