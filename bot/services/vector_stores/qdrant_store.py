@@ -220,6 +220,7 @@ class QdrantVectorStore(VectorStore):
             for match in default_result:
                 if (
                     match.score >= similarity_threshold
+                    and match.payload
                     and "namespace" not in match.payload
                 ):
                     all_documents.append(

@@ -38,7 +38,9 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     Returns:
         Compiled researcher subgraph
     """
-    researcher_builder = StateGraph(ResearcherState, output=ResearcherOutputState)
+    researcher_builder = StateGraph(
+        ResearcherState, output_schema=ResearcherOutputState
+    )
 
     # Add nodes
     researcher_builder.add_node("researcher", researcher)
