@@ -500,16 +500,38 @@ async def researcher_tools(
                 )
                 research_result = await webcat_client.deep_research(query, effort)
 
+                # Log the result structure for debugging
+                logger.info(
+                    f"Deep research result type: {type(research_result)}, "
+                    f"keys: {list(research_result.keys()) if isinstance(research_result, dict) else 'NOT A DICT'}"
+                )
+
                 if research_result.get("success") or research_result.get("answer"):
                     answer = research_result.get("answer", "")
                     sources = research_result.get("sources", [])
+
+                    # Log sources structure
+                    logger.info(
+                        f"Sources type: {type(sources)}, "
+                        f"count: {len(sources) if isinstance(sources, list) else 'NOT A LIST'}, "
+                        f"first source type: {type(sources[0]) if sources else 'EMPTY'}"
+                    )
 
                     # Format answer with sources
                     result_text = f"# Deep Research Results\n\n{answer}\n\n"
                     if sources:
                         result_text += "**Sources:**\n"
                         for idx, source in enumerate(sources[:10], 1):
-                            result_text += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+                            # Handle both string URLs and dict objects
+                            if isinstance(source, str):
+                                result_text += f"{idx}. {source}\n"
+                            elif isinstance(source, dict):
+                                result_text += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+                            else:
+                                logger.warning(
+                                    f"Unexpected source type: {type(source)}"
+                                )
+                                result_text += f"{idx}. {str(source)}\n"
 
                     # Trace successful research
                     if langfuse_service:
