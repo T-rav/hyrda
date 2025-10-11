@@ -89,8 +89,8 @@ async def final_report_generation(
             max_completion_tokens=configuration.final_report_model_max_tokens,
         )
 
-    # Format research context
-    notes_text = format_research_context(research_brief, notes, profile_type)
+    # Format research context (async - uses LLM for source selection)
+    notes_text = await format_research_context(research_brief, notes, profile_type)
 
     # Build final report prompt
     current_date = datetime.now().strftime("%B %d, %Y")
