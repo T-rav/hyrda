@@ -205,21 +205,95 @@ def format_research_context(
 ) -> str:
     """Format research context for final report generation.
 
+    Extracts all sources from individual research notes and creates a consolidated
+    global source list, renumbering citations throughout.
+
     Args:
         research_brief: Original research plan
         notes: List of compressed research findings
         profile_type: Type of profile (company, employee, project)
 
     Returns:
-        Formatted context string
+        Formatted context string with global source numbering
     """
+    import re
+
+    # Extract all sources from all notes
+    global_sources = []  # List of (url, description) tuples
+    source_url_to_global_num = {}  # Map URL -> global citation number
+    renumbered_notes = []
+
+    for note in notes:
+        # Find ### Sources section in this note
+        sources_match = re.search(
+            r"### Sources\s*\n(.*?)(?=\n###|\n##|$)", note, re.DOTALL
+        )
+
+        if sources_match:
+            sources_section = sources_match.group(1).strip()
+            # Split sources into main content and sources
+            note_content = note[: sources_match.start()].strip()
+
+            # Parse individual sources from this note
+            # Format: "1. URL - description" or "1. URL"
+            source_lines = []
+            for line in sources_section.split("\n"):
+                match = re.match(r"^\d+\.\s+(.+?)(?:\s+-\s+(.+))?$", line.strip())
+                if match:
+                    url = match.group(1).strip()
+                    desc = match.group(2).strip() if match.group(2) else ""
+                    source_lines.append((url, desc))
+
+            # Map local citation numbers to global numbers
+            local_to_global = {}
+            for local_num, (url, desc) in enumerate(source_lines, 1):
+                # Check if we've seen this URL before
+                if url not in source_url_to_global_num:
+                    global_sources.append((url, desc))
+                    source_url_to_global_num[url] = len(global_sources)
+
+                local_to_global[local_num] = source_url_to_global_num[url]
+
+            # Renumber citations in note content
+            # Replace [1], [2], etc. with global numbers
+            # Use lambda to avoid loop variable binding issues
+            renumbered_content = re.sub(
+                r"\[(\d+)\]",
+                lambda m,
+                mapping=local_to_global: f"[{mapping.get(int(m.group(1)), int(m.group(1)))}]",
+                note_content,
+            )
+            renumbered_notes.append(renumbered_content)
+        else:
+            # No sources section found, keep note as-is
+            renumbered_notes.append(note)
+
+    # Build context with renumbered notes
     context = "# Profile Research Context\n\n"
     context += f"**Profile Type**: {profile_type}\n\n"
     context += f"**Research Brief**:\n{research_brief}\n\n"
-    context += f"**Research Findings** ({len(notes)} sections):\n\n"
+    context += f"**Research Findings** ({len(renumbered_notes)} sections):\n\n"
 
-    for i, note in enumerate(notes, 1):
+    for i, note in enumerate(renumbered_notes, 1):
         context += f"## Finding {i}\n\n{note}\n\n"
+
+    # Add consolidated global sources list
+    if global_sources:
+        context += "\n\n---\n\n"
+        context += "# CONSOLIDATED SOURCE LIST FOR YOUR REFERENCE\n\n"
+        context += "**All sources from research findings (use these citation numbers in your report):**\n\n"
+        for num, (url, desc) in enumerate(global_sources, 1):
+            if desc:
+                context += f"{num}. {url} - {desc}\n"
+            else:
+                context += f"{num}. {url}\n"
+        context += f"\n**Total sources available: {len(global_sources)}**\n\n"
+        context += "**IMPORTANT**: When writing your report, use these source numbers [1] through"
+        context += f" [{len(global_sources)}] and ensure your ## Sources section lists ALL {len(global_sources)} sources.\n"
+
+    logger.info(
+        f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
+    )
 
     return context
 
