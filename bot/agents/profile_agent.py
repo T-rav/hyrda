@@ -230,7 +230,7 @@ class ProfileAgent(BaseAgent):
 
                 # Extract node name from event
                 if isinstance(event, dict):
-                    for node_name, _node_data in event.items():
+                    for node_name, node_data in event.items():
                         if node_name in node_messages:
                             # Track execution count for this node
                             node_execution_counts[node_name] = (
@@ -243,6 +243,19 @@ class ProfileAgent(BaseAgent):
                             start_time = node_start_times.get(node_name)
                             duration = end_time - start_time if start_time else 0
                             node_durations[node_name] = duration
+
+                            # Check if quality control is requesting a revision
+                            # by looking at revision_count in state data
+                            is_quality_failure = False
+                            if node_name == "quality_control" and isinstance(
+                                node_data, dict
+                            ):
+                                revision_count = node_data.get("revision_count", 0)
+                                if revision_count > 0:
+                                    is_quality_failure = True
+                                    logger.info(
+                                        f"Quality control FAILED, revision_count={revision_count}, will loop back"
+                                    )
 
                             # Build completion message with duration
                             duration_text = (
@@ -260,8 +273,15 @@ class ProfileAgent(BaseAgent):
                             ):
                                 revision_text = f" [Attempt {execution_count}]"
 
+                            # Special message for quality control failures
+                            complete_message = node_messages[node_name]["complete"]
+                            if is_quality_failure:
+                                complete_message = (
+                                    "⚠️ Quality check failed - revision needed"
+                                )
+
                             completed_steps.append(
-                                f"{node_messages[node_name]['complete']}{duration_text}{revision_text}"
+                                f"{complete_message}{duration_text}{revision_text}"
                             )
                             logger.info(
                                 f"✅ Completed node: {node_name} in {duration:.1f}s (attempt {execution_count})"
@@ -273,12 +293,29 @@ class ProfileAgent(BaseAgent):
                                 all_steps = list(completed_steps)
 
                                 # Determine next node
-                                # Special case: if quality_control completes and we've seen it before,
-                                # it might be looping back to final_report_generation
+                                # Special case: if quality_control failed, loop back to final_report
                                 next_node = None
                                 next_node_attempt = 1
 
                                 if (
+                                    node_name == "quality_control"
+                                    and is_quality_failure
+                                ):
+                                    # Quality control failed - loop back for revision
+                                    next_node = "final_report_generation"
+                                    # revision_count in state is already incremented
+                                    revision_count = (
+                                        node_data.get("revision_count", 0)
+                                        if isinstance(node_data, dict)
+                                        else 0
+                                    )
+                                    next_node_attempt = (
+                                        revision_count + 1
+                                    )  # +1 because revision_count is 0-indexed
+                                    logger.info(
+                                        f"Quality control FAILED (revision_count={revision_count}) - will loop back to final_report for attempt {next_node_attempt}"
+                                    )
+                                elif (
                                     node_name == "quality_control"
                                     and execution_count > 1
                                 ):

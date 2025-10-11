@@ -89,6 +89,18 @@ async def write_research_brief(
                         f"Research brief executing internal search: {query_text}"
                     )
 
+                    # Validate query is not empty
+                    if not query_text or not query_text.strip():
+                        logger.warning(
+                            "Internal search called with empty query - skipping"
+                        )
+                        tool_result = ToolMessage(
+                            content="No search query provided. Please specify what to search for.",
+                            tool_call_id=tool_id,
+                        )
+                        messages.append(tool_result)
+                        continue
+
                     # Get internal deep research service from config
                     configurable = config.get("configurable", {})
                     logger.debug(
