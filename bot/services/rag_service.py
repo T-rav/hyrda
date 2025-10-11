@@ -260,9 +260,18 @@ class RAGService:
                     "**Previous Conversation Summary:**"
                 )
                 summary_section = managed_system_message[summary_start:]
-                # Store summary for next time
-                await conversation_cache.store_summary(session_id, summary_section)
-                logger.info(f"✅ Stored conversation summary for session {session_id}")
+                # Store summary with metadata for better tracking
+                await conversation_cache.store_summary(
+                    thread_ts=session_id,
+                    summary=summary_section,
+                    message_count=len(managed_history),  # Messages kept
+                    compressed_from=len(conversation_history),  # Original message count
+                )
+                logger.info(
+                    f"✅ Stored conversation summary v? for session {session_id}: "
+                    f"compressed {len(conversation_history)} messages to {len(managed_history)} "
+                    f"(kept recent {len(managed_history)} + summary)"
+                )
 
             # Use managed context for the rest of the generation
             system_message = managed_system_message
