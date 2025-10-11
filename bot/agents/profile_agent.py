@@ -127,6 +127,21 @@ class ProfileAgent(BaseAgent):
             progress_msg_ts = progress_response.get("ts") if progress_response else None
 
         try:
+            # Initialize internal deep research service for knowledge base searching
+            from services.internal_deep_research import (
+                get_internal_deep_research_service,
+            )
+
+            internal_deep_research = get_internal_deep_research_service()
+            if internal_deep_research:
+                logger.info(
+                    "Internal deep research service initialized for profile agent"
+                )
+            else:
+                logger.warning(
+                    "Internal deep research service not available - knowledge base searching disabled"
+                )
+
             # Prepare LangGraph configuration
             graph_config = {
                 "configurable": {
@@ -135,6 +150,7 @@ class ProfileAgent(BaseAgent):
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
                     "max_researcher_iterations": self.config.max_researcher_iterations,
                     "allow_clarification": self.config.allow_clarification,
+                    "internal_deep_research": internal_deep_research,  # Enable knowledge base search
                 }
             }
 
