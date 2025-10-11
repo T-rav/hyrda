@@ -568,57 +568,49 @@ IMPORTANT: End your report with the Sources section. Do NOT add any footer text,
 """
 
 # Executive summary generation prompt
-executive_summary_prompt = """You are creating an executive summary for a detailed profile report.
+executive_summary_prompt = """You are creating a VERY BRIEF executive summary for Slack.
 
 <Full Report>
 {full_report}
 </Full Report>
 
 <Your Task>
-Create a concise executive summary (3-5 key bullet points) highlighting the most important insights.
-This will be shown in Slack, while the full report will be attached as a PDF.
+Create an EXTREMELY CONCISE summary with EXACTLY 3 bullet points.
+This appears in Slack - the full report is in the PDF attachment.
 </Your Task>
 
-<Summary Guidelines>
-- **3-5 bullet points maximum** - must be concise for Slack readability
-- **Focus on key insights** - what are the most important takeaways?
-- **Actionable information** - what should the reader know immediately?
-- **No citations needed** - this is a high-level overview
-- **Professional tone** - clear and direct
-- **Start each point with an emoji** for visual clarity
+<CRITICAL RULES - FOLLOW EXACTLY>
+- **EXACTLY 3 bullet points** - no more, no less
+- **Each bullet: ONE sentence maximum** (15-20 words per bullet)
+- **Total length: Under 100 words for entire summary**
+- **No sub-bullets or explanations** - just the core insight
+- **No citations** - this is high-level only
+- **Start each with emoji** for visual clarity
+</CRITICAL RULES>
 
-For **Company Profiles**, highlight:
-- Core business and market position
-- Recent major developments or news
-- Key leadership or strategic direction
-- Notable achievements or challenges
+<What to Include (pick the 3 most important)>
+For Company Profiles:
+- Core business/market position OR strategic priority
+- Major recent development OR key challenge
+- Leadership insight OR opportunity for 8th Light
 
-For **Employee Profiles**, highlight:
-- Current role and main responsibilities
-- Key expertise and experience areas
-- Notable contributions or projects
-- Career trajectory or focus
+For Employee/Project Profiles:
+- Current role/status
+- Key expertise/technology
+- Notable achievement/outcome
+</What to Include>
 
-For **Project Profiles**, highlight:
-- Project goals and current status
-- Key technologies and approach
-- Main outcomes or impact
-- Current phase or next steps
-</Summary Guidelines>
-
-<Output Format>
+<Output Format - FOLLOW EXACTLY>
 📊 **Executive Summary**
 
-• [Key point 1]
-• [Key point 2]
-• [Key point 3]
-• [Key point 4 - if needed]
-• [Key point 5 - if needed]
+• [Single sentence - 15-20 words max]
+• [Single sentence - 15-20 words max]
+• [Single sentence - 15-20 words max]
 
 📎 _Full detailed report attached as PDF_
 
-IMPORTANT: Do NOT include a profile type heading (like "Company Profile", "Employee Profile", etc.) in your output. Start directly with the "📊 **Executive Summary**" line.
+STOP HERE - DO NOT ADD MORE BULLETS OR EXPLANATIONS
 </Output Format>
 
-Generate the executive summary now.
+Generate EXACTLY 3 bullet points now.
 """
