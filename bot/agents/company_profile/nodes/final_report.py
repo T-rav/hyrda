@@ -199,9 +199,9 @@ async def final_report_generation(
 
             except Exception as summary_error:
                 logger.warning(f"Failed to generate executive summary: {summary_error}")
-                # Fallback: use first paragraph of report
+                # Fallback: use Slack-safe markdown
                 executive_summary = (
-                    "📊 **Executive Summary**\n\n"
+                    "📊 *Executive Summary*\n\n"
                     "• Full detailed report attached as PDF\n\n"
                     "📎 _Unable to generate summary - see full report_"
                 )
