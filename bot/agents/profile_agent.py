@@ -63,7 +63,7 @@ class ProfileAgent(BaseAgent):
     """
 
     name = "profile"
-    aliases: list[str] = []
+    aliases: list[str] = ["-profile"]
     description = "Generate comprehensive company, employee, or project profiles through deep research"
 
     def __init__(self):
