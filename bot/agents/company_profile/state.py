@@ -4,11 +4,12 @@ Defines data structures that flow through the LangGraph workflow for
 profile research, enrichment, and report generation.
 """
 
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 from langchain_core.messages import MessageLikeRepresentation
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel
+from typing_extensions import TypedDict
 
 
 # Structured output models for research workflow
