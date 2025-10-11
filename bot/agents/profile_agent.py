@@ -20,6 +20,33 @@ from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 logger = logging.getLogger(__name__)
 
 
+def format_duration(seconds: float) -> str:
+    """Format duration in seconds to human-readable string.
+
+    Examples:
+        5.2 -> "5.2s"
+        65.0 -> "1m 5s"
+        3661.5 -> "1h 1m 2s"
+
+    Args:
+        seconds: Duration in seconds
+
+    Returns:
+        Formatted duration string
+    """
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        remaining_seconds = int(seconds % 60)
+        return f"{minutes}m {remaining_seconds}s"
+    else:
+        hours = int(seconds // 3600)
+        remaining_minutes = int((seconds % 3600) // 60)
+        remaining_seconds = int(seconds % 60)
+        return f"{hours}h {remaining_minutes}m {remaining_seconds}s"
+
+
 class ProfileAgent(BaseAgent):
     """Agent for company profile search and analysis using deep research.
 
@@ -193,7 +220,9 @@ class ProfileAgent(BaseAgent):
 
                             # Build completion message with duration
                             duration_text = (
-                                f" ({duration:.1f}s)" if duration > 0 else ""
+                                f" ({format_duration(duration)})"
+                                if duration > 0
+                                else ""
                             )
 
                             # Add summary for research_supervisor node
