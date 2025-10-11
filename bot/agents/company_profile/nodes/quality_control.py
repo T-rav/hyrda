@@ -1,7 +1,6 @@
 """Quality control node for validating and revising final reports.
 
-Uses deterministic Python validation to check report quality and request revisions if needed.
-Validates citation-source matching using regex pattern matching (no LLM hallucinations).
+Uses LLM-as-a-judge to validate report quality and request revisions if needed.
 Implements up to 3 revision cycles to ensure all quality criteria are met.
 """
 
@@ -9,11 +8,96 @@ import logging
 import re
 
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
 from langgraph.types import Command
 
 from agents.company_profile.state import ProfileAgentState
+from config.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+# Quality validation prompt for LLM judge
+QUALITY_JUDGE_PROMPT = """You are a quality control judge evaluating a company profile report.
+
+<Report to Evaluate>
+{report}
+</Report to Evaluate>
+
+<Quality Criteria - ALL MUST PASS>
+
+1. **Sources Section Present**: Report MUST end with "## Sources" section
+2. **All Citations Listed**: Every citation [1], [2], [3]... in the report MUST have a corresponding entry in Sources section
+3. **No Gaps in Numbering**: Sources must be numbered sequentially (1, 2, 3, 4...) with NO gaps
+4. **External Sources Only**: No meta-references like "Internal research" or "Research findings" in Sources
+5. **Complete Structure**: All required sections present (Overview, Priorities, News, Executive Team, etc.)
+
+<Your Task>
+
+Evaluate this report against the criteria above. Return ONLY a JSON object:
+
+```json
+{{
+  "passes_quality": true/false,
+  "issues": [
+    "Description of issue 1 (if any)",
+    "Description of issue 2 (if any)"
+  ],
+  "highest_citation": 15,
+  "sources_count": 10,
+  "missing_sources": [11, 12, 13, 14, 15],
+  "revision_instructions": "Specific instructions for fixing issues (if fails)"
+}}
+```
+
+**Examples:**
+
+**Example 1: PASS**
+Report uses citations [1] through [12], Sources section lists 1-12 sequentially.
+```json
+{{
+  "passes_quality": true,
+  "issues": [],
+  "highest_citation": 12,
+  "sources_count": 12,
+  "missing_sources": [],
+  "revision_instructions": ""
+}}
+```
+
+**Example 2: FAIL - Missing Sources**
+Report uses citations [1] through [18], but Sources section only lists 1-10.
+```json
+{{
+  "passes_quality": false,
+  "issues": [
+    "Sources section only lists 10 sources, but report uses citations [1] through [18]",
+    "Missing source entries for citations [11], [12], [13], [14], [15], [16], [17], [18]"
+  ],
+  "highest_citation": 18,
+  "sources_count": 10,
+  "missing_sources": [11, 12, 13, 14, 15, 16, 17, 18],
+  "revision_instructions": "Add sources 11-18 to the ## Sources section. Each should have full URL and description matching the citations used in the report."
+}}
+```
+
+**Example 3: FAIL - No Sources Section**
+Report has no ## Sources section at all.
+```json
+{{
+  "passes_quality": false,
+  "issues": [
+    "Report is missing the ## Sources section entirely",
+    "Cannot verify citation coverage without Sources section"
+  ],
+  "highest_citation": 20,
+  "sources_count": 0,
+  "missing_sources": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  "revision_instructions": "Add a complete ## Sources section at the end of the report listing all 20 sources corresponding to citations [1] through [20] used in the report."
+}}
+```
+
+Evaluate the report now and return JSON only.
+"""
 
 
 def extract_citations_from_report(report: str) -> list[int]:
@@ -77,51 +161,52 @@ async def quality_control_node(
 
     logger.info(f"Quality control check (revision {revision_count})")
 
-    # Extract actual citations and sources using Python regex (deterministic)
+    # Extract actual citations and sources for logging
     citations = extract_citations_from_report(final_report)
     sources_count = count_sources_in_section(final_report)
-    highest_citation = max(citations) if citations else 0
 
     logger.info(
-        f"Report stats: {len(citations)} unique citations (highest: {highest_citation}), "
+        f"Report stats: {len(citations)} unique citations (highest: {max(citations) if citations else 0}), "
         f"{sources_count} source entries"
     )
 
-    # Validate using Python (deterministic, no LLM hallucinations)
+    # Initialize LLM judge
     try:
-        issues = []
-        missing_sources = []
+        settings = Settings()
+        judge_llm = ChatOpenAI(
+            model="gpt-4o-mini",  # Fast, cheap model for validation
+            api_key=settings.llm.api_key,
+            temperature=0.0,  # Deterministic evaluation
+            max_completion_tokens=500,
+        )
 
-        # Check 1: Sources section present
-        if sources_count == 0:
-            issues.append("Report is missing the ## Sources section entirely")
-            missing_sources = list(range(1, highest_citation + 1))
+        # Run quality evaluation
+        prompt = QUALITY_JUDGE_PROMPT.format(report=final_report)
+        response = await judge_llm.ainvoke(prompt)
+        response_text = response.content.strip()
 
-        # Check 2: All citations have corresponding sources
-        elif highest_citation > sources_count:
-            issues.append(
-                f"Sources section only lists {sources_count} sources, "
-                f"but report uses citations [1] through [{highest_citation}]"
-            )
-            missing_sources = list(range(sources_count + 1, highest_citation + 1))
-            issues.append(f"Missing source entries for citations {missing_sources}")
+        logger.debug(f"Judge response: {response_text[:200]}...")
 
-        # Check 3: All citations used should exist in sources
-        # (sources_count >= highest_citation means we have enough sources)
-        elif sources_count < highest_citation:
-            issues.append(
-                f"Report uses citations up to [{highest_citation}] but only {sources_count} sources listed"
-            )
-            missing_sources = list(range(sources_count + 1, highest_citation + 1))
+        # Parse JSON response
+        import json
 
-        passes_quality = len(issues) == 0
-        revision_instructions = ""
+        # Extract JSON from markdown code blocks if present
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)
+        if json_match:
+            json_text = json_match.group(1)
+        else:
+            # Try to find raw JSON
+            json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+            json_text = json_match.group(0) if json_match else response_text
 
-        if not passes_quality and missing_sources:
-            revision_instructions = (
-                f"Add sources {missing_sources[0]}-{missing_sources[-1]} to the ## Sources section. "
-                "Each should have full URL and description matching the citations used in the report."
-            )
+        evaluation = json.loads(json_text)
+
+        passes_quality = evaluation.get("passes_quality", False)
+        issues = evaluation.get("issues", [])
+        revision_instructions = evaluation.get("revision_instructions", "")
+        highest_citation = evaluation.get("highest_citation", 0)
+        sources_count_judge = evaluation.get("sources_count", 0)
+        missing_sources = evaluation.get("missing_sources", [])
 
         if passes_quality:
             logger.info("✅ Report PASSED quality control")
@@ -130,7 +215,7 @@ async def quality_control_node(
         # Report failed quality check
         logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
         logger.warning(f"   Citations used: [1] through [{highest_citation}]")
-        logger.warning(f"   Sources listed: {sources_count}")
+        logger.warning(f"   Sources listed: {sources_count_judge}")
         if missing_sources:
             logger.warning(f"   Missing sources: {missing_sources}")
         for issue in issues:

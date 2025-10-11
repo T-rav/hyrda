@@ -306,7 +306,7 @@ class _InternalDeepResearchServiceSingleton:
     _instance: InternalDeepResearchService | None = None
 
     @classmethod
-    async def get_instance(cls) -> InternalDeepResearchService | None:
+    def get_instance(cls) -> InternalDeepResearchService | None:
         """
         Get singleton internal deep research service instance.
 
@@ -321,7 +321,6 @@ class _InternalDeepResearchServiceSingleton:
 
         try:
             # Import here to avoid circular dependencies
-
             from config.settings import Settings
             from services.embedding_service import create_embedding_provider
             from services.llm_service import LLMService
@@ -351,17 +350,6 @@ class _InternalDeepResearchServiceSingleton:
                 )
                 return None
 
-            # Initialize vector store (CRITICAL: must be called to set up Qdrant client)
-            try:
-                await vector_service.initialize()
-                logger.info("✅ Vector store initialized for internal deep research")
-            except Exception as init_error:
-                logger.error(
-                    f"Failed to initialize vector store: {init_error}. "
-                    "Internal deep research will be unavailable."
-                )
-                return None
-
             # Create singleton instance
             cls._instance = InternalDeepResearchService(
                 llm_service=llm_service,
@@ -379,14 +367,14 @@ class _InternalDeepResearchServiceSingleton:
             return None
 
 
-async def get_internal_deep_research_service() -> InternalDeepResearchService | None:
+def get_internal_deep_research_service() -> InternalDeepResearchService | None:
     """
     Get singleton internal deep research service instance.
 
     Returns:
         Initialized InternalDeepResearchService or None if services unavailable
     """
-    return await _InternalDeepResearchServiceSingleton.get_instance()
+    return _InternalDeepResearchServiceSingleton.get_instance()
 
 
 # Factory function
