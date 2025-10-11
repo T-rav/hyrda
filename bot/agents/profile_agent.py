@@ -315,16 +315,6 @@ class ProfileAgent(BaseAgent):
                                     logger.info(
                                         f"Quality control FAILED (revision_count={revision_count}) - will loop back to final_report for attempt {next_node_attempt}"
                                     )
-                                elif (
-                                    node_name == "quality_control"
-                                    and execution_count > 1
-                                ):
-                                    # Quality control ran again - must be looping back for revision
-                                    next_node = "final_report_generation"
-                                    next_node_attempt = execution_count + 1
-                                    logger.info(
-                                        f"Quality control attempt {execution_count} completed - will loop back to final_report for attempt {next_node_attempt}"
-                                    )
                                 else:
                                     # Normal forward flow - find next node in order
                                     try:
