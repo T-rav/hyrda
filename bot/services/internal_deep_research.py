@@ -318,10 +318,10 @@ class _InternalDeepResearchServiceSingleton:
         try:
             # Import here to avoid circular dependencies
             from config.settings import Settings
-            from services.embedding_service import get_embedding_service
+            from services.embedding_service import create_embedding_provider
             from services.llm_service import LLMService
             from services.retrieval_service import RetrievalService
-            from services.vector_service import get_vector_service
+            from services.vector_service import create_vector_store
 
             settings = Settings()
 
@@ -333,8 +333,8 @@ class _InternalDeepResearchServiceSingleton:
                 return None
 
             # Get required services
-            vector_service = get_vector_service()
-            embedding_service = get_embedding_service()
+            vector_service = create_vector_store(settings.vector)
+            embedding_service = create_embedding_provider(settings.embedding)
             llm_service = LLMService(settings)
             retrieval_service = RetrievalService(settings)
 
