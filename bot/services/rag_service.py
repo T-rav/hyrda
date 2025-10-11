@@ -16,6 +16,7 @@ from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
 from services.conversation_manager import ConversationManager
 from services.embedding import create_embedding_provider
+from services.internal_deep_research import create_internal_deep_research_service
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.mcp_client import get_webcat_client
@@ -73,6 +74,16 @@ class RAGService:
             summarize_threshold=settings.conversation.summarize_threshold,
             model_context_window=settings.conversation.model_context_window,
         )
+
+        # Initialize internal deep research service
+        self.internal_deep_research = create_internal_deep_research_service(
+            llm_service=query_rewrite_llm
+            or self.llm_provider,  # Use query rewrite LLM or fallback to main LLM
+            retrieval_service=self.retrieval_service,
+            vector_service=self.vector_store,
+            embedding_service=self.embedding_provider,
+        )
+        logger.info("✅ Internal deep research service initialized")
 
     async def initialize(self):
         """Initialize all services"""
@@ -434,7 +445,7 @@ class RAGService:
                 tools=tools,  # Pass web search tools
             )
 
-            # Handle tool calls if LLM requested web search
+            # Handle tool calls if LLM requested web search or internal research
             if isinstance(response, dict) and response.get("tool_calls"):
                 logger.info(f"🛠️ LLM requested {len(response['tool_calls'])} tool calls")
                 response_str = await self._handle_tool_calls(
@@ -444,6 +455,7 @@ class RAGService:
                     session_id,
                     user_id,
                     tools,
+                    conversation_history,  # Pass conversation history for internal research
                 )
                 response = response_str
 
@@ -475,9 +487,10 @@ class RAGService:
         session_id: str | None,
         user_id: str | None,
         tools: list[dict] | None,
+        conversation_history: list[dict[str, str]] | None = None,
     ) -> str:
         """
-        Handle tool calls from the LLM (e.g., web search)
+        Handle tool calls from the LLM (e.g., web search, internal research)
 
         Args:
             tool_call_response: Response containing tool calls
@@ -486,6 +499,7 @@ class RAGService:
             session_id: Session ID
             user_id: User ID
             tools: Available tools
+            conversation_history: Conversation history for context
 
         Returns:
             Final response after executing tools

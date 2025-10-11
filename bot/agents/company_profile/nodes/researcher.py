@@ -16,6 +16,7 @@ from agents.company_profile.state import ResearcherState
 from agents.company_profile.utils import (
     create_system_message,
     get_search_tool,
+    internal_search_tool,
     think_tool,
 )
 from services.langfuse_service import get_langfuse_service
@@ -85,7 +86,7 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     # Get search tools
     search_tools = await get_search_tool(config, webcat_client)
-    all_tools = [*search_tools, think_tool]
+    all_tools = [*search_tools, internal_search_tool, think_tool]
 
     # Prepare messages
     messages = list(state["researcher_messages"])
@@ -230,6 +231,131 @@ async def researcher_tools(
 
             result = think_tool.invoke(tool_args)
             tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
+
+        elif tool_name == "internal_search_tool":
+            # Execute internal knowledge base search
+            try:
+                query = tool_args.get("query", "")
+                effort = tool_args.get("effort", "medium")
+
+                # Get internal deep research service from config
+                internal_deep_research = config.get("configurable", {}).get(
+                    "internal_deep_research"
+                )
+
+                if not internal_deep_research:
+                    from langchain_core.messages import ToolMessage
+
+                    tool_results.append(
+                        ToolMessage(
+                            content="Internal search service not available",
+                            tool_call_id=tool_id,
+                        )
+                    )
+                    logger.warning("Internal deep research service not available")
+                    continue
+
+                # Trace tool execution
+                langfuse_service = get_langfuse_service()
+
+                logger.info(
+                    f"Starting internal_search ({effort} effort): {query[:100]}..."
+                )
+                research_result = await internal_deep_research.deep_research(
+                    query=query,
+                    effort=effort,
+                    conversation_history=[],
+                    user_id=None,
+                )
+
+                if research_result.get("success"):
+                    summary = research_result.get("summary", "")
+                    chunks = research_result.get("chunks", [])
+                    sub_queries = research_result.get("sub_queries", [])
+                    unique_documents = research_result.get("unique_documents", 0)
+                    total_chunks = research_result.get("total_chunks", 0)
+
+                    # Format results
+                    result_text = f"# Internal Knowledge Base Search\n\n{summary}\n\n"
+                    if chunks:
+                        result_text += f"**Found in {unique_documents} internal documents ({total_chunks} sections):**\n"
+                        docs_seen = set()
+                        for chunk in chunks[:10]:
+                            doc_name = chunk.get("metadata", {}).get(
+                                "file_name", "unknown"
+                            )
+                            if doc_name not in docs_seen:
+                                docs_seen.add(doc_name)
+                                similarity = chunk.get("similarity", 0)
+                                result_text += (
+                                    f"- {doc_name} (relevance: {similarity:.0%})\n"
+                                )
+                        result_text += f"\n**Search Strategy:** {len(sub_queries)} focused queries\n"
+                    else:
+                        result_text += "**No relevant internal documents found.**\n"
+
+                    # Trace successful search
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="internal_search_tool",
+                            tool_input={"query": query, "effort": effort},
+                            tool_output={
+                                "success": True,
+                                "unique_documents": unique_documents,
+                                "total_chunks": total_chunks,
+                            },
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "effort": effort,
+                            },
+                        )
+
+                    from langchain_core.messages import ToolMessage
+
+                    tool_results.append(
+                        ToolMessage(content=result_text, tool_call_id=tool_id)
+                    )
+                    raw_notes.append(result_text)
+                    logger.info(
+                        f"Internal search completed: {unique_documents} docs, {total_chunks} chunks"
+                    )
+                else:
+                    error = research_result.get("error", "Unknown error")
+
+                    # Trace failed search
+                    if langfuse_service:
+                        langfuse_service.trace_tool_execution(
+                            tool_name="internal_search_tool",
+                            tool_input={"query": query, "effort": effort},
+                            tool_output={"success": False, "error": error},
+                            metadata={
+                                "context": "deep_research_researcher",
+                                "research_topic": state["research_topic"],
+                                "effort": effort,
+                            },
+                        )
+
+                    from langchain_core.messages import ToolMessage
+
+                    tool_results.append(
+                        ToolMessage(
+                            content=f"Internal search failed: {error}",
+                            tool_call_id=tool_id,
+                        )
+                    )
+                    logger.warning(f"Internal search failed for {query[:100]}: {error}")
+
+            except Exception as e:
+                logger.error(f"Internal search error: {e}")
+                from langchain_core.messages import ToolMessage
+
+                tool_results.append(
+                    ToolMessage(
+                        content=f"Internal search error: {str(e)}",
+                        tool_call_id=tool_id,
+                    )
+                )
 
         elif tool_name == "web_search" and webcat_client:
             # Execute web search

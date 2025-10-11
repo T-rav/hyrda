@@ -31,6 +31,31 @@ def think_tool(reflection: str) -> str:
     return f"Reflection recorded: {reflection}"
 
 
+# Internal search tool definition for LangChain tool binding
+@tool
+def internal_search_tool(query: str, effort: str = "medium") -> str:
+    """Search the internal knowledge base (Qdrant vector database) for existing information.
+
+    Use this FIRST before web search to check if we already have information about:
+    - Existing customers or past clients
+    - Previous projects or engagements
+    - Internal documentation
+    - Historical company data
+
+    Args:
+        query: What to search for in internal knowledge base.
+               Be specific about what you're looking for.
+        effort: Research depth - "low" (3 queries), "medium" (5 queries), "high" (8 queries).
+               Default: "medium"
+
+    Returns:
+        Search results from internal knowledge base with document citations.
+    """
+    # This is just the tool definition for LangChain
+    # The actual execution happens in researcher_tools node
+    return f"Internal search: {query} (effort: {effort})"
+
+
 async def get_search_tool(
     config: RunnableConfig, webcat_client: Any = None
 ) -> list[Any]:
