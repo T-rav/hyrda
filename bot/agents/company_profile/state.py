@@ -60,6 +60,8 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         final_report: Generated comprehensive profile report
         executive_summary: Short summary for Slack display (3-5 bullets)
         profile_type: Type of profile (company, employee, project)
+        revision_count: Number of quality control revisions attempted
+        revision_prompt: Specific instructions for next revision
     """
 
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
@@ -71,6 +73,8 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     final_report: str
     executive_summary: str
     profile_type: str
+    revision_count: int
+    revision_prompt: str
 
 
 # Supervisor state - manages research delegation
