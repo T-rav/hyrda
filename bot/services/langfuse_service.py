@@ -152,7 +152,7 @@ class LangfuseService:
             generation = self.client.start_generation(**generation_params)
 
             if error:
-                generation.end(status_message=error, level="ERROR")
+                generation.end()
 
         except Exception as e:
             logger.error(f"Error tracing LLM call: {e}")
@@ -532,12 +532,10 @@ class LangfuseService:
 
         try:
             if self.enabled and self.client:
-                # Use v3.x API for scoring current trace
-                self.client.score_current_trace(
-                    name=score_name,
-                    value=value,
-                    comment=comment,
-                    metadata=metadata,
+                # TODO: score_current_trace API changed in newer Langfuse versions
+                # This method needs to be updated to match the current Langfuse API
+                logger.debug(
+                    f"Score {score_name}={value} (not implemented for current Langfuse version)"
                 )
         except Exception as e:
             logger.error(f"Error adding score: {e}")
