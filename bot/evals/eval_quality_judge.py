@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Import the actual quality judge prompt
-from quality_control import QUALITY_JUDGE_PROMPT
+from agents.company_profile.nodes.quality_control import QUALITY_JUDGE_PROMPT
 
 # Test cases covering various scenarios
 TEST_CASES = [
