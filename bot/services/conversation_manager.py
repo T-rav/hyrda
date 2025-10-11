@@ -45,7 +45,12 @@ class ConversationManager:
         self.model_context_window = model_context_window
         self.max_context_tokens = int(model_context_window * summarize_threshold)
 
-    def should_summarize(self, messages: list[dict[str, str]]) -> bool:
+    def should_summarize(
+        self,
+        messages: list[dict[str, str]],
+        system_message: str | None = None,
+        existing_summary: str | None = None,
+    ) -> bool:
         """
         Check if conversation should be summarized.
 
@@ -55,6 +60,8 @@ class ConversationManager:
 
         Args:
             messages: Conversation messages
+            system_message: System prompt (included in token count)
+            existing_summary: Current summary (included in token count)
 
         Returns:
             True if summarization needed
@@ -67,7 +74,17 @@ class ConversationManager:
             return True
 
         # Check token usage threshold (anti-overflow protection)
+        # Include system prompt + summary + messages for accurate count
         estimated_tokens = self.estimate_tokens(messages)
+
+        # Add system prompt tokens
+        if system_message:
+            estimated_tokens += self.estimate_tokens([{"content": system_message}])
+
+        # Add summary tokens (it's embedded in system message, but check separately)
+        if existing_summary:
+            estimated_tokens += self.estimate_tokens([{"content": existing_summary}])
+
         if estimated_tokens > self.max_context_tokens:
             logger.info(
                 f"Summarization triggered: ~{estimated_tokens} tokens > {self.max_context_tokens} "
@@ -110,7 +127,7 @@ class ConversationManager:
             Tuple of (updated_system_message, managed_messages)
         """
         # Short conversation: no summarization needed
-        if not self.should_summarize(messages):
+        if not self.should_summarize(messages, system_message, existing_summary):
             logger.info(
                 f"Conversation has {len(messages)} messages, no summarization needed"
             )
@@ -180,7 +197,7 @@ Please create an updated summary that:
 2. Incorporates important points from the new messages
 3. Maintains chronological flow
 4. Focuses on facts, decisions, and context needed for future responses
-5. Keeps the summary concise (max 500 words)
+5. Be comprehensive but concise (aim for ~1000 words, max 4000 tokens)
 
 Updated Summary:"""
         else:
@@ -190,11 +207,11 @@ Updated Summary:"""
 **Conversation to Summarize:**
 {conversation_text}
 
-Please create a concise summary that:
+Please create a comprehensive summary that:
 1. Captures key information, decisions, and context
 2. Maintains chronological flow
 3. Focuses on facts needed for future responses
-4. Keeps it concise (max 500 words)
+4. Be thorough but concise (aim for ~1000 words, max 4000 tokens)
 
 Summary:"""
 
@@ -204,7 +221,7 @@ Summary:"""
         summary = await self.llm_provider.get_response(
             messages=summary_messages,
             system_message="You are a conversation summarization assistant. Create clear, concise summaries that preserve important context.",
-            max_tokens=1000,  # Limit summary length
+            max_tokens=4000,  # Increased from 1K to 4K for more detailed summaries
         )
 
         if isinstance(summary, dict):
