@@ -57,7 +57,7 @@ class ProfileConfiguration(BaseModel):
         16000  # For researcher tool calling with large payloads
     )
     compression_model_max_tokens: int = (
-        12000  # Increased for more detailed research summaries (was 8K)
+        16000  # Increased to preserve more research detail (was 12K)
     )
     final_report_model_max_tokens: int = (
         100000  # Significantly increased for comprehensive 15-page reports (was 32K)
