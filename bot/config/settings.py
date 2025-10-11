@@ -66,6 +66,7 @@ class DatabaseSettings(BaseSettings):
 class VectorSettings(BaseSettings):
     """Vector database settings for RAG (Qdrant)"""
 
+    enabled: bool = Field(default=True, description="Enable vector database features")
     provider: str = Field(
         default="qdrant", description="Vector database provider (qdrant)"
     )
