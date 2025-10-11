@@ -364,14 +364,19 @@ class ProfileAgent(BaseAgent):
             # If PDF was uploaded with executive summary, return empty response
             # (summary already posted as initial_comment)
             # Otherwise return the full response text
+            logger.info(
+                f"Decision point: executive_summary={bool(executive_summary)}, pdf_uploaded={pdf_uploaded}"
+            )
             if executive_summary and pdf_uploaded:
                 response = ""  # Already posted with PDF upload
                 logger.info(
-                    "Executive summary posted with PDF, returning empty response"
+                    "✅ Executive summary posted with PDF, returning EMPTY response"
                 )
             else:
                 response = response_text
-                logger.info("Returning response text (PDF not uploaded or no summary)")
+                logger.info(
+                    f"⚠️ Returning response text (PDF uploaded={pdf_uploaded}, has summary={bool(executive_summary)})"
+                )
 
             return {
                 "response": response,
