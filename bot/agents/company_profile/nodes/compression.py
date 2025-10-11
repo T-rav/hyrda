@@ -18,7 +18,6 @@ from agents.company_profile.utils import (
     remove_up_to_last_ai_message,
     select_messages_within_budget,
 )
-from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -40,23 +39,6 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
 
     logger.info(f"Compressing research for: {research_topic[:50]}...")
 
-    # Start Langfuse span for compression
-    langfuse_service = get_langfuse_service()
-    span = None
-    if langfuse_service and langfuse_service.client:
-        span = langfuse_service.client.start_span(
-            name="deep_research_compress_research",
-            input={
-                "research_topic": research_topic,
-                "message_count": len(messages),
-                "raw_notes_count": len(raw_notes),
-            },
-            metadata={
-                "node_type": "compression",
-                "max_tokens": configuration.compression_model_max_tokens,
-            },
-        )
-
     # Use LangChain ChatOpenAI directly
     from langchain_openai import ChatOpenAI
 
@@ -67,7 +49,7 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
         model=settings.llm.model,
         api_key=settings.llm.api_key,
         temperature=0.7,
-        max_tokens=configuration.compression_model_max_tokens,
+        max_completion_tokens=configuration.compression_model_max_tokens,
     )
 
     # Build compression prompt
@@ -92,47 +74,12 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
     max_attempts = 3
     for attempt in range(max_attempts):
         try:
-            # Trace LLM generation
-            generation = None
-            if langfuse_service and langfuse_service.client:
-                generation = langfuse_service.client.start_generation(
-                    name="compression_llm_call",
-                    input={
-                        "compression_messages": compression_messages,
-                        "attempt": attempt + 1,
-                    },
-                    metadata={
-                        "research_topic": research_topic,
-                        "max_tokens": configuration.compression_model_max_tokens,
-                    },
-                )
-
             # Use LangChain ChatOpenAI
             response = await llm.ainvoke(compression_messages)
             compressed = (
                 response.content if hasattr(response, "content") else str(response)
             )
             logger.info(f"Research compressed to {len(compressed)} characters")
-
-            # End generation trace
-            if generation:
-                generation.end(
-                    output={
-                        "compressed_length": len(compressed),
-                        "compression_ratio": len(compressed)
-                        / max(len("\n\n".join([str(msg) for msg in messages[-5:]])), 1),
-                    }
-                )
-
-            # End span
-            if span:
-                span.end(
-                    output={
-                        "compressed_length": len(compressed),
-                        "raw_notes_count": len(raw_notes),
-                        "success": True,
-                    }
-                )
 
             return {"compressed_research": compressed, "raw_notes": raw_notes}
 
@@ -145,22 +92,9 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
                 continue
 
             logger.error(f"Compression error: {e}")
-            if generation:
-                generation.end(level="ERROR", status_message=str(e))
-            if span:
-                span.end(level="ERROR", status_message=str(e))
             break
 
     # Fallback: return raw notes
-    if span:
-        span.end(
-            output={
-                "fallback": True,
-                "raw_notes_count": len(raw_notes),
-                "success": False,
-            }
-        )
-
     return {
         "compressed_research": "Compression failed. Raw notes: "
         + "\n".join(raw_notes[:3]),

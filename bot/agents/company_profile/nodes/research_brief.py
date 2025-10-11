@@ -19,7 +19,6 @@ from agents.company_profile.utils import (
     detect_profile_type,
     internal_search_tool,
 )
-from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -41,23 +40,7 @@ async def write_research_brief(
 
     logger.info(f"Writing research brief for {profile_type} profile")
 
-    # Start Langfuse span for research brief generation
-    langfuse_service = get_langfuse_service()
-    span = None
-    if langfuse_service and langfuse_service.client:
-        span = langfuse_service.client.start_span(
-            name="deep_research_write_research_brief",
-            input={
-                "query": query[:200],
-                "profile_type": profile_type,
-            },
-            metadata={
-                "node_type": "research_brief",
-            },
-        )
-
     # Generate research brief using LangChain ChatOpenAI with tool calling
-    generation = None
     try:
         from langchain_openai import ChatOpenAI
 
@@ -72,17 +55,6 @@ async def write_research_brief(
 
         # Bind internal_search_tool to allow searching existing knowledge
         llm_with_tools = llm.bind_tools([internal_search_tool])
-
-        # Trace LLM generation
-        if langfuse_service and langfuse_service.client:
-            generation = langfuse_service.client.start_generation(
-                name="research_brief_llm_call",
-                input={"query": query, "profile_type": profile_type},
-                metadata={
-                    "purpose": "generate_research_brief",
-                    "tools_available": ["internal_search_tool"],
-                },
-            )
 
         current_date = datetime.now().strftime("%B %d, %Y")
         prompt = prompts.transform_messages_into_research_topic_prompt.format(
@@ -162,26 +134,8 @@ async def write_research_brief(
         )
         logger.info(f"Research brief generated: {len(research_brief)} characters")
 
-        # End generation trace
-        if generation:
-            generation.end(
-                output={
-                    "research_brief_length": len(research_brief),
-                    "profile_type": profile_type,
-                }
-            )
-
         # Initialize supervisor messages
         supervisor_init_msg = create_human_message(research_brief)
-
-        if span:
-            span.end(
-                output={
-                    "success": True,
-                    "research_brief_length": len(research_brief),
-                    "profile_type": profile_type,
-                }
-            )
 
         return Command(
             goto="research_supervisor",
@@ -194,10 +148,6 @@ async def write_research_brief(
 
     except Exception as e:
         logger.error(f"Research brief error: {e}")
-        if generation:
-            generation.end(level="ERROR", status_message=str(e))
-        if span:
-            span.end(level="ERROR", status_message=str(e))
 
         return Command(
             goto=END,
