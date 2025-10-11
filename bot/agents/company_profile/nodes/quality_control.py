@@ -33,7 +33,16 @@ QUALITY_JUDGE_PROMPT = """You are a quality control judge evaluating a company p
 
 <Your Task>
 
-Evaluate this report against the criteria above. Return ONLY a JSON object:
+**CRITICAL: If you claim sources are missing, you MUST provide evidence by quoting the actual citation numbers you found and the source entries you counted.**
+
+Step-by-step evaluation process:
+1. Find the ## Sources section
+2. Count the numbered source entries (1. 2. 3. etc.)
+3. Scan the report for ALL citations [1], [2], [3]... and note the highest number
+4. Compare: Does the highest citation number match the sources count?
+5. If NO match, provide EXACT EVIDENCE of what you found
+
+Return ONLY a JSON object:
 
 ```json
 {{
@@ -45,9 +54,12 @@ Evaluate this report against the criteria above. Return ONLY a JSON object:
   "highest_citation": 15,
   "sources_count": 10,
   "missing_sources": [11, 12, 13, 14, 15],
+  "evidence": "I found citations [1] through [18] in the report body. In the ## Sources section, I counted entries: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. Therefore sources 11-18 are missing.",
   "revision_instructions": "Specific instructions for fixing issues (if fails)"
 }}
 ```
+
+**IMPORTANT**: The "evidence" field is REQUIRED when passes_quality is false. Show your work!
 
 **Examples:**
 
@@ -60,6 +72,7 @@ Report uses citations [1] through [12], Sources section lists 1-12 sequentially.
   "highest_citation": 12,
   "sources_count": 12,
   "missing_sources": [],
+  "evidence": "All citations [1]-[12] have corresponding source entries 1-12 in the ## Sources section.",
   "revision_instructions": ""
 }}
 ```
@@ -76,6 +89,7 @@ Report uses citations [1] through [18], but Sources section only lists 1-10.
   "highest_citation": 18,
   "sources_count": 10,
   "missing_sources": [11, 12, 13, 14, 15, 16, 17, 18],
+  "evidence": "Found citations [1], [2], [3]... up to [18] in the report. Counted source entries in ## Sources: 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. Missing: 11-18.",
   "revision_instructions": "Add sources 11-18 to the ## Sources section. Each should have full URL and description matching the citations used in the report."
 }}
 ```
@@ -92,6 +106,7 @@ Report has no ## Sources section at all.
   "highest_citation": 20,
   "sources_count": 0,
   "missing_sources": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  "evidence": "Scanned entire report - no ## Sources section found. Found citations up to [20].",
   "revision_instructions": "Add a complete ## Sources section at the end of the report listing all 20 sources corresponding to citations [1] through [20] used in the report."
 }}
 ```
@@ -207,9 +222,11 @@ async def quality_control_node(
         highest_citation = evaluation.get("highest_citation", 0)
         sources_count_judge = evaluation.get("sources_count", 0)
         missing_sources = evaluation.get("missing_sources", [])
+        evidence = evaluation.get("evidence", "No evidence provided")
 
         if passes_quality:
             logger.info("✅ Report PASSED quality control")
+            logger.info(f"   Evidence: {evidence}")
             return Command(goto="__end__", update={})
 
         # Report failed quality check
@@ -218,6 +235,7 @@ async def quality_control_node(
         logger.warning(f"   Sources listed: {sources_count_judge}")
         if missing_sources:
             logger.warning(f"   Missing sources: {missing_sources}")
+        logger.warning(f"   Evidence: {evidence}")
         for issue in issues:
             logger.warning(f"  - {issue}")
 
