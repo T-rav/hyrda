@@ -77,10 +77,10 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
 
     # Create compression messages with smart token management
     # Budget: 128K context - 16K output - 2K system prompt = ~110K available
-    # Use 80K to be conservative (allows for encoding overhead)
+    # Use 90K for better coverage (still 20K buffer for encoding overhead)
     compression_cache = {}  # Cache compressed messages across retries
     selected_content = select_messages_within_budget(
-        messages, max_tokens=80000, compression_cache=compression_cache
+        messages, max_tokens=90000, compression_cache=compression_cache
     )
 
     compression_messages = [
