@@ -71,14 +71,17 @@ class TestProfileAgent:
 
         assert "response" in result
         assert "metadata" in result
-        # When short-circuiting with ResearchComplete and no notes, we get "No research findings"
-        # This is expected behavior for tests that bypass the full research workflow
+        # Profile agent now returns empty response when PDF is uploaded successfully
+        # The actual content is in the PDF file uploaded to Slack
         assert (
-            "Profile" in result["response"]
+            result["response"] == ""
+            or "Profile" in result["response"]
             or "No research findings" in result["response"]
         )
         # Check metadata shows it's from profile agent
         assert result["metadata"]["agent"] == "profile"
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_profile_agent_invalid_context(self):

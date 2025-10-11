@@ -686,18 +686,16 @@ class TestBotCommandHandling:
         # and handle_bot_command cleanup, so we just verify it was called
         assert slack_service.delete_thinking_indicator.called
 
-        # Profile agent sends initial status message + final response
-        assert slack_service.send_message.call_count == 2
+        # Profile agent sends status message, then returns empty response when PDF uploaded
+        # Status message is sent, but final response is empty (content is in PDF)
+        assert slack_service.send_message.call_count >= 1
 
-        # Verify first call is status message
+        # Verify status message was sent
         first_call = slack_service.send_message.call_args_list[0]
         assert "Starting research" in first_call.kwargs["text"]
 
-        # Verify second call contains profile response
-        second_call = slack_service.send_message.call_args_list[1]
-        response_text = second_call.kwargs["text"]
-        # When mocking with ResearchComplete and no notes, we may get "No research findings"
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
@@ -917,12 +915,14 @@ class TestBotCommandHandling:
                 thread_ts=None,
             )
 
-        # Should route to bot command - sends status + response (2 messages)
-        assert slack_service.send_message.call_count == 2
-        # Check the final response - when mocking with ResearchComplete and no notes, may get "No research findings"
-        final_call = slack_service.send_message.call_args_list[1]
-        response_text = final_call.kwargs["text"]
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Should route to bot command - sends status message, then returns empty response when PDF uploaded
+        assert slack_service.send_message.call_count >= 1
+        # Check the status message
+        status_call = slack_service.send_message.call_args_list[0]
+        status_text = status_call.kwargs["text"]
+        assert "Starting research" in status_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
         # Reset mocks
         slack_service.send_message.reset_mock()
@@ -998,12 +998,13 @@ class TestBotCommandHandling:
                 thread_ts=None,
             )
 
-        # Profile agent sends status + response (2 messages)
-        assert slack_service.send_message.call_count == 2
-        final_call = slack_service.send_message.call_args_list[1]
-        response_text = final_call.kwargs["text"]
-        # When mocking with ResearchComplete and no notes, may get "No research findings"
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Profile agent sends status message, then returns empty response when PDF uploaded
+        assert slack_service.send_message.call_count >= 1
+        status_call = slack_service.send_message.call_args_list[0]
+        status_text = status_call.kwargs["text"]
+        assert "Starting research" in status_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
