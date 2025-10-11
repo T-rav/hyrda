@@ -289,29 +289,51 @@ async def format_research_context(
 
         settings = Settings()
 
-        # Build source list for LLM
+        # Identify deep research sources (from Perplexity)
+        deep_research_indices = []
+        regular_sources_indices = []
+        for i, (url, desc) in enumerate(global_sources, 1):
+            # Check if this source came from deep_research tool (comprehensive Perplexity analysis)
+            if "Deep Research Results" in desc or "perplexity" in url.lower():
+                deep_research_indices.append(i)
+            else:
+                regular_sources_indices.append(i)
+
+        logger.info(
+            f"Source breakdown: {len(deep_research_indices)} deep research, "
+            f"{len(regular_sources_indices)} regular"
+        )
+
+        # Build source list for LLM with markers
         sources_text = "\n".join(
             [
-                f"{i}. {url} - {desc}" if desc else f"{i}. {url}"
+                f"{i}. {url} - {desc} [DEEP_RESEARCH]"
+                if i in deep_research_indices
+                else (f"{i}. {url} - {desc}" if desc else f"{i}. {url}")
                 for i, (url, desc) in enumerate(global_sources, 1)
             ]
         )
+
+        # Calculate minimum deep research sources to include (at least 5 if available)
+        min_deep_research = min(5, len(deep_research_indices))
 
         selection_prompt = f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
 
 **All Available Sources:**
 {sources_text}
 
-**Selection Criteria:**
-- Prioritize authoritative sources (official company sites, SEC filings, reputable news)
-- Include diverse source types (company site, news, financial data, industry analysis)
-- Prefer sources with detailed descriptions (indicates rich content)
-- Balance recency with authority
-- Avoid duplicate or redundant sources
+**Selection Criteria (IN ORDER OF PRIORITY):**
+1. **CRITICAL**: Include AT LEAST {min_deep_research} sources marked [DEEP_RESEARCH] - these are comprehensive Perplexity AI analyses
+2. Prioritize authoritative sources (official company sites, SEC filings, reputable news)
+3. Include diverse source types (company site, news, financial data, industry analysis)
+4. Prefer sources with detailed descriptions (indicates rich content)
+5. Balance recency with authority
+6. Avoid duplicate or redundant sources
 
 **Your Task:**
 Return a JSON array of the source numbers (1-{len(global_sources)}) you want to keep, in order of importance.
 You MUST select exactly {max_sources} sources.
+You MUST include at least {min_deep_research} [DEEP_RESEARCH] sources (they provide expert synthesis).
 
 Example response format:
 ```json
@@ -343,6 +365,15 @@ Return ONLY the JSON array, no explanation."""
 
             logger.info(
                 f"LLM selected {len(selected_indices)} sources: {selected_indices[:5]}..."
+            )
+
+            # Validate deep research inclusion
+            deep_research_selected = [
+                idx for idx in selected_indices if idx in deep_research_indices
+            ]
+            logger.info(
+                f"Deep research sources selected: {len(deep_research_selected)}/{min_deep_research} minimum "
+                f"(indices: {deep_research_selected})"
             )
 
             # Build mapping: old index -> new index (or None if pruned)
