@@ -264,7 +264,7 @@ async def evaluate_judge_accuracy(
     actual_count = judge_result.get("sources_count", 0)
     if actual_count != test_case["expected_count"]:
         errors.append(
-            f"Expected sources_count={test_case['expected_count']}, " f"got {actual_count}"
+            f"Expected sources_count={test_case['expected_count']}, got {actual_count}"
         )
 
     # Check missing sources accuracy
@@ -325,7 +325,9 @@ async def run_evals():
                 logger.error("❌ FAIL - Judge was inaccurate")
                 for error in errors:
                     logger.error(f"   - {error}")
-                logger.error(f"   Full judge result: {json.dumps(judge_result, indent=2)}")
+                logger.error(
+                    f"   Full judge result: {json.dumps(judge_result, indent=2)}"
+                )
                 failed_tests += 1
 
         except Exception as e:
@@ -337,15 +339,13 @@ async def run_evals():
     logger.info("SUMMARY")
     logger.info("=" * 80)
     logger.info(f"Total tests: {total_tests}")
-    logger.info(f"Passed: {passed_tests} ({passed_tests/total_tests*100:.1f}%)")
-    logger.info(f"Failed: {failed_tests} ({failed_tests/total_tests*100:.1f}%)")
+    logger.info(f"Passed: {passed_tests} ({passed_tests / total_tests * 100:.1f}%)")
+    logger.info(f"Failed: {failed_tests} ({failed_tests / total_tests * 100:.1f}%)")
 
     if failed_tests == 0:
         logger.info("\n🎉 ALL TESTS PASSED! Quality judge is accurate.")
     else:
-        logger.warning(
-            f"\n⚠️  {failed_tests} test(s) failed. Judge needs improvement."
-        )
+        logger.warning(f"\n⚠️  {failed_tests} test(s) failed. Judge needs improvement.")
 
     return failed_tests == 0
 
