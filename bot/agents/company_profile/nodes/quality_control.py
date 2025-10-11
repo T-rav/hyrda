@@ -204,6 +204,9 @@ async def quality_control_node(
         passes_quality = evaluation.get("passes_quality", False)
         issues = evaluation.get("issues", [])
         revision_instructions = evaluation.get("revision_instructions", "")
+        highest_citation = evaluation.get("highest_citation", 0)
+        sources_count_judge = evaluation.get("sources_count", 0)
+        missing_sources = evaluation.get("missing_sources", [])
 
         if passes_quality:
             logger.info("✅ Report PASSED quality control")
@@ -211,6 +214,10 @@ async def quality_control_node(
 
         # Report failed quality check
         logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
+        logger.warning(f"   Citations used: [1] through [{highest_citation}]")
+        logger.warning(f"   Sources listed: {sources_count_judge}")
+        if missing_sources:
+            logger.warning(f"   Missing sources: {missing_sources}")
         for issue in issues:
             logger.warning(f"  - {issue}")
 
@@ -241,11 +248,17 @@ async def quality_control_node(
 **Specific Instructions:**
 {revision_instructions}
 
-**CRITICAL:** Make sure to:
-- Include the complete ## Sources section at the end
-- List ALL sources corresponding to EVERY citation [1], [2], [3]... used in the report
-- Number sources sequentially with NO gaps (1, 2, 3, 4, 5...)
-- Include full URL and description for each source
+**CRITICAL - HOW TO FIX SOURCES:**
+1. Look at the "CONSOLIDATED SOURCE LIST FOR YOUR REFERENCE" section in the research context
+2. That list shows you ALL available sources already numbered globally
+3. Use ONLY those citation numbers in your report (don't make up new ones)
+4. In your ## Sources section, copy ALL sources from the consolidated list
+5. Make sure your highest citation number [X] matches the total number of sources listed
+
+Example: If consolidated list shows 25 sources, your report should:
+- Use citations [1] through [25] only
+- Have a ## Sources section listing all 25 sources
+- Number them 1, 2, 3, 4... 25 with NO gaps
 
 Generate the complete revised report now.
 """
