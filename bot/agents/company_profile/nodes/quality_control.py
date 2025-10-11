@@ -1,7 +1,7 @@
 """Quality control node for validating and revising final reports.
 
 Uses LLM-as-a-judge to validate report quality and request revisions if needed.
-Implements up to 5 revision cycles to ensure all quality criteria are met.
+Implements up to 3 revision cycles to ensure all quality criteria are met.
 """
 
 import logging
@@ -215,14 +215,14 @@ async def quality_control_node(
             logger.warning(f"  - {issue}")
 
         # Check if we've exceeded max revisions
-        if revision_count >= 5:
+        if revision_count >= 3:
             logger.error(
-                "❌ Max revisions (5) exceeded, proceeding with imperfect report"
+                "❌ Max revisions (3) exceeded, proceeding with imperfect report"
             )
             # Add warning to report about quality issues
             warning_text = (
                 "\n\n---\n\n"
-                "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 5 revision attempts. "
+                "⚠️ **Quality Control Warning**: This report did not pass all quality checks after 3 revision attempts. "
                 f"Known issues: {', '.join(issues)}\n\n"
             )
             updated_report = final_report + warning_text
@@ -230,7 +230,7 @@ async def quality_control_node(
 
         # Request revision
         logger.info(
-            f"🔄 Requesting revision {revision_count + 1}/5: {revision_instructions}"
+            f"🔄 Requesting revision {revision_count + 1}/3: {revision_instructions}"
         )
 
         # Build revision prompt with specific instructions

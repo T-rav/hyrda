@@ -272,27 +272,67 @@ class ProfileAgent(BaseAgent):
                                 # Find next step to show as in-progress
                                 all_steps = list(completed_steps)
 
-                                # Add next step as in-progress if there is one
-                                try:
-                                    current_index = node_order.index(node_name)
+                                # Determine next node
+                                # Special case: if quality_control completes and we've seen it before,
+                                # it might be looping back to final_report_generation
+                                next_node = None
+                                next_node_attempt = 1
+
+                                if (
+                                    node_name == "quality_control"
+                                    and execution_count > 1
+                                ):
+                                    # Quality control ran again - must be looping back for revision
+                                    next_node = "final_report_generation"
+                                    next_node_attempt = execution_count + 1
                                     logger.info(
-                                        f"Node {node_name} at index {current_index}/{len(node_order) - 1}"
+                                        f"Quality control attempt {execution_count} completed - will loop back to final_report for attempt {next_node_attempt}"
                                     )
-                                    if current_index + 1 < len(node_order):
-                                        next_node = node_order[current_index + 1]
-                                        # Record start time for next node
-                                        node_start_times[next_node] = time.time()
-                                        all_steps.append(
-                                            node_messages[next_node]["start"]
-                                        )
+                                else:
+                                    # Normal forward flow - find next node in order
+                                    try:
+                                        current_index = node_order.index(node_name)
                                         logger.info(
-                                            f"⏳ Starting next node: {next_node} - {node_messages[next_node]['start']}"
+                                            f"Node {node_name} at index {current_index}/{len(node_order) - 1}"
                                         )
-                                    else:
-                                        logger.info("No more nodes to process")
-                                except (ValueError, IndexError) as e:
-                                    logger.warning(
-                                        f"Could not find node {node_name} in order: {e}"
+                                        if current_index + 1 < len(node_order):
+                                            next_node = node_order[current_index + 1]
+                                            # Check if next node has executed before (for attempt number)
+                                            next_node_attempt = (
+                                                node_execution_counts.get(next_node, 0)
+                                                + 1
+                                            )
+                                        else:
+                                            logger.info("No more nodes to process")
+                                    except (ValueError, IndexError) as e:
+                                        logger.warning(
+                                            f"Could not find node {node_name} in order: {e}"
+                                        )
+
+                                # Add next node as in-progress if we have one
+                                if next_node:
+                                    # Record start time for next node
+                                    node_start_times[next_node] = time.time()
+
+                                    # Build in-progress message with attempt indicator
+                                    next_revision_text = ""
+                                    if (
+                                        next_node
+                                        in [
+                                            "final_report_generation",
+                                            "quality_control",
+                                        ]
+                                        and next_node_attempt > 1
+                                    ):
+                                        next_revision_text = (
+                                            f" [Attempt {next_node_attempt}]"
+                                        )
+
+                                    all_steps.append(
+                                        f"{node_messages[next_node]['start']}{next_revision_text}"
+                                    )
+                                    logger.info(
+                                        f"⏳ Starting next node: {next_node} - {node_messages[next_node]['start']}{next_revision_text}"
                                     )
 
                                 steps_text = "\n".join(all_steps)
