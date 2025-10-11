@@ -335,14 +335,21 @@ Entity name:"""
                 )
 
                 entity_name = entity_response.strip().strip("\"'").strip()
+                logger.info(
+                    f"LLM returned entity name: '{entity_name}' (length: {len(entity_name)})"
+                )
 
                 if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
                     pdf_title = f"{entity_name} - {profile_type.title()} Profile"
-                    logger.info(f"Extracted entity name for PDF title: {entity_name}")
+                    logger.info(
+                        f"✅ Using extracted entity name in PDF title: '{pdf_title}'"
+                    )
                 else:
                     # Fallback to generic title
                     pdf_title = f"{profile_type.title()} Profile"
-                    logger.warning("Failed to extract entity name, using generic title")
+                    logger.warning(
+                        f"⚠️ Entity name invalid ('{entity_name}'), using generic title: '{pdf_title}'"
+                    )
 
             except Exception as e:
                 logger.warning(
