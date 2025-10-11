@@ -329,16 +329,18 @@ def _get_css_for_style(style: str) -> str:
         }
 
         /* Page breaks */
-        h2 {
-            page-break-after: avoid;
-        }
-
         h3, h4 {
             page-break-after: avoid;
         }
 
-        /* Keep lists together when possible */
+        /* Allow page breaks for long lists (like Sources section) */
         ul, ol {
+            page-break-inside: auto;
+        }
+
+        /* Keep short lists together */
+        ul li:first-child:nth-last-child(-n+5),
+        ol li:first-child:nth-last-child(-n+5) {
             page-break-inside: avoid;
         }
     """
