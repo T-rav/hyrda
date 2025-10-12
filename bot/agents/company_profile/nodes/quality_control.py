@@ -242,13 +242,13 @@ async def quality_control_node(
         issues = evaluation.get("issues", [])
         revision_instructions = evaluation.get("revision_instructions", "")
 
-        # Extract sources check details
-        sources_check = evaluation.get("sources_check", {})
+        # Extract sources check details with null safety
+        sources_check = evaluation.get("sources_check") or {}
         sources_count_judge = sources_check.get("sources_count", 0)
         has_adequate_sources = sources_check.get("has_adequate_sources", False)
 
-        # Extract focus alignment check details
-        focus_alignment = evaluation.get("focus_alignment_check", {})
+        # Extract focus alignment check details with null safety
+        focus_alignment = evaluation.get("focus_alignment_check") or {}
         alignment_notes = focus_alignment.get("alignment_notes", "")
 
         if passes_quality:
