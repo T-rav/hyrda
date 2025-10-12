@@ -38,6 +38,7 @@ async def final_report_generation(
     configuration = ProfileConfiguration.from_runnable_config(config)
     notes = state.get("notes", [])
     profile_type = state.get("profile_type", "company")
+    focus_area = state.get("focus_area", "")
     research_brief = state.get("research_brief", "")
     revision_count = state.get("revision_count", 0)
     revision_prompt = state.get("revision_prompt", "")
@@ -92,10 +93,38 @@ async def final_report_generation(
     # Format research context (async - uses LLM for source selection)
     notes_text = await format_research_context(research_brief, notes, profile_type)
 
-    # Build final report prompt
+    # Build final report prompt with focus area
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Build focus guidance for final report
+    if focus_area:
+        focus_guidance = f"""
+**🎯 CRITICAL - USER'S SPECIFIC REQUEST**: The user specifically asked about "{focus_area}".
+
+**Report Writing Strategy:**
+1. **Front-load the focus**: Sections most relevant to {focus_area} should be LONGEST and MOST DETAILED
+2. **Emphasize in Solutions section**: The "Solutions 8th Light Can Offer" section MUST heavily emphasize opportunities related to {focus_area}
+3. **Connect throughout**: In EVERY section, look for connections to {focus_area} and make them explicit
+4. **Executive Summary priority**: Ensure at least 1-2 of the 3 bullet points relate to {focus_area}
+5. **Depth allocation**:
+   - Sections directly about {focus_area}: Write 4-5 paragraphs each (maximum depth)
+   - Related sections: Write 3-4 paragraphs (good depth)
+   - Less relevant sections: Write 2-3 paragraphs (sufficient context)
+
+**Example**: If focus is "AI needs", then:
+- "Company Priorities" should extensively cover AI initiatives
+- "Size of Teams" should deeply analyze AI/ML team structure
+- "Solutions 8th Light Can Offer" should propose AI-specific consulting opportunities
+- Other sections should still be comprehensive but briefer"""
+    else:
+        focus_guidance = ""
+
     system_prompt = prompts.final_report_generation_prompt.format(
-        profile_type=profile_type, notes=notes_text, current_date=current_date
+        profile_type=profile_type,
+        focus_area=focus_area if focus_area else "None (general profile)",
+        focus_guidance=focus_guidance,
+        notes=notes_text,
+        current_date=current_date,
     )
 
     # Try generation with retry on token limits
@@ -127,8 +156,18 @@ async def final_report_generation(
             logger.info("Generating executive summary from full report")
 
             try:
+                # Build focus guidance for executive summary
+                if focus_area:
+                    summary_focus_guidance = f"""
+**IMPORTANT**: The user specifically asked about "{focus_area}".
+Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
+                else:
+                    summary_focus_guidance = ""
+
                 summary_prompt = prompts.executive_summary_prompt.format(
-                    full_report=final_report
+                    full_report=final_report,
+                    focus_area=focus_area if focus_area else "None (general profile)",
+                    focus_guidance=summary_focus_guidance,
                 )
                 # Always use GPT-4o for executive summary (more reliable than Gemini)
                 from langchain_openai import ChatOpenAI

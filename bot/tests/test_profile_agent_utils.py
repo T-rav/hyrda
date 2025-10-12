@@ -3,6 +3,7 @@
 import os
 import sys
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -80,13 +81,14 @@ class TestFormatDuration:
 class TestFormatResearchContext:
     """Tests for format_research_context function"""
 
-    def test_format_with_notes(self):
+    @pytest.mark.asyncio
+    async def test_format_with_notes(self):
         """Test formatting with research notes"""
         research_brief = "Research Tesla's electric vehicles"
         notes = ["Note 1: Market share data", "Note 2: Product lineup"]
         profile_type = "company"
 
-        result = format_research_context(research_brief, notes, profile_type)
+        result = await format_research_context(research_brief, notes, profile_type)
 
         assert "Profile Research Context" in result
         assert "company" in result
@@ -96,24 +98,26 @@ class TestFormatResearchContext:
         assert "Finding 1" in result
         assert "Finding 2" in result
 
-    def test_format_with_empty_notes(self):
+    @pytest.mark.asyncio
+    async def test_format_with_empty_notes(self):
         """Test formatting with no notes"""
         research_brief = "Research brief"
         notes = []
         profile_type = "company"
 
-        result = format_research_context(research_brief, notes, profile_type)
+        result = await format_research_context(research_brief, notes, profile_type)
 
         assert "Profile Research Context" in result
         assert "0 sections" in result
 
-    def test_format_with_many_notes(self):
+    @pytest.mark.asyncio
+    async def test_format_with_many_notes(self):
         """Test formatting with many notes"""
         research_brief = "Brief"
         notes = [f"Note {i}" for i in range(1, 11)]
         profile_type = "company"
 
-        result = format_research_context(research_brief, notes, profile_type)
+        result = await format_research_context(research_brief, notes, profile_type)
 
         assert "10 sections" in result
         for i in range(1, 11):

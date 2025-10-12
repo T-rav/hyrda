@@ -45,6 +45,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     research_brief = state.get("research_brief", "")
     notes = state.get("notes", [])
     profile_type = state.get("profile_type", "company")
+    focus_area = state.get("focus_area", "")
 
     # Validate research_brief exists
     if not research_brief:
@@ -70,11 +71,27 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         temperature=0.7,
     )
 
-    # Build supervisor prompt
+    # Build supervisor prompt with dynamic focus
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Build focus guidance for supervisor
+    if focus_area:
+        focus_guidance = f"""
+**CRITICAL - USER'S SPECIFIC FOCUS**: The user specifically asked about "{focus_area}".
+
+**Delegation Strategy:**
+- Prioritize delegating questions related to {focus_area} FIRST
+- Allocate 60-70% of research iterations to {focus_area}-related questions
+- Ensure remaining 30-40% covers essential context from other sections
+- When delegating, explicitly mention the focus area to researchers"""
+    else:
+        focus_guidance = "**Note**: This is a general profile request. Distribute research effort evenly across all sections."
+
     system_prompt = prompts.lead_researcher_prompt.format(
         research_brief=research_brief,
         profile_type=profile_type,
+        focus_area=focus_area if focus_area else "None (general profile)",
+        focus_guidance=focus_guidance,
         max_concurrent_research=configuration.max_concurrent_research_units,
         max_iterations=configuration.max_researcher_iterations,
         research_iterations=research_iterations,

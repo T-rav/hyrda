@@ -37,8 +37,14 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     tool_call_iterations = state.get("tool_call_iterations", 0)
     research_topic = state["research_topic"]
     profile_type = state.get("profile_type", "company")
+    focus_area = state.get("focus_area", "")
 
-    logger.info(f"Researcher working on: {research_topic[:50]}...")
+    if focus_area:
+        logger.info(
+            f"Researcher working on: {research_topic[:50]}... (Focus: {focus_area})"
+        )
+    else:
+        logger.info(f"Researcher working on: {research_topic[:50]}...")
 
     # Use LangChain ChatOpenAI directly
     from langchain_openai import ChatOpenAI
@@ -52,11 +58,27 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         temperature=0.7,
     )
 
-    # Prepare system prompt
+    # Prepare system prompt with focus area
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Build focus guidance for researcher
+    if focus_area:
+        focus_guidance = f"""
+**PRIORITY RESEARCH FOCUS**: The user specifically wants information about "{focus_area}".
+
+**Your Research Strategy:**
+- While investigating your assigned questions, ALWAYS consider how they relate to {focus_area}
+- If you find information directly relevant to {focus_area}, dig deeper with additional searches
+- Connect your findings back to {focus_area} in your notes
+- Prioritize sources and angles that reveal insights about {focus_area}"""
+    else:
+        focus_guidance = ""
+
     system_prompt = prompts.research_system_prompt.format(
         research_topic=research_topic,
         profile_type=profile_type,
+        focus_area=focus_area if focus_area else "None (general profile)",
+        focus_guidance=focus_guidance,
         max_tool_calls=configuration.max_react_tool_calls,
         tool_call_iterations=tool_call_iterations,
         current_date=current_date,

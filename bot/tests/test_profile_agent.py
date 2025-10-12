@@ -39,33 +39,28 @@ class TestProfileAgent:
             .build()
         )
 
-        # Mock LangChain ChatOpenAI to prevent real API calls
-        # Create a bound LLM mock that will be returned by bind_tools
-        mock_bound_llm = Mock()
-
-        # Supervisor response with ResearchComplete to short-circuit the workflow
-        mock_supervisor_response = Mock()
-        mock_supervisor_response.content = "Research complete."
-        mock_supervisor_response.tool_calls = [
-            {
-                "name": "ResearchComplete",
-                "args": {"research_summary": "Charlotte investigation complete"},
-                "id": "tc_1",
+        # Create mock graph that returns proper state
+        async def mock_astream(input_state, config):
+            """Mock graph astream to return final state"""
+            # Yield intermediate events (simulate nodes completing)
+            yield {"clarify_with_user": {}}
+            yield {"write_research_brief": {}}
+            yield {"research_supervisor": {}}
+            yield {"quality_control": {}}
+            # Final event with complete state
+            yield {
+                "final_report_generation": {
+                    "final_report": "# Employee Profile\n\nCharlotte is an employee with expertise in software development.",
+                    "executive_summary": "Charlotte is a software developer with 5 years of experience.",
+                    "notes": ["Note 1: Background", "Note 2: Experience"],
+                }
             }
-        ]
 
-        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
+        # Mock the profile_researcher graph at module level
+        mock_graph = Mock()
+        mock_graph.astream = mock_astream
 
-        mock_final_report = Mock()
-        mock_final_report.content = "# Employee Profile\n\nCharlotte is an employee with expertise in software development."
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            # Mock LLM with bind_tools that returns the bound LLM
-            mock_llm = Mock()
-            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
-            mock_llm.ainvoke = AsyncMock(return_value=mock_final_report)
-            mock_chat.return_value = mock_llm
-
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
             result = await agent.run("tell me about Charlotte", context)
 
@@ -119,7 +114,8 @@ class TestProfileAgent:
             yield {"clarify_with_user": {}}
             yield {"write_research_brief": {}}
             yield {"research_supervisor": {}}
-            # Final event with complete state
+            yield {"quality_control": {}}
+            # Final event with complete state in final_report_generation
             yield {
                 "final_report_generation": {
                     "final_report": "# Company Profile\n\nFull report content here.",
@@ -128,10 +124,11 @@ class TestProfileAgent:
                 }
             }
 
-        # Mock the profile_researcher graph
+        # Mock the profile_researcher graph at module level
         mock_graph = Mock()
         mock_graph.astream = mock_astream
 
+        # Patch the profile_researcher at module level
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
             await agent.run("tell me about Acme Corp", context)
