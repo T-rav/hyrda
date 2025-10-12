@@ -84,12 +84,11 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         current_date=current_date,
     )
 
-    # Get search tools - always include deep_research for best quality
+    # Get search tools - always include deep_research for best quality (if enabled)
     # Researchers are instructed to use web_search for exploration first,
     # then deep_research strategically for key topics (5-10 queries per researcher)
     search_tools = await search_tool(
         config,
-        phase="deep",  # Always include all tools including deep_research
         perplexity_enabled=settings.search.perplexity_enabled,
     )
 

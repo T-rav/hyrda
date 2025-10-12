@@ -72,17 +72,16 @@ def internal_search_tool():
 
 
 async def search_tool(
-    config: RunnableConfig, phase: str = "initial", perplexity_enabled: bool = False
+    config: RunnableConfig, perplexity_enabled: bool = False
 ) -> list[Any]:
     """Get appropriate search tools based on configuration.
 
     Args:
         config: RunnableConfig with configuration settings
-        phase: "initial" (web_search/scrape_url only) or "deep" (includes deep_research)
         perplexity_enabled: Whether deep_research is enabled (from SEARCH_PERPLEXITY_ENABLED)
 
     Returns:
-        List of search tools (always includes web_search/scrape_url, adds deep_research if phase="deep")
+        List of search tools (always includes web_search/scrape_url, adds deep_research if enabled)
     """
     from services.search_clients import get_tavily_client, get_tool_definitions
 
@@ -92,11 +91,9 @@ async def search_tool(
         logger.warning("No search client available for profile research")
         return []
 
-    # Determine if we should include deep_research based on phase and settings
-    include_deep_research = False
-    if phase == "deep" and perplexity_enabled:
+    # Determine if we should include deep_research based on settings
+    if perplexity_enabled:
         # Deep research enabled: Include all tools including Perplexity
-        include_deep_research = True
         logger.info(
             "Research tools: Using full toolkit (web_search, scrape_url, deep_research)"
         )
@@ -107,7 +104,7 @@ async def search_tool(
         )
 
     # Get tool definitions
-    tools = get_tool_definitions(include_deep_research=include_deep_research)
+    tools = get_tool_definitions(include_deep_research=perplexity_enabled)
     return tools
 
 
