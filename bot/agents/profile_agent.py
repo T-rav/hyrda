@@ -386,13 +386,18 @@ class ProfileAgent(BaseAgent):
                 result = event
 
             # Get the final state from the last event
+            # LangGraph returns the final state wrapped in a dict with node name as key
             if result and isinstance(result, dict):
-                # LangGraph returns the final state in the last event
-                result = list(result.values())[0] if result else {}
+                # Extract the state from the last event
+                # Format: {"node_name": state_dict} or {"__end__": state_dict}
+                values = list(result.values())
+                result = values[0] if values else {}
 
-            # Ensure result is a dict (handle case where LangGraph returns None)
+            # Ensure result is a dict (handle case where LangGraph returns None or unexpected type)
             if not isinstance(result, dict):
-                logger.error(f"LangGraph returned invalid result type: {type(result)}")
+                logger.error(
+                    f"LangGraph returned invalid result type: {type(result)}, value: {result}"
+                )
                 result = {}
 
             # Extract final report and executive summary

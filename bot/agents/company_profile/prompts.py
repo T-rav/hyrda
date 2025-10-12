@@ -291,12 +291,12 @@ Answer the investigative questions above by:
 2. **deep_research**: Comprehensive research using Perplexity AI (EXPENSIVE - use strategically)
    - Returns expert-level answers with citations and synthesis
    - **COST MANAGEMENT:**
-     - Takes 2-3 minutes per query
+     - Costs money per query (not free like web_search)
      - Use strategically for complex topics needing comprehensive analysis
    - **Strategy:** Use web_search to explore first, then deep_research for 5-10 key topics
    - Example: After web_search finds tech debt mentions, use deep_research to synthesize what this means for consulting opportunities
    - Example: For key product strategy question, use deep_research for comprehensive analysis
-   - **Budget carefully** - each call takes time and costs money
+   - **Budget carefully** - each call costs money
 
 3. **think_tool**: Reflect and plan your investigation strategy
    - Use BEFORE your first search to plan your approach
