@@ -409,4 +409,4 @@ class TestThinkTool:
     def test_think_tool_schema(self):
         """Test think tool has proper schema"""
         assert think_tool.name == "think_tool"
-        assert "reflection" in str(think_tool.args_schema.schema())
+        assert "reflection" in str(think_tool.args_schema.model_json_schema())

@@ -161,3 +161,106 @@ class TestProfileAgent:
 
         assert "response" in result
         assert "error" in result["metadata"]
+
+    @pytest.mark.asyncio
+    async def test_profile_agent_handles_none_state_from_langgraph(self):
+        """Test ProfileAgent handles None state from LangGraph quality control edge case.
+
+        This tests the bug fix for when quality_control passes on first try and
+        returns Command(goto="__end__", update={}), which can cause LangGraph to
+        wrap the final state as {"__end__": None} or {"quality_control": None}.
+
+        Bug: 'NoneType' object has no attribute 'get'
+        Fix: Added defensive null checks in state extraction (commits 53ece28, 191f6c4)
+        """
+        # Mock LLM service
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(return_value="Mock response")
+
+        # Mock Slack service
+        slack_service = Mock(spec=SlackService)
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(
+            return_value=None
+        )  # Simulate upload failure
+
+        context = (
+            AgentContextBuilder()
+            .with_llm_service(llm_service)
+            .with_slack_service(slack_service)
+            .build()
+        )
+
+        # Create mock graph that returns None state (simulates the bug)
+        async def mock_astream_with_none(input_state, config):
+            """Mock graph astream that returns None state (edge case from quality_control)"""
+            # Yield intermediate events
+            yield {"clarify_with_user": {}}
+            yield {"write_research_brief": {}}
+            yield {"research_supervisor": {}}
+            # Quality control passes and routes to __end__, returning None state
+            yield {"quality_control": None}  # This causes the bug!
+
+        # Mock the profile_researcher graph
+        mock_graph = Mock()
+        mock_graph.astream = mock_astream_with_none
+
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
+            agent = ProfileAgent()
+            result = await agent.run("tell me about Tesla", context)
+
+        # Should NOT crash with 'NoneType' object has no attribute 'get'
+        assert "response" in result
+        assert "metadata" in result
+        # Should return "no report available" error message
+        assert "Unable to generate profile report" in result["response"]
+        assert result["metadata"]["error"] == "no_report"
+
+    @pytest.mark.asyncio
+    async def test_profile_agent_handles_empty_values_from_langgraph(self):
+        """Test ProfileAgent handles empty dict values from LangGraph.
+
+        This tests another edge case where LangGraph returns {"__end__": {}}
+        (empty dict instead of None).
+        """
+        # Mock LLM service
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(return_value="Mock response")
+
+        # Mock Slack service
+        slack_service = Mock(spec=SlackService)
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(return_value=None)
+
+        context = (
+            AgentContextBuilder()
+            .with_llm_service(llm_service)
+            .with_slack_service(slack_service)
+            .build()
+        )
+
+        # Create mock graph that returns empty state dict
+        async def mock_astream_with_empty_dict(input_state, config):
+            """Mock graph astream that returns empty state dict"""
+            yield {"clarify_with_user": {}}
+            yield {"write_research_brief": {}}
+            yield {"research_supervisor": {}}
+            # Quality control returns empty dict
+            yield {"quality_control": {}}  # Empty state!
+
+        # Mock the profile_researcher graph
+        mock_graph = Mock()
+        mock_graph.astream = mock_astream_with_empty_dict
+
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
+            agent = ProfileAgent()
+            result = await agent.run("tell me about SpaceX", context)
+
+        # Should handle gracefully
+        assert "response" in result
+        assert "metadata" in result
+        # Should return "no report available" since final_report is empty
+        assert "Unable to generate profile report" in result["response"]
+        assert result["metadata"]["error"] == "no_report"

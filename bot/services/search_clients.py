@@ -35,13 +35,13 @@ class TavilyClient:
             await self.session.close()
             self.session = None
 
-    async def search(self, query: str, max_results: int = 15) -> list[dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
         """
         Search the web using Tavily API
 
         Args:
             query: Search query
-            max_results: Maximum number of results (default: 15)
+            max_results: Maximum number of results (default: 10)
 
         Returns:
             List of search results with title, url, content (snippet)
@@ -143,8 +143,8 @@ class PerplexityClient:
     async def initialize(self):
         """Initialize the HTTP session"""
         if not self.session:
-            # Deep research can take 2-3 minutes
-            timeout = aiohttp.ClientTimeout(total=300)
+            # Perplexity typically responds in 10-60 seconds, set timeout to 120s for safety
+            timeout = aiohttp.ClientTimeout(total=120)
             self.session = aiohttp.ClientSession(timeout=timeout)
             logger.info("Perplexity client initialized")
 
@@ -174,12 +174,27 @@ class PerplexityClient:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a research assistant. Provide comprehensive, well-researched answers with proper citations.",
+                        "content": (
+                            "You are an expert business intelligence researcher conducting company profile research for B2B sales and consulting. "
+                            "Provide comprehensive, strategic answers that reveal:\n"
+                            "- Business priorities and strategic initiatives\n"
+                            "- Product roadmaps and technology investments\n"
+                            "- Engineering challenges, technical debt, and scaling issues\n"
+                            "- Leadership priorities and pain points\n"
+                            "- Growth signals and consulting opportunities\n\n"
+                            "Focus on RECENT information (past 12 months) and cite authoritative sources like:\n"
+                            "- Company announcements, earnings calls, SEC filings\n"
+                            "- Executive interviews and conference talks\n"
+                            "- Industry analyst reports and tech journalism\n"
+                            "- Engineering blogs, job postings, and Glassdoor reviews\n\n"
+                            "Go beyond basic facts - provide strategic context, implications, and actionable insights."
+                        ),
                     },
                     {"role": "user", "content": query},
                 ],
                 "return_citations": True,
                 "return_images": False,
+                "search_recency_filter": "month",  # Focus on recent information (past month)
                 "temperature": 0.2,  # Lower temperature for factual research
             }
 
@@ -187,6 +202,10 @@ class PerplexityClient:
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json",
             }
+
+            import time
+
+            start_time = time.time()
 
             logger.info(f"Perplexity deep research: {query}")
 
@@ -208,8 +227,10 @@ class PerplexityClient:
                 # Format sources
                 sources = [{"url": url} for url in citations]
 
+                duration = time.time() - start_time
+
                 logger.info(
-                    f"Perplexity research completed: {len(answer)} chars, {len(sources)} sources"
+                    f"Perplexity research completed in {duration:.2f}s: {len(answer)} chars, {len(sources)} sources"
                 )
                 return {"success": True, "answer": answer, "sources": sources}
 
@@ -306,8 +327,8 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results (default: 15, max: 20)",
-                            "default": 15,
+                            "description": "Maximum number of results (default: 10, max: 20)",
+                            "default": 10,
                         },
                     },
                     "required": ["query"],
@@ -352,7 +373,7 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
                     "Returns detailed, well-researched answers with citations and sources. "
                     "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
                     "**IMPORTANT - Cost Management:**\n"
-                    "This tool is EXPENSIVE - takes 2-3 minutes per query. Use strategically:\n\n"
+                    "This tool is EXPENSIVE (costs money per query). Use strategically:\n\n"
                     "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics that need comprehensive analysis.\n\n"
                     "Best for:\n"
                     "- Complex research questions requiring comprehensive analysis\n"
