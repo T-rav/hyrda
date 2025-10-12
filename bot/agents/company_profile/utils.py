@@ -483,6 +483,109 @@ def detect_profile_type(query: str) -> str:
     return "company"
 
 
+async def extract_focus_area(query: str, llm_service: Any = None) -> str:
+    """Extract specific focus area or intent from user query.
+
+    Identifies if user is asking about a specific aspect like "AI needs",
+    "hiring challenges", "cloud strategy", etc.
+
+    Args:
+        query: User query
+        llm_service: Optional LLM service for extraction (if not provided, uses patterns)
+
+    Returns:
+        Focus area description or empty string if general profile requested
+
+    Examples:
+        "profile tesla" -> ""
+        "profile tesla's ai needs" -> "AI needs and capabilities"
+        "tell me about acme's hiring challenges" -> "hiring challenges and talent acquisition"
+        "what are stripe's product strategy" -> "product strategy and roadmap"
+    """
+    import re
+
+    query_lower = query.lower()
+
+    # Pattern-based extraction for common focus areas
+    focus_patterns = {
+        r"ai\s+(?:needs|capabilities|strategy|initiatives|plans)": "AI needs and capabilities",
+        r"hiring|talent|recruiting|recruitment": "hiring challenges and talent acquisition",
+        r"product\s+(?:strategy|roadmap|initiatives|plans)": "product strategy and roadmap",
+        r"engineering\s+(?:challenges|needs|team|practices)": "engineering challenges and team structure",
+        r"cloud\s+(?:strategy|infrastructure|migration)": "cloud strategy and infrastructure",
+        r"sales|revenue|go-to-market|gtm": "sales strategy and revenue generation",
+        r"marketing\s+(?:strategy|initiatives|campaigns)": "marketing strategy and initiatives",
+        r"technical\s+debt": "technical debt and code quality",
+        r"security|compliance|privacy": "security and compliance posture",
+        r"data\s+(?:strategy|infrastructure|analytics)": "data strategy and analytics capabilities",
+        r"mobile\s+(?:strategy|apps|development)": "mobile strategy and applications",
+        r"customer\s+(?:success|support|experience)": "customer success and support operations",
+    }
+
+    # Check each pattern
+    for pattern, focus_description in focus_patterns.items():
+        if re.search(pattern, query_lower):
+            logger.info(f"Extracted focus area from query: '{focus_description}'")
+            return focus_description
+
+    # If llm_service is provided, use it for more nuanced extraction
+    if llm_service:
+        try:
+            import json
+
+            from langchain_openai import ChatOpenAI
+
+            from config.settings import Settings
+
+            settings = Settings()
+
+            extraction_prompt = f"""Analyze this user query and extract the specific focus area or aspect they're interested in.
+
+Query: "{query}"
+
+If the user is asking about a SPECIFIC aspect (like AI needs, hiring challenges, product strategy, etc.),
+extract and return that focus area. If they're asking for a general profile with no specific focus, return an empty string.
+
+Examples:
+- "profile tesla" → ""
+- "profile tesla's ai needs" → "AI needs and capabilities"
+- "tell me about stripe's payment infrastructure" → "payment infrastructure and processing capabilities"
+- "what are snowflake's data governance practices" → "data governance and compliance practices"
+- "acme corp hiring challenges" → "hiring challenges and talent acquisition"
+
+Return ONLY a JSON object: {{"focus_area": "extracted focus or empty string"}}"""
+
+            llm = ChatOpenAI(
+                model="gpt-4o-mini",
+                api_key=settings.llm.api_key,
+                temperature=0.0,
+                max_completion_tokens=50,
+            )
+
+            response = await llm.ainvoke(extraction_prompt)
+            result_text = response.content.strip()
+
+            # Parse JSON response
+            result_data = json.loads(result_text)
+            focus_area = result_data.get("focus_area", "").strip()
+
+            if focus_area:
+                logger.info(f"LLM extracted focus area: '{focus_area}'")
+            else:
+                logger.info("LLM determined no specific focus area (general profile)")
+
+            return focus_area
+
+        except Exception as e:
+            logger.warning(
+                f"Error using LLM for focus extraction, falling back to pattern matching: {e}"
+            )
+
+    # No specific focus detected
+    logger.info("No specific focus area detected - general profile request")
+    return ""
+
+
 def create_system_message(prompt: str, **kwargs: Any) -> SystemMessage:
     """Create a system message with formatted prompt.
 

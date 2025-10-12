@@ -34,7 +34,12 @@ Transform the user's query into a strategic research brief with **specific inves
 {query}
 
 Profile Type: {profile_type}
+Focus Area: {focus_area}
 </User Query>
+
+<Research Focus Strategy>
+{focus_strategy}
+</Research Focus Strategy>
 
 <8th Light Company Profile Structure>
 Your research brief must plan for gathering information across these specific sections:
@@ -139,7 +144,7 @@ Write as the lead researcher planning the investigation:
 # Research Brief: [Company Name]
 
 ## Investigation Strategy
-[Brief overview of research approach - what angles will you pursue?]
+[Brief overview of research approach - what angles will you pursue? If a focus area is specified, explain how it guides the research.]
 
 ## Section 1: Company Overview
 **Key Questions:**
@@ -153,14 +158,15 @@ Write as the lead researcher planning the investigation:
 - [Investigative question 2]
 ...
 
-[Continue for all 9 sections]
+[Continue for all 9 sections, adjusting depth based on focus area]
 
 ## Research Priorities
-[What sections need deepest investigation? What's most critical for 8th Light's sales approach?]
+[What sections need deepest investigation? What's most critical for 8th Light's sales approach? How does the focus area influence priority?]
 
 </Output Format>
 
 Generate a comprehensive strategic research brief with specific investigative questions for each section. Think like a detective, not just a fact-gatherer.
+{focus_guidance}
 """
 
 # Lead researcher (supervisor) prompt
@@ -180,6 +186,11 @@ Your job is to delegate these questions strategically to specialized researchers
 <Profile Type>
 {profile_type}
 </Profile Type>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Available Tools>
 1. **ConductResearch**: Delegate specific investigative questions to a specialized researcher
@@ -252,6 +263,11 @@ research_system_prompt = """You are a specialized Business Development researche
 <Profile Type>
 {profile_type}
 </Profile Type>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Your Mission>
 Answer the investigative questions above by:
@@ -401,6 +417,11 @@ final_report_generation_prompt = """You are an expert Business Development assoc
 <Profile Type>
 {profile_type}
 </Profile Type>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Research Notes>
 {notes}
@@ -654,6 +675,11 @@ executive_summary_prompt = """You are creating a VERY BRIEF executive summary fo
 <Full Report>
 {full_report}
 </Full Report>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Your Task>
 Create an EXTREMELY CONCISE summary with EXACTLY 3 bullet points.

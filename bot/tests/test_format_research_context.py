@@ -1,9 +1,12 @@
 """Tests for format_research_context source consolidation."""
 
+import pytest
+
 from agents.company_profile.utils import format_research_context
 
 
-def test_consolidates_sources_from_multiple_notes():
+@pytest.mark.asyncio
+async def test_consolidates_sources_from_multiple_notes():
     """Test that sources from multiple notes are consolidated with global numbering."""
 
     # Create test notes with local citations
@@ -34,7 +37,7 @@ This is finding 3 with citation [1].
     research_brief = "Test brief"
     notes = [note1, note2, note3]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     # Verify consolidated sources section exists
     assert "CONSOLIDATED SOURCE LIST" in result
@@ -58,7 +61,8 @@ This is finding 3 with citation [1].
     assert "This is finding 3 with citation [5]" in result
 
 
-def test_handles_notes_without_sources():
+@pytest.mark.asyncio
+async def test_handles_notes_without_sources():
     """Test that notes without sources section are handled gracefully."""
 
     note1 = "Finding without sources section."
@@ -72,7 +76,7 @@ Finding with sources [1].
     research_brief = "Test brief"
     notes = [note1, note2]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     # Should still work
     assert "Finding without sources section" in result
@@ -81,13 +85,14 @@ Finding with sources [1].
     assert "Total sources available: 1" in result
 
 
-def test_handles_empty_notes():
+@pytest.mark.asyncio
+async def test_handles_empty_notes():
     """Test that empty notes list is handled gracefully."""
 
     research_brief = "Test brief"
     notes = []
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     # Should not crash
     assert "Profile Research Context" in result
@@ -95,7 +100,8 @@ def test_handles_empty_notes():
     assert "CONSOLIDATED SOURCE LIST" not in result
 
 
-def test_deduplicates_sources_by_url():
+@pytest.mark.asyncio
+async def test_deduplicates_sources_by_url():
     """Test that duplicate URLs are deduplicated."""
 
     note1 = """
@@ -117,7 +123,7 @@ More content with [1] and [2].
     research_brief = "Test brief"
     notes = [note1, note2]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     # Should have 3 unique sources, not 4
     assert "Total sources available: 3" in result
@@ -127,7 +133,8 @@ More content with [1] and [2].
     assert "More content with [1] and [3]" in result
 
 
-def test_preserves_source_descriptions():
+@pytest.mark.asyncio
+async def test_preserves_source_descriptions():
     """Test that source descriptions are preserved."""
 
     note = """
@@ -140,7 +147,7 @@ Content [1].
     research_brief = "Test brief"
     notes = [note]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     assert (
         "https://example.com/article - This is a detailed description of the article"
@@ -148,7 +155,8 @@ Content [1].
     )
 
 
-def test_handles_sources_without_descriptions():
+@pytest.mark.asyncio
+async def test_handles_sources_without_descriptions():
     """Test sources that don't have descriptions."""
 
     note = """
@@ -161,12 +169,13 @@ Content [1].
     research_brief = "Test brief"
     notes = [note]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     assert "1. https://example.com/article\n" in result
 
 
-def test_provides_guidance_to_llm():
+@pytest.mark.asyncio
+async def test_provides_guidance_to_llm():
     """Test that the output includes guidance for the LLM."""
 
     note = """
@@ -180,7 +189,7 @@ Content [1] and [2].
     research_brief = "Test brief"
     notes = [note]
 
-    result = format_research_context(research_brief, notes, "company")
+    result = await format_research_context(research_brief, notes, "company")
 
     # Should provide clear guidance
     assert "use these citation numbers in your report" in result

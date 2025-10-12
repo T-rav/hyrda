@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from agents.base_agent import BaseAgent
 from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.profile_researcher import profile_researcher
-from agents.company_profile.utils import detect_profile_type
+from agents.company_profile.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
@@ -105,9 +105,18 @@ class ProfileAgent(BaseAgent):
                 "metadata": {"error": "no_llm_service"},
             }
 
-        # Detect profile type
+        # Detect profile type and extract focus area
         profile_type = detect_profile_type(query)
-        logger.info(f"Detected profile type: {profile_type}")
+        focus_area = await extract_focus_area(query, llm_service)
+
+        if focus_area:
+            logger.info(
+                f"Detected profile type: {profile_type}, Focus area: {focus_area}"
+            )
+        else:
+            logger.info(
+                f"Detected profile type: {profile_type} (general profile, no specific focus)"
+            )
 
         # Delete thinking indicator and send initial status message in the same thread
         progress_msg_ts = None
@@ -159,6 +168,7 @@ class ProfileAgent(BaseAgent):
                 "messages": [HumanMessage(content=query)],
                 "query": query,
                 "profile_type": profile_type,
+                "focus_area": focus_area,
             }
 
             # Execute deep research workflow with streaming
