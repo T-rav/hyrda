@@ -60,6 +60,9 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         final_report: Generated comprehensive profile report
         executive_summary: Short summary for Slack display (3-5 bullets)
         profile_type: Type of profile (company, employee, project)
+        focus_area: Specific intent/aspect to emphasize (e.g., "AI needs", "hiring challenges")
+        revision_count: Number of quality control revisions attempted
+        revision_prompt: Specific instructions for next revision
     """
 
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
@@ -71,6 +74,9 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     final_report: str
     executive_summary: str
     profile_type: str
+    focus_area: str
+    revision_count: int
+    revision_prompt: str
 
 
 # Supervisor state - manages research delegation
@@ -89,6 +95,7 @@ class SupervisorState(TypedDict, total=False):
     research_iterations: int
     raw_notes: list[str]
     profile_type: str
+    focus_area: str
 
 
 # Individual researcher state
@@ -105,6 +112,7 @@ class ResearcherState(TypedDict):
     compressed_research: str
     raw_notes: list[str]
     profile_type: str
+    focus_area: str
 
 
 # Output state from researcher subgraph

@@ -13,7 +13,7 @@ from langchain_core.messages import HumanMessage
 from agents.base_agent import BaseAgent
 from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.profile_researcher import profile_researcher
-from agents.company_profile.utils import detect_profile_type
+from agents.company_profile.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
@@ -63,7 +63,7 @@ class ProfileAgent(BaseAgent):
     """
 
     name = "profile"
-    aliases: list[str] = []
+    aliases: list[str] = ["-profile"]
     description = "Generate comprehensive company, employee, or project profiles through deep research"
 
     def __init__(self):
@@ -96,7 +96,6 @@ class ProfileAgent(BaseAgent):
 
         # Get required services from context
         llm_service = context.get("llm_service")
-        webcat_client = context.get("webcat_client")
         slack_service = context.get("slack_service")
         channel = context.get("channel")
 
@@ -106,9 +105,18 @@ class ProfileAgent(BaseAgent):
                 "metadata": {"error": "no_llm_service"},
             }
 
-        # Detect profile type
+        # Detect profile type and extract focus area
         profile_type = detect_profile_type(query)
-        logger.info(f"Detected profile type: {profile_type}")
+        focus_area = await extract_focus_area(query, llm_service)
+
+        if focus_area:
+            logger.info(
+                f"Detected profile type: {profile_type}, Focus area: {focus_area}"
+            )
+        else:
+            logger.info(
+                f"Detected profile type: {profile_type} (general profile, no specific focus)"
+            )
 
         # Delete thinking indicator and send initial status message in the same thread
         progress_msg_ts = None
@@ -128,15 +136,30 @@ class ProfileAgent(BaseAgent):
             progress_msg_ts = progress_response.get("ts") if progress_response else None
 
         try:
+            # Initialize internal deep research service for knowledge base searching
+            from services.internal_deep_research import (
+                get_internal_deep_research_service,
+            )
+
+            internal_deep_research = await get_internal_deep_research_service()
+            if internal_deep_research:
+                logger.info(
+                    "Internal deep research service initialized for profile agent"
+                )
+            else:
+                logger.warning(
+                    "Internal deep research service not available - knowledge base searching disabled"
+                )
+
             # Prepare LangGraph configuration
             graph_config = {
                 "configurable": {
                     "llm_service": llm_service,
-                    "webcat_client": webcat_client,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
                     "max_researcher_iterations": self.config.max_researcher_iterations,
                     "allow_clarification": self.config.allow_clarification,
+                    "internal_deep_research": internal_deep_research,  # Enable knowledge base search
                 }
             }
 
@@ -145,6 +168,7 @@ class ProfileAgent(BaseAgent):
                 "messages": [HumanMessage(content=query)],
                 "query": query,
                 "profile_type": profile_type,
+                "focus_area": focus_area,
             }
 
             # Execute deep research workflow with streaming
@@ -168,6 +192,10 @@ class ProfileAgent(BaseAgent):
                     "start": "📊 Generating final report...",
                     "complete": "✅ Report generated",
                 },
+                "quality_control": {
+                    "start": "🔍 Validating report quality...",
+                    "complete": "✅ Quality check complete",
+                },
             }
 
             # Track completed steps
@@ -178,6 +206,7 @@ class ProfileAgent(BaseAgent):
                 "write_research_brief",
                 "research_supervisor",
                 "final_report_generation",
+                "quality_control",
             ]
 
             # Track timing for each node
@@ -185,6 +214,7 @@ class ProfileAgent(BaseAgent):
 
             node_start_times = {}
             node_durations = {}
+            node_execution_counts = {}  # Track how many times each node executes
 
             # Show first node as starting immediately
             first_node_started = False
@@ -212,11 +242,30 @@ class ProfileAgent(BaseAgent):
                 if isinstance(event, dict):
                     for node_name, node_data in event.items():
                         if node_name in node_messages:
+                            # Track execution count for this node
+                            node_execution_counts[node_name] = (
+                                node_execution_counts.get(node_name, 0) + 1
+                            )
+                            execution_count = node_execution_counts[node_name]
+
                             # Calculate duration for this node
                             end_time = time.time()
                             start_time = node_start_times.get(node_name)
                             duration = end_time - start_time if start_time else 0
                             node_durations[node_name] = duration
+
+                            # Check if quality control is requesting a revision
+                            # by looking at revision_count in state data
+                            is_quality_failure = False
+                            if node_name == "quality_control" and isinstance(
+                                node_data, dict
+                            ):
+                                revision_count = node_data.get("revision_count", 0)
+                                if revision_count > 0:
+                                    is_quality_failure = True
+                                    logger.info(
+                                        f"Quality control FAILED, revision_count={revision_count}, will loop back"
+                                    )
 
                             # Build completion message with duration
                             duration_text = (
@@ -225,21 +274,27 @@ class ProfileAgent(BaseAgent):
                                 else ""
                             )
 
-                            # Add summary for research_supervisor node
-                            summary_text = ""
-                            if node_name == "research_supervisor" and isinstance(
-                                node_data, dict
+                            # Add revision indicator for nodes that loop
+                            revision_text = ""
+                            if (
+                                node_name
+                                in ["final_report_generation", "quality_control"]
+                                and execution_count > 1
                             ):
-                                notes = node_data.get("notes", [])
-                                raw_notes = node_data.get("raw_notes", [])
-                                if notes or raw_notes:
-                                    summary_text = f" - {len(notes)} researchers, {len(raw_notes)} sources"
+                                revision_text = f" [Attempt {execution_count}]"
+
+                            # Special message for quality control failures
+                            complete_message = node_messages[node_name]["complete"]
+                            if is_quality_failure:
+                                complete_message = (
+                                    "⚠️ Quality check failed - revision needed"
+                                )
 
                             completed_steps.append(
-                                f"{node_messages[node_name]['complete']}{duration_text}{summary_text}"
+                                f"{complete_message}{duration_text}{revision_text}"
                             )
                             logger.info(
-                                f"✅ Completed node: {node_name} in {duration:.1f}s{summary_text}"
+                                f"✅ Completed node: {node_name} in {duration:.1f}s (attempt {execution_count})"
                             )
 
                             # Show next in-progress step if available
@@ -247,27 +302,74 @@ class ProfileAgent(BaseAgent):
                                 # Find next step to show as in-progress
                                 all_steps = list(completed_steps)
 
-                                # Add next step as in-progress if there is one
-                                try:
-                                    current_index = node_order.index(node_name)
-                                    logger.info(
-                                        f"Node {node_name} at index {current_index}/{len(node_order) - 1}"
+                                # Determine next node
+                                # Special case: if quality_control failed, loop back to final_report
+                                next_node = None
+                                next_node_attempt = 1
+
+                                if (
+                                    node_name == "quality_control"
+                                    and is_quality_failure
+                                ):
+                                    # Quality control failed - loop back for revision
+                                    next_node = "final_report_generation"
+                                    # revision_count in state is already incremented
+                                    revision_count = (
+                                        node_data.get("revision_count", 0)
+                                        if isinstance(node_data, dict)
+                                        else 0
                                     )
-                                    if current_index + 1 < len(node_order):
-                                        next_node = node_order[current_index + 1]
-                                        # Record start time for next node
-                                        node_start_times[next_node] = time.time()
-                                        all_steps.append(
-                                            node_messages[next_node]["start"]
-                                        )
+                                    next_node_attempt = (
+                                        revision_count + 1
+                                    )  # +1 because revision_count is 0-indexed
+                                    logger.info(
+                                        f"Quality control FAILED (revision_count={revision_count}) - will loop back to final_report for attempt {next_node_attempt}"
+                                    )
+                                else:
+                                    # Normal forward flow - find next node in order
+                                    try:
+                                        current_index = node_order.index(node_name)
                                         logger.info(
-                                            f"⏳ Starting next node: {next_node} - {node_messages[next_node]['start']}"
+                                            f"Node {node_name} at index {current_index}/{len(node_order) - 1}"
                                         )
-                                    else:
-                                        logger.info("No more nodes to process")
-                                except (ValueError, IndexError) as e:
-                                    logger.warning(
-                                        f"Could not find node {node_name} in order: {e}"
+                                        if current_index + 1 < len(node_order):
+                                            next_node = node_order[current_index + 1]
+                                            # Check if next node has executed before (for attempt number)
+                                            next_node_attempt = (
+                                                node_execution_counts.get(next_node, 0)
+                                                + 1
+                                            )
+                                        else:
+                                            logger.info("No more nodes to process")
+                                    except (ValueError, IndexError) as e:
+                                        logger.warning(
+                                            f"Could not find node {node_name} in order: {e}"
+                                        )
+
+                                # Add next node as in-progress if we have one
+                                if next_node:
+                                    # Record start time for next node
+                                    node_start_times[next_node] = time.time()
+
+                                    # Build in-progress message with attempt indicator
+                                    next_revision_text = ""
+                                    if (
+                                        next_node
+                                        in [
+                                            "final_report_generation",
+                                            "quality_control",
+                                        ]
+                                        and next_node_attempt > 1
+                                    ):
+                                        next_revision_text = (
+                                            f" [Attempt {next_node_attempt}]"
+                                        )
+
+                                    all_steps.append(
+                                        f"{node_messages[next_node]['start']}{next_revision_text}"
+                                    )
+                                    logger.info(
+                                        f"⏳ Starting next node: {next_node} - {node_messages[next_node]['start']}{next_revision_text}"
                                     )
 
                                 steps_text = "\n".join(all_steps)
@@ -308,8 +410,66 @@ class ProfileAgent(BaseAgent):
                 f"Profile research complete: {len(final_report)} chars, {notes_count} research notes"
             )
 
-            # Generate PDF from full report
-            pdf_title = f"{profile_type.title()} Profile"
+            # Generate PDF title with entity name extracted by LLM
+            try:
+                import json
+
+                from langchain_openai import ChatOpenAI
+
+                from config.settings import Settings
+
+                settings = Settings()
+
+                extraction_prompt = f"""Extract the main entity name from this query and return it as a JSON object.
+
+Query: "{query}"
+
+Examples:
+- "tell me about Tesla" → {{"entity": "Tesla"}}
+- "profile of Elon Musk" → {{"entity": "Elon Musk"}}
+- "what is the Cybertruck project?" → {{"entity": "Cybertruck"}}
+- "SpaceX" → {{"entity": "SpaceX"}}
+- "research Microsoft Azure" → {{"entity": "Microsoft Azure"}}
+
+Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
+
+                # Use ChatOpenAI directly (same as other LangGraph nodes)
+                llm = ChatOpenAI(
+                    model="gpt-4o-mini",
+                    api_key=settings.llm.api_key,
+                    temperature=0.0,
+                    max_completion_tokens=30,
+                )
+
+                entity_response = await llm.ainvoke(extraction_prompt)
+                entity_text = entity_response.content.strip()
+
+                # Parse JSON response
+                entity_data = json.loads(entity_text)
+                entity_name = entity_data.get("entity", "").strip()
+
+                logger.info(
+                    f"LLM returned entity name: '{entity_name}' (length: {len(entity_name)})"
+                )
+
+                if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
+                    pdf_title = f"{entity_name} - {profile_type.title()} Profile"
+                    logger.info(
+                        f"✅ Using extracted entity name in PDF title: '{pdf_title}'"
+                    )
+                else:
+                    # Fallback to generic title
+                    pdf_title = f"{profile_type.title()} Profile"
+                    logger.warning(
+                        f"⚠️ Entity name invalid ('{entity_name}'), using generic title: '{pdf_title}'"
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    f"Error extracting entity name: {e}, using generic title"
+                )
+                pdf_title = f"{profile_type.title()} Profile"
+
             pdf_metadata = {
                 "Query": query,
                 "Profile Type": profile_type.title(),
@@ -363,17 +523,24 @@ class ProfileAgent(BaseAgent):
                 except Exception as pdf_error:
                     logger.error(f"Error uploading PDF: {pdf_error}")
 
-            # If PDF was uploaded with executive summary, return empty response
-            # (summary already posted as initial_comment)
-            # Otherwise return the full response text
-            if executive_summary and pdf_uploaded:
-                response = ""  # Already posted with PDF upload
+            # If PDF was uploaded, ALWAYS return empty response
+            # (summary is posted as initial_comment with the PDF)
+            logger.info(
+                f"Decision point: executive_summary={bool(executive_summary)}, pdf_uploaded={pdf_uploaded}"
+            )
+            if pdf_uploaded:
+                # PDF was uploaded successfully - don't post anything else to Slack
+                # The summary is already attached to the PDF as initial_comment
+                response = ""
                 logger.info(
-                    "Executive summary posted with PDF, returning empty response"
+                    "✅ PDF uploaded with summary attached, returning EMPTY response"
                 )
             else:
+                # PDF upload failed - post the full report or summary as fallback
                 response = response_text
-                logger.info("Returning response text (PDF not uploaded or no summary)")
+                logger.info(
+                    f"⚠️ PDF upload failed, returning response text as fallback ({len(response_text)} chars)"
+                )
 
             return {
                 "response": response,

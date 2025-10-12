@@ -157,7 +157,8 @@ class QdrantVectorStore(VectorStore):
         """Search Qdrant for similar documents across all namespaces"""
         try:
             if self.client is None:
-                raise RuntimeError("Qdrant client not initialized")
+                logger.error("Failed to search Qdrant: Qdrant client not initialized")
+                return []
 
             # Query for documents with and without namespace filtering
             namespaces = ["metric"]  # Metric namespace
@@ -220,6 +221,7 @@ class QdrantVectorStore(VectorStore):
             for match in default_result:
                 if (
                     match.score >= similarity_threshold
+                    and match.payload
                     and "namespace" not in match.payload
                 ):
                     all_documents.append(

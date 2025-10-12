@@ -66,6 +66,7 @@ class DatabaseSettings(BaseSettings):
 class VectorSettings(BaseSettings):
     """Vector database settings for RAG (Qdrant)"""
 
+    enabled: bool = Field(default=True, description="Enable vector database features")
     provider: str = Field(
         default="qdrant", description="Vector database provider (qdrant)"
     )
@@ -128,7 +129,7 @@ class RAGSettings(BaseSettings):
     )
     enable_query_rewriting: bool = Field(
         default=True,
-        description="Enable adaptive query rewriting to improve retrieval accuracy",
+        description="Enable adaptive query rewriting to improve retrieval accuracy (adds 1-2 LLM calls per search)",
     )
     query_rewrite_model: str = Field(
         default="gpt-4o-mini",
@@ -161,23 +162,47 @@ class ConversationSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="CONVERSATION_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
-class MCPSettings(BaseSettings):
-    """MCP (Model Context Protocol) server settings"""
+class SearchSettings(BaseSettings):
+    """Search and research API settings"""
 
-    webcat_enabled: bool = Field(
-        default=True, description="Enable WebCat web search MCP server"
+    # Tavily settings
+    tavily_api_key: str | None = Field(
+        default=None,
+        description="Tavily API key for web search and scraping",
+        alias="TAVILY_API_KEY",
     )
-    webcat_host: str = Field(default="localhost", description="WebCat MCP server host")
-    webcat_port: int = Field(default=3000, description="WebCat MCP server port")
-    webcat_api_key: str | None = Field(
-        default=None, description="WebCat API key for bearer token authentication"
+
+    # Perplexity settings
+    perplexity_api_key: str | None = Field(
+        default=None,
+        description="Perplexity API key for deep research",
+        alias="PERPLEXITY_API_KEY",
     )
-    webcat_deep_research_enabled: bool = Field(
+    perplexity_enabled: bool = Field(
         default=True,
-        description="Enable deep_research tool (requires Perplexity API key)",
+        description="Enable deep_research tool (requires API key)",
+        alias="PERPLEXITY_ENABLED",
     )
 
-    model_config = ConfigDict(env_prefix="MCP_")  # type: ignore[assignment,typeddict-unknown-key]
+    model_config = ConfigDict(populate_by_name=True)  # type: ignore[assignment,typeddict-unknown-key]
+
+
+class GeminiSettings(BaseSettings):
+    """Google Gemini API settings for final report generation"""
+
+    api_key: str | None = Field(
+        default=None, description="Google Gemini API key for report generation"
+    )
+    model: str = Field(
+        default="gemini-2.0-flash-exp",
+        description="Gemini model for final report generation",
+    )
+    enabled: bool = Field(
+        default=False,
+        description="Use Gemini for final report generation (requires API key)",
+    )
+
+    model_config = ConfigDict(env_prefix="GEMINI_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class LangfuseSettings(BaseSettings):
@@ -225,7 +250,8 @@ class Settings(BaseSettings):
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     rag: RAGSettings = Field(default_factory=RAGSettings)
     conversation: ConversationSettings = Field(default_factory=ConversationSettings)
-    mcp: MCPSettings = Field(default_factory=MCPSettings)
+    search: SearchSettings = Field(default_factory=SearchSettings)
+    gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
     debug: bool = False
     log_level: str = "INFO"

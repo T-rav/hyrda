@@ -34,7 +34,12 @@ Transform the user's query into a strategic research brief with **specific inves
 {query}
 
 Profile Type: {profile_type}
+Focus Area: {focus_area}
 </User Query>
+
+<Research Focus Strategy>
+{focus_strategy}
+</Research Focus Strategy>
 
 <8th Light Company Profile Structure>
 Your research brief must plan for gathering information across these specific sections:
@@ -139,7 +144,7 @@ Write as the lead researcher planning the investigation:
 # Research Brief: [Company Name]
 
 ## Investigation Strategy
-[Brief overview of research approach - what angles will you pursue?]
+[Brief overview of research approach - what angles will you pursue? If a focus area is specified, explain how it guides the research.]
 
 ## Section 1: Company Overview
 **Key Questions:**
@@ -153,14 +158,15 @@ Write as the lead researcher planning the investigation:
 - [Investigative question 2]
 ...
 
-[Continue for all 9 sections]
+[Continue for all 9 sections, adjusting depth based on focus area]
 
 ## Research Priorities
-[What sections need deepest investigation? What's most critical for 8th Light's sales approach?]
+[What sections need deepest investigation? What's most critical for 8th Light's sales approach? How does the focus area influence priority?]
 
 </Output Format>
 
 Generate a comprehensive strategic research brief with specific investigative questions for each section. Think like a detective, not just a fact-gatherer.
+{focus_guidance}
 """
 
 # Lead researcher (supervisor) prompt
@@ -180,6 +186,11 @@ Your job is to delegate these questions strategically to specialized researchers
 <Profile Type>
 {profile_type}
 </Profile Type>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Available Tools>
 1. **ConductResearch**: Delegate specific investigative questions to a specialized researcher
@@ -252,6 +263,11 @@ research_system_prompt = """You are a specialized Business Development researche
 <Profile Type>
 {profile_type}
 </Profile Type>
+
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
 
 <Your Mission>
 Answer the investigative questions above by:
@@ -377,13 +393,14 @@ Preserve all important information while removing redundancy and organizing logi
 - Place citations immediately after relevant information
 - End with "### Sources" section listing all sources with numbers
 - IMPORTANT: Number sources sequentially without gaps (1,2,3,4...)
+- IMPORTANT: Include brief description after each URL to explain what it contains
 - Example format:
   ```
   Tesla announced new factory in Berlin [1]. The facility will produce Model Y vehicles [2].
 
   ### Sources
-  1. https://tesla.com/news/berlin-announcement
-  2. https://reuters.com/tesla-berlin-production
+  1. https://tesla.com/news/berlin-announcement - Tesla official press release about Berlin Gigafactory
+  2. https://reuters.com/tesla-berlin-production - Reuters article on Model Y production plans
   ```
 </Citation Rules>
 
@@ -401,22 +418,28 @@ final_report_generation_prompt = """You are an expert Business Development assoc
 {profile_type}
 </Profile Type>
 
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
+
 <Research Notes>
 {notes}
 </Research Notes>
 
 <Your Task>
 Create a COMPREHENSIVE, IN-DEPTH company profile following the 8th Light methodology.
-TARGET LENGTH: 12-15 pages of detailed analysis (approximately 8,000-10,000 words).
+TARGET LENGTH: 8-10 pages of detailed analysis (approximately 5,000-6,500 words).
 The report must be professional, accurate, and provide extensive actionable insights for sales and consulting partners.
 Use ONLY externally verifiable information - do not invent details.
 
 **Depth Requirements:**
 - Each section should be DETAILED and THOROUGH, not just summaries
-- Provide extensive analysis, context, and connecting insights
+- Provide analysis, context, and connecting insights
 - Include specific examples, quotes, and evidence throughout
 - Expand on implications and opportunities in each section
-- Write in rich narrative prose with comprehensive coverage
+- Write in narrative prose with comprehensive coverage
+- **CRITICAL**: MUST include complete ## Sources section with ALL citations
 </Your Task>
 
 <Mandatory Report Structure - 8th Light Company Profile>
@@ -518,24 +541,74 @@ COMPREHENSIVE opportunity analysis (3-4 paragraphs minimum) - THIS IS THE PAYOFF
 - **Competitive differentiation**: Why 8th Light vs other consulting firms for these specific challenges?
 
 ## Sources
-List all **external** sources with citation numbers:
-1. [Source Title or URL] - Brief description
-2. [Source Title or URL] - Brief description
-(Continue numbering sequentially)
+**🚨 CRITICAL: THIS SECTION IS ABSOLUTELY MANDATORY - NEVER SKIP IT 🚨**
 
-IMPORTANT: Only include external, verifiable sources (news articles, company websites, official announcements, etc.).
-DO NOT include:
-- "Internal research summary"
-- "Research findings"
-- "Compressed notes"
-- Any internal/meta references to the research process itself
+List **ALL** external sources with citation numbers that correspond to **EVERY** [1], [2], [3], [4]... citation used throughout the report.
+
+**REQUIRED FORMAT - FOLLOW EXACTLY:**
+```
+## Sources
+
+1. [Full URL or Source Name] - Brief description
+2. [Full URL or Source Name] - Brief description
+3. [Full URL or Source Name] - Brief description
+4. [Full URL or Source Name] - Brief description
+5. [Full URL or Source Name] - Brief description
+...continue for EVERY citation number used...
+15. [Full URL or Source Name] - Brief description
+20. [Full URL or Source Name] - Brief description
+25. [Full URL or Source Name] - Brief description
+...etc. until the LAST citation number
+```
+
+**ABSOLUTE REQUIREMENTS - NO EXCEPTIONS:**
+- ✅ EVERY citation [1], [2], [3]... in your report MUST have a corresponding source entry
+- ✅ Count your citations: If highest citation is [25], you MUST list 25 sources
+- ✅ Number sources sequentially: 1, 2, 3, 4, 5... with NO gaps
+- ✅ Only external sources: news articles, company websites, official announcements, SEC filings, interviews
+- ❌ NEVER include: "Internal research summary", "Research findings", "Compressed notes", or meta-references
+- ❌ NEVER stop at source 10 if you have citations [11], [12], [13]...
+- ❌ NEVER use "...and more" or "additional sources" - LIST EVERY SINGLE ONE
+
+**VERIFICATION CHECKLIST BEFORE SUBMITTING:**
+□ Did I count the highest citation number in my report?
+□ Does my Sources section have that many entries?
+□ Are sources numbered 1, 2, 3... with no gaps?
+□ Did I include the full URL or source name for each?
+
+**EXAMPLE - If you used citations [1] through [18]:**
+```
+## Sources
+
+1. https://tesla.com/news/announcement - Tesla Q3 earnings announcement
+2. https://reuters.com/tesla-factory - Reuters article on Berlin factory
+3. https://bloomberg.com/tesla-ai - Bloomberg coverage of AI initiatives
+4. https://sec.gov/10k-tesla-2024 - Tesla 10-K filing
+5. https://techcrunch.com/tesla-interview - TechCrunch CEO interview
+6. https://glassdoor.com/tesla-reviews - Glassdoor engineering reviews
+7. https://linkedin.com/tesla-jobs - LinkedIn job postings analysis
+8. https://tesla.com/team - Tesla leadership page
+9. https://forbes.com/tesla-strategy - Forbes strategic analysis
+10. https://cnbc.com/tesla-stock - CNBC market coverage
+11. https://electrek.co/tesla-production - Electrek production update
+12. https://theverge.com/tesla-software - The Verge software article
+13. https://wsj.com/tesla-expansion - Wall Street Journal expansion story
+14. https://ft.com/tesla-europe - Financial Times European operations
+15. https://businessinsider.com/tesla - Business Insider industry analysis
+16. https://arstechnica.com/tesla - Ars Technica technical coverage
+17. https://spectrum.ieee.org/tesla - IEEE Spectrum engineering article
+18. https://hbr.org/tesla-case-study - Harvard Business Review case study
+```
+
+**YOUR Sources section MUST follow this exact pattern with ALL citations represented.**
 
 </Mandatory Report Structure - 8th Light Company Profile>
 
-<Writing Guidelines - CRITICAL FOR 15-PAGE DEPTH>
-- **LENGTH TARGET**: Aim for 12-15 pages (8,000-10,000 words). Be COMPREHENSIVE, not brief
+<Writing Guidelines - CRITICAL FOR COMPREHENSIVE DEPTH>
+- **LENGTH TARGET**: Aim for 8-10 pages (5,000-6,500 words). Be COMPREHENSIVE, not brief
 - **Professional tone**: Trustworthy, analytical, and pragmatic - like a top-tier consulting report
 - **Citations required**: Use [1], [2] after EVERY factual claim - no unsourced statements
+- **SOURCES SECTION IS MANDATORY**: Always end your report with the ## Sources section listing all URLs
 - **Clear headings**: Use exact section names from structure above with ## markdown
 - **Rich narrative prose**: Write in detailed, flowing paragraphs with extensive analysis and context
 - **Minimize bullets**: Prefer prose paragraphs over bullet lists. Use bullets ONLY for executive names, source lists, or 5+ item lists
@@ -564,61 +637,87 @@ DO NOT include:
 
 Generate the comprehensive company profile report now following this EXACT structure.
 
-IMPORTANT: End your report with the Sources section. Do NOT add any footer text, attribution, or "Generated by" text after the Sources section.
+**🚨 FINAL CRITICAL REMINDER - READ BEFORE YOU START WRITING 🚨**
+
+Your report MUST end with a complete ## Sources section. This is the MOST IMPORTANT requirement:
+
+1. **Before you start writing**: Plan to track ALL URLs/sources you'll cite
+2. **As you write**: Keep a running list of citation numbers [1], [2], [3]...
+3. **Before you finish**: Count the highest citation number in your report
+4. **Final step**: Write ## Sources section with THAT MANY sources listed
+
+**Example workflow:**
+- You write your report and use citations [1] through [22]
+- BEFORE submitting, you count: highest citation = [22]
+- You write ## Sources section with entries 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
+- Each entry has the full URL and description
+- NO GAPS in numbering
+
+**If you forget to include all sources, the report is INCOMPLETE and FAILS quality standards.**
+
+**🚨 CRITICAL FOR GEMINI: Token Budget Management 🚨**
+You have approximately 8,000 tokens for output. Allocate them wisely:
+- Report sections: ~6,500 tokens (8-10 pages)
+- ## Sources section: RESERVE 1,500 tokens
+- The Sources section is MANDATORY - if you run low on tokens, SHORTEN the report sections to ensure Sources fits completely
+
+**Order of priority:**
+1. Complete ## Sources section (MUST HAVE ALL sources)
+2. All mandatory report sections (can be concise if needed)
+3. Additional detail and prose (nice to have)
+
+End your report with the complete Sources section. Do NOT add any footer text, attribution, or "Generated by" text after the Sources section.
 """
 
 # Executive summary generation prompt
-executive_summary_prompt = """You are creating an executive summary for a detailed profile report.
+executive_summary_prompt = """You are creating a VERY BRIEF executive summary for Slack.
 
 <Full Report>
 {full_report}
 </Full Report>
 
+<Focus Area>
+{focus_area}
+{focus_guidance}
+</Focus Area>
+
 <Your Task>
-Create a concise executive summary (3-5 key bullet points) highlighting the most important insights.
-This will be shown in Slack, while the full report will be attached as a PDF.
+Create an EXTREMELY CONCISE summary with EXACTLY 3 bullet points.
+This appears in Slack - the full report is in the PDF attachment.
 </Your Task>
 
-<Summary Guidelines>
-- **3-5 bullet points maximum** - must be concise for Slack readability
-- **Focus on key insights** - what are the most important takeaways?
-- **Actionable information** - what should the reader know immediately?
-- **No citations needed** - this is a high-level overview
-- **Professional tone** - clear and direct
-- **Start each point with an emoji** for visual clarity
+<CRITICAL RULES - FOLLOW EXACTLY>
+- **EXACTLY 3 bullet points** - no more, no less
+- **Each bullet: ONE sentence maximum** (15-20 words per bullet)
+- **Total length: Under 100 words for entire summary**
+- **No sub-bullets or explanations** - just the core insight
+- **No citations** - this is high-level only
+- **Start each with emoji** for visual clarity
+</CRITICAL RULES>
 
-For **Company Profiles**, highlight:
-- Core business and market position
-- Recent major developments or news
-- Key leadership or strategic direction
-- Notable achievements or challenges
+<What to Include (pick the 3 most important)>
+For Company Profiles:
+- Core business/market position OR strategic priority
+- Major recent development OR key challenge
+- Leadership insight OR opportunity for 8th Light
 
-For **Employee Profiles**, highlight:
-- Current role and main responsibilities
-- Key expertise and experience areas
-- Notable contributions or projects
-- Career trajectory or focus
+For Employee/Project Profiles:
+- Current role/status
+- Key expertise/technology
+- Notable achievement/outcome
+</What to Include>
 
-For **Project Profiles**, highlight:
-- Project goals and current status
-- Key technologies and approach
-- Main outcomes or impact
-- Current phase or next steps
-</Summary Guidelines>
+<Output Format - FOLLOW EXACTLY>
+📊 *Executive Summary*
 
-<Output Format>
-📊 **Executive Summary**
-
-• [Key point 1]
-• [Key point 2]
-• [Key point 3]
-• [Key point 4 - if needed]
-• [Key point 5 - if needed]
+• [Single sentence - 15-20 words max]
+• [Single sentence - 15-20 words max]
+• [Single sentence - 15-20 words max]
 
 📎 _Full detailed report attached as PDF_
 
-IMPORTANT: Do NOT include a profile type heading (like "Company Profile", "Employee Profile", etc.) in your output. Start directly with the "📊 **Executive Summary**" line.
+STOP HERE - DO NOT ADD MORE BULLETS OR EXPLANATIONS
 </Output Format>
 
-Generate the executive summary now.
+Generate EXACTLY 3 bullet points now.
 """

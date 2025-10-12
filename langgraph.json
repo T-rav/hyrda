@@ -4,7 +4,8 @@
   },
   "env": ".env",
   "dependencies": [
-    "./bot"
+    "./bot",
+    "langchain-google-genai>=2.0.0"
   ],
   "python_version": "3.11"
 }

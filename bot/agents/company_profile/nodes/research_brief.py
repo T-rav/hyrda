@@ -19,7 +19,6 @@ from agents.company_profile.utils import (
     detect_profile_type,
     internal_search_tool,
 )
-from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,26 +37,18 @@ async def write_research_brief(
     """
     query = state["query"]
     profile_type = state.get("profile_type", detect_profile_type(query))
+    focus_area = state.get("focus_area", "")
 
-    logger.info(f"Writing research brief for {profile_type} profile")
-
-    # Start Langfuse span for research brief generation
-    langfuse_service = get_langfuse_service()
-    span = None
-    if langfuse_service and langfuse_service.client:
-        span = langfuse_service.client.start_span(
-            name="deep_research_write_research_brief",
-            input={
-                "query": query[:200],
-                "profile_type": profile_type,
-            },
-            metadata={
-                "node_type": "research_brief",
-            },
+    if focus_area:
+        logger.info(
+            f"Writing research brief for {profile_type} profile with focus on: {focus_area}"
+        )
+    else:
+        logger.info(
+            f"Writing research brief for {profile_type} profile (general, no specific focus)"
         )
 
     # Generate research brief using LangChain ChatOpenAI with tool calling
-    generation = None
     try:
         from langchain_openai import ChatOpenAI
 
@@ -73,20 +64,42 @@ async def write_research_brief(
         # Bind internal_search_tool to allow searching existing knowledge
         llm_with_tools = llm.bind_tools([internal_search_tool])
 
-        # Trace LLM generation
-        if langfuse_service and langfuse_service.client:
-            generation = langfuse_service.client.start_generation(
-                name="research_brief_llm_call",
-                input={"query": query, "profile_type": profile_type},
-                metadata={
-                    "purpose": "generate_research_brief",
-                    "tools_available": ["internal_search_tool"],
-                },
-            )
-
         current_date = datetime.now().strftime("%B %d, %Y")
+
+        # Build dynamic focus strategy and guidance
+        if focus_area:
+            focus_strategy = f"""**SPECIFIC FOCUS REQUESTED**: The user is specifically interested in "{focus_area}".
+
+**Dynamic Research Approach:**
+- PRIORITIZE sections directly related to: {focus_area}
+- Generate 5-7 deep investigative questions for sections most relevant to {focus_area}
+- For less relevant sections, generate 2-3 questions to provide necessary context
+- In "Research Priorities", clearly identify which sections align with the focus area
+- Connect all findings back to how they relate to {focus_area}"""
+
+            focus_guidance = f"""
+**IMPORTANT**: Since the user specifically asked about "{focus_area}", ensure your research brief:
+1. Allocates 60-70% of investigative depth to sections directly related to {focus_area}
+2. Still covers all 9 sections for comprehensive context (30-40% depth)
+3. Explicitly calls out in "Research Priorities" which sections are most critical for {focus_area}
+4. Frames questions to reveal how {focus_area} connects to BD opportunities"""
+        else:
+            focus_strategy = """**GENERAL PROFILE REQUEST**: No specific focus area identified.
+
+**Balanced Research Approach:**
+- Distribute research effort evenly across all 9 sections
+- Generate 3-5 investigative questions per section
+- Look for overall BD opportunities across all areas"""
+
+            focus_guidance = ""
+
         prompt = prompts.transform_messages_into_research_topic_prompt.format(
-            query=query, profile_type=profile_type, current_date=current_date
+            query=query,
+            profile_type=profile_type,
+            current_date=current_date,
+            focus_area=focus_area if focus_area else "None (general profile)",
+            focus_strategy=focus_strategy,
+            focus_guidance=focus_guidance,
         )
         messages = [create_human_message(prompt)]
 
@@ -117,10 +130,24 @@ async def write_research_brief(
                         f"Research brief executing internal search: {query_text}"
                     )
 
+                    # Validate query is not empty
+                    if not query_text or not query_text.strip():
+                        logger.warning(
+                            "Internal search called with empty query - skipping"
+                        )
+                        tool_result = ToolMessage(
+                            content="No search query provided. Please specify what to search for.",
+                            tool_call_id=tool_id,
+                        )
+                        messages.append(tool_result)
+                        continue
+
                     # Get internal deep research service from config
-                    internal_deep_research = config.get("configurable", {}).get(
-                        "internal_deep_research"
+                    configurable = config.get("configurable", {})
+                    logger.debug(
+                        f"Config keys: {list(config.keys())}, Configurable keys: {list(configurable.keys())}"
                     )
+                    internal_deep_research = configurable.get("internal_deep_research")
 
                     if not internal_deep_research:
                         tool_result = ToolMessage(
@@ -162,26 +189,8 @@ async def write_research_brief(
         )
         logger.info(f"Research brief generated: {len(research_brief)} characters")
 
-        # End generation trace
-        if generation:
-            generation.end(
-                output={
-                    "research_brief_length": len(research_brief),
-                    "profile_type": profile_type,
-                }
-            )
-
         # Initialize supervisor messages
         supervisor_init_msg = create_human_message(research_brief)
-
-        if span:
-            span.end(
-                output={
-                    "success": True,
-                    "research_brief_length": len(research_brief),
-                    "profile_type": profile_type,
-                }
-            )
 
         return Command(
             goto="research_supervisor",
@@ -194,10 +203,6 @@ async def write_research_brief(
 
     except Exception as e:
         logger.error(f"Research brief error: {e}")
-        if generation:
-            generation.end(level="ERROR", status_message=str(e))
-        if span:
-            span.end(level="ERROR", status_message=str(e))
 
         return Command(
             goto=END,

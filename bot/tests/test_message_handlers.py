@@ -193,6 +193,34 @@ class SlackServiceFactory:
         return service
 
 
+class ProfileAgentMockHelper:
+    """Helper for mocking ProfileAgent graph for testing"""
+
+    @staticmethod
+    def create_mock_graph():
+        """Create a mock graph that simulates ProfileAgent behavior"""
+
+        async def mock_astream(input_state, config):
+            """Mock graph astream to return final state"""
+            # Yield intermediate events (simulate nodes completing)
+            yield {"clarify_with_user": {}}
+            yield {"write_research_brief": {}}
+            yield {"research_supervisor": {}}
+            yield {"quality_control": {}}
+            # Final event with complete state
+            yield {
+                "final_report_generation": {
+                    "final_report": "# Employee Profile\n\nTest profile content.",
+                    "executive_summary": "Test executive summary.",
+                    "notes": ["Note 1", "Note 2"],
+                }
+            }
+
+        mock_graph = Mock()
+        mock_graph.astream = mock_astream
+        return mock_graph
+
+
 class FileProcessingTestDataFactory:
     """Factory for creating comprehensive test data sets"""
 
@@ -645,32 +673,11 @@ class TestBotCommandHandling:
             return_value="Please provide more details about what you'd like to know."
         )
 
-        # Mock LangChain ChatOpenAI to prevent real API calls
-        # Create a bound LLM mock that will be returned by bind_tools
-        mock_bound_llm = Mock()
+        # Mock the ProfileAgent graph at module level
 
-        # Supervisor response with ResearchComplete to short-circuit workflow
-        mock_supervisor_response = Mock()
-        mock_supervisor_response.content = "Research complete."
-        mock_supervisor_response.tool_calls = [
-            {
-                "name": "ResearchComplete",
-                "args": {"research_summary": "Charlotte investigation complete"},
-                "id": "tc_1",
-            }
-        ]
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
-
-        mock_final_report = Mock()
-        mock_final_report.content = "# Employee Profile\n\nCharlotte works in software."
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
-            mock_llm.ainvoke = AsyncMock(return_value=mock_final_report)
-            mock_chat.return_value = mock_llm
-
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
             result = await handle_bot_command(
                 text="-profile tell me about Charlotte",
                 user_id="U123",
@@ -686,18 +693,16 @@ class TestBotCommandHandling:
         # and handle_bot_command cleanup, so we just verify it was called
         assert slack_service.delete_thinking_indicator.called
 
-        # Profile agent sends initial status message + final response
-        assert slack_service.send_message.call_count == 2
+        # Profile agent sends status message, then returns empty response when PDF uploaded
+        # Status message is sent, but final response is empty (content is in PDF)
+        assert slack_service.send_message.call_count >= 1
 
-        # Verify first call is status message
+        # Verify status message was sent
         first_call = slack_service.send_message.call_args_list[0]
         assert "Starting research" in first_call.kwargs["text"]
 
-        # Verify second call contains profile response
-        second_call = slack_service.send_message.call_args_list[1]
-        response_text = second_call.kwargs["text"]
-        # When mocking with ResearchComplete and no notes, we may get "No research findings"
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
@@ -881,32 +886,11 @@ class TestBotCommandHandling:
             return_value="Please provide more details about what you'd like to know."
         )
 
-        # Mock LangChain to prevent real API calls
-        # Create a bound LLM mock that will be returned by bind_tools
-        mock_bound_llm = Mock()
+        # Mock the ProfileAgent graph at module level
 
-        # Supervisor response with ResearchComplete to short-circuit workflow
-        mock_supervisor_response = Mock()
-        mock_supervisor_response.content = "Research complete."
-        mock_supervisor_response.tool_calls = [
-            {
-                "name": "ResearchComplete",
-                "args": {"research_summary": "Charlotte investigation complete"},
-                "id": "tc_1",
-            }
-        ]
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
-
-        mock_report = Mock()
-        mock_report.content = "# Employee Profile\n\nTest"
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
-            mock_llm.ainvoke = AsyncMock(return_value=mock_report)
-            mock_chat.return_value = mock_llm
-
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
             # Test /profile routing
             await handle_message(
                 text="-profile tell me about Charlotte",
@@ -917,12 +901,14 @@ class TestBotCommandHandling:
                 thread_ts=None,
             )
 
-        # Should route to bot command - sends status + response (2 messages)
-        assert slack_service.send_message.call_count == 2
-        # Check the final response - when mocking with ResearchComplete and no notes, may get "No research findings"
-        final_call = slack_service.send_message.call_args_list[1]
-        response_text = final_call.kwargs["text"]
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Should route to bot command - sends status message, then returns empty response when PDF uploaded
+        assert slack_service.send_message.call_count >= 1
+        # Check the status message
+        status_call = slack_service.send_message.call_args_list[0]
+        status_text = status_call.kwargs["text"]
+        assert "Starting research" in status_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
         # Reset mocks
         slack_service.send_message.reset_mock()
@@ -962,32 +948,11 @@ class TestBotCommandHandling:
             return_value="Please provide more details about what you'd like to know."
         )
 
-        # Mock LangChain
-        # Create a bound LLM mock that will be returned by bind_tools
-        mock_bound_llm = Mock()
+        # Mock the ProfileAgent graph at module level
 
-        # Supervisor response with ResearchComplete to short-circuit workflow
-        mock_supervisor_response = Mock()
-        mock_supervisor_response.content = "Research complete."
-        mock_supervisor_response.tool_calls = [
-            {
-                "name": "ResearchComplete",
-                "args": {"research_summary": "Investigation complete"},
-                "id": "tc_1",
-            }
-        ]
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        mock_bound_llm.ainvoke = AsyncMock(return_value=mock_supervisor_response)
-
-        mock_report = Mock()
-        mock_report.content = "# Employee Profile\n\nTest"
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.bind_tools = Mock(return_value=mock_bound_llm)
-            mock_llm.ainvoke = AsyncMock(return_value=mock_report)
-            mock_chat.return_value = mock_llm
-
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
             # Test uppercase
             await handle_message(
                 text="-PROFILE test",
@@ -998,12 +963,13 @@ class TestBotCommandHandling:
                 thread_ts=None,
             )
 
-        # Profile agent sends status + response (2 messages)
-        assert slack_service.send_message.call_count == 2
-        final_call = slack_service.send_message.call_args_list[1]
-        response_text = final_call.kwargs["text"]
-        # When mocking with ResearchComplete and no notes, may get "No research findings"
-        assert "Profile" in response_text or "No research findings" in response_text
+        # Profile agent sends status message, then returns empty response when PDF uploaded
+        assert slack_service.send_message.call_count >= 1
+        status_call = slack_service.send_message.call_args_list[0]
+        status_text = status_call.kwargs["text"]
+        assert "Starting research" in status_text
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
