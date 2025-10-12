@@ -485,13 +485,20 @@ async def handle_bot_command(
         metadata = result.get("metadata", {})
 
         # Track this thread for future continuity (if we have a thread_ts)
+        # Agent tracking and LangGraph checkpointing use SAME thread_id (thread_ts)
         # But allow agents to opt-out of tracking via metadata
         if thread_ts and primary_name:
             # Check if agent wants to auto-clear after completion
             if metadata.get("clear_thread_tracking", False):
                 await _thread_tracking.clear_thread(thread_ts)
+                logger.info(
+                    f"🔓 Cleared both agent tracking AND LangGraph checkpoint for thread {thread_ts}"
+                )
             else:
                 await _thread_tracking.track_thread(thread_ts, primary_name)
+                logger.info(
+                    f"📌 Thread {thread_ts} tracked for agent '{primary_name}' (both Redis + LangGraph checkpoint)"
+                )
 
         # Clean up thinking message
         if thinking_message_ts:
