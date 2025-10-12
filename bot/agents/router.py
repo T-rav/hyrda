@@ -29,8 +29,8 @@ class CommandRouter:
         """Parse bot command from message text.
 
         Extracts command name and query from messages like:
-        - "-profile tell me about Charlotte"
-        - "profile tell me about Charlotte"
+        - "-profile tell me about AllCampus AI"
+        - "profile Tesla"
         - "-meddic analyze this deal"
         - "meddic analyze this deal"
 
