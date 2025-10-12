@@ -84,13 +84,11 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         current_date=current_date,
     )
 
-    # Get search tools based on research phase
-    # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
-    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis (if enabled)
-    research_phase = "initial" if tool_call_iterations < 3 else "deep"
+    # Get search tools - always include deep_research for best quality (if enabled)
+    # Researchers are instructed to use web_search for exploration first,
+    # then deep_research strategically for key topics (5-10 queries per researcher)
     search_tools = await search_tool(
         config,
-        phase=research_phase,
         perplexity_enabled=settings.search.perplexity_enabled,
     )
 
@@ -258,7 +256,7 @@ async def researcher_tools(
             # Execute web search
             try:
                 query = tool_args.get("query", "")
-                max_results = tool_args.get("max_results", 5)
+                max_results = tool_args.get("max_results", 10)
 
                 search_results = await tavily_client.search(query, max_results)
 
@@ -350,20 +348,29 @@ async def researcher_tools(
                     )
 
                     # Format answer with sources
+                    # IMPORTANT: Use "### Sources" format (not **Sources:**) so it's properly captured as [DEEP_RESEARCH]
                     result_text = f"# Deep Research Results\n\n{answer}\n\n"
                     if sources:
-                        result_text += "**Sources:**\n"
+                        result_text += "### Sources\n"
                         for idx, source in enumerate(sources[:10], 1):
                             # Handle both string URLs and dict objects
                             if isinstance(source, str):
-                                result_text += f"{idx}. {source}\n"
+                                result_text += (
+                                    f"{idx}. {source} - Deep Research Results\n"
+                                )
                             elif isinstance(source, dict):
-                                result_text += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+                                url = source.get("url", "")
+                                title = source.get("title", "Untitled")
+                                result_text += (
+                                    f"{idx}. {url} - Deep Research Results: {title}\n"
+                                )
                             else:
                                 logger.warning(
                                     f"Unexpected source type: {type(source)}"
                                 )
-                                result_text += f"{idx}. {str(source)}\n"
+                                result_text += (
+                                    f"{idx}. {str(source)} - Deep Research Results\n"
+                                )
 
                     from langchain_core.messages import ToolMessage
 

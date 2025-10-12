@@ -17,124 +17,114 @@ from config.settings import Settings
 logger = logging.getLogger(__name__)
 
 # Quality validation prompt for LLM judge
-QUALITY_JUDGE_PROMPT = """You are a quality control judge evaluating a company profile report.
+QUALITY_JUDGE_PROMPT = """You are a quality control inspector doing a HIGH-LEVEL check of a company profile report.
 
 <Report to Evaluate>
 {report}
 </Report to Evaluate>
 
-<Quality Criteria - ALL MUST PASS>
+<Focus Area (if specified)>
+{focus_area}
+</Focus Area>
 
-1. **Sources Section Present**: Report MUST end with "## Sources" section
-2. **All Citations Listed**: Sources section must list entries 1, 2, 3... up to the HIGHEST citation number used
-3. **No Gaps in Numbering**: Sources must be numbered sequentially (1, 2, 3, 4...) with NO gaps
-4. **External Sources Only**: No meta-references like "Internal research" or "Research findings" in Sources
-5. **Complete Structure**: All required sections present (Overview, Priorities, News, Executive Team, etc.)
+<Quality Inspection - Keep it Simple>
 
-<Your Task>
+Your job is to do a QUICK INSPECTION for these 2 critical things:
 
-**CRITICAL RULE**: The report may use citations out of order (e.g., [1], [5], [10]). That's OK!
-What matters is: If the HIGHEST citation is [10], then the ## Sources section MUST list sources 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (all of them, sequentially, no gaps).
+1. **Sources Are Present**
+   - Does the report have a "## Sources" section?
+   - Are there at least 5-10 source entries listed?
+   - (Don't worry about exact citation matching - just verify sources exist)
 
-**If you claim sources are missing, you MUST provide evidence by quoting the actual citation numbers you found and the source entries you counted.**
+2. **Alignment to User's Goal** (if focus area was specified)
+   - If a specific focus area was requested (e.g., "AI needs"), does the report actually address it?
+   - Are the relevant sections (Company Priorities, Size of Teams, Solutions) detailed about the focus?
+   - Or did the report ignore the user's specific question?
 
-Step-by-step evaluation process:
-1. Find the ## Sources section
-2. Count the numbered source entries (1. 2. 3. etc.) - count ALL entries
-3. Scan the report for ALL citations [1], [2], [3]... and note the HIGHEST number (not which ones are used!)
-4. Compare: Does the sources count match the highest citation number?
-5. If NO match, provide EXACT EVIDENCE of what you found
+**That's it. Don't nitpick formatting, structure, writing style, or citation numbering.**
 
-**EXAMPLE OF CORRECT EVALUATION**:
-- Report uses citations: [1], [5], [10] (out of order - that's fine!)
-- Highest citation: 10
-- Sources section has: 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. (10 entries)
-- **RESULT: PASS** ✅ (all sources 1-10 are present, even though only [1], [5], [10] were cited)
+<Your Response Format>
 
 Return ONLY a JSON object:
 
 ```json
 {{
   "passes_quality": true/false,
-  "issues": [
-    "Description of issue 1 (if any)",
-    "Description of issue 2 (if any)"
-  ],
-  "highest_citation": 15,
-  "sources_count": 10,
-  "missing_sources": [11, 12, 13, 14, 15],
-  "evidence": "I found citations [1] through [18] in the report body. In the ## Sources section, I counted entries: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10. Therefore sources 11-18 are missing.",
-  "revision_instructions": "Specific instructions for fixing issues (if fails)"
+  "issues": ["Issue 1", "Issue 2"],
+  "sources_check": {{
+    "has_sources_section": true/false,
+    "sources_count": 12,
+    "has_adequate_sources": true/false
+  }},
+  "focus_alignment_check": {{
+    "focus_area_requested": "AI needs and capabilities" or "None",
+    "report_addresses_focus": true/false/null,
+    "alignment_notes": "Brief note on whether report covers the focus area adequately"
+  }},
+  "revision_instructions": "Simple instructions if it fails (or empty string if passes)"
 }}
 ```
-
-**IMPORTANT**: The "evidence" field is REQUIRED when passes_quality is false. Show your work!
 
 **Examples:**
 
-**Example 1: PASS**
-Report uses citations [1] through [12], Sources section lists 1-12 sequentially.
+**Example 1: PASS - Good sources, good alignment**
 ```json
 {{
   "passes_quality": true,
   "issues": [],
-  "highest_citation": 12,
-  "sources_count": 12,
-  "missing_sources": [],
-  "evidence": "All citations [1]-[12] have corresponding source entries 1-12 in the ## Sources section.",
+  "sources_check": {{
+    "has_sources_section": true,
+    "sources_count": 12,
+    "has_adequate_sources": true
+  }},
+  "focus_alignment_check": {{
+    "focus_area_requested": "AI needs and capabilities",
+    "report_addresses_focus": true,
+    "alignment_notes": "Company Priorities and Size of Teams sections both extensively cover AI initiatives and ML team structure"
+  }},
   "revision_instructions": ""
 }}
 ```
 
-**Example 2: FAIL - Missing Sources**
-Report uses citations [1] through [18], but Sources section only lists 1-10.
+**Example 2: FAIL - No sources section**
 ```json
 {{
   "passes_quality": false,
-  "issues": [
-    "Sources section only lists 10 sources, but report uses citations [1] through [18]",
-    "Missing source entries for citations [11], [12], [13], [14], [15], [16], [17], [18]"
-  ],
-  "highest_citation": 18,
-  "sources_count": 10,
-  "missing_sources": [11, 12, 13, 14, 15, 16, 17, 18],
-  "evidence": "Found citations [1], [2], [3]... up to [18] in the report. Counted source entries in ## Sources: 1. 2. 3. 4. 5. 6. 7. 8. 9. 10. Missing: 11-18.",
-  "revision_instructions": "Add sources 11-18 to the ## Sources section. Each should have full URL and description matching the citations used in the report."
+  "issues": ["Report is missing the ## Sources section"],
+  "sources_check": {{
+    "has_sources_section": false,
+    "sources_count": 0,
+    "has_adequate_sources": false
+  }},
+  "focus_alignment_check": {{
+    "focus_area_requested": "None",
+    "report_addresses_focus": null,
+    "alignment_notes": "No specific focus requested"
+  }},
+  "revision_instructions": "Add a ## Sources section at the end with at least 10 source URLs/references"
 }}
 ```
 
-**Example 3: FAIL - No Sources Section**
-Report has no ## Sources section at all.
+**Example 3: FAIL - Doesn't address focus**
 ```json
 {{
   "passes_quality": false,
-  "issues": [
-    "Report is missing the ## Sources section entirely",
-    "Cannot verify citation coverage without Sources section"
-  ],
-  "highest_citation": 20,
-  "sources_count": 0,
-  "missing_sources": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-  "evidence": "Scanned entire report - no ## Sources section found. Found citations up to [20].",
-  "revision_instructions": "Add a complete ## Sources section at the end of the report listing all 20 sources corresponding to citations [1] through [20] used in the report."
+  "issues": ["Report doesn't adequately address the user's specific focus on DevOps needs"],
+  "sources_check": {{
+    "has_sources_section": true,
+    "sources_count": 15,
+    "has_adequate_sources": true
+  }},
+  "focus_alignment_check": {{
+    "focus_area_requested": "DevOps practices and infrastructure",
+    "report_addresses_focus": false,
+    "alignment_notes": "User asked about DevOps but Company Priorities and Size of Teams barely mention DevOps, CI/CD, or infrastructure. Solutions section doesn't propose DevOps consulting opportunities."
+  }},
+  "revision_instructions": "Rewrite to emphasize DevOps throughout. In Company Priorities, highlight infrastructure initiatives. In Size of Teams, analyze DevOps/SRE team. In Solutions, propose DevOps transformation opportunities."
 }}
 ```
 
-**Example 4: PASS - Out of Order Citations**
-Report uses citations [1], [5], [10] (out of order), Sources section lists 1-10.
-```json
-{{
-  "passes_quality": true,
-  "issues": [],
-  "highest_citation": 10,
-  "sources_count": 10,
-  "missing_sources": [],
-  "evidence": "Report uses citations [1], [5], [10]. Highest citation is [10]. Counted sources: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 (10 entries). All sources 1-10 are present - PASS.",
-  "revision_instructions": ""
-}}
-```
-
-Evaluate the report now and return JSON only.
+Do a quick inspection and return JSON only. Don't overthink it.
 """
 
 
@@ -196,8 +186,14 @@ async def quality_control_node(
     """
     final_report = state.get("final_report", "")
     revision_count = state.get("revision_count", 0)
+    focus_area = state.get("focus_area", "")
 
-    logger.info(f"Quality control check (revision {revision_count})")
+    if focus_area:
+        logger.info(
+            f"Quality control check (revision {revision_count}) - Focus: {focus_area}"
+        )
+    else:
+        logger.info(f"Quality control check (revision {revision_count})")
 
     # Extract actual citations and sources for logging
     citations = extract_citations_from_report(final_report)
@@ -219,7 +215,10 @@ async def quality_control_node(
         )
 
         # Run quality evaluation
-        prompt = QUALITY_JUDGE_PROMPT.format(report=final_report)
+        prompt = QUALITY_JUDGE_PROMPT.format(
+            report=final_report,
+            focus_area=focus_area if focus_area else "None (general profile)",
+        )
         response = await judge_llm.ainvoke(prompt)
         response_text = response.content.strip()
 
@@ -242,23 +241,32 @@ async def quality_control_node(
         passes_quality = evaluation.get("passes_quality", False)
         issues = evaluation.get("issues", [])
         revision_instructions = evaluation.get("revision_instructions", "")
-        highest_citation = evaluation.get("highest_citation", 0)
-        sources_count_judge = evaluation.get("sources_count", 0)
-        missing_sources = evaluation.get("missing_sources", [])
-        evidence = evaluation.get("evidence", "No evidence provided")
+
+        # Extract sources check details with null safety
+        sources_check = evaluation.get("sources_check") or {}
+        sources_count_judge = sources_check.get("sources_count", 0)
+        has_adequate_sources = sources_check.get("has_adequate_sources", False)
+
+        # Extract focus alignment check details with null safety
+        focus_alignment = evaluation.get("focus_alignment_check") or {}
+        alignment_notes = focus_alignment.get("alignment_notes", "")
 
         if passes_quality:
             logger.info("✅ Report PASSED quality control")
-            logger.info(f"   Evidence: {evidence}")
+            logger.info(
+                f"   Sources: {sources_count_judge} entries (adequate: {has_adequate_sources})"
+            )
+            if alignment_notes:
+                logger.info(f"   Focus alignment: {alignment_notes}")
             return Command(goto="__end__", update={})
 
         # Report failed quality check
         logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
-        logger.warning(f"   Citations used: [1] through [{highest_citation}]")
-        logger.warning(f"   Sources listed: {sources_count_judge}")
-        if missing_sources:
-            logger.warning(f"   Missing sources: {missing_sources}")
-        logger.warning(f"   Evidence: {evidence}")
+        logger.warning(
+            f"   Sources listed: {sources_count_judge} (adequate: {has_adequate_sources})"
+        )
+        if alignment_notes:
+            logger.warning(f"   Focus alignment: {alignment_notes}")
         for issue in issues:
             logger.warning(f"  - {issue}")
 
@@ -289,18 +297,6 @@ async def quality_control_node(
 
 **Specific Instructions:**
 {revision_instructions}
-
-**CRITICAL - HOW TO FIX SOURCES:**
-1. Look at the "CONSOLIDATED SOURCE LIST FOR YOUR REFERENCE" section in the research context
-2. That list shows you ALL available sources already numbered globally
-3. Use ONLY those citation numbers in your report (don't make up new ones)
-4. In your ## Sources section, copy ALL sources from the consolidated list
-5. Make sure your highest citation number [X] matches the total number of sources listed
-
-Example: If consolidated list shows 25 sources, your report should:
-- Use citations [1] through [25] only
-- Have a ## Sources section listing all 25 sources
-- Number them 1, 2, 3, 4... 25 with NO gaps
 
 Generate the complete revised report now.
 """
