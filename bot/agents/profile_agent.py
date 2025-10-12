@@ -52,8 +52,8 @@ class ProfileAgent(BaseAgent):
 
     Handles queries like:
     - "Tell me about Tesla"
-    - "Who is Elon Musk?"
-    - "What is the Cybertruck project?"
+    - "Tell me about Tesla's AI needs"
+    - "What is Stripe's payment infrastructure?"
     - "Show me SpaceX's profile"
 
     Uses hierarchical LangGraph workflow:
@@ -64,7 +64,7 @@ class ProfileAgent(BaseAgent):
 
     name = "profile"
     aliases: list[str] = ["-profile"]
-    description = "Generate comprehensive company, employee, or project profiles through deep research"
+    description = "Generate comprehensive company profiles through deep research (supports specific focus areas like 'AI needs', 'DevOps practices', etc.)"
 
     def __init__(self):
         """Initialize ProfileAgent with deep research configuration."""
@@ -80,7 +80,7 @@ class ProfileAgent(BaseAgent):
         """Execute profile research using LangGraph deep research workflow.
 
         Args:
-            query: User query about profiles (company, employee, or project)
+            query: User query about company profiles (optionally with specific focus area)
             context: Context dict with user_id, channel, slack_service, llm_service, etc.
 
         Returns:
