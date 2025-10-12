@@ -324,8 +324,14 @@ async def format_research_context(
         )
 
         # Calculate minimum premium sources to include
-        min_deep_research = min(5, len(deep_research_indices))
-        min_internal = min(3, len(internal_search_indices))
+        # IMPORTANT: If we have ANY deep research sources, require at least 5 (or all if less than 5)
+        # Don't let LLM skip expensive Perplexity sources
+        min_deep_research = (
+            len(deep_research_indices) if len(deep_research_indices) <= 5 else 5
+        )
+        min_internal = (
+            len(internal_search_indices) if len(internal_search_indices) <= 3 else 3
+        )
 
         selection_prompt = f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
 
@@ -333,7 +339,10 @@ async def format_research_context(
 {sources_text}
 
 **Selection Criteria (IN ORDER OF PRIORITY):**
-1. **CRITICAL**: Include AT LEAST {min_deep_research} sources marked [DEEP_RESEARCH] - comprehensive Perplexity AI analyses (expensive, high-value)
+1. **CRITICAL - NON-NEGOTIABLE**: You MUST include AT LEAST {min_deep_research} sources marked [DEEP_RESEARCH]
+   - These are comprehensive Perplexity AI analyses (expensive, high-value)
+   - If {min_deep_research} > 0, you CANNOT submit a selection without at least that many [DEEP_RESEARCH] sources
+   - These are the MOST IMPORTANT sources to include
 2. **CRITICAL**: Include AT LEAST {min_internal} sources marked [INTERNAL_KB] - internal knowledge base data (proprietary information)
 3. Prioritize authoritative sources (official company sites, SEC filings, reputable news)
 4. Include diverse source types (company site, news, financial data, industry analysis)
@@ -344,7 +353,11 @@ async def format_research_context(
 **Your Task:**
 Return a JSON array of the source numbers (1-{len(global_sources)}) you want to keep, in order of importance.
 You MUST select exactly {max_sources} sources.
-You MUST include at least {min_deep_research} [DEEP_RESEARCH] and {min_internal} [INTERNAL_KB] sources (premium research).
+
+**MANDATORY REQUIREMENT:**
+- If {min_deep_research} > 0: You MUST include at least {min_deep_research} sources with [DEEP_RESEARCH] tag
+- If {min_internal} > 0: You MUST include at least {min_internal} sources with [INTERNAL_KB] tag
+- Failure to meet these requirements is NOT ACCEPTABLE
 
 Example response format:
 ```json
