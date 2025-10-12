@@ -58,7 +58,12 @@ async def coaching_insights(
         logger.info(f"Coaching insights generated: {len(coaching_insights)} chars")
 
         # Combine MEDDPICC breakdown and coaching insights for final response
-        final_response = f"{meddpicc_breakdown}\n\n{coaching_insights}"
+        # Add header if not present
+        header = ":dart: **MEDDPICC**\n\n"
+        if not meddpicc_breakdown.startswith(":dart:"):
+            final_response = f"{header}{meddpicc_breakdown}\n\n{coaching_insights}"
+        else:
+            final_response = f"{meddpicc_breakdown}\n\n{coaching_insights}"
 
         return {
             "coaching_insights": coaching_insights,
