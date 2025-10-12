@@ -382,8 +382,12 @@ class ProfileAgent(BaseAgent):
                                     f"Updated progress UI: {len(all_steps)} steps"
                                 )
 
-                # Store final result
-                result = event
+                # Store result from node completions (not __end__ or other events)
+                # Only update result if event contains actual state data from our workflow nodes
+                if isinstance(event, dict) and any(
+                    node_name in event for node_name in node_order
+                ):
+                    result = event
 
             # Get the final state from the last event
             # LangGraph returns the final state wrapped in a dict with node name as key
