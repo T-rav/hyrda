@@ -201,6 +201,29 @@ class MeddicAgent(BaseAgent):
                 logger.error(f"Invalid result type: {type(result)}")
                 result = {}
 
+            # Check if clarification is needed (early-stage minimal input)
+            clarification_message = result.get("clarification_message")
+            if clarification_message:
+                logger.info(
+                    "Input requires clarification - returning clarification message"
+                )
+                # Delete progress indicator
+                if slack_service and channel and progress_msg_ts:
+                    try:
+                        await slack_service.delete_message(
+                            channel=channel, ts=progress_msg_ts
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to delete progress message: {e}")
+
+                return {
+                    "response": clarification_message,
+                    "metadata": {
+                        "needs_clarification": True,
+                        "agent": "meddic",
+                    },
+                }
+
             # Extract final response
             final_response = result.get("final_response", "")
             sources = result.get("sources", [])
