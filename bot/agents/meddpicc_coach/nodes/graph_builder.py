@@ -1,10 +1,12 @@
 """Graph builder for MEDDPICC coach workflow.
 
-Builds and compiles the LangGraph workflow for MEDDPICC coaching.
+Builds and compiles the LangGraph workflow for MEDDPICC coaching
+with persistent checkpointing for conversation continuity.
 """
 
 import logging
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -19,6 +21,9 @@ from agents.meddpicc_coach.state import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Global checkpointer instance for state persistence
+_checkpointer = MemorySaver()  # TODO: Switch to PostgresSaver for production
 
 
 def _should_clarify(state: MeddpiccAgentState) -> str:
@@ -80,7 +85,9 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_edge("meddpicc_analysis", "coaching_insights")
     coach_builder.add_edge("coaching_insights", END)
 
-    # Compile and return
-    compiled = coach_builder.compile()
-    logger.info("MEDDPICC coach graph compiled with clarification routing")
+    # Compile with checkpointer for state persistence
+    compiled = coach_builder.compile(checkpointer=_checkpointer)
+    logger.info(
+        "MEDDPICC coach graph compiled with clarification routing and checkpointing"
+    )
     return compiled

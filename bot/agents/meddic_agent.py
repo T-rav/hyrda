@@ -90,8 +90,19 @@ class MeddicAgent(BaseAgent):
 
             # Prepare LangGraph configuration
             # Pass document content from context (extracted by main handler from file attachments)
+            # Use thread_ts as the LangGraph thread_id for state persistence
+            import time
+
+            thread_id = (
+                thread_ts
+                if thread_ts
+                else f"meddic_{context.get('user_id')}_{int(time.time())}"
+            )
+            logger.info(f"🔗 Running MEDDPICC graph with thread_id: {thread_id}")
+
             graph_config = {
                 "configurable": {
+                    "thread_id": thread_id,  # Enable checkpointing
                     "document_content": context.get("document_content", ""),
                 }
             }
@@ -354,8 +365,8 @@ Return ONLY JSON: {{"entity": "name here"}}"""
 
             # If PDF uploaded, return empty (summary already posted)
             # Otherwise return full text
-            # Add session completion footer
-            session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete. Type `-meddic [new query]` to start a new analysis, or ask me anything else!_"
+            # Add session continuation footer (since state is now persistent)
+            session_footer = "\n\n---\n\n_💬 Need to add more details? Just reply in this thread. Type `done` or `exit` to end this MEDDPICC session._"
 
             if pdf_uploaded:
                 response = ""
@@ -376,8 +387,10 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                     "pdf_generated": pdf_bytes is not None,
                     "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
-                    # Auto-clear thread tracking after successful completion
-                    "clear_thread_tracking": True,
+                    "thread_id": thread_id,
+                    # Keep thread tracking for iterative refinement
+                    # User can manually exit with "done" or "exit"
+                    "clear_thread_tracking": False,
                 },
             }
 
