@@ -348,20 +348,29 @@ async def researcher_tools(
                     )
 
                     # Format answer with sources
+                    # IMPORTANT: Use "### Sources" format (not **Sources:**) so it's properly captured as [DEEP_RESEARCH]
                     result_text = f"# Deep Research Results\n\n{answer}\n\n"
                     if sources:
-                        result_text += "**Sources:**\n"
+                        result_text += "### Sources\n"
                         for idx, source in enumerate(sources[:10], 1):
                             # Handle both string URLs and dict objects
                             if isinstance(source, str):
-                                result_text += f"{idx}. {source}\n"
+                                result_text += (
+                                    f"{idx}. {source} - Deep Research Results\n"
+                                )
                             elif isinstance(source, dict):
-                                result_text += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+                                url = source.get("url", "")
+                                title = source.get("title", "Untitled")
+                                result_text += (
+                                    f"{idx}. {url} - Deep Research Results: {title}\n"
+                                )
                             else:
                                 logger.warning(
                                     f"Unexpected source type: {type(source)}"
                                 )
-                                result_text += f"{idx}. {str(source)}\n"
+                                result_text += (
+                                    f"{idx}. {str(source)} - Deep Research Results\n"
+                                )
 
                     from langchain_core.messages import ToolMessage
 
