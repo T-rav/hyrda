@@ -143,8 +143,8 @@ class PerplexityClient:
     async def initialize(self):
         """Initialize the HTTP session"""
         if not self.session:
-            # Deep research can take 2-3 minutes
-            timeout = aiohttp.ClientTimeout(total=300)
+            # Perplexity typically responds in 10-60 seconds, set timeout to 120s for safety
+            timeout = aiohttp.ClientTimeout(total=120)
             self.session = aiohttp.ClientSession(timeout=timeout)
             logger.info("Perplexity client initialized")
 
@@ -189,6 +189,10 @@ class PerplexityClient:
                 "Content-Type": "application/json",
             }
 
+            import time
+
+            start_time = time.time()
+
             logger.info(f"Perplexity deep research: {query}")
 
             async with self.session.post(
@@ -209,8 +213,10 @@ class PerplexityClient:
                 # Format sources
                 sources = [{"url": url} for url in citations]
 
+                duration = time.time() - start_time
+
                 logger.info(
-                    f"Perplexity research completed: {len(answer)} chars, {len(sources)} sources"
+                    f"Perplexity research completed in {duration:.2f}s: {len(answer)} chars, {len(sources)} sources"
                 )
                 return {"success": True, "answer": answer, "sources": sources}
 
@@ -353,7 +359,7 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
                     "Returns detailed, well-researched answers with citations and sources. "
                     "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
                     "**IMPORTANT - Cost Management:**\n"
-                    "This tool is EXPENSIVE - takes 2-3 minutes per query. Use strategically:\n\n"
+                    "This tool is EXPENSIVE (costs money per query). Use strategically:\n\n"
                     "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics that need comprehensive analysis.\n\n"
                     "Best for:\n"
                     "- Complex research questions requiring comprehensive analysis\n"
