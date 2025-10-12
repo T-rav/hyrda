@@ -180,6 +180,7 @@ class PerplexityClient:
                 ],
                 "return_citations": True,
                 "return_images": False,
+                "search_recency_filter": "month",  # Focus on recent information (past month)
                 "temperature": 0.2,  # Lower temperature for factual research
             }
 
