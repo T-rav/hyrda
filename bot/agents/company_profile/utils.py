@@ -87,10 +87,6 @@ async def search_tool(
 
     tavily_client = get_tavily_client()
 
-    if not tavily_client:
-        logger.warning("No search client available for profile research")
-        return []
-
     # Determine if we should include deep_research based on settings
     if perplexity_enabled:
         # Deep research enabled: Include all tools including Perplexity
@@ -98,6 +94,9 @@ async def search_tool(
             "Research tools: Using full toolkit (web_search, scrape_url, deep_research)"
         )
     else:
+        if not tavily_client:
+            logger.warning("No search client available for profile research")
+            return []
         # Deep research not available: Only Tavily tools
         logger.info(
             "Research tools: Using exploration tools only (web_search, scrape_url)"
