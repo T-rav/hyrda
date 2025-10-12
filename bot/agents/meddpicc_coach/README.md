@@ -30,15 +30,22 @@ Professional, knowledgeable sales coach with a friendly, encouraging, and slight
 ### Via Slack Bot
 
 ```
-/meddic [your sales call notes]
+@bot meddic [your sales call notes]
 ```
 
-Example (plain text):
+**Minimal Input** (triggers clarification):
 ```
-/meddic Call with Sarah from Acme Corp. They're struggling with
+@bot meddic bob from bait and tackle wants a custom pos system
+```
+Response: *Asks for more context with specific questions*
+
+**Detailed Input** (full analysis):
+```
+@bot meddic Call with Sarah from Acme Corp. They're struggling with
 deployment speed - takes 2 weeks. CTO Mark is frustrated. Budget
 is $200K for DevOps improvements. Timeline is end of Q2.
 ```
+Response: *Full MEDDPICC analysis + PDF report*
 
 Example (with URLs):
 ```
@@ -95,31 +102,40 @@ print(result["response"])
 
 ## Workflow
 
-The agent uses a 3-node LangGraph workflow with real-time progress updates:
+The agent uses a 4-node LangGraph workflow with intelligent input checking and real-time progress updates:
 
 ```
-Sales Notes + URLs/Files → [Parse Notes] → [MEDDPICC Analysis] → [Coaching Insights] → PDF Report
-                              ↓                    ↓                        ↓
-                    [URL Scraping]        [Real-time Progress]     [Slack Summary]
-                    [Document Parsing]     [Updates to Slack]       [PDF Upload]
+                                     ┌─────────────────┐
+Input → [Check Input] ─────────────►│ Sufficient Info │─► [Parse Notes]
+          ↓                          └─────────────────┘         ↓
+      Too Sparse?                                          [MEDDPICC Analysis]
+          ↓                                                       ↓
+   Ask for More Details                                   [Coaching Insights]
+   (Questions + Examples)                                        ↓
+                                                            PDF Report + Summary
 ```
 
-1. **Parse Notes** (📝 2-3s):
+**1. Check Input** (⚡ <0.1s):
+   - Analyze input completeness
+   - If too sparse (< 50 chars, minimal context) → Ask clarifying questions
+   - If sufficient → Continue to full workflow
+
+**2. Parse Notes** (📝 2-3s):
    - Detect and extract URLs from text
    - Scrape web content using Tavily API
    - Parse PDF/DOCX file attachments
    - Clean and prepare combined notes
 
-2. **MEDDPICC Analysis** (🔍 2-3s):
+**3. MEDDPICC Analysis** (🔍 2-3s):
    - Structure all content into MEDDPICC format
    - Add source citations
    - Extract executive summary
 
-3. **Coaching Insights** (🎓 1-2s):
+**4. Coaching Insights** (🎓 1-2s):
    - Generate Maverick's coaching advice
    - Suggest follow-up questions
 
-4. **Delivery**:
+**5. Delivery**:
    - Progress updates shown in real-time
    - Summary posted to Slack
    - Full PDF report attached

@@ -21,6 +21,8 @@ class MeddpiccAgentState(TypedDict, total=False):
 
     Attributes:
         query: Raw sales call notes from user (REQUIRED)
+        needs_clarification: Flag indicating if more info is needed
+        clarification_message: Message with clarifying questions
         raw_notes: Cleaned and prepared notes
         scraped_content: Content extracted from URLs/documents
         sources: List of scraped URLs/documents
@@ -30,6 +32,8 @@ class MeddpiccAgentState(TypedDict, total=False):
     """
 
     query: str
+    needs_clarification: bool
+    clarification_message: str
     raw_notes: str
     scraped_content: str
     sources: list[str]
