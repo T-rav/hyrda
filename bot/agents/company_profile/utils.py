@@ -324,14 +324,10 @@ async def format_research_context(
         )
 
         # Calculate minimum premium sources to include
-        # IMPORTANT: If we have ANY deep research sources, require at least 5 (or all if less than 5)
+        # IMPORTANT: Require at least 5 deep research, 2 internal (or all available if less)
         # Don't let LLM skip expensive Perplexity sources
-        min_deep_research = (
-            len(deep_research_indices) if len(deep_research_indices) <= 5 else 5
-        )
-        min_internal = (
-            len(internal_search_indices) if len(internal_search_indices) <= 3 else 3
-        )
+        min_deep_research = min(5, len(deep_research_indices))
+        min_internal = min(2, len(internal_search_indices))
 
         selection_prompt = f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
 
@@ -402,6 +398,58 @@ Return ONLY the JSON array, no explanation."""
                 f"Premium sources selected: {len(deep_research_selected)}/{min_deep_research} deep research, "
                 f"{len(internal_selected)}/{min_internal} internal KB"
             )
+
+            # ENFORCE MINIMUM: If LLM didn't include enough deep research sources, force them in
+            if len(deep_research_selected) < min_deep_research:
+                logger.warning(
+                    f"LLM only selected {len(deep_research_selected)}/{min_deep_research} deep research sources - forcing missing ones"
+                )
+                # Add missing deep research sources
+                missing_count = min_deep_research - len(deep_research_selected)
+                unselected_deep_research = [
+                    idx for idx in deep_research_indices if idx not in selected_indices
+                ]
+                for idx in unselected_deep_research[:missing_count]:
+                    selected_indices.append(idx)
+                    logger.info(f"Forced inclusion of deep research source {idx}")
+
+            # ENFORCE MINIMUM: If LLM didn't include enough internal sources, force them in
+            if len(internal_selected) < min_internal:
+                logger.warning(
+                    f"LLM only selected {len(internal_selected)}/{min_internal} internal sources - forcing missing ones"
+                )
+                # Add missing internal sources
+                missing_count = min_internal - len(internal_selected)
+                unselected_internal = [
+                    idx
+                    for idx in internal_search_indices
+                    if idx not in selected_indices
+                ]
+                for idx in unselected_internal[:missing_count]:
+                    selected_indices.append(idx)
+                    logger.info(f"Forced inclusion of internal source {idx}")
+
+            # If we now have too many sources (after forcing), trim lowest priority non-premium sources
+            if len(selected_indices) > max_sources:
+                logger.warning(
+                    f"After forcing premium sources, have {len(selected_indices)} sources - trimming to {max_sources}"
+                )
+                # Keep all forced premium sources, trim regular ones
+                premium_indices = set(deep_research_indices + internal_search_indices)
+                regular_selected = [
+                    idx for idx in selected_indices if idx not in premium_indices
+                ]
+                premium_selected = [
+                    idx for idx in selected_indices if idx in premium_indices
+                ]
+                # Trim regular sources to fit
+                trim_count = len(selected_indices) - max_sources
+                selected_indices = (
+                    premium_selected
+                    + regular_selected[: -trim_count if trim_count > 0 else None]
+                )
+
+            logger.info(f"Final selection: {len(selected_indices)} sources")
 
             # Build mapping: old index -> new index (or None if pruned)
             old_to_new = {}
