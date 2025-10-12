@@ -354,23 +354,30 @@ Return ONLY JSON: {{"entity": "name here"}}"""
 
             # If PDF uploaded, return empty (summary already posted)
             # Otherwise return full text
+            # Add session completion footer
+            session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete. Type `-meddic [new query]` to start a new analysis, or ask me anything else!_"
+
             if pdf_uploaded:
                 response = ""
                 logger.info("✅ PDF uploaded with summary, returning empty response")
             else:
-                response = final_response
+                response = final_response + session_footer
                 logger.info("⚠️ PDF upload failed, returning text fallback")
 
             return {
                 "response": response,
                 "metadata": {
                     "agent": "meddic",
+                    "agent_type": "meddpicc_coach",
+                    "agent_version": "langgraph",
                     "query_length": len(query),
                     "response_length": len(final_response),
                     "sources_count": len(sources),
                     "pdf_generated": pdf_bytes is not None,
                     "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
+                    # Auto-clear thread tracking after successful completion
+                    "clear_thread_tracking": True,
                 },
             }
 
