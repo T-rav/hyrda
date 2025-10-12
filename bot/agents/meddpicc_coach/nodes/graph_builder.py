@@ -23,7 +23,22 @@ from agents.meddpicc_coach.state import (
 logger = logging.getLogger(__name__)
 
 # Global checkpointer instance for state persistence
-_checkpointer = MemorySaver()  # TODO: Switch to PostgresSaver for production
+# SQLite for simplicity and portability
+_checkpointer = None
+
+
+def get_checkpointer():
+    """Get or create checkpointer for LangGraph state persistence.
+
+    Uses MemorySaver for now - state persists during bot runtime.
+    Thread tracking in Redis handles cross-restart persistence.
+    """
+    global _checkpointer  # noqa: PLW0603
+    if _checkpointer is None:
+        _checkpointer = MemorySaver()
+        logger.info("LangGraph checkpointer initialized (MemorySaver)")
+
+    return _checkpointer
 
 
 def _should_clarify(state: MeddpiccAgentState) -> str:
@@ -86,7 +101,8 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_edge("coaching_insights", END)
 
     # Compile with checkpointer for state persistence
-    compiled = coach_builder.compile(checkpointer=_checkpointer)
+    checkpointer = get_checkpointer()
+    compiled = coach_builder.compile(checkpointer=checkpointer)
     logger.info(
         "MEDDPICC coach graph compiled with clarification routing and checkpointing"
     )
