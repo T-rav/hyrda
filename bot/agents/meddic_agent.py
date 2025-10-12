@@ -85,9 +85,6 @@ class MeddicAgent(BaseAgent):
             progress_msg_ts = progress_response.get("ts") if progress_response else None
 
         try:
-            # Prepare input state
-            input_state = {"query": query}
-
             # Prepare LangGraph configuration
             # Pass document content from context (extracted by main handler from file attachments)
             # Use thread_ts as the LangGraph thread_id for state persistence
@@ -99,6 +96,42 @@ class MeddicAgent(BaseAgent):
                 else f"meddic_{context.get('user_id')}_{int(time.time())}"
             )
             logger.info(f"🔗 Running MEDDPICC graph with thread_id: {thread_id}")
+
+            # Check for previous checkpoint to accumulate context across turns
+            from agents.meddpicc_coach.nodes.graph_builder import get_checkpointer
+
+            accumulated_query = query
+            checkpointer = get_checkpointer()
+
+            try:
+                # Attempt to load previous state from checkpoint
+                checkpoint_tuple = await checkpointer.aget_tuple(
+                    {"configurable": {"thread_id": thread_id}}
+                )
+                if checkpoint_tuple and checkpoint_tuple.checkpoint:
+                    previous_state = checkpoint_tuple.checkpoint.get(
+                        "channel_values", {}
+                    )
+                    previous_query = previous_state.get("query", "")
+
+                    if previous_query and previous_query != query:
+                        # Accumulate: previous context + new information
+                        accumulated_query = f"{previous_query}\n\n---\n\n**Additional information:**\n{query}"
+                        logger.info(
+                            f"📚 Accumulated context from previous turn ({len(previous_query)} + {len(query)} chars)"
+                        )
+                    else:
+                        logger.info("🆕 First message in thread (no previous context)")
+                else:
+                    logger.info("🆕 No previous checkpoint found (new conversation)")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load checkpoint for context accumulation: {e}"
+                )
+                # Continue with just the new query
+
+            # Prepare input state with accumulated context
+            input_state = {"query": accumulated_query}
 
             graph_config = {
                 "configurable": {
