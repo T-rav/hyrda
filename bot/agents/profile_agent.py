@@ -390,6 +390,11 @@ class ProfileAgent(BaseAgent):
                 # LangGraph returns the final state in the last event
                 result = list(result.values())[0] if result else {}
 
+            # Ensure result is a dict (handle case where LangGraph returns None)
+            if not isinstance(result, dict):
+                logger.error(f"LangGraph returned invalid result type: {type(result)}")
+                result = {}
+
             # Extract final report and executive summary
             final_report = result.get("final_report", "")
             executive_summary = result.get("executive_summary", "")
