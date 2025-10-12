@@ -84,13 +84,12 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         current_date=current_date,
     )
 
-    # Get search tools based on research phase
-    # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
-    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis (if enabled)
-    research_phase = "initial" if tool_call_iterations < 3 else "deep"
+    # Get search tools - always include deep_research for best quality
+    # Researchers are instructed to use web_search for exploration first,
+    # then deep_research strategically for key topics (5-10 queries per researcher)
     search_tools = await search_tool(
         config,
-        phase=research_phase,
+        phase="deep",  # Always include all tools including deep_research
         perplexity_enabled=settings.search.perplexity_enabled,
     )
 
