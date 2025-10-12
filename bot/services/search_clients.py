@@ -174,7 +174,21 @@ class PerplexityClient:
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a research assistant. Provide comprehensive, well-researched answers with proper citations.",
+                        "content": (
+                            "You are an expert business intelligence researcher conducting company profile research for B2B sales and consulting. "
+                            "Provide comprehensive, strategic answers that reveal:\n"
+                            "- Business priorities and strategic initiatives\n"
+                            "- Product roadmaps and technology investments\n"
+                            "- Engineering challenges, technical debt, and scaling issues\n"
+                            "- Leadership priorities and pain points\n"
+                            "- Growth signals and consulting opportunities\n\n"
+                            "Focus on RECENT information (past 12 months) and cite authoritative sources like:\n"
+                            "- Company announcements, earnings calls, SEC filings\n"
+                            "- Executive interviews and conference talks\n"
+                            "- Industry analyst reports and tech journalism\n"
+                            "- Engineering blogs, job postings, and Glassdoor reviews\n\n"
+                            "Go beyond basic facts - provide strategic context, implications, and actionable insights."
+                        ),
                     },
                     {"role": "user", "content": query},
                 ],
