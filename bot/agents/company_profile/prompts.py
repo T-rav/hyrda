@@ -288,15 +288,19 @@ Answer the investigative questions above by:
    - Verify across sources
    - **Use this for initial exploration and finding URLs to investigate**
 
-2. **deep_research**: Comprehensive research using Perplexity AI (EXPENSIVE - use strategically)
+2. **deep_research**: Comprehensive research using Perplexity AI (HIGH QUALITY - use for important topics)
    - Returns expert-level answers with citations and synthesis
-   - **COST MANAGEMENT:**
-     - Costs money per query (not free like web_search)
-     - Use strategically for complex topics needing comprehensive analysis
-   - **Strategy:** Use web_search to explore first, then deep_research for 5-10 key topics
-   - Example: After web_search finds tech debt mentions, use deep_research to synthesize what this means for consulting opportunities
-   - Example: For key product strategy question, use deep_research for comprehensive analysis
-   - **Budget carefully** - each call costs money
+   - **BEST PRACTICE:**
+     - Use web_search to find initial leads and URLs
+     - Use deep_research for the 5-10 most important investigative questions
+     - Deep research provides comprehensive analysis vs simple facts
+   - **Examples of GOOD use:**
+     - "What are [Company]'s key AI/ML product initiatives for 2024-2025 and what technical challenges do they face?"
+     - "What do analysts and industry experts say about [Company]'s competitive position and strategic risks?"
+     - "What engineering challenges and technical debt issues has [Company]'s CTO/VPE mentioned publicly?"
+   - **Examples of BAD use (use web_search instead):**
+     - "What is the CEO's name?" (simple fact lookup)
+     - "When was the company founded?" (basic info)
 
 3. **think_tool**: Reflect and plan your investigation strategy
    - Use BEFORE your first search to plan your approach
