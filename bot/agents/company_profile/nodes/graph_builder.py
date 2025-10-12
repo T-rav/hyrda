@@ -11,6 +11,7 @@ from langgraph.graph.state import CompiledStateGraph
 from agents.company_profile.nodes.clarification import clarify_with_user
 from agents.company_profile.nodes.compression import compress_research
 from agents.company_profile.nodes.final_report import final_report_generation
+from agents.company_profile.nodes.quality_control import quality_control_node
 from agents.company_profile.nodes.research_brief import write_research_brief
 from agents.company_profile.nodes.researcher import researcher, researcher_tools
 from agents.company_profile.nodes.supervisor import supervisor, supervisor_tools
@@ -38,7 +39,9 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     Returns:
         Compiled researcher subgraph
     """
-    researcher_builder = StateGraph(ResearcherState, output=ResearcherOutputState)
+    researcher_builder = StateGraph(
+        ResearcherState, output_schema=ResearcherOutputState
+    )
 
     # Add nodes
     researcher_builder.add_node("researcher", researcher)
@@ -107,13 +110,16 @@ def build_profile_researcher() -> CompiledStateGraph:
     profile_builder.add_node("write_research_brief", write_research_brief)
     profile_builder.add_node("research_supervisor", supervisor_subgraph)
     profile_builder.add_node("final_report_generation", final_report_generation)
+    profile_builder.add_node("quality_control", quality_control_node)
 
     # Add edges
+    # Main path uses static edges
     profile_builder.add_edge(START, "clarify_with_user")
     profile_builder.add_edge("clarify_with_user", "write_research_brief")
     profile_builder.add_edge("write_research_brief", "research_supervisor")
     profile_builder.add_edge("research_supervisor", "final_report_generation")
-    profile_builder.add_edge("final_report_generation", END)
+    profile_builder.add_edge("final_report_generation", "quality_control")
+    # quality_control uses Command to route to END or back to final_report_generation (creates loop)
 
     # Compile and return
     return profile_builder.compile()

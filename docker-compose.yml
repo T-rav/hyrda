@@ -14,9 +14,11 @@ services:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword"]
+      interval: 5s
+      timeout: 3s
       retries: 10
+      start_period: 30s
     networks:
       - insightmesh
 
@@ -126,28 +128,6 @@ services:
     networks:
       - insightmesh
 
-  # WebCat MCP Server (Search/Scrape/Research) - v2.5.0+
-  webcat:
-    image: tmfrisinger/webcat:2.5.1
-    container_name: insightmesh-webcat
-    restart: unless-stopped
-    ports:
-      - "${MCP_WEBCAT_PORT}:${MCP_WEBCAT_PORT}"
-    environment:
-      - PORT=${MCP_WEBCAT_PORT}
-      - SERPER_API_KEY=${MCP_WEBCAT_SERPER_API_KEY:-}
-      - PERPLEXITY_API_KEY=${MCP_WEBCAT_PERPLEXITY_API_KEY:-}
-      - WEBCAT_API_KEY=${MCP_WEBCAT_API_KEY:-}
-      - MAX_LENGTH=${MCP_WEBCAT_MAX_LENGTH:-10000}
-    healthcheck:
-      test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/${MCP_WEBCAT_PORT}' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    networks:
-      - insightmesh
-
   # AI Slack Bot Service
   bot:
     build:
@@ -164,9 +144,6 @@ services:
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
-      - MCP_WEBCAT_HOST=webcat
-      - MCP_WEBCAT_PORT=${MCP_WEBCAT_PORT}
-      - MCP_WEBCAT_ENABLED=true
       - ENVIRONMENT=production
     ports:
       - "${HEALTH_PORT:-8080}:8080"
@@ -176,8 +153,6 @@ services:
       qdrant:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      webcat:
         condition: service_healthy
     command: >
       sh -c "

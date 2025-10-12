@@ -51,11 +51,10 @@ make quality      # Run complete pipeline: linting + type checking + tests
 
 ### Docker
 ```bash
-# Full stack (bot + services including WebCat)
+# Full stack (bot + services)
 docker compose up -d
 
 # Individual services
-docker compose up -d webcat    # Start WebCat MCP server
 docker compose up -d bot       # Start Slack bot
 docker compose up -d qdrant    # Start vector database
 
@@ -65,7 +64,6 @@ make docker-run                # Run Docker container with .env
 
 # Logs
 docker logs -f insightmesh-bot      # Bot logs
-docker logs -f insightmesh-webcat   # WebCat search logs
 ```
 
 ### Document Ingestion - Google Drive Only
@@ -126,17 +124,13 @@ RAG_MAX_CHUNKS=5
 RAG_SIMILARITY_THRESHOLD=0.7
 ```
 
-### MCP (Model Context Protocol) - Web Search
+### Web Search Configuration
 ```bash
-# WebCat MCP Server for web search
-MCP_WEBCAT_ENABLED=true
-MCP_WEBCAT_HOST=localhost  # Use 'webcat' in Docker
-MCP_WEBCAT_PORT=3000
+# Web search via Tavily
+TAVILY_API_KEY=your-tavily-api-key  # Get from https://tavily.com
 
-# Search Provider API Key (choose one)
-BRAVE_API_KEY=your-brave-search-api-key  # Get from https://brave.com/search/api/
-# SERPER_API_KEY=your-serper-key  # Alternative: https://serper.dev/
-# GOOGLE_API_KEY=your-google-key  # Alternative: Google Custom Search
+# Deep research (optional)
+PERPLEXITY_API_KEY=your-perplexity-api-key  # Get from https://www.perplexity.ai/settings/api
 ```
 
 ### Quick Setup Examples
@@ -272,7 +266,7 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 - **Context Integration**: Retrieved chunks enhance LLM responses
 - **Metadata Support**: Track document sources and properties
 - **Configurable Retrieval**: Adjust chunk count and similarity thresholds
-- **Web Search (MCP)**: Automatic web search via WebCat MCP server for current events
+- **Web Search**: Automatic web search via Tavily for current events
 
 #### How It Works
 1. **Ingestion**: Documents are chunked and embedded into vector database
@@ -282,10 +276,10 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 5. **Web Search** (if needed): LLM can trigger web search for current information
 6. **Generation**: LLM generates response with enhanced context
 
-#### MCP (Model Context Protocol) Integration
-- **WebCat Server**: Docker service providing web search capabilities
+#### Web Search Integration
+- **Tavily Search**: Fast, high-quality web search results
+- **Perplexity Deep Research**: Long-form research with citations
 - **Function Calling**: LLM automatically decides when to search the web
-- **Search Providers**: Supports Brave Search, Serper, Google Custom Search
 - **Langfuse Tracing**: All tool calls are traced for observability
 - **Auto-discovery**: Bot detects when queries need real-time web data
 

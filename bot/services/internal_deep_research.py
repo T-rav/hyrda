@@ -8,8 +8,6 @@ Uses query decomposition, adaptive rewriting, and iterative retrieval for thorou
 import logging
 from typing import Any
 
-from services.langfuse_service import observe
-
 logger = logging.getLogger(__name__)
 
 
@@ -45,7 +43,6 @@ class InternalDeepResearchService:
         self.embedding_service = embedding_service
         self.enable_query_rewriting = enable_query_rewriting
 
-    @observe(as_type="generation", name="internal_deep_research")
     async def deep_research(
         self,
         query: str,
@@ -77,6 +74,15 @@ class InternalDeepResearchService:
             return {
                 "success": False,
                 "error": "Vector database not configured",
+                "query": query,
+            }
+
+        # Validate query is not empty
+        if not query or not query.strip():
+            logger.warning("Internal deep research called with empty query")
+            return {
+                "success": False,
+                "error": "Empty query provided",
                 "query": query,
             }
 
@@ -158,7 +164,6 @@ class InternalDeepResearchService:
             logger.error(f"Traceback: {traceback.format_exc()}")
             return {"success": False, "error": str(e), "query": query}
 
-    @observe(as_type="generation", name="query_decomposition")
     async def _decompose_query(self, query: str, num_queries: int) -> list[str]:
         """
         Decompose complex query into multiple focused sub-queries.
@@ -170,15 +175,18 @@ class InternalDeepResearchService:
         Returns:
             List of sub-queries covering different aspects
         """
-        prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} focused sub-queries that will help retrieve comprehensive information from an internal knowledge base.
+        prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} DIVERSE sub-queries that will help retrieve comprehensive information from an internal knowledge base.
 
 Original Query: "{query}"
 
-Generate {num_queries} specific sub-queries that:
-1. Cover different aspects/angles of the main query
-2. Are specific enough to retrieve relevant documents
-3. Together provide comprehensive coverage of the topic
-4. Avoid redundancy between queries
+Generate {num_queries} DISTINCT sub-queries that:
+1. **Each query must explore a DIFFERENT aspect or angle** of the main query
+2. **Vary the terminology and phrasing** - don't repeat the same words across queries
+3. **Target different information types**: concepts, definitions, examples, use cases, comparisons, etc.
+4. Are specific enough to retrieve relevant documents
+5. Together provide comprehensive coverage of the topic from multiple perspectives
+
+IMPORTANT: Each sub-query should be SUBSTANTIALLY DIFFERENT from the others. If you find yourself using similar wording, reframe the question completely.
 
 Format your response as a JSON array of strings:
 ["sub-query 1", "sub-query 2", ..., "sub-query {num_queries}"]
@@ -240,7 +248,6 @@ Return ONLY the JSON array, no explanation."""
         # Sort by similarity score (already included from retrieval)
         return sorted(chunks, key=lambda x: x.get("similarity", 0), reverse=True)
 
-    @observe(as_type="generation", name="research_synthesis")
     async def _synthesize_findings(
         self, query: str, chunks: list[dict], sub_queries: list[str]
     ) -> str:
@@ -299,7 +306,7 @@ class _InternalDeepResearchServiceSingleton:
     _instance: InternalDeepResearchService | None = None
 
     @classmethod
-    def get_instance(cls) -> InternalDeepResearchService | None:
+    async def get_instance(cls) -> InternalDeepResearchService | None:
         """
         Get singleton internal deep research service instance.
 
@@ -314,13 +321,13 @@ class _InternalDeepResearchServiceSingleton:
 
         try:
             # Import here to avoid circular dependencies
-            from config.settings import get_settings
-            from services.embedding_service import get_embedding_service
+            from config.settings import Settings
+            from services.embedding_service import create_embedding_provider
             from services.llm_service import LLMService
             from services.retrieval_service import RetrievalService
-            from services.vector_service import get_vector_service
+            from services.vector_service import create_vector_store
 
-            settings = get_settings()
+            settings = Settings()
 
             # Check if vector storage is enabled
             if not settings.vector.enabled:
@@ -330,8 +337,8 @@ class _InternalDeepResearchServiceSingleton:
                 return None
 
             # Get required services
-            vector_service = get_vector_service()
-            embedding_service = get_embedding_service()
+            vector_service = create_vector_store(settings.vector)
+            embedding_service = create_embedding_provider(settings.embedding)
             llm_service = LLMService(settings)
             retrieval_service = RetrievalService(settings)
 
@@ -340,6 +347,17 @@ class _InternalDeepResearchServiceSingleton:
             ):
                 logger.warning(
                     "Required services unavailable for internal deep research"
+                )
+                return None
+
+            # Initialize vector store (CRITICAL: must be called to set up Qdrant client)
+            try:
+                await vector_service.initialize()
+                logger.info("✅ Vector store initialized for internal deep research")
+            except Exception as init_error:
+                logger.error(
+                    f"Failed to initialize vector store: {init_error}. "
+                    "Internal deep research will be unavailable."
                 )
                 return None
 
@@ -360,14 +378,14 @@ class _InternalDeepResearchServiceSingleton:
             return None
 
 
-def get_internal_deep_research_service() -> InternalDeepResearchService | None:
+async def get_internal_deep_research_service() -> InternalDeepResearchService | None:
     """
     Get singleton internal deep research service instance.
 
     Returns:
         Initialized InternalDeepResearchService or None if services unavailable
     """
-    return _InternalDeepResearchServiceSingleton.get_instance()
+    return await _InternalDeepResearchServiceSingleton.get_instance()
 
 
 # Factory function

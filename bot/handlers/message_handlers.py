@@ -346,7 +346,6 @@ async def handle_bot_command(
     files: list[dict] | None = None,
     document_content: str | None = None,
     llm_service: LLMService | None = None,
-    webcat_client=None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -362,16 +361,35 @@ async def handle_bot_command(
         files: Optional list of file attachments
         document_content: Optional processed file content
         llm_service: Optional LLM service for agent use
-        webcat_client: Optional WebCat MCP client for web search
 
     Returns:
         True if bot command was handled, False otherwise
     """
+    # Debug: Log what text we're receiving
+    logger.info(f"handle_bot_command called with text: '{text}'")
+
+    # Strip Slack markdown formatting (bold, italic, etc.) before routing
+    # Slack sends *bold* and _italic_ which breaks command parsing
+    clean_text = text.strip()
+    # Remove leading/trailing markdown characters
+    while clean_text and clean_text[0] in ["*", "_", "~"]:
+        clean_text = clean_text[1:]
+    while clean_text and clean_text[-1] in ["*", "_", "~"]:
+        clean_text = clean_text[:-1]
+
+    logger.info(f"Cleaned text for routing: '{clean_text}'")
+
     # Use router to parse and route command
-    agent_info, query, primary_name = command_router.route(text)
+    agent_info, query, primary_name = command_router.route(clean_text)
+
+    # Debug: Log router results
+    logger.info(
+        f"Router results: agent_info={agent_info is not None}, primary_name={primary_name}, query='{query}'"
+    )
 
     # If no agent found, return False (not handled)
     if not agent_info or not primary_name:
+        logger.info("No agent found, returning False")
         return False
 
     logger.info(f"Routing to agent '{primary_name}' with query: {query}")
@@ -398,7 +416,6 @@ async def handle_bot_command(
             "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
             "slack_service": slack_service,
             "llm_service": llm_service,
-            "webcat_client": webcat_client,
         }
 
         # Add file information if available
@@ -519,11 +536,6 @@ async def handle_message(
 
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
-        # Get WebCat client for agent use
-        from services.mcp_client import get_webcat_client
-
-        webcat_client = get_webcat_client()
-
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -533,7 +545,6 @@ async def handle_message(
             files=files,
             document_content=document_content,
             llm_service=llm_service,
-            webcat_client=webcat_client,
         )
 
         if handled:

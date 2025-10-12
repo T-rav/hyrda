@@ -19,7 +19,6 @@ from agents.company_profile.utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
-from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,88 +33,118 @@ async def final_report_generation(
         config: Runtime configuration
 
     Returns:
-        Dict with final_report
+        Dict with final_report and executive_summary
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     notes = state.get("notes", [])
     profile_type = state.get("profile_type", "company")
+    focus_area = state.get("focus_area", "")
     research_brief = state.get("research_brief", "")
+    revision_count = state.get("revision_count", 0)
+    revision_prompt = state.get("revision_prompt", "")
 
-    logger.info(f"Generating final report from {len(notes)} research notes")
-
-    # Start Langfuse span for final report generation
-    langfuse_service = get_langfuse_service()
-    span = None
-    if langfuse_service and langfuse_service.client:
-        span = langfuse_service.client.start_span(
-            name="deep_research_final_report_generation",
-            input={
-                "notes_count": len(notes),
-                "profile_type": profile_type,
-                "research_brief": research_brief[:200],
-            },
-            metadata={
-                "node_type": "final_report",
-                "max_tokens": configuration.final_report_model_max_tokens,
-            },
+    if revision_count > 0:
+        logger.info(
+            f"Generating REVISED report (attempt {revision_count}) from {len(notes)} research notes"
         )
+    else:
+        logger.info(f"Generating final report from {len(notes)} research notes")
 
     if not notes:
         logger.warning("No research notes available for final report")
-        if span:
-            span.end(
-                level="WARNING",
-                output={"success": False, "reason": "no_notes"},
-            )
         return {"final_report": "No research findings available to generate report."}
 
-    # Use LangChain ChatOpenAI directly
-    from langchain_openai import ChatOpenAI
-
+    # Use LangChain with Gemini or OpenAI
     from config.settings import Settings
 
     settings = Settings()
-    llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.7,
-        max_tokens=configuration.final_report_model_max_tokens,
-    )
 
-    # Format research context
-    notes_text = format_research_context(research_brief, notes, profile_type)
+    # Check if Gemini is enabled for final report generation
+    llm = None
+    if settings.gemini.enabled and settings.gemini.api_key:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
 
-    # Build final report prompt
+            logger.info(
+                f"Using Gemini ({settings.gemini.model}) for final report generation"
+            )
+            llm = ChatGoogleGenerativeAI(
+                model=settings.gemini.model,
+                google_api_key=settings.gemini.api_key,
+                temperature=0.7,
+                max_output_tokens=configuration.final_report_model_max_tokens,
+            )
+        except ImportError:
+            logger.warning(
+                "langchain_google_genai not installed - falling back to OpenAI"
+            )
+
+    if llm is None:
+        from langchain_openai import ChatOpenAI
+
+        logger.info(f"Using OpenAI ({settings.llm.model}) for final report generation")
+        llm = ChatOpenAI(
+            model=settings.llm.model,
+            api_key=settings.llm.api_key,
+            temperature=0.7,
+            max_completion_tokens=configuration.final_report_model_max_tokens,
+        )
+
+    # Format research context (async - uses LLM for source selection)
+    notes_text = await format_research_context(research_brief, notes, profile_type)
+
+    # Build final report prompt with focus area
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Build focus guidance for final report
+    if focus_area:
+        focus_guidance = f"""
+**🎯 CRITICAL - USER'S SPECIFIC REQUEST**: The user specifically asked about "{focus_area}".
+
+**Report Writing Strategy:**
+1. **Front-load the focus**: Sections most relevant to {focus_area} should be LONGEST and MOST DETAILED
+2. **Emphasize in Solutions section**: The "Solutions 8th Light Can Offer" section MUST heavily emphasize opportunities related to {focus_area}
+3. **Connect throughout**: In EVERY section, look for connections to {focus_area} and make them explicit
+4. **Executive Summary priority**: Ensure at least 1-2 of the 3 bullet points relate to {focus_area}
+5. **Depth allocation**:
+   - Sections directly about {focus_area}: Write 4-5 paragraphs each (maximum depth)
+   - Related sections: Write 3-4 paragraphs (good depth)
+   - Less relevant sections: Write 2-3 paragraphs (sufficient context)
+
+**Example**: If focus is "AI needs", then:
+- "Company Priorities" should extensively cover AI initiatives
+- "Size of Teams" should deeply analyze AI/ML team structure
+- "Solutions 8th Light Can Offer" should propose AI-specific consulting opportunities
+- Other sections should still be comprehensive but briefer"""
+    else:
+        focus_guidance = ""
+
     system_prompt = prompts.final_report_generation_prompt.format(
-        profile_type=profile_type, notes=notes_text, current_date=current_date
+        profile_type=profile_type,
+        focus_area=focus_area if focus_area else "None (general profile)",
+        focus_guidance=focus_guidance,
+        notes=notes_text,
+        current_date=current_date,
     )
 
     # Try generation with retry on token limits
     max_attempts = 3
-    messages = [
-        create_system_message(system_prompt),
-        create_human_message("Generate the comprehensive profile report now."),
-    ]
+
+    # If this is a revision, add the revision prompt
+    if revision_count > 0 and revision_prompt:
+        logger.info(f"Using revision prompt: {revision_prompt[:100]}...")
+        messages = [
+            create_system_message(system_prompt),
+            create_human_message(revision_prompt),
+        ]
+    else:
+        messages = [
+            create_system_message(system_prompt),
+            create_human_message("Generate the comprehensive profile report now."),
+        ]
 
     for attempt in range(max_attempts):
         try:
-            # Trace LLM generation
-            generation = None
-            if langfuse_service and langfuse_service.client:
-                generation = langfuse_service.client.start_generation(
-                    name="final_report_llm_call",
-                    input={
-                        "messages": messages,
-                        "attempt": attempt + 1,
-                        "notes_count": len(notes),
-                    },
-                    metadata={
-                        "profile_type": profile_type,
-                        "max_tokens": configuration.final_report_model_max_tokens,
-                    },
-                )
-
             # Use LangChain ChatOpenAI
             response = await llm.ainvoke(messages)
             final_report = (
@@ -123,38 +152,32 @@ async def final_report_generation(
             )
             logger.info(f"Final report generated: {len(final_report)} characters")
 
-            # End generation trace
-            if generation:
-                generation.end(
-                    output={
-                        "report_length": len(final_report),
-                        "attempt": attempt + 1,
-                    }
-                )
-
             # Generate executive summary for Slack display
             logger.info("Generating executive summary from full report")
-            summary_generation = None
-            if langfuse_service and langfuse_service.client:
-                summary_generation = langfuse_service.client.start_generation(
-                    name="executive_summary_generation",
-                    input={
-                        "full_report_length": len(final_report),
-                        "profile_type": profile_type,
-                    },
-                    metadata={"node_type": "executive_summary"},
-                )
 
             try:
+                # Build focus guidance for executive summary
+                if focus_area:
+                    summary_focus_guidance = f"""
+**IMPORTANT**: The user specifically asked about "{focus_area}".
+Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
+                else:
+                    summary_focus_guidance = ""
+
                 summary_prompt = prompts.executive_summary_prompt.format(
-                    full_report=final_report
+                    full_report=final_report,
+                    focus_area=focus_area if focus_area else "None (general profile)",
+                    focus_guidance=summary_focus_guidance,
                 )
-                # Use LangChain ChatOpenAI with lower max_tokens for summary
+                # Always use GPT-4o for executive summary (more reliable than Gemini)
+                from langchain_openai import ChatOpenAI
+
+                logger.info("Using GPT-4o for executive summary generation")
                 summary_llm = ChatOpenAI(
-                    model=settings.llm.model,
+                    model="gpt-4o",
                     api_key=settings.llm.api_key,
                     temperature=0.7,
-                    max_tokens=500,
+                    max_completion_tokens=500,
                 )
                 summary_response = await summary_llm.ainvoke(
                     [create_human_message(summary_prompt)]
@@ -164,37 +187,22 @@ async def final_report_generation(
                     if hasattr(summary_response, "content")
                     else str(summary_response)
                 )
+
+                # Validate that summary is not empty
+                if not executive_summary or len(executive_summary.strip()) == 0:
+                    raise ValueError("LLM returned empty executive summary")
+
                 logger.info(
                     f"Executive summary generated: {len(executive_summary)} characters"
                 )
 
-                if summary_generation:
-                    summary_generation.end(
-                        output={"summary_length": len(executive_summary)}
-                    )
-
             except Exception as summary_error:
                 logger.warning(f"Failed to generate executive summary: {summary_error}")
-                # Fallback: use first paragraph of report
+                # Fallback: use Slack-safe markdown
                 executive_summary = (
-                    "📊 **Executive Summary**\n\n"
+                    "📊 *Executive Summary*\n\n"
                     "• Full detailed report attached as PDF\n\n"
                     "📎 _Unable to generate summary - see full report_"
-                )
-                if summary_generation:
-                    summary_generation.end(
-                        level="WARNING", status_message=str(summary_error)
-                    )
-
-            # End span
-            if span:
-                span.end(
-                    output={
-                        "success": True,
-                        "report_length": len(final_report),
-                        "summary_length": len(executive_summary),
-                        "attempts": attempt + 1,
-                    }
                 )
 
             return {
@@ -209,10 +217,6 @@ async def final_report_generation(
                 continue
 
             logger.error(f"Final report error: {e}")
-            if generation:
-                generation.end(level="ERROR", status_message=str(e))
-            if span:
-                span.end(level="ERROR", status_message=str(e))
             break
 
     # Fallback: return notes summary
@@ -222,13 +226,7 @@ async def final_report_generation(
         + "\n\n".join(notes[:3])
     )
 
-    if span:
-        span.end(
-            output={
-                "success": False,
-                "fallback": True,
-                "notes_included": min(3, len(notes)),
-            }
-        )
-
-    return {"final_report": fallback_report}
+    return {
+        "final_report": fallback_report,
+        "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
+    }

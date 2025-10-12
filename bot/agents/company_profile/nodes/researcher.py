@@ -15,11 +15,10 @@ from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.state import ResearcherState
 from agents.company_profile.utils import (
     create_system_message,
-    get_search_tool,
     internal_search_tool,
+    search_tool,
     think_tool,
 )
-from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +37,14 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     tool_call_iterations = state.get("tool_call_iterations", 0)
     research_topic = state["research_topic"]
     profile_type = state.get("profile_type", "company")
+    focus_area = state.get("focus_area", "")
 
-    logger.info(f"Researcher working on: {research_topic[:50]}...")
-
-    # Start Langfuse span for researcher node
-    langfuse_service = get_langfuse_service()
-    span = None
-    if langfuse_service and langfuse_service.client:
-        span = langfuse_service.client.start_span(
-            name="deep_research_researcher",
-            input={
-                "research_topic": research_topic,
-                "profile_type": profile_type,
-                "tool_call_iterations": tool_call_iterations,
-            },
-            metadata={
-                "node_type": "researcher",
-                "iteration": tool_call_iterations,
-                "max_iterations": configuration.max_react_tool_calls,
-            },
+    if focus_area:
+        logger.info(
+            f"Researcher working on: {research_topic[:50]}... (Focus: {focus_area})"
         )
-
-    # Get WebCat client from config
-    webcat_client = config.get("configurable", {}).get("webcat_client")
+    else:
+        logger.info(f"Researcher working on: {research_topic[:50]}...")
 
     # Use LangChain ChatOpenAI directly
     from langchain_openai import ChatOpenAI
@@ -74,19 +58,49 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         temperature=0.7,
     )
 
-    # Prepare system prompt
+    # Prepare system prompt with focus area
     current_date = datetime.now().strftime("%B %d, %Y")
+
+    # Build focus guidance for researcher
+    if focus_area:
+        focus_guidance = f"""
+**PRIORITY RESEARCH FOCUS**: The user specifically wants information about "{focus_area}".
+
+**Your Research Strategy:**
+- While investigating your assigned questions, ALWAYS consider how they relate to {focus_area}
+- If you find information directly relevant to {focus_area}, dig deeper with additional searches
+- Connect your findings back to {focus_area} in your notes
+- Prioritize sources and angles that reveal insights about {focus_area}"""
+    else:
+        focus_guidance = ""
+
     system_prompt = prompts.research_system_prompt.format(
         research_topic=research_topic,
         profile_type=profile_type,
+        focus_area=focus_area if focus_area else "None (general profile)",
+        focus_guidance=focus_guidance,
         max_tool_calls=configuration.max_react_tool_calls,
         tool_call_iterations=tool_call_iterations,
         current_date=current_date,
     )
 
-    # Get search tools
-    search_tools = await get_search_tool(config, webcat_client)
-    all_tools = [*search_tools, internal_search_tool, think_tool]
+    # Get search tools based on research phase
+    # Phase 1 (iterations 0-2): Use cheap tools only (web_search, scrape_url)
+    # Phase 2 (iterations 3+): Add expensive deep_research tool for targeted analysis (if enabled)
+    research_phase = "initial" if tool_call_iterations < 3 else "deep"
+    search_tools = await search_tool(
+        config,
+        phase=research_phase,
+        perplexity_enabled=settings.search.perplexity_enabled,
+    )
+
+    # Get internal search tool
+    internal_search = internal_search_tool()
+
+    # Build tool list
+    all_tools = [*search_tools, think_tool]
+    if internal_search:
+        all_tools.append(internal_search)
 
     # Prepare messages
     messages = list(state["researcher_messages"])
@@ -97,19 +111,6 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     # Call LLM with tools using LangChain
     try:
-        # Trace LLM generation
-        generation = None
-        if langfuse_service and langfuse_service.client:
-            generation = langfuse_service.client.start_generation(
-                name="researcher_llm_call",
-                input={"messages": messages, "tools_available": len(all_tools)},
-                metadata={
-                    "research_topic": research_topic,
-                    "iteration": tool_call_iterations,
-                    "has_tools": bool(search_tools),
-                },
-            )
-
         # Bind tools to LLM if available
         if search_tools:
             llm_with_tools = llm.bind_tools(all_tools)
@@ -117,22 +118,10 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         else:
             response = await llm.ainvoke(messages)
 
-        # End LLM generation trace
-        if generation:
-            generation.end(output={"response": str(response)})
-
         # Check if response contains tool calls (LangChain AIMessage format)
         if hasattr(response, "tool_calls") and response.tool_calls:
             # Model wants to use tools - append AIMessage to messages
             messages.append(response)
-
-            if span:
-                span.end(
-                    output={
-                        "decision": "call_tools",
-                        "tool_count": len(response.tool_calls),
-                    }
-                )
 
             return Command(
                 goto="researcher_tools",
@@ -148,14 +137,6 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
             )
             messages.append(response)
 
-            if span:
-                span.end(
-                    output={
-                        "decision": "complete",
-                        "response_length": len(final_content),
-                    }
-                )
-
             return Command(
                 goto="compress_research",
                 update={
@@ -166,8 +147,6 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     except Exception as e:
         logger.error(f"Researcher error: {e}")
-        if span:
-            span.end(level="ERROR", status_message=str(e))
         return Command(
             goto="compress_research",
             update={
@@ -214,7 +193,10 @@ async def researcher_tools(
         return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
     # Execute tools
-    webcat_client = config.get("configurable", {}).get("webcat_client")
+    from services.search_clients import get_perplexity_client, get_tavily_client
+
+    tavily_client = get_tavily_client()
+    perplexity_client = get_perplexity_client()
     tool_results = []
 
     for tool_call in tool_calls:
@@ -233,21 +215,14 @@ async def researcher_tools(
             tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
 
         elif tool_name == "internal_search_tool":
-            # Execute internal knowledge base search
+            # Execute internal knowledge base search using the LangChain tool
             try:
-                query = tool_args.get("query", "")
-                effort = tool_args.get("effort", "medium")
+                from langchain_core.messages import ToolMessage
 
-                # Lazy-load internal deep research service
-                from services.internal_deep_research import (
-                    get_internal_deep_research_service,
-                )
+                # Get the tool and invoke it
+                internal_search = internal_search_tool()
 
-                internal_deep_research = get_internal_deep_research_service()
-
-                if not internal_deep_research:
-                    from langchain_core.messages import ToolMessage
-
+                if not internal_search:
                     tool_results.append(
                         ToolMessage(
                             content="Internal search service not available (vector database not configured)",
@@ -255,100 +230,18 @@ async def researcher_tools(
                         )
                     )
                     logger.info(
-                        "Internal deep research service not available - vector DB may be disabled"
+                        "Internal search tool not available - vector DB may be disabled"
                     )
                     continue
 
-                # Trace tool execution
-                langfuse_service = get_langfuse_service()
+                # Invoke the tool
+                result_text = await internal_search.ainvoke(tool_args)
 
-                logger.info(
-                    f"Starting internal_search ({effort} effort): {query[:100]}..."
+                tool_results.append(
+                    ToolMessage(content=result_text, tool_call_id=tool_id)
                 )
-                research_result = await internal_deep_research.deep_research(
-                    query=query,
-                    effort=effort,
-                    conversation_history=[],
-                    user_id=None,
-                )
-
-                if research_result.get("success"):
-                    summary = research_result.get("summary", "")
-                    chunks = research_result.get("chunks", [])
-                    sub_queries = research_result.get("sub_queries", [])
-                    unique_documents = research_result.get("unique_documents", 0)
-                    total_chunks = research_result.get("total_chunks", 0)
-
-                    # Format results
-                    result_text = f"# Internal Knowledge Base Search\n\n{summary}\n\n"
-                    if chunks:
-                        result_text += f"**Found in {unique_documents} internal documents ({total_chunks} sections):**\n"
-                        docs_seen = set()
-                        for chunk in chunks[:10]:
-                            doc_name = chunk.get("metadata", {}).get(
-                                "file_name", "unknown"
-                            )
-                            if doc_name not in docs_seen:
-                                docs_seen.add(doc_name)
-                                similarity = chunk.get("similarity", 0)
-                                result_text += (
-                                    f"- {doc_name} (relevance: {similarity:.0%})\n"
-                                )
-                        result_text += f"\n**Search Strategy:** {len(sub_queries)} focused queries\n"
-                    else:
-                        result_text += "**No relevant internal documents found.**\n"
-
-                    # Trace successful search
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="internal_search_tool",
-                            tool_input={"query": query, "effort": effort},
-                            tool_output={
-                                "success": True,
-                                "unique_documents": unique_documents,
-                                "total_chunks": total_chunks,
-                            },
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "effort": effort,
-                            },
-                        )
-
-                    from langchain_core.messages import ToolMessage
-
-                    tool_results.append(
-                        ToolMessage(content=result_text, tool_call_id=tool_id)
-                    )
-                    raw_notes.append(result_text)
-                    logger.info(
-                        f"Internal search completed: {unique_documents} docs, {total_chunks} chunks"
-                    )
-                else:
-                    error = research_result.get("error", "Unknown error")
-
-                    # Trace failed search
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="internal_search_tool",
-                            tool_input={"query": query, "effort": effort},
-                            tool_output={"success": False, "error": error},
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "effort": effort,
-                            },
-                        )
-
-                    from langchain_core.messages import ToolMessage
-
-                    tool_results.append(
-                        ToolMessage(
-                            content=f"Internal search failed: {error}",
-                            tool_call_id=tool_id,
-                        )
-                    )
-                    logger.warning(f"Internal search failed for {query[:100]}: {error}")
+                raw_notes.append(result_text)
+                logger.info("Internal search completed")
 
             except Exception as e:
                 logger.error(f"Internal search error: {e}")
@@ -361,39 +254,13 @@ async def researcher_tools(
                     )
                 )
 
-        elif tool_name == "web_search" and webcat_client:
+        elif tool_name == "web_search" and tavily_client:
             # Execute web search
             try:
                 query = tool_args.get("query", "")
                 max_results = tool_args.get("max_results", 5)
 
-                # Trace tool execution
-                langfuse_service = get_langfuse_service()
-                if langfuse_service:
-                    langfuse_service.trace_tool_execution(
-                        tool_name="web_search",
-                        tool_input={"query": query, "max_results": max_results},
-                        tool_output={"status": "executing"},
-                        metadata={
-                            "context": "deep_research_researcher",
-                            "research_topic": state["research_topic"],
-                        },
-                    )
-
-                search_results = await webcat_client.search(query, max_results)
-
-                # Trace results
-                if langfuse_service:
-                    langfuse_service.trace_tool_execution(
-                        tool_name="web_search",
-                        tool_input={"query": query, "max_results": max_results},
-                        tool_output=search_results,
-                        metadata={
-                            "context": "deep_research_researcher",
-                            "results_count": len(search_results),
-                            "research_topic": state["research_topic"],
-                        },
-                    )
+                search_results = await tavily_client.search(query, max_results)
 
                 # Format results
                 result_text = f"Found {len(search_results)} results:\n\n"
@@ -418,36 +285,16 @@ async def researcher_tools(
                     ToolMessage(content=f"Search error: {str(e)}", tool_call_id=tool_id)
                 )
 
-        elif tool_name == "scrape_url" and webcat_client:
+        elif tool_name == "scrape_url" and tavily_client:
             # Execute URL scraping
             try:
                 url = tool_args.get("url", "")
 
-                # Trace tool execution
-                langfuse_service = get_langfuse_service()
-
-                scrape_result = await webcat_client.scrape_url(url)
+                scrape_result = await tavily_client.scrape_url(url)
 
                 if scrape_result.get("success"):
                     content = scrape_result.get("content", "")
                     title = scrape_result.get("title", "")
-
-                    # Trace successful scrape
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="scrape_url",
-                            tool_input={"url": url},
-                            tool_output={
-                                "success": True,
-                                "title": title,
-                                "content_length": len(content),
-                            },
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "url": url,
-                            },
-                        )
 
                     result_text = f"# Scraped: {title}\n\nURL: {url}\n\n{content}\n\n"
                     from langchain_core.messages import ToolMessage
@@ -459,19 +306,6 @@ async def researcher_tools(
                     logger.info(f"Successfully scraped {len(content)} chars from {url}")
                 else:
                     error = scrape_result.get("error", "Unknown error")
-
-                    # Trace failed scrape
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="scrape_url",
-                            tool_input={"url": url},
-                            tool_output={"success": False, "error": error},
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "url": url,
-                            },
-                        )
 
                     from langchain_core.messages import ToolMessage
 
@@ -490,19 +324,13 @@ async def researcher_tools(
                     ToolMessage(content=f"Scrape error: {str(e)}", tool_call_id=tool_id)
                 )
 
-        elif tool_name == "deep_research" and webcat_client:
+        elif tool_name == "deep_research" and perplexity_client:
             # Execute deep research via Perplexity
             try:
                 query = tool_args.get("query", "")
-                effort = tool_args.get("effort", "medium")
 
-                # Trace tool execution
-                langfuse_service = get_langfuse_service()
-
-                logger.info(
-                    f"Starting deep_research ({effort} effort): {query[:100]}..."
-                )
-                research_result = await webcat_client.deep_research(query, effort)
+                logger.info(f"Starting deep_research: {query[:100]}...")
+                research_result = await perplexity_client.deep_research(query)
 
                 # Log the result structure for debugging
                 logger.info(
@@ -537,24 +365,6 @@ async def researcher_tools(
                                 )
                                 result_text += f"{idx}. {str(source)}\n"
 
-                    # Trace successful research
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="deep_research",
-                            tool_input={"query": query, "effort": effort},
-                            tool_output={
-                                "success": True,
-                                "answer_length": len(answer),
-                                "sources_count": len(sources),
-                            },
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "effort": effort,
-                                "cost_indicator": f"{effort}_effort",
-                            },
-                        )
-
                     from langchain_core.messages import ToolMessage
 
                     tool_results.append(
@@ -566,19 +376,6 @@ async def researcher_tools(
                     )
                 else:
                     error = research_result.get("error", "Unknown error")
-
-                    # Trace failed research
-                    if langfuse_service:
-                        langfuse_service.trace_tool_execution(
-                            tool_name="deep_research",
-                            tool_input={"query": query, "effort": effort},
-                            tool_output={"success": False, "error": error},
-                            metadata={
-                                "context": "deep_research_researcher",
-                                "research_topic": state["research_topic"],
-                                "effort": effort,
-                            },
-                        )
 
                     from langchain_core.messages import ToolMessage
 
