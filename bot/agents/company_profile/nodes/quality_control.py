@@ -258,7 +258,9 @@ async def quality_control_node(
             )
             if alignment_notes:
                 logger.info(f"   Focus alignment: {alignment_notes}")
-            return Command(goto="__end__", update={})
+            # IMPORTANT: Return the state so LangGraph includes it in the final event
+            # Without this, Command(goto="__end__", update={}) causes LangGraph to send None
+            return Command(goto="__end__", update=state)
 
         # Report failed quality check
         logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
@@ -313,4 +315,4 @@ Generate the complete revised report now.
         logger.error(f"Quality control error: {e}", exc_info=True)
         # On error, proceed anyway (don't block the workflow)
         logger.warning("⚠️ Quality control failed, proceeding with report")
-        return Command(goto="__end__", update={})
+        return Command(goto="__end__", update=state)
