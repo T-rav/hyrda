@@ -72,8 +72,8 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     # Build graph with explicit input/output schemas
     coach_builder = StateGraph(
         MeddpiccAgentState,
-        input=MeddpiccAgentInputState,
-        output=MeddpiccAgentOutputState,
+        input_schema=MeddpiccAgentInputState,
+        output_schema=MeddpiccAgentOutputState,
     )
 
     # Add nodes
