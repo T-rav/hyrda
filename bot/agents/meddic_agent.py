@@ -216,11 +216,19 @@ class MeddicAgent(BaseAgent):
                     except Exception as e:
                         logger.warning(f"Failed to delete progress message: {e}")
 
+                # Ensure header is present
+                if not clarification_message.startswith(":dart:"):
+                    clarification_message = (
+                        f":dart: **MEDDPICC**\n\n{clarification_message}"
+                    )
+
                 return {
                     "response": clarification_message,
                     "metadata": {
                         "needs_clarification": True,
                         "agent": "meddic",
+                        "agent_type": "meddpicc_coach",
+                        "agent_version": "langgraph",
                     },
                 }
 

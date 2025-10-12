@@ -33,6 +33,7 @@ try:
 except ImportError:
     PYTHON_PPTX_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
+from agents.registry import agent_registry
 from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
@@ -337,6 +338,11 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
     return base_prompt
 
 
+# Thread-to-agent tracking (in-memory cache)
+# Maps thread_ts -> agent_name for continuous agent threads
+_thread_agent_map: dict[str, str] = {}
+
+
 async def handle_bot_command(
     text: str,
     user_id: str,
@@ -346,11 +352,14 @@ async def handle_bot_command(
     files: list[dict] | None = None,
     document_content: str | None = None,
     llm_service: LLMService | None = None,
+    check_thread_context: bool = False,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
 
     Routes commands like /profile and /meddic to registered agents.
+    Supports thread continuity - once an agent starts a thread, subsequent
+    messages in that thread automatically route to the same agent.
 
     Args:
         text: Full message text (e.g., "/profile tell me about Charlotte")
@@ -361,26 +370,49 @@ async def handle_bot_command(
         files: Optional list of file attachments
         document_content: Optional processed file content
         llm_service: Optional LLM service for agent use
+        check_thread_context: If True, check if thread belongs to an agent
 
     Returns:
         True if bot command was handled, False otherwise
     """
     # Debug: Log what text we're receiving
-    logger.info(f"handle_bot_command called with text: '{text}'")
+    logger.info(
+        f"handle_bot_command called with text: '{text}', check_thread_context: {check_thread_context}"
+    )
 
-    # Strip Slack markdown formatting (bold, italic, etc.) before routing
-    # Slack sends *bold* and _italic_ which breaks command parsing
-    clean_text = text.strip()
-    # Remove leading/trailing markdown characters
-    while clean_text and clean_text[0] in ["*", "_", "~"]:
-        clean_text = clean_text[1:]
-    while clean_text and clean_text[-1] in ["*", "_", "~"]:
-        clean_text = clean_text[:-1]
+    # Check if this thread already belongs to an agent
+    if check_thread_context and thread_ts and thread_ts in _thread_agent_map:
+        agent_name = _thread_agent_map[thread_ts]
+        logger.info(
+            f"🔗 Thread {thread_ts} belongs to agent '{agent_name}' - routing automatically"
+        )
 
-    logger.info(f"Cleaned text for routing: '{clean_text}'")
+        # Get agent info from registry
+        agent_info = agent_registry.get(agent_name)
+        if agent_info:
+            primary_name = agent_name
+            query = text  # Use full text as query (no command prefix needed)
+        else:
+            logger.warning(
+                f"Agent '{agent_name}' not found in registry, falling back to normal routing"
+            )
+            agent_info = None
+            primary_name = None
+            query = ""
+    else:
+        # Strip Slack markdown formatting (bold, italic, etc.) before routing
+        # Slack sends *bold* and _italic_ which breaks command parsing
+        clean_text = text.strip()
+        # Remove leading/trailing markdown characters
+        while clean_text and clean_text[0] in ["*", "_", "~"]:
+            clean_text = clean_text[1:]
+        while clean_text and clean_text[-1] in ["*", "_", "~"]:
+            clean_text = clean_text[:-1]
 
-    # Use router to parse and route command
-    agent_info, query, primary_name = command_router.route(clean_text)
+        logger.info(f"Cleaned text for routing: '{clean_text}'")
+
+        # Use router to parse and route command
+        agent_info, query, primary_name = command_router.route(clean_text)
 
     # Debug: Log router results
     logger.info(
@@ -428,6 +460,11 @@ async def handle_bot_command(
         # Execute agent
         result = await agent.run(query, context)
         response = result.get("response", "No response from agent")
+
+        # Track this thread for future continuity (if we have a thread_ts)
+        if thread_ts and primary_name:
+            _thread_agent_map[thread_ts] = primary_name
+            logger.info(f"📌 Tracked thread {thread_ts} for agent '{primary_name}'")
 
         # Clean up thinking message
         if thinking_message_ts:
@@ -536,6 +573,7 @@ async def handle_message(
 
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
+        # Pass check_thread_context=True to enable thread continuity
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -545,6 +583,7 @@ async def handle_message(
             files=files,
             document_content=document_content,
             llm_service=llm_service,
+            check_thread_context=True,  # Enable thread-aware routing
         )
 
         if handled:
