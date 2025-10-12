@@ -52,8 +52,8 @@ class ProfileAgent(BaseAgent):
 
     Handles queries like:
     - "Tell me about Tesla"
-    - "Who is Elon Musk?"
-    - "What is the Cybertruck project?"
+    - "Tell me about Tesla's AI needs"
+    - "What is Stripe's payment infrastructure?"
     - "Show me SpaceX's profile"
 
     Uses hierarchical LangGraph workflow:
@@ -64,7 +64,7 @@ class ProfileAgent(BaseAgent):
 
     name = "profile"
     aliases: list[str] = ["-profile"]
-    description = "Generate comprehensive company, employee, or project profiles through deep research"
+    description = "Generate comprehensive company profiles through deep research (supports specific focus areas like 'AI needs', 'DevOps practices', etc.)"
 
     def __init__(self):
         """Initialize ProfileAgent with deep research configuration."""
@@ -80,7 +80,7 @@ class ProfileAgent(BaseAgent):
         """Execute profile research using LangGraph deep research workflow.
 
         Args:
-            query: User query about profiles (company, employee, or project)
+            query: User query about company profiles (optionally with specific focus area)
             context: Context dict with user_id, channel, slack_service, llm_service, etc.
 
         Returns:
@@ -382,13 +382,27 @@ class ProfileAgent(BaseAgent):
                                     f"Updated progress UI: {len(all_steps)} steps"
                                 )
 
-                # Store final result
-                result = event
+                # Store result from node completions (not __end__ or other events)
+                # Only update result if event contains actual state data from our workflow nodes
+                if isinstance(event, dict) and any(
+                    node_name in event for node_name in node_order
+                ):
+                    result = event
 
             # Get the final state from the last event
+            # LangGraph returns the final state wrapped in a dict with node name as key
             if result and isinstance(result, dict):
-                # LangGraph returns the final state in the last event
-                result = list(result.values())[0] if result else {}
+                # Extract the state from the last event
+                # Format: {"node_name": state_dict} or {"__end__": state_dict}
+                values = list(result.values())
+                result = values[0] if values else {}
+
+            # Ensure result is a dict (handle case where LangGraph returns None or unexpected type)
+            if not isinstance(result, dict):
+                logger.error(
+                    f"LangGraph returned invalid result type: {type(result)}, value: {result}"
+                )
+                result = {}
 
             # Extract final report and executive summary
             final_report = result.get("final_report", "")
