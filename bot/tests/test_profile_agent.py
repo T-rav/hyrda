@@ -264,3 +264,76 @@ class TestProfileAgent:
         # Should return "no report available" since final_report is empty
         assert "Unable to generate profile report" in result["response"]
         assert result["metadata"]["error"] == "no_report"
+
+    @pytest.mark.asyncio
+    async def test_profile_agent_quality_control_passes_with_state(self):
+        """Test ProfileAgent when quality_control passes and returns state correctly.
+
+        This tests the FIX where quality_control returns:
+          Command(goto="__end__", update=state)
+
+        Instead of the broken:
+          Command(goto="__end__", update={})
+
+        When QC passes with state, the final event should contain the full report.
+        """
+        # Mock LLM service
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(return_value="Mock response")
+
+        # Mock Slack service
+        slack_service = Mock(spec=SlackService)
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.update_message = AsyncMock()
+        slack_service.upload_file = AsyncMock(return_value={"ok": True})
+
+        context = (
+            AgentContextBuilder()
+            .with_llm_service(llm_service)
+            .with_slack_service(slack_service)
+            .build()
+        )
+
+        # Create mock graph that simulates quality_control passing WITH state
+        async def mock_astream_qc_passes_with_state(input_state, config):
+            """Mock graph where quality_control passes and returns full state"""
+            # Yield intermediate events
+            yield {"clarify_with_user": {}}
+            yield {"write_research_brief": {}}
+            yield {"research_supervisor": {}}
+            yield {
+                "final_report_generation": {
+                    "final_report": "# Tesla Profile\n\nTesla is an electric vehicle company...\n\n## Sources\n1. tesla.com\n2. sec.gov",
+                    "executive_summary": "📊 *Executive Summary*\n\n• Tesla leads EV market\n• Strong growth trajectory\n• Innovation focus",
+                    "notes": ["Note 1", "Note 2", "Note 3"],
+                }
+            }
+            # Quality control passes and returns the FULL STATE (the fix!)
+            yield {
+                "quality_control": {
+                    "final_report": "# Tesla Profile\n\nTesla is an electric vehicle company...\n\n## Sources\n1. tesla.com\n2. sec.gov",
+                    "executive_summary": "📊 *Executive Summary*\n\n• Tesla leads EV market\n• Strong growth trajectory\n• Innovation focus",
+                    "notes": ["Note 1", "Note 2", "Note 3"],
+                }
+            }
+
+        # Mock the profile_researcher graph
+        mock_graph = Mock()
+        mock_graph.astream = mock_astream_qc_passes_with_state
+
+        with patch("agents.profile_agent.profile_researcher", mock_graph):
+            agent = ProfileAgent()
+            result = await agent.run("tell me about Tesla", context)
+
+        # Should succeed with the report!
+        assert "response" in result
+        assert "metadata" in result
+        # PDF uploaded successfully, so response is empty
+        assert result["response"] == ""
+        # Metadata should show success
+        assert result["metadata"]["agent"] == "profile"
+        assert result["metadata"]["report_length"] > 0
+        assert result["metadata"]["pdf_generated"] is True
+        assert result["metadata"]["pdf_uploaded"] is True
+        # Verify PDF was uploaded
+        slack_service.upload_file.assert_called_once()
