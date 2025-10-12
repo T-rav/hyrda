@@ -35,13 +35,13 @@ class TavilyClient:
             await self.session.close()
             self.session = None
 
-    async def search(self, query: str, max_results: int = 15) -> list[dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
         """
         Search the web using Tavily API
 
         Args:
             query: Search query
-            max_results: Maximum number of results (default: 15)
+            max_results: Maximum number of results (default: 10)
 
         Returns:
             List of search results with title, url, content (snippet)
@@ -327,8 +327,8 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
                         },
                         "max_results": {
                             "type": "integer",
-                            "description": "Maximum number of results (default: 15, max: 20)",
-                            "default": 15,
+                            "description": "Maximum number of results (default: 10, max: 20)",
+                            "default": 10,
                         },
                     },
                     "required": ["query"],

@@ -256,7 +256,7 @@ async def researcher_tools(
             # Execute web search
             try:
                 query = tool_args.get("query", "")
-                max_results = tool_args.get("max_results", 5)
+                max_results = tool_args.get("max_results", 10)
 
                 search_results = await tavily_client.search(query, max_results)
 
