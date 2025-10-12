@@ -373,10 +373,12 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                         profile_type="meddpicc",
                     )
 
-                    # Use executive summary as initial comment
-                    initial_comment = (
-                        executive_summary[:1000] if executive_summary else None
-                    )
+                    # Use executive summary as initial comment with session completion footer
+                    if executive_summary:
+                        session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
+                        initial_comment = executive_summary[:1000] + session_footer
+                    else:
+                        initial_comment = None
 
                     upload_response = await slack_service.upload_file(
                         channel=channel,
@@ -398,8 +400,8 @@ Return ONLY JSON: {{"entity": "name here"}}"""
 
             # If PDF uploaded, return empty (summary already posted)
             # Otherwise return full text
-            # Add session continuation footer (since state is now persistent)
-            session_footer = "\n\n---\n\n_💬 Need to add more details? Just reply in this thread. Type `done` or `exit` to end this MEDDPICC session._"
+            # Add session completion footer (analysis complete, auto-exit)
+            session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
 
             if pdf_uploaded:
                 response = ""
@@ -421,9 +423,9 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                     "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
                     "thread_id": thread_id,
-                    # Keep thread tracking for iterative refinement
-                    # User can manually exit with "done" or "exit"
-                    "clear_thread_tracking": False,
+                    # Auto-clear thread tracking after full analysis
+                    # User needs to type -meddic to start a new session
+                    "clear_thread_tracking": True,
                 },
             }
 
