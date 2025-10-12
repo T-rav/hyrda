@@ -553,19 +553,13 @@ Return ONLY a JSON object: {{"focus_area": "extracted focus or empty string"}}""
             api_key=settings.llm.api_key,
             temperature=0.0,
             max_completion_tokens=100,
+            model_kwargs={"response_format": {"type": "json_object"}},
         )
 
         response = await llm.ainvoke(extraction_prompt)
         result_text = response.content.strip()
 
-        # Parse JSON response (handle markdown code blocks)
-        if result_text.startswith("```"):
-            # Extract JSON from markdown code block
-            result_text = result_text.split("```")[1]
-            if result_text.startswith("json"):
-                result_text = result_text[4:]
-            result_text = result_text.strip()
-
+        # Parse JSON response (guaranteed to be valid JSON with response_format)
         result_data = json.loads(result_text)
         focus_area = result_data.get("focus_area", "").strip()
 
