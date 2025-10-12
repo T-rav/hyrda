@@ -338,25 +338,10 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
     return base_prompt
 
 
-# Thread-to-agent tracking (in-memory cache)
-# Maps thread_ts -> agent_name for continuous agent threads
-_thread_agent_map: dict[str, str] = {}
+# Thread tracking service (Redis-backed with in-memory fallback)
+from services.thread_tracking import get_thread_tracking
 
-
-def clear_thread_tracking(thread_ts: str) -> bool:
-    """Clear agent tracking for a thread.
-
-    Args:
-        thread_ts: Thread timestamp to clear
-
-    Returns:
-        True if thread was tracked and cleared, False if not tracked
-    """
-    if thread_ts in _thread_agent_map:
-        agent_name = _thread_agent_map.pop(thread_ts)
-        logger.info(f"🔓 Cleared thread tracking: {thread_ts} (was: {agent_name})")
-        return True
-    return False
+_thread_tracking = get_thread_tracking()
 
 
 async def handle_bot_command(
@@ -399,7 +384,7 @@ async def handle_bot_command(
     # Check for exit commands to clear thread tracking
     exit_commands = ["exit", "stop", "done", "end", "clear"]
     if thread_ts and any(text.strip().lower() == cmd for cmd in exit_commands):
-        if clear_thread_tracking(thread_ts):
+        if await _thread_tracking.clear_thread(thread_ts):
             # Send confirmation
             try:
                 await slack_service.send_message(
@@ -414,8 +399,12 @@ async def handle_bot_command(
         return False
 
     # Check if this thread already belongs to an agent
-    if check_thread_context and thread_ts and thread_ts in _thread_agent_map:
-        agent_name = _thread_agent_map[thread_ts]
+    agent_name = (
+        await _thread_tracking.get_thread_agent(thread_ts)
+        if check_thread_context and thread_ts
+        else None
+    )
+    if agent_name:
         logger.info(
             f"🔗 Thread {thread_ts} belongs to agent '{agent_name}' - routing automatically"
         )
@@ -500,10 +489,9 @@ async def handle_bot_command(
         if thread_ts and primary_name:
             # Check if agent wants to auto-clear after completion
             if metadata.get("clear_thread_tracking", False):
-                clear_thread_tracking(thread_ts)
+                await _thread_tracking.clear_thread(thread_ts)
             else:
-                _thread_agent_map[thread_ts] = primary_name
-                logger.info(f"📌 Tracked thread {thread_ts} for agent '{primary_name}'")
+                await _thread_tracking.track_thread(thread_ts, primary_name)
 
         # Clean up thinking message
         if thinking_message_ts:
