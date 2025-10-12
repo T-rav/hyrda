@@ -386,6 +386,24 @@ class ProfileAgent(BaseAgent):
                 # The last event from astream contains the final state
                 result = event
 
+            # Log final event structure for debugging
+            if result and isinstance(result, dict):
+                event_keys = list(result.keys())
+                logger.info(f"Final LangGraph event keys: {event_keys}")
+                # Log if it's an __end__ event or a node event
+                if "__end__" in event_keys:
+                    logger.info("Final event is __end__ event (quality control passed)")
+                elif any(key in node_order for key in event_keys):
+                    logger.info(
+                        f"Final event is node event: {[k for k in event_keys if k in node_order]}"
+                    )
+                else:
+                    logger.warning(f"Final event has unexpected keys: {event_keys}")
+            else:
+                logger.error(
+                    f"Final event is not a dict: type={type(result)}, value={result}"
+                )
+
             # Get the final state from the last event
             # LangGraph returns the final state wrapped in a dict with node name as key
             if result and isinstance(result, dict):
@@ -393,6 +411,9 @@ class ProfileAgent(BaseAgent):
                 # Format: {"node_name": state_dict} or {"__end__": state_dict}
                 values = list(result.values())
                 result = values[0] if values else {}
+                logger.info(
+                    f"Extracted state type: {type(result)}, has final_report: {isinstance(result, dict) and 'final_report' in result}"
+                )
 
             # Ensure result is a dict (handle case where LangGraph returns None or unexpected type)
             if not isinstance(result, dict):
