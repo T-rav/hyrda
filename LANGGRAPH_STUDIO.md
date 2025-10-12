@@ -1,6 +1,6 @@
 # LangGraph Studio Setup
 
-LangGraph Studio provides visual debugging for the profile agent's deep research workflow.
+LangGraph Studio provides visual debugging for the agent workflows.
 
 ## Installation
 
@@ -30,16 +30,30 @@ langgraph dev
 This will:
 1. Start the LangGraph Studio server
 2. Open your browser to `http://localhost:8123`
-3. Load the `profile_researcher` graph
+3. Load the available graphs:
+   - `profile_researcher` - Deep research agent for company profiles
+   - `meddpicc_coach` - MEDDPICC sales qualification and coaching agent
 
 ## Using the Studio
 
-### 1. **View Graph Structure**
-- See all nodes: `clarify_with_user`, `write_research_brief`, `research_supervisor`, `final_report_generation`
-- See edges and conditional routing
-- Understand the workflow visually
+### 1. **Select a Graph**
+Choose from the dropdown:
+- **profile_researcher** - Company/person deep research workflow
+- **meddpicc_coach** - MEDDPICC sales qualification workflow
 
-### 2. **Run Test Queries**
+### 2. **View Graph Structure**
+
+**Profile Researcher:**
+- Nodes: `clarify_with_user`, `write_research_brief`, `research_supervisor`, `final_report_generation`
+
+**MEDDPICC Coach:**
+- Nodes: `parse_notes`, `meddpicc_analysis`, `coaching_insights`
+
+See edges, conditional routing, and workflow visually.
+
+### 3. **Run Test Queries**
+
+#### Profile Researcher
 
 **UI Note:** The Studio UI shows ALL state fields in the input form (query, messages, supervisor_messages, research_brief, raw_notes, notes, final_report, executive_summary, profile_type). This is normal - it's showing the complete state schema. **Only fill in the fields you want to provide as input** - leave the rest empty.
 
@@ -67,7 +81,31 @@ This will:
 - `final_report`
 - `executive_summary`
 
-### 3. **Step Through Execution**
+#### MEDDPICC Coach
+
+**Minimal input (recommended):**
+```json
+{
+  "query": "Call with Sarah from Acme Corp. They're frustrated with 2-week deployment times. CTO Mark Chen allocated $200K for DevOps improvements. Also looking at XYZ Solutions but concerned about support quality."
+}
+```
+
+**With URL scraping:**
+```json
+{
+  "query": "Had a call with Mike from DataCorp. Check out their background: https://example.com/datacomp-overview\n\nThey need faster deployment pipelines."
+}
+```
+
+**Important:** Leave these fields empty - they are internal state:
+- `raw_notes`
+- `scraped_content`
+- `sources`
+- `meddpicc_breakdown`
+- `coaching_insights`
+- `final_response`
+
+### 4. **Step Through Execution**
 - Watch each node execute in real-time
 - Inspect state at each step
 - See tool calls (web_search, scrape_url, deep_research)
@@ -90,7 +128,8 @@ The `langgraph.json` file configures:
 ```json
 {
   "graphs": {
-    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher"
+    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher",
+    "meddpicc_coach": "./bot/agents/meddpicc_coach/meddpicc_coach.py:meddpicc_coach"
   },
   "env": ".env",
   "dependencies": ["./bot"],
