@@ -7,7 +7,6 @@ Includes Langfuse tracing for observability.
 import logging
 from datetime import datetime
 
-from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
 from langgraph.types import Command
@@ -17,7 +16,6 @@ from agents.company_profile.state import ProfileAgentState
 from agents.company_profile.utils import (
     create_human_message,
     detect_profile_type,
-    internal_search_tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,8 +59,9 @@ async def write_research_brief(
             temperature=0.7,
         )
 
-        # Bind internal_search_tool to allow searching existing knowledge
-        llm_with_tools = llm.bind_tools([internal_search_tool])
+        # NOTE: Don't bind internal_search_tool here - research brief is for PLANNING,
+        # not EXECUTING research. Internal search should only be used by researchers
+        # who have specific company names to search for.
 
         current_date = datetime.now().strftime("%B %d, %Y")
 
@@ -103,86 +102,8 @@ async def write_research_brief(
         )
         messages = [create_human_message(prompt)]
 
-        # Execute LLM with potential tool calls
-        response = await llm_with_tools.ainvoke(messages)
-
-        # Handle tool calls if present
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            logger.info(
-                f"Research brief requested {len(response.tool_calls)} tool calls"
-            )
-
-            # Add AI message to conversation
-            messages.append(response)
-
-            # Execute tool calls
-            for tool_call in response.tool_calls:
-                tool_name = tool_call.get("name", "")
-                tool_args = tool_call.get("args", {})
-                tool_id = tool_call.get("id", "")
-
-                if tool_name == "internal_search_tool":
-                    # Execute internal search
-                    query_text = tool_args.get("query", "")
-                    effort = tool_args.get("effort", "low")  # Default to low effort
-
-                    logger.info(
-                        f"Research brief executing internal search: {query_text}"
-                    )
-
-                    # Validate query is not empty
-                    if not query_text or not query_text.strip():
-                        logger.warning(
-                            "Internal search called with empty query - skipping"
-                        )
-                        tool_result = ToolMessage(
-                            content="No search query provided. Please specify what to search for.",
-                            tool_call_id=tool_id,
-                        )
-                        messages.append(tool_result)
-                        continue
-
-                    # Get internal deep research service from config
-                    configurable = config.get("configurable", {})
-                    logger.debug(
-                        f"Config keys: {list(config.keys())}, Configurable keys: {list(configurable.keys())}"
-                    )
-                    internal_deep_research = configurable.get("internal_deep_research")
-
-                    if not internal_deep_research:
-                        tool_result = ToolMessage(
-                            content="Internal search service not available",
-                            tool_call_id=tool_id,
-                        )
-                        logger.warning(
-                            "Internal deep research service not available for research brief"
-                        )
-                    else:
-                        # Execute search
-                        research_result = await internal_deep_research.deep_research(
-                            query=query_text,
-                            effort=effort,
-                            conversation_history=[],
-                            user_id=None,
-                        )
-
-                        if research_result.get("success"):
-                            summary = research_result.get("summary", "")
-                            tool_result = ToolMessage(
-                                content=f"Internal search results:\n\n{summary}",
-                                tool_call_id=tool_id,
-                            )
-                        else:
-                            error = research_result.get("error", "Unknown error")
-                            tool_result = ToolMessage(
-                                content=f"Internal search failed: {error}",
-                                tool_call_id=tool_id,
-                            )
-
-                    messages.append(tool_result)
-
-            # Get final response after tool execution
-            response = await llm.ainvoke(messages)
+        # Execute LLM directly (no tools needed for planning)
+        response = await llm.ainvoke(messages)
 
         research_brief = (
             response.content if hasattr(response, "content") else str(response)
