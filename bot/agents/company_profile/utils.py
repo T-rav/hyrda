@@ -62,6 +62,9 @@ def internal_search_tool():
     - Internal documentation
     - Historical company data
 
+    IMPORTANT: Only call with specific company names or topics (minimum 3 characters).
+    DO NOT call with empty queries.
+
     Returns:
         InternalSearchTool singleton instance or None if not available
     """

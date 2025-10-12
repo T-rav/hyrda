@@ -18,7 +18,8 @@ class InternalSearchInput(BaseModel):
     """Input schema for internal search tool."""
 
     query: str = Field(
-        description="What to search for in internal knowledge base. Be specific about what you're looking for."
+        min_length=3,
+        description="What to search for in internal knowledge base. Be specific about what you're looking for. MUST be a meaningful search query (minimum 3 characters). DO NOT call with empty string.",
     )
     effort: str = Field(
         default="medium",
@@ -41,8 +42,9 @@ class InternalSearchTool(BaseTool):
     name: str = "internal_search_tool"
     description: str = (
         "Search the internal knowledge base for existing information. "
-        "Use this FIRST before web search to check our internal docs, "
-        "customer history, past projects, and internal documentation."
+        "Use this FIRST before web search to check our internal docs, customer history, past projects, and internal documentation. "
+        "IMPORTANT: Only call if you have a specific company name or topic to search for (minimum 3 characters). "
+        "DO NOT call with empty query."
     )
     args_schema: type[BaseModel] = InternalSearchInput
 
