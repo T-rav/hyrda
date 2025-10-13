@@ -77,41 +77,45 @@ async def check_input_completeness(
 
     assessment_prompt = f"""You are assessing if sales call notes have enough information for a MEDDPICC analysis.
 
-MEDDPICC framework:
-- Metrics: Quantifiable value/ROI
-- Economic Buyer: Who has budget/authority?
-- Decision Criteria: How they evaluate solutions
-- Decision Process: Steps to get approval
-- Paper Process: Legal/procurement steps
-- Identify Pain: Business problems
-- Champion: Internal advocate
-- Competition: Alternatives they're considering
+**YOUR ROLE**: Be EXTREMELY permissive. The goal is to help salespeople, not block them with nitpicking.
 
 Sales notes:
 \"\"\"{query}\"\"\"
 
-Assess if there's ENOUGH actionable information to proceed with analysis, or if you need MORE DETAILS first.
+MEDDPICC elements (PARTIAL information counts!):
+- Metrics: ANY mention of improvements, savings, goals (doesn't need exact numbers)
+- Economic Buyer: ANY mention of decision makers, budget holders, executives
+- Decision Criteria: ANY hint about evaluation process
+- Decision Process: ANY steps mentioned (even "need approval")
+- Paper Process: Legal/procurement (often absent in early deals - THAT'S OK)
+- Identify Pain: Business problems, frustrations, inefficiencies
+- Champion: Person advocating internally (often the contact person)
+- Competition: Alternatives considered (often absent - THAT'S OK)
 
-CRITICAL RULES - BE VERY PERMISSIVE:
-1. **PROCEED if ANY of these are true:**
-   - Notes contain 2+ MEDDPICC elements (even brief mentions)
-   - Notes include structured call notes with attendees, pain points, or next steps
-   - Notes are longer than 200 words with sales context
-   - Multi-turn conversation with cumulative context
-   - Any mention of: customer name + problem/pain points + contact person
+**MANDATORY PROCEED CONDITIONS** (if ANY apply, you MUST say PROCEED):
+1. Notes have structured format (bullet points, sections, headings)
+2. Customer/company name + pain points/problems mentioned
+3. Notes contain 2+ MEDDPICC elements (even if partial/implied)
+4. More than 200 words with sales context
+5. Call notes format with attendees, date, or next steps
 
-2. **ONLY CLARIFY if ALL of these are true:**
-   - Notes are a single vague sentence (< 50 chars)
-   - Only 0-1 MEDDPICC elements present
-   - No customer name, no pain points, no context
+**ONLY SAY CLARIFY IF**:
+- Single vague sentence under 50 characters
+- Absolutely zero MEDDPICC elements
+- No customer name AND no pain points
 
-EXAMPLES:
-- "Jane's Equipment wants AI for scheduling" → PROCEED (has customer + pain)
-- "bob wants software" → CLARIFY (too vague)
-- Structured call notes with bullet points → ALWAYS PROCEED
-- "meddic <any customer name> wants <any solution>" → PROCEED
+EXAMPLES OF PROCEED:
+- "Jane's Equipment wants AI for scheduling" → PROCEED (customer + pain)
+- "Call with Bob at Acme. They have scaling issues." → PROCEED (customer + contact + pain)
+- ANY structured call notes with bullet points → ALWAYS PROCEED
+- Notes with pain points listed → ALWAYS PROCEED
+- Notes mentioning budget, timeline, or decision maker → ALWAYS PROCEED
 
-DEFAULT TO PROCEED - only clarify for truly minimal input."""
+EXAMPLES OF CLARIFY (very rare):
+- "bob wants software" → CLARIFY (too vague, no context)
+- "help with deal" → CLARIFY (zero information)
+
+**WHEN IN DOUBT → PROCEED**. It's better to attempt analysis than block the user."""
 
     try:
         # Get structured output - guaranteed to be valid JSON matching schema
