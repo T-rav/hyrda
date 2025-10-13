@@ -4,6 +4,7 @@ Handles user follow-up questions after the initial analysis is complete,
 allowing them to modify, clarify, or expand on the MEDDPICC analysis.
 """
 
+import json
 import logging
 
 from langchain_core.runnables import RunnableConfig
@@ -58,11 +59,14 @@ async def followup_handler(
 
         llm_settings = LLMSettings()
 
-        # Use GPT-4o for high-quality contextual responses
+        # Use GPT-4o with JSON mode for structured intent detection
         llm = ChatOpenAI(  # type: ignore[call-arg]
             model="gpt-4o",
             temperature=meddpicc_config.coaching_temperature,
-            model_kwargs={"max_tokens": meddpicc_config.coaching_max_tokens},
+            model_kwargs={
+                "max_tokens": meddpicc_config.coaching_max_tokens,
+                "response_format": {"type": "json_object"},
+            },
             api_key=llm_settings.api_key.get_secret_value(),
         )
 
@@ -71,22 +75,32 @@ async def followup_handler(
         )
         response = await llm.ainvoke(prompt)
 
-        followup_response = (
+        response_content = (
             response.content if hasattr(response, "content") else str(response)
         )
-        logger.info(f"Follow-up response generated: {len(followup_response)} chars")
+        logger.info(f"Follow-up response generated: {len(response_content)} chars")
 
-        # Check if LLM detected an unrelated question (exit signal)
-        if followup_response.startswith("EXIT_FOLLOWUP_MODE:"):
-            # Extract the message after the signal
-            exit_message = followup_response.replace("EXIT_FOLLOWUP_MODE:", "").strip()
-            logger.info("LLM detected unrelated question - exiting follow-up mode")
+        # Parse JSON response
+        try:
+            parsed = json.loads(response_content)
+            intent = parsed.get("intent", "meddpicc")
+            followup_response = parsed.get("response", response_content)
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse JSON response: {e}, using raw content")
+            # Fallback: treat as MEDDPICC intent if JSON parsing fails
+            intent = "meddpicc"
+            followup_response = response_content
+
+        # Check intent
+        if intent == "exit":
+            logger.info("LLM detected non-MEDDPICC intent - exiting follow-up mode")
             return {  # type: ignore[return-value]
-                "final_response": exit_message,
+                "final_response": followup_response,
                 "followup_mode": False,
             }
 
-        # Keep follow-up mode active so user can ask more questions
+        # Keep follow-up mode active (MEDDPICC intent)
+        logger.info("Staying in follow-up mode (MEDDPICC intent)")
         return {  # type: ignore[return-value]
             "final_response": followup_response,
             "followup_mode": True,

@@ -5,9 +5,7 @@ with persistent checkpointing for conversation continuity.
 """
 
 import logging
-import os
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -24,25 +22,8 @@ from agents.meddpicc_coach.state import (
 
 logger = logging.getLogger(__name__)
 
-# Detect if running in LangGraph API/Studio mode
-# LangGraph sets these variables ONLY when actually running in their runtime
-_langgraph_api_mode = (
-    os.getenv("LANGGRAPH_DEPLOYMENT_NAME") is not None  # Cloud deployment
-    or os.getenv("LANGSMITH_API_KEY_FILE") is not None  # Studio runtime
-    or os.getenv("LANGGRAPH_ENV") == "production"  # Explicit flag
-)
 
-# Only use custom checkpointer when NOT in LangGraph API mode
-# (LangGraph API provides its own persistence)
-if _langgraph_api_mode:
-    _checkpointer = None
-    logger.info("LangGraph API mode detected - using platform persistence")
-else:
-    _checkpointer = MemorySaver()
-    logger.info("LangGraph checkpointer initialized (MemorySaver)")
-
-
-def build_meddpicc_coach() -> CompiledStateGraph:
+def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
     """Build and compile the MEDDPICC coach graph.
 
     Workflow with Q&A branch and follow-up questions:
@@ -136,12 +117,18 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     # Follow-up handler loops back to END for more questions
     coach_builder.add_edge("followup_handler", END)
 
-    # Compile with checkpointer for state persistence
-    # (only when not in LangGraph API mode)
-    if _checkpointer:
-        compiled = coach_builder.compile(checkpointer=_checkpointer)
-        logger.info("MEDDPICC coach graph compiled with MemorySaver")
+    # Compile with optional checkpointer
+    # - LangGraph Studio: calls with no checkpointer (uses platform persistence)
+    # - Bot code: calls with MemorySaver() for local state persistence
+    if checkpointer:
+        compiled = coach_builder.compile(checkpointer=checkpointer)
+        logger.info(
+            f"MEDDPICC coach graph compiled with checkpointer: {type(checkpointer).__name__}"
+        )
     else:
         compiled = coach_builder.compile()
-        logger.info("MEDDPICC coach graph compiled (LangGraph API mode)")
+        logger.info(
+            "MEDDPICC coach graph compiled without checkpointer (platform persistence)"
+        )
+
     return compiled
