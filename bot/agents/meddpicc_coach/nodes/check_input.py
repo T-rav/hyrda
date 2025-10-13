@@ -96,7 +96,7 @@ MEDDPICC elements (PARTIAL information counts!):
 1. Notes have structured format (bullet points, sections, headings)
 2. Customer/company name + pain points/problems mentioned
 3. Notes contain 2+ MEDDPICC elements (even if partial/implied)
-4. More than 200 words with sales context
+4. More than 100 words with sales context
 5. Call notes format with attendees, date, or next steps
 
 **ONLY SAY CLARIFY IF**:
