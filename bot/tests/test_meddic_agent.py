@@ -78,6 +78,7 @@ class TestMeddicAgentClarificationLogic:
 
         return agent, context
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_comprehensive_notes_should_proceed(self, agent_context):
         """Test that comprehensive structured notes proceed to analysis"""
@@ -123,6 +124,7 @@ Next Steps:
         assert "need a bit more context" not in result["response"]
         assert "share more about the call" not in result["response"]
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_sample_call_notes_should_proceed(self, agent_context):
         """Test that medium-coverage notes proceed to analysis"""
@@ -150,6 +152,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
         assert "MEDDPICC" in result["response"]
         assert "need a bit more context" not in result["response"]
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_minimal_with_context_should_proceed(self, agent_context):
         """Test that minimal notes with customer + pain proceed"""
@@ -163,6 +166,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
         assert "response" in result
         assert "MEDDPICC" in result["response"]
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_customer_plus_pain_should_proceed(self, agent_context):
         """Test that customer name + pain point is sufficient"""
@@ -176,6 +180,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
         assert "response" in result
         assert "MEDDPICC" in result["response"]
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_vague_single_sentence_should_clarify(self, agent_context):
         """Test that truly vague input asks for clarification"""
@@ -192,6 +197,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
             or "share more about" in result["response"]
         )
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_follow_up_without_context_should_clarify(self, agent_context):
         """Test that vague follow-up without context asks for clarification"""
@@ -209,6 +215,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
             or "share more about" in result["response"]
         )
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_very_short_input_should_clarify(self, agent_context):
         """Test that very short input asks for clarification"""
@@ -225,6 +232,7 @@ Timeline is end of Q2 - they want something in place before the summer product l
             or "share more about" in result["response"]
         )
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_structured_bullets_should_proceed(self, agent_context):
         """Test that structured bullet points proceed"""
