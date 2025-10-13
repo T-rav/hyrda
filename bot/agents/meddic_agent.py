@@ -18,6 +18,7 @@ from agents.base_agent import BaseAgent
 from agents.meddpicc_coach.configuration import MeddpiccConfiguration
 from agents.meddpicc_coach.meddpicc_coach import meddpicc_coach
 from agents.registry import agent_registry
+from services.meddpicc_context_manager import MeddpiccContextManager
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,10 @@ class MeddicAgent(BaseAgent):
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
         self.graph = meddpicc_coach
-        logger.info("MeddicAgent initialized with MEDDPICC coach workflow")
+        self.context_manager = MeddpiccContextManager()
+        logger.info(
+            "MeddicAgent initialized with MEDDPICC coach workflow + context management"
+        )
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute MEDDPICC analysis using LangGraph.
@@ -101,75 +105,99 @@ class MeddicAgent(BaseAgent):
             # Check for previous checkpoint to restore Q&A state and accumulate context
             from agents.meddpicc_coach.nodes.qa_collector import MEDDPICC_QUESTIONS
 
-            accumulated_query = query
-            input_state = {"query": query}
-
             # Use the checkpointer from the graph
             checkpointer = self.graph.checkpointer
+            input_state = {"query": query}
 
+            # Load previous state and manage conversation context
             try:
                 # Attempt to load previous state from checkpoint
                 checkpoint_tuple = await checkpointer.aget_tuple(
                     {"configurable": {"thread_id": thread_id}}
                 )
 
+                # Initialize context variables
+                conversation_history = None
+                conversation_summary = None
+                question_mode = False
+                current_question_index = 0
+                gathered_answers = {}
+                followup_mode = False
+                original_analysis = ""
+
                 if checkpoint_tuple and checkpoint_tuple.checkpoint:
                     previous_state = checkpoint_tuple.checkpoint.get(
                         "channel_values", {}
                     )
 
-                    # Check if we're continuing a Q&A session
+                    # Load conversation context from previous state
+                    conversation_history = previous_state.get(
+                        "conversation_history", None
+                    )
+                    conversation_summary = previous_state.get(
+                        "conversation_summary", None
+                    )
+
+                    # Check modes
                     question_mode = previous_state.get("question_mode", False)
                     current_question_index = previous_state.get(
                         "current_question_index", 0
                     )
                     gathered_answers = previous_state.get("gathered_answers", {})
-
-                    # Check if we're in follow-up questions mode (after analysis complete)
                     followup_mode = previous_state.get("followup_mode", False)
                     original_analysis = previous_state.get("original_analysis", "")
 
-                    if followup_mode:
-                        # Follow-up questions mode - preserve follow-up state
-                        logger.info(
-                            f"💬 Continuing follow-up questions mode - user asked: {query[:50]}..."
-                        )
-                        input_state = {
-                            "query": query,  # User's follow-up question
-                            "followup_mode": followup_mode,
-                            "original_analysis": original_analysis,
-                        }
-                    elif question_mode:
-                        # Continuing Q&A - preserve Q&A state fields
-                        logger.info(
-                            f"📝 Continuing Q&A mode - question {current_question_index} of {len(MEDDPICC_QUESTIONS)}"
-                        )
-                        input_state = {
-                            "query": query,  # User's answer to the current question
-                            "question_mode": question_mode,
-                            "current_question_index": current_question_index,
-                            "gathered_answers": gathered_answers,
-                        }
-                    else:
-                        # Regular analysis mode - accumulate context
-                        previous_query = previous_state.get("query", "")
-                        if previous_query and previous_query != query:
-                            accumulated_query = f"{previous_query}\n\n---\n\n**Additional information:**\n{query}"
-                            logger.info(
-                                f"📚 Accumulated context from previous turn ({len(previous_query)} + {len(query)} chars)"
-                            )
-                            input_state = {"query": accumulated_query}
-                        else:
-                            logger.info(
-                                "🆕 First message in thread (no previous context)"
-                            )
-                else:
-                    logger.info("🆕 No previous checkpoint found (new conversation)")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to load checkpoint for context accumulation: {e}"
+                # Manage conversation context with compression
+                context_result = await self.context_manager.manage_context(
+                    query, conversation_history, conversation_summary, role="user"
                 )
-                # Continue with just the new query
+
+                # Extract managed context
+                conversation_history = context_result["conversation_history"]
+                conversation_summary = context_result["conversation_summary"]
+                enhanced_query = context_result["enhanced_query"]
+
+                # Build input state based on mode
+                if followup_mode:
+                    # Follow-up questions mode - preserve state + context
+                    logger.info(
+                        f"💬 Continuing follow-up mode with {len(conversation_history)} messages in history"
+                    )
+                    input_state = {
+                        "query": enhanced_query,
+                        "followup_mode": followup_mode,
+                        "original_analysis": original_analysis,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+                elif question_mode:
+                    # Continuing Q&A - preserve Q&A state + context
+                    logger.info(
+                        f"📝 Continuing Q&A mode - question {current_question_index} of {len(MEDDPICC_QUESTIONS)}"
+                    )
+                    input_state = {
+                        "query": query,  # Don't enhance Q&A answers
+                        "question_mode": question_mode,
+                        "current_question_index": current_question_index,
+                        "gathered_answers": gathered_answers,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+                else:
+                    # Regular analysis mode - use enhanced query with full context
+                    logger.info(
+                        f"🔍 Analysis mode with {len(conversation_history)} messages in history"
+                    )
+                    input_state = {
+                        "query": enhanced_query,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+
+            except Exception as e:
+                logger.warning(f"Failed to manage context: {e}")
+                # Fallback: continue with just the new query
+                input_state = {"query": query}
 
             # Log the input state
             logger.info(

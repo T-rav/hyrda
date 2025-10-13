@@ -21,6 +21,8 @@ class MeddpiccAgentInputState(TypedDict, total=False):
     followup_mode: (
         bool  # Whether in follow-up questions mode (restored from checkpoint)
     )
+    conversation_history: list[dict[str, str]]  # Full conversation history
+    conversation_summary: str  # Semantic summary of older messages
 
 
 class MeddpiccAgentState(TypedDict, total=False):
@@ -39,6 +41,8 @@ class MeddpiccAgentState(TypedDict, total=False):
         gathered_answers: Dictionary of answers to questions
         followup_mode: Whether in follow-up questions mode after analysis
         original_analysis: The complete analysis for reference in follow-ups
+        conversation_history: Full conversation history with role/content dicts
+        conversation_summary: Semantic summary of older conversation messages
     """
 
     query: str
@@ -53,6 +57,8 @@ class MeddpiccAgentState(TypedDict, total=False):
     gathered_answers: dict[str, str]
     followup_mode: bool
     original_analysis: str
+    conversation_history: list[dict[str, str]]
+    conversation_summary: str
 
 
 class MeddpiccAgentOutputState(TypedDict):
