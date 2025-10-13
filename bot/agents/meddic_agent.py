@@ -251,14 +251,6 @@ class MeddicAgent(BaseAgent):
                 logger.info(
                     "Input requires clarification - returning clarification message"
                 )
-                # Delete progress indicator
-                if slack_service and channel and progress_msg_ts:
-                    try:
-                        await slack_service.delete_message(
-                            channel=channel, ts=progress_msg_ts
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to delete progress message: {e}")
 
                 # Ensure header is present
                 if not clarification_message.startswith(":dart:"):
@@ -290,10 +282,6 @@ class MeddicAgent(BaseAgent):
                 }
 
             logger.info(f"MEDDPICC analysis complete: {len(final_response)} chars")
-
-            # Delete progress indicator
-            if slack_service and channel and progress_msg_ts:
-                await slack_service.delete_message(channel, progress_msg_ts)
 
             # Generate PDF with entity extraction for title
             from datetime import datetime

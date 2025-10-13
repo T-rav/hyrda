@@ -171,10 +171,10 @@ def get_thread_tracking(redis_url: str | None = None) -> ThreadTrackingService:
         # Get Redis URL from settings if not provided
         if redis_url is None:
             try:
-                from config.settings import Settings
+                from config.settings import CacheSettings
 
-                settings = Settings()
-                redis_url = settings.redis_url
+                cache_settings = CacheSettings()
+                redis_url = cache_settings.redis_url
                 logger.info(f"Thread tracking initialized with Redis: {redis_url}")
             except Exception as e:
                 logger.warning(f"Could not get Redis URL from settings: {e}")

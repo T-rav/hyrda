@@ -26,10 +26,15 @@ async def handle_error(
 
 
 async def delete_message(client: WebClient, channel: str, ts: str) -> bool:
-    """Delete a message with error handling"""
+    """Delete a message with error handling (idempotent - ignores already-deleted messages)"""
     try:
         await client.chat_delete(channel=channel, ts=ts)
         return True
     except Exception as e:
+        # Ignore "message_not_found" errors (message already deleted)
+        error_str = str(e).lower()
+        if "message_not_found" in error_str:
+            logger.debug(f"Message {ts} already deleted (ignoring)")
+            return True
         logger.error(f"Error deleting message: {e}")
         return False
