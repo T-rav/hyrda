@@ -61,9 +61,9 @@ async def coaching_insights(
         # Add header if not present
         header = ":dart: **MEDDPICC**\n\n"
         if not meddpicc_breakdown.startswith(":dart:"):
-            final_response = f"{header}{meddpicc_breakdown}\n\n\n{coaching_insights}"
+            final_response = f"{header}{meddpicc_breakdown}\n\n{coaching_insights}"
         else:
-            final_response = f"{meddpicc_breakdown}\n\n\n{coaching_insights}"
+            final_response = f"{meddpicc_breakdown}\n\n{coaching_insights}"
 
         return {  # type: ignore[return-value]
             "coaching_insights": coaching_insights,
