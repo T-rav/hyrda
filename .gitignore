@@ -213,3 +213,4 @@ tasks/supervisord.pid
 # LangGraph persistent checkpoints (production)
 /data/
 bot/data/
+.langgraph_api/
