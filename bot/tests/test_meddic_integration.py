@@ -65,6 +65,7 @@ async def test_full_notes_to_report():
     print(f"✅ Full notes → report: {len(nodes_visited)} nodes")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_qa_flow_iteration_1():
     """Test iteration 1: Empty → Answer all 8 questions → Get report."""
@@ -121,6 +122,7 @@ async def test_complete_qa_flow_iteration_1():
             )
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_qa_flow_iteration_2():
     """Test iteration 2: Empty → Answer all 8 questions → Get report."""
@@ -167,6 +169,7 @@ async def test_complete_qa_flow_iteration_2():
             print("✅ Iteration 2 - Complete! Report generated")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_qa_flow_iteration_3():
     """Test iteration 3: Empty → Answer all 8 questions → Get report."""
@@ -257,6 +260,7 @@ async def test_agent_level_full_notes():
     print("✅ Agent-level full notes test passed")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_three_complete_qa_conversations():
     """Test 3 complete back-and-forth Q&A conversations in sequence.

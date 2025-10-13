@@ -248,7 +248,7 @@ Summary:"""
             if recent_history:
                 history_text = "\n\n".join(
                     [
-                        f"{'User' if msg['role'] == 'user' else 'Assistant'}: {msg['content'][:300]}{'...' if len(msg['content']) > 300 else ''}"
+                        f"{'User' if msg['role'] == 'user' else 'Assistant'}: {str(msg.get('content', ''))[:300]}{'...' if len(str(msg.get('content', ''))) > 300 else ''}"
                         for msg in recent_history[-5:]  # Last 5 messages max
                     ]
                 )

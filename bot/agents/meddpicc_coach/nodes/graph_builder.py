@@ -9,6 +9,7 @@ import logging
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from agents.meddpicc_coach.nodes.check_input import check_input_completeness
 from agents.meddpicc_coach.nodes.coaching_insights import coaching_insights
 from agents.meddpicc_coach.nodes.followup_handler import followup_handler
 from agents.meddpicc_coach.nodes.meddpicc_analysis import meddpicc_analysis
@@ -44,6 +45,7 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
     )
 
     # Add nodes
+    coach_builder.add_node("check_input", check_input_completeness)
     coach_builder.add_node("qa_collector", qa_collector)
     coach_builder.add_node("parse_notes", parse_notes)
     coach_builder.add_node("meddpicc_analysis", meddpicc_analysis)
@@ -76,8 +78,17 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
             logger.info("No notes provided - routing to Q&A collector")
             return "qa_collector"
 
-        # Priority 4: Has notes and not in Q&A/follow-up mode, go straight to analysis
-        logger.info("Notes provided - routing directly to parse_notes")
+        # Priority 4: Has notes - check if they're sufficient for analysis
+        logger.info("Notes provided - checking input completeness")
+        return "check_input"
+
+    def route_check_input(state: MeddpiccAgentState) -> str:
+        """Route from check_input: to QA if needs clarification, to parse_notes if ready."""
+        needs_clarification = state.get("needs_clarification", False)
+        if needs_clarification:
+            logger.info("Input needs clarification - routing to Q&A collector")
+            return "qa_collector"
+        logger.info("Input is sufficient - proceeding to parse_notes")
         return "parse_notes"
 
     def route_qa(state: MeddpiccAgentState) -> str:
@@ -95,6 +106,15 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
         route_start,
         {
             "followup_handler": "followup_handler",
+            "qa_collector": "qa_collector",
+            "check_input": "check_input",
+        },
+    )
+
+    coach_builder.add_conditional_edges(
+        "check_input",
+        route_check_input,
+        {
             "qa_collector": "qa_collector",
             "parse_notes": "parse_notes",
         },
