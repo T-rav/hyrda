@@ -57,7 +57,17 @@ def event_loop():
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_environment():
-    """Set up test environment variables"""
+    """Set up test environment variables
+
+    Only sets fake API keys if LLM_API_KEY is not already set (allows integration tests)
+    """
+    # If LLM_API_KEY is already set, don't override it (integration tests)
+    if os.getenv("LLM_API_KEY") and os.getenv("LLM_API_KEY") != "test-api-key":
+        # Integration test mode - don't override environment
+        yield
+        return
+
+    # Unit test mode - use fake API keys
     test_env = {
         "SLACK_BOT_TOKEN": "xoxb-test-token",
         "SLACK_APP_TOKEN": "xapp-test-token",
