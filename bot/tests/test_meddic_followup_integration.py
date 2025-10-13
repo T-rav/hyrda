@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
+from langgraph.checkpoint.memory import MemorySaver
 
 from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach
 
@@ -37,7 +38,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.asyncio
 async def test_full_analysis_then_followup_stay():
     """Real integration: Full analysis → Follow-up MEDDPICC question → Stay in mode."""
-    graph = build_meddpicc_coach()
+    graph = build_meddpicc_coach(checkpointer=MemorySaver())
 
     # Step 1: Get initial analysis
     initial_notes = """
@@ -101,7 +102,7 @@ async def test_full_analysis_then_followup_stay():
 @pytest.mark.asyncio
 async def test_full_analysis_then_followup_exit():
     """Real integration: Full analysis → Unrelated question → Exit mode."""
-    graph = build_meddpicc_coach()
+    graph = build_meddpicc_coach(checkpointer=MemorySaver())
 
     # Step 1: Get initial analysis
     initial_notes = """
@@ -149,7 +150,7 @@ async def test_full_analysis_then_followup_exit():
 @pytest.mark.asyncio
 async def test_followup_modify_analysis():
     """Real integration: Analysis → Request to modify (drop P) → Modified analysis."""
-    graph = build_meddpicc_coach()
+    graph = build_meddpicc_coach(checkpointer=MemorySaver())
 
     # Step 1: Get initial analysis
     initial_notes = """
@@ -203,7 +204,7 @@ async def test_followup_modify_analysis():
 @pytest.mark.asyncio
 async def test_followup_sales_coaching():
     """Real integration: Analysis → Sales coaching question → Coaching response."""
-    graph = build_meddpicc_coach()
+    graph = build_meddpicc_coach(checkpointer=MemorySaver())
 
     # Step 1: Get initial analysis
     initial_notes = """
