@@ -60,9 +60,10 @@ async def followup_handler(
         llm_settings = LLMSettings()
 
         # Use GPT-4o with JSON mode for structured intent detection
+        # Low temperature (0.2) for deterministic intent classification
         llm = ChatOpenAI(  # type: ignore[call-arg]
             model="gpt-4o",
-            temperature=meddpicc_config.coaching_temperature,
+            temperature=0.2,  # Low temp for reliable intent detection
             model_kwargs={
                 "max_tokens": meddpicc_config.coaching_max_tokens,
                 "response_format": {"type": "json_object"},
