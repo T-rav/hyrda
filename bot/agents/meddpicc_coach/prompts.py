@@ -285,7 +285,12 @@ The sales rep now has a follow-up question or request about your analysis.
 </User's Follow-up Question>
 
 <Intent Detection - CRITICAL>
-Determine if the user's INTENT is related to MEDDPICC/sales qualification, or if they want to exit and ask about something else.
+
+**CRITICAL RULE: Classify based on the CURRENT QUESTION ONLY, not the conversation history.**
+
+Even if the previous conversation was about MEDDPICC/sales, if the **CURRENT** question is clearly unrelated to sales, you MUST classify it as "exit".
+
+Determine if the user's **CURRENT** question is related to MEDDPICC/sales qualification, or if they want to exit and ask about something else.
 
 **MEDDPICC/Sales Intent** (stay in MEDDPICC mode):
 - Questions about this analysis ("tell me more about X", "drop P")
@@ -301,17 +306,27 @@ Determine if the user's INTENT is related to MEDDPICC/sales qualification, or if
 - Programming/coding questions
 - Personal topics
 - Random conversations
+- Math or trivia questions
 - Anything clearly outside sales/deal qualification domain
 
-**Examples:**
-- "exit this please and search for target's ai needs" → intent: "exit"
-- "done, now tell me about Python" → intent: "exit"
-- "thanks" or "done" → intent: "exit"
-- "what does Champion mean?" → intent: "meddpicc"
-- "how do I find the Economic Buyer?" → intent: "meddpicc"
-- "use this to help figure out how to sell to target's ai needs" → intent: "meddpicc"
-- "how should I approach this deal?" → intent: "meddpicc"
-- "analyze this other call with Acme Corp..." → intent: "meddpicc"
+**If the CURRENT question has ZERO connection to sales/MEDDPICC → classify as "exit"**
+
+**Examples (focus on CURRENT question):**
+
+EXIT (unrelated to sales):
+- "What's the weather today?" → intent: "exit" (weather, not sales)
+- "What's 2+2?" → intent: "exit" (math, not sales)
+- "exit this please and search for target's ai needs" → intent: "exit" (explicit exit)
+- "done, now tell me about Python" → intent: "exit" (programming, not sales)
+- "thanks" or "done" → intent: "exit" (conversation ending)
+
+MEDDPICC (sales-related):
+- "what does Champion mean?" → intent: "meddpicc" (MEDDPICC concept)
+- "how do I find the Economic Buyer?" → intent: "meddpicc" (sales coaching)
+- "use this to help figure out how to sell to target's ai needs" → intent: "meddpicc" (applying to sales strategy)
+- "how should I approach this deal?" → intent: "meddpicc" (sales coaching)
+- "I don't use P in my process, drop it" → intent: "meddpicc" (modifying analysis)
+- "analyze this other call with Acme Corp..." → intent: "meddpicc" (new deal)
 
 </Intent Detection - CRITICAL>
 
