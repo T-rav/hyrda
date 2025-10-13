@@ -44,11 +44,15 @@ Focus Area: {focus_area}
 <8th Light Company Profile Structure>
 Your research brief must plan for gathering information across these specific sections:
 
-1. **Company Overview**
-   - Company name, founding year, headquarters
+1. **Company Overview & Financial Position**
+   - Company name, founding year, headquarters, founding story
    - Core business and value proposition
-   - Size (employees, revenue if public)
-   - Market position and industry sector
+   - Size (employees, revenue if public), growth trends (3-5 years)
+   - Market position, market cap, valuation metrics
+   - Key revenue streams and their contributions
+   - Recent funding, acquisitions, financial restructuring
+   - Financial performance vs industry benchmarks
+   - R&D investment levels and trends
 
 2. **Company Priorities for Current/Next Year**
    - Strategic initiatives and goals
@@ -56,41 +60,67 @@ Your research brief must plan for gathering information across these specific se
    - Executive interviews and statements
    - News stories about future direction
 
-3. **News Stories (Past Year)**
+3. **Technology Stack, Innovation & IP Strategy**
+   - Core technologies used or developed
+   - Technology architecture and infrastructure approach
+   - Patents held and IP strategy
+   - Digital transformation maturity and tech adoption
+   - Emerging technologies (AI/ML, cloud, etc.) being invested in
+   - Cybersecurity and data management approach
+   - Software development and deployment practices (CI/CD, DevOps, testing)
+
+4. **Market Position, Industry Trends & Risk Assessment**
+   - Industry trends affecting the business
+   - Overall market size and growth trajectory for their sector
+   - Regulatory changes impacting operations
+   - Customer behavior shifts relevant to their business
+   - Macroeconomic factors influencing performance
+   - Key business, technology, and market risks
+   - Economic downturn exposure and market volatility
+   - Regulatory/compliance risks in their sector
+   - Reputational or operational risks
+
+5. **News Stories (Past 12 Months)**
    - Major announcements and developments
    - Product launches, partnerships, acquisitions
    - Leadership changes
    - Industry recognition or challenges
 
-4. **Executive Team**
+6. **Executive Team**
    - C-suite executives (names, titles, backgrounds)
    - Business units and department leaders
    - Organizational structure
 
-5. **Relationships (8th Light Network)**
+7. **Relationships (8th Light Network)**
    - Known contacts at the company
    - Client network connections
    - Past or current engagements
 
-6. **Industry Competitors**
-   - Direct competitors in their space
-   - Target companies in same industry
-   - Market positioning vs competitors
+8. **Competitive Landscape**
+   - Direct and indirect competitors
+   - Market share and competitive positioning
+   - Key competitive advantages and differentiators
+   - Comparison to competitors (technology, pricing, market approach)
+   - Threats from new entrants or disruptive technologies
+   - Strategic partnerships or alliances
 
-7. **Boutique Consulting Partners**
+9. **Boutique Consulting Partners**
    - Consulting firms who have worked with the company
    - Competitors 8th Light may encounter
    - Case studies or news stories of consultancy work
 
-8. **Size of Teams**
-   - Product team size
-   - Design team size
-   - Technology/engineering team size
+10. **Operational Excellence & Team Structure**
+    - Product/Design/Technology team sizes
+    - Operational model and key processes
+    - Supply chain and vendor management approach
+    - Talent acquisition and retention strategy
+    - Performance measurement and reporting
+    - Sustainability and ESG initiatives
 
-9. **Solutions 8th Light Can Offer**
-   - Based on company initiatives and challenges
-   - How 8th Light's services align (see www.8thlight.com)
-   - Specific project opportunities
+11. **Solutions 8th Light Can Offer**
+    - Based on company initiatives and challenges
+    - How 8th Light's services align (see www.8thlight.com)
+    - Specific project opportunities
 
 </8th Light Company Profile Structure>
 
@@ -121,7 +151,7 @@ Your research brief must plan for gathering information across these specific se
 ❌ BAD (basic): "How many engineers do they have?"
 ✅ GOOD (health signals): "What's the engineering team growth trajectory - rapid hiring or stable? Are there Glassdoor reviews mentioning tech debt, burnout, or process issues? What does the CTO/VPE say about engineering challenges in interviews or blog posts? Are they hiring for roles that signal problems (Staff+ engineers, DevOps, QA)? Any notable engineering departures to competitors?"
 
-**For each of the 9 sections above**:
+**For each of the 11 sections above**:
 - Generate 3-5 **specific investigative questions** that reveal BD opportunities
 - Include **source targeting** (where to look)
 - Add **why it matters** (how this helps 8th Light's sales approach)
@@ -146,7 +176,7 @@ Write as the lead researcher planning the investigation:
 ## Investigation Strategy
 [Brief overview of research approach - what angles will you pursue? If a focus area is specified, explain how it guides the research.]
 
-## Section 1: Company Overview
+## Section 1: Company Overview & Financial Position
 **Key Questions:**
 - [Specific question 1 with source targeting]
 - [Specific question 2 asking around the issue]
@@ -158,7 +188,7 @@ Write as the lead researcher planning the investigation:
 - [Investigative question 2]
 ...
 
-[Continue for all 9 sections, adjusting depth based on focus area]
+[Continue for all 11 sections, adjusting depth based on focus area]
 
 ## Research Priorities
 [What sections need deepest investigation? What's most critical for 8th Light's sales approach? How does the focus area influence priority?]
@@ -356,11 +386,23 @@ Answer the investigative questions above by:
 **Prioritize findings that reveal**:
 - **Product efforts** (what are they building? product roadmap? product-market fit challenges?)
 - **Engineering team health** (technical debt mentions? hiring/attrition? scaling pains? Glassdoor eng reviews?)
+- **Technology & innovation** (tech stack, digital transformation, cybersecurity maturity, DevOps practices, IP strategy)
+- **Market position & risks** (competitive threats, industry disruption, regulatory changes, economic exposure)
+- **Financial health** (revenue trends, growth trajectory, profitability, funding, R&D investment)
+- **Operational maturity** (process gaps, supply chain issues, talent retention, ESG commitments)
 - **Growth challenges** (scaling issues, team gaps, process problems)
 - **Strategic initiatives** (digital transformation, new products, market expansion)
 - **Decision maker priorities** (what execs talk about in interviews)
 - **Budget signals** (funding, hiring sprees, partnerships)
 - **Cultural fit** (values, ways of working, engineering culture)
+
+**New Research Areas to Investigate**:
+- **Patents & IP**: Search patent databases, company IP filings, technology innovations
+- **Cybersecurity**: Look for breach history, security certifications, CISO statements, compliance frameworks
+- **Financial Performance**: 10-K filings, earnings calls, analyst reports, revenue breakdowns
+- **Market & Industry Analysis**: Industry reports (Gartner, Forrester), market size studies, regulatory news
+- **ESG & Sustainability**: Sustainability reports, ESG ratings, environmental initiatives
+- **Risk Factors**: 10-K risk sections, analyst concerns, regulatory filings
 </BD-Focused Research>
 
 <Hard Limits>
@@ -449,14 +491,21 @@ Use ONLY externally verifiable information - do not invent details.
 <Mandatory Report Structure - 8th Light Company Profile>
 IMPORTANT: Structure your report with EXACTLY these sections in this order:
 
-## Company Overview
-COMPREHENSIVE overview (2-3 paragraphs minimum) covering:
+## Company Overview & Financial Position
+COMPREHENSIVE overview and financial analysis (3-4 paragraphs minimum) covering:
 - Company name, founding year, headquarters, and founding story [cite sources]
 - Core business, products/services, and detailed value proposition [cite sources]
-- Company size (employees, revenue, growth trajectory if available) [cite sources]
+- Company size (employees, revenue, growth trajectory over 3-5 years if available) [cite sources]
 - Market position, industry sector, and competitive differentiation [cite sources]
 - Key milestones and evolution of the company [cite sources]
-- Financial performance indicators and market presence [cite sources]
+- **Financial Performance** (if publicly traded or available):
+  - Current financial position (revenue, profitability, cash flow, debt levels) [cite sources]
+  - Revenue growth trends over past 3-5 years [cite sources]
+  - Key revenue streams and their respective contributions [cite sources]
+  - Financial performance vs industry benchmarks [cite sources]
+  - R&D investment levels and trends [cite sources]
+  - Market capitalization and valuation metrics [cite sources]
+  - Recent funding rounds, acquisitions, or financial restructuring [cite sources]
 
 ## Company Priorities for Current/Next Year
 DETAILED strategic initiatives and goals (3-4 paragraphs minimum) including:
@@ -469,6 +518,28 @@ DETAILED strategic initiatives and goals (3-4 paragraphs minimum) including:
 - **Execution challenges and constraints**: Technical debt, talent gaps, regulatory hurdles, competitive pressures [cite sources]
 - **Investment signals**: Funding rounds, budget allocations, hiring sprees [cite sources]
 - **Risk factors and concerns**: What keeps leadership up at night? [cite sources]
+
+## Technology Stack, Innovation & IP Strategy
+COMPREHENSIVE technology and innovation analysis (2-3 paragraphs minimum) covering:
+- **Core Technology Stack**: What core technologies does the company use or develop? [cite sources]
+- **Architecture & Infrastructure**: Technology architecture approach (cloud, on-prem, hybrid), infrastructure strategy [cite sources]
+- **Patents & IP Portfolio**: Patents held, IP strategy, key technological innovations [cite sources]
+- **Digital Transformation**: Maturity of digital transformation and technology adoption [cite sources]
+- **Emerging Technology Investments**: AI/ML, blockchain, IoT, or other emerging tech being explored or deployed [cite sources]
+- **Cybersecurity Posture**: Approach to cybersecurity, data management, and privacy [cite sources]
+- **Software Development Practices**: Development methodologies, CI/CD maturity, DevOps practices, testing culture, deployment frequency [cite sources]
+
+## Market Position, Industry Trends & Risk Assessment
+EXTENSIVE market analysis and risk evaluation (3-4 paragraphs minimum) including:
+- **Industry Trends**: Major trends affecting the business, technology shifts, market dynamics [cite sources]
+- **Market Size & Growth**: Overall addressable market size and growth trajectory for their sector [cite sources]
+- **Regulatory Environment**: Regulatory changes impacting operations, compliance requirements, policy shifts [cite sources]
+- **Customer Behavior**: Evolving customer behaviors, preferences, or expectations relevant to their business [cite sources]
+- **Macroeconomic Factors**: Economic conditions, interest rates, inflation, or other macro factors influencing performance [cite sources]
+- **Business & Technology Risks**: Key strategic, operational, and technology risks they face [cite sources]
+- **Economic Exposure**: Vulnerability to economic downturns, recession resilience, market volatility exposure [cite sources]
+- **Regulatory & Compliance Risks**: Specific regulatory risks in their sector (data privacy, financial regulations, etc.) [cite sources]
+- **Operational & Reputational Risks**: Supply chain risks, reputational concerns, ESG risks [cite sources]
 
 ## Recent News Stories (Past 12 Months)
 COMPREHENSIVE news analysis (2-3 paragraphs minimum) including:
@@ -499,11 +570,14 @@ Known connections:
 - Past engagements or touchpoints (if any)
 - NOTE: If no known relationships exist, state "No known direct relationships identified"
 
-## Industry Competitors
-Competitive landscape:
-- Direct competitors in their market space
-- Market positioning relative to competitors
-- Other target companies in the same industry
+## Competitive Landscape
+DETAILED competitive analysis (2-3 paragraphs minimum) covering:
+- **Direct & Indirect Competitors**: Who are the main competitors in their space? [cite sources]
+- **Market Share & Positioning**: What is their market share and overall competitive positioning? [cite sources]
+- **Competitive Advantages**: Key differentiators, moats, unique capabilities [cite sources]
+- **Competitor Comparison**: How do they compare on technology, pricing, go-to-market approach, product quality? [cite sources]
+- **Threats & Disruption**: Threats from new entrants, disruptive technologies, or business model innovations [cite sources]
+- **Strategic Partnerships**: Key alliances, technology partnerships, distribution partnerships [cite sources]
 
 ## Boutique Consulting Partners
 Consulting ecosystem:
@@ -511,13 +585,13 @@ Consulting ecosystem:
 - Potential 8th Light competitors in this account
 - Relevant consultancy partnerships from news or case studies
 
-## Size of Product, Design, and Technology Teams
-EXTENSIVE team analysis and health assessment (3-4 paragraphs minimum):
-- **Product team size and structure**: Estimated size, product management approach, PM-to-engineer ratio [cite sources]
-- **Design team size and maturity**: UX/UI team size, design system investment, design leadership [cite sources]
-- **Technology/engineering team size and composition**: Total engineers, backend/frontend/data/infrastructure breakdown [cite sources]
-- **Growth trajectory and hiring patterns**: Rapid hiring? Stable? Contracting? What roles are they hiring? [cite sources]
-- **Engineering health signals - CRITICAL SECTION**:
+## Operational Excellence & Team Structure
+EXTENSIVE operational and team analysis (4-5 paragraphs minimum) covering:
+- **Product Team Size & Structure**: Estimated size, product management approach, PM-to-engineer ratio [cite sources]
+- **Design Team Size & Maturity**: UX/UI team size, design system investment, design leadership [cite sources]
+- **Technology/Engineering Team**: Total engineers, backend/frontend/data/infrastructure breakdown [cite sources]
+- **Growth Trajectory & Hiring**: Rapid hiring? Stable? Contracting? What roles are they hiring? [cite sources]
+- **Engineering Health Signals - CRITICAL SECTION**:
   - Technical debt: Has leadership mentioned tech debt, legacy systems, or modernization needs? [cite sources]
   - Quality concerns: Bug reports, outages, customer complaints about reliability? [cite sources]
   - Glassdoor engineering reviews: What are engineers saying about codebase, processes, culture? [cite sources]
@@ -525,8 +599,11 @@ EXTENSIVE team analysis and health assessment (3-4 paragraphs minimum):
   - Public engineering challenges: Blog posts, conference talks, job postings revealing pain points [cite sources]
   - Process maturity: Mentions of agile adoption, CI/CD, testing practices, dev velocity [cite sources]
   - Team scaling challenges: Growing 2x or 3x? How are they handling it? [cite sources]
-- **Technology stack and modernization**: What technologies do they use? Any migrations or modernization efforts? [cite sources]
-- **Engineering culture signals**: Open source contributions, tech blog activity, conference presence [cite sources]
+- **Operational Model**: Key operational processes, organizational efficiency, operational maturity [cite sources]
+- **Supply Chain & Vendor Management**: How do they manage suppliers, vendors, third-party dependencies? [cite sources]
+- **Talent Acquisition & Retention**: Hiring strategy, employee retention rates, talent development programs, culture initiatives [cite sources]
+- **Performance Measurement**: How do they measure success? KPIs tracked? Reporting cadence? [cite sources]
+- **Sustainability & ESG**: Environmental initiatives, social responsibility programs, governance practices, ESG commitments [cite sources]
 - NOTE: If specific numbers unavailable, provide DETAILED estimates based on company size/industry norms and explain reasoning
 
 ## Solutions 8th Light Can Offer
@@ -629,7 +706,7 @@ List **ALL** external sources with citation numbers that correspond to **EVERY**
 </Writing Guidelines - CRITICAL FOR 15-PAGE DEPTH>
 
 <Quality Checklist>
-✓ ALL 10 mandatory sections included in exact order (including Sources)
+✓ ALL 12 mandatory sections included in exact order (including Sources)
 ✓ Executive summary will be generated separately (don't include here)
 ✓ Facts supported by numbered citations [1], [2], etc.
 ✓ Professional sales prospecting tone
