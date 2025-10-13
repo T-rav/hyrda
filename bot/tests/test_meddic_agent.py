@@ -26,8 +26,8 @@ class TestMeddicAgent:
 
         assert "response" in result
         assert "metadata" in result
-        assert "MEDDIC" in result["response"]
-        assert "analyze this deal" in result["response"]
+        # MEDDPICC agent returns the analysis, not echoing the query
+        assert "MEDDIC" in result["response"] or "meddic" in result["response"].lower()
 
     @pytest.mark.asyncio
     async def test_meddic_agent_has_alias(self):
