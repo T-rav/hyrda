@@ -38,7 +38,8 @@ def get_checkpointer():
     is handled automatically by the platform.
     """
     # Don't use custom checkpointer in LangGraph API mode
-    if os.getenv("LANGGRAPH_API_URL") or os.getenv("LANGSMITH_API_KEY"):
+    # Only check LANGGRAPH_API_URL (not LANGSMITH_API_KEY which is for tracing)
+    if os.getenv("LANGGRAPH_API_URL"):
         logger.info("Running in LangGraph API mode - using platform persistence")
         return None
 

@@ -61,7 +61,8 @@ class MeddicAgent(BaseAgent):
                 "metadata": {"error": "missing_context"},
             }
 
-        logger.info(f"MeddicAgent executing with query: {len(query)} chars")
+        logger.info(f"MeddicAgent executing with query length: {len(query)} chars")
+        logger.info(f"MeddicAgent query content: '{query}'")
 
         # Get services from context
         slack_service = context.get("slack_service")
@@ -97,10 +98,12 @@ class MeddicAgent(BaseAgent):
             )
             logger.info(f"🔗 Running MEDDPICC graph with thread_id: {thread_id}")
 
-            # Check for previous checkpoint to accumulate context across turns
+            # Check for previous checkpoint to restore Q&A state and accumulate context
             from agents.meddpicc_coach.nodes.graph_builder import get_checkpointer
+            from agents.meddpicc_coach.nodes.qa_collector import MEDDPICC_QUESTIONS
 
             accumulated_query = query
+            input_state = {"query": query}
             checkpointer = get_checkpointer()
 
             try:
@@ -112,16 +115,38 @@ class MeddicAgent(BaseAgent):
                     previous_state = checkpoint_tuple.checkpoint.get(
                         "channel_values", {}
                     )
-                    previous_query = previous_state.get("query", "")
 
-                    if previous_query and previous_query != query:
-                        # Accumulate: previous context + new information
-                        accumulated_query = f"{previous_query}\n\n---\n\n**Additional information:**\n{query}"
+                    # Check if we're continuing a Q&A session
+                    question_mode = previous_state.get("question_mode", False)
+                    current_question_index = previous_state.get(
+                        "current_question_index", 0
+                    )
+                    gathered_answers = previous_state.get("gathered_answers", {})
+
+                    if question_mode:
+                        # Continuing Q&A - preserve Q&A state fields
                         logger.info(
-                            f"📚 Accumulated context from previous turn ({len(previous_query)} + {len(query)} chars)"
+                            f"📝 Continuing Q&A mode - question {current_question_index} of {len(MEDDPICC_QUESTIONS)}"
                         )
+                        input_state = {
+                            "query": query,  # User's answer to the current question
+                            "question_mode": question_mode,
+                            "current_question_index": current_question_index,
+                            "gathered_answers": gathered_answers,
+                        }
                     else:
-                        logger.info("🆕 First message in thread (no previous context)")
+                        # Regular analysis mode - accumulate context
+                        previous_query = previous_state.get("query", "")
+                        if previous_query and previous_query != query:
+                            accumulated_query = f"{previous_query}\n\n---\n\n**Additional information:**\n{query}"
+                            logger.info(
+                                f"📚 Accumulated context from previous turn ({len(previous_query)} + {len(query)} chars)"
+                            )
+                            input_state = {"query": accumulated_query}
+                        else:
+                            logger.info(
+                                "🆕 First message in thread (no previous context)"
+                            )
                 else:
                     logger.info("🆕 No previous checkpoint found (new conversation)")
             except Exception as e:
@@ -130,8 +155,10 @@ class MeddicAgent(BaseAgent):
                 )
                 # Continue with just the new query
 
-            # Prepare input state with accumulated context
-            input_state = {"query": accumulated_query}
+            # Log the input state
+            logger.info(
+                f"📊 Input state: query={len(input_state.get('query', ''))} chars, question_mode={input_state.get('question_mode', False)}"
+            )
 
             graph_config = {
                 "configurable": {
