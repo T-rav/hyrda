@@ -52,13 +52,8 @@ def get_checkpointer():
 def build_meddpicc_coach() -> CompiledStateGraph:
     """Build and compile the MEDDPICC coach graph.
 
-    Simple linear workflow - always proceeds to full analysis:
-        - parse_notes: Clean and prepare sales call notes
-        - meddpicc_analysis: Structure into MEDDPICC format
-        - coaching_insights: Generate Maverick's coaching advice
-
-    If information is missing, the analysis will mark fields as
-    "❌ Missing → Action" and coaching will guide next steps.
+    Direct analysis workflow:
+        - parse_notes → meddpicc_analysis → coaching_insights → END
 
     Returns:
         Compiled MEDDPICC coach graph
@@ -75,7 +70,7 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_node("meddpicc_analysis", meddpicc_analysis)
     coach_builder.add_node("coaching_insights", coaching_insights)
 
-    # Simple linear flow - always proceed to analysis
+    # Direct flow - no input checking
     coach_builder.add_edge(START, "parse_notes")
     coach_builder.add_edge("parse_notes", "meddpicc_analysis")
     coach_builder.add_edge("meddpicc_analysis", "coaching_insights")
@@ -85,12 +80,8 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     checkpointer = get_checkpointer()
     if checkpointer:
         compiled = coach_builder.compile(checkpointer=checkpointer)
-        logger.info(
-            "MEDDPICC coach graph compiled with linear workflow and MemorySaver checkpointer"
-        )
+        logger.info("MEDDPICC coach graph compiled with MemorySaver checkpointer")
     else:
         compiled = coach_builder.compile()
-        logger.info(
-            "MEDDPICC coach graph compiled with linear workflow (platform persistence)"
-        )
+        logger.info("MEDDPICC coach graph compiled (platform persistence)")
     return compiled
