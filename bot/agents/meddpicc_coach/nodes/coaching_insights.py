@@ -27,7 +27,7 @@ async def coaching_insights(
     Returns:
         Dict with updated state containing coaching_insights and final_response
     """
-    meddpicc_breakdown = state["meddpicc_breakdown"]
+    meddpicc_breakdown = state.get("meddpicc_breakdown", "")
     logger.info("Generating coaching insights")
 
     try:
@@ -40,11 +40,11 @@ async def coaching_insights(
         llm_settings = LLMSettings()
 
         # Use GPT-4o mini with higher temperature for creative coaching
-        llm = ChatOpenAI(
+        llm = ChatOpenAI(  # type: ignore[call-arg]
             model="gpt-4o-mini",
-            api_key=llm_settings.api_key.get_secret_value(),
             temperature=meddpicc_config.coaching_temperature,
-            max_tokens=meddpicc_config.coaching_max_tokens,
+            model_kwargs={"max_tokens": meddpicc_config.coaching_max_tokens},
+            api_key=llm_settings.api_key.get_secret_value(),
         )
 
         prompt = prompts.coaching_insights_prompt.format(
@@ -61,11 +61,11 @@ async def coaching_insights(
         # Add header if not present
         header = ":dart: **MEDDPICC**\n\n"
         if not meddpicc_breakdown.startswith(":dart:"):
-            final_response = f"{header}{meddpicc_breakdown}\n\n{coaching_insights}"
+            final_response = f"{header}{meddpicc_breakdown}\n\n\n{coaching_insights}"
         else:
-            final_response = f"{meddpicc_breakdown}\n\n{coaching_insights}"
+            final_response = f"{meddpicc_breakdown}\n\n\n{coaching_insights}"
 
-        return {
+        return {  # type: ignore[return-value]
             "coaching_insights": coaching_insights,
             "final_response": final_response,
         }
@@ -73,7 +73,7 @@ async def coaching_insights(
     except Exception as e:
         logger.error(f"Coaching insights error: {e}")
         # Fallback: return just the breakdown without coaching
-        return {
+        return {  # type: ignore[return-value]
             "coaching_insights": "Error generating coaching insights. Please try again.",
             "final_response": meddpicc_breakdown,
         }

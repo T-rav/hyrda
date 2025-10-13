@@ -88,7 +88,7 @@ async def parse_notes(
     Returns:
         Dict with updated state containing raw_notes, scraped_content, sources
     """
-    query = state["query"]
+    query = state.get("query", "")
 
     # Check if we have document content from Slack file attachments
     # (extracted by main bot handler before routing to agent)
@@ -126,11 +126,11 @@ async def parse_notes(
         from config.settings import LLMSettings
 
         llm_settings = LLMSettings()
-        llm = ChatOpenAI(
+        llm = ChatOpenAI(  # type: ignore[call-arg]
             model="gpt-4o-mini",  # Simple task, use cheaper model
-            api_key=llm_settings.api_key.get_secret_value(),
             temperature=0.1,
-            max_tokens=2000,
+            model_kwargs={"max_tokens": 2000},
+            api_key=llm_settings.api_key.get_secret_value(),
         )
 
         # If we have URLs, remove them from the text to avoid duplication
@@ -161,7 +161,7 @@ async def parse_notes(
             all_scraped_content = f"## Document Attachments\n\n{document_content}"
         logger.info(f"Added {len(document_content)} chars from document attachments")
 
-    return {
+    return {  # type: ignore[return-value]
         "raw_notes": raw_notes,
         "scraped_content": all_scraped_content,
         "sources": sources,
