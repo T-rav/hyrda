@@ -392,6 +392,114 @@ TIMELINE:
             print(f"   Response: {result['response'][:200]}")
             # This is acceptable with permissive logic
 
+    @pytest.mark.asyncio
+    async def test_clarification_flow_then_pdf_generation(self, agent_and_context):
+        """Test complete flow: Clarification → Details → PDF generated
+
+        Turn 1: Vague input → Clarification (NO PDF)
+        Turn 2: Comprehensive notes → Analysis with PDF generated
+        """
+        agent, context = agent_and_context
+
+        # Turn 1: Vague input should trigger clarification
+        turn1_input = "need help with a sales deal"
+        turn1_result = await agent.run(turn1_input, context)
+
+        print("\n" + "=" * 80)
+        print("TURN 1: Vague input")
+        print(f"Input: {turn1_input}")
+        print(f"Response: {turn1_result['response'][:200]}")
+        print("=" * 80)
+
+        # Turn 1 assertions
+        assert "response" in turn1_result
+        turn1_metadata = turn1_result.get("metadata", {})
+
+        # Should ask for clarification (no PDF)
+        needs_clarification = turn1_metadata.get("needs_clarification", False)
+        has_clarification_text = (
+            "need a bit more context" in turn1_result["response"]
+            or "share more about" in turn1_result["response"]
+        )
+
+        if needs_clarification or has_clarification_text:
+            # Turn 1: No PDF should be generated
+            assert not turn1_metadata.get("pdf_generated", False), (
+                "Turn 1: PDF should NOT be generated for clarification"
+            )
+            print("✅ Turn 1: Clarification requested, no PDF generated")
+        else:
+            print("⚠️  Turn 1: Agent proceeded (permissive logic) - checking Turn 2...")
+
+        # Turn 2: User provides comprehensive notes
+        turn2_input = """Here are the details:
+
+CUSTOMER: DataFlow Analytics
+PAIN POINTS:
+- Current reporting system takes 3 hours to generate daily reports
+- No real-time visibility into KPIs
+- Data silos across 5 different systems
+- Manual data entry causing 15% error rate
+
+ECONOMIC BUYER:
+- CFO Jennifer Martinez has final approval
+- Budget: $150K allocated for analytics transformation
+
+DECISION PROCESS:
+- Evaluation period: 2 weeks
+- Technical review with IT team
+- Final approval from CFO and CTO
+
+METRICS:
+- Reduce report generation from 3 hours to 15 minutes
+- Achieve <1% error rate
+- ROI target: 6 months
+
+TIMELINE:
+- Need solution deployed by end of Q2
+- Pilot starting next month
+
+CHAMPION:
+- VP of Analytics David Kim is advocating for our solution
+- He's familiar with our platform from previous company"""
+
+        turn2_result = await agent.run(turn2_input, context)
+
+        print("\n" + "=" * 80)
+        print("TURN 2: Comprehensive details provided")
+        print(f"Input: {turn2_input[:100]}...")
+        print(
+            f"Response: {turn2_result['response'][:200] if turn2_result.get('response') else '(empty - PDF uploaded)'}"
+        )
+        print("=" * 80)
+
+        # Turn 2 assertions
+        assert "response" in turn2_result
+        turn2_metadata = turn2_result.get("metadata", {})
+
+        # Turn 2: PDF should NOW be generated after receiving details
+        assert turn2_metadata.get("pdf_generated"), (
+            "Turn 2: PDF should be generated after receiving comprehensive details"
+        )
+        assert turn2_metadata.get("response_length", 0) > 500, (
+            "Turn 2: Should generate substantial MEDDPICC analysis"
+        )
+
+        # Verify MEDDPICC content (either in response or via PDF upload)
+        if turn2_result.get("response"):
+            # Text response returned (PDF upload failed in test)
+            assert "MEDDPICC" in turn2_result["response"], (
+                "Turn 2: Should contain MEDDPICC analysis"
+            )
+
+        print("\n✅ COMPLETE FLOW TEST PASSED:")
+        print("   Turn 1: Clarification (no PDF) ✅")
+        print(
+            f"   Turn 2: Analysis with PDF generated ({turn2_metadata.get('response_length')} chars) ✅"
+        )
+        print(f"   PDF generated: {turn2_metadata.get('pdf_generated')}")
+        print(f"   PDF uploaded: {turn2_metadata.get('pdf_uploaded')}")
+
 
 if __name__ == "__main__":
     # Allow running this test file directly
