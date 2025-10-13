@@ -94,33 +94,37 @@ MEDDPICC elements (PARTIAL information counts!):
 - Champion: Person advocating internally (often the contact person)
 - Competition: Alternatives considered (often absent - THAT'S OK)
 
-**MANDATORY PROCEED CONDITIONS** (if ANY apply, you MUST say PROCEED):
-1. Notes have structured format (bullet points, sections, headings)
-2. Customer/company name (e.g. "Acme Corp", "Jane's Equipment") + pain points/problems mentioned
-3. Notes contain 3+ distinct MEDDPICC elements (even if partial/implied)
-4. More than 100 words with sales context
-5. Call notes format with attendees, date, or next steps
+**YOUR DECISION LOGIC - SIMPLE:**
 
-**ONLY SAY CLARIFY IF**:
-- Single vague sentence under 50 characters
-- Absolutely zero MEDDPICC elements
-- No customer/company name (just a person name like "Bob" or "Susan" doesn't count)
-- Vague need without context (e.g., "they want better reporting" with no company name)
+If notes look like REAL CALL NOTES (any substance, details, context) → PROCEED
+If notes are vague one-liners with zero context → CLARIFY
 
-EXAMPLES OF PROCEED:
-- "Jane's Equipment wants AI for scheduling" → PROCEED (customer + pain)
-- "Call with Bob at Acme. They have scaling issues." → PROCEED (customer + contact + pain)
-- ANY structured call notes with bullet points → ALWAYS PROCEED
-- Notes with pain points listed → ALWAYS PROCEED
-- Notes mentioning budget, timeline, or decision maker → ALWAYS PROCEED
+**PROCEED if ANY of these:**
+- Has customer/company name + business context
+- More than 100 words about a sales situation
+- Multiple pain points or problems mentioned
+- Structured format (sections, attendees, dates, etc.)
+- Any call summary with details
 
-EXAMPLES OF CLARIFY (very rare):
-- "bob wants software" → CLARIFY (no company name, too vague)
-- "help with deal" → CLARIFY (zero information)
-- "they need better reporting in powerbi" → CLARIFY (no customer/company name - "they" is not sufficient)
-- "talked to susan, she's interested" → CLARIFY (no company name, too vague)
+**CLARIFY only if ALL of these:**
+- Under 50 characters OR completely vague
+- No customer/company name
+- Zero specific business context
 
-**WHEN IN DOUBT → PROCEED**. It's better to attempt analysis than block the user."""
+**EXAMPLES:**
+
+PROCEED:
+- "Jane's Equipment wants AI for scheduling" ✅
+- Any structured call notes with company name ✅
+- Multiple paragraphs about a deal ✅
+- Pain points + customer name ✅
+
+CLARIFY:
+- "bob wants software" ❌ (too vague, no company)
+- "help with deal" ❌ (zero context)
+- "they need better reporting" ❌ (no customer name)
+
+**DEFAULT: When in doubt → PROCEED**. Real call notes should always proceed, even if incomplete."""
 
     try:
         # Get structured output - guaranteed to be valid JSON matching schema
