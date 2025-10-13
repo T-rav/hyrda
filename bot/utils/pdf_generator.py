@@ -329,8 +329,23 @@ def _get_css_for_style(style: str) -> str:
         }
 
         /* Page breaks */
-        h2, h3, h4 {
+        h2 {
+            page-break-before: avoid;
             page-break-after: avoid;
+        }
+
+        h3, h4 {
+            page-break-after: avoid;
+        }
+
+        /* Keep MEDDPICC field sections together (h3 + following content) */
+        h3 {
+            page-break-inside: avoid;
+        }
+
+        /* Allow page breaks between MEDDPICC sections but not within them */
+        h3 + p, h3 + ul {
+            page-break-before: avoid;
         }
 
         /* Allow page breaks for long lists (like Sources section) */
@@ -338,10 +353,15 @@ def _get_css_for_style(style: str) -> str:
             page-break-inside: auto;
         }
 
-        /* Keep short lists together */
+        /* Keep short lists together (5 items or less) */
         ul li:first-child:nth-last-child(-n+5),
         ol li:first-child:nth-last-child(-n+5) {
             page-break-inside: avoid;
+        }
+
+        /* Keep horizontal rules with surrounding content */
+        hr {
+            page-break-after: avoid;
         }
     """
 
