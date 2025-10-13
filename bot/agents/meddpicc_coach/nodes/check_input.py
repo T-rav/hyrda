@@ -82,6 +82,8 @@ async def check_input_completeness(
 Sales notes:
 \"\"\"{query}\"\"\"
 
+**IMPORTANT**: If the notes contain "**Additional information:**", this is a multi-turn conversation where the user provided more details. You MUST evaluate the COMPLETE COMBINED context from ALL turns, not individual messages. The accumulated context as a whole may be sufficient even if the first message was vague.
+
 MEDDPICC elements (PARTIAL information counts!):
 - Metrics: ANY mention of improvements, savings, goals (doesn't need exact numbers)
 - Economic Buyer: ANY mention of decision makers, budget holders, executives
@@ -94,15 +96,16 @@ MEDDPICC elements (PARTIAL information counts!):
 
 **MANDATORY PROCEED CONDITIONS** (if ANY apply, you MUST say PROCEED):
 1. Notes have structured format (bullet points, sections, headings)
-2. Customer/company name + pain points/problems mentioned
-3. Notes contain 2+ MEDDPICC elements (even if partial/implied)
+2. Customer/company name (e.g. "Acme Corp", "Jane's Equipment") + pain points/problems mentioned
+3. Notes contain 3+ distinct MEDDPICC elements (even if partial/implied)
 4. More than 100 words with sales context
 5. Call notes format with attendees, date, or next steps
 
 **ONLY SAY CLARIFY IF**:
 - Single vague sentence under 50 characters
 - Absolutely zero MEDDPICC elements
-- No customer name AND no pain points
+- No customer/company name (just a person name like "Bob" or "Susan" doesn't count)
+- Vague need without context (e.g., "they want better reporting" with no company name)
 
 EXAMPLES OF PROCEED:
 - "Jane's Equipment wants AI for scheduling" → PROCEED (customer + pain)
@@ -112,8 +115,10 @@ EXAMPLES OF PROCEED:
 - Notes mentioning budget, timeline, or decision maker → ALWAYS PROCEED
 
 EXAMPLES OF CLARIFY (very rare):
-- "bob wants software" → CLARIFY (too vague, no context)
+- "bob wants software" → CLARIFY (no company name, too vague)
 - "help with deal" → CLARIFY (zero information)
+- "they need better reporting in powerbi" → CLARIFY (no customer/company name - "they" is not sufficient)
+- "talked to susan, she's interested" → CLARIFY (no company name, too vague)
 
 **WHEN IN DOUBT → PROCEED**. It's better to attempt analysis than block the user."""
 

@@ -338,8 +338,11 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                 "Generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
 
+            # Preprocess markdown for PDF: convert Slack emoji to Unicode emoji
+            pdf_content = final_response.replace(":dart:", "🎯")
+
             pdf_bytes = markdown_to_pdf(
-                markdown_content=final_response,
+                markdown_content=pdf_content,
                 title=pdf_title,
                 metadata=pdf_metadata,
                 style="professional",

@@ -175,10 +175,10 @@ NEXT STEPS:
         "reason": "Customer name + specific pain point = meets threshold despite brevity",
     },
     {
-        "name": "Name + generic interest - now proceeds with permissive logic",
+        "name": "Name + generic interest - should clarify",
         "notes": "talked to susan, she's interested",
-        "expected_decision": "PROCEED",
-        "reason": "Permissive logic sees potential champion (Susan) and implied interest/need",
+        "expected_decision": "CLARIFY",
+        "reason": "Too vague - no customer name, no specific pain, just generic interest",
     },
     {
         "name": "Company + vague problem - should proceed",
@@ -187,10 +187,10 @@ NEXT STEPS:
         "reason": "Company + problem + economic buyer mention + budget = sufficient for analysis",
     },
     {
-        "name": "Vague follow-up - now proceeds with permissive logic",
+        "name": "Vague follow-up - should clarify",
         "notes": "they need better reporting in powerbi",
-        "expected_decision": "PROCEED",
-        "reason": "Mentions specific pain point (reporting), permissive logic treats this as sufficient",
+        "expected_decision": "CLARIFY",
+        "reason": "No customer name, no context - just a vague need without any details",
     },
 ]
 
