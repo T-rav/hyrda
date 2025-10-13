@@ -24,8 +24,13 @@ from agents.meddpicc_coach.state import (
 
 logger = logging.getLogger(__name__)
 
-# Detect if running in LangGraph API mode (Studio/Cloud)
-_langgraph_api_mode = os.getenv("LANGGRAPH_API_URL") is not None
+# Detect if running in LangGraph API/Studio mode
+# LangGraph sets these variables ONLY when actually running in their runtime
+_langgraph_api_mode = (
+    os.getenv("LANGGRAPH_DEPLOYMENT_NAME") is not None  # Cloud deployment
+    or os.getenv("LANGSMITH_API_KEY_FILE") is not None  # Studio runtime
+    or os.getenv("LANGGRAPH_ENV") == "production"  # Explicit flag
+)
 
 # Only use custom checkpointer when NOT in LangGraph API mode
 # (LangGraph API provides its own persistence)
