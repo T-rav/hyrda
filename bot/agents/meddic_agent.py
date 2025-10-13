@@ -14,9 +14,11 @@ Uses LangGraph to orchestrate MEDDPICC analysis workflow:
 import logging
 from typing import Any
 
+from langgraph.checkpoint.memory import MemorySaver
+
 from agents.base_agent import BaseAgent
 from agents.meddpicc_coach.configuration import MeddpiccConfiguration
-from agents.meddpicc_coach.meddpicc_coach import meddpicc_coach
+from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach
 from agents.registry import agent_registry
 from services.meddpicc_context_manager import MeddpiccContextManager
 
@@ -43,10 +45,11 @@ class MeddicAgent(BaseAgent):
         """Initialize MeddicAgent with LangGraph workflow."""
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
-        self.graph = meddpicc_coach
+        # Build graph with MemorySaver for bot code (LangGraph Studio uses platform persistence)
+        self.graph = build_meddpicc_coach(checkpointer=MemorySaver())
         self.context_manager = MeddpiccContextManager()
         logger.info(
-            "MeddicAgent initialized with MEDDPICC coach workflow + context management"
+            "MeddicAgent initialized with MEDDPICC coach workflow (MemorySaver) + context management"
         )
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:

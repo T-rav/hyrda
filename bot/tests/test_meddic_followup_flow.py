@@ -91,11 +91,9 @@ async def test_followup_handler_stays_for_sales_coaching():
 async def test_followup_handler_exits_for_unrelated_question():
     """Test that unrelated questions trigger exit from follow-up mode."""
     with patch("agents.meddpicc_coach.nodes.followup_handler.ChatOpenAI") as mock_llm:
-        # Mock LLM response detecting unrelated question (exits mode)
+        # Mock LLM response detecting unrelated question (exits mode) - JSON format
         mock_response = MagicMock()
-        mock_response.content = (
-            "EXIT_FOLLOWUP_MODE: Got it! I'll hand this over to the main bot."
-        )
+        mock_response.content = '{"intent": "exit", "response": "Got it! I\'ll hand this over to the main bot."}'
         mock_llm.return_value.ainvoke = AsyncMock(return_value=mock_response)
 
         state: MeddpiccAgentState = {
@@ -114,11 +112,9 @@ async def test_followup_handler_exits_for_unrelated_question():
 async def test_followup_handler_exits_with_explicit_exit_command():
     """Test that explicit exit commands trigger exit from follow-up mode."""
     with patch("agents.meddpicc_coach.nodes.followup_handler.ChatOpenAI") as mock_llm:
-        # Mock LLM response for exit command (exits mode)
+        # Mock LLM response for exit command (exits mode) - JSON format
         mock_response = MagicMock()
-        mock_response.content = (
-            "EXIT_FOLLOWUP_MODE: Got it! I'll hand this over to the main bot."
-        )
+        mock_response.content = '{"intent": "exit", "response": "Got it! I\'ll hand this over to the main bot."}'
         mock_llm.return_value.ainvoke = AsyncMock(return_value=mock_response)
 
         state: MeddpiccAgentState = {
@@ -138,9 +134,9 @@ async def test_graph_routes_to_followup_handler_when_followup_mode_true():
     graph = build_meddpicc_coach()
 
     with patch("agents.meddpicc_coach.nodes.followup_handler.ChatOpenAI") as mock_llm:
-        # Mock LLM response
+        # Mock LLM response - JSON format
         mock_response = MagicMock()
-        mock_response.content = "Great question! Here's what you need to know..."
+        mock_response.content = '{"intent": "meddpicc", "response": "Great question! Here\'s what you need to know..."}'
         mock_llm.return_value.ainvoke = AsyncMock(return_value=mock_response)
 
         state: MeddpiccAgentState = {
@@ -172,9 +168,9 @@ async def test_graph_routes_to_followup_handler_when_followup_mode_true():
 async def test_full_followup_flow_stay_then_exit():
     """Test complete flow: follow-up question (stay) → exit command (exit)."""
     with patch("agents.meddpicc_coach.nodes.followup_handler.ChatOpenAI") as mock_llm:
-        # Test 1: MEDDPICC question (should stay in mode)
+        # Test 1: MEDDPICC question (should stay in mode) - JSON format
         mock_response_stay = MagicMock()
-        mock_response_stay.content = "A Champion is an internal advocate..."
+        mock_response_stay.content = '{"intent": "meddpicc", "response": "A Champion is an internal advocate..."}'
         mock_llm.return_value.ainvoke = AsyncMock(return_value=mock_response_stay)
 
         state1: MeddpiccAgentState = {
@@ -187,11 +183,9 @@ async def test_full_followup_flow_stay_then_exit():
         assert result1["followup_mode"] is True
         assert "Champion" in result1["final_response"]
 
-        # Test 2: Exit command (should exit mode)
+        # Test 2: Exit command (should exit mode) - JSON format
         mock_response_exit = MagicMock()
-        mock_response_exit.content = (
-            "EXIT_FOLLOWUP_MODE: Got it! I'll hand this over to the main bot."
-        )
+        mock_response_exit.content = '{"intent": "exit", "response": "Got it! I\'ll hand this over to the main bot."}'
         mock_llm.return_value.ainvoke = AsyncMock(return_value=mock_response_exit)
 
         state2: MeddpiccAgentState = {
