@@ -28,37 +28,49 @@ class MeddpiccContextManager:
         self,
         max_messages: int | None = None,
         keep_recent: int | None = None,
-        summarize_threshold_tokens: int | None = None,
+        summarize_threshold: float | None = None,
+        model_context_window: int | None = None,
     ):
         """Initialize context manager.
 
         Args:
-            max_messages: Max messages before compression (default: from CONVERSATION_MAX_MESSAGES or 15)
-            keep_recent: Messages to keep in full during compression (default: from CONVERSATION_KEEP_RECENT or 5)
-            summarize_threshold_tokens: Token threshold for compression (default: from CONVERSATION_SUMMARIZE_THRESHOLD or 20K)
+            max_messages: Max messages before compression (from CONVERSATION_MAX_MESSAGES)
+            keep_recent: Messages to keep in full during compression (from CONVERSATION_KEEP_RECENT)
+            summarize_threshold: Context usage % to trigger compression (from CONVERSATION_SUMMARIZE_THRESHOLD, e.g., 0.80)
+            model_context_window: Model's max context tokens (from CONVERSATION_MODEL_CONTEXT_WINDOW)
         """
         # Load from settings if not provided
         if (
             max_messages is None
             or keep_recent is None
-            or summarize_threshold_tokens is None
+            or summarize_threshold is None
+            or model_context_window is None
         ):
             from config.settings import Settings
 
             settings = Settings()
             max_messages = max_messages or settings.conversation.max_messages
             keep_recent = keep_recent or settings.conversation.keep_recent
-            summarize_threshold_tokens = (
-                summarize_threshold_tokens or settings.conversation.summarize_threshold
+            summarize_threshold = (
+                summarize_threshold or settings.conversation.summarize_threshold
+            )
+            model_context_window = (
+                model_context_window or settings.conversation.model_context_window
             )
 
         self.max_messages = max_messages
         self.keep_recent = keep_recent
-        self.summarize_threshold_tokens = summarize_threshold_tokens
+        self.summarize_threshold = summarize_threshold
+        self.model_context_window = model_context_window
+        # Calculate token threshold from percentage
+        self.summarize_threshold_tokens = int(
+            model_context_window * summarize_threshold
+        )
 
         logger.info(
             f"📊 Context manager initialized: max_messages={self.max_messages}, "
-            f"keep_recent={self.keep_recent}, threshold={self.summarize_threshold_tokens} tokens"
+            f"keep_recent={self.keep_recent}, threshold={self.summarize_threshold:.0%} "
+            f"({self.summarize_threshold_tokens} tokens)"
         )
 
     def add_message(
