@@ -99,23 +99,19 @@ class MeddicAgent(BaseAgent):
             logger.info(f"🔗 Running MEDDPICC graph with thread_id: {thread_id}")
 
             # Check for previous checkpoint to restore Q&A state and accumulate context
-            from agents.meddpicc_coach.nodes.graph_builder import get_checkpointer
             from agents.meddpicc_coach.nodes.qa_collector import MEDDPICC_QUESTIONS
 
             accumulated_query = query
             input_state = {"query": query}
 
-            # Get checkpointer and ensure async setup is complete
-            checkpointer = await get_checkpointer()
+            # Use the checkpointer from the graph
+            checkpointer = self.graph.checkpointer
 
             try:
                 # Attempt to load previous state from checkpoint
-                if checkpointer:
-                    checkpoint_tuple = await checkpointer.aget_tuple(
-                        {"configurable": {"thread_id": thread_id}}
-                    )
-                else:
-                    checkpoint_tuple = None
+                checkpoint_tuple = await checkpointer.aget_tuple(
+                    {"configurable": {"thread_id": thread_id}}
+                )
 
                 if checkpoint_tuple and checkpoint_tuple.checkpoint:
                     previous_state = checkpoint_tuple.checkpoint.get(
