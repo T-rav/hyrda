@@ -297,7 +297,7 @@ class MeddicAgent(BaseAgent):
 
                 from config.settings import LLMSettings
 
-                llm_settings = LLMSettings()
+                llm_settings = LLMSettings()  # type: ignore[call-arg]
 
                 extraction_prompt = f"""Extract the company or person name from these sales notes and return as JSON.
 

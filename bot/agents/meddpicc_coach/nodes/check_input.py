@@ -35,7 +35,7 @@ async def check_input_completeness(
     Returns:
         Dict with needs_clarification flag and optional clarification message
     """
-    query = state["query"]
+    query = state["query"]  # type: ignore[typeddict-item]
 
     logger.info(f"Checking input completeness ({len(query)} chars)")
 
@@ -64,10 +64,10 @@ async def check_input_completeness(
             description="List of MEDDPICC elements detected in the notes"
         )
 
-    llm_settings = LLMSettings()
+    llm_settings = LLMSettings()  # type: ignore[call-arg]
     llm = ChatOpenAI(
         model="gpt-4o-mini",
-        api_key=llm_settings.api_key.get_secret_value(),  # type: ignore
+        api_key=llm_settings.api_key.get_secret_value(),
         temperature=0.0,
         max_completion_tokens=300,
     )
@@ -177,10 +177,10 @@ async def _generate_clarification_message(query: str) -> str:
             description="3-5 specific, targeted follow-up questions based on what's already mentioned"
         )
 
-    llm_settings = LLMSettings()
+    llm_settings = LLMSettings()  # type: ignore[call-arg]
     llm = ChatOpenAI(
         model="gpt-4o-mini",
-        api_key=llm_settings.api_key.get_secret_value(),  # type: ignore
+        api_key=llm_settings.api_key.get_secret_value(),
         temperature=0.3,  # Slightly higher for natural question generation
         max_completion_tokens=400,
     )
