@@ -61,28 +61,35 @@ Extract information for each component, being thorough but realistic about what'
 ## MEDDPICC Maverick's Breakdown
 
 **M - Metrics:**
-- [Specific metrics, KPIs, or success measures mentioned, or "Not mentioned in notes" if absent]
+- [Specific metrics, KPIs, or success measures mentioned]
+- [If absent: "❌ Missing: No quantifiable success metrics → Action: Ask what specific numbers they're trying to improve"]
 
 **E - Economic Buyer:**
-- [Decision maker info, or "To be determined - need to identify budget authority" if unknown]
+- [Decision maker info with title and authority]
+- [If unknown: "❌ Missing: Budget authority unclear → Action: Identify who has final sign-off on purchases"]
 
 **D - Decision Criteria:**
-- [Evaluation criteria mentioned, or "Not mentioned in notes" if absent]
+- [Evaluation criteria: budget, technical requirements, ROI expectations, etc.]
+- [If absent: "❌ Missing: Evaluation criteria not discussed → Action: Ask how they'll evaluate competing solutions"]
 
 **D - Decision Process:**
-- [Timeline, steps, stakeholders, or "To be determined - need to clarify buying process" if unknown]
+- [Timeline, steps, stakeholders involved in approval]
+- [If unknown: "❌ Missing: Buying process unclear → Action: Map out their approval workflow and timeline"]
 
 **P - Paper Process:**
-- [Contract/procurement steps, or "Not mentioned in notes" if absent]
+- [Contract, legal, procurement steps required]
+- [If absent: "❌ Missing: Procurement requirements unknown → Action: Clarify legal/contract approval steps"]
 
 **I - Identify Pain:**
-- [Business problems, challenges, pain points]
+- [Business problems, challenges, pain points with implications]
 
 **C - Champion:**
-- [Internal advocate or enthusiast, or "To be determined - need to identify internal advocate" if unknown]
+- [Internal advocate with influence and enthusiasm for your solution]
+- [If unknown: "❌ Missing: No internal champion identified → Action: Find someone who will advocate internally"]
 
 **C - Competition:**
-- [Alternative solutions being considered, or "Not mentioned in notes" if absent]
+- [Alternative solutions being considered with strengths/weaknesses]
+- [If absent: "❌ Missing: Competitive landscape unclear → Action: Ask what other vendors they're evaluating"]
 
 ---
 
@@ -95,10 +102,15 @@ Extract information for each component, being thorough but realistic about what'
 <Analysis Guidelines>
 - **Always include all 8 MEDDPICC fields** - This provides comprehensive analysis
 - **Be concise** - Keep each field to 1-3 bullet points max
-- **Be honest about gaps** - Use "Not mentioned" or "To be determined" for missing info
-- **Use bullet points** - Be specific with names, numbers, timelines when available
+- **For missing info, use the explicit format**: "❌ Missing: [what's absent] → Action: [what to do next]"
+- **For present info** - Be specific with names, numbers, timelines when available
 - **Maintain professional tone** - Save personality for coaching section
 - **Add Summary section** - Highlight strengths and critical gaps at the end
+
+**Missing Info Format Examples:**
+- "❌ Missing: No quantifiable ROI discussed → Action: Ask what metrics they use to measure success"
+- "❌ Missing: Budget authority unclear → Action: Identify who has final sign-off power"
+- "❌ Missing: Timeline not specified → Action: Clarify their decision deadline and urgency"
 </Analysis Guidelines>
 
 Generate the MEDDPICC Maverick's Breakdown now.
