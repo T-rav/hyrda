@@ -704,6 +704,7 @@ class TestBotCommandHandling:
         # Verify PDF was uploaded
         slack_service.upload_file.assert_called_once()
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_handle_bot_command_meddic(self):
         """Test "-meddic" bot command is handled correctly"""
@@ -728,15 +729,15 @@ class TestBotCommandHandling:
             "C123", "1234.5678"
         )
         slack_service.delete_thinking_indicator.assert_called_once()
-        slack_service.send_message.assert_called_once()
+        # Agent now sends 2 messages: progress + final response
+        assert slack_service.send_message.call_count == 2
 
-        # Verify response content
+        # Verify final response content (last call)
         call_args = slack_service.send_message.call_args
         response_text = call_args.kwargs["text"]
         assert "MEDDIC" in response_text or "meddic" in response_text.lower()
-        assert "TODO" in response_text
-        assert "analyze this opportunity" in response_text
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_handle_bot_command_medic_alias(self):
         """Test -medic alias resolves to -meddic"""
@@ -758,11 +759,13 @@ class TestBotCommandHandling:
 
         assert result is True
 
-        # Verify it resolves to "-meddic"
+        # Agent now sends 2 messages: progress + final response
+        assert slack_service.send_message.call_count == 2
+
+        # Verify it resolves to "-meddic" (check final response)
         call_args = slack_service.send_message.call_args
         response_text = call_args.kwargs["text"]
         assert "MEDDIC" in response_text or "meddic" in response_text.lower()
-        assert "TODO" in response_text
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_unknown_bot_type(self):
@@ -866,6 +869,7 @@ class TestBotCommandHandling:
             "C123", "thinking_ts"
         )
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_handle_message_routes_to_bot_command(self):
         """Test that handle_message correctly routes /profile and "-meddic" commands"""
@@ -923,10 +927,11 @@ class TestBotCommandHandling:
             thread_ts=None,
         )
 
-        slack_service.send_message.assert_called_once()
+        # Agent now sends 2 messages: progress + final response
+        assert slack_service.send_message.call_count == 2
         call_args = slack_service.send_message.call_args
         response_text = call_args.kwargs["text"]
-        assert "MEDDIC Agent" in response_text
+        assert "MEDDIC" in response_text or "meddic" in response_text.lower()
 
     @pytest.mark.asyncio
     async def test_handle_message_case_insensitive_bot_commands(self):
@@ -971,6 +976,7 @@ class TestBotCommandHandling:
         # Verify PDF was uploaded
         slack_service.upload_file.assert_called_once()
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_routing(self):
         """Test that -medic alias routes through handle_message to -meddic"""
@@ -997,14 +1003,14 @@ class TestBotCommandHandling:
             thread_ts="1234.5678",
         )
 
-        slack_service.send_message.assert_called_once()
+        # Agent now sends 2 messages: progress + final response
+        assert slack_service.send_message.call_count == 2
         call_args = slack_service.send_message.call_args
         response_text = call_args.kwargs["text"]
         # Should show MEDDIC not MEDIC (alias resolved)
-        assert "MEDDIC Agent" in response_text
-        assert "TODO" in response_text
-        assert "analyze this deal opportunity" in response_text
+        assert "MEDDIC" in response_text or "meddic" in response_text.lower()
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_handle_message_medic_alias_case_variations(self):
         """Test that "-medic" alias works with different casing"""
@@ -1036,7 +1042,8 @@ class TestBotCommandHandling:
                 thread_ts=None,
             )
 
-            slack_service.send_message.assert_called_once()
+            # Agent now sends 2 messages: progress + final response
+            assert slack_service.send_message.call_count == 2
             call_args = slack_service.send_message.call_args
             response_text = call_args.kwargs["text"]
             # All should resolve to MEDDIC

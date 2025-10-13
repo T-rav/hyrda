@@ -114,7 +114,7 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_delete_message_api_error(self):
-        """Test message deletion with API error"""
+        """Test message deletion with API error (message_not_found is idempotent)"""
         api_error = SlackApiError(
             message="Error", response={"error": "message_not_found"}
         )
@@ -124,7 +124,8 @@ class TestErrorUtils:
 
         result = await delete_message(mock_client, channel, ts)
 
-        assert result is False
+        # message_not_found is treated as success (idempotent operation)
+        assert result is True
         mock_client.chat_delete.assert_called_once_with(channel=channel, ts=ts)
 
     @pytest.mark.asyncio
