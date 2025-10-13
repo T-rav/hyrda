@@ -33,13 +33,7 @@ Professional, knowledgeable sales coach with a friendly, encouraging, and slight
 @bot meddic [your sales call notes]
 ```
 
-**Minimal Input** (triggers clarification):
-```
-@bot meddic bob from bait and tackle wants a custom pos system
-```
-Response: *Asks for more context with specific questions*
-
-**Detailed Input** (full analysis):
+**Example Input**:
 ```
 @bot meddic Call with Sarah from Acme Corp. They're struggling with
 deployment speed - takes 2 weeks. CTO Mark is frustrated. Budget
@@ -102,40 +96,28 @@ print(result["response"])
 
 ## Workflow
 
-The agent uses a 4-node LangGraph workflow with intelligent input checking and real-time progress updates:
+The agent uses a 3-node LangGraph workflow with real-time progress updates:
 
 ```
-                                     ┌─────────────────┐
-Input → [Check Input] ─────────────►│ Sufficient Info │─► [Parse Notes]
-          ↓                          └─────────────────┘         ↓
-      Too Sparse?                                          [MEDDPICC Analysis]
-          ↓                                                       ↓
-   Ask for More Details                                   [Coaching Insights]
-   (Questions + Examples)                                        ↓
-                                                            PDF Report + Summary
+Input → [Parse Notes] → [MEDDPICC Analysis] → [Coaching Insights] → PDF Report + Summary
 ```
 
-**1. Check Input** (⚡ <0.1s):
-   - Analyze input completeness
-   - If too sparse (< 50 chars, minimal context) → Ask clarifying questions
-   - If sufficient → Continue to full workflow
-
-**2. Parse Notes** (📝 2-3s):
+**1. Parse Notes** (📝 2-3s):
    - Detect and extract URLs from text
    - Scrape web content using Tavily API
    - Parse PDF/DOCX file attachments
    - Clean and prepare combined notes
 
-**3. MEDDPICC Analysis** (🔍 2-3s):
+**2. MEDDPICC Analysis** (🔍 2-3s):
    - Structure all content into MEDDPICC format
    - Add source citations
    - Extract executive summary
 
-**4. Coaching Insights** (🎓 1-2s):
+**3. Coaching Insights** (🎓 1-2s):
    - Generate Maverick's coaching advice
    - Suggest follow-up questions
 
-**5. Delivery**:
+**4. Delivery**:
    - Progress updates shown in real-time
    - Summary posted to Slack
    - Full PDF report attached
@@ -204,6 +186,7 @@ meddpicc_coach/
     ├── parse_notes.py       # Parse notes + URL scraping
     ├── meddpicc_analysis.py # Structure into MEDDPICC
     ├── coaching_insights.py # Generate coaching advice
+    ├── check_input.py       # (DEPRECATED - no longer used)
     └── graph_builder.py     # Build workflow graph
 ```
 
