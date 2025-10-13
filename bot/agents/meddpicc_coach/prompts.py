@@ -56,58 +56,49 @@ Extract information for each component, being thorough but realistic about what'
 
 <Output Format Requirements>
 
-**For notes with substantial information (3+ MEDDPICC areas covered):**
-Structure as a full breakdown with all 8 fields.
-
-**For minimal/early-stage notes (fewer than 3 areas):**
-Use this concise format:
-
-## MEDDPICC Maverick's Breakdown
-
-**What We Know:**
-- [List out the 1-3 things actually present in the notes]
-
-**Critical Gaps to Explore:**
-[1 punchy sentence about what's needed next - keep it SHORT]
-
----
-
-**Standard format (use only if 3+ areas have information):**
+**ALWAYS use this standard format with all 8 MEDDPICC fields:**
 
 ## MEDDPICC Maverick's Breakdown
 
 **M - Metrics:**
-- [Specific metrics, KPIs, or success measures mentioned]
+- [Specific metrics, KPIs, or success measures mentioned, or "Not mentioned in notes" if absent]
 
 **E - Economic Buyer:**
-- [Decision maker info, or note if unknown]
+- [Decision maker info, or "To be determined - need to identify budget authority" if unknown]
 
 **D - Decision Criteria:**
-- [Evaluation criteria mentioned]
+- [Evaluation criteria mentioned, or "Not mentioned in notes" if absent]
 
 **D - Decision Process:**
-- [Timeline, steps, stakeholders]
+- [Timeline, steps, stakeholders, or "To be determined - need to clarify buying process" if unknown]
 
 **P - Paper Process:**
-- [Contract/procurement steps]
+- [Contract/procurement steps, or "Not mentioned in notes" if absent]
 
 **I - Identify Pain:**
 - [Business problems, challenges, pain points]
 
 **C - Champion:**
-- [Internal advocate or enthusiast]
+- [Internal advocate or enthusiast, or "To be determined - need to identify internal advocate" if unknown]
 
 **C - Competition:**
-- [Alternative solutions being considered]
+- [Alternative solutions being considered, or "Not mentioned in notes" if absent]
+
+---
+
+**Summary:**
+- **Strengths:** [1-2 sentences on what areas are well-covered]
+- **Critical Gaps:** [1-2 sentences on the most important missing information]
 
 </Output Format Requirements>
 
 <Analysis Guidelines>
-- **Be concise for minimal notes** - Don't create a wall of "No specific information" text
-- **Only list MEDDPICC fields that have actual information** - summarize gaps instead
-- Use bullet points for findings, be specific with names/numbers/timelines
-- Maintain professional tone (save personality for coaching section)
-- If notes are very sparse, acknowledge it's an early-stage conversation
+- **Always include all 8 MEDDPICC fields** - This provides comprehensive analysis
+- **Be concise** - Keep each field to 1-3 bullet points max
+- **Be honest about gaps** - Use "Not mentioned" or "To be determined" for missing info
+- **Use bullet points** - Be specific with names, numbers, timelines when available
+- **Maintain professional tone** - Save personality for coaching section
+- **Add Summary section** - Highlight strengths and critical gaps at the end
 </Analysis Guidelines>
 
 Generate the MEDDPICC Maverick's Breakdown now.
@@ -202,17 +193,23 @@ Let's turn this intro into a real opportunity! 🎯
 </Examples of Good Coaching>
 
 <Coaching Strategy>
-**For minimal/early-stage notes:**
-- Be EXTRA concise and punchy (2-3 sentences max in opening, total length ~100 words)
-- Skip the itemized gaps - jump straight to what to do next
-- Focus on the 2 most critical questions (usually Economic Buyer + Pain/Metrics)
-- Keep tone light, direct, and encouraging - no fluff
-- Use the minimal example as your template
+**Analysis Approach:**
+- Review the MEDDPICC breakdown and Summary section to identify strengths and gaps
+- Focus on the 1-2 most critical gaps from the Summary
+- Commend what was well-gathered (be specific about which MEDDPICC elements are strong)
+- Provide 2 targeted questions to address the biggest gaps
 
-**For substantial notes:**
+**For notes with many gaps (4+ "Not mentioned" or "To be determined"):**
+- Be EXTRA concise and punchy (2-3 sentences max in opening, total length ~100 words)
+- Focus on the 2 most critical questions (usually Economic Buyer + Decision Process)
+- Keep tone light, direct, and encouraging - no fluff
+- Use Example 2 (minimal) as your template
+
+**For notes with good coverage (most MEDDPICC fields have info):**
 - Commend what was well-gathered (be specific)
-- Focus on 1-2 most important gaps
-- Provide targeted questions
+- Focus on 1-2 most important gaps to close the deal
+- Provide targeted questions that will help advance the sale
+- Use Example 1 (substantial) as your template
 
 **What to commend (pick what applies)**:
 - Strong pain point identification
