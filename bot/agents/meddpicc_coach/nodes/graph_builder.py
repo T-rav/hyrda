@@ -4,18 +4,9 @@ Builds and compiles the LangGraph workflow for MEDDPICC coaching
 with persistent checkpointing for conversation continuity.
 """
 
-import asyncio
 import logging
-import os
-from pathlib import Path
 
 from langgraph.checkpoint.memory import MemorySaver
-
-try:
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-except (ImportError, ModuleNotFoundError):
-    # Handle missing module for tests or older langgraph versions
-    AsyncSqliteSaver = None  # type: ignore
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -32,85 +23,10 @@ from agents.meddpicc_coach.state import (
 
 logger = logging.getLogger(__name__)
 
-# Global checkpointer instance for state persistence
-_checkpointer = None
-_checkpointer_setup_done = False
-_checkpointer_lock = asyncio.Lock()
-
-
-def _init_checkpointer():
-    """Initialize checkpointer synchronously (for module load time).
-
-    Creates the checkpointer object but doesn't call async setup() yet.
-    """
-    # Don't use custom checkpointer in LangGraph API mode
-    if os.getenv("LANGGRAPH_API_URL"):
-        logger.info("Running in LangGraph API mode - using platform persistence")
-        return None
-
-    environment = os.getenv("ENVIRONMENT", "development").lower()
-
-    if environment in ("staging", "production") and AsyncSqliteSaver:
-        # Use persistent SQLite storage for production
-        data_dir = Path(os.getenv("DATA_DIR", "./data"))
-        data_dir.mkdir(parents=True, exist_ok=True)
-
-        db_path = data_dir / "langgraph_checkpoints.db"
-        logger.info(
-            f"Initializing persistent checkpointer for {environment}: {db_path}"
-        )
-
-        # Create AsyncSqliteSaver synchronously
-        checkpointer = AsyncSqliteSaver.from_conn_string(str(db_path))
-        logger.info(
-            f"LangGraph checkpointer created (AsyncSqliteSaver - {environment})"
-        )
-        return checkpointer
-    else:
-        # Use in-memory storage for development or when AsyncSqliteSaver not available
-        logger.info("LangGraph checkpointer initialized (MemorySaver - development)")
-        return MemorySaver()
-
-
-async def get_checkpointer():
-    """Get checkpointer and ensure it's set up.
-
-    Environment-aware storage:
-    - Development: MemorySaver (in-memory, fast)
-    - Staging/Production: AsyncSqliteSaver (persistent SQLite database)
-
-    Returns None when running in LangGraph API mode, as persistence
-    is handled automatically by the platform.
-    """
-    global _checkpointer_setup_done  # noqa: PLW0603
-
-    if _checkpointer is None:
-        return None
-
-    # Ensure async setup is called for AsyncSqliteSaver (if available)
-    if (
-        not _checkpointer_setup_done
-        and AsyncSqliteSaver is not None
-        and hasattr(_checkpointer, "setup")
-    ):
-        try:
-            if isinstance(_checkpointer, AsyncSqliteSaver):
-                async with _checkpointer_lock:
-                    if (
-                        not _checkpointer_setup_done
-                    ):  # Double-check after acquiring lock
-                        await _checkpointer.setup()
-                        _checkpointer_setup_done = True
-                        logger.info("✅ AsyncSqliteSaver setup complete")
-        except (TypeError, NameError):
-            # isinstance can fail when AsyncSqliteSaver is mocked/unavailable, just skip
-            pass
-
-    return _checkpointer
-
-
-# Initialize checkpointer at module load time (synchronous)
-_checkpointer = _init_checkpointer()
+# Simple in-memory checkpointer for state persistence during the process lifetime
+# This is sufficient for Slack conversation flows within a single thread
+_checkpointer = MemorySaver()
+logger.info("LangGraph checkpointer initialized (MemorySaver)")
 
 
 def build_meddpicc_coach() -> CompiledStateGraph:
@@ -208,12 +124,6 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_edge("followup_handler", END)
 
     # Compile with checkpointer for state persistence
-    # Use the global _checkpointer initialized at module load
-    if _checkpointer:
-        compiled = coach_builder.compile(checkpointer=_checkpointer)
-        checkpointer_type = type(_checkpointer).__name__
-        logger.info(f"MEDDPICC coach graph compiled with {checkpointer_type}")
-    else:
-        compiled = coach_builder.compile()
-        logger.info("MEDDPICC coach graph compiled (platform persistence)")
+    compiled = coach_builder.compile(checkpointer=_checkpointer)
+    logger.info("MEDDPICC coach graph compiled with MemorySaver")
     return compiled
