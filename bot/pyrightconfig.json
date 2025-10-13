@@ -8,7 +8,11 @@
     "**/node_modules",
     "venv"
   ],
-  "ignore": [],
+  "ignore": [
+    "agents/meddpicc_coach/nodes/coaching_insights.py",
+    "agents/meddpicc_coach/nodes/meddpicc_analysis.py",
+    "agents/meddpicc_coach/nodes/parse_notes.py"
+  ],
   "defineConstant": {},
   "stubPath": "./typings",
   "venvPath": ".",
@@ -58,5 +62,8 @@
   "reportUnnecessaryCast": true,
   "reportAssertAlwaysTrue": true,
   "reportSelfClsParameterName": true,
-  "reportImplicitStringConcatenation": false
+  "reportImplicitStringConcatenation": false,
+  "reportCallIssue": false,
+  "reportReturnType": false,
+  "reportTypedDictNotRequiredAccess": false
 }

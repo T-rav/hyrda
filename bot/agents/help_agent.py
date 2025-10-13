@@ -77,7 +77,7 @@ class HelpAgent(BaseAgent):
         response_lines.append(
             "\n\n**Usage:** Type `-<command> <your query>` to use an agent"
         )
-        response_lines.append("**Example:** `-profile tell me about Charlotte`")
+        response_lines.append("**Example:** `-profile AllCampus AI`")
 
         response = "\n".join(response_lines)
 

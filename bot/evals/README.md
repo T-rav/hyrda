@@ -72,6 +72,40 @@ The LLM evaluates sources based on:
 - Diversity requirement prevents overloading single source type
 - Reasoning field helps debug unexpected selections
 
+## MEDDPICC Clarification Evals
+
+Tests the MEDDPICC agent's `check_input_completeness` logic for deciding when to PROCEED vs CLARIFY.
+
+**Current Results**: 9-10/10 passing (90-100%)
+
+### Test Cases
+
+1. ✅ Comprehensive notes (Jane's Equipment) - All MEDDPICC elements present
+2. ✅ Sample sales call (Acme Corp) - 5+ elements with medium coverage
+3. ✅ Minimal notes (TechStartup) - Customer + pain point = sufficient
+4. ✅ URL notes (DataCorp) - Customer + pain + budget mention
+5. ✅ Comprehensive notes (GlobalTech) - All 8 MEDDPICC elements explicitly covered
+6. ✅ Very vague ("bob wants software") - Correctly triggers CLARIFY
+7. ✅ Minimal but contextual ("Jane's Equipment wants AI") - Correctly proceeds
+8. ✅ Name + generic interest ("talked to susan") - Correctly triggers CLARIFY
+9. ✅ Company + vague problem (Acme Corp) - Sufficient for analysis
+10. ⚠️ Second turn follow-up (flaky - no conversation context in eval)
+
+### Key Learnings
+
+- LLM correctly identifies 2+ MEDDPICC elements as sufficient to proceed
+- Structured call notes with pain points always proceed (as expected)
+- Very brief vague input (< 50 chars, no context) correctly triggers clarification
+- Customer name + specific pain point = minimum viable context
+- Decision logic is permissive (defaults to PROCEED for borderline cases)
+
+### Run Command
+
+```bash
+# From bot/ directory
+PYTHONPATH=. venv/bin/python evals/eval_meddpicc_clarification.py
+```
+
 ## Adding New Evals
 
 1. Create eval script in `evals/`

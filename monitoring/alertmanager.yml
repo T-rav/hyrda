@@ -13,8 +13,9 @@ receivers:
 - name: 'web.hook'
   email_configs:
   - to: 'admin@yourcompany.com'
-    subject: 'Slack Bot Alert: {{ .GroupLabels.alertname }}'
-    body: |
+    headers:
+      Subject: 'Slack Bot Alert: {{ .GroupLabels.alertname }}'
+    text: |
       {{ range .Alerts }}
       Alert: {{ .Annotations.summary }}
       Description: {{ .Annotations.description }}
