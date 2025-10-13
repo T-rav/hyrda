@@ -129,7 +129,21 @@ class MeddicAgent(BaseAgent):
                     )
                     gathered_answers = previous_state.get("gathered_answers", {})
 
-                    if question_mode:
+                    # Check if we're in follow-up questions mode (after analysis complete)
+                    followup_mode = previous_state.get("followup_mode", False)
+                    original_analysis = previous_state.get("original_analysis", "")
+
+                    if followup_mode:
+                        # Follow-up questions mode - preserve follow-up state
+                        logger.info(
+                            f"💬 Continuing follow-up questions mode - user asked: {query[:50]}..."
+                        )
+                        input_state = {
+                            "query": query,  # User's follow-up question
+                            "followup_mode": followup_mode,
+                            "original_analysis": original_analysis,
+                        }
+                    elif question_mode:
                         # Continuing Q&A - preserve Q&A state fields
                         logger.info(
                             f"📝 Continuing Q&A mode - question {current_question_index} of {len(MEDDPICC_QUESTIONS)}"
@@ -163,7 +177,7 @@ class MeddicAgent(BaseAgent):
 
             # Log the input state
             logger.info(
-                f"📊 Input state: query={len(input_state.get('query', ''))} chars, question_mode={input_state.get('question_mode', False)}"
+                f"📊 Input state: query={len(input_state.get('query', ''))} chars, question_mode={input_state.get('question_mode', False)}, followup_mode={input_state.get('followup_mode', False)}"
             )
 
             graph_config = {
@@ -186,6 +200,10 @@ class MeddicAgent(BaseAgent):
                 "coaching_insights": {
                     "start": "🎓 Generating coaching insights...",
                     "complete": "✅ Coaching complete",
+                },
+                "followup_handler": {
+                    "start": "💬 Processing your follow-up question...",
+                    "complete": "✅ Response ready",
                 },
             }
 
@@ -339,27 +357,45 @@ class MeddicAgent(BaseAgent):
                 final_response
             )
 
-            # Add session completion footer
-            session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
+            # Check if we should clear thread tracking
+            # If followup_mode is False, user exited follow-up mode (asked unrelated question)
+            # If followup_mode is True or None, keep tracking for continued conversation
+            followup_mode_state = result.get("followup_mode")
+            should_clear_tracking = followup_mode_state is False
+
+            # Add session completion footer only if exiting
+            if should_clear_tracking:
+                session_footer = "\n\n---\n\n_✅ Feel free to ask me anything!_"
+            else:
+                session_footer = (
+                    "\n\n---\n\n_💬 Ask me follow-up questions or type 'done' to exit._"
+                )
+
             response = slack_formatted_response + session_footer
 
-            logger.info("✅ Returning formatted markdown response")
+            logger.info(
+                f"✅ Returning formatted markdown response (clear_tracking={should_clear_tracking})"
+            )
+
+            metadata = {
+                "agent": "meddic",
+                "agent_type": "meddpicc_coach",
+                "agent_version": "langgraph",
+                "query_length": len(query),
+                "response_length": len(final_response),
+                "sources_count": len(sources),
+                "user_id": context.get("user_id"),
+                "thread_id": thread_id,
+            }
+
+            # Only clear thread tracking if user explicitly exited follow-up mode
+            if should_clear_tracking:
+                metadata["clear_thread_tracking"] = True
+                logger.info("User exited follow-up mode - clearing thread tracking")
 
             return {
                 "response": response,
-                "metadata": {
-                    "agent": "meddic",
-                    "agent_type": "meddpicc_coach",
-                    "agent_version": "langgraph",
-                    "query_length": len(query),
-                    "response_length": len(final_response),
-                    "sources_count": len(sources),
-                    "user_id": context.get("user_id"),
-                    "thread_id": thread_id,
-                    # Auto-clear thread tracking after full analysis
-                    # User needs to type -meddic to start a new session
-                    "clear_thread_tracking": True,
-                },
+                "metadata": metadata,
             }
 
         except Exception as e:

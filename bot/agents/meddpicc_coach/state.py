@@ -14,17 +14,20 @@ class MeddpiccAgentInputState(TypedDict, total=False):
     (typically restored from checkpoint when continuing a conversation).
     """
 
-    query: str  # Raw sales call notes
+    query: str  # Raw sales call notes or follow-up question
     question_mode: bool  # Whether in Q&A mode (restored from checkpoint)
     current_question_index: int  # Current question index (restored from checkpoint)
     gathered_answers: dict[str, str]  # Collected answers (restored from checkpoint)
+    followup_mode: (
+        bool  # Whether in follow-up questions mode (restored from checkpoint)
+    )
 
 
 class MeddpiccAgentState(TypedDict, total=False):
     """Main state for MEDDPICC coach workflow.
 
     Attributes:
-        query: Raw sales call notes from user (REQUIRED)
+        query: Raw sales call notes from user or follow-up question (REQUIRED)
         raw_notes: Cleaned and prepared notes
         scraped_content: Content extracted from URLs/documents
         sources: List of scraped URLs/documents
@@ -34,6 +37,8 @@ class MeddpiccAgentState(TypedDict, total=False):
         question_mode: Whether we're in Q&A gathering mode
         current_question_index: Which question we're asking (0-7 for MEDDPICC)
         gathered_answers: Dictionary of answers to questions
+        followup_mode: Whether in follow-up questions mode after analysis
+        original_analysis: The complete analysis for reference in follow-ups
     """
 
     query: str
@@ -46,6 +51,8 @@ class MeddpiccAgentState(TypedDict, total=False):
     question_mode: bool
     current_question_index: int
     gathered_answers: dict[str, str]
+    followup_mode: bool
+    original_analysis: str
 
 
 class MeddpiccAgentOutputState(TypedDict):

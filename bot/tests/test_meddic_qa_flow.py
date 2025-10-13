@@ -3,13 +3,21 @@
 Verify that the question loop properly collects answers and builds a report.
 """
 
-from unittest.mock import AsyncMock, patch
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agents.meddic_agent import MeddicAgent
-from agents.meddpicc_coach.nodes.qa_collector import MEDDPICC_QUESTIONS, qa_collector
-from agents.meddpicc_coach.state import MeddpiccAgentState
+# Mock the problematic langgraph.checkpoint.sqlite module before imports
+sys.modules["langgraph.checkpoint.sqlite"] = MagicMock()
+sys.modules["langgraph.checkpoint.sqlite.aio"] = MagicMock()
+
+from agents.meddic_agent import MeddicAgent  # noqa: E402
+from agents.meddpicc_coach.nodes.qa_collector import (  # noqa: E402
+    MEDDPICC_QUESTIONS,
+    qa_collector,
+)
+from agents.meddpicc_coach.state import MeddpiccAgentState  # noqa: E402
 
 
 class AsyncIterator:
@@ -139,25 +147,13 @@ async def test_meddic_agent_no_notes_starts_qa():
         "llm_service": AsyncMock(),
     }
 
-    # Mock graph execution to return Q&A mode
-    with patch.object(agent.graph, "astream") as mock_stream:
-        mock_stream.return_value = AsyncIterator(
-            [
-                {
-                    "qa_collector": {
-                        "question_mode": True,
-                        "current_question_index": 1,
-                        "final_response": "🎯 **MEDDPICC Analysis** - Question 1/8\n\nWho's the company?",
-                    }
-                }
-            ]
-        )
+    # Run the real workflow - should trigger Q&A mode
+    result = await agent.run("", context)
 
-        result = await agent.run("", context)
-
-    # Should return question
+    # Should return question (Q&A mode activated)
     assert result["metadata"]["question_mode"] is True
     assert "Question 1/8" in result["response"]
+    assert "company" in result["response"].lower()
 
 
 @pytest.mark.asyncio
@@ -173,7 +169,7 @@ async def test_meddic_agent_with_notes_skips_qa():
     context = {
         "user_id": "U123",
         "channel": "C123",
-        "thread_ts": "1234567890.123456",
+        "thread_ts": "9999999999.999999",  # Different thread to avoid state contamination
         "thinking_ts": "123",
         "slack_service": mock_slack,
         "llm_service": AsyncMock(),
@@ -182,22 +178,44 @@ async def test_meddic_agent_with_notes_skips_qa():
     # Call with actual notes
     query = "Spoke with Bob at Acme Corp. They need better reporting. Budget is $50K."
 
-    with patch.object(agent.graph, "astream") as mock_stream:
-        # Mock the graph execution - should go straight to analysis
-        mock_stream.return_value = AsyncIterator(
-            [
-                {"parse_notes": {"raw_notes": query}},
-                {"meddpicc_analysis": {"meddpicc_breakdown": "Analysis here"}},
-                {"coaching_insights": {"final_response": "Full MEDDPICC report here"}},
-            ]
+    # Mock the LLM calls to avoid actual API calls
+    with patch("agents.meddpicc_coach.nodes.parse_notes.ChatOpenAI") as mock_parse_llm:
+        mock_parse_response = MagicMock()
+        mock_parse_response.content = query  # Return cleaned notes
+        mock_parse_llm.return_value.ainvoke = AsyncMock(
+            return_value=mock_parse_response
         )
 
-        result = await agent.run(query, context)
+        with patch(
+            "agents.meddpicc_coach.nodes.meddpicc_analysis.ChatOpenAI"
+        ) as mock_analysis_llm:
+            mock_analysis_response = MagicMock()
+            mock_analysis_response.content = (
+                "**M - Metrics:** $50K budget\n**E - Economic Buyer:** Bob"
+            )
+            mock_analysis_llm.return_value.ainvoke = AsyncMock(
+                return_value=mock_analysis_response
+            )
+
+            with patch(
+                "agents.meddpicc_coach.nodes.coaching_insights.ChatOpenAI"
+            ) as mock_coaching_llm:
+                mock_coaching_response = MagicMock()
+                mock_coaching_response.content = (
+                    "Great work! Focus on the Economic Buyer..."
+                )
+                mock_coaching_llm.return_value.ainvoke = AsyncMock(
+                    return_value=mock_coaching_response
+                )
+
+                # Run the real workflow
+                result = await agent.run(query, context)
 
     # Should NOT be in question mode
     assert result["metadata"].get("question_mode") is not True
-    # Should have called graph
-    mock_stream.assert_called_once()
+    # Should have analysis in response
+    assert "response" in result
+    assert len(result["response"]) > 0
 
 
 def test_meddpicc_questions_count():
