@@ -689,7 +689,7 @@ class TestFinalReportNode:
 
         # Mock report response
         mock_report = Mock()
-        mock_report.content = "# Tesla Profile\n\n## Overview\nTesla is a leading electric vehicle manufacturer..."
+        mock_report.content = "# Tesla Profile\n\n## Overview\nTesla is a leading electric vehicle manufacturer founded by Elon Musk. The company specializes in electric vehicles and sustainable energy solutions."
 
         # Mock summary response
         mock_summary = Mock()
@@ -783,7 +783,7 @@ class TestFinalReportNode:
 
         # Report succeeds, summary fails
         mock_report = Mock()
-        mock_report.content = "# Full Report\n\nContent here"
+        mock_report.content = "# Full Report\n\nThis is a comprehensive report with detailed content about the company. It includes multiple sections covering various aspects of the business."
 
         with patch("langchain_openai.ChatOpenAI") as mock_chat:
             mock_llm = Mock()
@@ -814,7 +814,7 @@ class TestFinalReportNode:
         # First attempt fails, second succeeds
         mock_error = Exception("maximum context length exceeded")
         mock_success = Mock()
-        mock_success.content = "# Report\n\nGenerated successfully"
+        mock_success.content = "# Report\n\nThis report was generated successfully after retrying with a smaller context window. It contains comprehensive information."
 
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Point"
@@ -836,7 +836,10 @@ class TestFinalReportNode:
     async def test_final_report_fallback(self):
         """Test final report fallback on persistent failure"""
         state = {
-            "notes": ["Note 1", "Note 2"],
+            "notes": [
+                "Note 1: This is a detailed research note about the company background and history",
+                "Note 2: This is another research note covering products and market position",
+            ],
             "profile_type": "company",
             "research_brief": "Brief",
         }
