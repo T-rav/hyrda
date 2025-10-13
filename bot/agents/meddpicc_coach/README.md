@@ -96,10 +96,28 @@ print(result["response"])
 
 ## Workflow
 
-The agent uses a 3-node LangGraph workflow with real-time progress updates:
+The agent uses a multi-flow LangGraph workflow with real-time progress updates:
+
+### Flow 1: Q&A Collection (Interactive)
 
 ```
-Input → [Parse Notes] → [MEDDPICC Analysis] → [Coaching Insights] → PDF Report + Summary
+START → [Q&A Collector] ↔ User Responses → [Parse Notes] → Analysis Flow
+```
+
+If no notes are provided, the agent will ask you 8 questions to gather MEDDPICC information:
+1. Company/Contact information
+2. Pain points
+3. Metrics/Goals
+4. Decision maker (Economic Buyer)
+5. Decision criteria
+6. Buying process
+7. Internal champion
+8. Competition
+
+### Flow 2: Analysis (Direct Notes)
+
+```
+Input → [Parse Notes] → [MEDDPICC Analysis] → [Coaching Insights] → END
 ```
 
 **1. Parse Notes** (📝 2-3s):
@@ -117,10 +135,19 @@ Input → [Parse Notes] → [MEDDPICC Analysis] → [Coaching Insights] → PDF 
    - Generate Maverick's coaching advice
    - Suggest follow-up questions
 
-**4. Delivery**:
-   - Progress updates shown in real-time
-   - Summary posted to Slack
-   - Full PDF report attached
+### Flow 3: Follow-up Questions (NEW!)
+
+```
+After Analysis → [Follow-up Handler] ↔ User Questions → END
+```
+
+After receiving your MEDDPICC analysis, you can ask follow-up questions like:
+- **"I don't use P (Paper Process) in my sales process, drop it"** → Get modified analysis
+- **"Tell me more about the Economic Buyer section"** → Get detailed explanation
+- **"I forgot to mention they have a $500K budget"** → Analysis updates with new info
+- **"What does Champion mean in this context?"** → Get contextual clarification
+
+The Maverick remembers your full analysis and responds in context!
 
 ## Output Format
 
@@ -183,9 +210,11 @@ meddpicc_coach/
 ├── test_meddpicc_coach.py   # Test suite
 └── nodes/
     ├── __init__.py
+    ├── qa_collector.py      # Interactive Q&A collection
     ├── parse_notes.py       # Parse notes + URL scraping
     ├── meddpicc_analysis.py # Structure into MEDDPICC
     ├── coaching_insights.py # Generate coaching advice
+    ├── followup_handler.py  # Handle follow-up questions
     ├── check_input.py       # (DEPRECATED - no longer used)
     └── graph_builder.py     # Build workflow graph
 ```
@@ -197,6 +226,9 @@ meddpicc_coach/
 - ✅ **Summary in Chat**: Executive summary posted with PDF attachment
 - ✅ **URL Scraping**: Automatically extracts content from URLs in notes
 - ✅ **Document Support**: Parses PDF and DOCX attachments (Slack files)
+- ✅ **Interactive Q&A**: Guided questions if you don't have notes
+- ✅ **Follow-up Questions**: Ask clarifications or modify analysis after completion
+- ✅ **Context-Aware**: Maverick remembers your analysis for follow-up conversations
 - ✅ Handles messy, unstructured notes
 - ✅ Gracefully identifies missing information
 - ✅ Provides actionable follow-up questions
@@ -254,6 +286,52 @@ Quick call with John at TechStartup. They have scaling issues.
 - ✅ Notes John's interest
 - ✅ Identifies all missing MEDDPICC components
 - ✅ Provides encouraging coaching to gather more info
+
+### Follow-up Questions Flow
+
+**Initial Analysis:**
+```
+@bot meddic Call with Acme Corp. They need better deployment...
+[Full MEDDPICC analysis received]
+```
+
+**Follow-up Question 1:**
+```
+I don't use P (Paper Process) in my process, drop it from the analysis
+```
+
+**Response:**
+```
+Got it! Let's adjust this for your process. Here's your MEDDPICC
+analysis without Paper Process...
+
+[Modified MEDDIC analysis with only 7 components]
+```
+
+**Follow-up Question 2:**
+```
+Tell me more about identifying the Economic Buyer in this scenario
+```
+
+**Response:**
+```
+Great question! In your Acme Corp deal, the Economic Buyer is the
+person who ultimately controls budget approval. Based on your notes...
+[Detailed explanation with context from their specific deal]
+```
+
+**Follow-up Question 3:**
+```
+I forgot to mention - they have a $500K budget allocated for this
+```
+
+**Response:**
+```
+Great, that's helpful! Let me update the Metrics section with that
+budget information...
+
+[Updated analysis with new budget info incorporated]
+```
 
 ## Dependencies
 

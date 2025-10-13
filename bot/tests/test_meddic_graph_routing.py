@@ -3,10 +3,17 @@
 Verify that the graph routes correctly between Q&A and direct analysis.
 """
 
+import sys
+from unittest.mock import MagicMock
+
 import pytest
 
-from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach
-from agents.meddpicc_coach.state import MeddpiccAgentState
+# Mock the problematic langgraph.checkpoint.sqlite module before imports
+sys.modules["langgraph.checkpoint.sqlite"] = MagicMock()
+sys.modules["langgraph.checkpoint.sqlite.aio"] = MagicMock()
+
+from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach  # noqa: E402
+from agents.meddpicc_coach.state import MeddpiccAgentState  # noqa: E402
 
 
 @pytest.mark.asyncio
