@@ -15,6 +15,7 @@ from tests.agent_test_utils import AgentContextBuilder, SlackServiceMockFactory
 class TestMeddicAgent:
     """Tests for MeddicAgent"""
 
+    @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_meddic_agent_run(self):
         """Test MeddicAgent execution"""
