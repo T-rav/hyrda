@@ -362,9 +362,21 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                     )
 
                     # Use executive summary as initial comment with session completion footer
+                    # Convert markdown to Slack-compatible format
                     if executive_summary:
+                        from services.formatting import FormattingService
+
+                        # Convert markdown to Slack format
+                        slack_formatted_summary = (
+                            FormattingService.format_markdown_for_slack(
+                                executive_summary
+                            )
+                        )
+
                         session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
-                        initial_comment = executive_summary[:1000] + session_footer
+                        initial_comment = (
+                            slack_formatted_summary[:1000] + session_footer
+                        )
                     else:
                         initial_comment = None
 
