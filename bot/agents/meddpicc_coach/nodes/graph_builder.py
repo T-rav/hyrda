@@ -10,7 +10,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.meddpicc_coach.nodes.check_input import check_input_completeness
 from agents.meddpicc_coach.nodes.coaching_insights import coaching_insights
 from agents.meddpicc_coach.nodes.meddpicc_analysis import meddpicc_analysis
 from agents.meddpicc_coach.nodes.parse_notes import parse_notes
@@ -41,30 +40,16 @@ def get_checkpointer():
     return _checkpointer
 
 
-def _should_clarify(state: MeddpiccAgentState) -> str:
-    """Determine if clarification is needed before analysis.
-
-    Args:
-        state: Current agent state
-
-    Returns:
-        "clarify" if more info needed, "analyze" otherwise
-    """
-    if state.get("needs_clarification", False):
-        return "clarify"
-    return "analyze"
-
-
 def build_meddpicc_coach() -> CompiledStateGraph:
     """Build and compile the MEDDPICC coach graph.
 
-    The workflow includes conditional routing:
-    1. check_input: Determine if input has enough context
-    2a. If too sparse -> Return clarification message (END)
-    2b. If sufficient -> Continue to full analysis:
+    Simple linear workflow - always proceeds to full analysis:
         - parse_notes: Clean and prepare sales call notes
         - meddpicc_analysis: Structure into MEDDPICC format
         - coaching_insights: Generate Maverick's coaching advice
+
+    If information is missing, the analysis will mark fields as
+    "❌ Missing → Action" and coaching will guide next steps.
 
     Returns:
         Compiled MEDDPICC coach graph
@@ -77,25 +62,12 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     )
 
     # Add nodes
-    coach_builder.add_node("check_input", check_input_completeness)
     coach_builder.add_node("parse_notes", parse_notes)
     coach_builder.add_node("meddpicc_analysis", meddpicc_analysis)
     coach_builder.add_node("coaching_insights", coaching_insights)
 
-    # Add edges with conditional routing
-    coach_builder.add_edge(START, "check_input")
-
-    # Conditional: if needs clarification, skip to END; otherwise continue
-    coach_builder.add_conditional_edges(
-        "check_input",
-        _should_clarify,
-        {
-            "clarify": END,  # Skip analysis, return clarification message
-            "analyze": "parse_notes",  # Continue to full workflow
-        },
-    )
-
-    # Rest of the workflow (only executed if sufficient input)
+    # Simple linear flow - always proceed to analysis
+    coach_builder.add_edge(START, "parse_notes")
     coach_builder.add_edge("parse_notes", "meddpicc_analysis")
     coach_builder.add_edge("meddpicc_analysis", "coaching_insights")
     coach_builder.add_edge("coaching_insights", END)
@@ -104,6 +76,6 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     checkpointer = get_checkpointer()
     compiled = coach_builder.compile(checkpointer=checkpointer)
     logger.info(
-        "MEDDPICC coach graph compiled with clarification routing and checkpointing"
+        "MEDDPICC coach graph compiled with linear workflow (always proceeds to analysis)"
     )
     return compiled
