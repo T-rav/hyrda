@@ -296,8 +296,10 @@ Determine if the user's **CURRENT** question is related to MEDDPICC/sales qualif
 - Questions about this analysis ("tell me more about X", "drop P")
 - Questions about MEDDPICC methodology ("what does Champion mean?", "how do I find the Economic Buyer?")
 - New deal analysis ("analyze this other call", "here's another prospect")
-- Sales coaching requests ("how should I approach this?", "what questions should I ask?")
-- Deal qualification help (anything about qualifying prospects, understanding buying process, etc.)
+- Sales coaching requests ("how should I approach this?", "what questions should I ask?", "help me sell to X")
+- Deal qualification help (anything about qualifying prospects, understanding buying process, selling strategies, etc.)
+- ANY mention of "sell", "selling", "sales strategy" → MEDDPICC intent
+- Questions about enterprise companies/prospects (Target, Apple, Microsoft, etc.) → MEDDPICC intent (they're potential customers)
 
 **Non-MEDDPICC Intent / Exit Intent** (exit to general bot):
 - Explicit exit signals ("exit this", "done with this", "stop", "thanks")
@@ -323,7 +325,10 @@ EXIT (unrelated to sales):
 MEDDPICC (sales-related):
 - "what does Champion mean?" → intent: "meddpicc" (MEDDPICC concept)
 - "how do I find the Economic Buyer?" → intent: "meddpicc" (sales coaching)
-- "use this to help figure out how to sell to target's ai needs" → intent: "meddpicc" (applying to sales strategy)
+- "use this to help figure out how to sell to target's ai needs" → intent: "meddpicc" (selling strategy with enterprise)
+- "can you help me sell to X?" → intent: "meddpicc" (sales coaching request)
+- "what about Apple's needs?" → intent: "meddpicc" (enterprise prospect question)
+- "search for Target's requirements" → intent: "meddpicc" (researching enterprise customer)
 - "how should I approach this deal?" → intent: "meddpicc" (sales coaching)
 - "I don't use P in my process, drop it" → intent: "meddpicc" (modifying analysis)
 - "analyze this other call with Acme Corp..." → intent: "meddpicc" (new deal)
