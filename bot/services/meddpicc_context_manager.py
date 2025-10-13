@@ -26,20 +26,40 @@ class MeddpiccContextManager:
 
     def __init__(
         self,
-        max_messages: int = 15,
-        keep_recent: int = 5,
-        summarize_threshold_tokens: int = 20000,
+        max_messages: int | None = None,
+        keep_recent: int | None = None,
+        summarize_threshold_tokens: int | None = None,
     ):
         """Initialize context manager.
 
         Args:
-            max_messages: Max messages before triggering compression (default: 15)
-            keep_recent: Messages to keep in full when compressing (default: 5)
-            summarize_threshold_tokens: Token count to trigger compression (default: 20K)
+            max_messages: Max messages before compression (default: from CONVERSATION_MAX_MESSAGES or 15)
+            keep_recent: Messages to keep in full during compression (default: from CONVERSATION_KEEP_RECENT or 5)
+            summarize_threshold_tokens: Token threshold for compression (default: from CONVERSATION_SUMMARIZE_THRESHOLD or 20K)
         """
+        # Load from settings if not provided
+        if (
+            max_messages is None
+            or keep_recent is None
+            or summarize_threshold_tokens is None
+        ):
+            from config.settings import Settings
+
+            settings = Settings()
+            max_messages = max_messages or settings.conversation.max_messages
+            keep_recent = keep_recent or settings.conversation.keep_recent
+            summarize_threshold_tokens = (
+                summarize_threshold_tokens or settings.conversation.summarize_threshold
+            )
+
         self.max_messages = max_messages
         self.keep_recent = keep_recent
         self.summarize_threshold_tokens = summarize_threshold_tokens
+
+        logger.info(
+            f"📊 Context manager initialized: max_messages={self.max_messages}, "
+            f"keep_recent={self.keep_recent}, threshold={self.summarize_threshold_tokens} tokens"
+        )
 
     def add_message(
         self,
