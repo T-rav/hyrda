@@ -284,9 +284,9 @@ class MeddicAgent(BaseAgent):
             logger.info(f"MEDDPICC analysis complete: {len(final_response)} chars")
 
             # Convert markdown to Slack-compatible format and return directly
-            from services.formatting import FormattingService
+            from services.formatting import MessageFormatter
 
-            slack_formatted_response = FormattingService.format_markdown_for_slack(
+            slack_formatted_response = MessageFormatter.format_markdown_for_slack(
                 final_response
             )
 
