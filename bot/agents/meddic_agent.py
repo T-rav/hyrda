@@ -14,10 +14,13 @@ Uses LangGraph to orchestrate MEDDPICC analysis workflow:
 import logging
 from typing import Any
 
+from langgraph.checkpoint.memory import MemorySaver
+
 from agents.base_agent import BaseAgent
 from agents.meddpicc_coach.configuration import MeddpiccConfiguration
-from agents.meddpicc_coach.meddpicc_coach import meddpicc_coach
+from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach
 from agents.registry import agent_registry
+from services.meddpicc_context_manager import MeddpiccContextManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +45,12 @@ class MeddicAgent(BaseAgent):
         """Initialize MeddicAgent with LangGraph workflow."""
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
-        self.graph = meddpicc_coach
-        logger.info("MeddicAgent initialized with MEDDPICC coach workflow")
+        # Build graph with MemorySaver for bot code (LangGraph Studio uses platform persistence)
+        self.graph = build_meddpicc_coach(checkpointer=MemorySaver())
+        self.context_manager = MeddpiccContextManager()
+        logger.info(
+            "MeddicAgent initialized with MEDDPICC coach workflow (MemorySaver) + context management"
+        )
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute MEDDPICC analysis using LangGraph.
@@ -61,7 +68,8 @@ class MeddicAgent(BaseAgent):
                 "metadata": {"error": "missing_context"},
             }
 
-        logger.info(f"MeddicAgent executing MEDDPICC analysis ({len(query)} chars)")
+        logger.info(f"MeddicAgent executing with query length: {len(query)} chars")
+        logger.info(f"MeddicAgent query content: '{query}'")
 
         # Get services from context
         slack_service = context.get("slack_service")
@@ -97,41 +105,107 @@ class MeddicAgent(BaseAgent):
             )
             logger.info(f"🔗 Running MEDDPICC graph with thread_id: {thread_id}")
 
-            # Check for previous checkpoint to accumulate context across turns
-            from agents.meddpicc_coach.nodes.graph_builder import get_checkpointer
+            # Check for previous checkpoint to restore Q&A state and accumulate context
+            from agents.meddpicc_coach.nodes.qa_collector import MEDDPICC_QUESTIONS
 
-            accumulated_query = query
-            checkpointer = get_checkpointer()
+            # Use the checkpointer from the graph
+            checkpointer = self.graph.checkpointer
+            input_state = {"query": query}
 
+            # Load previous state and manage conversation context
             try:
                 # Attempt to load previous state from checkpoint
                 checkpoint_tuple = await checkpointer.aget_tuple(
                     {"configurable": {"thread_id": thread_id}}
                 )
+
+                # Initialize context variables
+                conversation_history = None
+                conversation_summary = None
+                question_mode = False
+                current_question_index = 0
+                gathered_answers = {}
+                followup_mode = False
+                original_analysis = ""
+
                 if checkpoint_tuple and checkpoint_tuple.checkpoint:
                     previous_state = checkpoint_tuple.checkpoint.get(
                         "channel_values", {}
                     )
-                    previous_query = previous_state.get("query", "")
 
-                    if previous_query and previous_query != query:
-                        # Accumulate: previous context + new information
-                        accumulated_query = f"{previous_query}\n\n---\n\n**Additional information:**\n{query}"
-                        logger.info(
-                            f"📚 Accumulated context from previous turn ({len(previous_query)} + {len(query)} chars)"
-                        )
-                    else:
-                        logger.info("🆕 First message in thread (no previous context)")
-                else:
-                    logger.info("🆕 No previous checkpoint found (new conversation)")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to load checkpoint for context accumulation: {e}"
+                    # Load conversation context from previous state
+                    conversation_history = previous_state.get(
+                        "conversation_history", None
+                    )
+                    conversation_summary = previous_state.get(
+                        "conversation_summary", None
+                    )
+
+                    # Check modes
+                    question_mode = previous_state.get("question_mode", False)
+                    current_question_index = previous_state.get(
+                        "current_question_index", 0
+                    )
+                    gathered_answers = previous_state.get("gathered_answers", {})
+                    followup_mode = previous_state.get("followup_mode", False)
+                    original_analysis = previous_state.get("original_analysis", "")
+
+                # Manage conversation context with compression
+                context_result = await self.context_manager.manage_context(
+                    query, conversation_history, conversation_summary, role="user"
                 )
-                # Continue with just the new query
 
-            # Prepare input state with accumulated context
-            input_state = {"query": accumulated_query}
+                # Extract managed context
+                conversation_history = context_result["conversation_history"]
+                conversation_summary = context_result["conversation_summary"]
+                enhanced_query = context_result["enhanced_query"]
+
+                # Build input state based on mode
+                if followup_mode:
+                    # Follow-up questions mode - preserve state + context
+                    logger.info(
+                        f"💬 Continuing follow-up mode with {len(conversation_history)} messages in history"
+                    )
+                    input_state = {
+                        "query": enhanced_query,
+                        "followup_mode": followup_mode,
+                        "original_analysis": original_analysis,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+                elif question_mode:
+                    # Continuing Q&A - preserve Q&A state + context
+                    logger.info(
+                        f"📝 Continuing Q&A mode - question {current_question_index} of {len(MEDDPICC_QUESTIONS)}"
+                    )
+                    input_state = {
+                        "query": query,  # Don't enhance Q&A answers
+                        "question_mode": question_mode,
+                        "current_question_index": current_question_index,
+                        "gathered_answers": gathered_answers,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+                else:
+                    # Regular analysis mode - use enhanced query with full context
+                    logger.info(
+                        f"🔍 Analysis mode with {len(conversation_history)} messages in history"
+                    )
+                    input_state = {
+                        "query": enhanced_query,
+                        "conversation_history": conversation_history,
+                        "conversation_summary": conversation_summary,
+                    }
+
+            except Exception as e:
+                logger.warning(f"Failed to manage context: {e}")
+                # Fallback: continue with just the new query
+                input_state = {"query": query}
+
+            # Log the input state
+            logger.info(
+                f"📊 Input state: query={len(input_state.get('query', ''))} chars, question_mode={input_state.get('question_mode', False)}, followup_mode={input_state.get('followup_mode', False)}"
+            )
 
             graph_config = {
                 "configurable": {
@@ -153,6 +227,10 @@ class MeddicAgent(BaseAgent):
                 "coaching_insights": {
                     "start": "🎓 Generating coaching insights...",
                     "complete": "✅ Coaching complete",
+                },
+                "followup_handler": {
+                    "start": "💬 Processing your follow-up question...",
+                    "complete": "✅ Response ready",
                 },
             }
 
@@ -245,6 +323,22 @@ class MeddicAgent(BaseAgent):
                 logger.error(f"Invalid result type: {type(result)}")
                 result = {}
 
+            # Check if we're in Q&A mode (graph is asking questions)
+            question_mode = result.get("question_mode", False)
+            if question_mode:
+                logger.info("Graph is in Q&A mode - returning question to user")
+                final_response = result.get("final_response", "")
+
+                return {
+                    "response": final_response,
+                    "metadata": {
+                        "agent": "meddic",
+                        "question_mode": True,
+                        "agent_type": "meddpicc_coach",
+                        "agent_version": "langgraph",
+                    },
+                }
+
             # Check if clarification is needed (early-stage minimal input)
             clarification_message = result.get("clarification_message")
             if clarification_message:
@@ -290,27 +384,45 @@ class MeddicAgent(BaseAgent):
                 final_response
             )
 
-            # Add session completion footer
-            session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
+            # Check if we should clear thread tracking
+            # If followup_mode is False, user exited follow-up mode (asked unrelated question)
+            # If followup_mode is True or None, keep tracking for continued conversation
+            followup_mode_state = result.get("followup_mode")
+            should_clear_tracking = followup_mode_state is False
+
+            # Add session completion footer only if exiting
+            if should_clear_tracking:
+                session_footer = "\n\n---\n\n_✅ Feel free to ask me anything!_"
+            else:
+                session_footer = (
+                    "\n\n---\n\n_💬 Ask me follow-up questions or type 'done' to exit._"
+                )
+
             response = slack_formatted_response + session_footer
 
-            logger.info("✅ Returning formatted markdown response")
+            logger.info(
+                f"✅ Returning formatted markdown response (clear_tracking={should_clear_tracking})"
+            )
+
+            metadata = {
+                "agent": "meddic",
+                "agent_type": "meddpicc_coach",
+                "agent_version": "langgraph",
+                "query_length": len(query),
+                "response_length": len(final_response),
+                "sources_count": len(sources),
+                "user_id": context.get("user_id"),
+                "thread_id": thread_id,
+            }
+
+            # Only clear thread tracking if user explicitly exited follow-up mode
+            if should_clear_tracking:
+                metadata["clear_thread_tracking"] = True
+                logger.info("User exited follow-up mode - clearing thread tracking")
 
             return {
                 "response": response,
-                "metadata": {
-                    "agent": "meddic",
-                    "agent_type": "meddpicc_coach",
-                    "agent_version": "langgraph",
-                    "query_length": len(query),
-                    "response_length": len(final_response),
-                    "sources_count": len(sources),
-                    "user_id": context.get("user_id"),
-                    "thread_id": thread_id,
-                    # Auto-clear thread tracking after full analysis
-                    # User needs to type -meddic to start a new session
-                    "clear_thread_tracking": True,
-                },
+                "metadata": metadata,
             }
 
         except Exception as e:

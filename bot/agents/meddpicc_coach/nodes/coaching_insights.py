@@ -65,9 +65,14 @@ async def coaching_insights(
         else:
             final_response = f"{meddpicc_breakdown}\n\n{coaching_insights}"
 
+        # Store complete analysis for follow-up questions and enable follow-up mode
+        original_analysis = final_response
+
         return {  # type: ignore[return-value]
             "coaching_insights": coaching_insights,
             "final_response": final_response,
+            "original_analysis": original_analysis,
+            "followup_mode": True,  # Enable follow-up mode after analysis
         }
 
     except Exception as e:

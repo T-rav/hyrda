@@ -37,6 +37,29 @@ class AgentSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="AGENT_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
+class ConversationSettings(BaseSettings):
+    """Conversation context management settings"""
+
+    max_messages: int = Field(
+        default=20,
+        description="Maximum messages to keep in conversation context (sliding window)",
+    )
+    keep_recent: int = Field(
+        default=4,
+        description="Number of recent messages to keep when summarizing",
+    )
+    summarize_threshold: float = Field(
+        default=0.75,
+        description="Context usage percentage to trigger summarization (0.75 = 75%)",
+    )
+    model_context_window: int = Field(
+        default=128000,
+        description="Model's maximum context window in tokens (default: 128k for GPT-4o)",
+    )
+
+    model_config = ConfigDict(env_prefix="CONVERSATION_")  # type: ignore[assignment,typeddict-unknown-key]
+
+
 class CacheSettings(BaseSettings):
     """Redis cache settings"""
 
@@ -137,29 +160,6 @@ class RAGSettings(BaseSettings):
     )
 
     model_config = ConfigDict(env_prefix="RAG_")  # type: ignore[assignment,typeddict-unknown-key]
-
-
-class ConversationSettings(BaseSettings):
-    """Conversation context management settings"""
-
-    max_messages: int = Field(
-        default=20,
-        description="Maximum messages to keep in conversation context (sliding window)",
-    )
-    keep_recent: int = Field(
-        default=4,
-        description="Number of recent messages to keep when summarizing",
-    )
-    summarize_threshold: float = Field(
-        default=0.75,
-        description="Context usage percentage to trigger summarization (0.75 = 75%)",
-    )
-    model_context_window: int = Field(
-        default=128000,
-        description="Model's maximum context window in tokens (default: 128k for GPT-4o)",
-    )
-
-    model_config = ConfigDict(env_prefix="CONVERSATION_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class SearchSettings(BaseSettings):
