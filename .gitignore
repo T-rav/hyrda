@@ -209,3 +209,7 @@ tasks/supervisord.pid
 
 # LangGraph Studio checkpoint files (development only)
 .langgraph_api/*.pckl
+
+# LangGraph persistent checkpoints (production)
+/data/
+bot/data/

@@ -104,13 +104,19 @@ class MeddicAgent(BaseAgent):
 
             accumulated_query = query
             input_state = {"query": query}
-            checkpointer = get_checkpointer()
+
+            # Get checkpointer and ensure async setup is complete
+            checkpointer = await get_checkpointer()
 
             try:
                 # Attempt to load previous state from checkpoint
-                checkpoint_tuple = await checkpointer.aget_tuple(
-                    {"configurable": {"thread_id": thread_id}}
-                )
+                if checkpointer:
+                    checkpoint_tuple = await checkpointer.aget_tuple(
+                        {"configurable": {"thread_id": thread_id}}
+                    )
+                else:
+                    checkpoint_tuple = None
+
                 if checkpoint_tuple and checkpoint_tuple.checkpoint:
                     previous_state = checkpoint_tuple.checkpoint.get(
                         "channel_values", {}

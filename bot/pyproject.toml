@@ -49,6 +49,7 @@ dependencies = [
     "langchain-qdrant>=0.1.0",  # Qdrant vector store integration
     "langchain-google-genai>=2.0.0",  # Google Gemini integration
     "langgraph>=0.2.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",  # Persistent checkpoint storage
 
     # Slack formatting
     "slackify-markdown>=0.2.0",
