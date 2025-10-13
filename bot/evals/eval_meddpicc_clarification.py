@@ -187,10 +187,10 @@ NEXT STEPS:
         "reason": "Company + problem + economic buyer mention + budget = sufficient for analysis",
     },
     {
-        "name": "Second turn in conversation - building on context",
+        "name": "Vague follow-up without context - should clarify",
         "notes": "they need better reporting in powerbi",
-        "expected_decision": "PROCEED",
-        "reason": "Even though brief, this is typically a follow-up message building on previous context, so should proceed",
+        "expected_decision": "CLARIFY",
+        "reason": "No customer name, no context - too vague without previous conversation",
     },
 ]
 
