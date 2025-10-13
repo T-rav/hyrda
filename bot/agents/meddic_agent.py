@@ -283,135 +283,18 @@ class MeddicAgent(BaseAgent):
 
             logger.info(f"MEDDPICC analysis complete: {len(final_response)} chars")
 
-            # Generate PDF with entity extraction for title
-            from datetime import datetime
+            # Convert markdown to Slack-compatible format and return directly
+            from services.formatting import FormattingService
 
-            from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
-
-            # Extract company/person name from notes for better title
-            pdf_title = "MEDDPICC Sales Analysis"
-            try:
-                import json
-
-                from langchain_openai import ChatOpenAI
-
-                from config.settings import LLMSettings
-
-                llm_settings = LLMSettings()  # type: ignore[call-arg]
-
-                extraction_prompt = f"""Extract the company or person name from these sales notes and return as JSON.
-
-Notes: "{query[:500]}"
-
-Examples:
-- "Call with Sarah from Acme Corp..." → {{"entity": "Acme Corp"}}
-- "Meeting with John at TechStartup..." → {{"entity": "TechStartup"}}
-- "DataCorp wants to improve..." → {{"entity": "DataCorp"}}
-- "Discussed with Jennifer Martinez at GlobalTech..." → {{"entity": "GlobalTech"}}
-
-Return ONLY JSON: {{"entity": "name here"}}"""
-
-                llm = ChatOpenAI(
-                    model="gpt-4o-mini",
-                    api_key=llm_settings.api_key.get_secret_value(),
-                    temperature=0.0,
-                    max_completion_tokens=30,
-                )
-
-                entity_response = await llm.ainvoke(extraction_prompt)
-                entity_text = entity_response.content.strip()
-                entity_data = json.loads(entity_text)
-                entity_name = entity_data.get("entity", "").strip()
-
-                if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
-                    pdf_title = f"{entity_name} - MEDDPICC Analysis"
-                    logger.info(f"✅ Using extracted entity: '{pdf_title}'")
-                else:
-                    logger.warning("⚠️ Entity name invalid, using generic title")
-
-            except Exception as e:
-                logger.warning(f"Entity extraction failed: {e}, using generic title")
-
-            pdf_metadata = {
-                "Query Length": f"{len(query)} characters",
-                "Sources": f"{len(sources)} URL(s)" if sources else "Text notes only",
-                "Generated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            }
-
-            # Preprocess markdown for PDF: convert Slack emoji to Unicode emoji
-            pdf_content = final_response.replace(":dart:", "🎯")
-
-            pdf_bytes = markdown_to_pdf(
-                markdown_content=pdf_content,
-                title=pdf_title,
-                metadata=pdf_metadata,
-                style="professional",
+            slack_formatted_response = FormattingService.format_markdown_for_slack(
+                final_response
             )
 
-            # Extract executive summary (first part before "---")
-            executive_summary = ""
-            if "---" in final_response:
-                parts = final_response.split("---", 1)
-                # Take MEDDPICC breakdown (everything before coaching)
-                executive_summary = parts[0].strip()
-
-            # Upload PDF to Slack with summary
-            pdf_uploaded = False
-            if slack_service and channel:
-                try:
-                    pdf_filename = get_pdf_filename(
-                        title=f"MEDDPICC_Analysis_{datetime.now().strftime('%Y%m%d')}",
-                        profile_type="meddpicc",
-                    )
-
-                    # Use executive summary as initial comment with session completion footer
-                    # Convert markdown to Slack-compatible format
-                    if executive_summary:
-                        from services.formatting import FormattingService
-
-                        # Convert markdown to Slack format
-                        slack_formatted_summary = (
-                            FormattingService.format_markdown_for_slack(
-                                executive_summary
-                            )
-                        )
-
-                        session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
-                        initial_comment = (
-                            slack_formatted_summary[:1000] + session_footer
-                        )
-                    else:
-                        initial_comment = None
-
-                    upload_response = await slack_service.upload_file(
-                        channel=channel,
-                        file_content=pdf_bytes,
-                        filename=pdf_filename,
-                        title=pdf_title,
-                        initial_comment=initial_comment,
-                        thread_ts=thread_ts,
-                    )
-
-                    if upload_response:
-                        pdf_uploaded = True
-                        logger.info(f"PDF report uploaded: {pdf_filename}")
-                    else:
-                        logger.warning("Failed to upload PDF to Slack")
-
-                except Exception as pdf_error:
-                    logger.error(f"Error uploading PDF: {pdf_error}")
-
-            # If PDF uploaded, return empty (summary already posted)
-            # Otherwise return full text
-            # Add session completion footer (analysis complete, auto-exit)
+            # Add session completion footer
             session_footer = "\n\n---\n\n_✅ MEDDPICC analysis complete! Type `-meddic` to start a new analysis._"
+            response = slack_formatted_response + session_footer
 
-            if pdf_uploaded:
-                response = ""
-                logger.info("✅ PDF uploaded with summary, returning empty response")
-            else:
-                response = final_response + session_footer
-                logger.info("⚠️ PDF upload failed, returning text fallback")
+            logger.info("✅ Returning formatted markdown response")
 
             return {
                 "response": response,
@@ -422,8 +305,6 @@ Return ONLY JSON: {{"entity": "name here"}}"""
                     "query_length": len(query),
                     "response_length": len(final_response),
                     "sources_count": len(sources),
-                    "pdf_generated": pdf_bytes is not None,
-                    "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
                     "thread_id": thread_id,
                     # Auto-clear thread tracking after full analysis
