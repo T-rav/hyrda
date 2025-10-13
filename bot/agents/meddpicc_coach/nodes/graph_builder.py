@@ -5,6 +5,7 @@ with persistent checkpointing for conversation continuity.
 """
 
 import logging
+import os
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -31,7 +32,15 @@ def get_checkpointer():
 
     Uses MemorySaver for now - state persists during bot runtime.
     Thread tracking in Redis handles cross-restart persistence.
+
+    Returns None when running in LangGraph API mode, as persistence
+    is handled automatically by the platform.
     """
+    # Don't use custom checkpointer in LangGraph API mode
+    if os.getenv("LANGGRAPH_API_URL") or os.getenv("LANGSMITH_API_KEY"):
+        logger.info("Running in LangGraph API mode - using platform persistence")
+        return None
+
     global _checkpointer  # noqa: PLW0603
     if _checkpointer is None:
         _checkpointer = MemorySaver()
@@ -72,10 +81,16 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_edge("meddpicc_analysis", "coaching_insights")
     coach_builder.add_edge("coaching_insights", END)
 
-    # Compile with checkpointer for state persistence
+    # Compile with checkpointer for state persistence (when not in LangGraph API mode)
     checkpointer = get_checkpointer()
-    compiled = coach_builder.compile(checkpointer=checkpointer)
-    logger.info(
-        "MEDDPICC coach graph compiled with linear workflow (always proceeds to analysis)"
-    )
+    if checkpointer:
+        compiled = coach_builder.compile(checkpointer=checkpointer)
+        logger.info(
+            "MEDDPICC coach graph compiled with linear workflow and MemorySaver checkpointer"
+        )
+    else:
+        compiled = coach_builder.compile()
+        logger.info(
+            "MEDDPICC coach graph compiled with linear workflow (platform persistence)"
+        )
     return compiled
