@@ -48,6 +48,7 @@ Choose from the dropdown:
 
 **MEDDPICC Coach:**
 - Nodes: `parse_notes`, `meddpicc_analysis`, `coaching_insights`
+- Note: `check_input` and `clarify` nodes have been removed - analysis now proceeds directly
 
 See edges, conditional routing, and workflow visually.
 
