@@ -61,7 +61,7 @@ class MeddicAgent(BaseAgent):
                 "metadata": {"error": "missing_context"},
             }
 
-        logger.info(f"MeddicAgent executing MEDDPICC analysis ({len(query)} chars)")
+        logger.info(f"MeddicAgent executing with query: {len(query)} chars")
 
         # Get services from context
         slack_service = context.get("slack_service")
@@ -244,6 +244,22 @@ class MeddicAgent(BaseAgent):
             if not isinstance(result, dict):
                 logger.error(f"Invalid result type: {type(result)}")
                 result = {}
+
+            # Check if we're in Q&A mode (graph is asking questions)
+            question_mode = result.get("question_mode", False)
+            if question_mode:
+                logger.info("Graph is in Q&A mode - returning question to user")
+                final_response = result.get("final_response", "")
+
+                return {
+                    "response": final_response,
+                    "metadata": {
+                        "agent": "meddic",
+                        "question_mode": True,
+                        "agent_type": "meddpicc_coach",
+                        "agent_version": "langgraph",
+                    },
+                }
 
             # Check if clarification is needed (early-stage minimal input)
             clarification_message = result.get("clarification_message")
