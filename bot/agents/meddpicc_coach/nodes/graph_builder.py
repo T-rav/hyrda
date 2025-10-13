@@ -5,6 +5,7 @@ with persistent checkpointing for conversation continuity.
 """
 
 import logging
+import os
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -23,10 +24,17 @@ from agents.meddpicc_coach.state import (
 
 logger = logging.getLogger(__name__)
 
-# Simple in-memory checkpointer for state persistence during the process lifetime
-# This is sufficient for Slack conversation flows within a single thread
-_checkpointer = MemorySaver()
-logger.info("LangGraph checkpointer initialized (MemorySaver)")
+# Detect if running in LangGraph API mode (Studio/Cloud)
+_langgraph_api_mode = os.getenv("LANGGRAPH_API_URL") is not None
+
+# Only use custom checkpointer when NOT in LangGraph API mode
+# (LangGraph API provides its own persistence)
+if _langgraph_api_mode:
+    _checkpointer = None
+    logger.info("LangGraph API mode detected - using platform persistence")
+else:
+    _checkpointer = MemorySaver()
+    logger.info("LangGraph checkpointer initialized (MemorySaver)")
 
 
 def build_meddpicc_coach() -> CompiledStateGraph:
@@ -124,6 +132,11 @@ def build_meddpicc_coach() -> CompiledStateGraph:
     coach_builder.add_edge("followup_handler", END)
 
     # Compile with checkpointer for state persistence
-    compiled = coach_builder.compile(checkpointer=_checkpointer)
-    logger.info("MEDDPICC coach graph compiled with MemorySaver")
+    # (only when not in LangGraph API mode)
+    if _checkpointer:
+        compiled = coach_builder.compile(checkpointer=_checkpointer)
+        logger.info("MEDDPICC coach graph compiled with MemorySaver")
+    else:
+        compiled = coach_builder.compile()
+        logger.info("MEDDPICC coach graph compiled (LangGraph API mode)")
     return compiled
