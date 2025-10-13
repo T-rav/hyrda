@@ -174,6 +174,8 @@ Format your coaching EXACTLY like this:
 
 ---
 
+&nbsp;
+
 ## Maverick's Insights & Next Moves
 
 [Your opening with encouragement about what was done well - 1-2 sentences]
@@ -195,6 +197,8 @@ How about in your next chat, you ask:
 **Example 1: Substantial Notes**
 ---
 
+&nbsp;
+
 ## Maverick's Insights & Next Moves
 
 Okay, looking good! You've clearly got a handle on their Pain Points – they're practically shouting them from the rooftops! And a solid start on the Metrics they care about.
@@ -212,6 +216,8 @@ Keep up the great work! We'll have this deal mapped out and cruising to 'closed-
 
 **Example 2: Minimal/Early-Stage Notes**
 ---
+
+&nbsp;
 
 ## Maverick's Insights & Next Moves
 

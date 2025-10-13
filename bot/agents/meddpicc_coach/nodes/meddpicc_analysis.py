@@ -27,7 +27,7 @@ async def meddpicc_analysis(
     Returns:
         Dict with updated state containing meddpicc_breakdown
     """
-    raw_notes = state["raw_notes"]
+    raw_notes = state.get("raw_notes", "")
     scraped_content = state.get("scraped_content", "")
     sources = state.get("sources", [])
 
@@ -51,11 +51,11 @@ async def meddpicc_analysis(
         llm_settings = LLMSettings()
 
         # Use GPT-4o for higher quality analysis
-        llm = ChatOpenAI(
+        llm = ChatOpenAI(  # type: ignore[call-arg]
             model="gpt-4o",
-            api_key=llm_settings.api_key.get_secret_value(),
             temperature=meddpicc_config.analysis_temperature,
-            max_tokens=meddpicc_config.analysis_max_tokens,
+            model_kwargs={"max_tokens": meddpicc_config.analysis_max_tokens},
+            api_key=llm_settings.api_key.get_secret_value(),
         )
 
         prompt = prompts.meddpicc_analysis_prompt.format(raw_notes=combined_notes)
@@ -74,10 +74,10 @@ async def meddpicc_analysis(
 
         logger.info(f"MEDDPICC analysis complete: {len(meddpicc_breakdown)} chars")
 
-        return {"meddpicc_breakdown": meddpicc_breakdown}
+        return {"meddpicc_breakdown": meddpicc_breakdown}  # type: ignore[return-value]
 
     except Exception as e:
         logger.error(f"MEDDPICC analysis error: {e}")
-        return {
+        return {  # type: ignore[return-value]
             "meddpicc_breakdown": f"Error during MEDDPICC analysis: {str(e)}\n\nPlease try again."
         }
