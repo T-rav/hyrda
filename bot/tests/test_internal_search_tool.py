@@ -131,16 +131,10 @@ class TestInternalSearchTool:
 
     @pytest.mark.asyncio
     async def test_full_search_flow(self):
-        """Test complete search flow with decomposition, rewriting, and retrieval"""
+        """Test complete search flow with decomposition and retrieval"""
         # Mock query decomposition
         decompose_response = MagicMock()
         decompose_response.content = '["sub-query 1", "sub-query 2"]'
-
-        # Mock query rewriting
-        rewrite_response1 = MagicMock()
-        rewrite_response1.content = "Rewritten query 1 about past projects"
-        rewrite_response2 = MagicMock()
-        rewrite_response2.content = "Rewritten query 2 about client work"
 
         # Mock synthesis
         synthesis_response = MagicMock()
@@ -148,15 +142,13 @@ class TestInternalSearchTool:
 
         self.mock_llm.ainvoke.side_effect = [
             decompose_response,
-            rewrite_response1,
-            rewrite_response2,
             synthesis_response,
         ]
 
-        # Mock vector store results
+        # Mock vector store results with case study to prevent fallback retrieval
         doc1 = Document(
-            page_content="Content from project A",
-            metadata={"file_name": "project_a.pdf"},
+            page_content="Content from project A case study",
+            metadata={"file_name": "project_a_case_study.pdf"},
         )
         doc2 = Document(
             page_content="Content from project B",
@@ -177,27 +169,22 @@ class TestInternalSearchTool:
 
         # Verify all components were called
         assert (
-            self.mock_llm.ainvoke.call_count == 4
-        )  # decompose + 2 rewrites + synthesis
+            self.mock_llm.ainvoke.call_count == 2
+        )  # decompose + synthesis (no rewriting anymore)
         assert self.mock_vector_store.asimilarity_search_with_score.call_count == 2
 
     @pytest.mark.asyncio
     async def test_deduplication(self):
         """Test that duplicate documents are deduplicated"""
-        # Mock query decomposition and rewriting
+        # Mock query decomposition
         decompose_response = MagicMock()
         decompose_response.content = '["query 1", "query 2"]'
-
-        rewrite_response = MagicMock()
-        rewrite_response.content = "Rewritten query"
 
         synthesis_response = MagicMock()
         synthesis_response.content = "Synthesized findings"
 
         self.mock_llm.ainvoke.side_effect = [
             decompose_response,
-            rewrite_response,
-            rewrite_response,
             synthesis_response,
         ]
 

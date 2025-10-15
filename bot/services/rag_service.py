@@ -660,13 +660,17 @@ class RAGService:
                         sources = research_result.get("sources", [])
 
                         # Format answer with sources
+                        # Use "Deep Research Results" keyword so sources get tagged as [DEEP_RESEARCH]
                         formatted_answer = f"{answer}\n\n"
                         if sources:
-                            formatted_answer += "**Sources:**\n"
-                            for idx, source in enumerate(
-                                sources[:10], 1
-                            ):  # Limit to 10 sources
-                                formatted_answer += f"{idx}. {source.get('title', 'Untitled')} - {source.get('url', '')}\n"
+                            formatted_answer += "### Sources\n\n"
+                            for source in sources[:10]:  # Limit to 10 sources
+                                url = source.get("url", "")
+                                title = source.get("title", "Untitled")
+                                # Add "Deep Research Results" to description so it's detected by format_research_context
+                                formatted_answer += (
+                                    f"- {url} - Deep Research Results: {title}\n"
+                                )
 
                         tool_results.append(
                             {

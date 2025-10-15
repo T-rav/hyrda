@@ -4,8 +4,6 @@ VectorSettingsFactory for test utilities
 
 from unittest.mock import MagicMock
 
-from pydantic import SecretStr
-
 from config.settings import (
     VectorSettings,
 )
@@ -15,16 +13,19 @@ class VectorSettingsFactory:
     """Factory for creating vector storage settings"""
 
     @staticmethod
-    def create_pinecone_settings(
-        api_key: str = "test-pinecone-key",
-        environment: str = "us-east-1-aws",
+    def create_qdrant_settings(
+        host: str = "localhost",
+        port: int = 6333,
         index_name: str = "test-index",
+        api_key: str | None = None,
     ) -> VectorSettings:
-        """Create Pinecone vector settings"""
+        """Create Qdrant vector settings"""
         return VectorSettings(
-            api_key=SecretStr(api_key),
-            environment=environment,
+            provider="qdrant",
+            host=host,
+            port=port,
             collection_name=index_name,
+            api_key=api_key,
         )
 
     @staticmethod
@@ -36,12 +37,13 @@ class VectorSettingsFactory:
 
     @staticmethod
     def create_mock_settings(
-        enabled: bool = False, provider: str = "chroma"
+        enabled: bool = False, provider: str = "qdrant"
     ) -> MagicMock:
         """Create vector settings mock"""
         settings = MagicMock()
         settings.enabled = enabled
         settings.provider = provider
-        settings.url = "./test_chroma"
+        settings.host = "localhost"
+        settings.port = 6333
         settings.collection_name = "test_collection"
         return settings
