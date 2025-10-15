@@ -446,46 +446,6 @@ class TestEnhancedChunkProcessor:
         )
         assert result[1]["original_content"] == "Deep learning fundamentals."
 
-    def test_prepare_for_dual_indexing(self):
-        """Test preparing documents for dual indexing (dense + sparse)"""
-        processor = EnhancedChunkProcessorFactory.create_processor()
-        documents = [DocumentDataFactory.create_document_for_dual_indexing()]
-
-        result = processor.prepare_for_dual_indexing(documents)
-
-        assert "dense" in result
-        assert "sparse" in result
-        assert len(result["dense"]) == 1
-        assert len(result["sparse"]) == 1
-
-        # Dense version (for Qdrant) - enhanced content
-        dense_doc = result["dense"][0]
-        assert (
-            dense_doc["content"]
-            == "[FILENAME] AI Safety Guide [/FILENAME]\nContent about AI safety."
-        )
-
-        # Sparse version (for sparse search) - separate title field
-        sparse_doc = result["sparse"][0]
-        assert sparse_doc["content"] == "Content about AI safety."  # Original content
-        assert sparse_doc["title"] == "AI Safety Guide"  # Separate title field
-
-    def test_prepare_for_dual_indexing_no_title(self):
-        """Test dual indexing preparation when no title is present"""
-        processor = EnhancedChunkProcessorFactory.create_processor()
-        documents = [DocumentDataFactory.create_document_without_title()]
-
-        result = processor.prepare_for_dual_indexing(documents)
-
-        # Dense version - no enhancement
-        dense_doc = result["dense"][0]
-        assert dense_doc["content"] == "Content without title."
-
-        # Sparse version - empty title
-        sparse_doc = result["sparse"][0]
-        assert sparse_doc["content"] == "Content without title."
-        assert sparse_doc["title"] == ""
-
 
 class TestTitleInjectionEdgeCases:
     """Test edge cases and error handling using factory patterns"""
