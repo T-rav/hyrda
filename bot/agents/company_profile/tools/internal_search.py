@@ -290,6 +290,29 @@ class InternalSearchTool(BaseTool):
 
             logger.info(f"📊 Found {len(final_docs)} unique documents")
 
+            # Ensure metric/CRM evidence is included in final docs for relationship detection
+            try:
+                metric_doc = None
+                for d in all_docs:
+                    meta = d.get("metadata", {}) or {}
+                    content_l = (d.get("content", "") or "").lower()
+                    if (
+                        str(meta.get("namespace", "")).lower() == "metric"
+                        or str(meta.get("source", "")).lower() == "metric"
+                        or str(meta.get("data_type", "")).lower() == "client"
+                        or "client id:" in content_l
+                    ):
+                        metric_doc = d
+                        break
+                if metric_doc and metric_doc not in final_docs:
+                    final_docs = (
+                        [metric_doc] + final_docs[:-1]
+                        if len(final_docs) >= max_docs
+                        else [metric_doc] + final_docs
+                    )
+            except Exception as _e:
+                logger.debug(f"Metric evidence inclusion failed: {_e}")
+
             # Step 4: Synthesize findings
             if not final_docs:
                 return "**No relevant information found in internal knowledge base.**"
@@ -497,7 +520,7 @@ Return ONLY the JSON array, no explanation."""
                     if "metric record" not in matched:
                         matched.append("metric record")
                     break
-        except Exception as e:  # noqa: B110
+        except Exception as e:
             logger.debug(f"Failed to check metric/CRM records: {e}")
 
         # Generate synthesis
