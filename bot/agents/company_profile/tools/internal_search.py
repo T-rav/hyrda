@@ -433,8 +433,23 @@ Return ONLY the JSON array, no explanation."""
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )
+            content = content.strip()
 
-            sub_queries = json.loads(content.strip())
+            # Try to extract JSON from markdown code blocks if present
+            import re
+
+            json_match = re.search(
+                r"```(?:json)?\s*(\[.*?\])\s*```", content, re.DOTALL
+            )
+            if json_match:
+                content = json_match.group(1)
+
+            # Remove any leading/trailing text before/after the JSON array
+            array_match = re.search(r"(\[.*\])", content, re.DOTALL)
+            if array_match:
+                content = array_match.group(1)
+
+            sub_queries = json.loads(content)
 
             if isinstance(sub_queries, list) and len(sub_queries) > 0:
                 return sub_queries
@@ -442,8 +457,8 @@ Return ONLY the JSON array, no explanation."""
                 logger.warning(f"Invalid sub-query format, using original: {content}")
                 return [query]
 
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse sub-queries, using original")
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse sub-queries ({e}), using original query")
             return [query]
         except Exception as e:
             logger.error(f"Query decomposition failed: {e}")
