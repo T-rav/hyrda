@@ -503,6 +503,13 @@ Use ONLY externally verifiable information - do not invent details.
 - Expand on implications and opportunities in each section
 - Write in narrative prose with comprehensive coverage
 - **CRITICAL**: MUST include complete ## Sources section with ALL citations
+
+**Internal Knowledge Base Priority:**
+- **CHECK FOR INTERNAL SEARCH RESULTS FIRST**: Research notes may contain internal knowledge base findings marked with [INTERNAL_KB]
+- These are sources from our Google Drive, CRM, and project documentation - ALWAYS prioritize them
+- If internal search found existing client data, past projects, or case studies, this company HAS a relationship with 8th Light
+- Include internal findings prominently, especially in "Relationships via 8th Light Network" section
+- Cite internal sources with [source #] notation where # references the [INTERNAL_KB] marked sources
 </Your Task>
 
 <Mandatory Report Structure - 8th Light Company Profile>
@@ -581,11 +588,17 @@ DETAILED leadership analysis (3-4 paragraphs minimum):
 - **External reputation**: What do analysts, employees (Glassdoor), and industry observers say about leadership? [cite sources]
 
 ## Relationships via 8th Light Network
+**CRITICAL**: Check research notes for **internal search tool results** - these contain existing client data, past projects, and relationships!
+
 Known connections:
-- Existing contacts at the company (if any)
-- Client network relationships (if any)
-- Past engagements or touchpoints (if any)
-- NOTE: If no known relationships exist, state "No known direct relationships identified"
+- **Past Engagements**: Look for internal search results showing past projects, case studies, or client work [cite internal sources marked [INTERNAL_KB]]
+- **Client Relationships**: Check if company appears in CRM data or project records from internal knowledge base
+- **Known Contacts**: Any 8th Light employees with direct contacts at this company (from notes)
+- **Network Connections**: Client network touchpoints or referrals
+
+**IMPORTANT**: If internal search tool found results, this company IS an existing client or past engagement. Include specific project details, dates, and work performed.
+
+If truly no relationships found (no internal search results), state: "No known direct relationships between 8th Light and [Company] have been identified through internal knowledge base review."
 
 ## Competitive Landscape
 DETAILED competitive analysis (2-3 paragraphs minimum) covering:
