@@ -386,7 +386,9 @@ Return ONLY the JSON array, no explanation."""
         context = "\n\n".join(context_parts)
 
         # Generate synthesis
-        prompt = f"""You are a research synthesizer. Based on the internal knowledge base documents below, provide a comprehensive answer to the research query.
+        prompt = f"""You are a research synthesizer reviewing 8th Light's internal knowledge base.
+
+**IMPORTANT**: If you see documents with "Case Study" in the filename, these are projects 8th Light completed for that company. Case studies = actual client work, not just research.
 
 Research Query: "{query}"
 
@@ -397,7 +399,7 @@ Retrieved Context:
 {context}
 
 Provide a well-structured, comprehensive answer that:
-1. Directly addresses the research query
+1. If case studies found: Clearly state this is an existing 8th Light client and list the specific projects
 2. Synthesizes information from multiple sources
 3. Highlights key findings and insights
 4. Notes any gaps or areas with limited information
