@@ -252,11 +252,17 @@ class InternalSearchTool(BaseTool):
                         "partner hub",
                         f"{company} case study" if company else None,
                         f"{company} project" if company else None,
+                        f"{company} opm case study" if company else None,
+                        "opm case study" if company else None,
                     ]
                     for phrase in [p for p in fallback_phrases if p]:
-                        fallback_query = (
-                            f"{query} {phrase}" if phrase != company else company
-                        )
+                        # Use phrase alone if it already includes company; otherwise pair with company
+                        if company and company in phrase:
+                            fallback_query = phrase
+                        else:
+                            fallback_query = (
+                                f"{company} {phrase}" if company else phrase
+                            )
                         try:
                             results = (
                                 await self.vector_store.asimilarity_search_with_score(
