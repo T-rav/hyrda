@@ -139,21 +139,30 @@ class InternalSearchTool(BaseTool):
                 from langchain_qdrant import QdrantVectorStore
                 from qdrant_client import QdrantClient
 
-                # Build Qdrant URL
-                qdrant_url = f"http://{vector_host}:{vector_port}"
-
-                client = QdrantClient(
-                    url=qdrant_url,
-                    api_key=vector_api_key if vector_api_key else None,
-                )
+                # Initialize Qdrant client - use host/port, not URL
+                # This matches how the bot's regular RAG initializes it
+                if vector_api_key:
+                    client = QdrantClient(
+                        host=vector_host,
+                        port=int(vector_port),
+                        api_key=vector_api_key,
+                        https=False,  # Explicitly disable HTTPS for localhost
+                    )
+                else:
+                    client = QdrantClient(
+                        host=vector_host,
+                        port=int(vector_port),
+                    )
 
                 self.vector_store = QdrantVectorStore(
                     client=client,
                     collection_name=vector_collection,
                     embedding=self.embeddings,
+                    content_payload_key="text",  # Bot stores content in "text" field, not "page_content"
+                    metadata_payload_key="metadata",  # Explicitly set metadata key too
                 )
                 logger.info(
-                    f"Initialized vector store: {vector_collection} at {qdrant_url}"
+                    f"Initialized vector store: {vector_collection} at http://{vector_host}:{vector_port}"
                 )
             elif vector_provider != "qdrant":
                 logger.info(
@@ -190,24 +199,36 @@ class InternalSearchTool(BaseTool):
 
             # Step 1: Decompose query into sub-queries
             sub_queries = await self._decompose_query(query, num_queries)
-            logger.info(f"📋 Generated {len(sub_queries)} sub-queries")
+            logger.info(f"📋 Generated {len(sub_queries)} sub-queries: {sub_queries}")
 
-            # Step 2: Retrieve context for each sub-query (with query rewriting)
+            # Step 2: Retrieve context for each sub-query (SIMPLE direct search - no rewriting)
             all_docs = []
             seen_content = set()
 
             for idx, sub_query in enumerate(sub_queries, 1):
                 logger.debug(f"Retrieving for sub-query {idx}/{len(sub_queries)}")
 
-                # Step 2a: Rewrite sub-query for better retrieval
-                rewritten_query = await self._rewrite_query(sub_query, query)
-                logger.debug(f"Rewritten query: {rewritten_query[:100]}...")
-
-                # Use LangChain's similarity_search_with_score with rewritten query
+                # Direct search without rewriting (like regular RAG)
+                # This ensures we find documents that actually mention the company name
+                # Use score_threshold=0 to get ALL results, like regular RAG does
                 results = await self.vector_store.asimilarity_search_with_score(
-                    rewritten_query,
-                    k=5,  # Get top 5 per sub-query
+                    sub_query,  # Use original sub-query, not rewritten
+                    k=50,  # Get MANY more results for better coverage
+                    score_threshold=None,  # No threshold - get everything
                 )
+
+                logger.info(
+                    f"   Sub-query '{sub_query}' returned {len(results)} results"
+                )
+                if results:
+                    for i, (doc, score) in enumerate(results[:3], 1):
+                        file_name = doc.metadata.get(
+                            "file_name", doc.metadata.get("title", "unknown")
+                        )
+                        logger.info(f"      {i}. {file_name} (score: {score:.4f})")
+
+                # Apply entity boosting (like regular RAG does)
+                results = self._apply_entity_boosting(sub_query, results)
 
                 # Deduplicate by content
                 for doc, score in results:
@@ -340,6 +361,146 @@ class InternalSearchTool(BaseTool):
         """Sync wrapper - not implemented (use async version)."""
         return "Internal search requires async execution. Use ainvoke() instead."
 
+    def _extract_entities_simple(self, query: str) -> set[str]:
+        """Extract entities from query (same logic as RetrievalService)."""
+        import re
+
+        stop_words = {
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "what",
+            "when",
+            "where",
+            "why",
+            "how",
+            "who",
+            "which",
+            "whose",
+            "i",
+            "you",
+            "he",
+            "she",
+            "it",
+            "we",
+            "they",
+            "them",
+            "this",
+            "that",
+            "these",
+            "those",
+            "any",
+            "some",
+            "all",
+            "many",
+            "much",
+            "more",
+            "most",
+            "very",
+            "really",
+            "quite",
+            "can",
+            "could",
+            "will",
+            "would",
+            "should",
+            "shall",
+            "may",
+            "might",
+            "must",
+            "there",
+            "here",
+            "then",
+            "than",
+            "so",
+            "just",
+            "only",
+            "also",
+            "even",
+            "still",
+            "profile",
+            "their",
+            "needs",  # Query-specific stop words
+        }
+        words = re.findall(r"\b[a-zA-Z0-9]{2,}\b", query.lower())
+        entities = {word for word in words if word not in stop_words}
+        logger.debug(f"Extracted entities from '{query}': {entities}")
+        return entities
+
+    def _apply_entity_boosting(self, query: str, results: list[tuple]) -> list[tuple]:
+        """Apply entity boosting to search results (same logic as RetrievalService)."""
+        try:
+            entities = self._extract_entities_simple(query)
+            logger.debug(f"🔍 Applying entity boosting for entities: {entities}")
+
+            enhanced_results = []
+            for doc, score in results:
+                content = doc.page_content.lower()
+                metadata = doc.metadata
+
+                # Calculate entity boost (5% per content match, 10% per title match)
+                entity_boost = 0.0
+                matching_entities = 0
+
+                for entity in entities:
+                    if entity.lower() in content:
+                        entity_boost += 0.05  # RAG_ENTITY_CONTENT_BOOST
+                        matching_entities += 1
+
+                    # Check title/filename for entities
+                    title = metadata.get("file_name", "").lower()
+                    if entity.lower() in title:
+                        entity_boost += 0.10  # RAG_ENTITY_TITLE_BOOST
+                        matching_entities += 1
+
+                # Apply boost to similarity score
+                # Note: Qdrant scores are DISTANCES (lower=better), not similarities
+                # So we SUBTRACT the boost to improve the score
+                boosted_score = max(0.0, score - entity_boost)
+
+                logger.debug(
+                    f"   Entity boost for {metadata.get('file_name', 'unknown')}: {entity_boost:.3f} (original: {score:.4f}, boosted: {boosted_score:.4f})"
+                )
+
+                enhanced_results.append((doc, boosted_score))
+
+            # Sort by boosted score (lower is better for distance)
+            enhanced_results.sort(key=lambda x: x[1])
+
+            logger.debug(
+                f"🎯 Entity boosting: {len(entities)} entities found, "
+                f"boosted {sum(1 for _, s in enhanced_results if s < results[enhanced_results.index((_, s))][1])} results"
+            )
+
+            return enhanced_results
+
+        except Exception as e:
+            logger.error(f"Entity boosting failed: {e}")
+            return results
+
     async def _rewrite_query(self, sub_query: str, original_query: str) -> str:
         """Rewrite a sub-query to maximize retrieval from internal knowledge base.
 
@@ -354,6 +515,14 @@ class InternalSearchTool(BaseTool):
             Rewritten query optimized for internal knowledge retrieval
         """
         try:
+            # Extract company/client names from original query to preserve them
+            import re
+
+            company_match = re.search(
+                r"profile\s+([a-z0-9_\-]+)", original_query.lower()
+            )
+            company_name = company_match.group(1) if company_match else None
+
             prompt = f"""You are optimizing search queries for an INTERNAL knowledge base containing:
 - Past client projects and engagements
 - Historical project documentation
@@ -363,27 +532,26 @@ class InternalSearchTool(BaseTool):
 Original context: "{original_query}"
 Sub-query to rewrite: "{sub_query}"
 
+**CRITICAL: If a company or client name is mentioned (like "{company_name}"), you MUST include it in the rewritten query.**
+
 Rewrite the sub-query to:
-1. Be specific to INTERNAL information (past projects, clients, our work)
-2. Use language that matches internal documentation style
-3. Include relevant context (client names, project types, timeframes if mentioned)
+1. **ALWAYS include the client/company name if present in the original context**
+2. Be specific to INTERNAL information (past projects, clients, our work)
+3. Use language that matches internal documentation style (case studies, project names, deliverables)
 4. Focus on "what did we do" rather than "what should we do"
 5. Keep it concise (1-2 sentences max)
 
 Return ONLY the rewritten query, no explanation.
 
 Examples:
-Input: "similar clients"
-Output: "What past clients or projects have we worked with that are similar in industry, size, or technical challenges?"
+Input original: "profile acme and their needs", sub-query: "organizational structure"
+Output: "What past work did we do with Acme related to their organizational structure or leadership team?"
 
-Input: "React projects"
-Output: "What projects have we completed that used React, and what were the specific implementations or patterns we used?"
+Input original: "profile techcorp", sub-query: "React projects"
+Output: "What React projects or engagements did we complete for TechCorp?"
 
-Input: "API work for fintech"
-Output: "What API development or integration work have we done for financial technology clients or projects?"
-
-Input: "agile transformations"
-Output: "What past engagements involved helping clients adopt agile methodologies, and what were the outcomes?"
+Input original: "fintech api work", sub-query: "API development"
+Output: "What API development or integration work have we done for financial technology clients?"
 
 Now rewrite: "{sub_query}"
 """
@@ -410,18 +578,30 @@ Now rewrite: "{sub_query}"
         Returns:
             List of sub-queries
         """
-        prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} DIVERSE sub-queries that will help retrieve comprehensive information from an internal knowledge base.
+        # Extract company name if present
+        import re
+
+        company_match = re.search(r"profile\s+([a-z0-9_\-]+)", query.lower())
+        company_name = company_match.group(1) if company_match else None
+
+        prompt = f"""You are a research query planner for searching an internal knowledge base containing past client projects, case studies, and engagements.
 
 Original Query: "{query}"
 
-Generate {num_queries} DISTINCT sub-queries that:
-1. **Each query must explore a DIFFERENT aspect or angle** of the main query
-2. **Vary the terminology and phrasing** - don't repeat the same words across queries
-3. **Target different information types**: concepts, definitions, examples, use cases, comparisons, etc.
-4. Are specific enough to retrieve relevant documents
-5. Together provide comprehensive coverage of the topic
+**CRITICAL: If a company/client name is mentioned (like "{company_name}"), EVERY sub-query MUST include that name.**
 
-IMPORTANT: Each sub-query should be SUBSTANTIALLY DIFFERENT from the others.
+Generate {num_queries} DISTINCT search queries that:
+1. **ALWAYS include the company/client name if present** - this is mandatory!
+2. Each query explores a DIFFERENT aspect: projects, case studies, technologies used, outcomes, team members
+3. Use simple, direct language that matches how case studies and project docs are written
+4. Focus on finding evidence of past work, not future plans
+
+Examples:
+Input: "profile acme corp and their needs"
+Output: ["acme case study", "acme projects completed", "acme client engagement"]
+
+Input: "profile techstart"
+Output: ["techstart case study", "techstart project deliverables", "techstart past work"]
 
 Format your response as a JSON array of strings:
 ["sub-query 1", "sub-query 2", ..., "sub-query {num_queries}"]
@@ -436,8 +616,6 @@ Return ONLY the JSON array, no explanation."""
             content = content.strip()
 
             # Try to extract JSON from markdown code blocks if present
-            import re
-
             json_match = re.search(
                 r"```(?:json)?\s*(\[.*?\])\s*```", content, re.DOTALL
             )

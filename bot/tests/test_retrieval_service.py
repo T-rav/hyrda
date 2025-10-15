@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.retrieval.base_retrieval import BaseRetrieval
 from services.retrieval_service import RetrievalService
 
 
@@ -81,17 +80,14 @@ class VectorSettingsBuilder:
     """Builder for creating vector settings configurations"""
 
     def __init__(self):
-        self._provider = "elasticsearch"
+        self._provider = "qdrant"
 
     def with_provider(self, provider: str) -> "VectorSettingsBuilder":
         self._provider = provider
         return self
 
-    def elasticsearch(self) -> "VectorSettingsBuilder":
-        return self.with_provider("elasticsearch")
-
-    def pinecone(self) -> "VectorSettingsBuilder":
-        return self.with_provider("pinecone")
+    def qdrant(self) -> "VectorSettingsBuilder":
+        return self.with_provider("qdrant")
 
     def build(self):
         class VectorSettings:
@@ -119,8 +115,8 @@ class RetrievalSettingsBuilder:
         self._vector_settings = vector_builder
         return self
 
-    def with_elasticsearch(self) -> "RetrievalSettingsBuilder":
-        self._vector_settings = self._vector_settings.elasticsearch()
+    def with_qdrant(self) -> "RetrievalSettingsBuilder":
+        self._vector_settings = self._vector_settings.qdrant()
         return self
 
     def with_entity_boosting(
@@ -155,8 +151,8 @@ class RetrievalSettingsBuilder:
         return cls()
 
     @classmethod
-    def elasticsearch_config(cls) -> "RetrievalSettingsBuilder":
-        return cls().with_elasticsearch()
+    def qdrant_config(cls) -> "RetrievalSettingsBuilder":
+        return cls().with_qdrant()
 
 
 class SearchResultBuilder:
@@ -270,10 +266,9 @@ class VectorServiceFactory:
         return mock_service
 
     @staticmethod
-    def create_elasticsearch_service() -> AsyncMock:
-        """Create Elasticsearch vector service mock with BM25 capability"""
+    def create_qdrant_service() -> AsyncMock:
+        """Create Qdrant vector service mock"""
         mock_service = VectorServiceFactory.create_basic_service()
-        mock_service.bm25_search = AsyncMock()  # BM25 capability
         return mock_service
 
     @staticmethod
@@ -284,11 +279,11 @@ class VectorServiceFactory:
         return mock_service
 
     @staticmethod
-    def create_elasticsearch_with_results(
+    def create_qdrant_with_results(
         search_results: list[dict[str, Any]],
     ) -> AsyncMock:
-        """Create Elasticsearch service mock with specific results"""
-        mock_service = VectorServiceFactory.create_elasticsearch_service()
+        """Create Qdrant service mock with specific results"""
+        mock_service = VectorServiceFactory.create_qdrant_service()
         mock_service.search.return_value = search_results
         return mock_service
 
@@ -337,10 +332,10 @@ class RetrievalServiceFactory:
         return RetrievalServiceFactory.create_service()
 
     @staticmethod
-    def create_elasticsearch_service() -> RetrievalService:
-        """Create RetrievalService configured for Elasticsearch"""
+    def create_qdrant_service() -> RetrievalService:
+        """Create RetrievalService configured for Qdrant"""
         return RetrievalServiceFactory.create_service(
-            RetrievalSettingsBuilder.elasticsearch_config()
+            RetrievalSettingsBuilder.qdrant_config()
         )
 
 
@@ -431,10 +426,10 @@ class TestRetrievalService:
 
     def test_extract_entities_simple_basic(self):
         """Test basic entity extraction"""
-        # Test via the base retrieval class using factory settings
+        # Test via the retrieval service using factory settings
         settings = RetrievalSettingsBuilder.default().build()
-        base_retrieval = BaseRetrieval(settings)
-        entities = base_retrieval._extract_entities_simple(
+        retrieval_service = RetrievalService(settings)
+        entities = retrieval_service._extract_entities_simple(
             "Apple and Microsoft partnership"
         )
 
@@ -445,7 +440,7 @@ class TestRetrievalService:
     def test_extract_entities_simple_patterns(self):
         """Test entity extraction with various patterns"""
         settings = RetrievalSettingsBuilder.default().build()
-        base_retrieval = BaseRetrieval(settings)
+        retrieval_service = RetrievalService(settings)
         test_cases = [
             (
                 "8th Light consulting services",
@@ -457,7 +452,7 @@ class TestRetrievalService:
         ]
 
         for query, expected_entities in test_cases:
-            entities = base_retrieval._extract_entities_simple(query)
+            entities = retrieval_service._extract_entities_simple(query)
 
             # Should extract at least some expected entities (normalized to lowercase)
             overlap = entities.intersection(expected_entities)
@@ -465,8 +460,8 @@ class TestRetrievalService:
 
     def test_extract_entities_simple_empty_query(self):
         """Test entity extraction with empty query"""
-        base_retrieval = BaseRetrieval(self.mock_settings)
-        entities = base_retrieval._extract_entities_simple("")
+        retrieval_service = RetrievalService(self.mock_settings)
+        entities = retrieval_service._extract_entities_simple("")
         assert isinstance(entities, set)
         assert len(entities) == 0
 
@@ -525,22 +520,26 @@ class TestRetrievalServiceEdgeCases:
         self.mock_settings.rag.max_unique_documents = 5
 
         self.mock_settings.vector = MagicMock()
-        self.mock_settings.vector.provider = "elasticsearch"
+        self.mock_settings.vector.provider = "qdrant"
 
         self.retrieval_service = RetrievalService(self.mock_settings)
 
     def test_extract_entities_unicode(self):
         """Test entity extraction with Unicode characters"""
-        base_retrieval = BaseRetrieval(self.mock_settings)
-        entities = base_retrieval._extract_entities_simple("Café München collaboration")
+        retrieval_service = RetrievalService(self.mock_settings)
+        entities = retrieval_service._extract_entities_simple(
+            "Café München collaboration"
+        )
         assert isinstance(entities, set)
         # Should handle Unicode gracefully
         assert len(entities) > 0
 
     def test_extract_entities_special_characters(self):
         """Test entity extraction with special characters"""
-        base_retrieval = BaseRetrieval(self.mock_settings)
-        entities = base_retrieval._extract_entities_simple("AT&T and T-Mobile merger")
+        retrieval_service = RetrievalService(self.mock_settings)
+        entities = retrieval_service._extract_entities_simple(
+            "AT&T and T-Mobile merger"
+        )
         assert isinstance(entities, set)
         # Should extract entities with special characters
         assert len(entities) > 0
@@ -579,9 +578,9 @@ class TestRetrievalServiceEdgeCases:
         # Should handle empty embeddings
         assert isinstance(results, list)
 
-    def test_entity_boosting_with_base_retrieval(self):
-        """Test entity boosting functionality via BaseRetrieval"""
-        base_retrieval = BaseRetrieval(self.mock_settings)
+    def test_entity_boosting_with_retrieval_service(self):
+        """Test entity boosting functionality via RetrievalService"""
+        retrieval_service = RetrievalService(self.mock_settings)
 
         # Mock results with different similarity scores
         results = [
@@ -598,7 +597,7 @@ class TestRetrievalServiceEdgeCases:
         ]
 
         # Apply entity boosting
-        boosted_results = base_retrieval._apply_entity_boosting(
+        boosted_results = retrieval_service._apply_entity_boosting(
             "Apple project", results
         )
 

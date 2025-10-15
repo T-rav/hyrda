@@ -1,92 +1,155 @@
 # Vector Search Options
 
-This document explains the three different search configurations available in the AI Slack Bot:
+This document explains the vector search configuration available in the AI Slack Bot:
 
-## 1. Pinecone (Pure Vector Search)
+## Qdrant (Pure Vector Search)
+
 **Configuration:**
 ```bash
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-key
-VECTOR_COLLECTION_NAME=knowledge_base
-RAG_ENABLE_HYBRID_SEARCH=false
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=qdrant
+VECTOR_PORT=6333
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+VECTOR_API_KEY=your-qdrant-api-key  # Optional
 ```
 
 **Use Case:** Best for pure semantic similarity searches.
 - Uses dense vector embeddings only
 - Fast and efficient for most RAG use cases
-- Requires Pinecone API key
+- Self-hosted or cloud-hosted
 - Excellent for finding conceptually similar content
+- Automatic collection initialization
+- Supports namespaces and metadata filtering
 
-## 2. Elasticsearch (Traditional BM25 + Vector Boost)
-**Configuration:**
-```bash
-VECTOR_PROVIDER=elasticsearch  
-VECTOR_URL=http://localhost:9200
-VECTOR_COLLECTION_NAME=knowledge_base
-RAG_ENABLE_HYBRID_SEARCH=false
-```
+## Quick Setup
 
-**Use Case:** Traditional Elasticsearch with vector similarity boost.
-- **Primary:** BM25 keyword-based search (traditional Elasticsearch)
-- **Secondary:** Vector similarity boost (0.5x multiplier)
-- Combines exact keyword matching with semantic understanding
-- Self-hosted with no external dependencies
-- Best of both worlds: traditional search enhanced by AI
-
-## 3. Hybrid Search (Dual Pipeline with RRF)
-**Configuration:**
-```bash
-VECTOR_PROVIDER=elasticsearch  # Must use Elasticsearch for hybrid
-VECTOR_URL=http://localhost:9200
-RAG_ENABLE_HYBRID_SEARCH=true
-HYBRID_ENABLED=true
-HYBRID_RERANKER_ENABLED=true
-```
-
-**Use Case:** Highest search quality with separate dense+sparse pipelines.
-- **Separate pipelines:** Dense vector search AND BM25 sparse search
-- **Fusion:** Reciprocal rank fusion (RRF) to combine results
-- **Reranking:** Optional cross-encoder reranking for precision
-- Most comprehensive but also most complex
-- Best for enterprise-grade search quality
-
-## Quick Setup Examples
-
-### Traditional Elasticsearch (BM25 + Vector Boost)
+### Qdrant (Recommended)
 ```bash
 # .env file
-VECTOR_PROVIDER=elasticsearch
-VECTOR_URL=http://localhost:9200
-RAG_ENABLE_HYBRID_SEARCH=false
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=qdrant
+VECTOR_PORT=6333
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
 
-# Start Elasticsearch
-docker run -p 9200:9200 -e "discovery.type=single-node" elasticsearch:8.7.0
+# Start Qdrant with Docker
+docker compose up -d
 ```
 
-### Hybrid Search with Reranking
+## Configuration Options
+
 ```bash
-# .env file  
-VECTOR_PROVIDER=elasticsearch
-VECTOR_URL=http://localhost:9200
-RAG_ENABLE_HYBRID_SEARCH=true
-HYBRID_ENABLED=true
-HYBRID_RERANKER_ENABLED=true
-HYBRID_RERANKER_API_KEY=your-cohere-key  # Optional for reranking
+# Qdrant settings (default)
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=qdrant                         # Docker service name or localhost
+VECTOR_PORT=6333                           # Qdrant REST API port
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+VECTOR_API_KEY=your-qdrant-api-key         # Optional for authentication
+
+# RAG settings
+RAG_MAX_RESULTS=5                          # Maximum results to return
+RAG_SIMILARITY_THRESHOLD=0.35              # Minimum similarity for initial retrieval
+RAG_RESULTS_SIMILARITY_THRESHOLD=0.5       # Final filtering threshold
+RAG_MAX_CHUNKS_PER_DOCUMENT=3              # Limit chunks per document
+RAG_ENTITY_CONTENT_BOOST=0.05              # Boost for entity matches in content
+RAG_ENTITY_TITLE_BOOST=0.1                 # Boost for entity matches in titles
 ```
 
-### Pinecone Cloud
+## Features
+
+### Entity Boosting
+- Automatically extracts entities from queries
+- Boosts similarity scores for chunks containing query entities
+- Separate boosts for content matches vs. title/filename matches
+
+### Smart Diversification
+- Limits chunks per document to avoid overwhelming results
+- Ensures variety across different source documents
+- Maintains pure similarity order for non-document data
+
+### Query Rewriting
+- Adaptive query rewriting to improve retrieval accuracy
+- Intent detection and query expansion
+- Metadata filtering based on query context
+
+### Contextual Retrieval
+- Optional Anthropic-style contextual retrieval
+- Adds context to chunks before embedding
+- Significantly improves retrieval accuracy
+
+## Architecture
+
+```
+Query → Query Rewriting → Embedding → Qdrant Search → Entity Boosting → Diversification → Results
+```
+
+**Flow:**
+1. Query rewriting (optional) - improves query based on intent
+2. Embedding generation - converts query to vector
+3. Qdrant similarity search - retrieves top candidates
+4. Entity boosting - boosts results with matching entities
+5. Threshold filtering - removes low-quality results
+6. Smart diversification - ensures variety across documents
+
+## Performance
+
+- **Latency**: ~50-100ms for typical queries
+- **Scalability**: Handles millions of vectors efficiently
+- **Memory**: ~150MB for 100k vectors (1536 dimensions)
+- **Accuracy**: ~70-85% recall@5 (depends on data quality)
+
+## Best Practices
+
+1. **Use appropriate similarity thresholds**
+   - Lower initial threshold (0.35) for entity boosting pipeline
+   - Higher final threshold (0.5) for quality results
+
+2. **Enable query rewriting** for better accuracy
+   - Adds 1-2 LLM calls per search
+   - Significant quality improvement
+
+3. **Tune entity boosting** based on your domain
+   - Higher boosts for entity-heavy queries
+   - Lower boosts for conceptual queries
+
+4. **Monitor collection health**
+   - Check vector counts regularly
+   - Verify namespace distribution
+
+5. **Optimize chunk size** for your content
+   - Smaller chunks (500-1000 tokens) for precise retrieval
+   - Larger chunks (1000-2000 tokens) for more context
+
+## Troubleshooting
+
+**Connection Issues:**
 ```bash
-# .env file
-VECTOR_PROVIDER=pinecone
-VECTOR_API_KEY=your-pinecone-key
-VECTOR_ENVIRONMENT=us-east-1-aws
-RAG_ENABLE_HYBRID_SEARCH=false
+# Check if Qdrant is running
+docker ps | grep qdrant
+
+# Check Qdrant logs
+docker logs qdrant
+
+# Test connection
+curl http://localhost:6333
 ```
 
-## Summary
+**Collection Not Found:**
+- Collection is created automatically on first use
+- Verify `VECTOR_COLLECTION_NAME` matches your ingestion configuration
 
-- **Pinecone**: Cloud-hosted, pure vector search, easiest setup
-- **Elasticsearch**: Self-hosted, pure vector search, no external deps
-- **Hybrid**: Best search quality, requires Elasticsearch + optional Cohere
+**Poor Search Quality:**
+- Check similarity thresholds (may be too high)
+- Review query rewriting settings
+- Consider enabling contextual retrieval
+- Verify chunks are properly embedded with metadata
 
-Choose based on your infrastructure preferences and search quality requirements.
+**Slow Performance:**
+- Check Qdrant resource allocation
+- Increase `QDRANT_MMAP` for large collections
+- Consider quantization for faster search
+
+## References
+
+- [Qdrant Documentation](https://qdrant.tech/documentation/)
+- [OpenAI Embeddings](https://platform.openai.com/docs/guides/embeddings)
+- [Anthropic Contextual Retrieval](https://www.anthropic.com/news/contextual-retrieval)

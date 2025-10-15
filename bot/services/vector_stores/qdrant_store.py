@@ -152,7 +152,7 @@ class QdrantVectorStore(VectorStore):
         limit: int = 100,  # Higher default for better retrieval
         similarity_threshold: float = 0.0,  # No threshold for intermediate results
         filter: dict[str, Any] | None = None,
-        query_text: str = "",  # Ignored for Qdrant (compatibility with Elasticsearch)
+        query_text: str = "",  # Not used for pure vector search
     ) -> list[dict[str, Any]]:
         """Search Qdrant for similar documents across all namespaces"""
         try:
