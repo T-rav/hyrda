@@ -460,9 +460,10 @@ Keep your response focused and informative (2-3 paragraphs)."""
         result_text += f"(retrieved {total_retrieved} total sections)\n"
 
         # Add sources section with proper format for source detection
-        # Format sources with "Internal search" keyword so they're detected by format_research_context
+        # IMPORTANT: Use numbered list format ("1. URL - description") so format_research_context can parse
         result_text += "\n\n### Sources\n\n"
         files_seen = set()
+        source_index = 1
         for doc in docs[:10]:
             file_name = doc.get("metadata", {}).get("file_name", "unknown")
             web_view_link = doc.get("metadata", {}).get(
@@ -470,10 +471,9 @@ Keep your response focused and informative (2-3 paragraphs)."""
             )
             if file_name not in files_seen:
                 files_seen.add(file_name)
-                # Use "Internal search" keyword so source gets tagged as [INTERNAL_KB]
-                result_text += (
-                    f"- {web_view_link} - Internal search result: {file_name}\n"
-                )
+                # Include "Internal search" keyword so this gets tagged as [INTERNAL_KB] downstream
+                result_text += f"{source_index}. {web_view_link} - Internal search result: {file_name}\n"
+                source_index += 1
 
         return result_text
 

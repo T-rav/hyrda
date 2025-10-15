@@ -517,6 +517,7 @@ Use ONLY externally verifiable information - do not invent details.
 - If internal search found existing client data, past projects, or case studies, this company HAS a relationship with 8th Light
 - Include internal findings prominently, especially in "Relationships via 8th Light Network" section
 - Cite internal sources with [source #] notation where # references the [INTERNAL_KB] marked sources
+- In the consolidated source list provided in your context, any source description containing "Internal search result:" is an internal knowledge base source and should be treated as [INTERNAL_KB].
 </Your Task>
 
 <Mandatory Report Structure - 8th Light Company Profile>
