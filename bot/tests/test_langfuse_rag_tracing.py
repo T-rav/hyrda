@@ -62,7 +62,7 @@ class TestLangfuseRAGTracing:
                     query=query,
                     results=retrieval_results,
                     metadata={
-                        "retrieval_type": "pinecone_rag",
+                        "retrieval_type": "qdrant_rag",
                         "total_chunks": len(context_chunks),
                         "avg_similarity": sum(
                             r["similarity"] for r in retrieval_results
@@ -77,7 +77,7 @@ class TestLangfuseRAGTracing:
                                 if r.get("document")
                             }
                         ),
-                        "vector_store": "pinecone",
+                        "vector_store": "qdrant",
                     },
                 )
 
@@ -106,11 +106,11 @@ class TestLangfuseRAGTracing:
 
         # Check metadata
         metadata = call_args[1]["metadata"]
-        assert metadata["retrieval_type"] == "pinecone_rag"
+        assert metadata["retrieval_type"] == "qdrant_rag"
         assert metadata["total_chunks"] == 2
         assert metadata["avg_similarity"] == 0.9  # (0.92 + 0.88) / 2
         assert set(metadata["documents_used"]) == {"ml_guide.pdf", "dl_basics.md"}
-        assert metadata["vector_store"] == "pinecone"
+        assert metadata["vector_store"] == "qdrant"
 
     @pytest.mark.asyncio
     async def test_no_tracing_when_no_langfuse_service(self):

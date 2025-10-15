@@ -51,39 +51,3 @@ class EnhancedChunkProcessor:
 
         logger.info(f"Processed {len(processed_docs)} documents with title injection")
         return processed_docs
-
-    def prepare_for_dual_indexing(
-        self, documents: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
-        """
-        Prepare documents for dual indexing (Pinecone + Elasticsearch)
-
-        Returns:
-            {
-                'dense': documents with enhanced content for embedding,
-                'sparse': documents with title field separation for BM25
-            }
-        """
-        dense_docs = []
-        sparse_docs = []
-
-        for doc in documents:
-            content = doc.get("content", "")
-            metadata = doc.get("metadata", {})
-
-            # For dense indexing: use enhanced content
-            enhanced_content = self.title_injection.inject_titles(
-                [content], [metadata]
-            )[0]
-            dense_doc = doc.copy()
-            dense_doc["content"] = enhanced_content
-            dense_docs.append(dense_doc)
-
-            # For sparse indexing: separate title and content fields
-            sparse_doc = doc.copy()
-            sparse_doc["content"] = content  # Original content
-            sparse_doc["title"] = self.title_injection._extract_title(metadata) or ""
-            sparse_docs.append(sparse_doc)
-
-        logger.info(f"Prepared {len(dense_docs)} documents for dual indexing")
-        return {"dense": dense_docs, "sparse": sparse_docs}

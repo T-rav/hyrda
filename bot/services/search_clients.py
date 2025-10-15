@@ -224,8 +224,25 @@ class PerplexityClient:
                 answer = message.get("content", "")
                 citations = data.get("citations", [])
 
-                # Format sources
-                sources = [{"url": url} for url in citations]
+                # Format sources with domain as title
+                sources = []
+                for url in citations:
+                    # Extract a readable title from URL (domain + path)
+                    try:
+                        from urllib.parse import urlparse
+
+                        parsed = urlparse(url)
+                        domain = parsed.netloc.replace("www.", "")
+                        # Use domain as title, or path if available
+                        path_parts = parsed.path.strip("/").split("/")
+                        if path_parts and path_parts[0]:
+                            title = f"{domain}/{path_parts[0]}"
+                        else:
+                            title = domain
+                    except Exception:
+                        title = url[:50]  # Fallback to truncated URL
+
+                    sources.append({"url": url, "title": title})
 
                 duration = time.time() - start_time
 
