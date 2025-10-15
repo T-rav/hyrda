@@ -388,7 +388,10 @@ Return ONLY the JSON array, no explanation."""
         # Generate synthesis
         prompt = f"""You are a research synthesizer reviewing 8th Light's internal knowledge base.
 
-**IMPORTANT**: If you see documents with "Case Study" in the filename, these are projects 8th Light completed for that company. Case studies = actual client work, not just research.
+**CRITICAL RELATIONSHIP RULES**
+- If you see any evidence of past project work (e.g., filenames or content mentioning "Case Study", "client engagement", "project delivered", "retrospective", "project summary", or similar), this indicates an existing or past client relationship with 8th Light.
+- Treat such evidence as definitive: state clearly that the company IS an existing client or past engagement and list projects with details if available.
+- If documents are purely research/analysis (no direct project work), do NOT infer a client relationship.
 
 Research Query: "{query}"
 
@@ -399,9 +402,11 @@ Retrieved Context:
 {context}
 
 Provide a well-structured, comprehensive answer that:
-1. If case studies found: Clearly state this is an existing 8th Light client and list the specific projects
-2. Synthesizes information from multiple sources
-3. Highlights key findings and insights
+1. Starts with an explicit "Relationship status" line:
+   - "Relationship status: Existing client/past engagement" when project work is present
+   - "Relationship status: No prior engagement" when only research/notes are present
+2. If relationship exists: Summarize specific projects (what/when/tech) from the context
+3. Synthesizes the most important findings and insights
 4. Notes any gaps or areas with limited information
 
 Keep your response focused and informative (2-3 paragraphs)."""
