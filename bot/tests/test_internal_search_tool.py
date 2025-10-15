@@ -153,10 +153,10 @@ class TestInternalSearchTool:
             synthesis_response,
         ]
 
-        # Mock vector store results
+        # Mock vector store results with case study to prevent fallback retrieval
         doc1 = Document(
-            page_content="Content from project A",
-            metadata={"file_name": "project_a.pdf"},
+            page_content="Content from project A case study",
+            metadata={"file_name": "project_a_case_study.pdf"},
         )
         doc2 = Document(
             page_content="Content from project B",
