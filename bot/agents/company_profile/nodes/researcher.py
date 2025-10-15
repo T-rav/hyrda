@@ -110,7 +110,7 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     # Call LLM with tools using LangChain
     try:
         # Bind tools to LLM if available
-        if search_tools:
+        if all_tools:
             llm_with_tools = llm.bind_tools(all_tools)
             response = await llm_with_tools.ainvoke(messages)
         else:
