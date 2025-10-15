@@ -382,7 +382,7 @@ class TestIntegration:
         settings = Settings()
         settings.rag.results_similarity_threshold = 0.7
         settings.rag.max_results = 5
-        settings.vector.provider = "pinecone"
+        settings.vector.provider = "qdrant"
 
         retrieval_service = RetrievalService(settings)
 

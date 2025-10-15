@@ -1,111 +1,70 @@
 # Vector Database Management Scripts
 
-Simple, clear scripts to manage your Pinecone and Elasticsearch vector databases.
-
-## 🧹 Clear Pinecone
-
-**Purpose**: Delete all vectors from your Pinecone index for clean re-ingestion.
-
-```bash
-# Clear all vectors from Pinecone
-python scripts/clear_pinecone.py
-
-# Or run with venv
-./venv/bin/python scripts/clear_pinecone.py
-```
-
-**What it does:**
-- ✅ Connects to your Pinecone index using `.env` settings
-- ✅ Shows current vector count
-- ✅ Asks for confirmation before deletion
-- ✅ Deletes all vectors safely
-- ✅ Ready for fresh ingestion
-
-**When to use:**
-- Before re-ingesting documents with new settings
-- When testing different embedding models
-- When you want a completely clean slate
+Simple, clear scripts to manage your Qdrant vector database.
 
 ## 🛠️ Initialize Indices
 
-**Purpose**: Create or recreate vector database indices with proper schemas.
+**Note**: Qdrant collections are initialized automatically on first use.
 
 ```bash
-# Initialize both Pinecone and Elasticsearch
+# Check initialization info
 python scripts/init_indices.py
-
-# Force recreate (deletes existing data)
-python scripts/init_indices.py --force
-
-# Initialize only Pinecone
-python scripts/init_indices.py --pinecone-only
-
-# Initialize only Elasticsearch  
-python scripts/init_indices.py --elasticsearch-only
 ```
 
 **What it does:**
-- ✅ Auto-detects your embedding model dimensions
-- ✅ Creates Pinecone index with correct schema
-- ✅ Creates Elasticsearch indices for BM25 search
-- ✅ Handles both sparse and dense configurations
-- ✅ Shows clear status and next steps
-
-**When to use:**
-- First-time setup of your vector databases
-- After changing embedding models
-- When you need to recreate indices with new schemas
+- ✅ Provides information about automatic initialization
+- ✅ Shows next steps for getting started
 
 ## 🔧 Configuration
 
-Both scripts read from your `.env` file:
+Configuration is handled through your `.env` file:
 
 ```bash
-# Required for Pinecone
-VECTOR_API_KEY=your-pinecone-api-key
+# Qdrant Configuration
+VECTOR_PROVIDER=qdrant
+VECTOR_HOST=qdrant  # Docker service name or localhost
+VECTOR_PORT=6333
 VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
-VECTOR_ENVIRONMENT=us-east-1
+VECTOR_API_KEY=your-qdrant-api-key  # Optional
 
-# Required for Elasticsearch
-VECTOR_URL=http://localhost:9200
-
-# Auto-detected embedding model
-EMBEDDING_MODEL=text-embedding-3-large  # 3072 dimensions
+# Embedding model
+EMBEDDING_MODEL=text-embedding-3-small  # 1536 dimensions
 ```
 
 ## 🚀 Typical Workflow
 
 ```bash
 # 1. Start services
-./start_dependencies.sh
+docker compose up -d
 
-# 2. Clear existing data (optional)
-python scripts/clear_pinecone.py
-
-# 3. Initialize indices
-python scripts/init_indices.py
-
-# 4. Run ingestion
+# 2. Run ingestion (creates collections automatically)
 cd ingest && python main.py --folder-id "YOUR_FOLDER_ID"
 
-# 5. Start bot
-./start_bot.sh
+# 3. Start bot
+make run
 ```
 
 ## 🆘 Troubleshooting
 
-**"Pinecone package not installed":**
+**"Cannot connect to Qdrant":**
 ```bash
-./venv/bin/pip install pinecone
+# Start Qdrant
+docker compose up -d
+
+# Check if running
+docker ps | grep qdrant
+
+# Test connection
+curl http://localhost:6333
 ```
 
-**"Cannot connect to Elasticsearch":**
-```bash
-docker compose -f docker-compose.elasticsearch.yml up -d
-```
-
-**"VECTOR_API_KEY not found":**
+**"VECTOR_HOST not found":**
 - Check your `.env` file exists
-- Ensure `VECTOR_API_KEY=your-pinecone-key` is set
+- Ensure Qdrant configuration is set
 
-These scripts are designed to be simple, safe, and clear about what they're doing. They'll ask for confirmation before any destructive operations.
+**"Collection errors":**
+- Collections are created automatically
+- Check Qdrant logs: `docker logs qdrant`
+- Verify credentials if using authentication
+
+These scripts are designed to be simple, safe, and clear about what they're doing.

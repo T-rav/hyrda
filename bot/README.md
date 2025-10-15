@@ -6,7 +6,7 @@ The main Slack bot service that provides RAG-enabled AI assistance with comprehe
 
 - **RAG-Enabled Responses**: Retrieval-Augmented Generation using your knowledge base
 - **Multi-Provider LLM Support**: OpenAI, Anthropic, or local Ollama models
-- **Vector Search**: Dense vector search with Pinecone or Elasticsearch
+- **Vector Search**: Dense vector search with Qdrant
 - **Thread Management**: Automatic conversation threading and context management
 - **Health Monitoring**: Real-time dashboard at `http://localhost:8080/ui`
 - **Prometheus Metrics**: Native metrics collection for monitoring
@@ -52,10 +52,12 @@ LLM_PROVIDER=openai
 LLM_API_KEY=sk-your-openai-api-key
 LLM_MODEL=gpt-4o-mini
 
-# Pinecone Configuration
-VECTOR_API_KEY=your-pinecone-api-key
+# Qdrant Configuration
+VECTOR_PROVIDER=qdrant
 VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
-VECTOR_ENVIRONMENT=us-east-1-aws
+VECTOR_HOST=qdrant
+VECTOR_PORT=6333
+VECTOR_API_KEY=your-qdrant-api-key  # Optional
 
 # Database
 DATABASE_URL=mysql+pymysql://user:pass@localhost:3306/bot
