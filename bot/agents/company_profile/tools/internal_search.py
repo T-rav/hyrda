@@ -457,6 +457,22 @@ Keep your response focused and informative (2-3 paragraphs)."""
         result_text += f"\n**Search Strategy:** {len(sub_queries)} focused queries "
         result_text += f"(retrieved {total_retrieved} total sections)\n"
 
+        # Add sources section with proper format for source detection
+        # Format sources with "Internal search" keyword so they're detected by format_research_context
+        result_text += "\n\n### Sources\n\n"
+        files_seen = set()
+        for doc in docs[:10]:
+            file_name = doc.get("metadata", {}).get("file_name", "unknown")
+            web_view_link = doc.get("metadata", {}).get(
+                "web_view_link", "internal://knowledge-base"
+            )
+            if file_name not in files_seen:
+                files_seen.add(file_name)
+                # Use "Internal search" keyword so source gets tagged as [INTERNAL_KB]
+                result_text += (
+                    f"- {web_view_link} - Internal search result: {file_name}\n"
+                )
+
         return result_text
 
 
