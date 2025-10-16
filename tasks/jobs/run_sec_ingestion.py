@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # Add tasks directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.openai_embeddings import OpenAIEmbeddingService
+from services.openai_embeddings import OpenAIEmbeddings
 from services.qdrant_client import QdrantClient
 from services.sec_edgar_client import SECEdgarClient
 from services.sec_ingestion_orchestrator import SECIngestionOrchestrator
@@ -75,6 +75,17 @@ async def main():
         type=int,
         default=1,
         help="Number of recent filings to ingest per company (default: 1)",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=10,
+        help="Number of filings to process in parallel (default: 10)",
+    )
+    parser.add_argument(
+        "--no-parallel",
+        action="store_true",
+        help="Disable parallel processing (use sequential instead)",
     )
 
     # Infrastructure options
@@ -113,7 +124,7 @@ async def main():
     )
 
     # Embedding service
-    embedding_service = OpenAIEmbeddingService(model_name=args.embedding_model)
+    embedding_service = OpenAIEmbeddings()
 
     # Determine embedding dimension
     embedding_dim = 3072 if "large" in args.embedding_model else 1536
