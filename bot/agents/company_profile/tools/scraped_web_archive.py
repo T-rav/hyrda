@@ -186,7 +186,7 @@ class ScrapedWebArchiveTool(BaseTool):
                 # Search with SEC source filter
                 results = await self.vector_store.asimilarity_search_with_score(
                     rewritten,
-                    k=30,  # Get more results for better coverage
+                    k=100,  # Get many more results (Gemini 2.5 can handle large context)
                     filter={"source": "sec_edgar"},  # Only SEC filings
                     score_threshold=None,
                 )
@@ -218,8 +218,8 @@ class ScrapedWebArchiveTool(BaseTool):
             # Sort by relevance score
             all_docs.sort(key=lambda x: x["score"], reverse=True)
 
-            # Take top results
-            top_results = all_docs[:15]
+            # Take top results (increased for Gemini 2.5's large context)
+            top_results = all_docs[:50]  # Up from 15 to leverage 1M token context
 
             # Format results
             formatted = self._format_results(top_results, query)
