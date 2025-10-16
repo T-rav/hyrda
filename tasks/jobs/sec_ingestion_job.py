@@ -31,11 +31,13 @@ class SECIngestionJob(BaseJob):
     """Job for ingesting SEC filings from all public companies."""
 
     JOB_NAME = "SEC Filing Ingestion"
-    JOB_DESCRIPTION = "Automatically ingest latest 10-K annual reports for all 10,000+ public companies"
+    JOB_DESCRIPTION = "Automatically ingest 10-K annual reports and 8-K event filings for all 10,000+ public companies"
     REQUIRED_PARAMS = []  # No required params - automatically fetches all companies
     OPTIONAL_PARAMS = [
         "batch_size",  # Default: 10 (parallel processing)
         "use_parallel",  # Default: True
+        "limit_10k",  # Default: 1 (latest annual report)
+        "limit_8k",  # Default: 100 (recent event filings)
     ]
 
     def __init__(
@@ -43,6 +45,8 @@ class SECIngestionJob(BaseJob):
         settings: TasksSettings,
         batch_size: int | str = 10,
         use_parallel: bool | str = True,
+        limit_10k: int | str = 1,
+        limit_8k: int | str = 100,
     ):
         """
         Initialize SEC ingestion job.
@@ -51,11 +55,12 @@ class SECIngestionJob(BaseJob):
             settings: Task settings
             batch_size: Number of filings to process in parallel (default: 10)
             use_parallel: Enable parallel processing (default: True)
+            limit_10k: Number of 10-K filings to fetch per company (default: 1)
+            limit_8k: Number of 8-K filings to fetch per company (default: 100)
         """
         super().__init__(settings)
-        # Fixed configuration - ingest only annual reports (most comprehensive)
-        self.filing_types = ["10-K"]  # Annual reports only (10-Q quarterly and 8-K events disabled to save costs)
-        self.limit_per_type = 1  # Latest filing
+        # Fixed configuration - ingest annual reports and event filings
+        self.filing_types = ["10-K", "8-K"]  # Annual reports and event filings
         self.user_agent = "8th Light InsightMesh insightmesh@8thlight.com"
 
         # Configurable performance options (convert from strings if needed)
@@ -66,6 +71,12 @@ class SECIngestionJob(BaseJob):
             else use_parallel
         )
 
+        # Per-filing-type limits
+        self.limits_by_type = {
+            "10-K": int(limit_10k) if isinstance(limit_10k, str) else limit_10k,
+            "8-K": int(limit_8k) if isinstance(limit_8k, str) else limit_8k,
+        }
+
     def get_job_id(self) -> str:
         """Get unique job ID."""
         return "sec_ingestion_all_filings"
@@ -73,7 +84,8 @@ class SECIngestionJob(BaseJob):
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the SEC ingestion job."""
         logger.info(f"Starting SEC ingestion job for filing types: {', '.join(self.filing_types)}")
-        logger.info(f"Limit per type: {self.limit_per_type}")
+        for filing_type, limit in self.limits_by_type.items():
+            logger.info(f"  - {filing_type}: {limit} filings per company")
 
         # Step 1: Sync symbol table with all public companies
         logger.info("=" * 60)
@@ -142,17 +154,6 @@ class SECIngestionJob(BaseJob):
 
         logger.info("✅ Ingestion services initialized")
 
-        # Step 4: Ingest filings for all companies
-        logger.info("=" * 60)
-        logger.info("STEP 4: Ingesting SEC filings...")
-        logger.info("=" * 60)
-        logger.info(
-            f"Processing {len(all_companies)} companies × "
-            f"{len(self.filing_types)} filing types × "
-            f"{self.limit_per_type} filings = "
-            f"{len(all_companies) * len(self.filing_types) * self.limit_per_type} total filings"
-        )
-
         # Convert to format expected by orchestrator
         company_list = [
             {
@@ -163,32 +164,70 @@ class SECIngestionJob(BaseJob):
             for company in all_companies
         ]
 
-        # Ingest filings with parallel processing
-        results = await orchestrator.ingest_multiple_filings(
-            companies=company_list,
-            filing_types=self.filing_types,
-            limit_per_type=self.limit_per_type,
-            batch_size=self.batch_size,
-            use_parallel=self.use_parallel,
+        # Step 4: Ingest filings for all companies (process each filing type with its own limit)
+        logger.info("=" * 60)
+        logger.info("STEP 4: Ingesting SEC filings...")
+        logger.info("=" * 60)
+
+        # Calculate total expected filings
+        total_expected = sum(
+            len(company_list) * limit
+            for limit in self.limits_by_type.values()
         )
+        logger.info(f"Total expected filings: {total_expected:,}")
+
+        # Aggregate results across all filing types
+        aggregate_results = {
+            "total": 0,
+            "success": 0,
+            "skipped": 0,
+            "failed": 0,
+        }
+
+        # Process each filing type with its specific limit
+        for filing_type in self.filing_types:
+            limit = self.limits_by_type[filing_type]
+            logger.info("=" * 60)
+            logger.info(f"Processing {filing_type} filings (limit: {limit} per company)")
+            logger.info("=" * 60)
+
+            results = await orchestrator.ingest_multiple_filings(
+                companies=company_list,
+                filing_types=[filing_type],
+                limit_per_type=limit,
+                batch_size=self.batch_size,
+                use_parallel=self.use_parallel,
+            )
+
+            logger.info(
+                f"✅ {filing_type} complete: {results['success']} success, "
+                f"{results['skipped']} skipped, {results['failed']} failed"
+            )
+
+            # Aggregate results
+            aggregate_results["total"] += results["total"]
+            aggregate_results["success"] += results["success"]
+            aggregate_results["skipped"] += results["skipped"]
+            aggregate_results["failed"] += results["failed"]
 
         logger.info("=" * 60)
         logger.info("JOB COMPLETE")
         logger.info("=" * 60)
         logger.info(
-            f"SEC ingestion complete: {results['success']} success, "
-            f"{results['skipped']} skipped, {results['failed']} failed"
+            f"SEC ingestion complete: {aggregate_results['success']} success, "
+            f"{aggregate_results['skipped']} skipped, {aggregate_results['failed']} failed"
         )
 
         return {
-            "records_processed": results["total"],
-            "records_success": results["success"],
-            "records_failed": results["failed"],
-            "records_skipped": results["skipped"],
+            "records_processed": aggregate_results["total"],
+            "records_success": aggregate_results["success"],
+            "records_failed": aggregate_results["failed"],
+            "records_skipped": aggregate_results["skipped"],
             "filing_types": ", ".join(self.filing_types),
             "total_companies": len(company_list),
             "batch_size": self.batch_size,
             "parallel_processing": self.use_parallel,
+            "limits_by_type": self.limits_by_type,
         }
 
 
