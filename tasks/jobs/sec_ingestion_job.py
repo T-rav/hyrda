@@ -36,6 +36,8 @@ class SECIngestionJob(BaseJob):
     OPTIONAL_PARAMS = [
         "filing_type",  # Default: 10-K
         "limit_per_company",  # Default: 1
+        "batch_size",  # Default: 10 (parallel processing)
+        "use_parallel",  # Default: True
         "user_agent",  # Default: InsightMesh Research
     ]
 
@@ -45,6 +47,8 @@ class SECIngestionJob(BaseJob):
         companies: list[str] | None = None,
         filing_type: str = "10-K",
         limit_per_company: int = 1,
+        batch_size: int = 10,
+        use_parallel: bool = True,
         user_agent: str = "InsightMesh Research research@insightmesh.com",
     ):
         """
@@ -55,12 +59,16 @@ class SECIngestionJob(BaseJob):
             companies: List of CIKs or ticker symbols (e.g., ["AAPL", "MSFT", "0000320193"])
             filing_type: Type of filing (10-K, 10-Q, 8-K)
             limit_per_company: Number of recent filings to ingest per company
+            batch_size: Number of filings to process in parallel (default: 10)
+            use_parallel: Enable parallel processing (default: True)
             user_agent: User-Agent header for SEC API
         """
         super().__init__(settings)
         self.companies = companies or []
         self.filing_type = filing_type
         self.limit_per_company = limit_per_company
+        self.batch_size = batch_size
+        self.use_parallel = use_parallel
         self.user_agent = user_agent
 
     def get_job_id(self) -> str:
@@ -111,11 +119,13 @@ class SECIngestionJob(BaseJob):
                 "details": [],
             }
 
-        # Ingest filings
+        # Ingest filings with parallel processing
         results = await orchestrator.ingest_multiple_filings(
             companies=company_list,
             filing_type=self.filing_type,
             limit_per_company=self.limit_per_company,
+            batch_size=self.batch_size,
+            use_parallel=self.use_parallel,
         )
 
         logger.info(
