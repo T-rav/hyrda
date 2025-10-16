@@ -294,3 +294,23 @@ class SECEdgarClient:
         """
         ticker_map = SECEdgarClient._load_sec_ticker_mapping()
         return ticker_map.get(ticker_symbol.upper())
+
+    @staticmethod
+    def get_all_tickers() -> dict[str, str]:
+        """
+        Get all public company tickers and their CIKs from SEC.
+
+        Downloads official SEC company tickers list (13,000+ companies).
+        Cached after first call for performance.
+
+        Returns:
+            Dictionary mapping ticker symbols to CIKs (e.g., {"AAPL": "0000320193", ...})
+
+        Examples:
+            >>> tickers = SECEdgarClient.get_all_tickers()
+            >>> len(tickers)
+            10142
+            >>> tickers["AAPL"]
+            "0000320193"
+        """
+        return SECEdgarClient._load_sec_ticker_mapping()

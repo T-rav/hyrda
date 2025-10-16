@@ -28,48 +28,53 @@ def set_registry(registry):
 
 
 class SECIngestionJob(BaseJob):
-    """Job for ingesting SEC filings."""
+    """Job for ingesting SEC filings from all public companies."""
 
     JOB_NAME = "SEC Filing Ingestion"
-    JOB_DESCRIPTION = "Ingest SEC filings (10-K, 10-Q, 8-K) into vector database for sales intelligence"
-    REQUIRED_PARAMS = ["companies"]  # List of CIKs or tickers
+    JOB_DESCRIPTION = "Automatically ingest SEC filings (10-K, 10-Q, 8-K) for all public companies"
+    REQUIRED_PARAMS = []  # No required params - automatically fetches all companies
     OPTIONAL_PARAMS = [
         "filing_type",  # Default: 10-K
         "limit_per_company",  # Default: 1
         "batch_size",  # Default: 10 (parallel processing)
         "use_parallel",  # Default: True
         "user_agent",  # Default: InsightMesh Research
+        "ticker_filter",  # Optional: List of specific tickers to process
+        "limit_total_companies",  # Optional: Max number of companies (for testing)
     ]
 
     def __init__(
         self,
         settings: TasksSettings,
-        companies: list[str] | None = None,
         filing_type: str = "10-K",
         limit_per_company: int = 1,
         batch_size: int = 10,
         use_parallel: bool = True,
         user_agent: str = "InsightMesh Research research@insightmesh.com",
+        ticker_filter: list[str] | None = None,
+        limit_total_companies: int | None = None,
     ):
         """
         Initialize SEC ingestion job.
 
         Args:
             settings: Task settings
-            companies: List of CIKs or ticker symbols (e.g., ["AAPL", "MSFT", "0000320193"])
             filing_type: Type of filing (10-K, 10-Q, 8-K)
             limit_per_company: Number of recent filings to ingest per company
             batch_size: Number of filings to process in parallel (default: 10)
             use_parallel: Enable parallel processing (default: True)
             user_agent: User-Agent header for SEC API
+            ticker_filter: Optional list of specific tickers to process (e.g., ["AAPL", "MSFT"])
+            limit_total_companies: Optional max number of companies to process (for testing)
         """
         super().__init__(settings)
-        self.companies = companies or []
         self.filing_type = filing_type
         self.limit_per_company = limit_per_company
         self.batch_size = batch_size
         self.use_parallel = use_parallel
         self.user_agent = user_agent
+        self.ticker_filter = ticker_filter
+        self.limit_total_companies = limit_total_companies
 
     def get_job_id(self) -> str:
         """Get unique job ID."""
@@ -78,7 +83,6 @@ class SECIngestionJob(BaseJob):
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the SEC ingestion job."""
         logger.info(f"Starting SEC {self.filing_type} ingestion job")
-        logger.info(f"Companies: {len(self.companies)}")
         logger.info(f"Limit per company: {self.limit_per_company}")
 
         # Initialize services
@@ -91,23 +95,36 @@ class SECIngestionJob(BaseJob):
         orchestrator = SECIngestionOrchestrator(user_agent=self.user_agent)
         orchestrator.set_services(vector_store, embedding_service)
 
-        # Convert companies list to format expected by orchestrator
-        # Handle both CIKs and ticker symbols
+        # Get SEC client
         sec_client = SECEdgarClient(self.user_agent)
-        company_list = []
 
-        for company_id in self.companies:
-            # Check if it's a ticker or CIK
-            if company_id.isalpha() and len(company_id) <= 5:
-                # Likely a ticker
-                cik = sec_client.lookup_cik(company_id.upper())
-                if cik:
-                    company_list.append({"cik": cik, "name": company_id.upper()})
-                else:
-                    logger.warning(f"Could not find CIK for ticker {company_id}")
-            else:
-                # Assume it's a CIK
-                company_list.append({"cik": company_id})
+        # Fetch all companies from SEC ticker list
+        logger.info("Fetching all public companies from SEC Edgar...")
+        all_tickers = sec_client.get_all_tickers()
+
+        # Apply ticker filter if specified
+        if self.ticker_filter:
+            logger.info(f"Filtering to {len(self.ticker_filter)} specific tickers")
+            filtered_tickers = {
+                ticker: cik
+                for ticker, cik in all_tickers.items()
+                if ticker in self.ticker_filter
+            }
+        else:
+            filtered_tickers = all_tickers
+
+        # Apply total company limit if specified (for testing)
+        if self.limit_total_companies:
+            logger.info(f"Limiting to first {self.limit_total_companies} companies")
+            filtered_tickers = dict(list(filtered_tickers.items())[:self.limit_total_companies])
+
+        logger.info(f"Processing {len(filtered_tickers)} companies")
+
+        # Convert to format expected by orchestrator
+        company_list = [
+            {"cik": cik, "name": ticker}
+            for ticker, cik in filtered_tickers.items()
+        ]
 
         if not company_list:
             logger.error("No valid companies to process")
