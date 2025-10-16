@@ -281,7 +281,7 @@ class SECIngestionOrchestrator:
                     vector_uuid=base_uuid,
                     chunk_count=len(chunks),
                     content_length=len(document_text),
-                    metadata=metadata,
+                    metadata=doc_metadata,  # Fixed: pass doc_metadata instead of metadata
                     status="success",
                 )
                 logger.info("Recorded ingestion in tracking table")
