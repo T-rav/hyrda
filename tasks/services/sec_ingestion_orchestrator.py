@@ -12,6 +12,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime
+from typing import Any
 
 from .sec_document_tracking_service import SECDocumentTrackingService
 from .sec_edgar_client import SECEdgarClient
@@ -185,7 +186,7 @@ class SECIngestionOrchestrator:
             # Prepare metadata for each chunk
             chunk_metadata = []
             chunk_ids = []
-            for i, chunk in enumerate(chunks):
+            for i in range(len(chunks)):
                 chunk_meta = doc_metadata.copy()
                 chunk_meta["chunk_id"] = f"{filing['accession_number']}_chunk_{i}"
                 chunk_meta["chunk_index"] = i
@@ -383,13 +384,13 @@ class SECIngestionOrchestrator:
                 processed_count = len(results["details"])
                 remaining_tasks = filing_tasks[processed_count:]
 
-                for cik, company_name, filing_type, index in remaining_tasks:
+                for cik, company_name, ftype, index in remaining_tasks:
                     logger.info(f"\n{'='*60}")
-                    logger.info(f"Processing {company_name} (CIK: {cik}) - {filing_type} index {index}")
+                    logger.info(f"Processing {company_name} (CIK: {cik}) - {ftype} index {index}")
                     logger.info(f"{'='*60}")
 
                     result_entry = await self._ingest_filing_safe(
-                        cik, company_name, filing_type, index
+                        cik, company_name, ftype, index
                     )
                     results["details"].append(result_entry)
 
@@ -405,13 +406,13 @@ class SECIngestionOrchestrator:
             # Sequential processing (original behavior)
             logger.info("Using sequential processing")
 
-            for cik, company_name, filing_type, index in filing_tasks:
+            for cik, company_name, ftype, index in filing_tasks:
                 logger.info(f"\n{'='*60}")
-                logger.info(f"Processing {company_name} (CIK: {cik}) - {filing_type} index {index}")
+                logger.info(f"Processing {company_name} (CIK: {cik}) - {ftype} index {index}")
                 logger.info(f"{'='*60}")
 
                 result_entry = await self._ingest_filing_safe(
-                    cik, company_name, filing_type, index
+                    cik, company_name, ftype, index
                 )
                 results["details"].append(result_entry)
 
