@@ -36,8 +36,8 @@ class SECSymbol(Base):
     cik: Mapped[str] = mapped_column(
         String(10),
         nullable=False,
-        unique=True,
-        comment="Central Index Key (zero-padded to 10 digits)",
+        index=True,
+        comment="Central Index Key (zero-padded to 10 digits) - NOT unique, companies can have multiple tickers",
     )
     company_name: Mapped[str] = mapped_column(
         String(512), nullable=False, comment="Company name"
@@ -95,16 +95,54 @@ class SECSymbolService:
             # SEC format: {0: {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc"}, ...}
             data = response.json()
 
-            # Convert to {ticker: {cik, company_name}} mapping
+            # Convert to {ticker: {cik, company_name, exchange}} mapping
             ticker_map = {}
             for entry in data.values():
                 ticker = entry["ticker"].upper()
                 cik = str(entry["cik_str"]).zfill(10)  # Pad to 10 digits
                 company_name = entry["title"]
 
-                ticker_map[ticker] = {"cik": cik, "company_name": company_name}
+                ticker_map[ticker] = {
+                    "cik": cik,
+                    "company_name": company_name,
+                    "exchange": None,  # Will populate below
+                }
 
             logger.info(f"Loaded {len(ticker_map)} ticker-to-CIK mappings")
+
+            # Fetch exchange data from company_tickers_exchange.json
+            exchange_url = "https://www.sec.gov/files/company_tickers_exchange.json"
+            try:
+                logger.info("Fetching exchange data from company_tickers_exchange.json...")
+                exchange_response = httpx.get(exchange_url, headers=headers, timeout=30.0)
+                exchange_response.raise_for_status()
+
+                # Format: {"fields": ["cik", "name", "ticker", "exchange"], "data": [[320193, "Apple Inc.", "AAPL", "Nasdaq"], ...]}
+                exchange_data = exchange_response.json()
+
+                if "data" in exchange_data and "fields" in exchange_data:
+                    fields = exchange_data["fields"]
+                    ticker_idx = fields.index("ticker")
+                    exchange_idx = fields.index("exchange")
+
+                    # Update ticker_map with exchange data
+                    exchange_count = 0
+                    for row in exchange_data["data"]:
+                        ticker = str(row[ticker_idx]).upper()
+                        exchange = row[exchange_idx]
+
+                        if ticker in ticker_map and exchange:
+                            ticker_map[ticker]["exchange"] = exchange
+                            exchange_count += 1
+
+                    logger.info(f"Added exchange data for {exchange_count} tickers")
+                else:
+                    logger.warning("Exchange data not in expected format")
+
+            except Exception as e:
+                logger.warning(f"Could not fetch exchange data (non-critical): {e}")
+                # Continue without exchange data
+
             return ticker_map
 
         except Exception as e:
@@ -162,6 +200,7 @@ class SECSymbolService:
                 for ticker, data in ticker_map.items():
                     cik = data["cik"]
                     company_name = data["company_name"]
+                    exchange = data.get("exchange")
 
                     if ticker in existing_symbols:
                         # Update if CIK or name changed
@@ -171,6 +210,7 @@ class SECSymbolService:
                                     "ticker_symbol": ticker,
                                     "cik": cik,
                                     "company_name": company_name,
+                                    "exchange": exchange,
                                     "is_active": True,
                                 }
                             )
@@ -181,25 +221,17 @@ class SECSymbolService:
                                 "ticker_symbol": ticker,
                                 "cik": cik,
                                 "company_name": company_name,
+                                "exchange": exchange,
                                 "is_active": True,
                             }
                         )
 
-                # Bulk insert new symbols (with upsert for duplicate CIKs)
+                # Bulk insert new symbols
+                # Note: ticker_symbol is unique, so duplicates will be skipped
                 if to_insert:
-                    from sqlalchemy.dialects.mysql import insert as mysql_insert
-
-                    stmt = mysql_insert(SECSymbol).values(to_insert)
-                    # On duplicate CIK, update the ticker_symbol and company_name
-                    # This handles cases like Google with multiple tickers (GOOGL, GOOG)
-                    stmt = stmt.on_duplicate_key_update(
-                        ticker_symbol=stmt.inserted.ticker_symbol,
-                        company_name=stmt.inserted.company_name,
-                        is_active=stmt.inserted.is_active,
-                    )
-                    session.execute(stmt)
+                    session.execute(insert(SECSymbol), to_insert)
                     stats["inserted"] = len(to_insert)
-                    logger.info(f"Inserted/updated {stats['inserted']} symbols")
+                    logger.info(f"Inserted {stats['inserted']} new symbols")
 
                 # Bulk update existing symbols
                 if to_update:
@@ -212,6 +244,7 @@ class SECSymbolService:
                             .values(
                                 cik=symbol_data["cik"],
                                 company_name=symbol_data["company_name"],
+                                exchange=symbol_data["exchange"],
                                 is_active=symbol_data["is_active"],
                             )
                         )

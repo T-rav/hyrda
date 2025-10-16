@@ -47,7 +47,6 @@ def upgrade():
         # Constraints
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("ticker_symbol", name="uq_ticker_symbol"),
-        sa.UniqueConstraint("cik", name="uq_cik"),
     )
 
     # Create indexes for lookups
