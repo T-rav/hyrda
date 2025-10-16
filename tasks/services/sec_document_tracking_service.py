@@ -16,9 +16,10 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks"))
 
 # Import from tasks/models/base.py (not bot/models/base.py)
-from models.base import Base, get_db_session  # noqa: E402
 from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
+
+from models.base import Base, get_db_session  # noqa: E402
 
 
 class SECDocument(Base):
@@ -47,6 +48,7 @@ class SECDocument(Base):
     # Content tracking
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     content_length: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)  # Raw filing text
 
     # Vector database tracking
     vector_uuid: Mapped[str] = mapped_column(String(36), nullable=False)
@@ -203,6 +205,7 @@ class SECDocumentTrackingService:
                 existing_doc.document_url = document_url
                 existing_doc.content_hash = content_hash
                 existing_doc.content_length = content_length
+                existing_doc.content = content  # Store raw content
                 existing_doc.vector_uuid = vector_uuid
                 existing_doc.chunk_count = chunk_count
                 existing_doc.last_ingested_at = datetime.utcnow()
@@ -221,6 +224,7 @@ class SECDocumentTrackingService:
                     document_url=document_url,
                     content_hash=content_hash,
                     content_length=content_length,
+                    content=content,  # Store raw content
                     vector_uuid=vector_uuid,
                     chunk_count=chunk_count,
                     ingestion_status=status,
