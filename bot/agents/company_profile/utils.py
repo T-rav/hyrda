@@ -567,6 +567,49 @@ Return ONLY the JSON array, no explanation."""
             f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
         )
 
+    # Check context size and truncate if needed
+    # Gemini 2.5 Pro: 1M input + 64K output = use ~900K for context (100K buffer)
+    # Rough estimate: 1 token ≈ 4 characters
+    max_context_chars = 900000 * 4  # ~3.6M characters for 900K tokens
+
+    if len(context) > max_context_chars:
+        logger.warning(
+            f"Context too large ({len(context)} chars ≈ {len(context) // 4} tokens). "
+            f"Truncating to fit within {max_context_chars // 4}K token budget."
+        )
+
+        # Keep header and sources, truncate notes proportionally
+        header_end = context.find("## Finding 1")
+        sources_start = context.find("\n\n---\n\n# CONSOLIDATED SOURCE LIST")
+
+        if header_end > 0 and sources_start > 0:
+            header = context[:header_end]
+            sources = context[sources_start:]
+            notes_text = context[header_end:sources_start]
+
+            # Calculate how much space we have for notes
+            available_for_notes = max_context_chars - len(header) - len(sources)
+
+            if len(notes_text) > available_for_notes:
+                # Truncate notes_text
+                notes_text = notes_text[:available_for_notes]
+                # Cut at last complete sentence
+                last_period = notes_text.rfind(".\n")
+                if (
+                    last_period > available_for_notes * 0.9
+                ):  # Only cut if we find a period in last 10%
+                    notes_text = notes_text[: last_period + 2]
+
+                notes_text += "\n\n[... additional research notes truncated to fit context window ...]\n\n"
+                logger.info(
+                    f"Truncated notes from {context[header_end:sources_start].__len__()} to {len(notes_text)} chars"
+                )
+
+            context = header + notes_text + sources
+
+    logger.info(
+        f"Final context size: {len(context)} chars ≈ {len(context) // 4} tokens"
+    )
     return context
 
 
