@@ -31,6 +31,7 @@ class AsyncIterator:
         return item
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_full_notes_to_report():
     """Test: User provides full notes upfront → gets report immediately."""
@@ -215,6 +216,7 @@ async def test_complete_qa_flow_iteration_3():
             print("✅ Iteration 3 - Complete! Report generated (with skipped answers)")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_agent_level_full_notes():
     """Test at agent level: Full notes → report (no Q&A)."""
