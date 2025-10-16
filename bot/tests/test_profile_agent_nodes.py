@@ -602,26 +602,17 @@ class TestCompressionNode:
 
         config = {"configurable": {}}
 
-        # Mock LLM response
-        mock_response = Mock()
-        mock_response.content = (
-            "Compressed Summary: Tesla is a leading EV manufacturer..."
-        )
-
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.ainvoke = AsyncMock(return_value=mock_response)
-            mock_chat.return_value = mock_llm
-
-            result = await compress_research(state, config)
+        result = await compress_research(state, config)
 
         assert "compressed_research" in result
-        assert "Tesla is a leading EV manufacturer" in result["compressed_research"]
+        # Compression is now a pass-through that preserves full research
+        assert "Tesla market analysis" in result["compressed_research"]
+        assert "Note 1" in result["compressed_research"]
         assert result["raw_notes"] == ["Note 1", "Note 2", "Note 3"]
 
     @pytest.mark.asyncio
     async def test_compress_research_token_limit_retry(self):
-        """Test compression retries on token limit"""
+        """Test compression handles long research (no actual compression, just pass-through)"""
         state = {
             "research_topic": "Long research",
             "researcher_messages": [
@@ -632,23 +623,15 @@ class TestCompressionNode:
 
         config = {"configurable": {}}
 
-        # First call fails with token limit, second succeeds
-        mock_error = Exception("maximum context length exceeded")
-        mock_success = Mock()
-        mock_success.content = "Compressed successfully"
+        result = await compress_research(state, config)
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.ainvoke = AsyncMock(side_effect=[mock_error, mock_success])
-            mock_chat.return_value = mock_llm
-
-            result = await compress_research(state, config)
-
-        assert "Compressed successfully" in result["compressed_research"]
+        # Compression now just preserves full content
+        assert "Long research" in result["compressed_research"]
+        assert "Note" in result["compressed_research"]
 
     @pytest.mark.asyncio
     async def test_compress_research_fallback(self):
-        """Test compression fallback on persistent failure"""
+        """Test compression preserves raw notes when no tool messages"""
         state = {
             "research_topic": "Failed compression",
             "researcher_messages": [HumanMessage(content="Research")],
@@ -657,16 +640,13 @@ class TestCompressionNode:
 
         config = {"configurable": {}}
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
-            mock_llm = Mock()
-            mock_llm.ainvoke = AsyncMock(side_effect=Exception("API error"))
-            mock_chat.return_value = mock_llm
+        result = await compress_research(state, config)
 
-            result = await compress_research(state, config)
-
-        # Should fall back to raw notes
-        assert "Compression failed" in result["compressed_research"]
+        # Should use raw notes as fallback when no tool messages
+        assert "Failed compression" in result["compressed_research"]
         assert "Note 1" in result["compressed_research"]
+        assert "Note 2" in result["compressed_research"]
+        assert "Note 3" in result["compressed_research"]
 
 
 class TestFinalReportNode:
