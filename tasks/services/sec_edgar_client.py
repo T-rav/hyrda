@@ -26,7 +26,7 @@ class SECEdgarClient:
 
         Args:
             user_agent: User-Agent header (required by SEC)
-                       Format: "CompanyName email@company.com"
+                       Format: "8th Light insightmesh@8thlight.com"
         """
         self.base_url = "https://data.sec.gov"
         self.archive_url = "https://www.sec.gov/Archives/edgar/data"
