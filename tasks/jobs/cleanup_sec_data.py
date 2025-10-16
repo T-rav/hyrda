@@ -163,9 +163,20 @@ async def cleanup_qdrant_vectors(dry_run: bool = False) -> dict:
         # Delete all vectors with sec_filings namespace
         logger.info("🗑️  Deleting all SEC filing vectors...")
 
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+        delete_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="namespace",
+                    match=MatchValue(value="sec_filings"),
+                )
+            ]
+        )
+
         vector_store.client.delete(
             collection_name=vector_store.collection_name,
-            points_selector=namespace_filter,
+            points_selector=delete_filter,
         )
 
         stats["vectors_deleted"] = count
