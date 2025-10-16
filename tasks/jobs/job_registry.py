@@ -10,6 +10,8 @@ from services.scheduler_service import SchedulerService
 
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
+from .sec_cleanup_job import SECCleanupJob
+from .sec_ingestion_job import SECIngestionJob
 from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,8 @@ def execute_job_by_type(
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
         "portal_sync": PortalSyncJob,
+        "sec_ingestion": SECIngestionJob,
+        "sec_cleanup": SECCleanupJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -116,12 +120,30 @@ class JobRegistry:
         self.settings = settings
         self.scheduler_service = scheduler_service
 
-        # Job type mapping
+        # Job type mapping - starts with built-in jobs
         self.job_types = {
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
             "portal_sync": PortalSyncJob,
+            "sec_ingestion": SECIngestionJob,
+            "sec_cleanup": SECCleanupJob,
         }
+
+    def register_job_type(self, job_type: str, job_class: type) -> None:
+        """
+        Register a new job type.
+
+        This allows jobs to self-register, similar to how agents work.
+
+        Args:
+            job_type: Unique identifier for the job type
+            job_class: Job class (must extend BaseJob)
+        """
+        if job_type in self.job_types:
+            logger.warning(f"Job type '{job_type}' already registered, overwriting")
+
+        self.job_types[job_type] = job_class
+        logger.info(f"Registered job type: {job_type} ({job_class.JOB_NAME})")
 
     def get_available_job_types(self) -> list[dict[str, Any]]:
         """Get available job types with their descriptions."""
