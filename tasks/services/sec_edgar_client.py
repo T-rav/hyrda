@@ -6,8 +6,10 @@ Free API, no authentication required, just needs a User-Agent header.
 """
 
 import asyncio
+import json
 import logging
 import re
+from functools import lru_cache
 from typing import Any
 
 import httpx
@@ -219,31 +221,77 @@ class SECEdgarClient:
         return filing
 
     @staticmethod
-    def lookup_cik(ticker_symbol: str) -> str | None:
+    @lru_cache(maxsize=1)
+    def _load_sec_ticker_mapping() -> dict[str, str]:
         """
-        Look up CIK from ticker symbol using SEC company tickers JSON.
+        Load the official SEC ticker-to-CIK mapping.
 
-        Note: This is a simplified version. For production, you'd want to
-        download and cache the full company tickers JSON file.
-
-        Args:
-            ticker_symbol: Stock ticker symbol (e.g., "AAPL")
+        Downloads from SEC's company_tickers.json (13,000+ companies).
+        Cached after first call for performance.
 
         Returns:
-            CIK string or None if not found
+            Dictionary mapping ticker -> CIK (zero-padded to 10 digits)
         """
-        # Known mappings for common companies (expand as needed)
-        known_tickers = {
-            "AAPL": "0000320193",  # Apple
-            "MSFT": "0000789019",  # Microsoft
-            "GOOGL": "0001652044",  # Alphabet (Google)
-            "AMZN": "0001018724",  # Amazon
-            "META": "0001326801",  # Meta (Facebook)
-            "TSLA": "0001318605",  # Tesla
-            "NVDA": "0001045810",  # NVIDIA
-            "NFLX": "0001065280",  # Netflix
-            "CRM": "0001108524",  # Salesforce
-            "ORCL": "0001341439",  # Oracle
-        }
+        import httpx
 
-        return known_tickers.get(ticker_symbol.upper())
+        url = "https://www.sec.gov/files/company_tickers.json"
+        headers = {"User-Agent": "Research Bot research@example.com"}
+
+        try:
+            logger.info("Downloading SEC ticker mapping (13,000+ companies)...")
+            response = httpx.get(url, headers=headers, timeout=30.0)
+            response.raise_for_status()
+
+            # SEC format: {0: {"cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc"}, ...}
+            data = response.json()
+
+            # Convert to {ticker: CIK} mapping with zero-padded CIKs
+            ticker_map = {}
+            for entry in data.values():
+                ticker = entry["ticker"].upper()
+                cik = str(entry["cik_str"]).zfill(10)  # Pad to 10 digits
+                ticker_map[ticker] = cik
+
+            logger.info(f"Loaded {len(ticker_map)} ticker-to-CIK mappings")
+            return ticker_map
+
+        except Exception as e:
+            logger.error(f"Failed to load SEC ticker mapping: {e}")
+            logger.warning("Falling back to hardcoded tickers")
+
+            # Fallback to known tickers if SEC API fails
+            return {
+                "AAPL": "0000320193",  # Apple
+                "MSFT": "0000789019",  # Microsoft
+                "GOOGL": "0001652044",  # Alphabet (Google)
+                "AMZN": "0001018724",  # Amazon
+                "META": "0001326801",  # Meta (Facebook)
+                "TSLA": "0001318605",  # Tesla
+                "NVDA": "0001045810",  # NVIDIA
+                "NFLX": "0001065280",  # Netflix
+                "CRM": "0001108524",  # Salesforce
+                "ORCL": "0001341439",  # Oracle
+            }
+
+    @staticmethod
+    def lookup_cik(ticker_symbol: str) -> str | None:
+        """
+        Look up CIK from ticker symbol using SEC's official company tickers.
+
+        Supports 13,000+ publicly traded companies (large, mid, small cap).
+        Downloads official SEC mapping on first call, then caches.
+
+        Args:
+            ticker_symbol: Stock ticker symbol (e.g., "AAPL", "COST", "ZM")
+
+        Returns:
+            CIK string (zero-padded to 10 digits) or None if not found
+
+        Examples:
+            >>> SECEdgarClient.lookup_cik("AAPL")  # Apple
+            "0000320193"
+            >>> SECEdgarClient.lookup_cik("ZM")    # Zoom (mid-cap)
+            "0001585521"
+        """
+        ticker_map = SECEdgarClient._load_sec_ticker_mapping()
+        return ticker_map.get(ticker_symbol.upper())

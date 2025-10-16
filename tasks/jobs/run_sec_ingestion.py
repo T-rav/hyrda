@@ -40,12 +40,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Add tasks directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from tasks.services.openai_embeddings import OpenAIEmbeddingService
-from tasks.services.qdrant_client import QdrantClient
-from tasks.services.sec_edgar_client import SECEdgarClient
-from tasks.services.sec_ingestion_orchestrator import SECIngestionOrchestrator
+from services.openai_embeddings import OpenAIEmbeddingService
+from services.qdrant_client import QdrantClient
+from services.sec_edgar_client import SECEdgarClient
+from services.sec_ingestion_orchestrator import SECIngestionOrchestrator
 
 
 async def main():
