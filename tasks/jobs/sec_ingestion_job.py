@@ -41,8 +41,8 @@ class SECIngestionJob(BaseJob):
     def __init__(
         self,
         settings: TasksSettings,
-        batch_size: int = 10,
-        use_parallel: bool = True,
+        batch_size: int | str = 10,
+        use_parallel: bool | str = True,
     ):
         """
         Initialize SEC ingestion job.
@@ -58,9 +58,13 @@ class SECIngestionJob(BaseJob):
         self.limit_per_type = 1  # Latest filing of each type
         self.user_agent = "8th Light InsightMesh insightmesh@8thlight.com"
 
-        # Configurable performance options
-        self.batch_size = batch_size
-        self.use_parallel = use_parallel
+        # Configurable performance options (convert from strings if needed)
+        self.batch_size = int(batch_size) if isinstance(batch_size, str) else batch_size
+        self.use_parallel = (
+            use_parallel.lower() in ("true", "1", "yes")
+            if isinstance(use_parallel, str)
+            else use_parallel
+        )
 
     def get_job_id(self) -> str:
         """Get unique job ID."""
