@@ -49,11 +49,21 @@ class MeddicAgent(BaseAgent):
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
         self.context_manager = MeddpiccContextManager()
-        # Graph will be initialized with shared singleton checkpointer on first run
-        self.graph = None
-        logger.info(
-            "MeddicAgent initialized - graph will use singleton MemorySaver checkpointer"
-        )
+        # Initialize singleton checkpointer and graph
+        self._ensure_graph_initialized()
+        logger.info("MeddicAgent initialized with singleton MemorySaver checkpointer")
+
+    def _ensure_graph_initialized(self):
+        """Ensure singleton checkpointer and graph are initialized."""
+        global _checkpointer  # noqa: PLW0603
+        if _checkpointer is None:
+            # Create singleton MemorySaver - shared across all agent instances
+            _checkpointer = MemorySaver()
+            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+
+        if not hasattr(self, "graph") or self.graph is None:
+            self.graph = build_meddpicc_coach(checkpointer=_checkpointer)
+            logger.info("✅ Built MEDDPICC graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute MEDDPICC analysis using LangGraph.
@@ -74,16 +84,8 @@ class MeddicAgent(BaseAgent):
         logger.info(f"MeddicAgent executing with query length: {len(query)} chars")
         logger.info(f"MeddicAgent query content: '{query}'")
 
-        # Initialize singleton checkpointer and graph if not already done
-        global _checkpointer  # noqa: PLW0603
-        if _checkpointer is None:
-            # Create singleton MemorySaver - shared across all agent instances
-            _checkpointer = MemorySaver()
-            logger.info("✅ Initialized singleton MemorySaver checkpointer")
-
-        if self.graph is None:
-            self.graph = build_meddpicc_coach(checkpointer=_checkpointer)
-            logger.info("✅ Built MEDDPICC graph with singleton checkpointer")
+        # Ensure graph is initialized (defensive check)
+        self._ensure_graph_initialized()
 
         # Get services from context
         slack_service = context.get("slack_service")
