@@ -8,6 +8,7 @@ Main service that coordinates the SEC filing ingestion process by:
 - Managing the overall ingestion workflow
 """
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -258,19 +259,65 @@ class SECIngestionOrchestrator:
 
             return False, error_msg
 
+    async def _ingest_filing_safe(
+        self,
+        cik: str,
+        company_name: str,
+        filing_type: str,
+        index: int,
+    ) -> dict[str, any]:
+        """
+        Safely ingest a single filing with error handling.
+
+        Args:
+            cik: Central Index Key
+            company_name: Company name for logging
+            filing_type: Type of filing (10-K, 10-Q, 8-K)
+            index: Filing index
+
+        Returns:
+            Dictionary with result details
+        """
+        try:
+            success, message = await self.ingest_company_filing(
+                cik, filing_type, index
+            )
+            return {
+                "cik": cik,
+                "company_name": company_name,
+                "filing_type": filing_type,
+                "index": index,
+                "success": success,
+                "message": message,
+            }
+        except Exception as e:
+            logger.error(f"Error processing {company_name} {filing_type} index {index}: {e}")
+            return {
+                "cik": cik,
+                "company_name": company_name,
+                "filing_type": filing_type,
+                "index": index,
+                "success": False,
+                "message": f"Exception during ingestion: {str(e)}",
+            }
+
     async def ingest_multiple_filings(
         self,
         companies: list[dict],
         filing_type: str = "10-K",
         limit_per_company: int = 1,
+        batch_size: int = 10,
+        use_parallel: bool = True,
     ) -> dict[str, Any]:
         """
-        Ingest filings for multiple companies.
+        Ingest filings for multiple companies with parallel processing.
 
         Args:
             companies: List of dicts with 'cik' and optionally 'name'
             filing_type: Type of filing (10-K, 10-Q, 8-K)
             limit_per_company: How many filings to ingest per company
+            batch_size: Number of filings to process in parallel (default: 10)
+            use_parallel: If True, use parallel processing. If False, sequential (default: True)
 
         Returns:
             Dictionary with success/failure counts and details
@@ -283,31 +330,93 @@ class SECIngestionOrchestrator:
             "details": [],
         }
 
+        # Build list of all filing tasks
+        filing_tasks = []
         for company in companies:
             cik = company.get("cik")
             company_name = company.get("name", f"CIK {cik}")
 
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Processing {company_name} (CIK: {cik})")
-            logger.info(f"{'='*60}")
-
             for index in range(limit_per_company):
-                success, message = await self.ingest_company_filing(
-                    cik, filing_type, index
-                )
+                filing_tasks.append((cik, company_name, filing_type, index))
 
-                result_entry = {
-                    "cik": cik,
-                    "company_name": company_name,
-                    "filing_type": filing_type,
-                    "index": index,
-                    "success": success,
-                    "message": message,
-                }
+        total_tasks = len(filing_tasks)
+        logger.info(f"Processing {total_tasks} total filings...")
+
+        if use_parallel:
+            logger.info(f"Using parallel processing with batch size: {batch_size}")
+
+            try:
+                # Process in batches
+                for batch_start in range(0, total_tasks, batch_size):
+                    batch_end = min(batch_start + batch_size, total_tasks)
+                    batch = filing_tasks[batch_start:batch_end]
+
+                    logger.info(f"\nProcessing batch {batch_start // batch_size + 1}/{(total_tasks + batch_size - 1) // batch_size}")
+                    logger.info(f"Companies in batch: {batch_end - batch_start}")
+
+                    # Run batch in parallel
+                    batch_results = await asyncio.gather(
+                        *[
+                            self._ingest_filing_safe(cik, name, ftype, idx)
+                            for cik, name, ftype, idx in batch
+                        ],
+                        return_exceptions=False,  # Let errors propagate to trigger fallback
+                    )
+
+                    # Process batch results
+                    for result_entry in batch_results:
+                        results["details"].append(result_entry)
+
+                        if result_entry["success"]:
+                            if "already indexed" in result_entry["message"]:
+                                results["skipped"] += 1
+                            else:
+                                results["success"] += 1
+                        else:
+                            results["failed"] += 1
+
+            except Exception as batch_error:
+                logger.error(f"Batch processing failed: {batch_error}")
+                logger.warning("Falling back to sequential processing...")
+
+                # Fallback: Process remaining tasks sequentially
+                processed_count = len(results["details"])
+                remaining_tasks = filing_tasks[processed_count:]
+
+                for cik, company_name, filing_type, index in remaining_tasks:
+                    logger.info(f"\n{'='*60}")
+                    logger.info(f"Processing {company_name} (CIK: {cik}) - {filing_type} index {index}")
+                    logger.info(f"{'='*60}")
+
+                    result_entry = await self._ingest_filing_safe(
+                        cik, company_name, filing_type, index
+                    )
+                    results["details"].append(result_entry)
+
+                    if result_entry["success"]:
+                        if "already indexed" in result_entry["message"]:
+                            results["skipped"] += 1
+                        else:
+                            results["success"] += 1
+                    else:
+                        results["failed"] += 1
+
+        else:
+            # Sequential processing (original behavior)
+            logger.info("Using sequential processing")
+
+            for cik, company_name, filing_type, index in filing_tasks:
+                logger.info(f"\n{'='*60}")
+                logger.info(f"Processing {company_name} (CIK: {cik}) - {filing_type} index {index}")
+                logger.info(f"{'='*60}")
+
+                result_entry = await self._ingest_filing_safe(
+                    cik, company_name, filing_type, index
+                )
                 results["details"].append(result_entry)
 
-                if success:
-                    if "already indexed" in message:
+                if result_entry["success"]:
+                    if "already indexed" in result_entry["message"]:
                         results["skipped"] += 1
                     else:
                         results["success"] += 1
