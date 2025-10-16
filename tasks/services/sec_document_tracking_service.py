@@ -162,6 +162,7 @@ class SECDocumentTrackingService:
         content: str,
         vector_uuid: str,
         chunk_count: int,
+        ticker_symbol: str | None = None,
         content_length: int | None = None,
         metadata: dict[str, Any] | None = None,
         status: str = "success",
@@ -181,6 +182,7 @@ class SECDocumentTrackingService:
             content: Document content (for hash computation)
             vector_uuid: Base UUID used for Qdrant point IDs
             chunk_count: Number of chunks created
+            ticker_symbol: Stock ticker symbol (e.g., "AAPL")
             content_length: Content length in characters
             metadata: Additional metadata
             status: Ingestion status (success, failed, pending)
@@ -197,6 +199,7 @@ class SECDocumentTrackingService:
 
             if existing_doc:
                 # Update existing record
+                existing_doc.ticker_symbol = ticker_symbol
                 existing_doc.cik = cik
                 existing_doc.company_name = company_name
                 existing_doc.filing_type = filing_type
@@ -215,6 +218,7 @@ class SECDocumentTrackingService:
             else:
                 # Create new record
                 new_doc = SECDocument(
+                    ticker_symbol=ticker_symbol,
                     cik=cik,
                     accession_number=accession_number,
                     company_name=company_name,
@@ -256,6 +260,7 @@ class SECDocumentTrackingService:
                 return None
 
             return {
+                "ticker_symbol": doc.ticker_symbol,
                 "cik": doc.cik,
                 "accession_number": doc.accession_number,
                 "company_name": doc.company_name,
@@ -302,6 +307,7 @@ class SECDocumentTrackingService:
 
             return [
                 {
+                    "ticker_symbol": doc.ticker_symbol,
                     "cik": doc.cik,
                     "accession_number": doc.accession_number,
                     "company_name": doc.company_name,
