@@ -1,7 +1,7 @@
 """Add sec_symbol_data table and ticker_symbol to sec_documents_data
 
-Revision ID: 014
-Revises: 013
+Revision ID: 015
+Revises: 014
 Create Date: 2025-01-16
 
 """
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "014"
-down_revision = "013"
+revision = "015"
+down_revision = "014"
 branch_labels = None
 depends_on = None
 
