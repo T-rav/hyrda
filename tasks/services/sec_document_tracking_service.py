@@ -31,6 +31,9 @@ class SECDocument(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # SEC identifiers
+    ticker_symbol: Mapped[str | None] = mapped_column(
+        String(10), nullable=True, index=True
+    )  # Stock ticker (e.g., "AAPL")
     cik: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
     accession_number: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True

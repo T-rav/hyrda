@@ -89,17 +89,22 @@ async def main():
         help="Disable parallel processing (use sequential instead)",
     )
 
-    # Infrastructure options
+    # Infrastructure options (reads from environment by default)
     parser.add_argument(
-        "--qdrant-host", default="localhost", help="Qdrant host (default: localhost)"
+        "--qdrant-host",
+        default=os.getenv("QDRANT_HOST", "qdrant"),
+        help="Qdrant host (default: from QDRANT_HOST env or 'qdrant')",
     )
     parser.add_argument(
-        "--qdrant-port", type=int, default=6333, help="Qdrant port (default: 6333)"
+        "--qdrant-port",
+        type=int,
+        default=int(os.getenv("QDRANT_PORT", "6333")),
+        help="Qdrant port (default: from QDRANT_PORT env or 6333)",
     )
     parser.add_argument(
         "--collection",
-        default="knowledge_base",
-        help="Qdrant collection name (default: knowledge_base)",
+        default=os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"),
+        help="Qdrant collection name (default: from VECTOR_COLLECTION_NAME env)",
     )
     parser.add_argument(
         "--embedding-model",
@@ -189,8 +194,10 @@ async def main():
     # Ingest filings
     results = await orchestrator.ingest_multiple_filings(
         companies=companies,
-        filing_type=args.filing_type,
-        limit_per_company=args.limit,
+        filing_types=[args.filing_type],  # Convert to list
+        limit_per_type=args.limit,
+        batch_size=args.batch_size,
+        use_parallel=not args.no_parallel,
     )
 
     # Print summary
