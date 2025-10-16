@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks"))
 from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base, get_db_session  # noqa: E402
+from models.base import Base, get_data_db_session  # noqa: E402
 
 
 class SECDocument(Base):
@@ -132,7 +132,7 @@ class SECDocumentTrackingService:
         """
         new_hash = self.compute_content_hash(content)
 
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             existing_doc = (
                 session.query(SECDocument)
                 .filter_by(accession_number=accession_number)
@@ -188,7 +188,7 @@ class SECDocumentTrackingService:
         """
         content_hash = self.compute_content_hash(content)
 
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             existing_doc = (
                 session.query(SECDocument)
                 .filter_by(accession_number=accession_number)
@@ -245,7 +245,7 @@ class SECDocumentTrackingService:
         Returns:
             Dictionary with document info or None if not found
         """
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             doc = (
                 session.query(SECDocument)
                 .filter_by(accession_number=accession_number)
@@ -292,7 +292,7 @@ class SECDocumentTrackingService:
         Returns:
             List of filing info dictionaries
         """
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             query = session.query(SECDocument).filter_by(cik=cik)
 
             if filing_type:
