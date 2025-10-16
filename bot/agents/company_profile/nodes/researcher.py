@@ -16,6 +16,7 @@ from agents.company_profile.state import ResearcherState
 from agents.company_profile.utils import (
     create_system_message,
     internal_search_tool,
+    scraped_web_archive_tool,
     search_tool,
     think_tool,
 )
@@ -95,10 +96,15 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     # Get internal search tool
     internal_search = internal_search_tool()
 
+    # Get scraped web archive tool (SEC filings)
+    web_archive = scraped_web_archive_tool()
+
     # Build tool list
     all_tools = [*search_tools, think_tool]
     if internal_search:
         all_tools.append(internal_search)
+    if web_archive:
+        all_tools.append(web_archive)
 
     # Prepare messages
     messages = list(state["researcher_messages"])
@@ -211,6 +217,44 @@ async def researcher_tools(
 
             result = think_tool.invoke(tool_args)
             tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
+
+        elif tool_name == "scraped_web_archive":
+            # Execute scraped web archive search (SEC filings)
+            try:
+                from langchain_core.messages import ToolMessage
+
+                # Get the tool and invoke it
+                web_archive = scraped_web_archive_tool()
+
+                if not web_archive:
+                    tool_results.append(
+                        ToolMessage(
+                            content="Scraped web archive tool not available",
+                            tool_call_id=tool_id,
+                        )
+                    )
+                    continue
+
+                # Execute async search
+                query = tool_args.get("query", "")
+                effort = tool_args.get("effort", "medium")
+
+                result = await web_archive.arun(query=query, effort=effort)
+                tool_results.append(ToolMessage(content=result, tool_call_id=tool_id))
+                raw_notes.append(result)
+
+                logger.info("Scraped web archive search completed")
+
+            except Exception as e:
+                logger.error(f"Scraped web archive error: {e}")
+                from langchain_core.messages import ToolMessage
+
+                tool_results.append(
+                    ToolMessage(
+                        content=f"Scraped web archive error: {str(e)}",
+                        tool_call_id=tool_id,
+                    )
+                )
 
         elif tool_name == "internal_search_tool":
             # Execute internal knowledge base search using the LangChain tool
