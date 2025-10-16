@@ -116,12 +116,13 @@ async def main():
     # Initialize services
     logger.info("Initializing services...")
 
+    # Set environment variables for Qdrant client
+    os.environ["QDRANT_HOST"] = args.qdrant_host
+    os.environ["QDRANT_PORT"] = str(args.qdrant_port)
+    os.environ["VECTOR_COLLECTION_NAME"] = args.collection
+
     # Vector store
-    vector_store = QdrantClient(
-        host=args.qdrant_host,
-        port=args.qdrant_port,
-        collection_name=args.collection,
-    )
+    vector_store = QdrantClient()
 
     # Embedding service
     embedding_service = OpenAIEmbeddings()
