@@ -213,7 +213,7 @@ class InternalSearchTool(BaseTool):
                 # Use score_threshold=0 to get ALL results, like regular RAG does
                 results = await self.vector_store.asimilarity_search_with_score(
                     sub_query,  # Use original sub-query, not rewritten
-                    k=50,  # Get MANY more results for better coverage
+                    k=100,  # Get many more results (Gemini 2.5 can handle large context)
                     score_threshold=None,  # No threshold - get everything
                 )
 
@@ -312,7 +312,8 @@ class InternalSearchTool(BaseTool):
 
             # Step 3: Rank and limit
             all_docs.sort(key=lambda x: x["score"])  # Lower score = better in Qdrant
-            max_docs = {"low": 8, "medium": 12, "high": 20}.get(effort, 12)
+            # Increased limits for Gemini 2.5's large context (1M tokens)
+            max_docs = {"low": 15, "medium": 30, "high": 50}.get(effort, 30)
             final_docs = all_docs[:max_docs]
 
             logger.info(f"📊 Found {len(final_docs)} unique documents")
