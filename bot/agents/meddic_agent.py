@@ -24,6 +24,9 @@ from services.meddpicc_context_manager import MeddpiccContextManager
 
 logger = logging.getLogger(__name__)
 
+# Singleton checkpoint saver - shared across all agent instances for state persistence
+_checkpointer = None
+
 
 class MeddicAgent(BaseAgent):
     """Agent for MEDDPICC sales qualification and coaching.
@@ -45,12 +48,22 @@ class MeddicAgent(BaseAgent):
         """Initialize MeddicAgent with LangGraph workflow."""
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
-        # Build graph with MemorySaver for bot code (LangGraph Studio uses platform persistence)
-        self.graph = build_meddpicc_coach(checkpointer=MemorySaver())
         self.context_manager = MeddpiccContextManager()
-        logger.info(
-            "MeddicAgent initialized with MEDDPICC coach workflow (MemorySaver) + context management"
-        )
+        # Initialize singleton checkpointer and graph
+        self._ensure_graph_initialized()
+        logger.info("MeddicAgent initialized with singleton MemorySaver checkpointer")
+
+    def _ensure_graph_initialized(self):
+        """Ensure singleton checkpointer and graph are initialized."""
+        global _checkpointer  # noqa: PLW0603
+        if _checkpointer is None:
+            # Create singleton MemorySaver - shared across all agent instances
+            _checkpointer = MemorySaver()
+            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+
+        if not hasattr(self, "graph") or self.graph is None:
+            self.graph = build_meddpicc_coach(checkpointer=_checkpointer)
+            logger.info("✅ Built MEDDPICC graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute MEDDPICC analysis using LangGraph.
@@ -70,6 +83,9 @@ class MeddicAgent(BaseAgent):
 
         logger.info(f"MeddicAgent executing with query length: {len(query)} chars")
         logger.info(f"MeddicAgent query content: '{query}'")
+
+        # Ensure graph is initialized (defensive check)
+        self._ensure_graph_initialized()
 
         # Get services from context
         slack_service = context.get("slack_service")
@@ -195,6 +211,8 @@ class MeddicAgent(BaseAgent):
                         "query": enhanced_query,
                         "conversation_history": conversation_history,
                         "conversation_summary": conversation_summary,
+                        "followup_mode": followup_mode,  # Preserve followup mode from checkpoint
+                        "original_analysis": original_analysis,  # Preserve original analysis for follow-ups
                     }
 
             except Exception as e:

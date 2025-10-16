@@ -120,8 +120,8 @@ class MeddpiccContextManager:
             return True
 
         # Estimate tokens (rough: ~4 chars per token)
-        total_chars = sum(msg.get("content", "") for msg in conversation_history)
-        estimated_tokens = len(total_chars) // 4
+        total_chars = sum(len(msg.get("content", "")) for msg in conversation_history)
+        estimated_tokens = total_chars // 4
 
         if conversation_summary:
             estimated_tokens += len(conversation_summary) // 4
