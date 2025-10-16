@@ -8,6 +8,7 @@ Free API, no authentication required, just needs a User-Agent header.
 import asyncio
 import logging
 import re
+from functools import lru_cache
 from typing import Any
 
 import httpx
