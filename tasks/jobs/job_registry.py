@@ -22,12 +22,31 @@ def execute_job_by_type(
 ) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
+    import sys
     import uuid
     from datetime import UTC, datetime
+    from pathlib import Path
 
     from config.settings import TasksSettings
     from models.base import get_db_session
     from models.task_run import TaskRun
+
+    # Configure logging for job execution (file + console)
+    log_dir = Path(__file__).parent.parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    # Add file handler if not already present
+    root_logger = logging.getLogger()
+    has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
+
+    if not has_file_handler:
+        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler = logging.FileHandler(log_dir / "tasks.log")
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+        root_logger.setLevel(logging.INFO)
+        logger.info(f"📝 File logging enabled for job: {job_type}")
 
     # Direct mapping - simpler than dynamic imports
     job_classes = {
