@@ -508,17 +508,17 @@ final_report_generation_prompt = """You are an expert Business Development assoc
 
 <Your Task>
 Create a COMPREHENSIVE, IN-DEPTH company profile following the 8th Light methodology.
-TARGET LENGTH: 8-10 pages of detailed analysis (approximately 5,000-6,500 words).
+TARGET LENGTH: 25 pages of highly detailed analysis (approximately 15,000-18,000 words).
 The report must be professional, accurate, and provide extensive actionable insights for sales and consulting partners.
 Use ONLY externally verifiable information - do not invent details.
 
 **Depth Requirements:**
-- Each section should be DETAILED and THOROUGH, not just summaries
-- Provide analysis, context, and connecting insights
+- Each section should be EXTREMELY DETAILED and THOROUGH with deep analysis
+- Provide extensive analysis, context, and connecting insights
 - Include specific examples, quotes, and evidence throughout
-- Expand on implications and opportunities in each section
-- Write in narrative prose with comprehensive coverage
-- **CRITICAL**: MUST include complete ## Sources section with ALL citations
+- Expand significantly on implications and opportunities in each section
+- Write in narrative prose with comprehensive, multi-paragraph coverage
+- **CRITICAL**: MUST include complete ## Sources section with ALL citations and URLs where available
 
 **Writing Style:**
 - Write clearly and naturally - sound like a human analyst, not a robot
