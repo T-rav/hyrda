@@ -57,6 +57,60 @@ class SECEdgarClient:
 
             return response.json()
 
+    async def get_company_facts(self, cik: str) -> dict[str, Any] | None:
+        """
+        Get company financial facts from SEC Company Facts API.
+
+        Returns structured XBRL data (500+ standardized metrics) in JSON format.
+        Includes revenue, assets, R&D spending, margins, etc. across all years.
+
+        Args:
+            cik: Central Index Key
+
+        Returns:
+            Dictionary with company facts data, or None if not available
+
+        Example response structure:
+            {
+                "cik": 320193,
+                "entityName": "Apple Inc.",
+                "facts": {
+                    "us-gaap": {
+                        "Revenues": {
+                            "label": "Revenue",
+                            "description": "...",
+                            "units": {
+                                "USD": [
+                                    {"end": "2024-09-28", "val": 391035000000, "form": "10-K", "fy": 2024},
+                                    ...
+                                ]
+                            }
+                        },
+                        "ResearchAndDevelopmentExpense": {...},
+                        ...
+                    }
+                }
+            }
+        """
+        cik_padded = cik.zfill(10)
+        url = f"{self.base_url}/api/xbrl/companyfacts/CIK{cik_padded}.json"
+
+        logger.info(f"Fetching company facts for CIK {cik}")
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(url, headers=self.headers)
+                response.raise_for_status()
+
+                await asyncio.sleep(self.rate_limit_delay)  # Rate limiting
+
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Company facts not available for CIK {cik}")
+                return None
+            raise
+
     async def get_recent_filings(
         self, cik: str, filing_type: str = "10-K", limit: int = 5
     ) -> list[dict[str, Any]]:
@@ -65,7 +119,7 @@ class SECEdgarClient:
 
         Args:
             cik: Central Index Key
-            filing_type: Type of filing (10-K, 10-Q, 8-K, etc.)
+            filing_type: Type of filing (10-K, 10-Q, 8-K, DEF 14A, etc.)
             limit: Maximum number of filings to return
 
         Returns:

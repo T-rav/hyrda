@@ -34,6 +34,7 @@ dependencies = [
     "aiohttp>=3.8.0",
     "httpx>=0.27.0",  # For SEC Edgar API
     "beautifulsoup4>=4.12.0",  # For parsing SEC HTML filings
+    "edgartools>=2.0.0",  # For parsing SEC filings (10-K, 10-Q, 8-K, etc.)
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",
