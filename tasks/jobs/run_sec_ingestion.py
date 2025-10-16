@@ -157,7 +157,7 @@ async def main():
                 "Try using --cik directly, or add the ticker to the lookup_cik() method"
             )
             sys.exit(1)
-        companies.append({"cik": cik, "name": args.ticker})
+        companies.append({"cik": cik, "ticker": args.ticker})
     elif args.companies_file:
         # Read companies from file
         companies_path = Path(args.companies_file)
