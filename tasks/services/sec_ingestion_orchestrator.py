@@ -450,10 +450,13 @@ class SECIngestionOrchestrator:
                             results["failed"] += 1
                         results["details"].append(result)
 
+                # Log batch completion with overall progress
+                progress_pct = ((i + len(batch)) / len(filing_tasks)) * 100
                 logger.info(
-                    f"Batch {batch_num} complete. Success: {results['success']}, "
-                    f"Skipped: {results['skipped']}, Failed: {results['failed']}"
+                    f"📊 Batch {batch_num}/{total_batches} complete ({progress_pct:.1f}% overall). "
+                    f"Success: {results['success']}, Skipped: {results['skipped']}, Failed: {results['failed']}"
                 )
+                logger.info(f"   Processed {i + len(batch)}/{len(filing_tasks)} total filings")
 
         else:
             # Sequential processing

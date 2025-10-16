@@ -1,7 +1,9 @@
 """APScheduler WebUI Flask application."""
 
 import logging
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
@@ -14,10 +16,29 @@ from services.scheduler_service import SchedulerService
 
 # Environment variables loaded by Pydantic from docker-compose.yml
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# Configure logging with both console and file handlers
+log_dir = Path(__file__).parent / "logs"
+log_dir.mkdir(exist_ok=True)
+
+# Create formatters and handlers
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Console handler (for docker logs)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(formatter)
+
+# File handler (persistent logs with immediate flush)
+file_handler = logging.FileHandler(log_dir / "tasks.log")
+file_handler.setLevel(logging.INFO)
+file_handler.setFormatter(formatter)
+
+# Configure root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(console_handler)
+root_logger.addHandler(file_handler)
+
 logger = logging.getLogger(__name__)
 
 # Global instances
