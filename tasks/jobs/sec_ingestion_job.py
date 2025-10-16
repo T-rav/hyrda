@@ -31,7 +31,7 @@ class SECIngestionJob(BaseJob):
     """Job for ingesting SEC filings from all public companies."""
 
     JOB_NAME = "SEC Filing Ingestion"
-    JOB_DESCRIPTION = "Automatically ingest latest SEC filings (10-K, 10-Q, 8-K) for all 13,000+ public companies"
+    JOB_DESCRIPTION = "Automatically ingest latest 10-K annual reports for all 10,000+ public companies"
     REQUIRED_PARAMS = []  # No required params - automatically fetches all companies
     OPTIONAL_PARAMS = [
         "batch_size",  # Default: 10 (parallel processing)
@@ -53,9 +53,9 @@ class SECIngestionJob(BaseJob):
             use_parallel: Enable parallel processing (default: True)
         """
         super().__init__(settings)
-        # Fixed configuration - ingest all major filing types
-        self.filing_types = ["10-K", "10-Q", "8-K"]  # Annual, Quarterly, Material Events
-        self.limit_per_type = 1  # Latest filing of each type
+        # Fixed configuration - ingest only annual reports (most comprehensive)
+        self.filing_types = ["10-K"]  # Annual reports only (10-Q quarterly and 8-K events disabled to save costs)
+        self.limit_per_type = 1  # Latest filing
         self.user_agent = "8th Light InsightMesh insightmesh@8thlight.com"
 
         # Configurable performance options (convert from strings if needed)
