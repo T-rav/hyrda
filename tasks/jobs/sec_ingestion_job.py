@@ -31,54 +31,40 @@ class SECIngestionJob(BaseJob):
     """Job for ingesting SEC filings from all public companies."""
 
     JOB_NAME = "SEC Filing Ingestion"
-    JOB_DESCRIPTION = "Automatically ingest SEC filings (10-K, 10-Q, 8-K) for all public companies"
+    JOB_DESCRIPTION = "Automatically ingest latest 10-K filings for all 10,000+ public companies"
     REQUIRED_PARAMS = []  # No required params - automatically fetches all companies
     OPTIONAL_PARAMS = [
-        "filing_type",  # Default: 10-K
-        "limit_per_company",  # Default: 1
         "batch_size",  # Default: 10 (parallel processing)
         "use_parallel",  # Default: True
-        "user_agent",  # Default: InsightMesh Research
-        "ticker_filter",  # Optional: List of specific tickers to process
-        "limit_total_companies",  # Optional: Max number of companies (for testing)
     ]
 
     def __init__(
         self,
         settings: TasksSettings,
-        filing_type: str = "10-K",
-        limit_per_company: int = 1,
         batch_size: int = 10,
         use_parallel: bool = True,
-        user_agent: str = "InsightMesh Research research@insightmesh.com",
-        ticker_filter: list[str] | None = None,
-        limit_total_companies: int | None = None,
     ):
         """
         Initialize SEC ingestion job.
 
         Args:
             settings: Task settings
-            filing_type: Type of filing (10-K, 10-Q, 8-K)
-            limit_per_company: Number of recent filings to ingest per company
             batch_size: Number of filings to process in parallel (default: 10)
             use_parallel: Enable parallel processing (default: True)
-            user_agent: User-Agent header for SEC API
-            ticker_filter: Optional list of specific tickers to process (e.g., ["AAPL", "MSFT"])
-            limit_total_companies: Optional max number of companies to process (for testing)
         """
         super().__init__(settings)
-        self.filing_type = filing_type
-        self.limit_per_company = limit_per_company
+        # Fixed configuration
+        self.filing_type = "10-K"  # Always ingest 10-K annual reports
+        self.limit_per_company = 1  # Latest filing only
+        self.user_agent = "8th Light InsightMesh insightmesh@8thlight.com"
+
+        # Configurable performance options
         self.batch_size = batch_size
         self.use_parallel = use_parallel
-        self.user_agent = user_agent
-        self.ticker_filter = ticker_filter
-        self.limit_total_companies = limit_total_companies
 
     def get_job_id(self) -> str:
         """Get unique job ID."""
-        return f"sec_ingestion_{self.filing_type.lower()}"
+        return "sec_ingestion_10k"
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the SEC ingestion job."""
@@ -102,28 +88,12 @@ class SECIngestionJob(BaseJob):
         logger.info("Fetching all public companies from SEC Edgar...")
         all_tickers = sec_client.get_all_tickers()
 
-        # Apply ticker filter if specified
-        if self.ticker_filter:
-            logger.info(f"Filtering to {len(self.ticker_filter)} specific tickers")
-            filtered_tickers = {
-                ticker: cik
-                for ticker, cik in all_tickers.items()
-                if ticker in self.ticker_filter
-            }
-        else:
-            filtered_tickers = all_tickers
-
-        # Apply total company limit if specified (for testing)
-        if self.limit_total_companies:
-            logger.info(f"Limiting to first {self.limit_total_companies} companies")
-            filtered_tickers = dict(list(filtered_tickers.items())[:self.limit_total_companies])
-
-        logger.info(f"Processing {len(filtered_tickers)} companies")
+        logger.info(f"Processing {len(all_tickers)} public companies")
 
         # Convert to format expected by orchestrator
         company_list = [
             {"cik": cik, "name": ticker}
-            for ticker, cik in filtered_tickers.items()
+            for ticker, cik in all_tickers.items()
         ]
 
         if not company_list:
@@ -155,9 +125,10 @@ class SECIngestionJob(BaseJob):
             "records_success": results["success"],
             "records_failed": results["failed"],
             "records_skipped": results["skipped"],
-            "filing_type": self.filing_type,
-            "companies_processed": len(company_list),
-            "details": results["details"],
+            "filing_type": "10-K",
+            "total_companies": len(company_list),
+            "batch_size": self.batch_size,
+            "parallel_processing": self.use_parallel,
         }
 
 
