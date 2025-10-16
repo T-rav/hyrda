@@ -185,11 +185,21 @@ class SECSymbolService:
                             }
                         )
 
-                # Bulk insert new symbols
+                # Bulk insert new symbols (with upsert for duplicate CIKs)
                 if to_insert:
-                    session.execute(insert(SECSymbol), to_insert)
+                    from sqlalchemy.dialects.mysql import insert as mysql_insert
+
+                    stmt = mysql_insert(SECSymbol).values(to_insert)
+                    # On duplicate CIK, update the ticker_symbol and company_name
+                    # This handles cases like Google with multiple tickers (GOOGL, GOOG)
+                    stmt = stmt.on_duplicate_key_update(
+                        ticker_symbol=stmt.inserted.ticker_symbol,
+                        company_name=stmt.inserted.company_name,
+                        is_active=stmt.inserted.is_active,
+                    )
+                    session.execute(stmt)
                     stats["inserted"] = len(to_insert)
-                    logger.info(f"Inserted {stats['inserted']} new symbols")
+                    logger.info(f"Inserted/updated {stats['inserted']} symbols")
 
                 # Bulk update existing symbols
                 if to_update:
