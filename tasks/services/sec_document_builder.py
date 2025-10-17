@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from services.sec_section_filter import filter_sec_filing
+
 # Force HOME to /app so edgartools uses /app/.edgar instead of /root/.edgar
 os.environ["HOME"] = "/app"
 
@@ -176,6 +178,9 @@ class SECDocumentBuilder:
             filing = filings[0]
             text_content = filing.text()
 
+            # Filter to keep only sales-relevant sections (reduces storage ~65%)
+            filtered_content = filter_sec_filing(text_content, "10-K")
+
             # Build document with edgar text + financial summary
             doc = f"""Company: {company_name} ({ticker_symbol})
 Filing Type: 10-K Annual Report
@@ -190,10 +195,11 @@ Fiscal Year: {filing_date[:4]}
                 doc += self.build_financial_summary(company_facts, years=3)
                 doc += "\n"
 
-            doc += f"=== FILING CONTENT ===\n{text_content}\n"
+            doc += f"=== FILING CONTENT ===\n{filtered_content}\n"
 
             logger.info(
-                f"Built 10-K document for {ticker_symbol} using edgartools: {len(doc)} characters"
+                f"Built 10-K document for {ticker_symbol} using edgartools: {len(doc)} characters "
+                f"(filtered from {len(text_content)} chars)"
             )
             return doc
 
@@ -210,89 +216,6 @@ Fiscal Year: {filing_date[:4]}
                 company_facts,
             )
 
-    def build_10q_document(
-        self,
-        ticker_symbol: str,
-        company_name: str,
-        cik: str,
-        filing_date: str,
-        html_content: str,
-        company_facts: dict[str, Any] | None = None,
-    ) -> str:
-        """
-        Build a 10-Q document from HTML filing and company facts.
-
-        Args:
-            ticker_symbol: Stock ticker
-            company_name: Company name
-            cik: Central Index Key
-            filing_date: Filing date
-            html_content: Raw HTML content
-            company_facts: Optional company facts data
-
-        Returns:
-            Formatted document text
-        """
-        # Use edgartools to fetch and parse
-        try:
-            # Lazy import edgar (cache env var already set above)
-            from edgar import Company, set_identity, use_local_storage
-
-            use_local_storage(str(EDGAR_DATA_DIR))
-            set_identity("8th Light InsightMesh insightmesh@8thlight.com")
-
-            logger.info(f"Fetching {ticker_symbol} 10-Q using edgartools...")
-            company = Company(ticker_symbol)
-            filings = company.get_filings(form="10-Q")
-
-            if not filings or len(filings) == 0:
-                logger.warning(
-                    f"No 10-Q filings found for {ticker_symbol}, using fallback"
-                )
-                return self._build_document_fallback(
-                    ticker_symbol,
-                    company_name,
-                    cik,
-                    filing_date,
-                    html_content,
-                    "10-Q",
-                    company_facts,
-                )
-
-            filing = filings[0]
-            text_content = filing.text()
-
-            doc = f"""Company: {company_name} ({ticker_symbol})
-Filing Type: 10-Q Quarterly Report
-Filing Date: {filing_date}
-CIK: {cik}
-Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
-
-"""
-
-            if company_facts:
-                doc += self.build_financial_summary(company_facts, years=1)
-                doc += "\n"
-
-            doc += f"=== FILING CONTENT ===\n{text_content}\n"
-
-            logger.info(
-                f"Built 10-Q document for {ticker_symbol} using edgartools: {len(doc)} characters"
-            )
-            return doc
-
-        except Exception as e:
-            logger.error(f"Error using edgartools for {ticker_symbol} 10-Q: {e}")
-            logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-Q")
-            return self._build_document_fallback(
-                ticker_symbol,
-                company_name,
-                cik,
-                filing_date,
-                html_content,
-                "10-Q",
-                company_facts,
-            )
 
     def build_8k_document(
         self,
@@ -346,13 +269,16 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
             filing = filings[0]
             text_content = filing.text()
 
+            # 8-K: Keep full content (already short event disclosures)
+            filtered_content = filter_sec_filing(text_content, "8-K")
+
             doc = f"""Company: {company_name} ({ticker_symbol})
 Filing Type: 8-K Current Report (Material Event)
 Filing Date: {filing_date}
 CIK: {cik}
 
 === MATERIAL EVENT DISCLOSURE ===
-{text_content}
+{filtered_content}
 
 """
 
@@ -412,6 +338,9 @@ CIK: {cik}
         text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
         text = re.sub(r" +", " ", text)
 
+        # Filter to keep only sales-relevant sections
+        filtered_text = filter_sec_filing(text, filing_type)
+
         # Build document
         doc = f"""Company: {company_name} ({ticker_symbol})
 Filing Type: {filing_type}
@@ -424,9 +353,10 @@ CIK: {cik}
             doc += self.build_financial_summary(company_facts, years=3)
             doc += "\n"
 
-        doc += f"=== FILING CONTENT ===\n{text}\n"
+        doc += f"=== FILING CONTENT ===\n{filtered_text}\n"
 
         logger.info(
-            f"Built {filing_type} document (fallback) for {ticker_symbol}: {len(doc)} characters"
+            f"Built {filing_type} document (fallback) for {ticker_symbol}: {len(doc)} characters "
+            f"(filtered from {len(text)} chars)"
         )
         return doc
