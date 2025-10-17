@@ -46,7 +46,7 @@ class SECIngestionJob(BaseJob):
         batch_size: int | str = 10,
         use_parallel: bool | str = True,
         limit_10k: int | str = 1,
-        limit_8k: int | str = 100,
+        limit_8k: int | str = 0,
     ):
         """
         Initialize SEC ingestion job.
