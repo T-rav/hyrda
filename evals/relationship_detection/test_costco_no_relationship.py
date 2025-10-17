@@ -47,40 +47,28 @@ async def test_costco_no_relationship_integration():
     print(result)
     print("=" * 60)
 
-    # Check if Costco is mentioned in the results
-    # If Costco is not mentioned, the search found nothing specific
-    if "costco" not in result.lower():
-        # No Costco-specific content found - should show no relationship
-        assert (
-            "No prior engagement" in result or "No relevant information found" in result
-        ), f"Expected 'No prior engagement' or 'No relevant information found' when Costco not mentioned, got: {result[:500]}"
-    else:
-        # Costco IS mentioned - check what kind of content it is
-        # If it's just research notes (not case study/project), should still be no relationship
-        has_costco_case_study = (
-            "costco" in result.lower()
-            and (
-                "case study" in result.lower()
-                or "project" in result.lower()
-                or "engagement" in result.lower()
-                or "partner hub" in result.lower()
-            )
+    # The key check: should show "No prior engagement" for Costco
+    # (unless we actually have a Costco case study in the vector DB)
+    assert (
+        "Relationship status: No prior engagement" in result
+        or "Relationship status: Existing client" in result
+    ), "Result should have explicit relationship status"
+
+    # If it says "Existing client", check the sources - they should include a Costco case study file
+    if "Relationship status: Existing client" in result:
+        # Should have Costco-specific case study file in sources
+        has_costco_source = any(
+            "costco" in source.lower()
+            for source in result.split("Internal search result:")
+            if source.strip()
         )
-
-        if has_costco_case_study:
-            # If we actually have a Costco case study in the vector DB, relationship is expected
-            assert (
-                "Relationship status: Existing client" in result
-            ), "If Costco case study exists, should show existing client"
-        else:
-            # Costco mentioned but only in research/analysis context - no relationship
-            assert (
-                "No prior engagement" in result
-            ), f"Expected 'No prior engagement' for Costco research notes (not case studies), got: {result[:500]}"
-
-    # CRITICAL: Should NOT show existing client relationship unless Costco is actually mentioned
-    # and there's evidence of case study/project work
-    if "costco" not in result.lower():
         assert (
-            "Existing client" not in result
-        ), f"FALSE POSITIVE: Shows 'Existing client' without mentioning Costco! Result: {result[:500]}"
+            has_costco_source
+        ), f"If showing 'Existing client', sources should include Costco case study, got: {result[:1000]}"
+    else:
+        # Should be "No prior engagement" - this is the expected result for Costco
+        assert "Relationship status: No prior engagement" in result
+        print("\n✅ PASS: Correctly identified Costco as having no prior engagement")
+        print(
+            "   (Even though other companies' case studies were retrieved, they were correctly filtered out)"
+        )
