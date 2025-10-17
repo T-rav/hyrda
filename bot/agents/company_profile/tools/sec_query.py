@@ -43,6 +43,9 @@ class SECQueryTool(BaseTool):
     - Technology investments and R&D spending
     - Market position and competitive landscape
     - Executive commentary and forward-looking statements
+    - Executive changes and leadership movements (8-K Item 5.02)
+    - Key announcements and material events (8-K disclosures)
+    - Acquisitions, partnerships, and corporate actions
 
     No pre-indexing required - fetches documents on-demand from SEC Edgar API.
     """
@@ -51,7 +54,8 @@ class SECQueryTool(BaseTool):
     description: str = (
         "Search SEC filings on-demand (10-K annual reports, 8-K current events) for company information. "
         "Fetches latest filings from SEC Edgar API and searches for relevant information. "
-        "Find risk factors, strategic priorities, financial data, R&D investments, and executive commentary. "
+        "Find risk factors, strategic priorities, financial data, R&D investments, executive commentary, "
+        "executive changes, leadership movements, key announcements, material events, acquisitions, and partnerships. "
         "IMPORTANT: Must include company name or ticker in query. Only call with specific search query (minimum 3 characters). "
         "DO NOT call with empty query."
     )
@@ -264,6 +268,9 @@ Focus on different aspects typically found in SEC filings:
 4. Technology and R&D investments
 5. Market position and competition
 6. Regulatory and compliance matters
+7. Executive changes and leadership movements
+8. Key announcements and material events
+9. Acquisitions, partnerships, and corporate actions
 
 Return as JSON array of strings: ["query1", "query2", "query3"]
 """
@@ -308,6 +315,9 @@ Return as JSON array of strings: ["query1", "query2", "query3"]
 - Forward-looking statements
 - Technology and R&D investments
 - Market position and competitive landscape
+- Executive changes and leadership movements (Item 5.02 in 8-Ks)
+- Key announcements and material events (8-K disclosures)
+- Acquisitions, partnerships, and corporate actions
 
 Original context: "{original_query}"
 Sub-query to rewrite: "{sub_query}"
@@ -316,7 +326,7 @@ Sub-query to rewrite: "{sub_query}"
 
 Rewrite the sub-query to:
 1. **ALWAYS include the company name if present in the original context**
-2. Use language that matches SEC filing terminology (risk factors, MD&A, strategic priorities, etc.)
+2. Use language that matches SEC filing terminology (risk factors, MD&A, strategic priorities, Item 5.02, material events, etc.)
 3. Focus on specific SEC sections that would contain this information
 4. Be specific about what type of information you're looking for
 5. Keep it concise (1-2 sentences max)
@@ -332,6 +342,12 @@ Output: "What competitive risks and market challenges does Microsoft identify in
 
 Input original: "Tesla R&D", sub-query: "technology investments"
 Output: "What are Tesla's R&D investments and technology development priorities disclosed in SEC filings?"
+
+Input original: "Salesforce leadership", sub-query: "executive changes"
+Output: "What executive appointments, departures, or leadership changes has Salesforce disclosed in 8-K Item 5.02 filings?"
+
+Input original: "Meta announcements", sub-query: "material events"
+Output: "What material events, acquisitions, or strategic announcements has Meta disclosed in recent 8-K filings?"
 
 Now rewrite: "{sub_query}"
 """
