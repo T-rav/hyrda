@@ -196,13 +196,23 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                     f"Executive summary generated: {len(executive_summary)} characters"
                 )
 
+                # Add footer encouraging follow-up questions
+                executive_summary += (
+                    "\n\n---\n\n"
+                    "_💬 Ask me follow-up questions about this profile in this thread!_\n"
+                    "_Or start your message with `profile [company name]` to profile another company._"
+                )
+
             except Exception as summary_error:
                 logger.warning(f"Failed to generate executive summary: {summary_error}")
                 # Fallback: use Slack-safe markdown
                 executive_summary = (
                     "📊 *Executive Summary*\n\n"
                     "• Full detailed report attached as PDF\n\n"
-                    "📎 _Unable to generate summary - see full report_"
+                    "📎 _Unable to generate summary - see full report_\n\n"
+                    "---\n\n"
+                    "_💬 Ask me follow-up questions about this profile in this thread!_\n"
+                    "_Or start your message with `profile [company name]` to profile another company._"
                 )
 
             return {

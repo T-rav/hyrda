@@ -549,6 +549,24 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                     if upload_response:
                         pdf_uploaded = True
                         logger.info(f"PDF report uploaded with summary: {pdf_filename}")
+
+                        # Cache PDF content for follow-up questions (same as user uploads)
+                        # This allows follow-up questions in the thread to access the profile
+                        thread_ts = context.get("thread_ts")
+                        conversation_cache = context.get("conversation_cache")
+                        if thread_ts and conversation_cache:
+                            try:
+                                # Store the markdown report (more useful than PDF bytes for Q&A)
+                                await conversation_cache.store_document_content(
+                                    thread_ts, final_report, pdf_filename
+                                )
+                                logger.info(
+                                    f"✅ Cached profile report for follow-up questions in thread {thread_ts}"
+                                )
+                            except Exception as cache_error:
+                                logger.warning(
+                                    f"Failed to cache PDF content: {cache_error}"
+                                )
                     else:
                         logger.warning("Failed to upload PDF to Slack")
 
