@@ -404,18 +404,36 @@ class ProfileAgent(BaseAgent):
                     f"Final event is not a dict: type={type(result)}, value={result}"
                 )
 
-            # Get the final state from the last event
-            # LangGraph returns the final state wrapped in a dict with node name as key
-            if result and isinstance(result, dict):
-                # Extract the state from the last event
-                # Format: {"node_name": state_dict} or {"__end__": state_dict}
-                values = list(result.values())
-                result = values[0] if values else {}
-                logger.info(
-                    f"Extracted state type: {type(result)}, has final_report: {isinstance(result, dict) and 'final_report' in result}"
-                )
+            # Get the final state from LangGraph
+            # The astream events don't include the full accumulated state, so we need to get it separately
+            try:
+                # Get the final state using the state API
+                final_state_snapshot = await self.graph.aget_state(graph_config)
+                if final_state_snapshot and hasattr(final_state_snapshot, "values"):
+                    result = final_state_snapshot.values
+                    logger.info(
+                        f"Retrieved final state from graph.aget_state: has final_report: {'final_report' in result}"
+                    )
+                elif result and isinstance(result, dict):
+                    # Fallback to last event (old behavior)
+                    values = list(result.values())
+                    result = values[0] if values else {}
+                    logger.warning(
+                        f"Fallback to last event state: has final_report: {isinstance(result, dict) and 'final_report' in result}"
+                    )
+                else:
+                    logger.error("Could not retrieve final state from LangGraph")
+                    result = {}
+            except Exception as state_error:
+                logger.error(f"Error retrieving final state: {state_error}")
+                # Fallback to last event
+                if result and isinstance(result, dict):
+                    values = list(result.values())
+                    result = values[0] if values else {}
+                else:
+                    result = {}
 
-            # Ensure result is a dict (handle case where LangGraph returns None or unexpected type)
+            # Ensure result is a dict
             if not isinstance(result, dict):
                 logger.error(
                     f"LangGraph returned invalid result type: {type(result)}, value: {result}"
