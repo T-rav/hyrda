@@ -13,9 +13,10 @@ os.environ.setdefault("QDRANT_HOST", "localhost")
 os.environ.setdefault("QDRANT_PORT", "6333")
 
 from services.embedding_provider import EmbeddingProvider
+from services.vector_store import QdrantVectorStore
+
 from services.sec_edgar_client import SECEdgarClient
 from services.sec_ingestion_orchestrator import SECIngestionOrchestrator
-from services.vector_store import QdrantVectorStore
 
 
 async def example_single_company():
