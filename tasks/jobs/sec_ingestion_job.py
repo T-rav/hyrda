@@ -202,7 +202,7 @@ class SECIngestionJob(BaseJob):
                 limit_per_type=limit,
                 batch_size=self.batch_size,
                 use_parallel=self.use_parallel,
-                skip_if_exists=True,  # Skip companies that already have documents
+                skip_if_exists=False,  # Always process, let hash check determine if reindex needed
             )
 
             logger.info(
