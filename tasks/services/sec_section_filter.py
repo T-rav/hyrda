@@ -24,7 +24,19 @@ class SECSectionFilter:
             "properties",
             "legal proceedings",
         ],
-        # 10-Q and 8-K disabled - only ingesting 10-K annual reports
+        "8-K": [
+            # Material events relevant to sales intelligence
+            "entry into a material definitive agreement",  # Item 1.01
+            "termination of a material definitive agreement",  # Item 1.02
+            "completion of acquisition or disposition of assets",  # Item 2.01
+            "results of operations and financial condition",  # Item 2.02
+            "creation of a direct financial obligation",  # Item 2.03
+            "departure of directors or certain officers",  # Item 5.02
+            "amendments to articles of incorporation or bylaws",  # Item 5.03
+            "regulation fd disclosure",  # Item 7.01
+            "other events",  # Item 8.01
+        ],
+        # 10-Q disabled - only ingesting 10-K and 8-K
     }
 
     # Sections to always skip (get from XBRL instead)
@@ -91,15 +103,15 @@ class SECSectionFilter:
 
         Args:
             content: Raw filing text
-            filing_type: Type of filing (currently only 10-K supported)
+            filing_type: Type of filing (10-K, 8-K supported; 10-Q disabled)
             parse_sections: If True, attempt to parse and filter sections.
                            If False, return full content
 
         Returns:
             Filtered content with only relevant sections
         """
-        # Only 10-K is supported - 10-Q and 8-K are disabled
-        if filing_type != "10-K":
+        # Only 10-K and 8-K are supported - 10-Q is disabled
+        if filing_type not in ["10-K", "8-K"]:
             logger.info(
                 f"{filing_type} filing not supported for filtering: Keeping full content ({len(content)} chars)"
             )
