@@ -13,6 +13,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+# Force HOME to /app so edgartools uses /app/.edgar instead of /root/.edgar
+os.environ["HOME"] = "/app"
+
 # Configure edgar cache directory - MUST be set before any edgar import
 EDGAR_DATA_DIR = Path("/app/.edgar")
 EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
