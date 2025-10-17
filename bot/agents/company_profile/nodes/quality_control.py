@@ -9,7 +9,6 @@ import re
 
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
-from langgraph.types import Command
 
 from agents.company_profile.state import ProfileAgentState
 from config.settings import Settings
@@ -168,7 +167,7 @@ def count_sources_in_section(report: str) -> int:
 
 async def quality_control_node(
     state: ProfileAgentState, config: RunnableConfig
-) -> Command[str]:
+) -> dict:
     """Validate report quality and request revision if needed.
 
     Checks:
@@ -182,7 +181,7 @@ async def quality_control_node(
         config: Runtime configuration
 
     Returns:
-        Command to proceed to END (if passes) or back to final_report_generation (if fails)
+        Dict with passes_quality, revision_prompt, and updated final_report (if needed)
     """
     final_report = state.get("final_report", "")
     revision_count = state.get("revision_count", 0)
@@ -258,9 +257,11 @@ async def quality_control_node(
             )
             if alignment_notes:
                 logger.info(f"   Focus alignment: {alignment_notes}")
-            # IMPORTANT: Return the state so LangGraph includes it in the final event
-            # Without this, Command(goto="__end__", update={}) causes LangGraph to send None
-            return Command(goto="__end__", update=state)
+            # Return passes_quality flag for conditional edge routing
+            return {
+                "passes_quality": True,
+                "revision_prompt": None,
+            }
 
         # Report failed quality check
         logger.warning(f"❌ Report FAILED quality control: {len(issues)} issues")
@@ -285,7 +286,12 @@ async def quality_control_node(
                 f"Known issues: {', '.join(issues)}\n\n"
             )
             updated_report = final_report + warning_text
-            return Command(goto="__end__", update={"final_report": updated_report})
+            return {
+                "passes_quality": False,
+                "max_revisions_exceeded": True,
+                "final_report": updated_report,
+                "revision_prompt": None,
+            }
 
         # Request revision
         logger.info(
@@ -303,16 +309,46 @@ async def quality_control_node(
 Generate the complete revised report now.
 """
 
-        return Command(
-            goto="final_report_generation",
-            update={
-                "revision_count": revision_count + 1,
-                "revision_prompt": revision_prompt,
-            },
-        )
+        return {
+            "passes_quality": False,
+            "max_revisions_exceeded": False,
+            "revision_count": revision_count + 1,
+            "revision_prompt": revision_prompt,
+        }
 
     except Exception as e:
         logger.error(f"Quality control error: {e}", exc_info=True)
         # On error, proceed anyway (don't block the workflow)
         logger.warning("⚠️ Quality control failed, proceeding with report")
-        return Command(goto="__end__", update=state)
+        return {
+            "passes_quality": True,  # Treat errors as pass to avoid blocking
+            "revision_prompt": None,
+        }
+
+
+def quality_control_router(state: ProfileAgentState) -> str:
+    """Route quality control results to either END or revision.
+
+    This function is used by add_conditional_edges to determine the next node.
+    It makes the evaluation loop visible in LangGraph Studio's graph visualization.
+
+    Args:
+        state: Current agent state with quality control results
+
+    Returns:
+        "end" to finish the workflow, or "revise" to loop back to final_report_generation
+    """
+    passes_quality = state.get("passes_quality", False)
+    max_revisions_exceeded = state.get("max_revisions_exceeded", False)
+
+    if passes_quality:
+        logger.info("✅ Router: Quality passed, proceeding to END")
+        return "end"
+
+    if max_revisions_exceeded:
+        logger.warning("⚠️ Router: Max revisions exceeded, proceeding to END")
+        return "end"
+
+    # Quality failed and revisions available - loop back
+    logger.info("🔄 Router: Quality failed, looping back to final_report_generation")
+    return "revise"
