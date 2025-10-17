@@ -1,6 +1,7 @@
 """APScheduler WebUI Flask application."""
 
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,6 +16,16 @@ from models.task_run import TaskRun
 from services.scheduler_service import SchedulerService
 
 # Environment variables loaded by Pydantic from docker-compose.yml
+
+# Configure edgar cache directory BEFORE any other imports that might use it
+EDGAR_DATA_DIR = Path("/app/.edgar")
+EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
+try:
+    from edgar import use_local_storage
+    use_local_storage(True, data_dir=str(EDGAR_DATA_DIR))
+except ImportError:
+    pass  # edgar not installed or not needed
 
 # Configure logging with both console and file handlers
 log_dir = Path(__file__).parent / "logs"
