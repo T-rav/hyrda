@@ -23,6 +23,8 @@ async def clarify_with_user(
 ) -> Command[str]:
     """Check if clarification is needed before research.
 
+    Also detects URLs in the query and extracts company names from them.
+
     Args:
         state: Current profile agent state
         config: Runtime configuration
@@ -37,6 +39,33 @@ async def clarify_with_user(
         return Command(goto="write_research_brief", update={})
 
     query = state["query"]
+
+    # Check if query contains a URL
+    import re
+
+    url_pattern = r"(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\.[a-zA-Z]{2,})?(?:/[\w\-._~:/?#[\]@!$&'()*+,;=]*)?)"
+    url_match = re.search(url_pattern, query)
+
+    if url_match:
+        url = url_match.group(0)
+        logger.info(f"Detected URL in query: {url}")
+
+        # Extract company name from URL
+        from agents.company_profile.utils import extract_company_from_url
+
+        company_name = await extract_company_from_url(url)
+
+        if company_name:
+            logger.info(f"Successfully extracted company name from URL: {company_name}")
+            # Replace URL with company name in query
+            updated_query = query.replace(url, company_name)
+            logger.info(f"Updated query: {updated_query}")
+
+            # Update state with cleaner query
+            return Command(goto="write_research_brief", update={"query": updated_query})
+        else:
+            logger.warning(f"Failed to extract company name from URL: {url}")
+            # Continue with original query
 
     # Check if clarification needed
     try:

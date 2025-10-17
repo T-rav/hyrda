@@ -613,6 +613,107 @@ Return ONLY the JSON array, no explanation."""
     return context
 
 
+async def extract_company_from_url(url: str) -> str | None:
+    """Extract company name from a URL by fetching and parsing the page.
+
+    Fetches the URL and extracts the company name from:
+    - <title> tag
+    - og:site_name meta tag
+    - og:title meta tag
+    - Twitter card site name
+
+    Args:
+        url: URL to fetch and extract company name from
+
+    Returns:
+        Extracted company name or None if extraction fails
+
+    Examples:
+        "https://www.costco.com" → "Costco"
+        "https://stripe.com" → "Stripe"
+        "www.tesla.com" → "Tesla"
+    """
+    import re
+
+    import requests
+    from bs4 import BeautifulSoup
+
+    try:
+        # Ensure URL has protocol
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+
+        logger.info(f"Fetching URL to extract company name: {url}")
+
+        # Fetch the page with timeout
+        response = requests.get(
+            url,
+            timeout=10,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+        )
+        response.raise_for_status()
+
+        # Parse HTML
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        # Try multiple extraction methods in order of preference
+        company_name = None
+
+        # 1. og:site_name (most reliable for company name)
+        og_site_name = soup.find("meta", property="og:site_name")
+        if og_site_name and hasattr(og_site_name, "get"):
+            content = og_site_name.get("content")  # type: ignore[union-attr]
+            if content:
+                company_name = str(content).strip()
+                logger.info(f"Extracted from og:site_name: {company_name}")
+                return company_name
+
+        # 2. Twitter card site name
+        twitter_site = soup.find("meta", attrs={"name": "twitter:site"})
+        if twitter_site and hasattr(twitter_site, "get"):
+            content = twitter_site.get("content")  # type: ignore[union-attr]
+            if content:
+                # Remove @ symbol if present
+                company_name = str(content).strip().lstrip("@")
+                logger.info(f"Extracted from twitter:site: {company_name}")
+                return company_name
+
+        # 3. <title> tag (extract company name, remove common suffixes)
+        title_tag = soup.find("title")
+        if title_tag and title_tag.string:
+            title = title_tag.string.strip()
+            # Remove common suffixes like " | Home", " - Official Site", etc.
+            cleaned_title = re.split(r"[\|\-\–:]", title)[0].strip()
+            # Remove common words
+            cleaned_title = re.sub(
+                r"\b(Home|Official Site|Welcome|Homepage)\b",
+                "",
+                cleaned_title,
+                flags=re.IGNORECASE,
+            ).strip()
+            if cleaned_title:
+                logger.info(f"Extracted from title tag: {cleaned_title}")
+                return cleaned_title
+
+        # 4. og:title (fallback)
+        og_title = soup.find("meta", property="og:title")
+        if og_title and hasattr(og_title, "get"):
+            content = og_title.get("content")  # type: ignore[union-attr]
+            if content:
+                company_name = str(content).strip()
+                logger.info(f"Extracted from og:title: {company_name}")
+                return company_name
+
+        logger.warning(f"Could not extract company name from URL: {url}")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error extracting company from URL {url}: {e}")
+        return None
+
+
 def detect_profile_type(query: str) -> str:
     """Detect the type of profile from the query.
 
