@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Singleton checkpointer shared across all ProfileAgent instances
 _checkpointer = None
 
+# Module-level graph variable for testing (mocked by tests)
+# This is set during ProfileAgent initialization
+profile_researcher = None
+
 
 def format_duration(seconds: float) -> str:
     """Format duration in seconds to human-readable string.
@@ -84,7 +88,15 @@ class ProfileAgent(BaseAgent):
 
     def _ensure_graph_initialized(self):
         """Ensure singleton checkpointer and graph are initialized."""
-        global _checkpointer  # noqa: PLW0603
+        global _checkpointer, profile_researcher  # noqa: PLW0603
+
+        # Check if profile_researcher is already set (by tests mocking it)
+        if profile_researcher is not None:
+            # Tests have mocked the graph, use the mock
+            self.graph = profile_researcher
+            logger.info("✅ Using mocked profile_researcher graph from tests")
+            return
+
         if _checkpointer is None:
             # Create singleton MemorySaver - shared across all agent instances
             _checkpointer = MemorySaver()
@@ -92,6 +104,10 @@ class ProfileAgent(BaseAgent):
 
         # Build graph with checkpointer
         self.graph = build_profile_researcher(checkpointer=_checkpointer)
+
+        # Set module-level variable for test mocking compatibility
+        profile_researcher = self.graph
+
         logger.info("✅ Built profile researcher graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
@@ -170,8 +186,11 @@ class ProfileAgent(BaseAgent):
                 )
 
             # Prepare LangGraph configuration
+            # Note: thread_id is required when using MemorySaver checkpointer
             graph_config = {
                 "configurable": {
+                    "thread_id": thread_ts
+                    or f"profile_{context.get('user_id', 'unknown')}_{query[:20]}",
                     "llm_service": llm_service,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
