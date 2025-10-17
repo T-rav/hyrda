@@ -13,15 +13,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-# Configure edgar cache and identity BEFORE importing edgar
-EDGAR_DATA_DIR = Path("/app/.edgar")
-EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
+# CRITICAL: Set EDGAR_LOCAL_DATA_DIR environment variable BEFORE any edgar import
+# edgartools reads this on first import and caches the result
+os.environ["EDGAR_LOCAL_DATA_DIR"] = "/app/.edgar"
 
-# Import edgar and configure
-from edgar import set_identity, use_local_storage
+# Import edgar - will now use /app/.edgar instead of /root/.edgar
+from edgar import Company, set_identity
+
+# Set identity for SEC API
 set_identity("8th Light InsightMesh insightmesh@8thlight.com")
-use_local_storage(str(EDGAR_DATA_DIR))
 
 logger = logging.getLogger(__name__)
 
@@ -143,8 +143,6 @@ class SECDocumentBuilder:
         """
         # Use edgartools to fetch and parse the filing
         try:
-            from edgar import Company
-
             logger.info(f"Fetching {ticker_symbol} 10-K using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='10-K')
@@ -206,8 +204,6 @@ Fiscal Year: {filing_date[:4]}
         """
         # Use edgartools to fetch and parse
         try:
-            from edgar import Company
-
             logger.info(f"Fetching {ticker_symbol} 10-Q using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='10-Q')
@@ -266,8 +262,6 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
         """
         # Use edgartools to fetch and parse
         try:
-            from edgar import Company
-
             logger.info(f"Fetching {ticker_symbol} 8-K using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='8-K')
