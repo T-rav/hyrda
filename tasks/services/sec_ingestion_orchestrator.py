@@ -196,56 +196,18 @@ class SECIngestionOrchestrator:
                     company_facts=company_facts,
                 )
 
-            # Check if document needs reindexing (idempotent ingestion)
-            needs_reindex, existing_uuid = (
-                self.document_tracker.check_document_needs_reindex(
-                    accession_number, document_text
-                )
-            )
+            # Check if document already exists in database (skip if exists, no hash check)
+            existing_doc = self.document_tracker.get_document_info(accession_number)
 
-            if not needs_reindex:
+            if existing_doc:
+                # Document exists - skip without checking if content changed
                 logger.info(
-                    f"⏭️  Skipping (unchanged): {company_name} ({ticker_symbol}) - {filing_type}"
+                    f"⏭️  Skipping (already in DB): {company_name} ({ticker_symbol}) - {filing_type}"
                 )
-                return True, "Document already indexed with same content"
+                return True, "Document already indexed"
 
-            if existing_uuid:
-                logger.info(
-                    f"🔄 Content changed, reindexing: {company_name} ({ticker_symbol}) - {filing_type}"
-                )
-
-                # Delete old chunks from vector store before reindexing
-                try:
-                    logger.info(f"Deleting old chunks for {accession_number}...")
-                    # Get the old document info to know how many chunks to delete
-                    old_doc_info = self.document_tracker.get_document_info(
-                        accession_number
-                    )
-                    if old_doc_info and old_doc_info.get("chunk_count", 0) > 0:
-                        old_chunk_count = old_doc_info["chunk_count"]
-                        old_chunk_ids = [
-                            str(uuid.uuid5(uuid.UUID(existing_uuid), f"chunk_{i}"))
-                            for i in range(old_chunk_count)
-                        ]
-
-                        # Delete old chunks from Qdrant
-                        from qdrant_client.models import PointIdsList
-
-                        await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            lambda: self.vector_service.client.delete(
-                                collection_name=self.vector_service.collection_name,
-                                points_selector=PointIdsList(points=old_chunk_ids),
-                            ),
-                        )
-                        logger.info(f"✅ Deleted {old_chunk_count} old chunks")
-                except Exception as e:
-                    logger.warning(f"⚠️  Failed to delete old chunks: {e}")
-
-            # Generate or reuse UUID for this document
-            base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
-                accession_number
-            )
+            # New document - generate UUID
+            base_uuid = self.document_tracker.generate_base_uuid(accession_number)
 
             # Prepare comprehensive document metadata
             doc_metadata = {
