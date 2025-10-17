@@ -17,12 +17,6 @@ from services.scheduler_service import SchedulerService
 
 # Environment variables loaded by Pydantic from docker-compose.yml
 
-# Configure edgar cache directory via environment variable
-# (edgar will pick this up when imported by job code)
-EDGAR_DATA_DIR = Path("/app/.edgar")
-EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
-
 # Configure logging with both console and file handlers
 log_dir = Path(__file__).parent / "logs"
 log_dir.mkdir(exist_ok=True)
