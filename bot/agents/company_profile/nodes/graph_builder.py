@@ -90,7 +90,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     return supervisor_builder.compile({"recursion_limit": 100})
 
 
-def build_profile_researcher() -> CompiledStateGraph:
+def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     """Build and compile the main profile researcher graph.
 
     The main graph orchestrates the entire deep research process:
@@ -100,6 +100,9 @@ def build_profile_researcher() -> CompiledStateGraph:
     4. research_supervisor: Delegate and coordinate research tasks
     5. final_report_generation: Synthesize findings into final report
     6. quality_control: Validate final report (with revision loop)
+
+    Args:
+        checkpointer: Optional checkpointer for state persistence (MemorySaver, etc.)
 
     Returns:
         Compiled profile researcher graph
@@ -152,5 +155,8 @@ def build_profile_researcher() -> CompiledStateGraph:
         },
     )
 
-    # Compile and return
-    return profile_builder.compile()
+    # Compile and return with checkpointer if provided
+    if checkpointer:
+        return profile_builder.compile(checkpointer=checkpointer)
+    else:
+        return profile_builder.compile()

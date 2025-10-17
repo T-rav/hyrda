@@ -9,15 +9,19 @@ from datetime import datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 
 from agents.base_agent import BaseAgent
 from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.profile_researcher import profile_researcher
+from agents.company_profile.nodes.graph_builder import build_profile_researcher
 from agents.company_profile.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
 logger = logging.getLogger(__name__)
+
+# Singleton checkpointer shared across all ProfileAgent instances
+_checkpointer = None
 
 
 def format_duration(seconds: float) -> str:
@@ -70,11 +74,25 @@ class ProfileAgent(BaseAgent):
         """Initialize ProfileAgent with deep research configuration."""
         super().__init__()
         self.config = ProfileConfiguration.from_env()
-        self.graph = profile_researcher
+
+        # Initialize singleton checkpointer and graph
+        self._ensure_graph_initialized()
         logger.info(
             f"ProfileAgent initialized with {self.config.search_api} search, "
             f"max {self.config.max_concurrent_research_units} concurrent researchers"
         )
+
+    def _ensure_graph_initialized(self):
+        """Ensure singleton checkpointer and graph are initialized."""
+        global _checkpointer  # noqa: PLW0603
+        if _checkpointer is None:
+            # Create singleton MemorySaver - shared across all agent instances
+            _checkpointer = MemorySaver()
+            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+
+        # Build graph with checkpointer
+        self.graph = build_profile_researcher(checkpointer=_checkpointer)
+        logger.info("✅ Built profile researcher graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute profile research using LangGraph deep research workflow.
@@ -404,40 +422,26 @@ class ProfileAgent(BaseAgent):
                     f"Final event is not a dict: type={type(result)}, value={result}"
                 )
 
-            # Get the final state from LangGraph
-            # The astream events don't include the full accumulated state, so we need to get it separately
+            # Get the final state from LangGraph using checkpointer
             try:
-                # Get the final state using the state API
                 final_state_snapshot = await self.graph.aget_state(graph_config)
                 if final_state_snapshot and hasattr(final_state_snapshot, "values"):
                     result = final_state_snapshot.values
                     logger.info(
-                        f"Retrieved final state from graph.aget_state: has final_report: {'final_report' in result}"
-                    )
-                elif result and isinstance(result, dict):
-                    # Fallback to last event (old behavior)
-                    values = list(result.values())
-                    result = values[0] if values else {}
-                    logger.warning(
-                        f"Fallback to last event state: has final_report: {isinstance(result, dict) and 'final_report' in result}"
+                        f"✅ Retrieved final state from checkpointer: has final_report: {'final_report' in result}"
                     )
                 else:
-                    logger.error("Could not retrieve final state from LangGraph")
+                    logger.error("Checkpointer returned invalid state snapshot")
                     result = {}
             except Exception as state_error:
-                logger.error(f"Error retrieving final state: {state_error}")
-                # Fallback to last event
-                if result and isinstance(result, dict):
-                    values = list(result.values())
-                    result = values[0] if values else {}
-                else:
-                    result = {}
+                logger.error(
+                    f"❌ Error retrieving final state from checkpointer: {state_error}"
+                )
+                result = {}
 
             # Ensure result is a dict
             if not isinstance(result, dict):
-                logger.error(
-                    f"LangGraph returned invalid result type: {type(result)}, value: {result}"
-                )
+                logger.error(f"Invalid result type: {type(result)}, value: {result}")
                 result = {}
 
             # Extract final report and executive summary
