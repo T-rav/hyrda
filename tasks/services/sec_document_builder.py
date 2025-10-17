@@ -13,20 +13,13 @@ import os
 from pathlib import Path
 from typing import Any
 
-# Configure edgar cache BEFORE importing edgar
+# Configure edgar cache directory - MUST be set before any edgar import
 EDGAR_DATA_DIR = Path("/app/.edgar")
 EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
 
-# Import edgar utilities and configure BEFORE importing Company (which triggers cache init)
-try:
-    from edgar import use_local_storage, set_identity
-    use_local_storage(str(EDGAR_DATA_DIR))
-    set_identity("8th Light InsightMesh insightmesh@8thlight.com")
-    # NOW it's safe to import Company (cache is already configured)
-    from edgar import Company
-except ImportError:
-    Company = None  # edgar not installed
+# DO NOT import edgar here - it will initialize cache before env var takes effect
+# Instead, lazy-load edgar inside methods that actually use it
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +141,11 @@ class SECDocumentBuilder:
         """
         # Use edgartools to fetch and parse the filing
         try:
+            # Lazy import edgar (cache env var already set above)
+            from edgar import Company, use_local_storage, set_identity
+            use_local_storage(str(EDGAR_DATA_DIR))
+            set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+
             logger.info(f"Fetching {ticker_symbol} 10-K using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='10-K')
@@ -209,6 +207,11 @@ Fiscal Year: {filing_date[:4]}
         """
         # Use edgartools to fetch and parse
         try:
+            # Lazy import edgar (cache env var already set above)
+            from edgar import Company, use_local_storage, set_identity
+            use_local_storage(str(EDGAR_DATA_DIR))
+            set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+
             logger.info(f"Fetching {ticker_symbol} 10-Q using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='10-Q')
@@ -267,6 +270,11 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
         """
         # Use edgartools to fetch and parse
         try:
+            # Lazy import edgar (cache env var already set above)
+            from edgar import Company, use_local_storage, set_identity
+            use_local_storage(str(EDGAR_DATA_DIR))
+            set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+
             logger.info(f"Fetching {ticker_symbol} 8-K using edgartools...")
             company = Company(ticker_symbol)
             filings = company.get_filings(form='8-K')
