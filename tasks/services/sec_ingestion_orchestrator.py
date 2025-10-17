@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 class SECIngestionOrchestrator:
     """Main orchestrator for the SEC document ingestion process."""
 
-    def __init__(self, user_agent: str = "8th Light InsightMesh insightmesh@8thlight.com"):
+    def __init__(
+        self, user_agent: str = "8th Light InsightMesh insightmesh@8thlight.com"
+    ):
         """
         Initialize the SEC ingestion orchestrator.
 
@@ -40,7 +42,9 @@ class SECIngestionOrchestrator:
         self.vector_service = None
         self.embedding_service = None
 
-    def _chunk_text(self, text: str, chunk_size: int = 1500, overlap: int = 200) -> list[str]:
+    def _chunk_text(
+        self, text: str, chunk_size: int = 1500, overlap: int = 200
+    ) -> list[str]:
         """
         Simple text chunking by character count with overlap.
 
@@ -128,17 +132,26 @@ class SECIngestionOrchestrator:
             )
 
         # Skip if company already has documents in database
-        if skip_if_exists and self.document_tracker.has_documents_for_ticker(ticker_symbol):
-            logger.info(f"⏭️  Skipping {ticker_symbol} - already has documents in database")
+        if skip_if_exists and self.document_tracker.has_documents_for_ticker(
+            ticker_symbol
+        ):
+            logger.info(
+                f"⏭️  Skipping {ticker_symbol} - already has documents in database"
+            )
             return True, f"Skipped - {ticker_symbol} already processed"
 
         try:
             # Fetch recent filings
             logger.info(f"Fetching {filing_type} for {ticker_symbol} (CIK {cik})...")
-            filings = await self.sec_client.get_recent_filings(cik, filing_type, limit=index + 1)
+            filings = await self.sec_client.get_recent_filings(
+                cik, filing_type, limit=index + 1
+            )
 
             if len(filings) <= index:
-                return False, f"No {filing_type} filing found at index {index} for {ticker_symbol}"
+                return (
+                    False,
+                    f"No {filing_type} filing found at index {index} for {ticker_symbol}",
+                )
 
             filing = filings[index]
             accession_number = filing["accession_number"]
@@ -156,7 +169,9 @@ class SECIngestionOrchestrator:
             # Fetch company facts (financial metrics) - only for 10-K/10-Q
             company_facts = None
             if filing_type in ["10-K", "10-Q"]:
-                logger.info(f"Fetching company facts (financial metrics) for {ticker_symbol}...")
+                logger.info(
+                    f"Fetching company facts (financial metrics) for {ticker_symbol}..."
+                )
                 company_facts = await self.sec_client.get_company_facts(cik)
 
             # Build comprehensive document using edgartools + financial data
@@ -216,6 +231,34 @@ class SECIngestionOrchestrator:
                 logger.info(
                     f"🔄 Content changed, reindexing: {company_name} ({ticker_symbol}) - {filing_type}"
                 )
+
+                # Delete old chunks from vector store before reindexing
+                try:
+                    logger.info(f"Deleting old chunks for {accession_number}...")
+                    # Get the old document info to know how many chunks to delete
+                    old_doc_info = self.document_tracker.get_document_info(
+                        accession_number
+                    )
+                    if old_doc_info and old_doc_info.get("chunk_count", 0) > 0:
+                        old_chunk_count = old_doc_info["chunk_count"]
+                        old_chunk_ids = [
+                            str(uuid.uuid5(uuid.UUID(existing_uuid), f"chunk_{i}"))
+                            for i in range(old_chunk_count)
+                        ]
+
+                        # Delete old chunks from Qdrant
+                        from qdrant_client.models import PointIdsList
+
+                        await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: self.vector_service.client.delete(
+                                collection_name=self.vector_service.collection_name,
+                                points_selector=PointIdsList(points=old_chunk_ids),
+                            ),
+                        )
+                        logger.info(f"✅ Deleted {old_chunk_count} old chunks")
+                except Exception as e:
+                    logger.warning(f"⚠️  Failed to delete old chunks: {e}")
 
             # Generate or reuse UUID for this document
             base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
@@ -293,7 +336,9 @@ class SECIngestionOrchestrator:
                 )
                 logger.info("Recorded ingestion in tracking table")
             except Exception as tracking_error:
-                logger.warning(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
+                logger.warning(
+                    f"⚠️  Failed to record ingestion tracking: {tracking_error}"
+                )
 
             success_msg = f"✅ Successfully ingested: {company_name} ({ticker_symbol}) - {filing_type} ({len(chunks)} chunks)"
             logger.info(success_msg)
@@ -353,7 +398,12 @@ class SECIngestionOrchestrator:
         """
         try:
             success, message = await self.ingest_company_filing(
-                ticker_symbol, cik, company_name, filing_type, index, skip_if_exists=skip_if_exists
+                ticker_symbol,
+                cik,
+                company_name,
+                filing_type,
+                index,
+                skip_if_exists=skip_if_exists,
             )
             return {
                 "ticker_symbol": ticker_symbol,
@@ -365,7 +415,9 @@ class SECIngestionOrchestrator:
                 "message": message,
             }
         except Exception as e:
-            logger.error(f"Error processing {company_name} ({ticker_symbol}) {filing_type} index {index}: {e}")
+            logger.error(
+                f"Error processing {company_name} ({ticker_symbol}) {filing_type} index {index}: {e}"
+            )
             return {
                 "ticker_symbol": ticker_symbol,
                 "cik": cik,
@@ -379,7 +431,7 @@ class SECIngestionOrchestrator:
     async def ingest_multiple_filings(
         self,
         companies: list[dict],
-        filing_types: list[str] = ["10-K"],
+        filing_types: list[str] | None = None,
         limit_per_type: int = 1,
         batch_size: int = 10,
         use_parallel: bool = True,
@@ -399,6 +451,9 @@ class SECIngestionOrchestrator:
         Returns:
             Dictionary with success/failure counts and details
         """
+        if filing_types is None:
+            filing_types = ["10-K"]
+
         results = {
             "total": len(companies) * len(filing_types) * limit_per_type,
             "success": 0,
@@ -437,12 +492,16 @@ class SECIngestionOrchestrator:
 
                 # Create tasks for this batch
                 batch_coros = [
-                    self._ingest_filing_safe(ticker, cik, name, filing_type, idx, skip_if_exists)
+                    self._ingest_filing_safe(
+                        ticker, cik, name, filing_type, idx, skip_if_exists
+                    )
                     for ticker, cik, name, filing_type, idx in batch
                 ]
 
                 # Execute batch in parallel
-                batch_results = await asyncio.gather(*batch_coros, return_exceptions=True)
+                batch_results = await asyncio.gather(
+                    *batch_coros, return_exceptions=True
+                )
 
                 # Process results
                 for result in batch_results:
@@ -457,12 +516,14 @@ class SECIngestionOrchestrator:
                                 results["skipped"] += 1
                             else:
                                 results["success"] += 1
+                        # Check if this is a "no filing found" case (should be skipped, not failed)
+                        elif (
+                            "No" in result["message"]
+                            and "filing found" in result["message"]
+                        ):
+                            results["skipped"] += 1
                         else:
-                            # Check if this is a "no filing found" case (should be skipped, not failed)
-                            if "No" in result["message"] and "filing found" in result["message"]:
-                                results["skipped"] += 1
-                            else:
-                                results["failed"] += 1
+                            results["failed"] += 1
                         results["details"].append(result)
 
                 # Log batch completion with overall progress
@@ -471,26 +532,31 @@ class SECIngestionOrchestrator:
                     f"📊 Batch {batch_num}/{total_batches} complete ({progress_pct:.1f}% overall). "
                     f"Success: {results['success']}, Skipped: {results['skipped']}, Failed: {results['failed']}"
                 )
-                logger.info(f"   Processed {i + len(batch)}/{len(filing_tasks)} total filings")
+                logger.info(
+                    f"   Processed {i + len(batch)}/{len(filing_tasks)} total filings"
+                )
 
         else:
             # Sequential processing
             for i, (ticker, cik, name, filing_type, idx) in enumerate(filing_tasks, 1):
-                logger.info(f"Processing {i}/{total_tasks}: {name} ({ticker}) - {filing_type}")
+                logger.info(
+                    f"Processing {i}/{total_tasks}: {name} ({ticker}) - {filing_type}"
+                )
 
-                result = await self._ingest_filing_safe(ticker, cik, name, filing_type, idx, skip_if_exists)
+                result = await self._ingest_filing_safe(
+                    ticker, cik, name, filing_type, idx, skip_if_exists
+                )
 
                 if result["success"]:
                     if "already indexed" in result["message"]:
                         results["skipped"] += 1
                     else:
                         results["success"] += 1
+                # Check if this is a "no filing found" case (should be skipped, not failed)
+                elif "No" in result["message"] and "filing found" in result["message"]:
+                    results["skipped"] += 1
                 else:
-                    # Check if this is a "no filing found" case (should be skipped, not failed)
-                    if "No" in result["message"] and "filing found" in result["message"]:
-                        results["skipped"] += 1
-                    else:
-                        results["failed"] += 1
+                    results["failed"] += 1
 
                 results["details"].append(result)
 
@@ -501,13 +567,13 @@ class SECIngestionOrchestrator:
                     )
 
         logger.info(
-            f"\n{'='*60}\n"
+            f"\n{'=' * 60}\n"
             f"✅ Ingestion complete!\n"
             f"Total: {results['total']}\n"
             f"Success: {results['success']}\n"
             f"Skipped: {results['skipped']}\n"
             f"Failed: {results['failed']}\n"
-            f"{'='*60}"
+            f"{'=' * 60}"
         )
 
         return results

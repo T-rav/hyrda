@@ -74,7 +74,7 @@ class SECCleanupJob(BaseJob):
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the SEC cleanup job."""
         logger.info("Starting SEC filing cleanup job")
-        logger.info(f"Retention Policy:")
+        logger.info("Retention Policy:")
         logger.info(f"  - 10-K: Keep {self.keep_10k} most recent per company")
         logger.info(f"  - 10-Q: Keep {self.keep_10q} most recent per company")
         logger.info(f"  - 8-K: Keep last {self.keep_8k_months} months")
@@ -98,7 +98,7 @@ class SECCleanupJob(BaseJob):
         to_keep_stats = {"10-K": 0, "10-Q": 0, "8-K": 0, "other": 0}
         to_delete_stats = {"10-K": 0, "10-Q": 0, "8-K": 0, "other": 0}
 
-        for cik, filings_by_type in by_company.items():
+        for _cik, filings_by_type in by_company.items():
             for filing_type, filings in filings_by_type.items():
                 # Sort by filing date (most recent first)
                 filings.sort(key=lambda x: x["filing_date"], reverse=True)
@@ -210,7 +210,9 @@ class SECCleanupJob(BaseJob):
         """Get all SEC filings from tracking database."""
         filings = []
         with get_db_session() as session:
-            docs = session.query(SECDocument).filter_by(ingestion_status="success").all()
+            docs = (
+                session.query(SECDocument).filter_by(ingestion_status="success").all()
+            )
 
             for doc in docs:
                 filings.append(
@@ -244,7 +246,8 @@ class SECCleanupJob(BaseJob):
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: vector_store.client.delete(
-                    collection_name=vector_store.collection_name, points_selector=chunk_ids
+                    collection_name=vector_store.collection_name,
+                    points_selector=chunk_ids,
                 ),
             )
 

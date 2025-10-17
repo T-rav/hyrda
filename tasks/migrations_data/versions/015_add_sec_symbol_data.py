@@ -6,8 +6,8 @@ Create Date: 2025-01-16
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "015"
@@ -29,7 +29,9 @@ def upgrade():
         sa.Column("cik", sa.String(length=10), nullable=False),
         sa.Column("company_name", sa.String(length=512), nullable=False),
         # Metadata
-        sa.Column("exchange", sa.String(length=10), nullable=True),  # NYSE, NASDAQ, etc.
+        sa.Column(
+            "exchange", sa.String(length=10), nullable=True
+        ),  # NYSE, NASDAQ, etc.
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
         # Timestamps
         sa.Column(
@@ -57,7 +59,7 @@ def upgrade():
     # 2. Add ticker_symbol to sec_documents_data (for cross-referencing)
     op.add_column(
         "sec_documents_data",
-        sa.Column("ticker_symbol", sa.String(length=10), nullable=True)
+        sa.Column("ticker_symbol", sa.String(length=10), nullable=True),
     )
 
     # Create index on ticker_symbol for joins

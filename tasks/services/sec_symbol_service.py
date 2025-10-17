@@ -6,20 +6,21 @@ Populates and maintains the mapping of ticker symbols to CIKs for all public com
 """
 
 import logging
+
+# Add tasks directory to path for imports
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Mapped, mapped_column
 
-# Add tasks directory to path for imports
-import sys
-from pathlib import Path
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.base import Base, get_data_db_session  # noqa: E402
 from sqlalchemy import Boolean, DateTime, Integer, String, text  # noqa: E402
+
+from models.base import Base, get_data_db_session  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,10 @@ class SECSymbol(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     ticker_symbol: Mapped[str] = mapped_column(
-        String(10), nullable=False, unique=True, comment="Stock ticker symbol (e.g., AAPL)"
+        String(10),
+        nullable=False,
+        unique=True,
+        comment="Stock ticker symbol (e.g., AAPL)",
     )
     cik: Mapped[str] = mapped_column(
         String(10),
@@ -113,8 +117,12 @@ class SECSymbolService:
             # Fetch exchange data from company_tickers_exchange.json
             exchange_url = "https://www.sec.gov/files/company_tickers_exchange.json"
             try:
-                logger.info("Fetching exchange data from company_tickers_exchange.json...")
-                exchange_response = httpx.get(exchange_url, headers=headers, timeout=30.0)
+                logger.info(
+                    "Fetching exchange data from company_tickers_exchange.json..."
+                )
+                exchange_response = httpx.get(
+                    exchange_url, headers=headers, timeout=30.0
+                )
                 exchange_response.raise_for_status()
 
                 # Format: {"fields": ["cik", "name", "ticker", "exchange"], "data": [[320193, "Apple Inc.", "AAPL", "Nasdaq"], ...]}

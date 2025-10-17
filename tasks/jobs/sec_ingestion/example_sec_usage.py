@@ -6,7 +6,6 @@ This file demonstrates how to programmatically use the SEC ingestion services.
 
 import asyncio
 import os
-from pathlib import Path
 
 # You would normally set these via environment variables
 os.environ.setdefault("OPENAI_API_KEY", "your-key-here")
@@ -124,9 +123,11 @@ async def example_explore_sec_api():
     print(f"CIK: {company_data.get('cik')}")
 
     # Get recent 10-K filings
-    filings = await client.get_recent_filings(cik="0000320193", filing_type="10-K", limit=5)
+    filings = await client.get_recent_filings(
+        cik="0000320193", filing_type="10-K", limit=5
+    )
 
-    print(f"\nRecent 10-K filings:")
+    print("\nRecent 10-K filings:")
     for i, filing in enumerate(filings):
         print(f"  {i}. {filing['filing_date']}: {filing['accession_number']}")
         print(f"     URL: {filing['url']}")

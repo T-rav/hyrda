@@ -161,7 +161,9 @@ class SECEdgarClient:
         logger.info(f"Found {len(filings)} {filing_type} filings for CIK {cik}")
         return filings
 
-    def _build_document_url(self, cik: str, accession_number: str, filename: str) -> str:
+    def _build_document_url(
+        self, cik: str, accession_number: str, filename: str
+    ) -> str:
         """
         Build the URL to access a specific document.
 
@@ -252,7 +254,9 @@ class SECEdgarClient:
         filings = await self.get_recent_filings(cik, filing_type, limit=index + 1)
 
         if len(filings) <= index:
-            logger.warning(f"No {filing_type} filing found at index {index} for CIK {cik}")
+            logger.warning(
+                f"No {filing_type} filing found at index {index} for CIK {cik}"
+            )
             return None
 
         filing = filings[index]

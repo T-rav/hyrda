@@ -11,16 +11,16 @@ Use this to start fresh with SEC ingestion.
 
 import argparse
 import logging
-import os
 import sys
 from pathlib import Path
 
 # Add tasks directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sqlalchemy import text  # noqa: E402
+
 from models.base import get_data_db_session  # noqa: E402
 from services.qdrant_client import QdrantClient  # noqa: E402
-from sqlalchemy import text  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -163,7 +163,7 @@ async def cleanup_qdrant_vectors(dry_run: bool = False) -> dict:
         # Delete all vectors with sec_filings namespace
         logger.info("🗑️  Deleting all SEC filing vectors...")
 
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         delete_filter = Filter(
             must=[
@@ -254,8 +254,12 @@ Examples:
     logger.info("=" * 60)
     logger.info("CLEANUP SUMMARY")
     logger.info("=" * 60)
-    logger.info(f"MySQL Records: {mysql_stats['records_found']} found, {mysql_stats['records_deleted']} deleted")
-    logger.info(f"Qdrant Vectors: {qdrant_stats['vectors_found']} found, {qdrant_stats['vectors_deleted']} deleted")
+    logger.info(
+        f"MySQL Records: {mysql_stats['records_found']} found, {mysql_stats['records_deleted']} deleted"
+    )
+    logger.info(
+        f"Qdrant Vectors: {qdrant_stats['vectors_found']} found, {qdrant_stats['vectors_deleted']} deleted"
+    )
     logger.info("=" * 60)
 
     if args.dry_run:

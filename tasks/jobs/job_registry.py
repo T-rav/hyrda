@@ -22,7 +22,6 @@ def execute_job_by_type(
 ) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
-    import sys
     import uuid
     from datetime import UTC, datetime
     from pathlib import Path
@@ -37,10 +36,14 @@ def execute_job_by_type(
 
     # Add file handler if not already present
     root_logger = logging.getLogger()
-    has_file_handler = any(isinstance(h, logging.FileHandler) for h in root_logger.handlers)
+    has_file_handler = any(
+        isinstance(h, logging.FileHandler) for h in root_logger.handlers
+    )
 
     if not has_file_handler:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
         file_handler = logging.FileHandler(log_dir / "tasks.log")
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(formatter)
