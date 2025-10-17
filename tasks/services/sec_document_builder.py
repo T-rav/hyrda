@@ -9,7 +9,19 @@ Output format is optimized for vector search and LLM consumption.
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import Any
+
+# Configure edgar cache and identity BEFORE importing edgar
+EDGAR_DATA_DIR = Path("/app/.edgar")
+EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
+
+# Import edgar and configure
+from edgar import set_identity, use_local_storage
+set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+use_local_storage(str(EDGAR_DATA_DIR))
 
 logger = logging.getLogger(__name__)
 
@@ -129,10 +141,45 @@ class SECDocumentBuilder:
         Returns:
             Formatted document text optimized for vector search
         """
-        # Use HTML parser directly since we already have the HTML content
-        # (edgartools is designed to fetch filings itself, not parse pre-fetched HTML)
-        logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-K")
-        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
+        # Use edgartools to fetch and parse the filing
+        try:
+            from edgar import Company
+
+            logger.info(f"Fetching {ticker_symbol} 10-K using edgartools...")
+            company = Company(ticker_symbol)
+            filings = company.get_filings(form='10-K')
+
+            if not filings or len(filings) == 0:
+                logger.warning(f"No 10-K filings found for {ticker_symbol}, using fallback")
+                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
+
+            # Use the most recent filing
+            filing = filings[0]
+            text_content = filing.text()
+
+            # Build document with edgar text + financial summary
+            doc = f"""Company: {company_name} ({ticker_symbol})
+Filing Type: 10-K Annual Report
+Filing Date: {filing_date}
+CIK: {cik}
+Fiscal Year: {filing_date[:4]}
+
+"""
+
+            # Add financial summary from Company Facts API
+            if company_facts:
+                doc += self.build_financial_summary(company_facts, years=3)
+                doc += "\n"
+
+            doc += f"=== FILING CONTENT ===\n{text_content}\n"
+
+            logger.info(f"Built 10-K document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            return doc
+
+        except Exception as e:
+            logger.error(f"Error using edgartools for {ticker_symbol} 10-K: {e}")
+            logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-K")
+            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
 
     def build_10q_document(
         self,
@@ -157,9 +204,42 @@ class SECDocumentBuilder:
         Returns:
             Formatted document text
         """
-        # Use HTML parser directly
-        logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-Q")
-        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
+        # Use edgartools to fetch and parse
+        try:
+            from edgar import Company
+
+            logger.info(f"Fetching {ticker_symbol} 10-Q using edgartools...")
+            company = Company(ticker_symbol)
+            filings = company.get_filings(form='10-Q')
+
+            if not filings or len(filings) == 0:
+                logger.warning(f"No 10-Q filings found for {ticker_symbol}, using fallback")
+                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
+
+            filing = filings[0]
+            text_content = filing.text()
+
+            doc = f"""Company: {company_name} ({ticker_symbol})
+Filing Type: 10-Q Quarterly Report
+Filing Date: {filing_date}
+CIK: {cik}
+Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
+
+"""
+
+            if company_facts:
+                doc += self.build_financial_summary(company_facts, years=1)
+                doc += "\n"
+
+            doc += f"=== FILING CONTENT ===\n{text_content}\n"
+
+            logger.info(f"Built 10-Q document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            return doc
+
+        except Exception as e:
+            logger.error(f"Error using edgartools for {ticker_symbol} 10-Q: {e}")
+            logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-Q")
+            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
 
     def build_8k_document(
         self,
@@ -184,9 +264,38 @@ class SECDocumentBuilder:
         Returns:
             Formatted document text
         """
-        # Use HTML parser directly
-        logger.info(f"Using fallback HTML parser for {ticker_symbol} 8-K")
-        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
+        # Use edgartools to fetch and parse
+        try:
+            from edgar import Company
+
+            logger.info(f"Fetching {ticker_symbol} 8-K using edgartools...")
+            company = Company(ticker_symbol)
+            filings = company.get_filings(form='8-K')
+
+            if not filings or len(filings) == 0:
+                logger.warning(f"No 8-K filings found for {ticker_symbol}, using fallback")
+                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
+
+            filing = filings[0]
+            text_content = filing.text()
+
+            doc = f"""Company: {company_name} ({ticker_symbol})
+Filing Type: 8-K Current Report (Material Event)
+Filing Date: {filing_date}
+CIK: {cik}
+
+=== MATERIAL EVENT DISCLOSURE ===
+{text_content}
+
+"""
+
+            logger.info(f"Built 8-K document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            return doc
+
+        except Exception as e:
+            logger.error(f"Error using edgartools for {ticker_symbol} 8-K: {e}")
+            logger.info(f"Using fallback HTML parser for {ticker_symbol} 8-K")
+            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
 
     def _build_document_fallback(
         self,
