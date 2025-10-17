@@ -14,6 +14,27 @@ from services.slack_service import SlackService
 from tests.agent_test_utils import AgentContextBuilder
 
 
+def create_mock_aget_state(state_values):
+    """Helper to create mock aget_state function.
+
+    Args:
+        state_values: Dict of state values to return
+
+    Returns:
+        Async mock function that returns a state snapshot
+    """
+
+    async def mock_aget_state(config):
+        """Mock aget_state to return final state from checkpointer"""
+        from unittest.mock import Mock as StateMock
+
+        state_snapshot = StateMock()
+        state_snapshot.values = state_values
+        return state_snapshot
+
+    return mock_aget_state
+
+
 class TestProfileAgent:
     """Tests for ProfileAgent"""
 
@@ -59,6 +80,13 @@ class TestProfileAgent:
         # Mock the profile_researcher graph at module level
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "# Employee Profile\n\nCharlotte is an employee with expertise in software development.",
+                "executive_summary": "Charlotte is a software developer with 5 years of experience.",
+                "notes": ["Note 1: Background", "Note 2: Experience"],
+            }
+        )
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
@@ -127,6 +155,13 @@ class TestProfileAgent:
         # Mock the profile_researcher graph at module level
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "# Company Profile\n\nFull report content here.",
+                "executive_summary": executive_summary_content,
+                "notes": ["Note 1", "Note 2"],
+            }
+        )
 
         # Patch the profile_researcher at module level
         with patch("agents.profile_agent.profile_researcher", mock_graph):
@@ -205,6 +240,7 @@ class TestProfileAgent:
         # Mock the profile_researcher graph
         mock_graph = Mock()
         mock_graph.astream = mock_astream_with_none
+        mock_graph.aget_state = create_mock_aget_state({})  # Empty state!
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
@@ -253,6 +289,7 @@ class TestProfileAgent:
         # Mock the profile_researcher graph
         mock_graph = Mock()
         mock_graph.astream = mock_astream_with_empty_dict
+        mock_graph.aget_state = create_mock_aget_state({})  # Empty state!
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
@@ -320,6 +357,13 @@ class TestProfileAgent:
         # Mock the profile_researcher graph
         mock_graph = Mock()
         mock_graph.astream = mock_astream_qc_passes_with_state
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "# Tesla Profile\n\nTesla is an electric vehicle company...\n\n## Sources\n1. tesla.com\n2. sec.gov",
+                "executive_summary": "📊 *Executive Summary*\n\n• Tesla leads EV market\n• Strong growth trajectory\n• Innovation focus",
+                "notes": ["Note 1", "Note 2", "Note 3"],
+            }
+        )
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
