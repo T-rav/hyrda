@@ -20,7 +20,13 @@ os.environ["HOME"] = "/app"
 
 # Configure edgar cache directory - MUST be set before any edgar import
 EDGAR_DATA_DIR = Path("/app/.edgar")
-EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    # In test environment, /app may not be writable - use temp dir
+    import tempfile
+    EDGAR_DATA_DIR = Path(tempfile.gettempdir()) / ".edgar"
+    EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
 
 # DO NOT import edgar here - it will initialize cache before env var takes effect
