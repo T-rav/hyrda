@@ -8,8 +8,6 @@ from .base_job import BaseJob
 from .job_registry import JobRegistry
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
-from .sec_cleanup_job import SECCleanupJob
-from .sec_ingestion_job import SECIngestionJob
 from .slack_user_import import SlackUserImportJob
 
 __all__ = [
@@ -17,7 +15,5 @@ __all__ = [
     "JobRegistry",
     "MetricSyncJob",
     "PortalSyncJob",
-    "SECIngestionJob",
-    "SECCleanupJob",
     "SlackUserImportJob",
 ]
