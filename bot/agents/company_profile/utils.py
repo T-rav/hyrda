@@ -71,48 +71,6 @@ def internal_search_tool():
     return _InternalSearchToolSingleton.get_instance()
 
 
-class _ScrapedWebArchiveToolSingleton:
-    """Singleton for scraped web archive tool."""
-
-    _instance = None
-
-    @classmethod
-    def get_instance(cls):
-        """Get or create singleton instance."""
-        if cls._instance is None:
-            try:
-                from agents.company_profile.tools.scraped_web_archive import (
-                    ScrapedWebArchiveTool,
-                )
-
-                cls._instance = ScrapedWebArchiveTool()
-                logger.info("Initialized scraped_web_archive tool singleton")
-            except Exception as e:
-                logger.error(f"Failed to initialize scraped_web_archive tool: {e}")
-                return None
-
-        return cls._instance
-
-
-def scraped_web_archive_tool():
-    """Get scraped web archive tool singleton instance.
-
-    The tool searches SEC filings (10-K, 10-Q, 8-K) in the vector database for:
-    - Risk factors and strategic challenges
-    - Financial performance and trends
-    - Strategic priorities and initiatives
-    - Technology investments and R&D spending
-    - Market position and competitive landscape
-
-    IMPORTANT: Must include company name in query (minimum 3 characters).
-    DO NOT call with empty queries.
-
-    Returns:
-        ScrapedWebArchiveTool singleton instance or None if not available
-    """
-    return _ScrapedWebArchiveToolSingleton.get_instance()
-
-
 class _SECQueryToolSingleton:
     """Singleton for SEC query tool."""
 
