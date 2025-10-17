@@ -13,15 +13,18 @@ import os
 from pathlib import Path
 from typing import Any
 
-# CRITICAL: Set EDGAR_LOCAL_DATA_DIR environment variable BEFORE any edgar import
-# edgartools reads this on first import and caches the result
-os.environ["EDGAR_LOCAL_DATA_DIR"] = "/app/.edgar"
+# Configure edgar cache BEFORE importing edgar
+EDGAR_DATA_DIR = Path("/app/.edgar")
+EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
 
-# Import edgar - will now use /app/.edgar instead of /root/.edgar
-from edgar import Company, set_identity
-
-# Set identity for SEC API
-set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+# Import edgar and configure it programmatically
+try:
+    from edgar import Company, set_identity, use_local_storage
+    use_local_storage(str(EDGAR_DATA_DIR))
+    set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+except ImportError:
+    pass  # edgar not installed
 
 logger = logging.getLogger(__name__)
 
