@@ -143,90 +143,10 @@ class SECDocumentBuilder:
         Returns:
             Formatted document text optimized for vector search
         """
-        try:
-            from edgar import Filing
-
-            # Parse the filing with edgartools
-            filing = Filing(company=company_name, cik=cik, form="10-K", filing_date=filing_date, html=html_content)
-
-            # Build document header
-            doc = f"""Company: {company_name} ({ticker_symbol})
-Filing Type: 10-K Annual Report
-Filing Date: {filing_date}
-CIK: {cik}
-Fiscal Year: {filing_date[:4]}
-
-"""
-
-            # Add financial summary from Company Facts API
-            if company_facts:
-                doc += self.build_financial_summary(company_facts, years=3)
-                doc += "\n"
-
-            # Extract narrative sections using edgartools
-            # Item 1: Business
-            try:
-                business = filing.item1
-                if business:
-                    doc += f"=== ITEM 1: BUSINESS ===\n{business}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 1 (Business): {e}")
-
-            # Item 1A: Risk Factors
-            try:
-                risk_factors = filing.item1a
-                if risk_factors:
-                    doc += f"=== ITEM 1A: RISK FACTORS ===\n{risk_factors}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 1A (Risk Factors): {e}")
-
-            # Item 1B: Unresolved Staff Comments (usually empty, skip)
-
-            # Item 1C: Cybersecurity (new requirement, may not exist in all filings)
-            try:
-                cybersecurity = getattr(filing, "item1c", None)
-                if cybersecurity:
-                    doc += f"=== ITEM 1C: CYBERSECURITY ===\n{cybersecurity}\n\n"
-            except Exception:
-                pass
-
-            # Item 2: Properties (usually brief, skip for now)
-
-            # Item 3: Legal Proceedings
-            try:
-                legal = filing.item3
-                if legal:
-                    doc += f"=== ITEM 3: LEGAL PROCEEDINGS ===\n{legal}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 3 (Legal): {e}")
-
-            # Item 7: Management's Discussion and Analysis (MD&A)
-            try:
-                mda = filing.item7
-                if mda:
-                    doc += f"=== ITEM 7: MANAGEMENT'S DISCUSSION AND ANALYSIS ===\n{mda}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 7 (MD&A): {e}")
-
-            # Item 7A: Quantitative and Qualitative Disclosures About Market Risk
-            try:
-                market_risk = filing.item7a
-                if market_risk:
-                    doc += f"=== ITEM 7A: MARKET RISK DISCLOSURES ===\n{market_risk}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 7A (Market Risk): {e}")
-
-            # Skip Item 8 (Financial Statements) - tables are already in financial summary
-
-            # Item 9A: Controls and Procedures (usually boilerplate, skip)
-
-            logger.info(f"Built 10-K document for {ticker_symbol}: {len(doc)} characters")
-            return doc
-
-        except Exception as e:
-            logger.error(f"Error building 10-K document with edgartools: {e}")
-            # Fallback to simple HTML parsing
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
+        # Use HTML parser directly since we already have the HTML content
+        # (edgartools is designed to fetch filings itself, not parse pre-fetched HTML)
+        logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-K")
+        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
 
     def build_10q_document(
         self,
@@ -251,50 +171,9 @@ Fiscal Year: {filing_date[:4]}
         Returns:
             Formatted document text
         """
-        try:
-            from edgar import Filing
-
-            filing = Filing(company=company_name, cik=cik, form="10-Q", filing_date=filing_date, html=html_content)
-
-            doc = f"""Company: {company_name} ({ticker_symbol})
-Filing Type: 10-Q Quarterly Report
-Filing Date: {filing_date}
-CIK: {cik}
-Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
-
-"""
-
-            # Add recent financial summary
-            if company_facts:
-                doc += self.build_financial_summary(company_facts, years=1)
-                doc += "\n"
-
-            # Item 1: Financial Statements (skip - in financial summary)
-
-            # Item 2: MD&A
-            try:
-                mda = filing.item2
-                if mda:
-                    doc += f"=== ITEM 2: MANAGEMENT'S DISCUSSION AND ANALYSIS ===\n{mda}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 2 (MD&A): {e}")
-
-            # Item 3: Quantitative and Qualitative Disclosures About Market Risk
-            try:
-                market_risk = filing.item3
-                if market_risk:
-                    doc += f"=== ITEM 3: MARKET RISK DISCLOSURES ===\n{market_risk}\n\n"
-            except Exception as e:
-                logger.warning(f"Could not extract Item 3 (Market Risk): {e}")
-
-            # Item 4: Controls and Procedures (usually boilerplate, skip)
-
-            logger.info(f"Built 10-Q document for {ticker_symbol}: {len(doc)} characters")
-            return doc
-
-        except Exception as e:
-            logger.error(f"Error building 10-Q document with edgartools: {e}")
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
+        # Use HTML parser directly
+        logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-Q")
+        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
 
     def build_8k_document(
         self,
