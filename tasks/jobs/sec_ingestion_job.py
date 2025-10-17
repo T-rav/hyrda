@@ -83,7 +83,9 @@ class SECIngestionJob(BaseJob):
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the SEC ingestion job."""
-        logger.info(f"Starting SEC ingestion job for filing types: {', '.join(self.filing_types)}")
+        logger.info(
+            f"Starting SEC ingestion job for filing types: {', '.join(self.filing_types)}"
+        )
         for filing_type, limit in self.limits_by_type.items():
             logger.info(f"  - {filing_type}: {limit} filings per company")
 
@@ -119,7 +121,9 @@ class SECIngestionJob(BaseJob):
 
         try:
             all_companies = symbol_service.get_all_symbols(active_only=True)
-            logger.info(f"✅ Loaded {len(all_companies)} active companies from database")
+            logger.info(
+                f"✅ Loaded {len(all_companies)} active companies from database"
+            )
         except Exception as e:
             logger.error(f"Failed to load companies from database: {e}")
             return {
@@ -171,8 +175,7 @@ class SECIngestionJob(BaseJob):
 
         # Calculate total expected filings
         total_expected = sum(
-            len(company_list) * limit
-            for limit in self.limits_by_type.values()
+            len(company_list) * limit for limit in self.limits_by_type.values()
         )
         logger.info(f"Total expected filings: {total_expected:,}")
 
@@ -188,7 +191,9 @@ class SECIngestionJob(BaseJob):
         for filing_type in self.filing_types:
             limit = self.limits_by_type[filing_type]
             logger.info("=" * 60)
-            logger.info(f"Processing {filing_type} filings (limit: {limit} per company)")
+            logger.info(
+                f"Processing {filing_type} filings (limit: {limit} per company)"
+            )
             logger.info("=" * 60)
 
             results = await orchestrator.ingest_multiple_filings(

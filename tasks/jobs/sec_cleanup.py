@@ -39,8 +39,10 @@ logger = logging.getLogger(__name__)
 # Add tasks directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tasks.services.qdrant_client import QdrantClient
-from tasks.services.sec_document_tracking_service import SECDocumentTrackingService
+from tasks.services.qdrant_client import QdrantClient  # noqa: E402
+from tasks.services.sec_document_tracking_service import (  # noqa: E402
+    SECDocumentTrackingService,
+)
 
 
 class SECCleanupJob:
@@ -73,7 +75,7 @@ class SECCleanupJob:
         logger.info("=" * 60)
         logger.info("SEC Filing Cleanup Job")
         logger.info("=" * 60)
-        logger.info(f"Retention Policy:")
+        logger.info("Retention Policy:")
         logger.info(f"  - 10-K: Keep {self.keep_10k} most recent per company")
         logger.info(f"  - 10-Q: Keep {self.keep_10q} most recent per company")
         logger.info(f"  - 8-K: Keep last {self.keep_8k_months} months")
@@ -99,7 +101,7 @@ class SECCleanupJob:
         to_keep_stats = {"10-K": 0, "10-Q": 0, "8-K": 0, "other": 0}
         to_delete_stats = {"10-K": 0, "10-Q": 0, "8-K": 0, "other": 0}
 
-        for cik, filings_by_type in by_company.items():
+        for _cik, filings_by_type in by_company.items():
             company_name = None
 
             for filing_type, filings in filings_by_type.items():
@@ -200,12 +202,15 @@ class SECCleanupJob:
 
     def _get_all_filings(self) -> list[dict]:
         """Get all SEC filings from tracking database."""
-        from models.base import get_db_session
         from tasks.services.sec_document_tracking_service import SECDocument
+
+        from models.base import get_db_session
 
         filings = []
         with get_db_session() as session:
-            docs = session.query(SECDocument).filter_by(ingestion_status="success").all()
+            docs = (
+                session.query(SECDocument).filter_by(ingestion_status="success").all()
+            )
 
             for doc in docs:
                 filings.append(
@@ -248,7 +253,8 @@ class SECCleanupJob:
             await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: vector_store.client.delete(
-                    collection_name=vector_store.collection_name, points_selector=chunk_ids
+                    collection_name=vector_store.collection_name,
+                    points_selector=chunk_ids,
                 ),
             )
 

@@ -55,7 +55,9 @@ class SECDocumentBuilder:
         """Initialize document builder."""
         pass
 
-    def build_financial_summary(self, company_facts: dict[str, Any] | None, years: int = 3) -> str:
+    def build_financial_summary(
+        self, company_facts: dict[str, Any] | None, years: int = 3
+    ) -> str:
         """
         Build a text summary of key financial metrics from Company Facts API.
 
@@ -90,7 +92,9 @@ class SECDocumentBuilder:
 
             # Get last N annual reports (10-K)
             annual_values = [v for v in values if v.get("form") == "10-K"]
-            annual_values = sorted(annual_values, key=lambda x: x.get("end", ""), reverse=True)[:years]
+            annual_values = sorted(
+                annual_values, key=lambda x: x.get("end", ""), reverse=True
+            )[:years]
 
             if not annual_values:
                 continue
@@ -107,9 +111,9 @@ class SECDocumentBuilder:
                 elif "shares" in units:
                     val_str = f"{val:,.0f} shares"
                 elif val >= 1_000_000_000:
-                    val_str = f"${val/1_000_000_000:.2f}B"
+                    val_str = f"${val / 1_000_000_000:.2f}B"
                 elif val >= 1_000_000:
-                    val_str = f"${val/1_000_000:.2f}M"
+                    val_str = f"${val / 1_000_000:.2f}M"
                 else:
                     val_str = f"${val:,.0f}"
 
@@ -145,17 +149,28 @@ class SECDocumentBuilder:
         # Use edgartools to fetch and parse the filing
         try:
             # Lazy import edgar (cache env var already set above)
-            from edgar import Company, use_local_storage, set_identity
+            from edgar import Company, set_identity, use_local_storage
+
             use_local_storage(str(EDGAR_DATA_DIR))
             set_identity("8th Light InsightMesh insightmesh@8thlight.com")
 
             logger.info(f"Fetching {ticker_symbol} 10-K using edgartools...")
             company = Company(ticker_symbol)
-            filings = company.get_filings(form='10-K')
+            filings = company.get_filings(form="10-K")
 
             if not filings or len(filings) == 0:
-                logger.warning(f"No 10-K filings found for {ticker_symbol}, using fallback")
-                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
+                logger.warning(
+                    f"No 10-K filings found for {ticker_symbol}, using fallback"
+                )
+                return self._build_document_fallback(
+                    ticker_symbol,
+                    company_name,
+                    cik,
+                    filing_date,
+                    html_content,
+                    "10-K",
+                    company_facts,
+                )
 
             # Use the most recent filing
             filing = filings[0]
@@ -177,13 +192,23 @@ Fiscal Year: {filing_date[:4]}
 
             doc += f"=== FILING CONTENT ===\n{text_content}\n"
 
-            logger.info(f"Built 10-K document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            logger.info(
+                f"Built 10-K document for {ticker_symbol} using edgartools: {len(doc)} characters"
+            )
             return doc
 
         except Exception as e:
             logger.error(f"Error using edgartools for {ticker_symbol} 10-K: {e}")
             logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-K")
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-K", company_facts)
+            return self._build_document_fallback(
+                ticker_symbol,
+                company_name,
+                cik,
+                filing_date,
+                html_content,
+                "10-K",
+                company_facts,
+            )
 
     def build_10q_document(
         self,
@@ -211,17 +236,28 @@ Fiscal Year: {filing_date[:4]}
         # Use edgartools to fetch and parse
         try:
             # Lazy import edgar (cache env var already set above)
-            from edgar import Company, use_local_storage, set_identity
+            from edgar import Company, set_identity, use_local_storage
+
             use_local_storage(str(EDGAR_DATA_DIR))
             set_identity("8th Light InsightMesh insightmesh@8thlight.com")
 
             logger.info(f"Fetching {ticker_symbol} 10-Q using edgartools...")
             company = Company(ticker_symbol)
-            filings = company.get_filings(form='10-Q')
+            filings = company.get_filings(form="10-Q")
 
             if not filings or len(filings) == 0:
-                logger.warning(f"No 10-Q filings found for {ticker_symbol}, using fallback")
-                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
+                logger.warning(
+                    f"No 10-Q filings found for {ticker_symbol}, using fallback"
+                )
+                return self._build_document_fallback(
+                    ticker_symbol,
+                    company_name,
+                    cik,
+                    filing_date,
+                    html_content,
+                    "10-Q",
+                    company_facts,
+                )
 
             filing = filings[0]
             text_content = filing.text()
@@ -240,13 +276,23 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
 
             doc += f"=== FILING CONTENT ===\n{text_content}\n"
 
-            logger.info(f"Built 10-Q document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            logger.info(
+                f"Built 10-Q document for {ticker_symbol} using edgartools: {len(doc)} characters"
+            )
             return doc
 
         except Exception as e:
             logger.error(f"Error using edgartools for {ticker_symbol} 10-Q: {e}")
             logger.info(f"Using fallback HTML parser for {ticker_symbol} 10-Q")
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "10-Q", company_facts)
+            return self._build_document_fallback(
+                ticker_symbol,
+                company_name,
+                cik,
+                filing_date,
+                html_content,
+                "10-Q",
+                company_facts,
+            )
 
     def build_8k_document(
         self,
@@ -274,17 +320,28 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
         # Use edgartools to fetch and parse
         try:
             # Lazy import edgar (cache env var already set above)
-            from edgar import Company, use_local_storage, set_identity
+            from edgar import Company, set_identity, use_local_storage
+
             use_local_storage(str(EDGAR_DATA_DIR))
             set_identity("8th Light InsightMesh insightmesh@8thlight.com")
 
             logger.info(f"Fetching {ticker_symbol} 8-K using edgartools...")
             company = Company(ticker_symbol)
-            filings = company.get_filings(form='8-K')
+            filings = company.get_filings(form="8-K")
 
             if not filings or len(filings) == 0:
-                logger.warning(f"No 8-K filings found for {ticker_symbol}, using fallback")
-                return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
+                logger.warning(
+                    f"No 8-K filings found for {ticker_symbol}, using fallback"
+                )
+                return self._build_document_fallback(
+                    ticker_symbol,
+                    company_name,
+                    cik,
+                    filing_date,
+                    html_content,
+                    "8-K",
+                    None,
+                )
 
             filing = filings[0]
             text_content = filing.text()
@@ -299,13 +356,17 @@ CIK: {cik}
 
 """
 
-            logger.info(f"Built 8-K document for {ticker_symbol} using edgartools: {len(doc)} characters")
+            logger.info(
+                f"Built 8-K document for {ticker_symbol} using edgartools: {len(doc)} characters"
+            )
             return doc
 
         except Exception as e:
             logger.error(f"Error using edgartools for {ticker_symbol} 8-K: {e}")
             logger.info(f"Using fallback HTML parser for {ticker_symbol} 8-K")
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
+            return self._build_document_fallback(
+                ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None
+            )
 
     def _build_document_fallback(
         self,
@@ -332,8 +393,9 @@ CIK: {cik}
         Returns:
             Formatted document text
         """
-        from bs4 import BeautifulSoup
         import re
+
+        from bs4 import BeautifulSoup
 
         logger.info(f"Using fallback HTML parser for {ticker_symbol} {filing_type}")
 
@@ -364,5 +426,7 @@ CIK: {cik}
 
         doc += f"=== FILING CONTENT ===\n{text}\n"
 
-        logger.info(f"Built {filing_type} document (fallback) for {ticker_symbol}: {len(doc)} characters")
+        logger.info(
+            f"Built {filing_type} document (fallback) for {ticker_symbol}: {len(doc)} characters"
+        )
         return doc

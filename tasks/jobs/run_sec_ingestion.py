@@ -43,10 +43,10 @@ logger = logging.getLogger(__name__)
 # Add tasks directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.openai_embeddings import OpenAIEmbeddings
-from services.qdrant_client import QdrantClient
-from services.sec_edgar_client import SECEdgarClient
-from services.sec_ingestion_orchestrator import SECIngestionOrchestrator
+from services.openai_embeddings import OpenAIEmbeddings  # noqa: E402
+from services.qdrant_client import QdrantClient  # noqa: E402
+from services.sec_edgar_client import SECEdgarClient  # noqa: E402
+from services.sec_ingestion_orchestrator import SECIngestionOrchestrator  # noqa: E402
 
 
 async def main():
@@ -133,9 +133,6 @@ async def main():
     # Embedding service
     embedding_service = OpenAIEmbeddings()
 
-    # Determine embedding dimension
-    embedding_dim = 3072 if "large" in args.embedding_model else 1536
-
     # Initialize vector store
     await vector_store.initialize()
 
@@ -167,8 +164,8 @@ async def main():
 
         sec_client = SECEdgarClient(args.user_agent)
         with open(companies_path) as f:
-            for line in f:
-                line = line.strip()
+            for raw_line in f:
+                line = raw_line.strip()
                 # Skip empty lines and comments
                 if not line or line.startswith("#"):
                     continue

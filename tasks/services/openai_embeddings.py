@@ -69,22 +69,21 @@ class OpenAIEmbeddings:
                     f"Single text has ~{text_tokens} tokens, truncating to {max_tokens}"
                 )
                 # Rough truncation: keep first max_tokens * 4 characters
-                text = text[: max_tokens * 4]
+                truncated_text = text[: max_tokens * 4]
                 text_tokens = max_tokens
+            else:
+                truncated_text = text
 
             # Start new batch if adding this text would exceed limits
-            if (
-                current_batch
-                and (
-                    len(current_batch) >= max_texts
-                    or current_tokens + text_tokens > max_tokens
-                )
+            if current_batch and (
+                len(current_batch) >= max_texts
+                or current_tokens + text_tokens > max_tokens
             ):
                 batches.append(current_batch)
                 current_batch = []
                 current_tokens = 0
 
-            current_batch.append(text)
+            current_batch.append(truncated_text)
             current_tokens += text_tokens
 
         # Add final batch

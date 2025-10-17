@@ -1,7 +1,6 @@
 """APScheduler WebUI Flask application."""
 
 import logging
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,7 +21,7 @@ log_dir = Path(__file__).parent / "logs"
 log_dir.mkdir(exist_ok=True)
 
 # Create formatters and handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 # Console handler (for docker logs)
 console_handler = logging.StreamHandler(sys.stdout)

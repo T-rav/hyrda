@@ -38,7 +38,9 @@ def init_data_db(database_url: str):
     """Initialize data database connection."""
     global _data_engine, _DataSessionLocal
     _data_engine = create_engine(database_url)
-    _DataSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_data_engine)
+    _DataSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=_data_engine
+    )
 
 
 @contextmanager
