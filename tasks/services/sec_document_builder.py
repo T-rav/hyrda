@@ -130,7 +130,7 @@ class SECDocumentBuilder:
             Formatted document text optimized for vector search
         """
         try:
-            from edgartools import Filing
+            from edgar import Filing
 
             # Parse the filing with edgartools
             filing = Filing(company=company_name, cik=cik, form="10-K", filing_date=filing_date, html=html_content)
@@ -238,7 +238,7 @@ Fiscal Year: {filing_date[:4]}
             Formatted document text
         """
         try:
-            from edgartools import Filing
+            from edgar import Filing
 
             filing = Filing(company=company_name, cik=cik, form="10-Q", filing_date=filing_date, html=html_content)
 
@@ -306,7 +306,7 @@ Quarter: Q{(int(filing_date[5:7]) - 1) // 3 + 1} {filing_date[:4]}
             Formatted document text
         """
         try:
-            from edgartools import Filing
+            from edgar import Filing
 
             filing = Filing(company=company_name, cik=cik, form="8-K", filing_date=filing_date, html=html_content)
 
