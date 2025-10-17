@@ -9,21 +9,7 @@ Output format is optimized for vector search and LLM consumption.
 """
 
 import logging
-import os
-from pathlib import Path
 from typing import Any
-
-# Set edgar cache directory before any edgar imports
-EDGAR_DATA_DIR = Path("/app/.edgar")
-EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
-
-# Configure edgartools to use our cache directory
-try:
-    from edgar import use_local_storage
-    use_local_storage(True, data_dir=str(EDGAR_DATA_DIR))
-except ImportError:
-    pass  # edgar not installed yet, will be set by environment variable
 
 logger = logging.getLogger(__name__)
 
