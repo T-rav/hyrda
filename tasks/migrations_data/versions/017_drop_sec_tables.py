@@ -19,15 +19,42 @@ depends_on = None
 
 def upgrade():
     """Drop SEC database tables - now using on-demand fetching only."""
-    # Drop sec_documents_data table
-    op.drop_index("idx_company_name", table_name="sec_documents_data")
-    op.drop_index("idx_cik", table_name="sec_documents_data")
-    op.drop_table("sec_documents_data")
+    import sqlalchemy as sa
+    from sqlalchemy import inspect
 
-    # Drop sec_symbol_data table
-    op.drop_index("idx_ticker_lookup", table_name="sec_symbol_data")
-    op.drop_index("idx_cik_lookup", table_name="sec_symbol_data")
-    op.drop_table("sec_symbol_data")
+    # Get database connection
+    conn = op.get_bind()
+    inspector = inspect(conn)
+
+    # Check if sec_documents_data table exists
+    if "sec_documents_data" in inspector.get_table_names():
+        # Drop indexes if they exist
+        indexes = [idx["name"] for idx in inspector.get_indexes("sec_documents_data")]
+        if "idx_company_name" in indexes:
+            op.drop_index("idx_company_name", table_name="sec_documents_data")
+        if "idx_cik" in indexes:
+            op.drop_index("idx_cik", table_name="sec_documents_data")
+
+        # Drop table
+        op.drop_table("sec_documents_data")
+        print("✅ Dropped sec_documents_data table")
+    else:
+        print("⏭️  sec_documents_data table does not exist, skipping")
+
+    # Check if sec_symbol_data table exists
+    if "sec_symbol_data" in inspector.get_table_names():
+        # Drop indexes if they exist
+        indexes = [idx["name"] for idx in inspector.get_indexes("sec_symbol_data")]
+        if "idx_ticker_lookup" in indexes:
+            op.drop_index("idx_ticker_lookup", table_name="sec_symbol_data")
+        if "idx_cik_lookup" in indexes:
+            op.drop_index("idx_cik_lookup", table_name="sec_symbol_data")
+
+        # Drop table
+        op.drop_table("sec_symbol_data")
+        print("✅ Dropped sec_symbol_data table")
+    else:
+        print("⏭️  sec_symbol_data table does not exist, skipping")
 
 
 def downgrade():
