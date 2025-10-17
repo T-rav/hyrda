@@ -131,15 +131,6 @@ class SECIngestionOrchestrator:
                 "Vector and embedding services must be set before calling ingest_company_filing."
             )
 
-        # Skip if company already has documents in database
-        if skip_if_exists and self.document_tracker.has_documents_for_ticker(
-            ticker_symbol
-        ):
-            logger.info(
-                f"⏭️  Skipping {ticker_symbol} - already has documents in database"
-            )
-            return True, f"Skipped - {ticker_symbol} already processed"
-
         try:
             # Fetch recent filings
             logger.info(f"Fetching {filing_type} for {ticker_symbol} (CIK {cik})...")
