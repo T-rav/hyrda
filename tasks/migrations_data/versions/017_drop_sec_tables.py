@@ -19,7 +19,6 @@ depends_on = None
 
 def upgrade():
     """Drop SEC database tables - now using on-demand fetching only."""
-    import sqlalchemy as sa
     from sqlalchemy import inspect
 
     # Get database connection
