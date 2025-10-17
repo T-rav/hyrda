@@ -198,27 +198,9 @@ class SECDocumentBuilder:
         Returns:
             Formatted document text
         """
-        try:
-            from edgar import Filing
-
-            filing = Filing(company=company_name, cik=cik, form="8-K", filing_date=filing_date, html=html_content)
-
-            doc = f"""Company: {company_name} ({ticker_symbol})
-Filing Type: 8-K Current Report (Material Event)
-Filing Date: {filing_date}
-CIK: {cik}
-
-=== MATERIAL EVENT DISCLOSURE ===
-{filing.text}
-
-"""
-
-            logger.info(f"Built 8-K document for {ticker_symbol}: {len(doc)} characters")
-            return doc
-
-        except Exception as e:
-            logger.error(f"Error building 8-K document with edgartools: {e}")
-            return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
+        # Use HTML parser directly
+        logger.info(f"Using fallback HTML parser for {ticker_symbol} 8-K")
+        return self._build_document_fallback(ticker_symbol, company_name, cik, filing_date, html_content, "8-K", None)
 
     def _build_document_fallback(
         self,
