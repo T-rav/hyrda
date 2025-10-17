@@ -9,7 +9,14 @@ Output format is optimized for vector search and LLM consumption.
 """
 
 import logging
+import os
+from pathlib import Path
 from typing import Any
+
+# Set edgar cache directory before any edgar imports
+EDGAR_DATA_DIR = Path("/app/.edgar")
+EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
+os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
 
 logger = logging.getLogger(__name__)
 

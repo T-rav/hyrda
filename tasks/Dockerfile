@@ -46,7 +46,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     ENVIRONMENT=production \
     LOG_LEVEL=INFO \
-    EDGAR_CACHE_DIR=/app/.edgar
+    EDGAR_LOCAL_DATA_DIR=/app/.edgar
 
 # Expose nginx port
 EXPOSE 5001
