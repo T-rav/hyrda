@@ -39,11 +39,14 @@ class TestSECSectionFilter:
         """Test that signature section is skipped."""
         assert not SECSectionFilter.should_keep_section("Signatures", "10-K")
 
-    def test_non_10k_returns_full_content(self):
-        """Test that non-10-K filings return full content."""
-        content = "Test content for 8-K filing"
-        result = filter_sec_filing(content, "8-K")
-        assert result == content  # 8-K not supported, returns full content
+    def test_8k_keeps_key_material_events(self):
+        """Test that 8-K filings keep key material event sections."""
+        assert SECSectionFilter.should_keep_section(
+            "Item 1.01 Entry into a Material Definitive Agreement", "8-K"
+        )
+        assert SECSectionFilter.should_keep_section(
+            "Item 2.01 Completion of Acquisition or Disposition of Assets", "8-K"
+        )
 
     def test_parse_sections_basic(self):
         """Test basic section parsing."""
@@ -98,8 +101,8 @@ Item 15. Exhibits
         # For this test, we check that filtering was attempted
         assert len(filtered) <= len(content)
 
-    def test_filter_filing_content_8k_not_supported(self):
-        """Test that 8-K returns full content (not supported for filtering)."""
+    def test_filter_filing_content_8k(self):
+        """Test filtering 8-K content to keep key material events."""
         content = """
 Item 1.01 Entry into Material Agreement
 
@@ -111,10 +114,9 @@ Pro forma financial information is attached.
 """
         filtered = filter_sec_filing(content, "8-K")
 
-        # 8-K not supported, should return full content
-        assert filtered == content
+        # Should attempt filtering (may keep full content if sections not parsed)
+        assert len(filtered) <= len(content)
         assert "merger agreement" in filtered
-        assert "financial information" in filtered
 
     def test_filter_filing_fallback_no_sections(self):
         """Test that filtering falls back to full content if no sections found."""

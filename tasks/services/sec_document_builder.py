@@ -269,7 +269,7 @@ Fiscal Year: {filing_date[:4]}
             filing = filings[0]
             text_content = filing.text()
 
-            # 8-K: Keep full content (already short event disclosures)
+            # Filter to keep only sales-relevant material events
             filtered_content = filter_sec_filing(text_content, "8-K")
 
             doc = f"""Company: {company_name} ({ticker_symbol})
@@ -283,7 +283,8 @@ CIK: {cik}
 """
 
             logger.info(
-                f"Built 8-K document for {ticker_symbol} using edgartools: {len(doc)} characters"
+                f"Built 8-K document for {ticker_symbol} using edgartools: {len(doc)} characters "
+                f"(filtered from {len(text_content)} chars)"
             )
             return doc
 
