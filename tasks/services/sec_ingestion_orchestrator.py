@@ -117,7 +117,7 @@ class SECIngestionOrchestrator:
             ticker_symbol: Stock ticker (e.g., "AAPL")
             cik: Central Index Key (SEC company identifier)
             company_name: Company name
-            filing_type: Type of filing (10-K, 10-Q, 8-K, DEF 14A)
+            filing_type: Type of filing (10-K, 8-K)
             index: Which filing to get (0 = most recent, 1 = second most recent)
             metadata: Additional metadata to add to the document
             skip_if_exists: If True, skip companies that already have any documents
@@ -166,9 +166,9 @@ class SECIngestionOrchestrator:
                 cik, accession_number, filing["primary_document"]
             )
 
-            # Fetch company facts (financial metrics) - only for 10-K/10-Q
+            # Fetch company facts (financial metrics) - only for 10-K
             company_facts = None
-            if filing_type in ["10-K", "10-Q"]:
+            if filing_type == "10-K":
                 logger.info(
                     f"Fetching company facts (financial metrics) for {ticker_symbol}..."
                 )
@@ -178,15 +178,6 @@ class SECIngestionOrchestrator:
             logger.info(f"Building comprehensive {filing_type} document...")
             if filing_type == "10-K":
                 document_text = self.document_builder.build_10k_document(
-                    ticker_symbol=ticker_symbol,
-                    company_name=company_name,
-                    cik=cik,
-                    filing_date=filing_date,
-                    html_content=html_content,
-                    company_facts=company_facts,
-                )
-            elif filing_type == "10-Q":
-                document_text = self.document_builder.build_10q_document(
                     ticker_symbol=ticker_symbol,
                     company_name=company_name,
                     cik=cik,
@@ -389,7 +380,7 @@ class SECIngestionOrchestrator:
             ticker_symbol: Stock ticker
             cik: Central Index Key
             company_name: Company name for logging
-            filing_type: Type of filing (10-K, 10-Q, 8-K)
+            filing_type: Type of filing (10-K, 8-K)
             index: Filing index
             skip_if_exists: If True, skip companies that already have documents
 
@@ -442,7 +433,7 @@ class SECIngestionOrchestrator:
 
         Args:
             companies: List of dicts with 'ticker', 'cik', and 'name'
-            filing_types: List of filing types to ingest (e.g., ["10-K", "10-Q", "8-K"])
+            filing_types: List of filing types to ingest (e.g., ["10-K", "8-K"])
             limit_per_type: How many filings to ingest per type per company
             batch_size: Number of filings to process in parallel (default: 10)
             use_parallel: If True, use parallel processing. If False, sequential (default: True)
