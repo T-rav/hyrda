@@ -10,8 +10,6 @@ from services.scheduler_service import SchedulerService
 
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
-from .sec_cleanup_job import SECCleanupJob
-from .sec_ingestion_job import SECIngestionJob
 from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
@@ -56,8 +54,6 @@ def execute_job_by_type(
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
         "portal_sync": PortalSyncJob,
-        "sec_ingestion": SECIngestionJob,
-        "sec_cleanup": SECCleanupJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -147,8 +143,6 @@ class JobRegistry:
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
             "portal_sync": PortalSyncJob,
-            "sec_ingestion": SECIngestionJob,
-            "sec_cleanup": SECCleanupJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:

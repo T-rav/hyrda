@@ -49,12 +49,12 @@ class TestResearchBriefNode:
 
             result = await write_research_brief(state, config)
 
-        assert isinstance(result, Command)
-        assert result.goto == "research_supervisor"
-        assert "research_brief" in result.update
-        assert "Research Brief:" in result.update["research_brief"]
-        assert result.update["profile_type"] == "company"
-        assert "supervisor_messages" in result.update
+        # Node returns dict, not Command
+        assert isinstance(result, dict)
+        assert "research_brief" in result
+        assert "Research Brief:" in result["research_brief"]
+        assert result["profile_type"] == "company"
+        assert "supervisor_messages" in result
 
     @pytest.mark.asyncio
     async def test_write_research_brief_with_internal_search_unavailable(self):
@@ -99,9 +99,9 @@ class TestResearchBriefNode:
 
             result = await write_research_brief(state, config)
 
-        assert isinstance(result, Command)
-        assert result.goto == "research_supervisor"
-        assert "research_brief" in result.update
+        # Node returns dict, not Command
+        assert isinstance(result, dict)
+        assert "research_brief" in result
 
     @pytest.mark.asyncio
     async def test_write_research_brief_exception_handling(self):
@@ -121,10 +121,10 @@ class TestResearchBriefNode:
 
             result = await write_research_brief(state, config)
 
-        # Should return END with error message
-        assert isinstance(result, Command)
-        assert result.goto == END
-        assert "error" in result.update["final_report"].lower()
+        # Should return dict with error message
+        assert isinstance(result, dict)
+        assert "final_report" in result
+        assert "error" in result["final_report"].lower()
 
 
 class TestClarificationNode:
