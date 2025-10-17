@@ -113,6 +113,50 @@ def scraped_web_archive_tool():
     return _ScrapedWebArchiveToolSingleton.get_instance()
 
 
+class _SECQueryToolSingleton:
+    """Singleton for SEC query tool."""
+
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        """Get or create singleton instance."""
+        if cls._instance is None:
+            try:
+                from agents.company_profile.tools.sec_query import SECQueryTool
+
+                cls._instance = SECQueryTool()
+                logger.info("Initialized sec_query tool singleton")
+            except Exception as e:
+                logger.error(f"Failed to initialize sec_query tool: {e}")
+                return None
+
+        return cls._instance
+
+
+def sec_query_tool():
+    """Get SEC query tool singleton instance.
+
+    The tool fetches and searches SEC filings on-demand (10-K annual reports, 8-K events):
+    - Risk factors and strategic challenges
+    - Financial performance and trends
+    - Executive changes and leadership movements (8-K Item 5.02)
+    - Material events, acquisitions, partnerships
+    - Strategic priorities and initiatives
+    - Technology investments and R&D spending
+
+    Uses on-demand fetching (no pre-indexing) with in-memory vectorization.
+    Fetches latest 10-K + 4 most recent 8-Ks when called.
+
+    IMPORTANT: Must include company name or ticker symbol in query (minimum 3 characters).
+    DO NOT call with empty queries.
+
+    Returns:
+        SECQueryTool singleton instance or None if not available
+    """
+    return _SECQueryToolSingleton.get_instance()
+
+
 async def search_tool(
     config: RunnableConfig, perplexity_enabled: bool = False
 ) -> list[Any]:
