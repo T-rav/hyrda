@@ -18,13 +18,15 @@ EDGAR_DATA_DIR = Path("/app/.edgar")
 EDGAR_DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["EDGAR_LOCAL_DATA_DIR"] = str(EDGAR_DATA_DIR)
 
-# Import edgar and configure it programmatically
+# Import edgar utilities and configure BEFORE importing Company (which triggers cache init)
 try:
-    from edgar import Company, set_identity, use_local_storage
+    from edgar import use_local_storage, set_identity
     use_local_storage(str(EDGAR_DATA_DIR))
     set_identity("8th Light InsightMesh insightmesh@8thlight.com")
+    # NOW it's safe to import Company (cache is already configured)
+    from edgar import Company
 except ImportError:
-    pass  # edgar not installed
+    Company = None  # edgar not installed
 
 logger = logging.getLogger(__name__)
 
