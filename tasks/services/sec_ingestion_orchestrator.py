@@ -104,6 +104,7 @@ class SECIngestionOrchestrator:
         filing_type: str = "10-K",
         index: int = 0,
         metadata: dict | None = None,
+        skip_if_exists: bool = False,
     ) -> tuple[bool, str]:
         """
         Ingest a specific filing for a company with narrative + financial data.
@@ -115,6 +116,7 @@ class SECIngestionOrchestrator:
             filing_type: Type of filing (10-K, 10-Q, 8-K, DEF 14A)
             index: Which filing to get (0 = most recent, 1 = second most recent)
             metadata: Additional metadata to add to the document
+            skip_if_exists: If True, skip companies that already have any documents
 
         Returns:
             Tuple of (success: bool, message: str)
@@ -124,6 +126,11 @@ class SECIngestionOrchestrator:
             raise RuntimeError(
                 "Vector and embedding services must be set before calling ingest_company_filing."
             )
+
+        # Skip if company already has documents in database
+        if skip_if_exists and self.document_tracker.has_documents_for_ticker(ticker_symbol):
+            logger.info(f"⏭️  Skipping {ticker_symbol} - already has documents in database")
+            return True, f"Skipped - {ticker_symbol} already processed"
 
         try:
             # Fetch recent filings
@@ -328,6 +335,7 @@ class SECIngestionOrchestrator:
         company_name: str,
         filing_type: str,
         index: int,
+        skip_if_exists: bool = False,
     ) -> dict[str, Any]:
         """
         Safely ingest a single filing with error handling.
@@ -338,13 +346,14 @@ class SECIngestionOrchestrator:
             company_name: Company name for logging
             filing_type: Type of filing (10-K, 10-Q, 8-K)
             index: Filing index
+            skip_if_exists: If True, skip companies that already have documents
 
         Returns:
             Dictionary with result details
         """
         try:
             success, message = await self.ingest_company_filing(
-                ticker_symbol, cik, company_name, filing_type, index
+                ticker_symbol, cik, company_name, filing_type, index, skip_if_exists=skip_if_exists
             )
             return {
                 "ticker_symbol": ticker_symbol,
@@ -374,6 +383,7 @@ class SECIngestionOrchestrator:
         limit_per_type: int = 1,
         batch_size: int = 10,
         use_parallel: bool = True,
+        skip_if_exists: bool = False,
     ) -> dict[str, Any]:
         """
         Ingest filings for multiple companies with parallel processing.
@@ -384,6 +394,7 @@ class SECIngestionOrchestrator:
             limit_per_type: How many filings to ingest per type per company
             batch_size: Number of filings to process in parallel (default: 10)
             use_parallel: If True, use parallel processing. If False, sequential (default: True)
+            skip_if_exists: If True, skip companies that already have any documents in database
 
         Returns:
             Dictionary with success/failure counts and details
@@ -426,7 +437,7 @@ class SECIngestionOrchestrator:
 
                 # Create tasks for this batch
                 batch_coros = [
-                    self._ingest_filing_safe(ticker, cik, name, filing_type, idx)
+                    self._ingest_filing_safe(ticker, cik, name, filing_type, idx, skip_if_exists)
                     for ticker, cik, name, filing_type, idx in batch
                 ]
 
@@ -447,7 +458,11 @@ class SECIngestionOrchestrator:
                             else:
                                 results["success"] += 1
                         else:
-                            results["failed"] += 1
+                            # Check if this is a "no filing found" case (should be skipped, not failed)
+                            if "No" in result["message"] and "filing found" in result["message"]:
+                                results["skipped"] += 1
+                            else:
+                                results["failed"] += 1
                         results["details"].append(result)
 
                 # Log batch completion with overall progress
@@ -463,7 +478,7 @@ class SECIngestionOrchestrator:
             for i, (ticker, cik, name, filing_type, idx) in enumerate(filing_tasks, 1):
                 logger.info(f"Processing {i}/{total_tasks}: {name} ({ticker}) - {filing_type}")
 
-                result = await self._ingest_filing_safe(ticker, cik, name, filing_type, idx)
+                result = await self._ingest_filing_safe(ticker, cik, name, filing_type, idx, skip_if_exists)
 
                 if result["success"]:
                     if "already indexed" in result["message"]:
@@ -471,7 +486,11 @@ class SECIngestionOrchestrator:
                     else:
                         results["success"] += 1
                 else:
-                    results["failed"] += 1
+                    # Check if this is a "no filing found" case (should be skipped, not failed)
+                    if "No" in result["message"] and "filing found" in result["message"]:
+                        results["skipped"] += 1
+                    else:
+                        results["failed"] += 1
 
                 results["details"].append(result)
 

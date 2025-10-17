@@ -118,6 +118,24 @@ class SECDocumentTrackingService:
         namespace = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # DNS namespace
         return str(uuid.uuid5(namespace, accession_number))
 
+    def has_documents_for_ticker(self, ticker_symbol: str) -> bool:
+        """
+        Check if any documents exist for a given ticker symbol.
+
+        Args:
+            ticker_symbol: Stock ticker (e.g., "AAPL")
+
+        Returns:
+            True if documents exist, False otherwise
+        """
+        with get_data_db_session() as session:
+            count = (
+                session.query(SECDocument)
+                .filter_by(ticker_symbol=ticker_symbol)
+                .count()
+            )
+            return count > 0
+
     def check_document_needs_reindex(
         self, accession_number: str, content: str
     ) -> tuple[bool, str | None]:
