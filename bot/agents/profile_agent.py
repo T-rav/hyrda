@@ -654,6 +654,7 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                     "pdf_generated": pdf_bytes is not None,
                     "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
+                    "clear_thread_tracking": True,  # Clear tracking so follow-ups use regular LLM
                 },
             }
 
