@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 import numpy as np
+import tiktoken
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,47 @@ class SECInMemoryVectorSearch:
         self.chunks: list[str] = []
         self.metadata: list[dict[str, Any]] = []
 
+        # Initialize tiktoken encoder for token counting
+        try:
+            self.encoder = tiktoken.encoding_for_model(embedding_model)
+        except KeyError:
+            # Fallback to cl100k_base (used by text-embedding-3-*)
+            logger.warning(
+                f"Could not find encoding for {embedding_model}, using cl100k_base"
+            )
+            self.encoder = tiktoken.get_encoding("cl100k_base")
+
+        # OpenAI embedding API limits
+        self.max_tokens_per_input = 8191  # Max tokens per input string
+        self.max_inputs_per_request = 2048  # Max inputs per API call
+
+    def _validate_and_truncate_chunk(self, chunk: str) -> str:
+        """
+        Validate chunk token count and truncate if needed.
+
+        Args:
+            chunk: Text chunk to validate
+
+        Returns:
+            Validated chunk (truncated if over token limit)
+        """
+        tokens = self.encoder.encode(chunk)
+        token_count = len(tokens)
+
+        if token_count > self.max_tokens_per_input:
+            logger.warning(
+                f"Chunk exceeds {self.max_tokens_per_input} tokens ({token_count} tokens). Truncating..."
+            )
+            # Truncate to max tokens
+            truncated_tokens = tokens[: self.max_tokens_per_input]
+            truncated_chunk = self.encoder.decode(truncated_tokens)
+            logger.info(
+                f"Truncated chunk from {token_count} to {len(truncated_tokens)} tokens"
+            )
+            return truncated_chunk
+
+        return chunk
+
     async def add_filing_chunks(
         self, chunks: list[str], filing_metadata: dict[str, Any]
     ) -> None:
@@ -42,12 +84,25 @@ class SECInMemoryVectorSearch:
             chunks: Text chunks from filing
             filing_metadata: Metadata about the filing (type, date, etc.)
         """
-        logger.info(f"Generating embeddings for {len(chunks)} chunks...")
+        logger.info(f"Validating and generating embeddings for {len(chunks)} chunks...")
+
+        # Validate and truncate chunks if needed
+        validated_chunks = [
+            self._validate_and_truncate_chunk(chunk) for chunk in chunks
+        ]
+
+        # Count total tokens for logging
+        total_tokens = sum(
+            len(self.encoder.encode(chunk)) for chunk in validated_chunks
+        )
+        logger.info(
+            f"Total tokens to embed: {total_tokens:,} (~${total_tokens * 0.02 / 1_000_000:.4f} cost)"
+        )
 
         # Generate embeddings in batches
-        batch_size = 100
-        for i in range(0, len(chunks), batch_size):
-            batch = chunks[i : i + batch_size]
+        batch_size = 100  # Conservative (API allows up to 2048)
+        for i in range(0, len(validated_chunks), batch_size):
+            batch = validated_chunks[i : i + batch_size]
 
             try:
                 response = await self.client.embeddings.create(
@@ -95,10 +150,13 @@ class SECInMemoryVectorSearch:
             logger.warning("No chunks in index")
             return []
 
+        # Validate and truncate query if needed
+        validated_query = self._validate_and_truncate_chunk(query)
+
         # Generate query embedding
         try:
             response = await self.client.embeddings.create(
-                model=self.embedding_model, input=[query]
+                model=self.embedding_model, input=[validated_query]
             )
             query_embedding = np.array(response.data[0].embedding)
         except Exception as e:
