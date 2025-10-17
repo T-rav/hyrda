@@ -734,10 +734,39 @@ Return ONLY the JSON array, no explanation."""
         ]
         matched = [s for s in signals if s in blob]
 
-        # Relationship evidence ONLY if: (1) signals present AND (2) company name mentioned
-        relationship_evidence = bool(matched) and company_mentioned
+        # CRITICAL: Check if company name appears in same document as relationship signals
+        # This prevents false positives where company is mentioned in one doc but case studies are in another
+        company_with_signals = False
+        if company_mentioned and matched:
+            # Check each document to see if it contains BOTH company name AND relationship signals
+            for doc in docs[:5]:  # Check top 5 docs
+                doc_text = (doc.get("content", "") or "").lower()
+                doc_filename = (
+                    doc.get("metadata", {}).get("file_name", "") or ""
+                ).lower()
+                doc_combined = doc_text + " " + doc_filename
 
-        if matched and not company_mentioned:
+                # Check if this doc has company name
+                if company_name in doc_combined:
+                    # Check if this same doc has relationship signals
+                    has_signal = any(signal in doc_combined for signal in signals)
+                    if has_signal:
+                        company_with_signals = True
+                        logger.info(
+                            f"✓ Found '{company_name}' with relationship signals in: {doc.get('metadata', {}).get('file_name', 'unknown')}"
+                        )
+                        break
+
+        # Relationship evidence ONLY if: (1) signals present AND (2) company name mentioned AND (3) they appear together
+        relationship_evidence = (
+            bool(matched) and company_mentioned and company_with_signals
+        )
+
+        if matched and company_mentioned and not company_with_signals:
+            logger.warning(
+                f"Found relationship signals {matched} AND '{company_name}' mentioned, but NOT in same documents - marking as NO relationship to prevent false positive"
+            )
+        elif matched and not company_mentioned:
             logger.warning(
                 f"Found relationship signals {matched} but company '{company_name}' not mentioned - marking as NO relationship to prevent false positive"
             )
