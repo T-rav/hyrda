@@ -19,6 +19,7 @@ dependencies = [
     # Web UI
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
+    "gunicorn>=21.0.0",  # WSGI server for production
 
     # Time zones
     "tzlocal>=5.2",
