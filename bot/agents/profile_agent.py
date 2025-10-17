@@ -186,11 +186,21 @@ class ProfileAgent(BaseAgent):
                 )
 
             # Prepare LangGraph configuration
-            # Note: thread_id is required when using MemorySaver checkpointer
+            # Use thread_ts as the LangGraph thread_id for state persistence (matches meddic_agent pattern)
+            import time
+
+            thread_id = (
+                thread_ts
+                if thread_ts
+                else f"profile_{context.get('user_id', 'unknown')}_{int(time.time())}"
+            )
+            logger.info(
+                f"🔗 Running profile researcher graph with thread_id: {thread_id}"
+            )
+
             graph_config = {
                 "configurable": {
-                    "thread_id": thread_ts
-                    or f"profile_{context.get('user_id', 'unknown')}_{query[:20]}",
+                    "thread_id": thread_id,  # Required by MemorySaver checkpointer
                     "llm_service": llm_service,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
