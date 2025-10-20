@@ -243,6 +243,30 @@ async def supervisor_tools(
     # Add tool results to messages
     messages.extend(tool_results)
 
+    # Trim message history to prevent context overflow (keep system + recent interactions)
+    # GPT-4o has 128k token limit, but we need to leave room for system prompt and tools
+    # Keep: system message + last 4 AI/tool message pairs (typically ~60-80k tokens)
+    if len(messages) > 9:  # system + 4 pairs (AI + tool results)
+        system_msg = (
+            messages[0]
+            if messages
+            and hasattr(messages[0], "type")
+            and messages[0].type == "system"
+            else None
+        )
+        recent_messages = messages[-8:]  # Last 4 AI messages + their tool results
+
+        if system_msg:
+            messages = [system_msg] + recent_messages
+            logger.info(
+                "Trimmed supervisor messages to prevent context overflow: kept system + last 8 messages"
+            )
+        else:
+            messages = recent_messages
+            logger.info(
+                "Trimmed supervisor messages to prevent context overflow: kept last 8 messages"
+            )
+
     # Continue supervision
     return Command(
         goto="supervisor",
