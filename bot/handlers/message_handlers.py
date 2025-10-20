@@ -742,6 +742,22 @@ async def handle_message(
             )
 
         # Generate response using LLM service with document-aware RAG
+        # When there's a cached profile report, disable RAG to avoid retrieving
+        # irrelevant documents from the vector store. Profile reports are self-contained
+        # and should be the sole source of truth for follow-up questions.
+        # For user-uploaded documents, keep RAG enabled to supplement with knowledge base.
+        is_profile_report = document_filename and (
+            "Profile" in document_filename
+            or "profile" in document_filename
+            or document_filename.endswith("_Profile.pdf")
+        )
+        use_rag = not is_profile_report
+
+        if is_profile_report:
+            logger.info(
+                f"Disabling RAG for thread {thread_ts} - using cached profile report: {document_filename}"
+            )
+
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
@@ -750,6 +766,7 @@ async def handle_message(
             document_filename=document_filename,
             conversation_id=thread_ts or channel,  # Use thread_ts for conversation ID
             conversation_cache=conversation_cache,  # Pass cache for summary management
+            use_rag=use_rag,  # Disable RAG only for profile reports
         )
 
         # Clean up thinking message
