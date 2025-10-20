@@ -9,6 +9,7 @@ from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 
+from agents.company_profile import prompts
 from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.state import ProfileAgentState
 from agents.company_profile.utils import (
@@ -125,13 +126,13 @@ async def final_report_generation(
         raise RuntimeError("PromptService not available - required for profile agent")
 
     prompt_template = prompt_service.get_custom_prompt(
-        template_name="profile-final-report-generation",
+        template_name="CompanyProfiler/Final_Report_Generation",
         fallback=None,  # Force error if Langfuse prompt not found
     )
 
     if not prompt_template:
         raise RuntimeError(
-            "Langfuse prompt 'profile-final-report-generation' not found. "
+            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
             "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
         )
 
@@ -180,18 +181,8 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 else:
                     summary_focus_guidance = ""
 
-                # Get executive summary prompt from Langfuse
-                summary_prompt_template = prompt_service.get_custom_prompt(
-                    template_name="profile-executive-summary", fallback=None
-                )
-
-                if not summary_prompt_template:
-                    raise RuntimeError(
-                        "Langfuse prompt 'profile-executive-summary' not found. "
-                        "Profile agent requires Langfuse prompts."
-                    )
-
-                summary_prompt = summary_prompt_template.format(
+                # Use local prompt for executive summary (not in Langfuse)
+                summary_prompt = prompts.executive_summary_prompt.format(
                     full_report=final_report,
                     focus_area=focus_area if focus_area else "None (general profile)",
                     focus_guidance=summary_focus_guidance,
