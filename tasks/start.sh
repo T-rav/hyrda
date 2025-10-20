@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Ensure edgar cache directory uses /app (not /root)
+export HOME=/app
+export EDGAR_LOCAL_DATA_DIR=/app/.edgar
+
 echo "🚀 Starting InsightMesh Task Scheduler..."
 
 # Run database migrations for task database

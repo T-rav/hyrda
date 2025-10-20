@@ -14,6 +14,25 @@ from services.slack_service import SlackService
 from tests.agent_test_utils import AgentContextBuilder
 
 
+def create_mock_aget_state(state_values):
+    """Helper to create mock aget_state function.
+
+    Args:
+        state_values: Dict of state values to return
+
+    Returns:
+        Async mock function that returns a state snapshot
+    """
+
+    async def mock_aget_state(config):
+        """Mock aget_state to return final state from checkpointer"""
+        state_snapshot = Mock()
+        state_snapshot.values = state_values
+        return state_snapshot
+
+    return mock_aget_state
+
+
 class TestProfileAgentErrorHandling:
     """Tests for ProfileAgent error handling"""
 
@@ -249,6 +268,13 @@ class TestProfileAgentErrorHandling:
 
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "# Report\n\nContent here",
+                "executive_summary": "📊 *Summary*\n\n• Point",
+                "notes": ["Note"],
+            }
+        )
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
@@ -319,6 +345,13 @@ class TestProfileAgentErrorHandling:
 
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "# Report\n\nContent",
+                "executive_summary": "Summary",
+                "notes": ["Note"],
+            }
+        )
 
         # Mock entity extraction to fail
         with (
@@ -497,6 +530,13 @@ class TestProfileAgentEdgeCases:
 
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": long_report,
+                "executive_summary": "Summary",
+                "notes": ["Note"],
+            }
+        )
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()
@@ -533,6 +573,13 @@ class TestProfileAgentEdgeCases:
 
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = create_mock_aget_state(
+            {
+                "final_report": "No data found",
+                "executive_summary": "",
+                "notes": [],  # No notes
+            }
+        )
 
         with patch("agents.profile_agent.profile_researcher", mock_graph):
             agent = ProfileAgent()

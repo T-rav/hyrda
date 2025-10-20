@@ -354,6 +354,7 @@ async def handle_bot_command(
     document_content: str | None = None,
     llm_service: LLMService | None = None,
     check_thread_context: bool = False,
+    conversation_cache=None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -470,6 +471,7 @@ async def handle_bot_command(
             "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
             "slack_service": slack_service,
             "llm_service": llm_service,
+            "conversation_cache": conversation_cache,  # For caching agent-generated docs
         }
 
         # Add file information if available
@@ -618,6 +620,7 @@ async def handle_message(
             document_content=document_content,
             llm_service=llm_service,
             check_thread_context=True,  # Enable thread-aware routing
+            conversation_cache=conversation_cache,  # Pass cache for agent-generated docs
         )
 
         if handled:

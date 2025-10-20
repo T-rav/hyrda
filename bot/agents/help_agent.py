@@ -65,19 +65,23 @@ class HelpAgent(BaseAgent):
                 agent_class, "description", "No description available"
             )
 
-            # Format agent line
-            agent_line = f"\n**-{agent_name}**"
+            # Format agent line - show both with and without dash
+            agent_line = f"\n**{agent_name}** or **-{agent_name}**"
             if aliases:
-                alias_text = ", ".join([f"-{alias}" for alias in aliases])
+                alias_text = ", ".join([f"{alias} or -{alias}" for alias in aliases])
                 agent_line += f" (aliases: {alias_text})"
 
             response_lines.append(agent_line)
             response_lines.append(f"  {description}")
 
         response_lines.append(
-            "\n\n**Usage:** Type `-<command> <your query>` to use an agent"
+            "\n\n**Usage:** Type `-<command> <your query>` or `<command> <your query>` to use an agent"
         )
-        response_lines.append("**Example:** `-profile AllCampus AI`")
+        response_lines.append("**Examples:**")
+        response_lines.append("  • `-profile AllCampus AI` or `profile AllCampus AI`")
+        response_lines.append(
+            "  • `-meddic analyze this deal` or `meddic analyze this deal`"
+        )
 
         response = "\n".join(response_lines)
 

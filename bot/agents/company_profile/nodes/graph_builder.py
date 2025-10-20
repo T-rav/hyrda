@@ -8,10 +8,17 @@ import logging
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from agents.company_profile.nodes.brief_validation import (
+    research_brief_router,
+    validate_research_brief,
+)
 from agents.company_profile.nodes.clarification import clarify_with_user
 from agents.company_profile.nodes.compression import compress_research
 from agents.company_profile.nodes.final_report import final_report_generation
-from agents.company_profile.nodes.quality_control import quality_control_node
+from agents.company_profile.nodes.quality_control import (
+    quality_control_node,
+    quality_control_router,
+)
 from agents.company_profile.nodes.research_brief import write_research_brief
 from agents.company_profile.nodes.researcher import researcher, researcher_tools
 from agents.company_profile.nodes.supervisor import supervisor, supervisor_tools
@@ -83,14 +90,19 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     return supervisor_builder.compile({"recursion_limit": 100})
 
 
-def build_profile_researcher() -> CompiledStateGraph:
+def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     """Build and compile the main profile researcher graph.
 
     The main graph orchestrates the entire deep research process:
     1. clarify_with_user: Check if user query needs clarification
     2. write_research_brief: Generate structured research plan
-    3. research_supervisor: Delegate and coordinate research tasks
-    4. final_report_generation: Synthesize findings into final report
+    3. validate_research_brief: Validate brief quality (with revision loop)
+    4. research_supervisor: Delegate and coordinate research tasks
+    5. final_report_generation: Synthesize findings into final report
+    6. quality_control: Validate final report (with revision loop)
+
+    Args:
+        checkpointer: Optional checkpointer for state persistence (MemorySaver, etc.)
 
     Returns:
         Compiled profile researcher graph
@@ -108,6 +120,7 @@ def build_profile_researcher() -> CompiledStateGraph:
     # Add nodes
     profile_builder.add_node("clarify_with_user", clarify_with_user)
     profile_builder.add_node("write_research_brief", write_research_brief)
+    profile_builder.add_node("validate_research_brief", validate_research_brief)
     profile_builder.add_node("research_supervisor", supervisor_subgraph)
     profile_builder.add_node("final_report_generation", final_report_generation)
     profile_builder.add_node("quality_control", quality_control_node)
@@ -116,10 +129,34 @@ def build_profile_researcher() -> CompiledStateGraph:
     # Main path uses static edges
     profile_builder.add_edge(START, "clarify_with_user")
     profile_builder.add_edge("clarify_with_user", "write_research_brief")
-    profile_builder.add_edge("write_research_brief", "research_supervisor")
+    profile_builder.add_edge("write_research_brief", "validate_research_brief")
+
+    # Brief validation uses conditional edges to create validation loop (VISIBLE in graph!)
+    profile_builder.add_conditional_edges(
+        "validate_research_brief",
+        research_brief_router,
+        {
+            "revise": "write_research_brief",  # Loop back for revision
+            "proceed": "research_supervisor",  # Brief validated, start research
+        },
+    )
+
     profile_builder.add_edge("research_supervisor", "final_report_generation")
     profile_builder.add_edge("final_report_generation", "quality_control")
-    # quality_control uses Command to route to END or back to final_report_generation (creates loop)
 
-    # Compile and return
-    return profile_builder.compile()
+    # Quality control uses conditional edges to create evaluation loop (VISIBLE in graph!)
+    # This replaces the Command-based routing with explicit conditional edges
+    profile_builder.add_conditional_edges(
+        "quality_control",
+        quality_control_router,
+        {
+            "revise": "final_report_generation",  # Loop back for revision
+            "end": END,  # Quality passed or max revisions exceeded
+        },
+    )
+
+    # Compile and return with checkpointer if provided
+    if checkpointer:
+        return profile_builder.compile(checkpointer=checkpointer)
+    else:
+        return profile_builder.compile()

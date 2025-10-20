@@ -9,15 +9,23 @@ from datetime import datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.memory import MemorySaver
 
 from agents.base_agent import BaseAgent
 from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.profile_researcher import profile_researcher
+from agents.company_profile.nodes.graph_builder import build_profile_researcher
 from agents.company_profile.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
 logger = logging.getLogger(__name__)
+
+# Singleton checkpointer shared across all ProfileAgent instances
+_checkpointer = None
+
+# Module-level graph variable for testing (mocked by tests)
+# This is set during ProfileAgent initialization
+profile_researcher = None
 
 
 def format_duration(seconds: float) -> str:
@@ -70,11 +78,37 @@ class ProfileAgent(BaseAgent):
         """Initialize ProfileAgent with deep research configuration."""
         super().__init__()
         self.config = ProfileConfiguration.from_env()
-        self.graph = profile_researcher
+
+        # Initialize singleton checkpointer and graph
+        self._ensure_graph_initialized()
         logger.info(
             f"ProfileAgent initialized with {self.config.search_api} search, "
             f"max {self.config.max_concurrent_research_units} concurrent researchers"
         )
+
+    def _ensure_graph_initialized(self):
+        """Ensure singleton checkpointer and graph are initialized."""
+        global _checkpointer, profile_researcher  # noqa: PLW0603
+
+        # Check if profile_researcher is already set (by tests mocking it)
+        if profile_researcher is not None:
+            # Tests have mocked the graph, use the mock
+            self.graph = profile_researcher
+            logger.info("✅ Using mocked profile_researcher graph from tests")
+            return
+
+        if _checkpointer is None:
+            # Create singleton MemorySaver - shared across all agent instances
+            _checkpointer = MemorySaver()
+            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+
+        # Build graph with checkpointer
+        self.graph = build_profile_researcher(checkpointer=_checkpointer)
+
+        # Set module-level variable for test mocking compatibility
+        profile_researcher = self.graph
+
+        logger.info("✅ Built profile researcher graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute profile research using LangGraph deep research workflow.
@@ -152,8 +186,21 @@ class ProfileAgent(BaseAgent):
                 )
 
             # Prepare LangGraph configuration
+            # Use thread_ts as the LangGraph thread_id for state persistence (matches meddic_agent pattern)
+            import time
+
+            thread_id = (
+                thread_ts
+                if thread_ts
+                else f"profile_{context.get('user_id', 'unknown')}_{int(time.time())}"
+            )
+            logger.info(
+                f"🔗 Running profile researcher graph with thread_id: {thread_id}"
+            )
+
             graph_config = {
                 "configurable": {
+                    "thread_id": thread_id,  # Required by MemorySaver checkpointer
                     "llm_service": llm_service,
                     "search_api": self.config.search_api,
                     "max_concurrent_research_units": self.config.max_concurrent_research_units,
@@ -404,22 +451,26 @@ class ProfileAgent(BaseAgent):
                     f"Final event is not a dict: type={type(result)}, value={result}"
                 )
 
-            # Get the final state from the last event
-            # LangGraph returns the final state wrapped in a dict with node name as key
-            if result and isinstance(result, dict):
-                # Extract the state from the last event
-                # Format: {"node_name": state_dict} or {"__end__": state_dict}
-                values = list(result.values())
-                result = values[0] if values else {}
-                logger.info(
-                    f"Extracted state type: {type(result)}, has final_report: {isinstance(result, dict) and 'final_report' in result}"
-                )
-
-            # Ensure result is a dict (handle case where LangGraph returns None or unexpected type)
-            if not isinstance(result, dict):
+            # Get the final state from LangGraph using checkpointer
+            try:
+                final_state_snapshot = await self.graph.aget_state(graph_config)
+                if final_state_snapshot and hasattr(final_state_snapshot, "values"):
+                    result = final_state_snapshot.values
+                    logger.info(
+                        f"✅ Retrieved final state from checkpointer: has final_report: {'final_report' in result}"
+                    )
+                else:
+                    logger.error("Checkpointer returned invalid state snapshot")
+                    result = {}
+            except Exception as state_error:
                 logger.error(
-                    f"LangGraph returned invalid result type: {type(result)}, value: {result}"
+                    f"❌ Error retrieving final state from checkpointer: {state_error}"
                 )
+                result = {}
+
+            # Ensure result is a dict
+            if not isinstance(result, dict):
+                logger.error(f"Invalid result type: {type(result)}, value: {result}")
                 result = {}
 
             # Extract final report and executive summary
@@ -441,6 +492,24 @@ class ProfileAgent(BaseAgent):
             logger.info(
                 f"Profile research complete: {len(final_report)} chars, {notes_count} research notes"
             )
+
+            # Cache markdown report BEFORE converting to PDF (for follow-up questions)
+            thread_ts = context.get("thread_ts")
+            conversation_cache = context.get("conversation_cache")
+            if thread_ts and conversation_cache:
+                try:
+                    # Cache the full markdown report for follow-up questions
+                    pdf_filename_preview = (
+                        f"{profile_type.title()}_Profile_{query[:30]}.pdf"
+                    )
+                    await conversation_cache.store_document_content(
+                        thread_ts, final_report, pdf_filename_preview
+                    )
+                    logger.info(
+                        f"✅ Cached markdown report for follow-up questions in thread {thread_ts}"
+                    )
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache markdown report: {cache_error}")
 
             # Generate PDF title with entity name extracted by LLM
             try:
@@ -585,6 +654,7 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                     "pdf_generated": pdf_bytes is not None,
                     "pdf_uploaded": pdf_uploaded,
                     "user_id": context.get("user_id"),
+                    "clear_thread_tracking": True,  # Clear tracking so follow-ups use regular LLM
                 },
             }
 

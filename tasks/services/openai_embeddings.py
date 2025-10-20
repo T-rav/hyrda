@@ -33,6 +33,65 @@ class OpenAIEmbeddings:
                 ) from e
         return self.client
 
+    def _estimate_tokens(self, text: str) -> int:
+        """
+        Estimate token count for text.
+
+        Uses rough approximation: ~4 characters per token for English text.
+        This is conservative to avoid hitting token limits.
+        """
+        return len(text) // 4
+
+    def _create_token_aware_batches(
+        self, texts: list[str], max_texts: int = 2048, max_tokens: int = 280000
+    ) -> list[list[str]]:
+        """
+        Create batches that respect both text count and token count limits.
+
+        Args:
+            texts: List of texts to batch
+            max_texts: Maximum texts per batch (OpenAI limit: 2048)
+            max_tokens: Maximum tokens per batch (OpenAI limit: 300k, use 280k for safety)
+
+        Returns:
+            List of batches, where each batch is a list of texts
+        """
+        batches = []
+        current_batch = []
+        current_tokens = 0
+
+        for text in texts:
+            text_tokens = self._estimate_tokens(text)
+
+            # If single text exceeds token limit, truncate it
+            if text_tokens > max_tokens:
+                logger.warning(
+                    f"Single text has ~{text_tokens} tokens, truncating to {max_tokens}"
+                )
+                # Rough truncation: keep first max_tokens * 4 characters
+                truncated_text = text[: max_tokens * 4]
+                text_tokens = max_tokens
+            else:
+                truncated_text = text
+
+            # Start new batch if adding this text would exceed limits
+            if current_batch and (
+                len(current_batch) >= max_texts
+                or current_tokens + text_tokens > max_tokens
+            ):
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+
+            current_batch.append(truncated_text)
+            current_tokens += text_tokens
+
+        # Add final batch
+        if current_batch:
+            batches.append(current_batch)
+
+        return batches
+
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """
         Generate embeddings for a batch of texts.
@@ -59,16 +118,21 @@ class OpenAIEmbeddings:
 
         client = self._get_client()
 
-        # OpenAI has a limit of 2048 texts per batch
-        batch_size = 2048
+        # Create token-aware batches (respects both text and token limits)
+        batches = self._create_token_aware_batches(filtered_texts)
+        logger.info(
+            f"Split {len(filtered_texts)} texts into {len(batches)} batches "
+            f"(token-aware batching)"
+        )
+
         all_embeddings = []
 
         try:
-            for i in range(0, len(filtered_texts), batch_size):
-                batch = filtered_texts[i : i + batch_size]
+            for batch_idx, batch in enumerate(batches, 1):
+                estimated_tokens = sum(self._estimate_tokens(t) for t in batch)
                 logger.info(
-                    f"Generating embeddings for batch {i // batch_size + 1} "
-                    f"({len(batch)} texts)"
+                    f"Generating embeddings for batch {batch_idx}/{len(batches)} "
+                    f"({len(batch)} texts, ~{estimated_tokens:,} tokens)"
                 )
                 response = client.embeddings.create(input=batch, model=self.model)
                 batch_embeddings = [data.embedding for data in response.data]

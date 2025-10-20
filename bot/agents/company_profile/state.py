@@ -63,6 +63,13 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         focus_area: Specific intent/aspect to emphasize (e.g., "AI needs", "hiring challenges")
         revision_count: Number of quality control revisions attempted
         revision_prompt: Specific instructions for next revision
+        passes_quality: Quality control result flag
+        max_revisions_exceeded: Flag indicating max revision limit reached
+        brief_passes_validation: Research brief validation result flag
+        brief_revision_count: Number of brief validation revisions attempted
+        brief_revision_prompt: Specific instructions for brief revision
+        brief_max_revisions_exceeded: Flag indicating max brief revision limit reached
+        brief_revision_instructions: Validation instructions for brief revision
     """
 
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
@@ -77,6 +84,13 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     focus_area: str
     revision_count: int
     revision_prompt: str
+    passes_quality: bool
+    max_revisions_exceeded: bool
+    brief_passes_validation: bool
+    brief_revision_count: int
+    brief_revision_prompt: str
+    brief_max_revisions_exceeded: bool
+    brief_revision_instructions: str
 
 
 # Supervisor state - manages research delegation

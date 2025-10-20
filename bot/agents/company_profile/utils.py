@@ -71,6 +71,50 @@ def internal_search_tool():
     return _InternalSearchToolSingleton.get_instance()
 
 
+class _SECQueryToolSingleton:
+    """Singleton for SEC query tool."""
+
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        """Get or create singleton instance."""
+        if cls._instance is None:
+            try:
+                from agents.company_profile.tools.sec_query import SECQueryTool
+
+                cls._instance = SECQueryTool()
+                logger.info("Initialized sec_query tool singleton")
+            except Exception as e:
+                logger.error(f"Failed to initialize sec_query tool: {e}")
+                return None
+
+        return cls._instance
+
+
+def sec_query_tool():
+    """Get SEC query tool singleton instance.
+
+    The tool fetches and searches SEC filings on-demand (10-K annual reports, 8-K events):
+    - Risk factors and strategic challenges
+    - Financial performance and trends
+    - Executive changes and leadership movements (8-K Item 5.02)
+    - Material events, acquisitions, partnerships
+    - Strategic priorities and initiatives
+    - Technology investments and R&D spending
+
+    Uses on-demand fetching (no pre-indexing) with in-memory vectorization.
+    Fetches latest 10-K + 4 most recent 8-Ks when called.
+
+    IMPORTANT: Must include company name or ticker symbol in query (minimum 3 characters).
+    DO NOT call with empty queries.
+
+    Returns:
+        SECQueryTool singleton instance or None if not available
+    """
+    return _SECQueryToolSingleton.get_instance()
+
+
 async def search_tool(
     config: RunnableConfig, perplexity_enabled: bool = False
 ) -> list[Any]:
@@ -525,7 +569,151 @@ Return ONLY the JSON array, no explanation."""
             f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
         )
 
+    # Check context size and truncate if needed
+    # Gemini 2.5 Pro: 1M input + 64K output = use ~900K for context (100K buffer)
+    # Rough estimate: 1 token ≈ 4 characters
+    max_context_chars = 900000 * 4  # ~3.6M characters for 900K tokens
+
+    if len(context) > max_context_chars:
+        logger.warning(
+            f"Context too large ({len(context)} chars ≈ {len(context) // 4} tokens). "
+            f"Truncating to fit within {max_context_chars // 4}K token budget."
+        )
+
+        # Keep header and sources, truncate notes proportionally
+        header_end = context.find("## Finding 1")
+        sources_start = context.find("\n\n---\n\n# CONSOLIDATED SOURCE LIST")
+
+        if header_end > 0 and sources_start > 0:
+            header = context[:header_end]
+            sources = context[sources_start:]
+            notes_text = context[header_end:sources_start]
+
+            # Calculate how much space we have for notes
+            available_for_notes = max_context_chars - len(header) - len(sources)
+
+            if len(notes_text) > available_for_notes:
+                # Truncate notes_text
+                notes_text = notes_text[:available_for_notes]
+                # Cut at last complete sentence
+                last_period = notes_text.rfind(".\n")
+                if (
+                    last_period > available_for_notes * 0.9
+                ):  # Only cut if we find a period in last 10%
+                    notes_text = notes_text[: last_period + 2]
+
+                notes_text += "\n\n[... additional research notes truncated to fit context window ...]\n\n"
+                logger.info(
+                    f"Truncated notes from {context[header_end:sources_start].__len__()} to {len(notes_text)} chars"
+                )
+
+            context = header + notes_text + sources
+
+    logger.info(
+        f"Final context size: {len(context)} chars ≈ {len(context) // 4} tokens"
+    )
     return context
+
+
+async def extract_company_from_url(url: str) -> str | None:
+    """Extract company name from a URL by fetching and parsing the page.
+
+    Fetches the URL and extracts the company name from:
+    - <title> tag
+    - og:site_name meta tag
+    - og:title meta tag
+    - Twitter card site name
+
+    Args:
+        url: URL to fetch and extract company name from
+
+    Returns:
+        Extracted company name or None if extraction fails
+
+    Examples:
+        "https://www.costco.com" → "Costco"
+        "https://stripe.com" → "Stripe"
+        "www.tesla.com" → "Tesla"
+    """
+    import re
+
+    import requests
+    from bs4 import BeautifulSoup
+
+    try:
+        # Ensure URL has protocol
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+
+        logger.info(f"Fetching URL to extract company name: {url}")
+
+        # Fetch the page with timeout
+        response = requests.get(
+            url,
+            timeout=10,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+        )
+        response.raise_for_status()
+
+        # Parse HTML
+        soup = BeautifulSoup(response.content, "html.parser")
+
+        # Try multiple extraction methods in order of preference
+        company_name = None
+
+        # 1. og:site_name (most reliable for company name)
+        og_site_name = soup.find("meta", property="og:site_name")
+        if og_site_name and hasattr(og_site_name, "get"):
+            content = og_site_name.get("content")  # type: ignore[union-attr]
+            if content:
+                company_name = str(content).strip()
+                logger.info(f"Extracted from og:site_name: {company_name}")
+                return company_name
+
+        # 2. Twitter card site name
+        twitter_site = soup.find("meta", attrs={"name": "twitter:site"})
+        if twitter_site and hasattr(twitter_site, "get"):
+            content = twitter_site.get("content")  # type: ignore[union-attr]
+            if content:
+                # Remove @ symbol if present
+                company_name = str(content).strip().lstrip("@")
+                logger.info(f"Extracted from twitter:site: {company_name}")
+                return company_name
+
+        # 3. <title> tag (extract company name, remove common suffixes)
+        title_tag = soup.find("title")
+        if title_tag and title_tag.string:
+            title = title_tag.string.strip()
+            # Remove common suffixes like " | Home", " - Official Site", etc.
+            cleaned_title = re.split(r"[\|\-\–:]", title)[0].strip()
+            # Remove common words
+            cleaned_title = re.sub(
+                r"\b(Home|Official Site|Welcome|Homepage)\b",
+                "",
+                cleaned_title,
+                flags=re.IGNORECASE,
+            ).strip()
+            if cleaned_title:
+                logger.info(f"Extracted from title tag: {cleaned_title}")
+                return cleaned_title
+
+        # 4. og:title (fallback)
+        og_title = soup.find("meta", property="og:title")
+        if og_title and hasattr(og_title, "get"):
+            content = og_title.get("content")  # type: ignore[union-attr]
+            if content:
+                company_name = str(content).strip()
+                logger.info(f"Extracted from og:title: {company_name}")
+                return company_name
+
+        logger.warning(f"Could not extract company name from URL: {url}")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error extracting company from URL {url}: {e}")
+        return None
 
 
 def detect_profile_type(query: str) -> str:

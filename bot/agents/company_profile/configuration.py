@@ -50,11 +50,13 @@ class ProfileConfiguration(BaseModel):
     final_report_model: str = "openai:gpt-4o"  # Final report generation
 
     # Token limits
-    # Note: Gemini 2.5 Pro has 1M input + 8K output tokens (8192 max)
+    # Note: Gemini 2.5 Pro has 1M input + 64K output tokens
     # OpenAI GPT-4o has 128K input + 16K output tokens
     research_model_max_tokens: int = 16000  # For researcher tool calling
     compression_model_max_tokens: int = 16000  # For compression synthesis
-    final_report_model_max_tokens: int = 8192  # Gemini 2.5 Pro: 8192 max output
+    final_report_model_max_tokens: int = (
+        60000  # Gemini 2.5 Pro: 64k max output (using 60k for safety)
+    )
 
     # Profile-specific settings
     min_profile_sections: int = 3  # Minimum sections in final report

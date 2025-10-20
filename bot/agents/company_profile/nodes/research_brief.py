@@ -8,8 +8,6 @@ import logging
 from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph import END
-from langgraph.types import Command
 
 from agents.company_profile import prompts
 from agents.company_profile.state import ProfileAgentState
@@ -23,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def write_research_brief(
     state: ProfileAgentState, config: RunnableConfig
-) -> Command[str]:
+) -> dict:
     """Generate research brief from user query.
 
     Args:
@@ -31,13 +29,19 @@ async def write_research_brief(
         config: Runtime configuration
 
     Returns:
-        Command to proceed to research_supervisor
+        Dict with research_brief, profile_type, and supervisor_messages
     """
     query = state["query"]
     profile_type = state.get("profile_type", detect_profile_type(query))
     focus_area = state.get("focus_area", "")
+    brief_revision_count = state.get("brief_revision_count", 0)
+    brief_revision_prompt = state.get("brief_revision_prompt", "")
 
-    if focus_area:
+    if brief_revision_count > 0:
+        logger.info(
+            f"Revising research brief (attempt {brief_revision_count + 1}) for {profile_type} profile"
+        )
+    elif focus_area:
         logger.info(
             f"Writing research brief for {profile_type} profile with focus on: {focus_area}"
         )
@@ -92,15 +96,21 @@ async def write_research_brief(
 
             focus_guidance = ""
 
-        prompt = prompts.transform_messages_into_research_topic_prompt.format(
-            query=query,
-            profile_type=profile_type,
-            current_date=current_date,
-            focus_area=focus_area if focus_area else "None (general profile)",
-            focus_strategy=focus_strategy,
-            focus_guidance=focus_guidance,
-        )
-        messages = [create_human_message(prompt)]
+        # If this is a revision, use the revision prompt instead of the original query
+        if brief_revision_prompt:
+            logger.info("Using revision prompt from validation feedback")
+            messages = [create_human_message(brief_revision_prompt)]
+        else:
+            # First attempt - use the standard prompt
+            prompt = prompts.transform_messages_into_research_topic_prompt.format(
+                query=query,
+                profile_type=profile_type,
+                current_date=current_date,
+                focus_area=focus_area if focus_area else "None (general profile)",
+                focus_strategy=focus_strategy,
+                focus_guidance=focus_guidance,
+            )
+            messages = [create_human_message(prompt)]
 
         # Execute LLM directly (no tools needed for planning)
         response = await llm.ainvoke(messages)
@@ -113,19 +123,16 @@ async def write_research_brief(
         # Initialize supervisor messages
         supervisor_init_msg = create_human_message(research_brief)
 
-        return Command(
-            goto="research_supervisor",
-            update={
-                "research_brief": research_brief,
-                "profile_type": profile_type,
-                "supervisor_messages": [supervisor_init_msg],
-            },
-        )
+        return {
+            "research_brief": research_brief,
+            "profile_type": profile_type,
+            "supervisor_messages": [supervisor_init_msg],
+        }
 
     except Exception as e:
-        logger.error(f"Research brief error: {e}")
+        logger.error(f"Research brief error: {e}", exc_info=True)
 
-        return Command(
-            goto=END,
-            update={"final_report": f"Error generating research plan: {str(e)}"},
-        )
+        return {
+            "research_brief": f"Error generating research plan: {str(e)}",
+            "final_report": f"Error generating research plan: {str(e)}",
+        }

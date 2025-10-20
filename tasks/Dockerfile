@@ -17,8 +17,8 @@ WORKDIR /app
 # Create non-root user early
 RUN useradd -m -u 1000 appuser
 
-# Create logs directory with proper permissions
-RUN mkdir -p /app/logs && \
+# Create logs and cache directories with proper permissions
+RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
 # Copy application code first (needed for pyproject.toml to work)
@@ -45,7 +45,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     ENVIRONMENT=production \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    HOME=/app \
+    EDGAR_LOCAL_DATA_DIR=/app/.edgar
 
 # Expose nginx port
 EXPOSE 5001
