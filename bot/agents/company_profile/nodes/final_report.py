@@ -9,7 +9,6 @@ from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 
-from agents.company_profile import prompts
 from agents.company_profile.configuration import ProfileConfiguration
 from agents.company_profile.state import ProfileAgentState
 from agents.company_profile.utils import (
@@ -19,6 +18,7 @@ from agents.company_profile.utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
+from services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,23 @@ async def final_report_generation(
     else:
         focus_guidance = ""
 
-    system_prompt = prompts.final_report_generation_prompt.format(
+    # Get prompt from Langfuse (required - no local fallback)
+    prompt_service = get_prompt_service()
+    if not prompt_service:
+        raise RuntimeError("PromptService not available - required for profile agent")
+
+    prompt_template = prompt_service.get_custom_prompt(
+        template_name="profile-final-report-generation",
+        fallback=None,  # Force error if Langfuse prompt not found
+    )
+
+    if not prompt_template:
+        raise RuntimeError(
+            "Langfuse prompt 'profile-final-report-generation' not found. "
+            "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
+        )
+
+    system_prompt = prompt_template.format(
         profile_type=profile_type,
         focus_area=focus_area if focus_area else "None (general profile)",
         focus_guidance=focus_guidance,
@@ -164,7 +180,18 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 else:
                     summary_focus_guidance = ""
 
-                summary_prompt = prompts.executive_summary_prompt.format(
+                # Get executive summary prompt from Langfuse
+                summary_prompt_template = prompt_service.get_custom_prompt(
+                    template_name="profile-executive-summary", fallback=None
+                )
+
+                if not summary_prompt_template:
+                    raise RuntimeError(
+                        "Langfuse prompt 'profile-executive-summary' not found. "
+                        "Profile agent requires Langfuse prompts."
+                    )
+
+                summary_prompt = summary_prompt_template.format(
                     full_report=final_report,
                     focus_area=focus_area if focus_area else "None (general profile)",
                     focus_guidance=summary_focus_guidance,
