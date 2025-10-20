@@ -419,3 +419,63 @@ class TestRAGService:
         assert context_chunks[1]["similarity"] == 0.75
         assert context_chunks[1]["metadata"]["source"] == "vector_db"
         assert "Internal knowledge" in context_chunks[1]["content"]
+
+    @pytest.mark.asyncio
+    async def test_generate_response_disables_tools_when_rag_disabled(self):
+        """Test that web search tools are disabled when use_rag=False (e.g., profile threads)"""
+        settings = SettingsFactory.create_complete_rag_settings()
+        rag_service = RAGService(settings)
+
+        # Mock all components
+        rag_service.vector_store = VectorStoreMockFactory.create_basic_vector_store()
+        rag_service.embedding_provider = (
+            EmbeddingProviderMockFactory.create_basic_embedding_provider()
+        )
+
+        # Mock LLM provider
+        rag_service.llm_provider = AsyncMock()
+        rag_service.llm_provider.get_response = AsyncMock(
+            return_value="Response without tools"
+        )
+
+        # Mock context builder
+        rag_service.context_builder = Mock()
+        rag_service.context_builder.build_rag_prompt = Mock(
+            return_value=("System message", [{"role": "user", "content": "Test query"}])
+        )
+
+        # Mock citation service
+        rag_service.citation_service = Mock()
+        rag_service.citation_service.add_source_citations = Mock(
+            return_value="Response with citations"
+        )
+
+        # Mock conversation manager
+        rag_service.conversation_manager = AsyncMock()
+        rag_service.conversation_manager.manage_context = AsyncMock(
+            return_value=("System message", [])
+        )
+
+        # Mock Tavily client to simulate web search availability
+        with patch("services.rag_service.get_tavily_client") as mock_tavily:
+            mock_tavily.return_value = Mock()  # Tavily is available
+
+            # Test with use_rag=False (profile thread scenario)
+            response = await rag_service.generate_response(
+                query="What services can 8th Light provide?",
+                conversation_history=[],
+                system_message="You are a helpful assistant",
+                use_rag=False,  # RAG disabled for profile thread
+                session_id="test-session",
+                user_id="U123",
+            )
+
+            # Verify LLM provider was called with tools=None (no web search)
+            rag_service.llm_provider.get_response.assert_called_once()
+            call_kwargs = rag_service.llm_provider.get_response.call_args.kwargs
+            assert call_kwargs["tools"] is None, (
+                "Web search tools should be disabled when use_rag=False"
+            )
+
+            # Verify response was generated
+            assert response is not None
