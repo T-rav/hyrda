@@ -59,6 +59,11 @@ class TestProfileAgentPdfCaching:
                     assert "Tesla Profile" in call_args[0][1]  # markdown content
                     assert ".pdf" in call_args[0][2]  # filename
 
+                    # Verify thread type was set to "profile"
+                    mock_cache.set_thread_type.assert_called_once_with(
+                        "1234567890.123456", "profile"
+                    )
+
     async def test_caching_happens_before_pdf_upload(self):
         """Test that caching happens even if PDF upload fails."""
         agent = ProfileAgent()
