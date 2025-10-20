@@ -505,8 +505,12 @@ class ProfileAgent(BaseAgent):
                     await conversation_cache.store_document_content(
                         thread_ts, final_report, pdf_filename_preview
                     )
+
+                    # Mark this thread as a profile thread to disable RAG
+                    await conversation_cache.set_thread_type(thread_ts, "profile")
+
                     logger.info(
-                        f"✅ Cached markdown report for follow-up questions in thread {thread_ts}"
+                        f"✅ Cached markdown report and marked as profile thread {thread_ts}"
                     )
                 except Exception as cache_error:
                     logger.warning(f"Failed to cache markdown report: {cache_error}")

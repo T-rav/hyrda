@@ -742,20 +742,21 @@ async def handle_message(
             )
 
         # Generate response using LLM service with document-aware RAG
-        # When there's a cached profile report, disable RAG to avoid retrieving
-        # irrelevant documents from the vector store. Profile reports are self-contained
-        # and should be the sole source of truth for follow-up questions.
+        # Check if this is a profile thread (explicit thread type metadata)
+        # Profile threads should disable RAG to avoid retrieving irrelevant documents
+        # from the vector store. Profile reports are self-contained and should be the
+        # sole source of truth for follow-up questions.
         # For user-uploaded documents, keep RAG enabled to supplement with knowledge base.
-        is_profile_report = document_filename and (
-            "Profile" in document_filename
-            or "profile" in document_filename
-            or document_filename.endswith("_Profile.pdf")
-        )
-        use_rag = not is_profile_report
+        thread_type = None
+        if thread_ts and conversation_cache:
+            thread_type = await conversation_cache.get_thread_type(thread_ts)
 
-        if is_profile_report:
+        is_profile_thread = thread_type == "profile"
+        use_rag = not is_profile_thread
+
+        if is_profile_thread:
             logger.info(
-                f"Disabling RAG for thread {thread_ts} - using cached profile report: {document_filename}"
+                f"Disabling RAG for profile thread {thread_ts} (document: {document_filename})"
             )
 
         response = await llm_service.get_response(
