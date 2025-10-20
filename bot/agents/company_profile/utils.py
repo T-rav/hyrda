@@ -830,13 +830,14 @@ def create_system_message(prompt: str, **kwargs: Any) -> SystemMessage:
     """Create a system message with formatted prompt.
 
     Args:
-        prompt: Prompt template string
-        **kwargs: Variables to format into prompt
+        prompt: Prompt template string (or pre-formatted string)
+        **kwargs: Variables to format into prompt (optional - if not provided, uses prompt as-is)
 
     Returns:
         SystemMessage instance
     """
-    formatted_prompt = prompt.format(**kwargs)
+    # Only format if kwargs are provided, otherwise use prompt as-is
+    formatted_prompt = prompt.format(**kwargs) if kwargs else prompt
     return SystemMessage(content=formatted_prompt)
 
 
