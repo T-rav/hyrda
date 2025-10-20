@@ -501,6 +501,55 @@ class TestResearcherToolsNode:
         assert len(result.update["raw_notes"]) > 0
 
     @pytest.mark.asyncio
+    async def test_researcher_tools_sec_query(self):
+        """Test SEC query tool execution with ainvoke"""
+        mock_ai_message = Mock()
+        mock_ai_message.tool_calls = [
+            {
+                "name": "sec_query",
+                "args": {"query": "Tesla strategic priorities", "effort": "medium"},
+                "id": "tc_sec1",
+            }
+        ]
+
+        state = {
+            "research_topic": "Tesla strategy",
+            "profile_type": "company",
+            "researcher_messages": [Mock(), mock_ai_message],
+            "tool_call_iterations": 1,
+            "raw_notes": [],
+        }
+
+        config = {"configurable": {}}
+
+        # Mock SEC query tool
+        mock_sec_tool = Mock()
+        mock_sec_tool.ainvoke = AsyncMock(
+            return_value="## SEC Filing Results for Tesla: strategic priorities\n\nRisk factors: ..."
+        )
+
+        with (
+            patch(
+                "agents.company_profile.nodes.researcher.sec_query_tool",
+                return_value=mock_sec_tool,
+            ),
+            patch("services.search_clients.get_tavily_client", return_value=None),
+            patch("services.search_clients.get_perplexity_client", return_value=None),
+        ):
+            result = await researcher_tools(state, config)
+
+        assert isinstance(result, Command)
+        assert result.goto == "researcher"
+        # Verify ainvoke was called with tool_args dict
+        mock_sec_tool.ainvoke.assert_called_once()
+        call_args = mock_sec_tool.ainvoke.call_args[0][0]  # First positional arg
+        assert call_args["query"] == "Tesla strategic priorities"
+        assert call_args["effort"] == "medium"
+        # Check that we got SEC results in raw_notes
+        assert len(result.update["raw_notes"]) > 0
+        assert "SEC Filing Results" in result.update["raw_notes"][0]
+
+    @pytest.mark.asyncio
     async def test_researcher_tools_think_tool(self):
         """Test think tool execution"""
         mock_ai_message = Mock()
