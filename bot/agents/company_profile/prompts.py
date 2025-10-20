@@ -323,18 +323,21 @@ Answer the investigative questions above by:
    - **Returns:** Existing client data, project details, relationships, past work
    - **IMPORTANT:** If you find existing relationship data, include it prominently in your research!
 
-2. **scraped_web_archive**: Search SEC filings (10-K, 10-Q, 8-K) for PUBLIC companies (FREE - use for official data)
-   - Searches archived SEC Edgar filings for financial and strategic information
+2. **sec_query**: Search SEC filings (10-K, 8-K) for PUBLIC companies on-demand (FREE - use for official data)
+   - Fetches and searches latest SEC Edgar filings on-demand (no pre-indexing needed)
+   - Automatically retrieves: latest 10-K (annual report) + 4 most recent 8-Ks (material events)
    - **When to use:**
      - Researching PUBLIC companies (must be traded on US stock markets)
-     - For questions about risk factors, strategic priorities, financial performance
+     - For questions about risk factors, strategic priorities, financial performance, executive changes
      - When you need official company statements vs news coverage
    - **Example queries:**
      - "Apple strategic priorities and risks" → finds 10-K risk factors, MD&A
      - "Microsoft AI investments and R&D spending" → finds technology investment disclosures
      - "Tesla competitive challenges" → finds competitive landscape from SEC filings
-   - **Returns:** Risk factors, strategic priorities, financial data, executive commentary
-   - **IMPORTANT:** Only works for public companies with SEC filings
+     - "Salesforce executive changes" → finds 8-K Item 5.02 leadership movements
+     - "Meta acquisitions and partnerships" → finds 8-K material event disclosures
+   - **Returns:** Risk factors, strategic priorities, financial data, executive commentary, material events
+   - **IMPORTANT:** Must include company name or ticker in query. Only works for public companies with SEC filings
 
 3. **web_search**: Search the web for current information (CHEAPEST - use for exploration)
    - Search from MULTIPLE angles, not just direct queries
@@ -383,7 +386,7 @@ Answer the investigative questions above by:
 **GOOD approach** (investigative, BD-focused, cost-conscious, checks internal first):
 - **STEP 1 - CHECK INTERNAL FIRST:** internal_search_tool: "CompanyX" → Found existing client! Past projects with CRM/OPM work!
 - Think: "We have an existing relationship! I need to include this prominently. Now what additional external context do I need?"
-- **STEP 2 - CHECK SEC FILINGS (if public):** scraped_web_archive: "CompanyX strategic priorities and risks" → Found 10-K with product roadmap delays, technical debt concerns in risk factors!
+- **STEP 2 - CHECK SEC FILINGS (if public):** sec_query: "CompanyX strategic priorities and risks" → Found 10-K with product roadmap delays, technical debt concerns in risk factors!
 - Think: "Official SEC filing shows they're worried about technical debt and scaling challenges - perfect consulting opportunity signal!"
 - Think: "What signals growth opportunities? Revenue trends, expansion news, team growth, funding... What about their product roadmap and engineering health? I'll use cheap web_search to explore, then deep_research if I find something critical."
 - web_search: "company raises funding 2024" → Found Series B!
@@ -399,7 +402,7 @@ Answer the investigative questions above by:
 
 **For each question you're investigating**:
 1. **Check internal first** - use internal_search_tool for any company/person/project names
-2. **Check SEC filings** - if public company, use scraped_web_archive for official data
+2. **Check SEC filings** - if public company, use sec_query for official data (fetches latest 10-K + 8-Ks on-demand)
 3. **Plan next** - use think_tool to map out search angles for external research
 4. **Search strategically** - multiple angles, follow leads
 5. **Reflect** - what does this reveal about their needs/challenges?
