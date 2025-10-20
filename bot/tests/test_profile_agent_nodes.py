@@ -836,3 +836,53 @@ class TestFinalReportNode:
         # Should return report (real LLM may be called, not mock)
         assert "final_report" in result
         assert len(result["final_report"]) > 100
+
+    @pytest.mark.asyncio
+    async def test_final_report_requires_langfuse_prompt(self):
+        """Test that final report generation fails if Langfuse prompt not found"""
+        state = {
+            "notes": ["Test note"],
+            "profile_type": "company",
+            "research_brief": "Brief",
+        }
+
+        config = {"configurable": {}}
+
+        # Mock PromptService to return None (prompt not found)
+        with patch(
+            "agents.company_profile.nodes.final_report.get_prompt_service"
+        ) as mock_get_service:
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(return_value=None)
+            mock_get_service.return_value = mock_prompt_service
+
+            # Should raise RuntimeError when Langfuse prompt not found
+            with pytest.raises(RuntimeError) as exc_info:
+                await final_report_generation(state, config)
+
+            # Verify error message mentions the correct prompt name
+            assert "CompanyProfiler/Final_Report_Generation" in str(exc_info.value)
+            assert "Langfuse prompt" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_final_report_requires_prompt_service(self):
+        """Test that final report generation fails if PromptService unavailable"""
+        state = {
+            "notes": ["Test note"],
+            "profile_type": "company",
+            "research_brief": "Brief",
+        }
+
+        config = {"configurable": {}}
+
+        # Mock PromptService to be unavailable (returns None)
+        with patch(
+            "agents.company_profile.nodes.final_report.get_prompt_service",
+            return_value=None,
+        ):
+            # Should raise RuntimeError when PromptService not available
+            with pytest.raises(RuntimeError) as exc_info:
+                await final_report_generation(state, config)
+
+            # Verify error message mentions PromptService
+            assert "PromptService not available" in str(exc_info.value)
