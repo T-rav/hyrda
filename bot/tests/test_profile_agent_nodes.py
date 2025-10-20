@@ -501,6 +501,55 @@ class TestResearcherToolsNode:
         assert len(result.update["raw_notes"]) > 0
 
     @pytest.mark.asyncio
+    async def test_researcher_tools_sec_query(self):
+        """Test SEC query tool execution with ainvoke"""
+        mock_ai_message = Mock()
+        mock_ai_message.tool_calls = [
+            {
+                "name": "sec_query",
+                "args": {"query": "Tesla strategic priorities", "effort": "medium"},
+                "id": "tc_sec1",
+            }
+        ]
+
+        state = {
+            "research_topic": "Tesla strategy",
+            "profile_type": "company",
+            "researcher_messages": [Mock(), mock_ai_message],
+            "tool_call_iterations": 1,
+            "raw_notes": [],
+        }
+
+        config = {"configurable": {}}
+
+        # Mock SEC query tool
+        mock_sec_tool = Mock()
+        mock_sec_tool.ainvoke = AsyncMock(
+            return_value="## SEC Filing Results for Tesla: strategic priorities\n\nRisk factors: ..."
+        )
+
+        with (
+            patch(
+                "agents.company_profile.nodes.researcher.sec_query_tool",
+                return_value=mock_sec_tool,
+            ),
+            patch("services.search_clients.get_tavily_client", return_value=None),
+            patch("services.search_clients.get_perplexity_client", return_value=None),
+        ):
+            result = await researcher_tools(state, config)
+
+        assert isinstance(result, Command)
+        assert result.goto == "researcher"
+        # Verify ainvoke was called with tool_args dict
+        mock_sec_tool.ainvoke.assert_called_once()
+        call_args = mock_sec_tool.ainvoke.call_args[0][0]  # First positional arg
+        assert call_args["query"] == "Tesla strategic priorities"
+        assert call_args["effort"] == "medium"
+        # Check that we got SEC results in raw_notes
+        assert len(result.update["raw_notes"]) > 0
+        assert "SEC Filing Results" in result.update["raw_notes"][0]
+
+    @pytest.mark.asyncio
     async def test_researcher_tools_think_tool(self):
         """Test think tool execution"""
         mock_ai_message = Mock()
@@ -675,7 +724,22 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Key point 1\n• Key point 2"
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService to return prompt
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(side_effect=[mock_report, mock_summary])
             mock_chat.return_value = mock_llm
@@ -706,10 +770,16 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Summary point"
 
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
         with (
             patch("config.settings.Settings") as mock_settings,
             patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_gemini,
             patch("langchain_openai.ChatOpenAI") as mock_openai,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
         ):
             # Configure settings for Gemini
             settings_instance = Mock()
@@ -718,6 +788,13 @@ class TestFinalReportNode:
             settings_instance.gemini.model = "gemini-pro"
             settings_instance.llm.api_key = "openai-key"
             mock_settings.return_value = settings_instance
+
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
 
             # Mock Gemini for report
             mock_gemini_llm = Mock()
@@ -765,7 +842,22 @@ class TestFinalReportNode:
         mock_report = Mock()
         mock_report.content = "# Full Report\n\nThis is a comprehensive report with detailed content about the company. It includes multiple sections covering various aspects of the business."
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             # First call (report) succeeds, second call (summary) fails
             mock_llm.ainvoke = AsyncMock(
@@ -799,7 +891,22 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Point"
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(
                 side_effect=[mock_error, mock_success, mock_summary]
@@ -826,7 +933,22 @@ class TestFinalReportNode:
 
         config = {"configurable": {}}
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(side_effect=Exception("Persistent error"))
             mock_chat.return_value = mock_llm
@@ -836,3 +958,53 @@ class TestFinalReportNode:
         # Should return report (real LLM may be called, not mock)
         assert "final_report" in result
         assert len(result["final_report"]) > 100
+
+    @pytest.mark.asyncio
+    async def test_final_report_requires_langfuse_prompt(self):
+        """Test that final report generation fails if Langfuse prompt not found"""
+        state = {
+            "notes": ["Test note"],
+            "profile_type": "company",
+            "research_brief": "Brief",
+        }
+
+        config = {"configurable": {}}
+
+        # Mock PromptService to return None (prompt not found)
+        with patch(
+            "agents.company_profile.nodes.final_report.get_prompt_service"
+        ) as mock_get_service:
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(return_value=None)
+            mock_get_service.return_value = mock_prompt_service
+
+            # Should raise RuntimeError when Langfuse prompt not found
+            with pytest.raises(RuntimeError) as exc_info:
+                await final_report_generation(state, config)
+
+            # Verify error message mentions the correct prompt name
+            assert "CompanyProfiler/Final_Report_Generation" in str(exc_info.value)
+            assert "Langfuse prompt" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_final_report_requires_prompt_service(self):
+        """Test that final report generation fails if PromptService unavailable"""
+        state = {
+            "notes": ["Test note"],
+            "profile_type": "company",
+            "research_brief": "Brief",
+        }
+
+        config = {"configurable": {}}
+
+        # Mock PromptService to be unavailable (returns None)
+        with patch(
+            "agents.company_profile.nodes.final_report.get_prompt_service",
+            return_value=None,
+        ):
+            # Should raise RuntimeError when PromptService not available
+            with pytest.raises(RuntimeError) as exc_info:
+                await final_report_generation(state, config)
+
+            # Verify error message mentions PromptService
+            assert "PromptService not available" in str(exc_info.value)

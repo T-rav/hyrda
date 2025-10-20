@@ -236,10 +236,8 @@ async def researcher_tools(
                     continue
 
                 # Execute async search
-                query = tool_args.get("query", "")
-                effort = tool_args.get("effort", "medium")
-
-                result = await sec_query.arun(query=query, effort=effort)
+                # Invoke the tool with tool_args dict
+                result = await sec_query.ainvoke(tool_args)
                 tool_results.append(ToolMessage(content=result, tool_call_id=tool_id))
                 raw_notes.append(result)
 

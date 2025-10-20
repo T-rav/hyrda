@@ -19,6 +19,7 @@ from agents.company_profile.utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
+from services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,31 @@ async def final_report_generation(
     else:
         focus_guidance = ""
 
-    system_prompt = prompts.final_report_generation_prompt.format(
+    # Get prompt from Langfuse (required - no local fallback)
+    prompt_service = get_prompt_service()
+    if not prompt_service:
+        raise RuntimeError("PromptService not available - required for profile agent")
+
+    logger.info(
+        "Fetching prompt from Langfuse: CompanyProfiler/Final_Report_Generation"
+    )
+    prompt_template = prompt_service.get_custom_prompt(
+        template_name="CompanyProfiler/Final_Report_Generation",
+        fallback=None,  # Force error if Langfuse prompt not found
+    )
+
+    if not prompt_template:
+        logger.error(
+            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
+            "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
+            "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
+        )
+        raise RuntimeError(
+            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
+            "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
+        )
+
+    system_prompt = prompt_template.format(
         profile_type=profile_type,
         focus_area=focus_area if focus_area else "None (general profile)",
         focus_guidance=focus_guidance,
@@ -164,6 +189,7 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 else:
                     summary_focus_guidance = ""
 
+                # Use local prompt for executive summary (not in Langfuse)
                 summary_prompt = prompts.executive_summary_prompt.format(
                     full_report=final_report,
                     focus_area=focus_area if focus_area else "None (general profile)",
