@@ -1,7 +1,7 @@
 """SEC Query Tool - On-demand SEC research with query rewriting.
 
-Fetches and searches SEC filings just-in-time using the existing query
-rewriting logic from scraped_web_archive.
+Fetches and searches SEC filings on-demand from SEC Edgar API with no pre-indexing.
+Uses multi-angle query rewriting for comprehensive search across 10-K and 8-K filings.
 """
 
 import json

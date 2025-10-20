@@ -202,8 +202,15 @@ class SECOnDemandFetcher:
 
         return text
 
-    async def _lookup_cik(self, ticker_symbol: str) -> str | None:
-        """Look up CIK from ticker symbol using SEC's official mapping."""
+    async def _lookup_cik(self, identifier: str) -> str | None:
+        """Look up CIK from ticker symbol or company name using SEC's official mapping.
+
+        Args:
+            identifier: Ticker symbol (e.g., "COST") or company name (e.g., "Costco")
+
+        Returns:
+            CIK string zero-padded to 10 digits, or None if not found
+        """
         url = "https://www.sec.gov/files/company_tickers.json"
 
         try:
@@ -213,15 +220,38 @@ class SECOnDemandFetcher:
 
                 data = response.json()
 
-                # Find ticker
+                # First try exact ticker match (case-insensitive)
+                identifier_upper = identifier.upper()
                 for entry in data.values():
-                    if entry["ticker"].upper() == ticker_symbol.upper():
-                        return str(entry["cik_str"]).zfill(10)
+                    if entry["ticker"].upper() == identifier_upper:
+                        cik = str(entry["cik_str"]).zfill(10)
+                        logger.info(f"Found CIK {cik} for ticker '{identifier}'")
+                        return cik
 
+                # If ticker not found, try fuzzy company name match
+                identifier_lower = identifier.lower()
+                for entry in data.values():
+                    company_name = entry["title"].lower()
+                    # Check if identifier is a substring of company name or vice versa
+                    if (
+                        identifier_lower in company_name
+                        or company_name.split()[0] == identifier_lower
+                    ):
+                        cik = str(entry["cik_str"]).zfill(10)
+                        logger.info(
+                            f"Found CIK {cik} for company name '{identifier}' "
+                            f"(matched: {entry['title']})"
+                        )
+                        return cik
+
+                logger.warning(
+                    f"No CIK found for '{identifier}'. "
+                    f"Try using the ticker symbol (e.g., 'COST' instead of 'Costco')"
+                )
                 return None
 
         except Exception as e:
-            logger.error(f"Failed to lookup CIK for {ticker_symbol}: {e}")
+            logger.error(f"Failed to lookup CIK for {identifier}: {e}")
             return None
 
     def chunk_filing_content(

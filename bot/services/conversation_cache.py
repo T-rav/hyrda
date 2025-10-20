@@ -517,6 +517,70 @@ class ConversationCache:
             logger.warning(f"Failed to clear conversation cache: {e}")
             return False
 
+    async def set_thread_type(self, thread_ts: str, thread_type: str) -> bool:
+        """
+        Store thread type metadata (e.g., 'profile', 'meddic', 'general').
+
+        Args:
+            thread_ts: Thread timestamp
+            thread_type: Type of thread ('profile', 'meddic', 'general', etc.)
+
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return False
+
+        try:
+            meta_key = self._get_metadata_key(thread_ts)
+
+            # Get existing metadata or create new
+            existing_meta = await redis_client.get(meta_key)
+            if existing_meta:
+                metadata = json.loads(existing_meta)
+            else:
+                metadata = {"cached_at": datetime.now(UTC).isoformat()}
+
+            # Add thread type
+            metadata["thread_type"] = thread_type
+
+            await redis_client.setex(meta_key, self.ttl, json.dumps(metadata))
+            logger.info(f"Stored thread type '{thread_type}' for thread {thread_ts}")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to store thread type: {e}")
+            return False
+
+    async def get_thread_type(self, thread_ts: str) -> str | None:
+        """
+        Retrieve thread type metadata.
+
+        Args:
+            thread_ts: Thread timestamp
+
+        Returns:
+            Thread type string ('profile', 'meddic', 'general') or None if not set
+        """
+        redis_client = await self._get_redis_client()
+        if not redis_client:
+            return None
+
+        try:
+            meta_key = self._get_metadata_key(thread_ts)
+            metadata_json = await redis_client.get(meta_key)
+
+            if not metadata_json:
+                return None
+
+            metadata = json.loads(metadata_json)
+            return metadata.get("thread_type")
+
+        except Exception as e:
+            logger.warning(f"Failed to retrieve thread type: {e}")
+            return None
+
     async def get_cache_stats(self) -> dict:
         """Get cache statistics"""
         redis_client = await self._get_redis_client()
