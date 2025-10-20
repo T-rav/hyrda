@@ -1061,3 +1061,73 @@ class TestBotCommandHandling:
             assert "MEDDIC Agent" in response_text, (
                 f"Failed for variant: {medic_variant}"
             )
+
+    @pytest.mark.asyncio
+    async def test_profile_report_disables_rag(self):
+        """Test that cached profile reports disable RAG but uploaded docs don't"""
+        from unittest.mock import AsyncMock
+
+        from services.llm_service import LLMService
+
+        slack_service = SlackServiceFactory.create_service("test-token")
+        slack_service.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        slack_service.delete_thinking_indicator = AsyncMock()
+        slack_service.send_message = AsyncMock(return_value={"ts": "123.456"})
+        slack_service.get_thread_history = AsyncMock(return_value=([], True))
+
+        llm_service = Mock(spec=LLMService)
+        llm_service.get_response = AsyncMock(return_value="Response about the profile")
+
+        # Mock conversation cache to return a cached profile report
+        conversation_cache = AsyncMock()
+        conversation_cache.get_document_content = AsyncMock(
+            return_value=(
+                "# Company Profile\n\nProfile content",
+                "Company_Profile_Acme.pdf",
+            )
+        )
+
+        # Test 1: Profile report should disable RAG
+        await handle_message(
+            text="What are the key findings?",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts="1234.5678",
+            conversation_cache=conversation_cache,
+        )
+
+        # Verify LLM was called with use_rag=False for profile report
+        llm_service.get_response.assert_called_once()
+        call_kwargs = llm_service.get_response.call_args.kwargs
+        assert call_kwargs["use_rag"] is False, "Profile report should disable RAG"
+        assert call_kwargs["document_content"] is not None
+        assert "Profile" in call_kwargs["document_filename"]
+
+        # Reset mocks
+        llm_service.get_response.reset_mock()
+
+        # Test 2: Regular uploaded document should keep RAG enabled
+        conversation_cache.get_document_content = AsyncMock(
+            return_value=("Document content", "quarterly_report.pdf")
+        )
+
+        await handle_message(
+            text="Summarize this document",
+            user_id="U123",
+            slack_service=slack_service,
+            llm_service=llm_service,
+            channel="C123",
+            thread_ts="1234.5678",
+            conversation_cache=conversation_cache,
+        )
+
+        # Verify LLM was called with use_rag=True for regular document
+        llm_service.get_response.assert_called_once()
+        call_kwargs = llm_service.get_response.call_args.kwargs
+        assert call_kwargs["use_rag"] is True, (
+            "Regular document should keep RAG enabled"
+        )
+        assert call_kwargs["document_content"] is not None
+        assert "Profile" not in call_kwargs["document_filename"]
