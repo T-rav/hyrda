@@ -125,12 +125,20 @@ async def final_report_generation(
     if not prompt_service:
         raise RuntimeError("PromptService not available - required for profile agent")
 
+    logger.info(
+        "Fetching prompt from Langfuse: CompanyProfiler/Final_Report_Generation"
+    )
     prompt_template = prompt_service.get_custom_prompt(
         template_name="CompanyProfiler/Final_Report_Generation",
         fallback=None,  # Force error if Langfuse prompt not found
     )
 
     if not prompt_template:
+        logger.error(
+            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
+            "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
+            "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
+        )
         raise RuntimeError(
             "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
             "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
