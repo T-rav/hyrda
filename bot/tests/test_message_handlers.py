@@ -1063,8 +1063,8 @@ class TestBotCommandHandling:
             )
 
     @pytest.mark.asyncio
-    async def test_profile_report_disables_rag(self):
-        """Test that cached profile reports disable RAG but uploaded docs don't"""
+    async def test_profile_thread_disables_rag(self):
+        """Test that profile threads disable RAG via thread type metadata"""
         from unittest.mock import AsyncMock
 
         from services.llm_service import LLMService
@@ -1078,7 +1078,7 @@ class TestBotCommandHandling:
         llm_service = Mock(spec=LLMService)
         llm_service.get_response = AsyncMock(return_value="Response about the profile")
 
-        # Mock conversation cache to return a cached profile report
+        # Mock conversation cache for profile thread
         conversation_cache = AsyncMock()
         conversation_cache.get_document_content = AsyncMock(
             return_value=(
@@ -1086,8 +1086,10 @@ class TestBotCommandHandling:
                 "Company_Profile_Acme.pdf",
             )
         )
+        # Mark thread as profile type
+        conversation_cache.get_thread_type = AsyncMock(return_value="profile")
 
-        # Test 1: Profile report should disable RAG
+        # Test 1: Profile thread should disable RAG
         await handle_message(
             text="What are the key findings?",
             user_id="U123",
@@ -1098,20 +1100,21 @@ class TestBotCommandHandling:
             conversation_cache=conversation_cache,
         )
 
-        # Verify LLM was called with use_rag=False for profile report
+        # Verify LLM was called with use_rag=False for profile thread
         llm_service.get_response.assert_called_once()
         call_kwargs = llm_service.get_response.call_args.kwargs
-        assert call_kwargs["use_rag"] is False, "Profile report should disable RAG"
+        assert call_kwargs["use_rag"] is False, "Profile thread should disable RAG"
         assert call_kwargs["document_content"] is not None
-        assert "Profile" in call_kwargs["document_filename"]
 
         # Reset mocks
         llm_service.get_response.reset_mock()
 
-        # Test 2: Regular uploaded document should keep RAG enabled
+        # Test 2: Regular thread (no thread type) should keep RAG enabled
         conversation_cache.get_document_content = AsyncMock(
             return_value=("Document content", "quarterly_report.pdf")
         )
+        # No thread type set (returns None)
+        conversation_cache.get_thread_type = AsyncMock(return_value=None)
 
         await handle_message(
             text="Summarize this document",
@@ -1119,15 +1122,12 @@ class TestBotCommandHandling:
             slack_service=slack_service,
             llm_service=llm_service,
             channel="C123",
-            thread_ts="1234.5678",
+            thread_ts="5678.1234",
             conversation_cache=conversation_cache,
         )
 
-        # Verify LLM was called with use_rag=True for regular document
+        # Verify LLM was called with use_rag=True for regular thread
         llm_service.get_response.assert_called_once()
         call_kwargs = llm_service.get_response.call_args.kwargs
-        assert call_kwargs["use_rag"] is True, (
-            "Regular document should keep RAG enabled"
-        )
+        assert call_kwargs["use_rag"] is True, "Regular thread should keep RAG enabled"
         assert call_kwargs["document_content"] is not None
-        assert "Profile" not in call_kwargs["document_filename"]
