@@ -675,7 +675,22 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Key point 1\n• Key point 2"
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService to return prompt
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(side_effect=[mock_report, mock_summary])
             mock_chat.return_value = mock_llm
@@ -706,10 +721,16 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Summary point"
 
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
         with (
             patch("config.settings.Settings") as mock_settings,
             patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_gemini,
             patch("langchain_openai.ChatOpenAI") as mock_openai,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
         ):
             # Configure settings for Gemini
             settings_instance = Mock()
@@ -718,6 +739,13 @@ class TestFinalReportNode:
             settings_instance.gemini.model = "gemini-pro"
             settings_instance.llm.api_key = "openai-key"
             mock_settings.return_value = settings_instance
+
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
 
             # Mock Gemini for report
             mock_gemini_llm = Mock()
@@ -765,7 +793,22 @@ class TestFinalReportNode:
         mock_report = Mock()
         mock_report.content = "# Full Report\n\nThis is a comprehensive report with detailed content about the company. It includes multiple sections covering various aspects of the business."
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             # First call (report) succeeds, second call (summary) fails
             mock_llm.ainvoke = AsyncMock(
@@ -799,7 +842,22 @@ class TestFinalReportNode:
         mock_summary = Mock()
         mock_summary.content = "📊 *Executive Summary*\n\n• Point"
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(
                 side_effect=[mock_error, mock_success, mock_summary]
@@ -826,7 +884,22 @@ class TestFinalReportNode:
 
         config = {"configurable": {}}
 
-        with patch("langchain_openai.ChatOpenAI") as mock_chat:
+        # Mock Langfuse prompt
+        mock_prompt_template = "System prompt template"
+
+        with (
+            patch("langchain_openai.ChatOpenAI") as mock_chat,
+            patch(
+                "agents.company_profile.nodes.final_report.get_prompt_service"
+            ) as mock_get_service,
+        ):
+            # Mock PromptService
+            mock_prompt_service = Mock()
+            mock_prompt_service.get_custom_prompt = Mock(
+                return_value=mock_prompt_template
+            )
+            mock_get_service.return_value = mock_prompt_service
+
             mock_llm = Mock()
             mock_llm.ainvoke = AsyncMock(side_effect=Exception("Persistent error"))
             mock_chat.return_value = mock_llm
