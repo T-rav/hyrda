@@ -65,10 +65,10 @@ class HelpAgent(BaseAgent):
                 agent_class, "description", "No description available"
             )
 
-            # Format agent line
-            agent_line = f"\n**-{agent_name}**"
+            # Format agent line - show both with and without dash
+            agent_line = f"\n**{agent_name}** or **-{agent_name}**"
             if aliases:
-                alias_text = ", ".join([f"-{alias}" for alias in aliases])
+                alias_text = ", ".join([f"{alias} or -{alias}" for alias in aliases])
                 agent_line += f" (aliases: {alias_text})"
 
             response_lines.append(agent_line)
