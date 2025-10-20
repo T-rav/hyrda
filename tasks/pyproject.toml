@@ -19,6 +19,7 @@ dependencies = [
     # Web UI
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
+    "gunicorn>=21.0.0",  # WSGI server for production
 
     # Time zones
     "tzlocal>=5.2",
@@ -32,6 +33,9 @@ dependencies = [
     # HTTP & requests for API calls
     "requests>=2.28.0",
     "aiohttp>=3.8.0",
+    "httpx>=0.27.0",  # For SEC Edgar API
+    "beautifulsoup4>=4.12.0",  # For parsing SEC HTML filings
+    "edgartools>=2.0.0",  # For parsing SEC filings (10-K, 10-Q, 8-K, etc.)
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",

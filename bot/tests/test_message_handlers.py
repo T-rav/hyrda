@@ -216,8 +216,19 @@ class ProfileAgentMockHelper:
                 }
             }
 
+        async def mock_aget_state(config):
+            """Mock aget_state to return final state from checkpointer"""
+            state_snapshot = Mock()
+            state_snapshot.values = {
+                "final_report": "# Employee Profile\n\nTest profile content.",
+                "executive_summary": "Test executive summary.",
+                "notes": ["Note 1", "Note 2"],
+            }
+            return state_snapshot
+
         mock_graph = Mock()
         mock_graph.astream = mock_astream
+        mock_graph.aget_state = mock_aget_state
         return mock_graph
 
 

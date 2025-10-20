@@ -213,7 +213,7 @@ class InternalSearchTool(BaseTool):
                 # Use score_threshold=0 to get ALL results, like regular RAG does
                 results = await self.vector_store.asimilarity_search_with_score(
                     sub_query,  # Use original sub-query, not rewritten
-                    k=50,  # Get MANY more results for better coverage
+                    k=100,  # Get many more results (Gemini 2.5 can handle large context)
                     score_threshold=None,  # No threshold - get everything
                 )
 
@@ -244,7 +244,7 @@ class InternalSearchTool(BaseTool):
                             }
                         )
 
-            # Fallback retrieval: if thin results and no case study signal, try targeted queries
+            # Fallback retrieval: if thin results, try targeted queries that MUST include company name
             try:
                 has_case_study = any(
                     "case study"
@@ -263,46 +263,55 @@ class InternalSearchTool(BaseTool):
                         company = after.strip()
                 if not company:
                     # fallback: first token
-                    company = q_lower.split()[0]
+                    tokens = q_lower.split()
+                    company = tokens[0] if tokens else None
                 company = company.strip().strip("\"' ") if company else ""
 
-                if len(all_docs) < 5 and not has_case_study:
+                # CRITICAL: Only do fallback if we have a company name AND few results
+                # Never search for generic "case study" without company name - causes false positives!
+                if len(all_docs) < 5 and not has_case_study and company:
+                    # Only search with company name included - prevents false positives
                     fallback_phrases = [
-                        "case study",
-                        "project",
-                        "partner hub",
-                        f"{company} case study" if company else None,
-                        f"{company} project" if company else None,
-                        f"{company} opm case study" if company else None,
-                        "opm case study" if company else None,
+                        f"{company} case study",
+                        f"{company} project",
+                        f"{company} opm case study",
+                        f"{company} engagement",
+                        f"{company} client",
                     ]
-                    for phrase in [p for p in fallback_phrases if p]:
-                        # Use phrase alone if it already includes company; otherwise pair with company
-                        if company and company in phrase:
-                            fallback_query = phrase
-                        else:
-                            fallback_query = (
-                                f"{company} {phrase}" if company else phrase
-                            )
+                    for phrase in fallback_phrases:
                         try:
                             results = (
                                 await self.vector_store.asimilarity_search_with_score(
-                                    fallback_query,
+                                    phrase,
                                     k=5,
                                 )
                             )
+                            # CRITICAL: Filter results to only include docs that mention the company
+                            # This prevents false positives from other companies' case studies
                             for doc, score in results:
-                                content_key = doc.page_content[:100]
-                                if content_key not in seen_content:
-                                    seen_content.add(content_key)
-                                    all_docs.append(
-                                        {
-                                            "content": doc.page_content,
-                                            "metadata": doc.metadata,
-                                            "score": score,
-                                            "sub_query": f"fallback:{phrase}",
-                                        }
-                                    )
+                                content_lower = doc.page_content.lower()
+                                file_name_lower = doc.metadata.get(
+                                    "file_name", ""
+                                ).lower()
+                                # Only include if company name appears in content or filename
+                                if (
+                                    company in content_lower
+                                    or company in file_name_lower
+                                ):
+                                    content_key = doc.page_content[:100]
+                                    if content_key not in seen_content:
+                                        seen_content.add(content_key)
+                                        all_docs.append(
+                                            {
+                                                "content": doc.page_content,
+                                                "metadata": doc.metadata,
+                                                "score": score,
+                                                "sub_query": f"fallback:{phrase}",
+                                            }
+                                        )
+                                        logger.info(
+                                            f"   Fallback match: {doc.metadata.get('file_name', 'unknown')} contains '{company}'"
+                                        )
                         except Exception as _e:
                             logger.debug(
                                 f"Fallback retrieval failed for '{phrase}': {_e}"
@@ -312,7 +321,8 @@ class InternalSearchTool(BaseTool):
 
             # Step 3: Rank and limit
             all_docs.sort(key=lambda x: x["score"])  # Lower score = better in Qdrant
-            max_docs = {"low": 8, "medium": 12, "high": 20}.get(effort, 12)
+            # Increased limits for Gemini 2.5's large context (1M tokens)
+            max_docs = {"low": 15, "medium": 30, "high": 50}.get(effort, 30)
             final_docs = all_docs[:max_docs]
 
             logger.info(f"📊 Found {len(final_docs)} unique documents")
@@ -686,7 +696,26 @@ Return ONLY the JSON array, no explanation."""
         context = "\n\n".join(context_parts)
 
         # Generate synthesis with explicit relationship flags
+        # CRITICAL: Extract company name to verify it's actually mentioned
+        company_name = None
+        q_lower = query.lower()
+        if q_lower.startswith("profile "):
+            after = q_lower[len("profile ") :]
+            if " and " in after:
+                company_name = after.split(" and ", 1)[0].strip()
+            else:
+                company_name = after.strip()
+        if not company_name:
+            tokens = q_lower.split()
+            company_name = tokens[0] if tokens else None
+        company_name = company_name.strip().strip("\"' ") if company_name else ""
+
         blob = "\n".join(evidence_corpus).lower()
+
+        # CRITICAL: First check if company name is actually mentioned in the evidence
+        # If company not mentioned, cannot have relationship evidence (prevents false positives)
+        company_mentioned = company_name and company_name in blob
+
         signals = [
             "case study",
             "client engagement",
@@ -704,7 +733,43 @@ Return ONLY the JSON array, no explanation."""
             "record_type: client",
         ]
         matched = [s for s in signals if s in blob]
-        relationship_evidence = bool(matched)
+
+        # CRITICAL: Check if company name appears in same document as relationship signals
+        # This prevents false positives where company is mentioned in one doc but case studies are in another
+        company_with_signals = False
+        if company_mentioned and matched:
+            # Check each document to see if it contains BOTH company name AND relationship signals
+            for doc in docs[:5]:  # Check top 5 docs
+                doc_text = (doc.get("content", "") or "").lower()
+                doc_filename = (
+                    doc.get("metadata", {}).get("file_name", "") or ""
+                ).lower()
+                doc_combined = doc_text + " " + doc_filename
+
+                # Check if this doc has company name
+                if company_name in doc_combined:
+                    # Check if this same doc has relationship signals
+                    has_signal = any(signal in doc_combined for signal in signals)
+                    if has_signal:
+                        company_with_signals = True
+                        logger.info(
+                            f"✓ Found '{company_name}' with relationship signals in: {doc.get('metadata', {}).get('file_name', 'unknown')}"
+                        )
+                        break
+
+        # Relationship evidence ONLY if: (1) signals present AND (2) company name mentioned AND (3) they appear together
+        relationship_evidence = (
+            bool(matched) and company_mentioned and company_with_signals
+        )
+
+        if matched and company_mentioned and not company_with_signals:
+            logger.warning(
+                f"Found relationship signals {matched} AND '{company_name}' mentioned, but NOT in same documents - marking as NO relationship to prevent false positive"
+            )
+        elif matched and not company_mentioned:
+            logger.warning(
+                f"Found relationship signals {matched} but company '{company_name}' not mentioned - marking as NO relationship to prevent false positive"
+            )
         # Treat metric/CRM records as relationship evidence
         try:
             for d in docs:

@@ -20,6 +20,7 @@ dependencies = [
     # Core dependencies
     "python-dotenv==1.0.0",
     "requests==2.31.0",
+    "httpx>=0.27.0",  # HTTP client for SEC API
     "asyncpg==0.29.0",
 
     # Vector database
@@ -35,6 +36,8 @@ dependencies = [
     "python-docx>=1.1.0",  # Word document (.docx) processing
     "openpyxl>=3.1.0",  # Excel spreadsheet (.xlsx) processing
     "python-pptx>=0.6.23",  # PowerPoint (.pptx) processing
+    "beautifulsoup4>=4.12.0",  # HTML parsing for SEC filings
+    "feedparser>=6.0.0",  # RSS feed parsing for future use
 
     # Database (for document tracking via tasks module)
     "sqlalchemy[asyncio]>=2.0.0",  # ORM and database toolkit - must match tasks module

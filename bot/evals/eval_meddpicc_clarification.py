@@ -197,10 +197,9 @@ NEXT STEPS:
 
 async def run_check_input_assessment(notes: str) -> dict:
     """Run the check_input_completeness assessment."""
-    # Create minimal state
+    # Create minimal state (just the query field is needed)
     state: MeddpiccAgentState = {
         "query": notes,
-        "needs_clarification": False,
     }
 
     # Run the check

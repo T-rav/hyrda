@@ -17,6 +17,7 @@ from agents.company_profile.utils import (
     create_system_message,
     internal_search_tool,
     search_tool,
+    sec_query_tool,
     think_tool,
 )
 
@@ -95,10 +96,15 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     # Get internal search tool
     internal_search = internal_search_tool()
 
+    # Get SEC query tool (on-demand SEC filings)
+    sec_query = sec_query_tool()
+
     # Build tool list
     all_tools = [*search_tools, think_tool]
     if internal_search:
         all_tools.append(internal_search)
+    if sec_query:
+        all_tools.append(sec_query)
 
     # Prepare messages
     messages = list(state["researcher_messages"])
@@ -211,6 +217,44 @@ async def researcher_tools(
 
             result = think_tool.invoke(tool_args)
             tool_results.append(ToolMessage(content=str(result), tool_call_id=tool_id))
+
+        elif tool_name == "sec_query":
+            # Execute SEC query tool (on-demand fetching + search)
+            try:
+                from langchain_core.messages import ToolMessage
+
+                # Get the tool and invoke it
+                sec_query = sec_query_tool()
+
+                if not sec_query:
+                    tool_results.append(
+                        ToolMessage(
+                            content="SEC query tool not available",
+                            tool_call_id=tool_id,
+                        )
+                    )
+                    continue
+
+                # Execute async search
+                query = tool_args.get("query", "")
+                effort = tool_args.get("effort", "medium")
+
+                result = await sec_query.arun(query=query, effort=effort)
+                tool_results.append(ToolMessage(content=result, tool_call_id=tool_id))
+                raw_notes.append(result)
+
+                logger.info("SEC query completed")
+
+            except Exception as e:
+                logger.error(f"SEC query error: {e}")
+                from langchain_core.messages import ToolMessage
+
+                tool_results.append(
+                    ToolMessage(
+                        content=f"SEC query error: {str(e)}",
+                        tool_call_id=tool_id,
+                    )
+                )
 
         elif tool_name == "internal_search_tool":
             # Execute internal knowledge base search using the LangChain tool

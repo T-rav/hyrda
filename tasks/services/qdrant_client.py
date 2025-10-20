@@ -97,6 +97,9 @@ class QdrantClient:
                 or doc_metadata.get("project_id")
                 or doc_metadata.get("client_id")
                 or doc_metadata.get("allocation_id")
+                or doc_metadata.get(
+                    "chunk_id"
+                )  # For SEC filings and other chunked documents
                 or f"unknown_{i}"
             )
             # Generate deterministic UUID from namespace + record_id

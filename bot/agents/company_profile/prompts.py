@@ -323,7 +323,20 @@ Answer the investigative questions above by:
    - **Returns:** Existing client data, project details, relationships, past work
    - **IMPORTANT:** If you find existing relationship data, include it prominently in your research!
 
-2. **web_search**: Search the web for current information (CHEAPEST - use for exploration)
+2. **scraped_web_archive**: Search SEC filings (10-K, 10-Q, 8-K) for PUBLIC companies (FREE - use for official data)
+   - Searches archived SEC Edgar filings for financial and strategic information
+   - **When to use:**
+     - Researching PUBLIC companies (must be traded on US stock markets)
+     - For questions about risk factors, strategic priorities, financial performance
+     - When you need official company statements vs news coverage
+   - **Example queries:**
+     - "Apple strategic priorities and risks" → finds 10-K risk factors, MD&A
+     - "Microsoft AI investments and R&D spending" → finds technology investment disclosures
+     - "Tesla competitive challenges" → finds competitive landscape from SEC filings
+   - **Returns:** Risk factors, strategic priorities, financial data, executive commentary
+   - **IMPORTANT:** Only works for public companies with SEC filings
+
+3. **web_search**: Search the web for current information (CHEAPEST - use for exploration)
    - Search from MULTIPLE angles, not just direct queries
    - Example: Don't just search "CEO name", search "recent CEO interview", "CEO LinkedIn", "CEO strategic vision 2024"
    - Example: For product strategy, search "product roadmap", "product launch delays", "customer feedback on product"
@@ -332,7 +345,7 @@ Answer the investigative questions above by:
    - Verify across sources
    - **Use this for initial exploration and finding URLs to investigate**
 
-3. **deep_research**: Comprehensive research using Perplexity AI (HIGH QUALITY - use for important topics)
+4. **deep_research**: Comprehensive research using Perplexity AI (HIGH QUALITY - use for important topics)
    - Returns expert-level answers with citations and synthesis
    - **BEST PRACTICE:**
      - Use web_search to find initial leads and URLs
@@ -346,14 +359,14 @@ Answer the investigative questions above by:
      - "What is the CEO's name?" (simple fact lookup)
      - "When was the company founded?" (basic info)
 
-4. **think_tool**: Reflect and plan your investigation strategy
+5. **think_tool**: Reflect and plan your investigation strategy
    - Use BEFORE your first search to plan your approach
    - Use AFTER findings to decide what to investigate next
    - Ask: "What did I learn? What questions does this raise? What's missing?"
    - Connect to BD value: "Why does this matter for 8th Light's sales approach?"
    - **Plan your tool budget:** When should I use cheap web_search vs expensive deep_research?
 
-5. **ResearchComplete**: Signal completion
+6. **ResearchComplete**: Signal completion
    - Use when you've answered the key questions with actionable insights
    - Ensure findings are BD-relevant (opportunities, challenges, decision makers)
 </Available Tools>
@@ -370,6 +383,8 @@ Answer the investigative questions above by:
 **GOOD approach** (investigative, BD-focused, cost-conscious, checks internal first):
 - **STEP 1 - CHECK INTERNAL FIRST:** internal_search_tool: "CompanyX" → Found existing client! Past projects with CRM/OPM work!
 - Think: "We have an existing relationship! I need to include this prominently. Now what additional external context do I need?"
+- **STEP 2 - CHECK SEC FILINGS (if public):** scraped_web_archive: "CompanyX strategic priorities and risks" → Found 10-K with product roadmap delays, technical debt concerns in risk factors!
+- Think: "Official SEC filing shows they're worried about technical debt and scaling challenges - perfect consulting opportunity signal!"
 - Think: "What signals growth opportunities? Revenue trends, expansion news, team growth, funding... What about their product roadmap and engineering health? I'll use cheap web_search to explore, then deep_research if I find something critical."
 - web_search: "company raises funding 2024" → Found Series B!
 - Think: "Series B means they're scaling. What are they scaling? What product initiatives? What engineering challenges?"
@@ -384,11 +399,12 @@ Answer the investigative questions above by:
 
 **For each question you're investigating**:
 1. **Check internal first** - use internal_search_tool for any company/person/project names
-2. **Plan next** - use think_tool to map out search angles for external research
-3. **Search strategically** - multiple angles, follow leads
-4. **Reflect** - what does this reveal about their needs/challenges?
-5. **Connect to BD value** - how does this help 8th Light's sales approach?
-6. **Go deeper** - don't stop at surface facts
+2. **Check SEC filings** - if public company, use scraped_web_archive for official data
+3. **Plan next** - use think_tool to map out search angles for external research
+4. **Search strategically** - multiple angles, follow leads
+5. **Reflect** - what does this reveal about their needs/challenges?
+6. **Connect to BD value** - how does this help 8th Light's sales approach?
+7. **Go deeper** - don't stop at surface facts
 
 </Investigation Strategy>
 
@@ -492,17 +508,17 @@ final_report_generation_prompt = """You are an expert Business Development assoc
 
 <Your Task>
 Create a COMPREHENSIVE, IN-DEPTH company profile following the 8th Light methodology.
-TARGET LENGTH: 8-10 pages of detailed analysis (approximately 5,000-6,500 words).
+TARGET LENGTH: 25 pages of highly detailed analysis (approximately 15,000-18,000 words).
 The report must be professional, accurate, and provide extensive actionable insights for sales and consulting partners.
 Use ONLY externally verifiable information - do not invent details.
 
 **Depth Requirements:**
-- Each section should be DETAILED and THOROUGH, not just summaries
-- Provide analysis, context, and connecting insights
+- Each section should be EXTREMELY DETAILED and THOROUGH with deep analysis
+- Provide extensive analysis, context, and connecting insights
 - Include specific examples, quotes, and evidence throughout
-- Expand on implications and opportunities in each section
-- Write in narrative prose with comprehensive coverage
-- **CRITICAL**: MUST include complete ## Sources section with ALL citations
+- Expand significantly on implications and opportunities in each section
+- Write in narrative prose with comprehensive, multi-paragraph coverage
+- **CRITICAL**: MUST include complete ## Sources section with ALL citations and URLs where available
 
 **Writing Style:**
 - Write clearly and naturally - sound like a human analyst, not a robot
