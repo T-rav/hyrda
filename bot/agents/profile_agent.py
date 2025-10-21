@@ -496,6 +496,12 @@ class ProfileAgent(BaseAgent):
             # Cache markdown report BEFORE converting to PDF (for follow-up questions)
             thread_ts = context.get("thread_ts")
             conversation_cache = context.get("conversation_cache")
+
+            logger.info(
+                f"🔍 DEBUG: Attempting to cache report - thread_ts={thread_ts}, "
+                f"conversation_cache={conversation_cache is not None}"
+            )
+
             if thread_ts and conversation_cache:
                 try:
                     # Cache the full markdown report for follow-up questions
@@ -505,15 +511,25 @@ class ProfileAgent(BaseAgent):
                     await conversation_cache.store_document_content(
                         thread_ts, final_report, pdf_filename_preview
                     )
+                    logger.info(f"✅ Stored document content for thread {thread_ts}")
 
                     # Mark this thread as a profile thread to disable RAG
                     await conversation_cache.set_thread_type(thread_ts, "profile")
+                    logger.info(f"✅ Set thread_type='profile' for thread {thread_ts}")
 
                     logger.info(
                         f"✅ Cached markdown report and marked as profile thread {thread_ts}"
                     )
                 except Exception as cache_error:
-                    logger.warning(f"Failed to cache markdown report: {cache_error}")
+                    logger.error(
+                        f"❌ Failed to cache markdown report: {cache_error}",
+                        exc_info=True,
+                    )
+            else:
+                logger.warning(
+                    f"⚠️ Skipping cache - thread_ts={thread_ts}, "
+                    f"conversation_cache={conversation_cache is not None}"
+                )
 
             # Generate PDF title with entity name extracted by LLM
             try:

@@ -436,14 +436,19 @@ class RAGService:
 
             # Check if we should enable web search tools
             # Regular chat only gets Tavily (web_search + scrape_url), NOT deep_research
+            # IMPORTANT: Disable tools when RAG is disabled (e.g., profile threads)
             tavily_client = get_tavily_client()
             tools = None
-            if tavily_client:
+            if tavily_client and use_rag:
                 from services.search_clients import get_tool_definitions
 
                 tools = get_tool_definitions(include_deep_research=False)
                 logger.info(
                     f"🔍 Web search tools available: {len(tools)} tools (Tavily only)"
+                )
+            elif tavily_client and not use_rag:
+                logger.info(
+                    "🚫 Web search tools disabled (RAG disabled for this thread)"
                 )
 
             # Generate response from LLM (with optional function calling)
