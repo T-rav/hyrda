@@ -456,7 +456,16 @@ class ConversationCache:
 
         # Store metadata - PRESERVE existing fields like thread_type!
         existing_meta = await redis_client.get(meta_key)
-        metadata = json.loads(existing_meta) if existing_meta else {}
+        if existing_meta:
+            try:
+                metadata = json.loads(existing_meta)
+                # Ensure it's a dict, not a list
+                if not isinstance(metadata, dict):
+                    metadata = {}
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+        else:
+            metadata = {}
 
         # Update with new cache info (preserves thread_type if it exists)
         metadata.update(
