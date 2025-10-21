@@ -39,6 +39,85 @@ class TestProfileAgent:
     """Tests for ProfileAgent"""
 
     @pytest.mark.asyncio
+    async def test_profile_agent_sets_thread_type(self):
+        """Test that ProfileAgent sets thread_type='profile' after generating report"""
+        # This test verifies the caching logic directly without running the full graph
+        # Import the actual ProfileAgent to test the real caching code
+        from unittest.mock import patch
+
+        # Mock conversation cache
+        mock_conversation_cache = AsyncMock()
+        mock_conversation_cache.store_document_content = AsyncMock()
+        mock_conversation_cache.set_thread_type = AsyncMock()
+
+        # Mock Slack service
+        slack_service = Mock(spec=SlackService)
+        slack_service.upload_file = AsyncMock(
+            return_value={"ok": True, "file": {"id": "F123"}}
+        )
+
+        # Mock LLM service
+        llm_service = Mock(spec=LLMService)
+
+        # Create profile agent
+        agent = ProfileAgent()
+
+        # Create minimal context with conversation_cache
+        context = {
+            "thread_ts": "1234.5678",
+            "conversation_cache": mock_conversation_cache,
+            "slack_service": slack_service,
+            "llm_service": llm_service,
+            "channel": "C123",
+            "user_id": "U123",
+        }
+
+        # Mock the graph execution to return a completed state
+        with patch.object(agent, "graph") as mock_graph:
+            final_report = "# Company Profile\n\nThis is a test profile."
+            mock_state = {
+                "final_report": final_report,
+                "notes": ["Note 1", "Note 2"],
+                "executive_summary": "Executive summary text",
+            }
+
+            # Mock both ainvoke and aget_state
+            mock_graph.ainvoke = AsyncMock(return_value=mock_state)
+            mock_graph.aget_state = create_mock_aget_state(mock_state)
+
+            # Execute agent
+            result = await agent.run("Profile Acme Corporation", context)
+
+            # Debug: Print what was called
+            print(
+                f"store_document_content called: {mock_conversation_cache.store_document_content.called}"
+            )
+            print(
+                f"set_thread_type called: {mock_conversation_cache.set_thread_type.called}"
+            )
+            print(f"Result metadata: {result.get('metadata', {})}")
+
+            # Verify conversation cache methods were called
+            assert mock_conversation_cache.store_document_content.called, (
+                "store_document_content was not called"
+            )
+            assert mock_conversation_cache.set_thread_type.called, (
+                "set_thread_type was not called"
+            )
+
+            # Verify the thread_type was set to 'profile'
+            set_thread_type_calls = (
+                mock_conversation_cache.set_thread_type.call_args_list
+            )
+            assert len(set_thread_type_calls) > 0, "set_thread_type was not called"
+            assert set_thread_type_calls[0][0] == ("1234.5678", "profile"), (
+                f"Expected set_thread_type('1234.5678', 'profile'), got {set_thread_type_calls[0]}"
+            )
+
+            # Verify metadata indicates thread tracking should be cleared
+            assert result["metadata"]["clear_thread_tracking"] is True
+
+    @pytest.mark.asyncio
     async def test_profile_agent_run(self):
         """Test ProfileAgent execution"""
         # Mock LLM service for profile agent's LangGraph execution
