@@ -254,17 +254,42 @@ async def supervisor_tools(
             and messages[0].type == "system"
             else None
         )
-        recent_messages = messages[-8:]  # Last 4 AI messages + their tool results
+
+        # Find the last AI message with tool_calls to ensure we keep valid pairs
+        # Work backwards to find complete AI + tool result sequences
+        trimmed_messages = []
+        i = len(messages) - 1
+        while i > 0 and len(trimmed_messages) < 8:
+            msg = messages[i]
+            trimmed_messages.insert(0, msg)
+
+            # If this is a tool message, ensure its corresponding AI message is included
+            if hasattr(msg, "type") and msg.type == "tool":
+                # Find the AI message with tool_calls that this tool message responds to
+                for j in range(i - 1, 0, -1):
+                    ai_msg = messages[j]
+                    if hasattr(ai_msg, "tool_calls") and ai_msg.tool_calls:
+                        # Check if this AI message has the matching tool_call_id
+                        tool_call_ids = [tc.get("id") for tc in ai_msg.tool_calls]
+                        if (
+                            hasattr(msg, "tool_call_id")
+                            and msg.tool_call_id in tool_call_ids
+                        ):
+                            # Include this AI message if not already included
+                            if ai_msg not in trimmed_messages:
+                                trimmed_messages.insert(0, ai_msg)
+                            break
+            i -= 1
 
         if system_msg:
-            messages = [system_msg] + recent_messages
+            messages = [system_msg] + trimmed_messages
             logger.info(
-                "Trimmed supervisor messages to prevent context overflow: kept system + last 8 messages"
+                f"Trimmed supervisor messages to prevent context overflow: kept system + {len(trimmed_messages)} recent messages"
             )
         else:
-            messages = recent_messages
+            messages = trimmed_messages
             logger.info(
-                "Trimmed supervisor messages to prevent context overflow: kept last 8 messages"
+                f"Trimmed supervisor messages to prevent context overflow: kept {len(trimmed_messages)} recent messages"
             )
 
     # Continue supervision
