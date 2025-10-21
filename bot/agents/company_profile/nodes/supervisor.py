@@ -245,7 +245,7 @@ async def supervisor_tools(
 
     # Trim message history to prevent context overflow (keep system + recent interactions)
     # GPT-4o has 128k token limit, but we need to leave room for system prompt and tools
-    # Keep: system message + last 4 AI/tool message pairs (typically ~60-80k tokens)
+    # CRITICAL: Every AI message with tool_calls MUST have ALL its tool responses
     if len(messages) > 9:  # system + 4 pairs (AI + tool results)
         system_msg = (
             messages[0]
@@ -255,41 +255,64 @@ async def supervisor_tools(
             else None
         )
 
-        # Find the last AI message with tool_calls to ensure we keep valid pairs
-        # Work backwards to find complete AI + tool result sequences
+        # Build a map of tool_call_id -> tool response for validation
+        tool_responses = {}
+        for msg in messages:
+            if (
+                hasattr(msg, "type")
+                and msg.type == "tool"
+                and hasattr(msg, "tool_call_id")
+            ):
+                tool_responses[msg.tool_call_id] = msg
+
+        # Work backwards, keeping complete conversation turns (AI + ALL its tool responses)
         trimmed_messages = []
         i = len(messages) - 1
-        while i > 0 and len(trimmed_messages) < 8:
-            msg = messages[i]
-            trimmed_messages.insert(0, msg)
 
-            # If this is a tool message, ensure its corresponding AI message is included
-            if hasattr(msg, "type") and msg.type == "tool":
-                # Find the AI message with tool_calls that this tool message responds to
-                for j in range(i - 1, 0, -1):
-                    ai_msg = messages[j]
-                    if hasattr(ai_msg, "tool_calls") and ai_msg.tool_calls:
-                        # Check if this AI message has the matching tool_call_id
-                        tool_call_ids = [tc.get("id") for tc in ai_msg.tool_calls]
-                        if (
-                            hasattr(msg, "tool_call_id")
-                            and msg.tool_call_id in tool_call_ids
-                        ):
-                            # Include this AI message if not already included
-                            if ai_msg not in trimmed_messages:
-                                trimmed_messages.insert(0, ai_msg)
-                            break
+        while (
+            i > 0 and len(trimmed_messages) < 20
+        ):  # Increased limit to ensure complete pairs
+            msg = messages[i]
+
+            # If this is an AI message with tool_calls, we MUST include ALL its tool responses
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                # Check if ALL tool responses are available
+                tool_call_ids = [tc.get("id") for tc in msg.tool_calls]
+                missing_responses = [
+                    tid for tid in tool_call_ids if tid not in tool_responses
+                ]
+
+                if missing_responses:
+                    # This AI message is missing some tool responses - skip it entirely
+                    logger.warning(
+                        f"Skipping AI message in trim: missing tool responses for {missing_responses}"
+                    )
+                    i -= 1
+                    continue
+
+                # Include the AI message
+                trimmed_messages.insert(0, msg)
+
+                # Include ALL its tool responses
+                for tool_call_id in tool_call_ids:
+                    tool_msg = tool_responses[tool_call_id]
+                    if tool_msg not in trimmed_messages:
+                        trimmed_messages.insert(0, tool_msg)
+            else:
+                # Not an AI message with tool_calls, safe to include
+                trimmed_messages.insert(0, msg)
+
             i -= 1
 
         if system_msg:
             messages = [system_msg] + trimmed_messages
             logger.info(
-                f"Trimmed supervisor messages to prevent context overflow: kept system + {len(trimmed_messages)} recent messages"
+                f"Trimmed supervisor messages: kept system + {len(trimmed_messages)} messages"
             )
         else:
             messages = trimmed_messages
             logger.info(
-                f"Trimmed supervisor messages to prevent context overflow: kept {len(trimmed_messages)} recent messages"
+                f"Trimmed supervisor messages: kept {len(trimmed_messages)} messages"
             )
 
     # Continue supervision
