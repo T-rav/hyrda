@@ -454,12 +454,19 @@ class ConversationCache:
         conversation_data = json.dumps(messages)
         await redis_client.setex(cache_key, self.ttl, conversation_data)
 
-        # Store metadata
-        metadata = {
-            "cached_at": datetime.now(UTC).isoformat(),
-            "message_count": len(messages),
-            "ttl": self.ttl,
-        }
+        # Store metadata - PRESERVE existing fields like thread_type!
+        existing_meta = await redis_client.get(meta_key)
+        metadata = json.loads(existing_meta) if existing_meta else {}
+
+        # Update with new cache info (preserves thread_type if it exists)
+        metadata.update(
+            {
+                "cached_at": datetime.now(UTC).isoformat(),
+                "message_count": len(messages),
+                "ttl": self.ttl,
+            }
+        )
+
         meta_data = json.dumps(metadata)
         await redis_client.setex(meta_key, self.ttl, meta_data)
 
