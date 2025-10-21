@@ -534,6 +534,9 @@ class ConversationCache:
 
         try:
             meta_key = self._get_metadata_key(thread_ts)
+            logger.info(
+                f"🔍 Storing thread_type='{thread_type}' for {thread_ts}, key={meta_key}"
+            )
 
             # Get existing metadata or create new
             existing_meta = await redis_client.get(meta_key)
@@ -546,7 +549,9 @@ class ConversationCache:
             metadata["thread_type"] = thread_type
 
             await redis_client.setex(meta_key, self.ttl, json.dumps(metadata))
-            logger.info(f"Stored thread type '{thread_type}' for thread {thread_ts}")
+            logger.info(
+                f"✅ Stored thread_type='{thread_type}' for thread {thread_ts} at key {meta_key}"
+            )
             return True
 
         except Exception as e:
@@ -565,20 +570,33 @@ class ConversationCache:
         """
         redis_client = await self._get_redis_client()
         if not redis_client:
+            logger.warning(
+                f"get_thread_type: No Redis client available for thread {thread_ts}"
+            )
             return None
 
         try:
             meta_key = self._get_metadata_key(thread_ts)
+            logger.info(f"🔍 Getting thread_type for {thread_ts}, key={meta_key}")
             metadata_json = await redis_client.get(meta_key)
 
             if not metadata_json:
+                logger.warning(
+                    f"❌ No metadata found for thread {thread_ts} at key {meta_key}"
+                )
                 return None
 
             metadata = json.loads(metadata_json)
-            return metadata.get("thread_type")
+            thread_type = metadata.get("thread_type")
+            logger.info(
+                f"✅ Retrieved thread_type='{thread_type}' for thread {thread_ts}"
+            )
+            return thread_type
 
         except Exception as e:
-            logger.warning(f"Failed to retrieve thread type: {e}")
+            logger.error(
+                f"Failed to retrieve thread type for {thread_ts}: {e}", exc_info=True
+            )
             return None
 
     async def get_cache_stats(self) -> dict:
