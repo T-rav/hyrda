@@ -225,7 +225,10 @@ class InternalSearchTool(BaseTool):
                         file_name = doc.metadata.get(
                             "file_name", doc.metadata.get("title", "unknown")
                         )
+                        # Also show if content has company name for debugging
+                        content_preview = doc.page_content[:150].replace("\n", " ")
                         logger.info(f"      {i}. {file_name} (score: {score:.4f})")
+                        logger.debug(f"         Content: {content_preview}...")
 
                 # Apply entity boosting (like regular RAG does)
                 results = self._apply_entity_boosting(sub_query, results)
@@ -461,30 +464,74 @@ class InternalSearchTool(BaseTool):
         return entities
 
     def _apply_entity_boosting(self, query: str, results: list[tuple]) -> list[tuple]:
-        """Apply entity boosting to search results (same logic as RetrievalService)."""
+        """Apply entity boosting to search results with strong company name preference."""
         try:
             entities = self._extract_entities_simple(query)
             logger.debug(f"🔍 Applying entity boosting for entities: {entities}")
+
+            # Extract company name from query (first entity that's not 'case'/'studies'/'project'/etc.)
+            company_name = None
+            for entity in entities:
+                if entity not in {
+                    "case",
+                    "studies",
+                    "study",
+                    "project",
+                    "projects",
+                    "completed",
+                    "technologies",
+                    "used",
+                    "profile",
+                }:
+                    company_name = entity
+                    break
 
             enhanced_results = []
             for doc, score in results:
                 content = doc.page_content.lower()
                 metadata = doc.metadata
+                title = metadata.get("file_name", "").lower()
 
-                # Calculate entity boost (5% per content match, 10% per title match)
-                entity_boost = 0.0
-                matching_entities = 0
+                # FILTER OUT index/overview files - they contaminate results
+                if any(
+                    keyword in title or keyword in content[:200]
+                    for keyword in [
+                        "index",
+                        "overview",
+                        "start here",
+                        "slide index",
+                        "snapshots overview",
+                    ]
+                ):
+                    # Penalize index files heavily
+                    entity_boost = -0.5  # Much worse score
+                    logger.debug(
+                        f"   ❌ Penalizing index file: {metadata.get('file_name', 'unknown')}"
+                    )
+                else:
+                    # Calculate entity boost (5% per content match, 10% per title match)
+                    entity_boost = 0.0
+                    matching_entities = 0
 
-                for entity in entities:
-                    if entity.lower() in content:
-                        entity_boost += 0.05  # RAG_ENTITY_CONTENT_BOOST
-                        matching_entities += 1
+                    # STRONG boost if company name appears in content/title
+                    if company_name:
+                        if company_name in content:
+                            entity_boost += (
+                                0.20  # 20% boost for company name in content
+                            )
+                            matching_entities += 1
+                        if company_name in title:
+                            entity_boost += 0.30  # 30% boost for company name in title
+                            matching_entities += 1
 
-                    # Check title/filename for entities
-                    title = metadata.get("file_name", "").lower()
-                    if entity.lower() in title:
-                        entity_boost += 0.10  # RAG_ENTITY_TITLE_BOOST
-                        matching_entities += 1
+                    # Regular boost for other entities
+                    for entity in entities:
+                        if entity == company_name:
+                            continue  # Already handled above
+                        if entity in content:
+                            entity_boost += 0.02  # Small boost for other terms
+                        if entity in title:
+                            entity_boost += 0.05  # Small boost for other terms
 
                 # Apply boost to similarity score
                 # Note: Qdrant scores are DISTANCES (lower=better), not similarities
