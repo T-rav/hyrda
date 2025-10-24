@@ -269,6 +269,7 @@ class MetricSyncJob(BaseJob):
             # Create searchable text with project history
             text = (
                 f"Employee: {employee['name']}\n"
+                f"Title: {employee.get('title', 'N/A')}\n"
                 f"Email: {employee.get('email', 'N/A')}\n"
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
@@ -283,6 +284,7 @@ class MetricSyncJob(BaseJob):
                 "data_type": "employee",
                 "employee_id": employee["id"],
                 "name": employee["name"],
+                "title": employee.get("title", ""),
                 "email": employee.get("email", ""),
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
