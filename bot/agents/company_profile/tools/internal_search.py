@@ -802,8 +802,14 @@ Return ONLY the JSON array, no explanation."""
                     has_signal = any(signal in doc_combined for signal in signals)
                     if has_signal:
                         company_with_signals = True
-                        logger.info(
-                            f"✓ Found '{company_name}' with relationship signals in: {doc.get('metadata', {}).get('file_name', 'unknown')}"
+                        culprit_file = doc.get("metadata", {}).get(
+                            "file_name", "unknown"
+                        )
+                        logger.warning(
+                            f"🚨 CULPRIT DOCUMENT: '{company_name}' + signals found in: {culprit_file}"
+                        )
+                        logger.warning(
+                            f"🚨 Content preview: {doc.get('content', '')[:300]}"
                         )
                         break
 
