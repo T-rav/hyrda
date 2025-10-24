@@ -73,6 +73,7 @@ class MetricClient:
                   id
                   name
                   email
+                  title
                   startedWorking
                   endedWorking
                   groups {
