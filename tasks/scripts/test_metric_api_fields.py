@@ -30,12 +30,20 @@ def main():
             return
 
         print(f"✅ Found {len(employees)} employees\n")
+
+        # Filter to active employees with groups
+        active_with_groups = [
+            e for e in employees
+            if not e.get("endedWorking") and len(e.get("groups", [])) > 2
+        ]
+
+        print(f"Active employees with groups: {len(active_with_groups)}\n")
         print("=" * 80)
-        print("EMPLOYEE FIELDS FOR TOP 5 EMPLOYEES")
+        print("EMPLOYEE FIELDS FOR 5 ACTIVE EMPLOYEES")
         print("=" * 80)
 
-        # Print all fields for first 5 employees
-        for i, employee in enumerate(employees[:5], 1):
+        # Print all fields for first 5 active employees with groups
+        for i, employee in enumerate(active_with_groups[:5], 1):
             print(f"\n{'=' * 80}")
             print(f"EMPLOYEE #{i}: {employee.get('name', 'Unknown')}")
             print(f"{'=' * 80}")
