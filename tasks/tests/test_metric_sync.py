@@ -222,6 +222,7 @@ async def test_employee_metadata_structure(
         assert "Employee: John Doe" in texts[0]
         assert "Title: Senior Crafter" in texts[0]
         assert "Email: john@example.com" in texts[0]
+        assert "Employment Status: Active" in texts[0]
         assert "Status: Allocated" in texts[0]
         assert "Started: 2020-01-01" in texts[0]
 
