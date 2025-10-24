@@ -260,6 +260,17 @@ class MetricSyncJob(BaseJob):
                 for g in employee.get("groups", [])
             )
 
+            # Extract job title/craft level from groups (groupType: GROUP_TYPE_11)
+            # This contains craft levels like: Crafter, Senior Crafter, Lead Crafter, Principal Crafter, Partner
+            title = next(
+                (g["name"] for g in employee.get("groups", []) if g["groupType"] == "GROUP_TYPE_11"),
+                "N/A",
+            )
+
+            # Determine employment status based on endedWorking field
+            is_active = not employee.get("endedWorking")
+            employment_status = "Active" if is_active else "Inactive"
+
             # Get project history for this employee
             projects = employee_projects.get(employee["id"], set())
             project_history = (
@@ -269,7 +280,9 @@ class MetricSyncJob(BaseJob):
             # Create searchable text with project history
             text = (
                 f"Employee: {employee['name']}\n"
+                f"Title: {title}\n"
                 f"Email: {employee.get('email', 'N/A')}\n"
+                f"Employment Status: {employment_status}\n"
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
                 f"Ended: {employee.get('endedWorking', 'Active')}\n"
@@ -283,7 +296,10 @@ class MetricSyncJob(BaseJob):
                 "data_type": "employee",
                 "employee_id": employee["id"],
                 "name": employee["name"],
+                "title": title if title != "N/A" else "",
                 "email": employee.get("email", ""),
+                "is_active": is_active,
+                "employment_status": employment_status,
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
                 "ended_working": employee.get("endedWorking", ""),
