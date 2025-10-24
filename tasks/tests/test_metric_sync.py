@@ -8,6 +8,56 @@ from config.settings import TasksSettings
 from jobs.metric_sync import MetricSyncJob
 
 
+class VectorStoreMockFactory:
+    """Factory for creating vector store mocks"""
+
+    @staticmethod
+    def create_basic_store() -> AsyncMock:
+        """Create basic vector store mock with standard responses"""
+        store = AsyncMock()
+        store.initialize = AsyncMock()
+        store.add_documents = AsyncMock()
+        store.close = AsyncMock()
+        store.index = MagicMock()  # Simulate Qdrant
+        return store
+
+    @staticmethod
+    def create_failing_store(error: str = "Vector store connection error") -> AsyncMock:
+        """Create vector store mock that fails operations"""
+        store = AsyncMock()
+        store.initialize = AsyncMock(side_effect=Exception(error))
+        store.add_documents = AsyncMock(side_effect=Exception(error))
+        store.close = AsyncMock()
+        store.index = MagicMock()
+        return store
+
+
+class EmbeddingProviderMockFactory:
+    """Factory for creating embedding provider mocks"""
+
+    @staticmethod
+    def create_basic_provider(embeddings: list | None = None) -> MagicMock:
+        """Create basic embedding provider mock with standard embeddings"""
+        if embeddings is None:
+            embeddings = [[0.1, 0.2, 0.3]]
+        provider = MagicMock()
+        provider.embed_batch.return_value = embeddings
+        return provider
+
+    @staticmethod
+    def create_failing_provider(error: str = "Embedding API error") -> MagicMock:
+        """Create embedding provider mock that fails"""
+        provider = MagicMock()
+        provider.embed_batch.side_effect = Exception(error)
+        return provider
+
+    @staticmethod
+    def create_provider_with_multiple_embeddings(count: int) -> MagicMock:
+        """Create provider that returns multiple embeddings"""
+        embeddings = [[0.1 * i, 0.2 * i, 0.3 * i] for i in range(1, count + 1)]
+        return EmbeddingProviderMockFactory.create_basic_provider(embeddings)
+
+
 @pytest.fixture
 def mock_metric_client():
     """Mock Metric.ai client."""
@@ -72,20 +122,13 @@ def mock_metric_client():
 @pytest.fixture
 def mock_vector_store():
     """Mock vector store."""
-    store = AsyncMock()
-    store.initialize = AsyncMock()
-    store.add_documents = AsyncMock()
-    store.close = AsyncMock()
-    store.index = MagicMock()  # Simulate Qdrant
-    return store
+    return VectorStoreMockFactory.create_basic_store()
 
 
 @pytest.fixture
 def mock_embedding_provider():
     """Mock embedding provider."""
-    provider = MagicMock()
-    provider.embed_batch.return_value = [[0.1, 0.2, 0.3]]
-    return provider
+    return EmbeddingProviderMockFactory.create_basic_provider()
 
 
 @pytest.fixture

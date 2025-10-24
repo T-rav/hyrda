@@ -261,52 +261,6 @@ class TestApp:
             # Should call asyncio.run with a coroutine
             mock_asyncio_run.assert_called_once()
 
-    def test_mock_service_factory_creates_valid_mocks(self):
-        """Test that MockServiceFactory creates properly configured mocks"""
-        app_mock = MockServiceFactory.create_mock_async_app()
-        llm_mock = MockServiceFactory.create_mock_llm_service()
-        slack_mock = MockServiceFactory.create_mock_slack_service()
-        cache_mock = MockServiceFactory.create_mock_conversation_cache()
-        metrics_mock = MockServiceFactory.create_mock_metrics_service()
-
-        # Verify all mocks are MagicMock instances
-        assert isinstance(app_mock, MagicMock)
-        assert isinstance(llm_mock, MagicMock)
-        assert isinstance(slack_mock, MagicMock)
-        assert isinstance(cache_mock, MagicMock)
-        assert isinstance(metrics_mock, MagicMock)
-
-        # Verify health check methods exist
-        assert hasattr(llm_mock, "health_check")
-        assert hasattr(slack_mock, "health_check")
-        assert hasattr(cache_mock, "health_check")
-        assert hasattr(metrics_mock, "health_check")
-
-    def test_environment_factory_creates_valid_configs(self):
-        """Test that MockEnvironmentFactory creates valid configurations"""
-        basic_env = MockEnvironmentFactory.create_basic_app_env()
-        rag_env = MockEnvironmentFactory.create_rag_enabled_env()
-        anthropic_env = MockEnvironmentFactory.create_anthropic_env()
-        ollama_env = MockEnvironmentFactory.create_ollama_env()
-
-        # Verify basic required keys exist
-        required_keys = [
-            "SLACK_BOT_TOKEN",
-            "SLACK_APP_TOKEN",
-            "LLM_PROVIDER",
-            "LLM_API_KEY",
-        ]
-        for env in [basic_env, rag_env, anthropic_env, ollama_env]:
-            for key in required_keys:
-                assert key in env
-                assert env[key] != ""
-
-        # Verify specific configurations
-        assert rag_env["VECTOR_ENABLED"] == "true"
-        assert anthropic_env["LLM_PROVIDER"] == "anthropic"
-        assert ollama_env["LLM_PROVIDER"] == "ollama"
-        assert "LLM_BASE_URL" in ollama_env
-
     def test_agents_registered_on_import(self):
         """Test that agents are registered when app module is imported"""
         from agents.registry import agent_registry
