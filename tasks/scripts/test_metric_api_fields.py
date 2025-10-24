@@ -14,7 +14,7 @@ load_dotenv(env_path)
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from services.metric_client import MetricClient
+from services.metric_client import MetricClient  # noqa: E402
 
 
 def main():
