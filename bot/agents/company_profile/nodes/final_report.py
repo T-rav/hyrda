@@ -72,7 +72,7 @@ async def final_report_generation(
             llm = ChatGoogleGenerativeAI(
                 model=settings.gemini.model,
                 google_api_key=settings.gemini.api_key,
-                temperature=0.7,
+                temperature=0.0,  # CRITICAL: 0.0 to prevent hallucination in relationship status
                 max_output_tokens=configuration.final_report_model_max_tokens,
             )
         except ImportError:
@@ -87,7 +87,7 @@ async def final_report_generation(
         llm = ChatOpenAI(
             model=settings.llm.model,
             api_key=settings.llm.api_key,
-            temperature=0.7,
+            temperature=0.0,  # CRITICAL: 0.0 to prevent hallucination in relationship status
             max_completion_tokens=configuration.final_report_model_max_tokens,
         )
 

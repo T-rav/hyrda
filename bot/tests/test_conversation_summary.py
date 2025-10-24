@@ -18,6 +18,30 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from services.conversation_cache import ConversationCache
 
 
+class RedisClientFactory:
+    """Factory for creating Redis client mocks"""
+
+    @staticmethod
+    def create_healthy_redis() -> AsyncMock:
+        """Create a healthy Redis client mock"""
+        mock_redis = AsyncMock()
+        mock_redis.ping.return_value = "PONG"
+        mock_redis.get.return_value = None
+        mock_redis.setex.return_value = True
+        mock_redis.delete.return_value = 1
+        return mock_redis
+
+    @staticmethod
+    def create_failing_redis(error: str = "Connection failed") -> AsyncMock:
+        """Create a Redis client mock that fails"""
+        mock_redis = AsyncMock()
+        mock_redis.ping.side_effect = Exception(error)
+        mock_redis.get.side_effect = Exception(error)
+        mock_redis.setex.side_effect = Exception(error)
+        mock_redis.delete.side_effect = Exception(error)
+        return mock_redis
+
+
 class TestConversationSummaryStorage:
     """Tests for structured summary storage with metadata"""
 
@@ -29,12 +53,7 @@ class TestConversationSummaryStorage:
     @pytest.fixture
     def mock_redis(self):
         """Create a mock Redis client"""
-        mock_redis = AsyncMock()
-        mock_redis.ping.return_value = "PONG"
-        mock_redis.get.return_value = None
-        mock_redis.setex.return_value = True
-        mock_redis.delete.return_value = 1
-        return mock_redis
+        return RedisClientFactory.create_healthy_redis()
 
     @pytest.mark.asyncio
     async def test_store_summary_with_metadata(self, cache, mock_redis):
@@ -188,12 +207,7 @@ class TestConversationSummaryVersioning:
     @pytest.fixture
     def mock_redis(self):
         """Create a mock Redis client"""
-        mock_redis = AsyncMock()
-        mock_redis.ping.return_value = "PONG"
-        mock_redis.get.return_value = None
-        mock_redis.setex.return_value = True
-        mock_redis.delete.return_value = 1
-        return mock_redis
+        return RedisClientFactory.create_healthy_redis()
 
     @pytest.mark.asyncio
     async def test_store_multiple_versions(self, cache, mock_redis):
@@ -422,12 +436,7 @@ class TestConversationSummaryEdgeCases:
 
     @pytest.fixture
     def mock_redis(self):
-        mock_redis = AsyncMock()
-        mock_redis.ping.return_value = "PONG"
-        mock_redis.get.return_value = None
-        mock_redis.setex.return_value = True
-        mock_redis.delete.return_value = 1
-        return mock_redis
+        return RedisClientFactory.create_healthy_redis()
 
     @pytest.mark.asyncio
     async def test_store_summary_error_handling(self, cache, mock_redis):
