@@ -4,15 +4,15 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import String, create_engine, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy import Boolean, Column, Integer, String, create_engine, select
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
 
-# Simple SQLAlchemy model for slack_users table
-class Base(DeclarativeBase):
-    pass
+# Simple SQLAlchemy model for slack_users table (SQLAlchemy 1.4 compatible)
+Base = declarative_base()
 
 
 class SlackUser(Base):
@@ -20,13 +20,13 @@ class SlackUser(Base):
 
     __tablename__ = "slack_users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    slack_user_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    email_address: Mapped[str | None] = mapped_column(String(255))
-    display_name: Mapped[str | None] = mapped_column(String(255))
-    real_name: Mapped[str | None] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(default=True)
-    user_type: Mapped[str | None] = mapped_column(String(50))
+    id = Column(Integer, primary_key=True)
+    slack_user_id = Column(String(255), unique=True, nullable=False)
+    email_address = Column(String(255))
+    display_name = Column(String(255))
+    real_name = Column(String(255))
+    is_active = Column(Boolean, default=True)
+    user_type = Column(String(50))
 
 
 class UserService:

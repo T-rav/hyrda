@@ -83,77 +83,181 @@ def setup_test_environment():
         yield
 
 
+# Factory classes for creating test mocks with consistent patterns
+class SettingsMockFactory:
+    """Factory for creating application settings mocks"""
+
+    @staticmethod
+    def create_basic_settings() -> MagicMock:
+        """Create basic application settings mock with default test values"""
+        settings = MagicMock()
+
+        # Slack settings
+        settings.slack = MagicMock()
+        settings.slack.bot_token = "xoxb-test"
+        settings.slack.app_token = "xapp-test"
+        settings.slack.bot_id = "B12345TEST"
+
+        # LLM settings
+        settings.llm = MagicMock()
+        settings.llm.api_url = "https://api.test.com/v1"
+        settings.llm.api_key = MagicMock()
+        settings.llm.api_key.get_secret_value.return_value = "test-key"
+        settings.llm.model = "gpt-4o-mini"
+
+        # Database settings
+        settings.database = MagicMock()
+        settings.database.enabled = True
+        settings.database.url = "postgresql+asyncpg://test:test@localhost:5432/test_db"
+
+        # Cache settings
+        settings.cache = MagicMock()
+        settings.cache.enabled = True
+        settings.cache.redis_url = "redis://localhost:6379/0"
+        settings.cache.conversation_ttl = 1800
+
+        return settings
+
+    @staticmethod
+    def create_settings_with_disabled_cache() -> MagicMock:
+        """Create settings with cache disabled"""
+        settings = SettingsMockFactory.create_basic_settings()
+        settings.cache.enabled = False
+        return settings
+
+    @staticmethod
+    def create_settings_with_disabled_database() -> MagicMock:
+        """Create settings with database disabled"""
+        settings = SettingsMockFactory.create_basic_settings()
+        settings.database.enabled = False
+        return settings
+
+
+class SlackServiceMockFactory:
+    """Factory for creating Slack service mocks"""
+
+    @staticmethod
+    def create_basic_service(bot_id: str = "B12345TEST") -> AsyncMock:
+        """Create basic Slack service mock with standard responses"""
+        service = AsyncMock()
+        service.send_message = AsyncMock()
+        service.send_thinking_indicator = AsyncMock(return_value="thinking_ts_12345")
+        service.delete_thinking_indicator = AsyncMock()
+        service.get_thread_history = AsyncMock(return_value=([], True))
+        service.get_thread_info = AsyncMock(return_value={"bot_is_participant": False})
+        service.bot_id = bot_id
+        return service
+
+    @staticmethod
+    def create_service_with_thread_history(history: list) -> AsyncMock:
+        """Create Slack service mock with pre-populated thread history"""
+        service = SlackServiceMockFactory.create_basic_service()
+        service.get_thread_history = AsyncMock(return_value=(history, True))
+        return service
+
+    @staticmethod
+    def create_failing_service(error: str = "Slack API error") -> AsyncMock:
+        """Create Slack service mock that raises errors"""
+        service = SlackServiceMockFactory.create_basic_service()
+        service.send_message = AsyncMock(side_effect=Exception(error))
+        return service
+
+
+class LLMServiceMockFactory:
+    """Factory for creating LLM service mocks"""
+
+    @staticmethod
+    def create_basic_service(response: str = "Test LLM response") -> AsyncMock:
+        """Create basic LLM service mock with standard response"""
+        service = AsyncMock()
+        service.get_response = AsyncMock(return_value=response)
+        service.close = AsyncMock()
+        return service
+
+    @staticmethod
+    def create_failing_service(error: str = "LLM API error") -> AsyncMock:
+        """Create LLM service mock that raises errors"""
+        service = AsyncMock()
+        service.get_response = AsyncMock(side_effect=Exception(error))
+        service.close = AsyncMock()
+        return service
+
+    @staticmethod
+    def create_streaming_service(chunks: list[str]) -> AsyncMock:
+        """Create LLM service mock that returns streaming responses"""
+        service = AsyncMock()
+
+        async def mock_stream():
+            for chunk in chunks:
+                yield chunk
+
+        service.get_response = AsyncMock(return_value=mock_stream())
+        service.close = AsyncMock()
+        return service
+
+
+class ConversationCacheMockFactory:
+    """Factory for creating conversation cache mocks"""
+
+    @staticmethod
+    def create_basic_cache() -> AsyncMock:
+        """Create basic conversation cache mock with standard responses"""
+        cache = AsyncMock()
+        cache.get_conversation = AsyncMock(return_value=([], True, "cache"))
+        cache.update_conversation = AsyncMock()
+        cache.get_cache_stats = AsyncMock(
+            return_value={
+                "total_conversations": 10,
+                "cache_hits": 8,
+                "cache_misses": 2,
+                "hit_rate": 0.8,
+                "redis_connection": "healthy",
+            }
+        )
+        cache.close = AsyncMock()
+        return cache
+
+    @staticmethod
+    def create_cache_with_conversation(conversation: list) -> AsyncMock:
+        """Create cache mock with pre-populated conversation"""
+        cache = ConversationCacheMockFactory.create_basic_cache()
+        cache.get_conversation = AsyncMock(return_value=(conversation, True, "cache"))
+        return cache
+
+    @staticmethod
+    def create_failing_cache(error: str = "Redis connection error") -> AsyncMock:
+        """Create cache mock that raises errors"""
+        cache = AsyncMock()
+        cache.get_conversation = AsyncMock(side_effect=Exception(error))
+        cache.update_conversation = AsyncMock(side_effect=Exception(error))
+        cache.get_cache_stats = AsyncMock(side_effect=Exception(error))
+        cache.close = AsyncMock()
+        return cache
+
+
+# Fixtures using factory classes
 @pytest.fixture
 def mock_settings():
     """Mock application settings with test values."""
-    settings = MagicMock()
-
-    # Slack settings
-    settings.slack = MagicMock()
-    settings.slack.bot_token = "xoxb-test"
-    settings.slack.app_token = "xapp-test"
-    settings.slack.bot_id = "B12345TEST"
-
-    # LLM settings
-    settings.llm = MagicMock()
-    settings.llm.api_url = "https://api.test.com/v1"
-    settings.llm.api_key = MagicMock()
-    settings.llm.api_key.get_secret_value.return_value = "test-key"
-    settings.llm.model = "gpt-4o-mini"
-
-    # Database settings
-    settings.database = MagicMock()
-    settings.database.enabled = True
-    settings.database.url = "postgresql+asyncpg://test:test@localhost:5432/test_db"
-
-    # Cache settings
-    settings.cache = MagicMock()
-    settings.cache.enabled = True
-    settings.cache.redis_url = "redis://localhost:6379/0"
-    settings.cache.conversation_ttl = 1800
-
-    return settings
+    return SettingsMockFactory.create_basic_settings()
 
 
 @pytest.fixture
 def mock_slack_service():
     """Mock Slack service for testing."""
-    service = AsyncMock()
-    service.send_message = AsyncMock()
-    service.send_thinking_indicator = AsyncMock(return_value="thinking_ts_12345")
-    service.delete_thinking_indicator = AsyncMock()
-    service.get_thread_history = AsyncMock(return_value=([], True))
-    service.get_thread_info = AsyncMock(return_value={"bot_is_participant": False})
-    service.bot_id = "B12345TEST"
-    return service
+    return SlackServiceMockFactory.create_basic_service()
 
 
 @pytest.fixture
 def mock_llm_service():
     """Mock LLM service for testing."""
-    service = AsyncMock()
-    service.get_response = AsyncMock(return_value="Test LLM response")
-    service.close = AsyncMock()
-    return service
+    return LLMServiceMockFactory.create_basic_service()
 
 
 @pytest.fixture
 def mock_conversation_cache():
     """Mock conversation cache for testing."""
-    cache = AsyncMock()
-    cache.get_conversation = AsyncMock(return_value=([], True, "cache"))
-    cache.update_conversation = AsyncMock()
-    cache.get_cache_stats = AsyncMock(
-        return_value={
-            "total_conversations": 10,
-            "cache_hits": 8,
-            "cache_misses": 2,
-            "hit_rate": 0.8,
-            "redis_connection": "healthy",
-        }
-    )
-    cache.close = AsyncMock()
-    return cache
+    return ConversationCacheMockFactory.create_basic_cache()
 
 
 # User prompt service and migrations removed - no longer used
