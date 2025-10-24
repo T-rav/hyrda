@@ -24,8 +24,7 @@ def mock_metric_client():
                 "startedWorking": "2020-01-01",
                 "endedWorking": None,
                 "groups": [
-                    {"name": "Senior Software Engineer", "groupType": "ROLE"},
-                    {"name": "Engineer", "groupType": "GROUP_TYPE_11"},
+                    {"name": "Senior Crafter", "groupType": "GROUP_TYPE_11"},
                     {"name": "Engineering", "groupType": "DEPARTMENT"},
                     {"name": "Backend", "groupType": "GROUP_TYPE_23"},
                 ],
@@ -221,7 +220,7 @@ async def test_employee_metadata_structure(
 
         # Verify text contains expected fields
         assert "Employee: John Doe" in texts[0]
-        assert "Title: Senior Software Engineer" in texts[0]
+        assert "Title: Senior Crafter" in texts[0]
         assert "Email: john@example.com" in texts[0]
         assert "Status: Allocated" in texts[0]
         assert "Started: 2020-01-01" in texts[0]
