@@ -737,12 +737,15 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
     Identifies if user is asking about a specific aspect like "AI needs",
     "hiring challenges", "cloud strategy", etc.
 
+    If URLs are present in the query, scrapes and summarizes them to provide
+    context for focus area extraction (reduces token costs in later stages).
+
     Args:
         query: User query
         llm_service: Optional LLM service for extraction (if not provided, creates one)
 
     Returns:
-        Focus area description or empty string if general profile requested
+        Focus area description (may include URL context summary) or empty string if general profile requested
 
     Examples:
         "profile tesla" -> ""
@@ -750,8 +753,11 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
         "profile tesla and its ai needs" -> "AI needs and capabilities"
         "tell me about acme's hiring challenges" -> "hiring challenges and talent acquisition"
         "what are stripe's product strategy" -> "product strategy and roadmap"
+        "profile vail resorts and highlight how https://example.com/case-study applies" ->
+            "How [case study summary] applies to their business needs"
     """
     import json
+    import re
 
     from langchain_openai import ChatOpenAI
 
@@ -760,7 +766,70 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
     try:
         settings = Settings()
 
+        # Step 1: Extract and scrape URLs from query
+        url_pattern = re.compile(r"https?://[^\s]+")
+        urls = url_pattern.findall(query)
+
+        url_summaries = []
+        if urls:
+            logger.info(f"Found {len(urls)} URL(s) in query, scraping for context...")
+            from services.search_clients import get_tavily_client
+
+            tavily_client = get_tavily_client()
+            if tavily_client:
+                for url in urls[:3]:  # Limit to 3 URLs to avoid excessive scraping
+                    try:
+                        logger.info(f"Scraping URL: {url}")
+                        scraped = await tavily_client.scrape_url(url)
+
+                        # Summarize the scraped content to save tokens
+                        if scraped and scraped.get("content"):
+                            content = scraped["content"][:8000]  # Limit to ~2k tokens
+
+                            # Use LLM to summarize
+                            summary_llm = ChatOpenAI(
+                                model="gpt-4o-mini",
+                                api_key=settings.llm.api_key,
+                                temperature=0.0,
+                                max_completion_tokens=400,  # Increased for 5-7 sentences
+                            )
+
+                            summary_prompt = f"""Summarize this webpage content in 5-7 concise sentences covering:
+- Key value propositions and business outcomes
+- Technologies, methodologies, or approaches used
+- Specific challenges addressed
+- Results or impact achieved
+- Any relevant industry context
+
+Content:
+{content}
+
+Return ONLY the summary (no preamble)."""
+
+                            summary_response = await summary_llm.ainvoke(summary_prompt)
+                            summary = summary_response.content.strip()
+
+                            url_summaries.append(f"[{url}]: {summary}")
+                            logger.info(
+                                f"Scraped and summarized {url} ({len(summary)} chars)"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to scrape {url}: {e}")
+            else:
+                logger.warning("Tavily client not available, skipping URL scraping")
+
+        # Step 2: Build extraction prompt with URL context
+        url_context_section = ""
+        if url_summaries:
+            url_context_section = f"""
+
+**Referenced URL Content:**
+{chr(10).join(url_summaries)}
+
+Use this context when determining the focus area."""
+
         extraction_prompt = f"""Analyze this user query and extract the specific focus area or aspect they're interested in.
+{url_context_section}
 
 Query: "{query}"
 
@@ -786,6 +855,10 @@ Pay attention to phrases like:
 If the user is asking about a SPECIFIC aspect, extract and return that focus area.
 If they're asking for a general profile with no specific focus, return an empty string.
 
+**IMPORTANT**: If URL summaries are provided above, incorporate the key context into your focus area description.
+For example, if the URL is a case study about X technology helping Y industry, include that context:
+"How [X technology approach] from the case study applies to their [Y industry] needs"
+
 Examples:
 - "profile tesla" → ""
 - "profile tesla's ai needs" → "AI needs and capabilities"
@@ -795,13 +868,13 @@ Examples:
 - "acme corp hiring challenges" → "hiring challenges and talent acquisition"
 - "profile google devops practices" → "DevOps practices and infrastructure"
 
-Return ONLY a JSON object: {{"focus_area": "extracted focus or empty string"}}"""
+Return ONLY a JSON object: {{"focus_area": "extracted focus with URL context incorporated", "url_context": "brief summary of URL content if URLs were provided, otherwise empty string"}}"""
 
         llm = ChatOpenAI(
             model="gpt-4o-mini",
             api_key=settings.llm.api_key,
             temperature=0.0,
-            max_completion_tokens=100,
+            max_completion_tokens=200,  # Increased to accommodate URL context
             model_kwargs={"response_format": {"type": "json_object"}},
         )
 
@@ -811,12 +884,16 @@ Return ONLY a JSON object: {{"focus_area": "extracted focus or empty string"}}""
         # Parse JSON response (guaranteed to be valid JSON with response_format)
         result_data = json.loads(result_text)
         focus_area = result_data.get("focus_area", "").strip()
+        url_context = result_data.get("url_context", "").strip()
 
         if focus_area:
             logger.info(f"LLM extracted focus area: '{focus_area}'")
+            if url_context:
+                logger.info(f"URL context included: '{url_context[:100]}...'")
         else:
             logger.info("LLM determined no specific focus area (general profile)")
 
+        # Return focus area (which now includes URL context if present)
         return focus_area
 
     except Exception as e:
