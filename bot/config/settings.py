@@ -77,12 +77,12 @@ class CacheSettings(BaseSettings):
 class DatabaseSettings(BaseSettings):
     """MySQL database settings"""
 
-    url: str = Field(
-        default="mysql+pymysql://insightmesh_data:insightmesh_data_password@localhost:3306/insightmesh_data",
-        description="MySQL connection URL",
+    url: str | None = Field(
+        default=None,
+        description="MySQL connection URL (required if enabled=True)",
         validation_alias="DATA_DATABASE_URL",  # Support both DATABASE_URL and DATA_DATABASE_URL
     )
-    enabled: bool = Field(default=True, description="Enable database features")
+    enabled: bool = Field(default=False, description="Enable database features")
 
     model_config = ConfigDict(env_prefix="DATABASE_", populate_by_name=True)  # type: ignore[assignment,typeddict-unknown-key]
 
