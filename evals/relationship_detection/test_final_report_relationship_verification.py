@@ -269,12 +269,11 @@ async def test_allcampus_existing_relationship():
 @pytest.mark.asyncio
 @pytest.mark.integration
 @pytest.mark.slow
-async def test_generic_company_no_relationship():
+async def test_costco_no_relationship():
     """
-    Test a generic Fortune 500 company (e.g., Target, McDonald's) that definitely
-    has NO relationship with 8th Light.
+    Test Costco (Fortune 500 company) that has NO relationship with 8th Light.
 
-    This ensures the prompt properly handles companies that may be mentioned
+    This ensures the prompt properly handles large companies that may be mentioned
     in various contexts but never as direct clients.
     """
     # Require env for real integration
@@ -288,13 +287,12 @@ async def test_generic_company_no_relationship():
     # Import here to avoid import errors when env not configured
     from agents.profile_agent import run_profile_agent
 
-    # Test with McDonald's (very unlikely to have relationship)
     print("\n" + "=" * 80)
-    print("TESTING: McDonald's Profile Generation (No Relationship Expected)")
+    print("TESTING: Costco Profile Generation (No Relationship Expected)")
     print("=" * 80)
 
     result = await run_profile_agent(
-        query="profile McDonald's",
+        query="profile Costco",
         profile_type="company",
         context={},
     )
@@ -325,11 +323,91 @@ async def test_generic_company_no_relationship():
 
     # Check 3: Should show NO relationship
     assert status == "none", (
-        "McDonald's should show no relationship (unless we actually have a case study)"
+        "Costco should show no relationship (unless we actually have a case study)"
     )
-    print(f"✅ Correctly identified McDonald's as having no prior engagement")
+    print(f"✅ Correctly identified Costco as having no prior engagement")
 
-    print("\n🎉 TEST PASSED: Generic company relationship verification successful")
+    print("\n🎉 TEST PASSED: Costco relationship verification successful")
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+@pytest.mark.slow
+async def test_3step_existing_relationship():
+    """
+    Test 3Step (company with KNOWN prior relationship) is correctly
+    identified with specific project details.
+
+    This validates the prompt allows legitimate relationships through.
+    """
+    # Require env for real integration
+    if not os.getenv("VECTOR_HOST"):
+        pytest.skip("VECTOR_HOST not configured - skipping integration test")
+    if not os.getenv("LLM_API_KEY"):
+        pytest.skip("LLM_API_KEY not configured - skipping integration test")
+    if not os.getenv("LANGFUSE_PUBLIC_KEY"):
+        pytest.skip("LANGFUSE_PUBLIC_KEY not configured - skipping integration test")
+
+    # Import here to avoid import errors when env not configured
+    from agents.profile_agent import run_profile_agent
+
+    print("\n" + "=" * 80)
+    print("TESTING: 3Step Profile Generation (Relationship Expected)")
+    print("=" * 80)
+
+    result = await run_profile_agent(
+        query="profile 3Step",
+        profile_type="company",
+        context={},
+    )
+
+    final_report = result.get("final_report", "")
+
+    # Extract relationship section
+    relationship_section = extract_relationship_section(final_report)
+
+    assert relationship_section is not None, "Report should have a Relationships section"
+
+    print(f"\n🔍 Relationship Section:")
+    print("=" * 80)
+    print(relationship_section)
+    print("=" * 80)
+
+    # Check 1: Should have explicit status
+    has_status, status = has_explicit_status(relationship_section)
+    assert has_status, "Relationship section must have explicit status declaration"
+    print(f"\n✅ Has explicit status: {status}")
+
+    # Check 2: Should NOT have forbidden language
+    has_forbidden, found_phrases = has_false_positive_language(relationship_section)
+    assert not has_forbidden, (
+        f"Relationship section contains forbidden language: {found_phrases}"
+    )
+    print(f"✅ No forbidden language found")
+
+    # Check 3: For 3Step, should show EXISTING relationship
+    assert status == "existing", (
+        "3Step is a known client (has case study in KB), should show existing relationship"
+    )
+    print(f"✅ Correctly identified 3Step as existing client")
+
+    # Check 4: Should mention specific projects/deliverables
+    section_lower = relationship_section.lower()
+    project_indicators = [
+        "3step",
+        "case study",
+        "project",
+        "built",
+        "delivered",
+    ]
+    found_indicators = [ind for ind in project_indicators if ind in section_lower]
+    assert len(found_indicators) > 0, (
+        f"Relationship section should mention specific projects/deliverables. "
+        f"Found: {found_indicators}"
+    )
+    print(f"✅ Mentions specific project details: {found_indicators}")
+
+    print("\n🎉 TEST PASSED: 3Step relationship verification successful")
 
 
 if __name__ == "__main__":
@@ -349,18 +427,25 @@ if __name__ == "__main__":
             print(f"\n❌ Vail Resorts test failed: {e}")
             return 1
 
-        # Test 2: AllCampus (true positive case)
+        # Test 2: Costco (no relationship)
+        try:
+            await test_costco_no_relationship()
+        except Exception as e:
+            print(f"\n❌ Costco test failed: {e}")
+            return 1
+
+        # Test 3: AllCampus (true positive case)
         try:
             await test_allcampus_existing_relationship()
         except Exception as e:
             print(f"\n❌ AllCampus test failed: {e}")
             return 1
 
-        # Test 3: Generic company (no relationship)
+        # Test 4: 3Step (true positive case)
         try:
-            await test_generic_company_no_relationship()
+            await test_3step_existing_relationship()
         except Exception as e:
-            print(f"\n❌ Generic company test failed: {e}")
+            print(f"\n❌ 3Step test failed: {e}")
             return 1
 
         print("\n" + "=" * 80)
