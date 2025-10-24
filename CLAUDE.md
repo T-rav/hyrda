@@ -283,6 +283,50 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 - **Langfuse Tracing**: All tool calls are traced for observability
 - **Auto-discovery**: Bot detects when queries need real-time web data
 
+### Relationship Verification System
+
+The bot includes a sophisticated system to prevent false positives when identifying past client relationships in company profiles.
+
+#### How It Works
+
+1. **Internal Search Tool** (`bot/agents/company_profile/tools/internal_search.py`):
+   - Performs deep search of internal knowledge base for company-specific documents
+   - Uses enhanced entity boosting to prioritize company-specific docs over generic index files
+   - Returns explicit "Relationship status: Existing client" or "Relationship status: No prior engagement"
+   - Filters out index/overview files that contaminate results
+
+2. **Langfuse Prompt Versioning**:
+   - Prompt v10 (production): Trusts internal_search_tool's relationship determination
+   - Scripts in `scripts/`: `update_final_report_prompt.py` and `fix_final_report_prompt.py`
+   - Prompt tells LLM to trust the "Relationship status:" line, not validate it again
+
+3. **Entity Boosting Logic**:
+   - 20% boost for company name in content (vs 5% for other terms)
+   - 30% boost for company name in title (vs 10% for other terms)
+   - -50% penalty for index/overview files
+   - Smart company name extraction from queries
+
+#### Integration Tests
+
+Comprehensive test suite in `evals/relationship_detection/`:
+- `test_relationship_verification_integration.py`: 4 integration tests using real vector DB
+- Tests validate false positive prevention (Vail Resorts, Costco) and true positive detection (AllCampus, 3Step)
+- Run with: `PYTHONPATH=bot venv/bin/python -m pytest evals/relationship_detection/test_relationship_verification_integration.py`
+
+#### Key Files
+
+- `bot/agents/company_profile/tools/internal_search.py`: Entity boosting logic (lines 466-527)
+- `scripts/fix_final_report_prompt.py`: Prompt updater to trust internal search
+- `evals/relationship_detection/*.py`: Integration and unit tests
+
+#### Updating the Prompt
+
+To update the Langfuse prompt:
+```bash
+PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
+```
+Then promote the new version to production in Langfuse UI.
+
 ## Testing Framework & Quality Standards
 
 ### Test Suite Requirements
