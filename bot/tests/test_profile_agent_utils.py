@@ -2,6 +2,7 @@
 
 import os
 import sys
+from unittest.mock import Mock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -14,6 +15,7 @@ from agents.company_profile.utils import (
     create_system_message,
     detect_profile_type,
     estimate_tokens,
+    extract_focus_area,
     format_research_context,
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
@@ -410,3 +412,107 @@ class TestThinkTool:
         """Test think tool has proper schema"""
         assert think_tool.name == "think_tool"
         assert "reflection" in str(think_tool.args_schema.model_json_schema())
+
+
+class TavilyClientMockFactory:
+    """Factory for creating Tavily client mocks"""
+
+    @staticmethod
+    def create_successful_scraper(content: str = "Default content") -> Mock:
+        """Create Tavily client mock that successfully scrapes URLs"""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_tavily = Mock()
+        mock_tavily.scrape_url = AsyncMock(
+            return_value={"success": True, "content": content}
+        )
+        return mock_tavily
+
+    @staticmethod
+    def create_failing_scraper(error: str = "Scraping failed") -> Mock:
+        """Create Tavily client mock that fails to scrape"""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_tavily = Mock()
+        mock_tavily.scrape_url = AsyncMock(side_effect=Exception(error))
+        return mock_tavily
+
+
+class ChatOpenAIMockFactory:
+    """Factory for creating ChatOpenAI mocks"""
+
+    @staticmethod
+    def create_with_response(response_content: str) -> Mock:
+        """Create ChatOpenAI mock with a single response"""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_response = Mock()
+        mock_response.content = response_content
+
+        mock_llm = Mock()
+        mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+        return mock_llm
+
+    @staticmethod
+    def create_with_multiple_responses(responses: list[str]) -> Mock:
+        """Create ChatOpenAI mock with multiple sequential responses"""
+        from unittest.mock import AsyncMock, Mock
+
+        mock_responses = [Mock(content=content) for content in responses]
+
+        mock_llm = Mock()
+        mock_llm.ainvoke = AsyncMock(side_effect=mock_responses)
+        return mock_llm
+
+
+class TestExtractFocusArea:
+    """Tests for extract_focus_area function with URL scraping"""
+
+    @pytest.mark.asyncio
+    async def test_extract_focus_area_no_url(self):
+        """Test focus area extraction without URLs"""
+        from unittest.mock import patch
+
+        mock_llm = ChatOpenAIMockFactory.create_with_response(
+            '{"focus_area": "AI needs and capabilities", "url_context": ""}'
+        )
+
+        with patch("langchain_openai.ChatOpenAI", return_value=mock_llm):
+            result = await extract_focus_area("profile tesla's ai needs")
+
+        assert result == "AI needs and capabilities"
+        # Should not attempt to scrape URLs
+        mock_llm.ainvoke.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_extract_focus_area_with_url_scraping(self):
+        """Test focus area extraction with URL scraping and summarization"""
+        from unittest.mock import patch
+
+        # Create mocks using factories
+        mock_tavily = TavilyClientMockFactory.create_successful_scraper(
+            "Aspenware is a TravelTech platform. We helped them implement AI-driven data enrichment for e-commerce."
+        )
+
+        mock_llm = ChatOpenAIMockFactory.create_with_multiple_responses(
+            [
+                "Aspenware case study: AI-driven enrichment pipeline for TravelTech e-commerce platform.",
+                '{"focus_area": "AI-driven enrichment strategies for e-commerce", "url_context": "Aspenware case study context"}',
+            ]
+        )
+
+        with (
+            patch(
+                "services.search_clients.get_tavily_client", return_value=mock_tavily
+            ),
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+        ):
+            result = await extract_focus_area(
+                "profile Vail Resorts and https://example.com/case-study"
+            )
+
+        assert result == "AI-driven enrichment strategies for e-commerce"
+        # Should scrape URL
+        mock_tavily.scrape_url.assert_called_once_with("https://example.com/case-study")
+        # Should call LLM twice (summary + extraction)
+        assert mock_llm.ainvoke.call_count == 2
