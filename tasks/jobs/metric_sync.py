@@ -267,6 +267,10 @@ class MetricSyncJob(BaseJob):
                 "N/A",
             )
 
+            # Determine employment status based on endedWorking field
+            is_active = not employee.get("endedWorking")
+            employment_status = "Active" if is_active else "Inactive"
+
             # Get project history for this employee
             projects = employee_projects.get(employee["id"], set())
             project_history = (
@@ -278,6 +282,7 @@ class MetricSyncJob(BaseJob):
                 f"Employee: {employee['name']}\n"
                 f"Title: {title}\n"
                 f"Email: {employee.get('email', 'N/A')}\n"
+                f"Employment Status: {employment_status}\n"
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
                 f"Ended: {employee.get('endedWorking', 'Active')}\n"
@@ -293,6 +298,8 @@ class MetricSyncJob(BaseJob):
                 "name": employee["name"],
                 "title": title if title != "N/A" else "",
                 "email": employee.get("email", ""),
+                "is_active": is_active,
+                "employment_status": employment_status,
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
                 "ended_working": employee.get("endedWorking", ""),
