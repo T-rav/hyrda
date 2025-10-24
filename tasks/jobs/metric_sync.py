@@ -260,6 +260,12 @@ class MetricSyncJob(BaseJob):
                 for g in employee.get("groups", [])
             )
 
+            # Extract job title from groups (groupType: ROLE)
+            title = next(
+                (g["name"] for g in employee.get("groups", []) if g["groupType"] == "ROLE"),
+                "N/A",
+            )
+
             # Get project history for this employee
             projects = employee_projects.get(employee["id"], set())
             project_history = (
@@ -269,7 +275,7 @@ class MetricSyncJob(BaseJob):
             # Create searchable text with project history
             text = (
                 f"Employee: {employee['name']}\n"
-                f"Title: {employee.get('title', 'N/A')}\n"
+                f"Title: {title}\n"
                 f"Email: {employee.get('email', 'N/A')}\n"
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
@@ -284,7 +290,7 @@ class MetricSyncJob(BaseJob):
                 "data_type": "employee",
                 "employee_id": employee["id"],
                 "name": employee["name"],
-                "title": employee.get("title", ""),
+                "title": title if title != "N/A" else "",
                 "email": employee.get("email", ""),
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
