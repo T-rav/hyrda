@@ -67,13 +67,13 @@ async def debug_metadata():
         print(f"\n❌ Error querying Qdrant: {e}")
         return 1
 
-    # 2. LangChain retrieval
+    # 2. Bot's vector store retrieval
     print("\n" + "=" * 100)
-    print("2. LANGCHAIN RETRIEVAL")
+    print("2. BOT'S VECTOR STORE RETRIEVAL")
     print("=" * 100)
 
     try:
-        from langchain_qdrant import QdrantVectorStore
+        from services.vector_stores import QdrantVectorStore
         from services.embedding import create_embedding_provider
         from config.settings import Settings
 
@@ -81,45 +81,47 @@ async def debug_metadata():
 
         # Initialize embedding provider
         embedding_provider = create_embedding_provider(settings.embedding)
-        embeddings = embedding_provider.get_langchain_embeddings()
 
-        # Initialize LangChain Qdrant vector store
-        vector_store = QdrantVectorStore(
-            client=client,
-            collection_name=collection,
-            embedding=embeddings,
-        )
+        # Initialize bot's vector store
+        vector_store = QdrantVectorStore(settings.vector)
+        await vector_store.initialize()
 
-        # Try to retrieve by searching for content
-        print("\nSearching for document via similarity search...")
+        # Search for the document by its content
+        print("\nSearching for document via bot's vector store...")
 
         # Get the document content from direct query
-        doc_content = doc.payload.get('text', '')[:100]
-        print(f"Searching for content: {doc_content[:50]}...")
+        doc_content = doc.payload.get('text', '')[:200]
+        print(f"Searching for content: {doc_content[:80]}...")
 
-        results = await vector_store.asimilarity_search_with_score(
-            doc_content,
+        # Embed the query
+        query_embedding = await embedding_provider.get_embedding(doc_content)
+
+        # Search Qdrant using bot's method
+        results = await vector_store.asearch(
+            query_embedding=query_embedding,
             k=5
         )
 
-        print(f"\n✅ Found {len(results)} documents via LangChain")
+        print(f"\n✅ Found {len(results)} documents via bot's vector store")
 
         # Check if our document is in the results
         found_target = False
-        for i, (langchain_doc, score) in enumerate(results, 1):
-            is_target = str(langchain_doc.metadata.get('chunk_id', '')) == doc.payload.get('chunk_id', '')
+        for i, result in enumerate(results, 1):
+            # result structure from bot's vector store
+            result_metadata = result.get('metadata', {})
+            is_target = result_metadata.get('chunk_id', '') == doc.payload.get('chunk_id', '')
             marker = "👉 TARGET DOCUMENT" if is_target else ""
 
-            print(f"\n{i}. Score: {score:.4f} {marker}")
-            print(f"   Metadata keys: {list(langchain_doc.metadata.keys())}")
-            print(f"   source: {langchain_doc.metadata.get('source', 'MISSING')}")
-            print(f"   file_name: {langchain_doc.metadata.get('file_name', 'MISSING')}")
-            print(f"   chunk_id: {langchain_doc.metadata.get('chunk_id', 'MISSING')}")
+            print(f"\n{i}. Score: {result.get('score', 'N/A'):.4f} {marker}")
+            print(f"   Metadata keys: {list(result_metadata.keys())}")
+            print(f"   source: {result_metadata.get('source', 'MISSING')}")
+            print(f"   file_name: {result_metadata.get('file_name', 'MISSING')}")
+            print(f"   chunk_id: {result_metadata.get('chunk_id', 'MISSING')}")
 
             if is_target:
                 found_target = True
-                print("\n   Full metadata from LangChain:")
-                for key, value in langchain_doc.metadata.items():
+                print("\n   Full metadata from bot's vector store:")
+                for key, value in result_metadata.items():
                     if key == 'text':
                         print(f"      {key}: {str(value)[:100]}...")
                     else:
@@ -129,7 +131,7 @@ async def debug_metadata():
             print("\n⚠️  Target document not in top 5 results")
 
     except Exception as e:
-        print(f"\n❌ Error with LangChain retrieval: {e}")
+        print(f"\n❌ Error with bot's vector store retrieval: {e}")
         import traceback
         traceback.print_exc()
         return 1
@@ -140,10 +142,10 @@ async def debug_metadata():
     print("=" * 100)
 
     if found_target:
-        print("\n✅ Document metadata IS preserved through LangChain")
+        print("\n✅ Document metadata IS preserved through bot's vector store")
         print("If logs show missing metadata, the issue is in the logging code, not the data.")
     else:
-        print("\n⚠️  Could not find target document in LangChain results")
+        print("\n⚠️  Could not find target document in bot's vector store results")
         print("Try running with a different document ID.")
 
     return 0
