@@ -128,41 +128,33 @@ class InternalSearchTool(BaseTool):
                 )
                 logger.info(f"Initialized embeddings: {embedding_model}")
 
-            # Initialize LangChain VectorStore
+            # Initialize direct Qdrant client (NO LangChain - it mangles metadata)
             if (
                 not self.vector_store
                 and vector_provider == "qdrant"
                 and vector_host
                 and self.embeddings
             ):
-                # Import LangChain Qdrant
-                from langchain_qdrant import QdrantVectorStore
                 from qdrant_client import QdrantClient
 
-                # Initialize Qdrant client - use host/port, not URL
-                # This matches how the bot's regular RAG initializes it
+                # Initialize Qdrant client directly
                 if vector_api_key:
-                    client = QdrantClient(
+                    self.qdrant_client = QdrantClient(
                         host=vector_host,
                         port=int(vector_port),
                         api_key=vector_api_key,
                         https=False,  # Explicitly disable HTTPS for localhost
                     )
                 else:
-                    client = QdrantClient(
+                    self.qdrant_client = QdrantClient(
                         host=vector_host,
                         port=int(vector_port),
                     )
 
-                self.vector_store = QdrantVectorStore(
-                    client=client,
-                    collection_name=vector_collection,
-                    embedding=self.embeddings,
-                    content_payload_key="text",  # Bot stores content in "text" field, not "page_content"
-                    metadata_payload_key=None,  # CRITICAL: Set to None - Qdrant stores metadata fields directly in payload
-                )
+                self.vector_collection = vector_collection
+                self.vector_store = "direct_qdrant"  # Flag that we're using direct mode
                 logger.info(
-                    f"Initialized vector store: {vector_collection} at http://{vector_host}:{vector_port}"
+                    f"Initialized direct Qdrant client: {vector_collection} at http://{vector_host}:{vector_port}"
                 )
             elif vector_provider != "qdrant":
                 logger.info(
@@ -174,6 +166,57 @@ class InternalSearchTool(BaseTool):
         except Exception as e:
             logger.error(f"Failed to initialize internal search components: {e}")
             logger.info("Internal search tool will be unavailable")
+
+    async def _direct_qdrant_search(self, query: str, k: int = 100):
+        """Search Qdrant directly without LangChain (preserves metadata).
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+
+        Returns:
+            List of tuples: [(doc_dict, score), ...]
+            where doc_dict has 'page_content' and 'metadata' keys (LangChain-compatible format)
+        """
+        from dataclasses import dataclass
+
+        # Simple doc class to match LangChain's Document interface
+        @dataclass
+        class SimpleDoc:
+            page_content: str
+            metadata: dict
+
+        # Get embedding for query
+        from langchain_openai import OpenAIEmbeddings
+
+        if isinstance(self.embeddings, OpenAIEmbeddings):
+            query_vector = await self.embeddings.aembed_query(query)
+        else:
+            # Fallback for other embedding types
+            query_vector = self.embeddings.embed_query(query)
+
+        # Search Qdrant directly
+        search_results = self.qdrant_client.search(
+            collection_name=self.vector_collection,
+            query_vector=query_vector,
+            limit=k,
+            with_payload=True,
+        )
+
+        # Convert to LangChain-compatible format
+        results = []
+        for result in search_results:
+            # Extract text content
+            text = result.payload.get("text", "")
+
+            # ALL other fields are metadata (source, file_name, chunk_id, etc.)
+            metadata = {k: v for k, v in result.payload.items() if k != "text"}
+
+            doc = SimpleDoc(page_content=text, metadata=metadata)
+            score = result.score
+            results.append((doc, score))
+
+        return results
 
     async def _arun(self, query: str, effort: str = "medium") -> str:
         """Execute internal search asynchronously.
@@ -210,11 +253,10 @@ class InternalSearchTool(BaseTool):
 
                 # Direct search without rewriting (like regular RAG)
                 # This ensures we find documents that actually mention the company name
-                # Use score_threshold=0 to get ALL results, like regular RAG does
-                results = await self.vector_store.asimilarity_search_with_score(
+                # Use direct Qdrant search to preserve metadata
+                results = await self._direct_qdrant_search(
                     sub_query,  # Use original sub-query, not rewritten
                     k=100,  # Get many more results (Gemini 2.5 can handle large context)
-                    score_threshold=None,  # No threshold - get everything
                 )
 
                 logger.info(
@@ -283,11 +325,9 @@ class InternalSearchTool(BaseTool):
                     ]
                     for phrase in fallback_phrases:
                         try:
-                            results = (
-                                await self.vector_store.asimilarity_search_with_score(
-                                    phrase,
-                                    k=5,
-                                )
+                            results = await self._direct_qdrant_search(
+                                phrase,
+                                k=5,
                             )
                             # CRITICAL: Filter results to only include docs that mention the company
                             # This prevents false positives from other companies' case studies
