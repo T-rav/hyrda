@@ -7,7 +7,6 @@ Tests the LangChain-based internal search tool for company profile research.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.documents import Document
 
 from agents.company_profile.tools.internal_search import (
     InternalSearchInput,
@@ -24,12 +23,15 @@ class TestInternalSearchTool:
         # Mock LangChain components
         self.mock_llm = AsyncMock()
         self.mock_embeddings = MagicMock()
-        self.mock_vector_store = AsyncMock()
+
+        # Mock direct Qdrant client
+        self.mock_qdrant_client = MagicMock()
 
         self.tool = InternalSearchTool(
             llm=self.mock_llm,
             embeddings=self.mock_embeddings,
-            vector_store=self.mock_vector_store,
+            qdrant_client=self.mock_qdrant_client,
+            vector_collection="test-collection",
         )
 
     def test_tool_initialization(self):
@@ -39,7 +41,8 @@ class TestInternalSearchTool:
         assert self.tool.args_schema == InternalSearchInput
         assert self.tool.llm == self.mock_llm
         assert self.tool.embeddings == self.mock_embeddings
-        assert self.tool.vector_store == self.mock_vector_store
+        assert self.tool.qdrant_client == self.mock_qdrant_client
+        assert self.tool.vector_collection == "test-collection"
 
     def test_tool_input_schema(self):
         """Test tool input schema validation"""
@@ -55,16 +58,23 @@ class TestInternalSearchTool:
     @pytest.mark.asyncio
     async def test_search_without_vector_store(self):
         """Test search fails gracefully without vector store"""
+        # Mock embeddings for direct Qdrant search
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock qdrant_client to return empty results
+        mock_qdrant = MagicMock()
+        mock_qdrant.search.return_value = []
+
         tool = InternalSearchTool(
             llm=self.mock_llm,
             embeddings=self.mock_embeddings,
-            vector_store=None,
+            qdrant_client=mock_qdrant,
+            vector_collection="test",
         )
 
         result = await tool._arun("test query")
 
-        assert "not available" in result.lower()
-        assert "vector database" in result.lower()
+        assert "no results" in result.lower() or "no relevant" in result.lower()
 
     @pytest.mark.asyncio
     async def test_query_decomposition(self):
@@ -145,19 +155,27 @@ class TestInternalSearchTool:
             synthesis_response,
         ]
 
-        # Mock vector store results with case study to prevent fallback retrieval
-        doc1 = Document(
-            page_content="Content from project A case study",
-            metadata={"file_name": "project_a_case_study.pdf"},
-        )
-        doc2 = Document(
-            page_content="Content from project B",
-            metadata={"file_name": "project_b.pdf"},
-        )
+        # Mock embeddings for _direct_qdrant_search
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
-        self.mock_vector_store.asimilarity_search_with_score.side_effect = [
-            [(doc1, 0.1)],  # First sub-query results
-            [(doc2, 0.15)],  # Second sub-query results
+        # Mock Qdrant search results
+        mock_result1 = MagicMock()
+        mock_result1.payload = {
+            "text": "Content from project A case study",
+            "file_name": "project_a_case_study.pdf",
+        }
+        mock_result1.score = 0.9
+
+        mock_result2 = MagicMock()
+        mock_result2.payload = {
+            "text": "Content from project B",
+            "file_name": "project_b.pdf",
+        }
+        mock_result2.score = 0.85
+
+        self.mock_qdrant_client.search.side_effect = [
+            [mock_result1],  # First sub-query results
+            [mock_result2],  # Second sub-query results
         ]
 
         result = await self.tool._arun("test query", effort="low")
@@ -165,13 +183,13 @@ class TestInternalSearchTool:
         # Verify result format
         assert "Internal Knowledge Base Search" in result
         assert "synthesized summary" in result.lower()
-        assert "project_a.pdf" in result or "project_b.pdf" in result
+        assert "project_a_case_study.pdf" in result or "project_b.pdf" in result
 
         # Verify all components were called
         assert (
             self.mock_llm.ainvoke.call_count == 2
         )  # decompose + synthesis (no rewriting anymore)
-        assert self.mock_vector_store.asimilarity_search_with_score.call_count == 2
+        assert self.mock_qdrant_client.search.call_count == 2
 
     @pytest.mark.asyncio
     async def test_deduplication(self):
@@ -188,15 +206,20 @@ class TestInternalSearchTool:
             synthesis_response,
         ]
 
-        # Same document returned for both queries
-        duplicate_doc = Document(
-            page_content="Duplicate content here",
-            metadata={"file_name": "duplicate.pdf"},
-        )
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
-        self.mock_vector_store.asimilarity_search_with_score.side_effect = [
-            [(duplicate_doc, 0.1)],
-            [(duplicate_doc, 0.1)],
+        # Same document returned for both queries
+        duplicate_result = MagicMock()
+        duplicate_result.payload = {
+            "text": "Duplicate content here",
+            "file_name": "duplicate.pdf",
+        }
+        duplicate_result.score = 0.9
+
+        self.mock_qdrant_client.search.side_effect = [
+            [duplicate_result],
+            [duplicate_result],
         ]
 
         result = await self.tool._arun("test query", effort="low")
@@ -207,11 +230,13 @@ class TestInternalSearchTool:
     @pytest.mark.asyncio
     async def test_effort_levels(self):
         """Test different effort levels produce different query counts"""
-        # Mock responses
-        self.mock_llm.ainvoke.return_value = MagicMock(content="[]")
-        self.mock_vector_store.asimilarity_search_with_score.return_value = []
+        # Mock embeddings for direct Qdrant search
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
-        # Low effort
+        # Mock Qdrant search
+        self.mock_qdrant_client.search.return_value = []
+
+        # Test different effort levels
         for effort, expected_queries in [("low", 2), ("medium", 3), ("high", 5)]:
             self.mock_llm.ainvoke.reset_mock()
             self.mock_llm.ainvoke.return_value = MagicMock(
@@ -236,8 +261,11 @@ class TestInternalSearchTool:
 
         self.mock_llm.ainvoke.side_effect = [decompose_response, rewrite_response]
 
-        # No results from vector store
-        self.mock_vector_store.asimilarity_search_with_score.return_value = []
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # No results from Qdrant
+        self.mock_qdrant_client.search.return_value = []
 
         result = await self.tool._arun("test query")
 
@@ -249,8 +277,11 @@ class TestInternalSearchTool:
         # Mock to raise exception during decomposition
         self.mock_llm.ainvoke.side_effect = Exception("LLM failure")
 
-        # Mock vector store to return no results
-        self.mock_vector_store.asimilarity_search_with_score.return_value = []
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant to return no results
+        self.mock_qdrant_client.search.return_value = []
 
         result = await self.tool._arun("test query")
 
@@ -276,24 +307,28 @@ class TestInternalSearchToolFactory:
         """Test factory creates tool with provided components"""
         mock_llm = MagicMock()
         mock_embeddings = MagicMock()
-        mock_vector_store = MagicMock()
+        mock_qdrant_client = MagicMock()
 
         tool = internal_search_tool(
-            llm=mock_llm, embeddings=mock_embeddings, vector_store=mock_vector_store
+            llm=mock_llm,
+            embeddings=mock_embeddings,
+            qdrant_client=mock_qdrant_client,
+            vector_collection="test",
         )
 
         assert isinstance(tool, InternalSearchTool)
         assert tool.llm == mock_llm
         assert tool.embeddings == mock_embeddings
-        assert tool.vector_store == mock_vector_store
+        assert tool.qdrant_client == mock_qdrant_client
+        assert tool.vector_collection == "test"
 
     def test_factory_without_components(self):
         """Test factory creates tool with lazy loading"""
-        tool = internal_search_tool()
+        # Need at minimum the required fields for Pydantic
+        tool = internal_search_tool(qdrant_client=MagicMock(), vector_collection="test")
 
         assert isinstance(tool, InternalSearchTool)
-        # Components will be None until lazy-loaded
-        # (which requires environment variables)
+        # LLM and embeddings will be lazy-loaded from environment if needed
 
     @patch("agents.company_profile.tools.internal_search.InternalSearchTool")
     def test_factory_error_handling(self, mock_tool_class):
@@ -315,19 +350,18 @@ class TestInternalSearchToolIntegration:
         # Create tool with mocks
         mock_llm = AsyncMock()
         mock_embeddings = MagicMock()
-        mock_vector_store = AsyncMock()
+        mock_qdrant_client = MagicMock()
 
         tool = InternalSearchTool(
-            llm=mock_llm, embeddings=mock_embeddings, vector_store=mock_vector_store
+            llm=mock_llm,
+            embeddings=mock_embeddings,
+            qdrant_client=mock_qdrant_client,
+            vector_collection="test",
         )
 
         # Mock decomposition
         decompose_response = MagicMock()
         decompose_response.content = '["test query"]'
-
-        # Mock rewriting
-        rewrite_response = MagicMock()
-        rewrite_response.content = "Rewritten test query"
 
         # Mock synthesis
         synthesis_response = MagicMock()
@@ -335,12 +369,14 @@ class TestInternalSearchToolIntegration:
 
         mock_llm.ainvoke.side_effect = [
             decompose_response,
-            rewrite_response,
             synthesis_response,
         ]
 
-        # Mock vector results
-        mock_vector_store.asimilarity_search_with_score.return_value = []
+        # Mock embeddings for direct Qdrant search
+        mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results
+        mock_qdrant_client.search.return_value = []
 
         # Simulate tool invocation via LangChain
         result = await tool.ainvoke({"query": "test", "effort": "low"})
@@ -351,7 +387,10 @@ class TestInternalSearchToolIntegration:
     def test_tool_schema_for_binding(self):
         """Test tool has correct schema for LangChain binding"""
         tool = InternalSearchTool(
-            llm=MagicMock(), embeddings=MagicMock(), vector_store=MagicMock()
+            llm=MagicMock(),
+            embeddings=MagicMock(),
+            qdrant_client=MagicMock(),
+            vector_collection="test",
         )
 
         # Should have proper name and description for tool binding
