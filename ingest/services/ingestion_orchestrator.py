@@ -191,6 +191,15 @@ class IngestionOrchestrator:
                     chunk_meta["chunk_index"] = i
                     chunk_meta["total_chunks"] = len(chunks)
                     chunk_meta["base_uuid"] = base_uuid  # Store base UUID in metadata
+
+                    # Validate required metadata fields before upserting
+                    # All documents MUST have a source field (google_drive, metric, etc.)
+                    if not chunk_meta.get("source"):
+                        raise ValueError(
+                            f"Missing required 'source' field in metadata for chunk {i}. "
+                            f"Available keys: {list(chunk_meta.keys())}"
+                        )
+
                     chunk_metadata.append(chunk_meta)
                     # Generate proper UUID for each chunk using UUID5 (deterministic)
                     chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{i}"))
