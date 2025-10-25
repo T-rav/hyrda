@@ -25,15 +25,16 @@ class TestInternalSearchTool:
         self.mock_embeddings = MagicMock()
         self.mock_vector_store = AsyncMock()
 
+        # Mock direct Qdrant client
+        self.mock_qdrant_client = MagicMock()
+
         self.tool = InternalSearchTool(
             llm=self.mock_llm,
             embeddings=self.mock_embeddings,
             vector_store=self.mock_vector_store,
+            qdrant_client=self.mock_qdrant_client,
+            vector_collection="test-collection",
         )
-
-        # Mock direct Qdrant client (for non-LangChain search)
-        self.tool.qdrant_client = MagicMock()
-        self.tool.vector_collection = "test-collection"
 
     def test_tool_initialization(self):
         """Test tool initializes with correct properties"""
@@ -62,6 +63,8 @@ class TestInternalSearchTool:
             llm=self.mock_llm,
             embeddings=self.mock_embeddings,
             vector_store=None,
+            qdrant_client=MagicMock(),
+            vector_collection="test",
         )
 
         result = await tool._arun("test query")
@@ -166,7 +169,7 @@ class TestInternalSearchTool:
         }
         mock_result2.score = 0.85
 
-        self.tool.qdrant_client.search.side_effect = [
+        self.mock_qdrant_client.search.side_effect = [
             [mock_result1],  # First sub-query results
             [mock_result2],  # Second sub-query results
         ]
@@ -210,7 +213,7 @@ class TestInternalSearchTool:
         }
         duplicate_result.score = 0.9
 
-        self.tool.qdrant_client.search.side_effect = [
+        self.mock_qdrant_client.search.side_effect = [
             [duplicate_result],
             [duplicate_result],
         ]
@@ -256,7 +259,7 @@ class TestInternalSearchTool:
         self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # No results from Qdrant
-        self.tool.qdrant_client.search.return_value = []
+        self.mock_qdrant_client.search.return_value = []
 
         result = await self.tool._arun("test query")
 
@@ -272,7 +275,7 @@ class TestInternalSearchTool:
         self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # Mock Qdrant to return no results
-        self.tool.qdrant_client.search.return_value = []
+        self.mock_qdrant_client.search.return_value = []
 
         result = await self.tool._arun("test query")
 
