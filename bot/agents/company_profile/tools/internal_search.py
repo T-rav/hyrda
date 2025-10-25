@@ -185,9 +185,6 @@ class InternalSearchTool(BaseTool):
         Returns:
             Formatted search results with citations
         """
-        # TEMP DEBUG: Log the actual query being used
-        logger.warning(f"🔍 INTERNAL_SEARCH_TOOL QUERY: '{query}'")
-
         # Check if components are available
         if not all([self.vector_store, self.llm, self.embeddings]):
             return (
@@ -802,27 +799,17 @@ Return ONLY the JSON array, no explanation."""
                     has_signal = any(signal in doc_combined for signal in signals)
                     if has_signal:
                         company_with_signals = True
-                        culprit_file = doc.get("metadata", {}).get(
-                            "file_name", "unknown"
-                        )
+                        culprit_metadata = doc.get("metadata", {})
                         logger.warning(
-                            f"🚨 CULPRIT DOCUMENT: '{company_name}' + signals found in: {culprit_file}"
-                        )
-                        logger.warning(
-                            f"🚨 Content preview: {doc.get('content', '')[:300]}"
+                            f"🚨 CULPRIT FOUND: '{company_name}' + signals | "
+                            f"file_name='{culprit_metadata.get('file_name', 'MISSING')}' | "
+                            f"Full metadata: {culprit_metadata}"
                         )
                         break
 
         # Relationship evidence ONLY if: (1) signals present AND (2) company name mentioned AND (3) they appear together
         relationship_evidence = (
             bool(matched) and company_mentioned and company_with_signals
-        )
-
-        # TEMP DEBUG: Log relationship decision
-        logger.warning(
-            f"🎯 RELATIONSHIP DECISION: relationship_evidence={relationship_evidence} "
-            f"(matched={bool(matched)}, company_mentioned={company_mentioned}, "
-            f"company_with_signals={company_with_signals})"
         )
 
         if matched and company_mentioned and not company_with_signals:
