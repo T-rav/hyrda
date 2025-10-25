@@ -49,13 +49,13 @@ class InternalSearchTool(BaseTool):
     args_schema: type[BaseModel] = InternalSearchInput
 
     # LangChain components (injected at initialization)
-    vector_store: Any = None  # LangChain VectorStore
+    vector_store: Any = None  # LangChain VectorStore (for tests/compatibility)
     llm: Any = None  # LangChain ChatModel
     embeddings: Any = None  # LangChain Embeddings
 
-    # Direct Qdrant client (alternative to LangChain VectorStore)
-    qdrant_client: Any = None  # Direct Qdrant client
-    vector_collection: str | None = None  # Qdrant collection name
+    # Direct Qdrant client (production use)
+    qdrant_client: Any  # Direct Qdrant client (required)
+    vector_collection: str  # Qdrant collection name (required)
 
     class Config:
         arbitrary_types_allowed = True
