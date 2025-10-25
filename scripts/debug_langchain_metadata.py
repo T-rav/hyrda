@@ -85,13 +85,13 @@ async def debug_metadata():
             api_key=embedding_api_key,
         )
 
-        # Initialize LangChain QdrantVectorStore WITHOUT metadata_payload_key
+        # Initialize LangChain QdrantVectorStore with metadata_payload_key=None
         langchain_vector_store = QdrantVectorStore(
             client=client,
             collection_name=collection,
             embedding=embeddings,
             content_payload_key="text",
-            # NO metadata_payload_key - let LangChain treat all non-"text" fields as metadata
+            metadata_payload_key=None,  # CRITICAL: Must be None - Qdrant stores metadata directly in payload
         )
 
         print("\nSearching for document via LangChain QdrantVectorStore...")
