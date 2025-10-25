@@ -74,14 +74,14 @@ async def debug_metadata():
 
     try:
         from langchain_qdrant import QdrantVectorStore
-        from services.embedding_service import EmbeddingService
+        from services.embedding import create_embedding_provider
         from config.settings import Settings
 
         settings = Settings()
 
-        # Initialize embedding service
-        embedding_service = EmbeddingService(settings.embedding)
-        embeddings = embedding_service.get_embeddings()
+        # Initialize embedding provider
+        embedding_provider = create_embedding_provider(settings.embedding)
+        embeddings = embedding_provider.get_langchain_embeddings()
 
         # Initialize LangChain Qdrant vector store
         vector_store = QdrantVectorStore(
