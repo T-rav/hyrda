@@ -54,8 +54,8 @@ class InternalSearchTool(BaseTool):
     embeddings: Any = None  # LangChain Embeddings
 
     # Direct Qdrant client (production use)
-    qdrant_client: Any  # Direct Qdrant client (required)
-    vector_collection: str  # Qdrant collection name (required)
+    qdrant_client: Any = None  # Direct Qdrant client
+    vector_collection: str = ""  # Qdrant collection name
 
     class Config:
         arbitrary_types_allowed = True
@@ -182,6 +182,10 @@ class InternalSearchTool(BaseTool):
             List of tuples: [(doc_dict, score), ...]
             where doc_dict has 'page_content' and 'metadata' keys (LangChain-compatible format)
         """
+        # If qdrant_client not initialized, return empty results
+        if not self.qdrant_client:
+            return []
+
         from dataclasses import dataclass
 
         # Simple doc class to match LangChain's Document interface
