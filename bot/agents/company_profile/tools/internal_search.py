@@ -53,6 +53,10 @@ class InternalSearchTool(BaseTool):
     llm: Any = None  # LangChain ChatModel
     embeddings: Any = None  # LangChain Embeddings
 
+    # Direct Qdrant client (alternative to LangChain VectorStore)
+    qdrant_client: Any = None  # Direct Qdrant client
+    vector_collection: str | None = None  # Qdrant collection name
+
     class Config:
         arbitrary_types_allowed = True
 
