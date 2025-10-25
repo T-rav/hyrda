@@ -40,12 +40,13 @@ def prune_vector_db():
     info = client.get_collection(collection)
     print(f"\nTotal documents BEFORE pruning: {info.points_count}")
 
-    # Find documents to delete (NOT google_drive or metric)
+    # Find documents to delete (NOT google_drive or metric, OR malformed)
     print("\nScanning for documents to delete...")
 
     allowed_sources = {'google_drive', 'metric'}
     to_delete = []
     to_keep_by_source = {}
+    malformed_count = 0
     offset = None
     batch_size = 100
     scanned = 0
@@ -63,12 +64,25 @@ def prune_vector_db():
 
         for point in points:
             source = point.payload.get('source', 'MISSING')
+            payload_keys = list(point.payload.keys())
 
-            if source in allowed_sources:
+            # Check if document is malformed (only has _id and _collection_name)
+            # These documents have no actual content and cause false positives
+            is_malformed = len(payload_keys) <= 2 and all(
+                key.startswith('_') for key in payload_keys
+            )
+
+            if is_malformed:
+                # Delete malformed documents
+                to_delete.append(point.id)
+                malformed_count += 1
+                if malformed_count <= 10:
+                    print(f"  🚨 Malformed document: {point.id} (keys: {payload_keys})")
+            elif source in allowed_sources:
                 # Keep this document
                 to_keep_by_source[source] = to_keep_by_source.get(source, 0) + 1
             else:
-                # Delete this document
+                # Delete this document (wrong source)
                 to_delete.append(point.id)
 
             scanned += 1
@@ -86,6 +100,9 @@ def prune_vector_db():
         print(f"  {source}: {count} documents")
 
     print(f"\nDocuments to DELETE: {len(to_delete)}")
+    if malformed_count > 0:
+        print(f"  - {malformed_count} malformed documents (only _id and _collection_name)")
+        print(f"  - {len(to_delete) - malformed_count} wrong source documents")
     print(f"  ({len(to_delete) / scanned * 100:.1f}% of total)")
 
     if not to_delete:
