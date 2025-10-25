@@ -159,7 +159,8 @@ class InternalSearchTool(BaseTool):
                     collection_name=vector_collection,
                     embedding=self.embeddings,
                     content_payload_key="text",  # Bot stores content in "text" field, not "page_content"
-                    metadata_payload_key="metadata",  # Explicitly set metadata key too
+                    # Don't set metadata_payload_key - Qdrant stores metadata fields directly in payload,
+                    # not in a nested "metadata" object. LangChain will treat all non-"text" fields as metadata.
                 )
                 logger.info(
                     f"Initialized vector store: {vector_collection} at http://{vector_host}:{vector_port}"
