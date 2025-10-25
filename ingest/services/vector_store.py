@@ -87,6 +87,14 @@ class QdrantVectorStore:
             metadatas: List of metadata dictionaries
             texts: List of text chunks
         """
+        # Validate that all metadata dicts have required fields
+        for i, metadata in enumerate(metadatas):
+            if not metadata.get("source"):
+                raise ValueError(
+                    f"Document {i} (id={ids[i]}) missing required 'source' field. "
+                    f"Metadata keys: {list(metadata.keys())}"
+                )
+
         points = [
             PointStruct(
                 id=doc_id,

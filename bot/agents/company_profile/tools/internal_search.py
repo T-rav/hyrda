@@ -49,37 +49,72 @@ class InternalSearchTool(BaseTool):
     args_schema: type[BaseModel] = InternalSearchInput
 
     # LangChain components (injected at initialization)
-    vector_store: Any = None  # LangChain VectorStore
     llm: Any = None  # LangChain ChatModel
     embeddings: Any = None  # LangChain Embeddings
+
+    # Direct Qdrant client (production use - REQUIRED)
+    qdrant_client: Any  # Direct Qdrant client (REQUIRED)
+    vector_collection: str  # Qdrant collection name (REQUIRED)
 
     class Config:
         arbitrary_types_allowed = True
 
     def __init__(
         self,
-        vector_store: Any = None,
         llm: Any = None,
         embeddings: Any = None,
+        qdrant_client: Any = None,
+        vector_collection: str = None,
         **kwargs,
     ):
-        """Initialize with LangChain components.
+        """Initialize with direct Qdrant client.
 
         Args:
-            vector_store: LangChain VectorStore instance (e.g., Qdrant, Pinecone)
             llm: LangChain ChatModel (e.g., ChatOpenAI, ChatAnthropic)
             embeddings: LangChain Embeddings (e.g., OpenAIEmbeddings)
+            qdrant_client: Direct Qdrant client (REQUIRED)
+            vector_collection: Qdrant collection name (REQUIRED)
             **kwargs: Additional BaseTool arguments
         """
+        # If qdrant_client or vector_collection not provided, lazy-load from environment
+        if qdrant_client is None or vector_collection is None:
+            import os
+
+            from qdrant_client import QdrantClient
+
+            vector_host = os.getenv("VECTOR_HOST", "localhost")
+            vector_port = os.getenv("VECTOR_PORT", "6333")
+            vector_api_key = os.getenv("VECTOR_API_KEY")
+
+            if qdrant_client is None:
+                if vector_api_key:
+                    qdrant_client = QdrantClient(
+                        host=vector_host,
+                        port=int(vector_port),
+                        api_key=vector_api_key,
+                        https=False,
+                    )
+                else:
+                    qdrant_client = QdrantClient(
+                        host=vector_host,
+                        port=int(vector_port),
+                    )
+
+            if vector_collection is None:
+                vector_collection = os.getenv(
+                    "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
+                )
+
         # Pass components as kwargs to avoid Pydantic issues
-        kwargs["vector_store"] = vector_store
         kwargs["llm"] = llm
         kwargs["embeddings"] = embeddings
+        kwargs["qdrant_client"] = qdrant_client
+        kwargs["vector_collection"] = vector_collection
 
         super().__init__(**kwargs)
 
-        # Lazy-load if not provided
-        if not all([self.vector_store, self.llm, self.embeddings]):
+        # Lazy-load LLM/embeddings if not provided
+        if not all([self.llm, self.embeddings]):
             self._initialize_components()
 
     def _initialize_components(self):
@@ -98,14 +133,6 @@ class InternalSearchTool(BaseTool):
                 "EMBEDDING_API_KEY", llm_api_key
             )  # Fallback to LLM key
             embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
-
-            vector_provider = os.getenv("VECTOR_PROVIDER", "qdrant")
-            vector_host = os.getenv("VECTOR_HOST", "localhost")
-            vector_port = os.getenv("VECTOR_PORT", "6333")
-            vector_api_key = os.getenv("VECTOR_API_KEY")
-            vector_collection = os.getenv(
-                "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
-            )
 
             # Initialize LangChain LLM
             if not self.llm and llm_api_key:
@@ -128,52 +155,74 @@ class InternalSearchTool(BaseTool):
                 )
                 logger.info(f"Initialized embeddings: {embedding_model}")
 
-            # Initialize LangChain VectorStore
-            if (
-                not self.vector_store
-                and vector_provider == "qdrant"
-                and vector_host
-                and self.embeddings
-            ):
-                # Import LangChain Qdrant
-                from langchain_qdrant import QdrantVectorStore
-                from qdrant_client import QdrantClient
-
-                # Initialize Qdrant client - use host/port, not URL
-                # This matches how the bot's regular RAG initializes it
-                if vector_api_key:
-                    client = QdrantClient(
-                        host=vector_host,
-                        port=int(vector_port),
-                        api_key=vector_api_key,
-                        https=False,  # Explicitly disable HTTPS for localhost
-                    )
-                else:
-                    client = QdrantClient(
-                        host=vector_host,
-                        port=int(vector_port),
-                    )
-
-                self.vector_store = QdrantVectorStore(
-                    client=client,
-                    collection_name=vector_collection,
-                    embedding=self.embeddings,
-                    content_payload_key="text",  # Bot stores content in "text" field, not "page_content"
-                    metadata_payload_key="metadata",  # Explicitly set metadata key too
-                )
+            # Qdrant client is now initialized in __init__, so just log status
+            if self.qdrant_client:
                 logger.info(
-                    f"Initialized vector store: {vector_collection} at http://{vector_host}:{vector_port}"
+                    f"Using Qdrant client for collection: {self.vector_collection}"
                 )
-            elif vector_provider != "qdrant":
-                logger.info(
-                    f"Vector provider '{vector_provider}' not supported by this tool (only 'qdrant')"
+            else:
+                logger.warning(
+                    "Qdrant client not initialized - internal search unavailable"
                 )
-            elif not vector_host:
-                logger.warning("VECTOR_HOST not set - internal search unavailable")
 
         except Exception as e:
             logger.error(f"Failed to initialize internal search components: {e}")
             logger.info("Internal search tool will be unavailable")
+
+    async def _direct_qdrant_search(self, query: str, k: int = 100):
+        """Search Qdrant directly without LangChain (preserves metadata).
+
+        Args:
+            query: Search query text
+            k: Number of results to return
+
+        Returns:
+            List of tuples: [(doc_dict, score), ...]
+            where doc_dict has 'page_content' and 'metadata' keys (LangChain-compatible format)
+        """
+        # If qdrant_client not initialized, return empty results
+        if not self.qdrant_client:
+            return []
+
+        from dataclasses import dataclass
+
+        # Simple doc class to match LangChain's Document interface
+        @dataclass
+        class SimpleDoc:
+            page_content: str
+            metadata: dict
+
+        # Get embedding for query
+        from langchain_openai import OpenAIEmbeddings
+
+        if isinstance(self.embeddings, OpenAIEmbeddings):
+            query_vector = await self.embeddings.aembed_query(query)
+        else:
+            # Fallback for other embedding types
+            query_vector = self.embeddings.embed_query(query)
+
+        # Search Qdrant directly
+        search_results = self.qdrant_client.search(
+            collection_name=self.vector_collection,
+            query_vector=query_vector,
+            limit=k,
+            with_payload=True,
+        )
+
+        # Convert to LangChain-compatible format
+        results = []
+        for result in search_results:
+            # Extract text content
+            text = result.payload.get("text", "")
+
+            # ALL other fields are metadata (source, file_name, chunk_id, etc.)
+            metadata = {k: v for k, v in result.payload.items() if k != "text"}
+
+            doc = SimpleDoc(page_content=text, metadata=metadata)
+            score = result.score
+            results.append((doc, score))
+
+        return results
 
     async def _arun(self, query: str, effort: str = "medium") -> str:
         """Execute internal search asynchronously.
@@ -186,7 +235,7 @@ class InternalSearchTool(BaseTool):
             Formatted search results with citations
         """
         # Check if components are available
-        if not all([self.vector_store, self.llm, self.embeddings]):
+        if not all([self.qdrant_client, self.llm, self.embeddings]):
             return (
                 "Internal search service not available (vector database not configured)"
             )
@@ -210,11 +259,10 @@ class InternalSearchTool(BaseTool):
 
                 # Direct search without rewriting (like regular RAG)
                 # This ensures we find documents that actually mention the company name
-                # Use score_threshold=0 to get ALL results, like regular RAG does
-                results = await self.vector_store.asimilarity_search_with_score(
+                # Use direct Qdrant search to preserve metadata
+                results = await self._direct_qdrant_search(
                     sub_query,  # Use original sub-query, not rewritten
                     k=100,  # Get many more results (Gemini 2.5 can handle large context)
-                    score_threshold=None,  # No threshold - get everything
                 )
 
                 logger.info(
@@ -283,11 +331,9 @@ class InternalSearchTool(BaseTool):
                     ]
                     for phrase in fallback_phrases:
                         try:
-                            results = (
-                                await self.vector_store.asimilarity_search_with_score(
-                                    phrase,
-                                    k=5,
-                                )
+                            results = await self._direct_qdrant_search(
+                                phrase,
+                                k=5,
                             )
                             # CRITICAL: Filter results to only include docs that mention the company
                             # This prevents false positives from other companies' case studies
@@ -981,25 +1027,32 @@ Keep your response focused and informative (2-3 paragraphs)."""
 
 # Factory function for easy instantiation
 def internal_search_tool(
-    vector_store: Any = None,
     llm: Any = None,
     embeddings: Any = None,
+    qdrant_client: Any = None,
+    vector_collection: str | None = None,
 ) -> InternalSearchTool | None:
     """Create an internal search tool instance.
 
     Args:
-        vector_store: Optional LangChain VectorStore (will be lazy-loaded if not provided)
         llm: Optional LangChain ChatModel (will be lazy-loaded if not provided)
         embeddings: Optional LangChain Embeddings (will be lazy-loaded if not provided)
+        qdrant_client: Direct Qdrant client (REQUIRED for production use)
+        vector_collection: Qdrant collection name (REQUIRED for production use)
 
     Returns:
         Configured InternalSearchTool or None if unavailable
     """
     try:
+        # Require both qdrant_client and vector_collection or neither (for lazy-loading from env)
+        if qdrant_client and not vector_collection:
+            vector_collection = "documents"  # Default collection name
+
         return InternalSearchTool(
-            vector_store=vector_store,
             llm=llm,
             embeddings=embeddings,
+            qdrant_client=qdrant_client,
+            vector_collection=vector_collection,
         )
     except Exception as e:
         logger.error(f"Failed to create internal search tool: {e}")
