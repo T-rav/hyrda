@@ -178,13 +178,6 @@ class InternalSearchTool(BaseTool):
             List of tuples: [(doc_dict, score), ...]
             where doc_dict has 'page_content' and 'metadata' keys (LangChain-compatible format)
         """
-        # Check if we have qdrant_client (for tests with mocked vector_store)
-        if not hasattr(self, "qdrant_client") or not self.qdrant_client:
-            # Fall back to using vector_store (LangChain interface for tests)
-            if hasattr(self.vector_store, "asimilarity_search_with_score"):
-                return await self.vector_store.asimilarity_search_with_score(query, k=k)
-            return []
-
         from dataclasses import dataclass
 
         # Simple doc class to match LangChain's Document interface
