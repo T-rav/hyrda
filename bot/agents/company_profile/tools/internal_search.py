@@ -866,20 +866,36 @@ Return ONLY the JSON array, no explanation."""
             logger.warning(
                 f"Found relationship signals {matched} but company '{company_name}' not mentioned - marking as NO relationship to prevent false positive"
             )
-        # Treat metric/CRM records as relationship evidence
+        # Treat metric/CRM records as relationship evidence (ONLY if company name is in the same document)
         try:
             for d in docs:
                 meta = d.get("metadata", {}) or {}
                 meta_values = " ".join(str(v).lower() for v in meta.values())
-                if (
+                doc_content = (d.get("content", "") or "").lower()
+                doc_combined = doc_content + " " + meta_values
+
+                has_metric_record = (
                     "metric" in meta_values
                     or "record_type: client" in meta_values
                     or str(meta.get("record_type", "")).lower() == "client"
-                ):
-                    relationship_evidence = True
-                    if "metric record" not in matched:
-                        matched.append("metric record")
-                    break
+                )
+
+                # CRITICAL: Only set relationship_evidence = True if company name appears in THIS document
+                if has_metric_record:
+                    if company_name and company_name in doc_combined:
+                        relationship_evidence = True
+                        if "metric record" not in matched:
+                            matched.append("metric record")
+                        logger.warning(
+                            f"🚨 METRIC RECORD MATCH: '{company_name}' found in metric/CRM record | "
+                            f"file_name='{meta.get('file_name', 'MISSING')}'"
+                        )
+                        break
+                    else:
+                        logger.debug(
+                            f"Ignoring metric record without company name '{company_name}' | "
+                            f"file_name='{meta.get('file_name', 'MISSING')}'"
+                        )
         except Exception as e:
             logger.debug(f"Failed to check metric/CRM records: {e}")
 
