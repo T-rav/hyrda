@@ -106,6 +106,15 @@ services:
         echo '=== Starting services ===' &&
         /usr/bin/supervisord
       "
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "tasks"
+      component: "scheduler"
     networks:
       - insightmesh
 
@@ -158,6 +167,44 @@ services:
       sh -c "
         python -u app.py
       "
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "bot"
+      component: "slack-bot"
+    networks:
+      - insightmesh
+
+  # Loki - Log Aggregation Server
+  loki:
+    image: grafana/loki:latest
+    container_name: insightmesh-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - insightmesh
+
+  # Promtail - Log Shipper
+  promtail:
+    image: grafana/promtail:latest
+    container_name: insightmesh-promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
     networks:
       - insightmesh
 
@@ -167,6 +214,8 @@ volumes:
   qdrant_data:
     driver: local
   redis_data:
+    driver: local
+  loki_data:
     driver: local
 
 networks:

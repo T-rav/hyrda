@@ -40,7 +40,7 @@ help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
 	@echo ""
 	@echo "$(RED)🚀 ONE COMMAND TO RULE THEM ALL:$(RESET)"
-	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring (recommended)"
+	@echo "  $(GREEN)make start$(RESET)       🔥 Build everything and run full stack with monitoring + centralized logging (recommended)"
 	@echo ""
 	@echo "$(GREEN)Service Management:$(RESET)"
 	@echo "  start-core       🤖 Core services only (no monitoring)"
@@ -331,9 +331,9 @@ status:
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
-	@echo "$(BLUE)  - Elasticsearch: http://localhost:9200$(RESET)"
-	@echo "$(BLUE)  - Grafana: http://localhost:3000 (admin/admin)$(RESET)"
+	@echo "$(BLUE)  - Grafana (Logs + Metrics): http://localhost:3000 (admin/admin)$(RESET)"
 	@echo "$(BLUE)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(BLUE)  - Loki: http://localhost:3100$(RESET)"
 	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 setup-dev: install-dev
@@ -400,12 +400,13 @@ start: docker-build docker-up docker-monitor
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 	@echo ""
-	@echo "$(YELLOW)🔍 Monitoring Stack:$(RESET)"
+	@echo "$(YELLOW)🔍 Monitoring & Logging Stack:$(RESET)"
 	@echo "$(YELLOW)  - Grafana Dashboard: http://localhost:3000 (admin/admin)$(RESET)"
-	@echo "$(YELLOW)  - Prometheus: http://localhost:9090$(RESET)"
+	@echo "$(YELLOW)  - Prometheus Metrics: http://localhost:9090$(RESET)"
+	@echo "$(YELLOW)  - Loki Logs: http://localhost:3100 (view via Grafana)$(RESET)"
 	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
 	@echo ""
-	@echo "$(GREEN)🎉 All services are running! Check the health dashboard for RAG metrics.$(RESET)"
+	@echo "$(GREEN)🎉 All services running with centralized logging! Check Grafana for logs and metrics.$(RESET)"
 
 # Core services only (without monitoring)
 start-core: docker-build docker-up
