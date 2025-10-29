@@ -19,6 +19,15 @@ services:
       timeout: 3s
       retries: 10
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "mysql"
+      component: "database"
     networks:
       - insightmesh
 
@@ -59,6 +68,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "qdrant"
+      component: "vector-database"
     networks:
       - insightmesh
 
