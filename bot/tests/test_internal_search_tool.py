@@ -140,6 +140,119 @@ class TestInternalSearchTool:
         assert rewritten == original_query
 
     @pytest.mark.asyncio
+    async def test_metric_record_without_company_name_ignored(self):
+        """
+        Test that metric/CRM records are ONLY used as relationship evidence
+        if the company name appears in the same document.
+
+        This prevents false positives like:
+        - Query: "SanMar" → Finds "Samaritan Ministries" CRM records
+        - Should NOT mark as existing client
+        """
+        # Mock query decomposition to return simple queries
+        decompose_response = MagicMock()
+        decompose_response.content = '["sanmar case studies", "sanmar projects"]'
+
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant search to return a document with metric record but DIFFERENT company
+        mock_point = MagicMock()
+        mock_point.id = "doc1"
+        mock_point.score = 0.8
+        mock_point.payload = {
+            "text": "Project: Samaritan - Phoenix Client: Samaritan Ministries",
+            "file_name": "samaritan_project.txt",
+            "record_type": "client",  # This is a metric/CRM record
+        }
+
+        self.mock_qdrant_client.search.return_value = [mock_point]
+
+        # Mock synthesis LLM response - should see relationship_evidence: FALSE
+        synthesis_response = MagicMock()
+        synthesis_response.content = (
+            "Relationship status: No prior engagement\n\n"
+            "No evidence of work with SanMar found."
+        )
+
+        # Set up mock to return different responses for different calls
+        self.mock_llm.ainvoke.side_effect = [
+            decompose_response,  # Query decomposition
+            synthesis_response,  # Final synthesis
+        ]
+
+        # Run search for "SanMar"
+        result = await self.tool._arun("profile SanMar", effort="low")
+
+        # Should return "No prior engagement" because "sanmar" doesn't appear in the Samaritan doc
+        assert (
+            "Relationship status: No prior engagement" in result
+            or "no prior engagement" in result.lower()
+        ), (
+            f"Should not identify SanMar as existing client when only Samaritan records found. Got: {result[:500]}"
+        )
+
+        # Verify synthesis was called with relationship_evidence: FALSE
+        synthesis_call = self.mock_llm.ainvoke.call_args_list[1][0][0]
+        assert "relationship_evidence: FALSE" in synthesis_call, (
+            "Synthesis should receive relationship_evidence: FALSE for Samaritan records without SanMar mention"
+        )
+
+    @pytest.mark.asyncio
+    async def test_metric_record_with_company_name_detected(self):
+        """
+        Test that metric/CRM records ARE used as relationship evidence
+        when the company name DOES appear in the document.
+        """
+        # Mock query decomposition
+        decompose_response = MagicMock()
+        decompose_response.content = '["acme corp case studies"]'
+
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant search to return document with metric record AND matching company name
+        mock_point = MagicMock()
+        mock_point.id = "doc1"
+        mock_point.score = 0.9
+        mock_point.payload = {
+            "text": "Project: Acme Corp Implementation Client: Acme Corp Practice: Consulting",
+            "file_name": "acme_project.txt",
+            "record_type": "client",  # Metric/CRM record
+        }
+
+        self.mock_qdrant_client.search.return_value = [mock_point]
+
+        # Mock synthesis response - should see relationship_evidence: TRUE
+        synthesis_response = MagicMock()
+        synthesis_response.content = (
+            "Relationship status: Existing client\n\n"
+            "Acme Corp is a client based on project records."
+        )
+
+        self.mock_llm.ainvoke.side_effect = [
+            decompose_response,
+            synthesis_response,
+        ]
+
+        # Run search for "Acme Corp"
+        result = await self.tool._arun("profile Acme Corp", effort="low")
+
+        # Should identify as existing client because "acme" appears WITH the metric record
+        assert (
+            "Relationship status: Existing client" in result
+            or "existing client" in result.lower()
+        ), (
+            f"Should identify Acme as existing client when metric record has company name. Got: {result[:500]}"
+        )
+
+        # Verify synthesis was called with relationship_evidence: TRUE
+        synthesis_call = self.mock_llm.ainvoke.call_args_list[1][0][0]
+        assert "relationship_evidence: TRUE" in synthesis_call, (
+            "Synthesis should receive relationship_evidence: TRUE when metric record contains company name"
+        )
+
+    @pytest.mark.asyncio
     async def test_full_search_flow(self):
         """Test complete search flow with decomposition and retrieval"""
         # Mock query decomposition
