@@ -201,9 +201,7 @@ async def main():
 
             # Ingest as single-item list
             files = [file_info]
-            results = await orchestrator.ingest_files(files, base_metadata=metadata)
-            success_count = sum(1 for r in results if r["success"])
-            error_count = len(results) - success_count
+            success_count, error_count = await orchestrator.ingest_files(files, metadata=metadata)
 
         print("\n📊 Ingestion Summary:")
         print(f"✅ Successfully processed: {success_count}")
