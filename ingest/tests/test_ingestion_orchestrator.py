@@ -256,6 +256,44 @@ class TestIngestionOrchestrator:
         assert success_count == 0
         assert error_count == 0
 
+    @pytest.mark.asyncio
+    async def test_ingest_single_file_with_metadata_parameter(
+        self, orchestrator, mock_vector_service, mock_embedding_service
+    ):
+        """Test single file ingestion with metadata parameter - regression test for parameter name bug."""
+        orchestrator.vector_service = mock_vector_service
+        orchestrator.embedding_service = mock_embedding_service
+
+        # Mock single file
+        file_info = {
+            "id": "file123",
+            "name": "spreadsheet.xlsx",
+            "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "size": "2048",
+            "modifiedTime": "2023-01-01T00:00:00.000Z",
+            "createdTime": "2023-01-01T00:00:00.000Z",
+            "webViewLink": "https://docs.google.com/spreadsheets/d/file123/edit",
+            "owners": [{"emailAddress": "owner@example.com", "displayName": "Owner"}],
+            "detailed_permissions": [],
+            "folder_path": "/",
+            "full_path": "spreadsheet.xlsx",
+        }
+
+        # Mock download to return None (simulate download failure for simplicity)
+        orchestrator.google_drive_client.download_file_content = Mock(return_value=None)
+
+        # Custom metadata like main.py passes
+        custom_metadata = {"department": "engineering", "project": "docs"}
+
+        # This should NOT raise TypeError about 'base_metadata' parameter
+        success_count, error_count = await orchestrator.ingest_files(
+            [file_info], metadata=custom_metadata
+        )
+
+        # With download failure, should have 1 error
+        assert success_count == 0
+        assert error_count == 1
+
     @pytest.mark.skip(
         reason="Mocking dynamic imports from bot/services requires code refactoring for testability"
     )
