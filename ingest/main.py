@@ -190,7 +190,7 @@ async def main():
         else:  # args.file_id
             print(f"\n📄 Ingesting single file: {args.file_id}")
             # Get file info from Google Drive
-            file_info = orchestrator.drive_client.api_service.service.files().get(
+            file_info = orchestrator.google_drive_client.api_service.service.files().get(
                 fileId=args.file_id,
                 fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime"
             ).execute()
