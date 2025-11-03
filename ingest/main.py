@@ -46,7 +46,12 @@ from services import IngestionOrchestrator
 async def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(description="Ingest documents from Google Drive")
-    parser.add_argument("--folder-id", required=True, help="Google Drive folder ID")
+
+    # Either folder-id OR file-id is required (mutually exclusive)
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--folder-id", help="Google Drive folder ID to ingest recursively")
+    group.add_argument("--file-id", help="Google Drive file ID to ingest (single file)")
+
     parser.add_argument(
         "--credentials", help="Path to Google OAuth2 credentials JSON file"
     )
@@ -55,7 +60,7 @@ async def main():
         "--recursive",
         action="store_true",
         default=True,
-        help="Include subfolders (default: True)",
+        help="Include subfolders (default: True, only applies to --folder-id)",
     )
     parser.add_argument("--metadata", help="Additional metadata as JSON string")
     parser.add_argument(
@@ -175,11 +180,30 @@ async def main():
         traceback.print_exc()
         sys.exit(1)
 
-    # Ingest folder
+    # Ingest folder or single file
     try:
-        success_count, error_count = await orchestrator.ingest_folder(
-            args.folder_id, recursive=args.recursive, metadata=metadata
-        )
+        if args.folder_id:
+            print(f"\n📂 Ingesting folder: {args.folder_id}")
+            success_count, error_count = await orchestrator.ingest_folder(
+                args.folder_id, recursive=args.recursive, metadata=metadata
+            )
+        else:  # args.file_id
+            print(f"\n📄 Ingesting single file: {args.file_id}")
+            # Get file info from Google Drive
+            file_info = orchestrator.drive_client.api_service.service.files().get(
+                fileId=args.file_id,
+                fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime"
+            ).execute()
+
+            # Add folder path context
+            file_info["folder_path"] = "/"  # Root level for single file
+            file_info["folder_id"] = file_info.get("parents", [""])[0] if file_info.get("parents") else ""
+
+            # Ingest as single-item list
+            files = [file_info]
+            results = await orchestrator.ingest_files(files, base_metadata=metadata)
+            success_count = sum(1 for r in results if r["success"])
+            error_count = len(results) - success_count
 
         print("\n📊 Ingestion Summary:")
         print(f"✅ Successfully processed: {success_count}")
@@ -188,6 +212,8 @@ async def main():
 
     except Exception as e:
         print(f"❌ Ingestion failed: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
