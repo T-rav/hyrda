@@ -585,6 +585,105 @@ class LangfuseService:
             logger.error(f"Error fetching prompt template '{template_name}': {e}")
             return None
 
+    async def get_lifetime_stats(
+        self, start_date: str = "2025-10-21"
+    ) -> dict[str, Any]:
+        """
+        Get lifetime conversation statistics from Langfuse API since start_date
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format (default: Oct 21, 2025)
+
+        Returns:
+            Dictionary with:
+            - total_traces: Total number of traces (interactions)
+            - unique_sessions: Number of unique conversation threads
+            - start_date: The start date used for the query
+        """
+        if not self.enabled or not self.settings.public_key:
+            return {
+                "total_traces": 0,
+                "unique_sessions": 0,
+                "start_date": start_date,
+                "error": "Langfuse not enabled or credentials missing",
+            }
+
+        try:
+            from datetime import datetime
+
+            import aiohttp
+
+            # Langfuse API endpoint
+            api_base = self.settings.host.rstrip("/")
+
+            # Convert start_date to timestamp
+            start_datetime = datetime.fromisoformat(f"{start_date}T00:00:00Z")
+
+            # Use basic auth with public_key as username and secret_key as password
+            auth = aiohttp.BasicAuth(
+                login=self.settings.public_key,
+                password=self.settings.secret_key.get_secret_value(),
+            )
+
+            async with aiohttp.ClientSession() as session:
+                # Query traces endpoint with filters
+                traces_url = f"{api_base}/api/public/traces"
+                params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,  # We only need the count
+                }
+
+                async with session.get(
+                    traces_url, auth=auth, params=params, timeout=10
+                ) as response:
+                    if response.status != 200:
+                        logger.error(
+                            f"Langfuse API error: {response.status} - {await response.text()}"
+                        )
+                        return {
+                            "total_traces": 0,
+                            "unique_sessions": 0,
+                            "start_date": start_date,
+                            "error": f"API returned {response.status}",
+                        }
+
+                    data = await response.json()
+                    total_traces = data.get("meta", {}).get("totalItems", 0)
+
+                # Query sessions endpoint for unique sessions
+                sessions_url = f"{api_base}/api/public/sessions"
+                async with session.get(
+                    sessions_url, auth=auth, params=params, timeout=10
+                ) as response:
+                    if response.status != 200:
+                        logger.warning(f"Could not fetch sessions: {response.status}")
+                        unique_sessions = 0
+                    else:
+                        sessions_data = await response.json()
+                        unique_sessions = sessions_data.get("meta", {}).get(
+                            "totalItems", 0
+                        )
+
+                logger.info(
+                    f"Langfuse lifetime stats: {total_traces} traces, {unique_sessions} unique sessions since {start_date}"
+                )
+
+                return {
+                    "total_traces": total_traces,
+                    "unique_sessions": unique_sessions,
+                    "start_date": start_date,
+                }
+
+        except Exception as e:
+            logger.error(f"Error fetching Langfuse lifetime stats: {e}")
+            return {
+                "total_traces": 0,
+                "unique_sessions": 0,
+                "start_date": start_date,
+                "error": str(e),
+            }
+
     async def close(self):
         """Close Langfuse client and flush pending traces"""
         if self.enabled and self.client:

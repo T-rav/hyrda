@@ -39,7 +39,7 @@ class MetricsService:
 
         # Track active conversations with timestamps
         self._active_conversations = {}  # conversation_id -> last_activity_time
-        self._conversation_timeout = timedelta(hours=4)
+        self._conversation_timeout = timedelta(days=7)
 
         # Track RAG stats for dashboard (in-memory counters)
         self._rag_stats = {
