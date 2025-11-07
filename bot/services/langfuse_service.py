@@ -596,13 +596,13 @@ class LangfuseService:
 
         Returns:
             Dictionary with:
-            - total_traces: Total number of traces (interactions)
+            - total_interactions: Total number of observations (LLM calls, RAG, tools, etc)
             - unique_sessions: Number of unique conversation threads
             - start_date: The start date used for the query
         """
         if not self.enabled or not self.settings.public_key:
             return {
-                "total_traces": 0,
+                "total_interactions": 0,
                 "unique_sessions": 0,
                 "start_date": start_date,
                 "error": "Langfuse not enabled or credentials missing",
@@ -626,8 +626,8 @@ class LangfuseService:
             )
 
             async with aiohttp.ClientSession() as session:
-                # Query traces endpoint with filters
-                traces_url = f"{api_base}/api/public/traces"
+                # Query observations endpoint for total interactions (all LLM calls, RAG, tools, etc)
+                observations_url = f"{api_base}/api/public/observations"
                 params = {
                     "fromTimestamp": start_datetime.isoformat(),
                     "page": 1,
@@ -635,21 +635,21 @@ class LangfuseService:
                 }
 
                 async with session.get(
-                    traces_url, auth=auth, params=params, timeout=10
+                    observations_url, auth=auth, params=params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
                             f"Langfuse API error: {response.status} - {await response.text()}"
                         )
                         return {
-                            "total_traces": 0,
+                            "total_interactions": 0,
                             "unique_sessions": 0,
                             "start_date": start_date,
                             "error": f"API returned {response.status}",
                         }
 
                     data = await response.json()
-                    total_traces = data.get("meta", {}).get("totalItems", 0)
+                    total_interactions = data.get("meta", {}).get("totalItems", 0)
 
                 # Query sessions endpoint for unique sessions
                 sessions_url = f"{api_base}/api/public/sessions"
@@ -666,11 +666,11 @@ class LangfuseService:
                         )
 
                 logger.info(
-                    f"Langfuse lifetime stats: {total_traces} traces, {unique_sessions} unique sessions since {start_date}"
+                    f"Langfuse lifetime stats: {total_interactions} observations, {unique_sessions} unique sessions since {start_date}"
                 )
 
                 return {
-                    "total_traces": total_traces,
+                    "total_interactions": total_interactions,
                     "unique_sessions": unique_sessions,
                     "start_date": start_date,
                 }
@@ -678,7 +678,7 @@ class LangfuseService:
         except Exception as e:
             logger.error(f"Error fetching Langfuse lifetime stats: {e}")
             return {
-                "total_traces": 0,
+                "total_interactions": 0,
                 "unique_sessions": 0,
                 "start_date": start_date,
                 "error": str(e),
