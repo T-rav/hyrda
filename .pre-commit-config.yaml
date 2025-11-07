@@ -14,6 +14,22 @@ repos:
         pass_filenames: false
         always_run: true
 
+      # React UI linting
+      - id: react-ui-lint
+        name: React UI ESLint Check
+        entry: bash -c 'cd bot/health_ui && npm run lint'
+        language: system
+        files: ^bot/health_ui/src/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+      # React UI tests
+      - id: react-ui-tests
+        name: React UI Tests
+        entry: bash -c 'cd bot/health_ui && npm test -- --run'
+        language: system
+        files: ^bot/health_ui/src/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
   # Built-in hooks for general cleanup
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
