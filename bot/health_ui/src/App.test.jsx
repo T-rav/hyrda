@@ -437,4 +437,64 @@ describe('Infrastructure Services Component', () => {
       expect(screen.getByText(/error loading services/i)).toBeInTheDocument()
     })
   })
+
+  test('displays sections in correct order: Infrastructure before Lifetime Statistics', async () => {
+    // Add lifetime stats to mock metrics
+    const metricsWithLifetimeStats = {
+      ...mockMetricsData,
+      lifetime_stats: {
+        total_traces: 150,
+        unique_threads: 25,
+        since_date: '2025-01-01',
+        description: 'Statistics since January 2025'
+      }
+    }
+
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/api/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockHealthData)
+        })
+      }
+      if (url.includes('/api/metrics')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(metricsWithLifetimeStats)
+        })
+      }
+      if (url.includes('/api/ready')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockReadyData)
+        })
+      }
+      if (url.includes('/api/services/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockServicesData)
+        })
+      }
+      return Promise.reject(new Error('Unknown URL'))
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      // Get all h2 headings (section titles)
+      const headings = screen.getAllByRole('heading', { level: 2 })
+      const headingTexts = headings.map(h => h.textContent)
+
+      // Find the indices
+      const infrastructureIndex = headingTexts.findIndex(text => text.includes('Infrastructure'))
+      const lifetimeStatsIndex = headingTexts.findIndex(text => text.includes('Lifetime Statistics'))
+
+      // Both sections should be present
+      expect(infrastructureIndex).toBeGreaterThan(-1)
+      expect(lifetimeStatsIndex).toBeGreaterThan(-1)
+
+      // Infrastructure should appear before Lifetime Statistics
+      expect(infrastructureIndex).toBeLessThan(lifetimeStatsIndex)
+    })
+  })
 })
