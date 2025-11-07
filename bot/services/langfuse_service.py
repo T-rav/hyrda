@@ -630,15 +630,32 @@ class LangfuseService:
                 # Query both traces (user messages) and observations (all AI operations)
                 traces_url = f"{api_base}/api/public/traces"
                 observations_url = f"{api_base}/api/public/observations"
-                params = {
+
+                # Filter for only slack_conversation traces (actual user messages)
+                traces_params = {
                     "fromTimestamp": start_datetime.isoformat(),
                     "page": 1,
                     "limit": 1,  # We only need the count
+                    "name": "slack_conversation",  # Filter for user conversation traces only
                 }
 
-                # Get total traces (user messages)
+                # No filter for observations (count all AI operations)
+                observations_params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,
+                }
+
+                # No filter for sessions
+                sessions_params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,
+                }
+
+                # Get total traces (user messages only - filtered by name)
                 async with session.get(
-                    traces_url, auth=auth, params=params, timeout=10
+                    traces_url, auth=auth, params=traces_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -651,7 +668,7 @@ class LangfuseService:
 
                 # Get total observations (all AI operations)
                 async with session.get(
-                    observations_url, auth=auth, params=params, timeout=10
+                    observations_url, auth=auth, params=observations_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -671,7 +688,7 @@ class LangfuseService:
                 # Query sessions endpoint for unique sessions
                 sessions_url = f"{api_base}/api/public/sessions"
                 async with session.get(
-                    sessions_url, auth=auth, params=params, timeout=10
+                    sessions_url, auth=auth, params=sessions_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.warning(f"Could not fetch sessions: {response.status}")
