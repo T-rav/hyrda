@@ -627,19 +627,21 @@ class LangfuseService:
             )
 
             async with aiohttp.ClientSession() as session:
-                # Query both traces (user messages) and observations (all AI operations)
-                traces_url = f"{api_base}/api/public/traces"
+                # Query observations for user messages (conversation_turn)
+                # Note: We use start_span in v3.x which creates observations, not traces
                 observations_url = f"{api_base}/api/public/observations"
+                sessions_url = f"{api_base}/api/public/sessions"
 
-                # Filter for only slack_conversation traces (actual user messages)
-                traces_params = {
+                # Filter for conversation_turn observations (actual user messages)
+                # Each user message creates a "conversation_turn" generation
+                user_messages_params = {
                     "fromTimestamp": start_datetime.isoformat(),
                     "page": 1,
                     "limit": 1,  # We only need the count
-                    "name": "slack_conversation",  # Filter for user conversation traces only
+                    "name": "conversation_turn",  # Filter for user message observations
                 }
 
-                # No filter for observations (count all AI operations)
+                # No filter for all observations (count all AI operations)
                 observations_params = {
                     "fromTimestamp": start_datetime.isoformat(),
                     "page": 1,
@@ -653,18 +655,20 @@ class LangfuseService:
                     "limit": 1,
                 }
 
-                # Get total traces (user messages only - filtered by name)
+                # Get total user messages (conversation_turn observations)
                 async with session.get(
-                    traces_url, auth=auth, params=traces_params, timeout=10
+                    observations_url, auth=auth, params=user_messages_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
-                            f"Langfuse API error (traces): {response.status} - {await response.text()}"
+                            f"Langfuse API error (user messages): {response.status} - {await response.text()}"
                         )
-                        total_traces = 0
+                        total_user_messages = 0
                     else:
-                        traces_data = await response.json()
-                        total_traces = traces_data.get("meta", {}).get("totalItems", 0)
+                        user_messages_data = await response.json()
+                        total_user_messages = user_messages_data.get("meta", {}).get(
+                            "totalItems", 0
+                        )
 
                 # Get total observations (all AI operations)
                 async with session.get(
@@ -700,11 +704,11 @@ class LangfuseService:
                         )
 
                 logger.info(
-                    f"Langfuse lifetime stats: {total_traces} traces, {total_observations} observations, {unique_sessions} unique sessions since {start_date}"
+                    f"Langfuse lifetime stats: {total_user_messages} user messages, {total_observations} observations, {unique_sessions} unique sessions since {start_date}"
                 )
 
                 return {
-                    "total_traces": total_traces,
+                    "total_traces": total_user_messages,  # Return as total_traces for backwards compatibility
                     "total_observations": total_observations,
                     "unique_sessions": unique_sessions,
                     "start_date": start_date,
