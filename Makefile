@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -87,6 +87,12 @@ help:
 	@echo "$(GREEN)UI Components:$(RESET)"
 	@echo "  health-ui       Build React health dashboard UI"
 	@echo "  tasks-ui        Build React tasks dashboard UI"
+	@echo "  ui-lint         Lint React Health UI code"
+	@echo "  ui-lint-fix     Auto-fix React Health UI lint issues"
+	@echo "  ui-test         Run React Health UI tests"
+	@echo "  ui-test-coverage Run React Health UI tests with coverage"
+	@echo "  ui-dev          Start React Health UI dev server (port 5173)"
+	@echo "  quality-all     Run all quality checks (Python + React)"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
 	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
@@ -348,6 +354,32 @@ health-ui:
 	cd $(BOT_DIR)/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${HEALTH_PORT:-8080}/ui$(RESET)"
+
+# React UI Development Commands
+ui-lint:
+	@echo "$(BLUE)Linting React Health UI...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run lint
+
+ui-lint-fix:
+	@echo "$(BLUE)Auto-fixing React Health UI lint issues...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run lint:fix
+
+ui-test:
+	@echo "$(BLUE)Running React Health UI tests...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm test -- --run
+
+ui-test-coverage:
+	@echo "$(BLUE)Running React Health UI tests with coverage...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run test:coverage
+
+ui-dev:
+	@echo "$(BLUE)Starting React Health UI dev server...$(RESET)"
+	@echo "$(YELLOW)Note: Dev server runs on port 5173 by default$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run dev
+
+# Combined quality check (Python + React)
+quality-all: quality ui-lint ui-test
+	@echo "$(GREEN)✅ All quality checks (Python + React) passed!$(RESET)"
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
