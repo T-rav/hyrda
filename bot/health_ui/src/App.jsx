@@ -93,6 +93,9 @@ function App() {
             </div>
 
 
+            {/* Lifetime Statistics */}
+            <LifetimeStatisticsSection metrics={metrics} />
+
             {/* Infrastructure Services */}
             <InfrastructureServices ready={ready} metrics={metrics} />
 
@@ -159,6 +162,63 @@ function App() {
         </footer>
       </div>
     </ErrorBoundary>
+  )
+}
+
+// Lifetime Statistics Component
+function LifetimeStatisticsSection({ metrics }) {
+  const lifetimeStats = metrics?.lifetime_stats
+
+  if (!lifetimeStats) {
+    return null
+  }
+
+  const formatNumber = (value) => {
+    if (typeof value === 'number') {
+      return value.toLocaleString()
+    }
+    return 'N/A'
+  }
+
+  const hasError = lifetimeStats.error
+
+  return (
+    <div className="grid-section">
+      <h2><Activity size={20} /> Lifetime Statistics</h2>
+      <p className="section-description">
+        {lifetimeStats.description || `Statistics since ${lifetimeStats.since_date}`}
+      </p>
+      {hasError && (
+        <div className="error-banner">
+          ⚠️ {lifetimeStats.error}
+        </div>
+      )}
+      <div className="cards-row">
+        <MetricsCard
+          title="Total Interactions"
+          value={formatNumber(lifetimeStats.total_interactions)}
+          label={`All traces since ${lifetimeStats.since_date}`}
+          icon={<Zap size={20} />}
+          status={hasError ? 'error' : 'info'}
+        />
+        <MetricsCard
+          title="Unique Conversation Threads"
+          value={formatNumber(lifetimeStats.unique_threads)}
+          label={`Distinct sessions since ${lifetimeStats.since_date}`}
+          icon={<Activity size={20} />}
+          status={hasError ? 'error' : 'info'}
+        />
+        {lifetimeStats.total_interactions > 0 && lifetimeStats.unique_threads > 0 && (
+          <MetricsCard
+            title="Avg Interactions per Thread"
+            value={(lifetimeStats.total_interactions / lifetimeStats.unique_threads).toFixed(1)}
+            label="Traces per conversation"
+            icon={<Server size={20} />}
+            status="info"
+          />
+        )}
+      </div>
+    </div>
   )
 }
 
