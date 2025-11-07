@@ -319,12 +319,12 @@ class HealthChecker:
         # Add metrics service data
         metrics_service = get_metrics_service()
         if metrics_service and metrics_service.enabled:
-            # Get active conversation count from metrics service (last 4 hours)
+            # Get active conversation count from metrics service (last 7 days)
             active_count = metrics_service.get_active_conversation_count()
 
             metrics["active_conversations"] = {
                 "total": active_count,
-                "description": "Active conversations (last 4 hours)",
+                "description": "Active conversations (last 7 days)",
             }
 
             # Get RAG performance stats
@@ -337,6 +337,32 @@ class HealthChecker:
                 "documents_used": rag_stats["total_documents_used"],
                 "description": f"RAG queries processed (since {rag_stats['last_reset'].strftime('%H:%M')})",
             }
+
+        # Add Langfuse lifetime stats
+        if self.langfuse_service and self.langfuse_service.enabled:
+            try:
+                lifetime_stats = await self.langfuse_service.get_lifetime_stats(
+                    start_date="2025-10-21"
+                )
+                metrics["lifetime_stats"] = {
+                    "total_traces": lifetime_stats.get("total_traces", 0),
+                    "total_observations": lifetime_stats.get("total_observations", 0),
+                    "unique_threads": lifetime_stats.get("unique_sessions", 0),
+                    "since_date": lifetime_stats.get("start_date", "2025-10-21"),
+                    "description": "Lifetime statistics since Oct 21, 2025",
+                }
+                if "error" in lifetime_stats:
+                    metrics["lifetime_stats"]["error"] = lifetime_stats["error"]
+            except Exception as e:
+                logger.error(f"Error fetching lifetime stats: {e}")
+                metrics["lifetime_stats"] = {
+                    "total_traces": 0,
+                    "total_observations": 0,
+                    "unique_threads": 0,
+                    "since_date": "2025-10-21",
+                    "error": str(e),
+                    "description": "Lifetime statistics unavailable",
+                }
 
         # Add service status
         metrics["services"] = {
