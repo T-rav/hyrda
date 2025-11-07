@@ -93,11 +93,11 @@ function App() {
             </div>
 
 
-            {/* Lifetime Statistics */}
-            <LifetimeStatisticsSection metrics={metrics} />
-
             {/* Infrastructure Services */}
             <InfrastructureServices ready={ready} metrics={metrics} />
+
+            {/* Lifetime Statistics */}
+            <LifetimeStatisticsSection metrics={metrics} />
 
             {/* RAG Metrics */}
             <RAGMetricsSection ready={ready} metrics={metrics} />
