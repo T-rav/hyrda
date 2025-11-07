@@ -387,8 +387,8 @@ tasks-ui:
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
-ci: quality test-coverage docker-build
-	@echo "✅ All CI checks passed!"
+ci: quality test-coverage ui-lint ui-test docker-build
+	@echo "✅ All CI checks passed (Python + React + Docker)!"
 
 pre-commit:
 	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files
