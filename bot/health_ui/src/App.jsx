@@ -195,25 +195,25 @@ function LifetimeStatisticsSection({ metrics }) {
       )}
       <div className="cards-row">
         <MetricsCard
-          title="Total Interactions"
-          value={formatNumber(lifetimeStats.total_interactions)}
-          label={`All traces since ${lifetimeStats.since_date}`}
-          icon={<Zap size={20} />}
+          title="Total User Messages"
+          value={formatNumber(lifetimeStats.total_traces)}
+          label={`User interactions since ${lifetimeStats.since_date}`}
+          icon={<Activity size={20} />}
           status={hasError ? 'error' : 'info'}
         />
         <MetricsCard
           title="Unique Conversation Threads"
           value={formatNumber(lifetimeStats.unique_threads)}
           label={`Distinct sessions since ${lifetimeStats.since_date}`}
-          icon={<Activity size={20} />}
+          icon={<Server size={20} />}
           status={hasError ? 'error' : 'info'}
         />
-        {lifetimeStats.total_interactions > 0 && lifetimeStats.unique_threads > 0 && (
+        {lifetimeStats.total_traces > 0 && lifetimeStats.unique_threads > 0 && (
           <MetricsCard
-            title="Avg Interactions per Thread"
-            value={(lifetimeStats.total_interactions / lifetimeStats.unique_threads).toFixed(1)}
-            label="Traces per conversation"
-            icon={<Server size={20} />}
+            title="Avg Messages per Thread"
+            value={(lifetimeStats.total_traces / lifetimeStats.unique_threads).toFixed(1)}
+            label="User messages per conversation"
+            icon={<Zap size={20} />}
             status="info"
           />
         )}

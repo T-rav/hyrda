@@ -345,7 +345,8 @@ class HealthChecker:
                     start_date="2025-10-21"
                 )
                 metrics["lifetime_stats"] = {
-                    "total_interactions": lifetime_stats.get("total_traces", 0),
+                    "total_traces": lifetime_stats.get("total_traces", 0),
+                    "total_observations": lifetime_stats.get("total_observations", 0),
                     "unique_threads": lifetime_stats.get("unique_sessions", 0),
                     "since_date": lifetime_stats.get("start_date", "2025-10-21"),
                     "description": "Lifetime statistics since Oct 21, 2025",
@@ -355,7 +356,8 @@ class HealthChecker:
             except Exception as e:
                 logger.error(f"Error fetching lifetime stats: {e}")
                 metrics["lifetime_stats"] = {
-                    "total_interactions": 0,
+                    "total_traces": 0,
+                    "total_observations": 0,
                     "unique_threads": 0,
                     "since_date": "2025-10-21",
                     "error": str(e),
