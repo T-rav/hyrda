@@ -799,8 +799,40 @@ Return ONLY the JSON array, no explanation."""
             else:
                 company_name = after.strip()
         if not company_name:
+            # Extract multi-word company names by removing common query terms
+            # This handles queries like "Baker College existing client relationship"
+            # Stop words that typically appear after company name in search queries
+            stop_words = {
+                "existing",
+                "client",
+                "relationship",
+                "projects",
+                "case",
+                "studies",
+                "study",
+                "engagement",
+                "work",
+                "history",
+                "past",
+                "previous",
+                "information",
+                "about",
+                "details",
+                "background",
+                "overview",
+                "profile",
+                "company",
+                "research",
+            }
             tokens = q_lower.split()
-            company_name = tokens[0] if tokens else None
+            company_tokens = []
+            for token in tokens:
+                clean_token = token.strip("\"'(),.:;")
+                if clean_token in stop_words:
+                    break  # Stop at first stop word
+                company_tokens.append(clean_token)
+
+            company_name = " ".join(company_tokens) if company_tokens else None
         company_name = company_name.strip().strip("\"' ") if company_name else ""
 
         blob = "\n".join(evidence_corpus).lower()
