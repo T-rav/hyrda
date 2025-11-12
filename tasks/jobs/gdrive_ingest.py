@@ -87,8 +87,7 @@ class GDriveIngestJob(BaseJob):
             if ingest_path not in sys.path:
                 sys.path.insert(0, ingest_path)
 
-            # Import ingest orchestrator
-            from ingest_config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
+            # Import ingest orchestrator and services
             from services import IngestionOrchestrator
             from services.embedding_provider import OpenAIEmbeddingProvider
             from services.llm_wrapper import SimpleLLMService
@@ -112,26 +111,23 @@ class GDriveIngestJob(BaseJob):
             if not orchestrator.authenticate():
                 raise RuntimeError("Google Drive authentication failed")
 
-            # Initialize vector and embedding services
+            # Initialize vector and embedding services using environment variables
             logger.info("Initializing vector database and embedding service...")
-            vector_config = VectorConfig.from_env()
-            embedding_config = EmbeddingConfig.from_env()
-            llm_config = LLMConfig.from_env()
-            rag_config = RAGConfig.from_env()
+            import os
 
             # Initialize embedding provider
             embedding_provider = OpenAIEmbeddingProvider(
-                api_key=embedding_config.api_key,
-                model=embedding_config.model,
+                api_key=os.getenv("EMBEDDING_API_KEY"),
+                model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
             )
 
             # Initialize vector store
             vector_store = QdrantVectorStore(
-                host=vector_config.host,
-                port=vector_config.port,
-                collection_name=vector_config.collection_name,
-                api_key=vector_config.api_key,
-                use_https=vector_config.use_https,
+                host=os.getenv("VECTOR_HOST", "localhost"),
+                port=int(os.getenv("VECTOR_PORT", "6333")),
+                collection_name=os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"),
+                api_key=os.getenv("VECTOR_API_KEY"),
+                use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
             )
 
             await vector_store.initialize(
@@ -140,10 +136,11 @@ class GDriveIngestJob(BaseJob):
 
             # Initialize LLM service for contextual retrieval if enabled
             llm_service = None
-            if rag_config.enable_contextual_retrieval and llm_config.api_key:
+            enable_contextual = os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower() == "true"
+            if enable_contextual and os.getenv("LLM_API_KEY"):
                 llm_service = SimpleLLMService(
-                    api_key=llm_config.api_key,
-                    model=llm_config.model,
+                    api_key=os.getenv("LLM_API_KEY"),
+                    model=os.getenv("LLM_MODEL", "gpt-4o"),
                 )
                 logger.info("Contextual retrieval enabled")
 
