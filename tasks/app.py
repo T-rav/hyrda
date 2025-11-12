@@ -102,11 +102,10 @@ def list_jobs() -> Response | tuple[Response, int]:
     for job in jobs:
         job_info = scheduler_service.get_job_info(job.id)
         if job_info:
-            # Add custom task name and description if available
+            # Add custom task name if available
             metadata = metadata_map.get(job.id)
             if metadata:
                 job_info["name"] = metadata.task_name
-                job_info["description"] = metadata.task_description
             jobs_data.append(job_info)
 
     return jsonify({"jobs": jobs_data})
