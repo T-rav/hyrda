@@ -67,41 +67,43 @@ function CredentialsManager() {
 
   return (
     <div className="container-fluid py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h2 className="mb-1">
-            <Key size={28} className="me-2" />
-            Google Drive Credentials
-          </h2>
-          <p className="text-muted">
+      <div className="glass-card mb-4">
+        <div className="card-header">
+          <div className="header-title">
+            <Key size={28} />
+            <h2>Google Drive Credentials</h2>
+          </div>
+          <button
+            className="btn btn-outline-success"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={18} className="me-1" />
+            Add Credential
+          </button>
+        </div>
+        <div className="card-body">
+          <p style={{ color: 'var(--text-primary)', opacity: 0.9 }}>
             Connect different Google accounts to access different files
           </p>
         </div>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowAddModal(true)}
-        >
-          <Plus size={18} className="me-1" />
-          Add Credential
-        </button>
       </div>
 
       {error && (
-        <div className="alert alert-danger">
+        <div className="alert alert-danger" style={{ color: '#721c24' }}>
           <AlertCircle size={16} className="me-2" />
           {error}
         </div>
       )}
 
       {credentials.length === 0 ? (
-        <div className="alert alert-info">
+        <div className="alert alert-info" style={{ color: '#004085', backgroundColor: 'rgba(209, 236, 241, 0.3)' }}>
           <AlertCircle size={16} className="me-2" />
           No credentials configured. Add a credential to start using Google Drive ingestion.
         </div>
       ) : (
-        <div className="card">
-          <div className="card-body">
-            <table className="table table-hover">
+        <div className="glass-card">
+          <div className="table-container">
+            <table className="table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -116,7 +118,7 @@ function CredentialsManager() {
                       <Key size={16} className="me-2 text-primary" />
                       <strong>{cred.name}</strong>
                     </td>
-                    <td className="text-muted">
+                    <td style={{ color: 'var(--text-secondary)' }}>
                       {new Date(cred.created_at * 1000).toLocaleString()}
                     </td>
                     <td className="text-end">
