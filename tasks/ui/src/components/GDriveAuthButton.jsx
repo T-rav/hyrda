@@ -7,10 +7,19 @@ import { Check, AlertCircle, ExternalLink } from 'lucide-react'
  * Handles OAuth flow for Google Drive authentication within task setup.
  * Each task instance gets its own credentials stored on the filesystem.
  */
-function GDriveAuthButton({ taskId, onAuthComplete }) {
+function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
   const [authStatus, setAuthStatus] = useState({ authenticated: false, loading: true })
   const [authError, setAuthError] = useState(null)
   const [authInProgress, setAuthInProgress] = useState(false)
+
+  if (!credentialId) {
+    return (
+      <div className="alert alert-warning">
+        <AlertCircle size={16} className="me-2" />
+        <small>Please select a credential first</small>
+      </div>
+    )
+  }
 
   // Check auth status on mount and when taskId changes
   useEffect(() => {
@@ -56,7 +65,7 @@ function GDriveAuthButton({ taskId, onAuthComplete }) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ task_id: taskId }),
+        body: JSON.stringify({ task_id: taskId, credential_id: credentialId }),
       })
 
       const data = await response.json()
