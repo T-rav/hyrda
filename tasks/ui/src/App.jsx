@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
 import GDriveAuthButton from './components/GDriveAuthButton'
+import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
 // Custom hook for managing document title
@@ -54,6 +55,13 @@ function App() {
               <ListChecks size={20} />
               Tasks
             </button>
+            <button
+              className={`nav-link ${activeTab === 'credentials' ? 'active' : ''}`}
+              onClick={() => handleTabChange('credentials')}
+            >
+              <Key size={20} />
+              Credentials
+            </button>
             <a
               href="http://localhost:8080/ui"
               target="_blank"
@@ -71,6 +79,7 @@ function App() {
       <main className="main-content">
         {activeTab === 'dashboard' && <DashboardContent showNotification={showNotification} />}
         {activeTab === 'tasks' && <TasksContent showNotification={showNotification} />}
+        {activeTab === 'credentials' && <CredentialsManager />}
       </main>
 
       <footer className="footer">
@@ -1277,9 +1286,26 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
   }
 
   const [gdriveAuthComplete, setGdriveAuthComplete] = React.useState(false)
+  const [selectedCredential, setSelectedCredential] = React.useState('')
+  const [availableCredentials, setAvailableCredentials] = React.useState([])
 
   // Special handling for Google Drive ingestion - show OAuth button first
   const isGDriveIngest = taskType === 'gdrive_ingest'
+
+  // Load available credentials for gdrive_ingest tasks
+  React.useEffect(() => {
+    if (isGDriveIngest) {
+      fetch('/api/credentials')
+        .then(r => r.json())
+        .then(data => {
+          setAvailableCredentials(data.credentials || [])
+          if (data.credentials && data.credentials.length === 1) {
+            setSelectedCredential(data.credentials[0].id)
+          }
+        })
+        .catch(err => console.error('Error loading credentials:', err))
+    }
+  }, [isGDriveIngest])
 
   const renderParameter = (param, isRequired = false) => {
     // Skip credentials_file and token_file for gdrive_ingest (handled by OAuth)
@@ -1535,10 +1561,42 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
       {isGDriveIngest && taskId && (
         <div className="mb-4">
           <h6>Google Drive Authentication</h6>
-          <GDriveAuthButton
-            taskId={taskId}
-            onAuthComplete={() => setGdriveAuthComplete(true)}
-          />
+
+          {availableCredentials.length === 0 ? (
+            <div className="alert alert-warning">
+              <small>No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.</small>
+            </div>
+          ) : (
+            <>
+              <div className="mb-3">
+                <label className="form-label">Select Credential</label>
+                <select
+                  className="form-select"
+                  value={selectedCredential}
+                  onChange={(e) => setSelectedCredential(e.target.value)}
+                  required
+                >
+                  <option value="">Choose a credential...</option>
+                  {availableCredentials.map((cred) => (
+                    <option key={cred.id} value={cred.id}>
+                      {cred.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text">
+                  <small className="text-muted">
+                    Select which Google account to use for this task
+                  </small>
+                </div>
+              </div>
+
+              <GDriveAuthButton
+                taskId={taskId}
+                credentialId={selectedCredential}
+                onAuthComplete={() => setGdriveAuthComplete(true)}
+              />
+            </>
+          )}
         </div>
       )}
 
