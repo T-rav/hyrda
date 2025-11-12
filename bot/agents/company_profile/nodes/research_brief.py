@@ -32,6 +32,18 @@ async def write_research_brief(
         Dict with research_brief, profile_type, and supervisor_messages
     """
     query = state["query"]
+
+    # Clean Slack URL formatting: <http://URL|display> → display
+    # This prevents LLM confusion from Slack's link format
+    import re
+
+    cleaned_query = re.sub(r"<https?://([^|>]+)\|([^>]+)>", r"\2", query)
+    cleaned_query = re.sub(r"<https?://([^>]+)>", r"\1", cleaned_query)
+
+    if cleaned_query != query:
+        logger.info(f"Cleaned Slack URLs from query: '{query}' → '{cleaned_query}'")
+        query = cleaned_query
+
     profile_type = state.get("profile_type", detect_profile_type(query))
     focus_area = state.get("focus_area", "")
     brief_revision_count = state.get("brief_revision_count", 0)
