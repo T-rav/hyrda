@@ -83,8 +83,8 @@ services:
   # Task Scheduler Service (nginx + Flask in single container)
   tasks:
     build:
-      context: ./tasks
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: tasks/Dockerfile
     image: insightmesh-tasks:latest
     container_name: insightmesh-tasks
     restart: unless-stopped

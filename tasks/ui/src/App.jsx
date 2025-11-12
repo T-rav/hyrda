@@ -574,26 +574,19 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const isActive = !!task.next_run_time
   const currentAction = actionLoading[task.id]
 
-  // Clean up the task name display
-  const getDisplayName = (task) => {
-    if (task.name && task.name !== task.id) {
-      return task.name
-    }
+  // Get task type from args
+  const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
 
-    // If no name or name is same as ID, try to derive a clean name from the ID
-    if (task.id.includes('slack_user_import')) {
-      return 'Slack User Import'
-    }
-
-    // Default fallback
-    return task.name || 'Unnamed Task'
-  }
+  // Format display: "Task Name / Task Type"
+  const displayName = task.name && task.name !== task.id
+    ? `${task.name} / ${taskType}`
+    : taskType
 
   return (
     <tr>
       <td>
         <div>
-          <strong>{getDisplayName(task)}</strong>
+          <strong>{displayName}</strong>
           {isActive ? (
             <span className="badge bg-success ms-2">Active</span>
           ) : (
