@@ -82,13 +82,15 @@ class GDriveIngestJob(BaseJob):
         )
 
         try:
-            # Add ingest directory to Python path
+            # Add ingest directory to Python path at the FRONT to override /app/services
             ingest_path = str(Path(__file__).parent.parent.parent / "ingest")
-            if ingest_path not in sys.path:
-                sys.path.insert(0, ingest_path)
+            # Remove it first if it exists to ensure it's at position 0
+            if ingest_path in sys.path:
+                sys.path.remove(ingest_path)
+            sys.path.insert(0, ingest_path)
 
-            # Import ingest orchestrator and services
-            from services import IngestionOrchestrator
+            # Import ingest orchestrator and services (from ingest/services, not tasks/services)
+            from services.ingestion_orchestrator import IngestionOrchestrator
             from services.embedding_provider import OpenAIEmbeddingProvider
             from services.llm_wrapper import SimpleLLMService
             from services.vector_store import QdrantVectorStore
