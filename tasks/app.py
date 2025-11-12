@@ -180,7 +180,8 @@ def create_job() -> Response | tuple[Response, int]:
         schedule = data.get("schedule", {})
         job_params = data.get("parameters", {})
         task_name = data.get("task_name")
-        task_description = data.get("task_description")
+
+        logger.info(f"Creating job: type={job_type}, task_name={task_name}, data={data}")
 
         if not job_type:
             return jsonify({"error": "job_type is required"}), 400
@@ -190,20 +191,23 @@ def create_job() -> Response | tuple[Response, int]:
             job_type=job_type, job_id=job_id, schedule=schedule, **job_params
         )
 
-        # Save task metadata (custom name and description)
+        # Save task metadata (custom name)
         if task_name:
             try:
+                logger.info(f"Saving task metadata: job_id={job.id}, task_name={task_name}")
                 with get_db_session() as db_session:
                     metadata = TaskMetadata(
                         job_id=job.id,
-                        task_name=task_name,
-                        task_description=task_description
+                        task_name=task_name
                     )
                     db_session.add(metadata)
                     db_session.commit()
+                    logger.info(f"Task metadata saved successfully for job {job.id}")
             except Exception as e:
-                logger.error(f"Error saving task metadata: {e}")
+                logger.error(f"Error saving task metadata: {e}", exc_info=True)
                 # Don't fail job creation if metadata save fails
+        else:
+            logger.warning(f"No task_name provided for job {job.id}, skipping metadata save")
 
         return jsonify(
             {"message": f"Job {job.id} created successfully", "job_id": job.id}

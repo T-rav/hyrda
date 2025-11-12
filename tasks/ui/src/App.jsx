@@ -982,7 +982,6 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
       const taskData = {
         job_type: taskType,
         task_name: taskName,
-        task_description: taskDescription || null,
         schedule: {
           trigger: triggerType,
           hours: parseInt(hours) || 0,
@@ -1054,7 +1053,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 <div className="mb-4">
                   <label htmlFor="taskName" className="form-label">
                     <Play size={16} className="me-1" />
-                    Task Name/Description
+                    Task Name
                   </label>
                   <input
                     type="text"
@@ -1062,7 +1061,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                     id="taskName"
                     value={taskName}
                     onChange={(e) => setTaskName(e.target.value)}
-                    placeholder="Enter a descriptive name for this task"
+                    placeholder="Enter a name for this task"
                     required
                   />
                 </div>
