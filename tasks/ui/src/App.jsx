@@ -1276,9 +1276,10 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
     )
   }
 
+  const [gdriveAuthComplete, setGdriveAuthComplete] = React.useState(false)
+
   // Special handling for Google Drive ingestion - show OAuth button first
   const isGDriveIngest = taskType === 'gdrive_ingest'
-  const [gdriveAuthComplete, setGdriveAuthComplete] = React.useState(false)
 
   const renderParameter = (param, isRequired = false) => {
     // Skip credentials_file and token_file for gdrive_ingest (handled by OAuth)

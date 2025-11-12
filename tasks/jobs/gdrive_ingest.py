@@ -1,8 +1,6 @@
 """Google Drive document ingestion job for scheduled RAG updates."""
 
-import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -78,10 +76,8 @@ class GDriveIngestJob(BaseJob):
                 sys.path.insert(0, ingest_path)
 
             # Import ingest orchestrator
-            from services import IngestionOrchestrator
-
-            # Import configs and services
             from ingest_config import EmbeddingConfig, LLMConfig, RAGConfig, VectorConfig
+            from services import IngestionOrchestrator
             from services.embedding_provider import OpenAIEmbeddingProvider
             from services.llm_wrapper import SimpleLLMService
             from services.vector_store import QdrantVectorStore
