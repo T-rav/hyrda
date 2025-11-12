@@ -533,7 +533,9 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
 
         # Get settings for redirect URI
         settings = get_settings()
-        redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
+        # Use localhost for OAuth redirect (not 0.0.0.0)
+        host = "localhost" if settings.host == "0.0.0.0" else settings.host
+        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
 
         # Create flow from client config (not from file)
         flow = Flow.from_client_config(
@@ -603,7 +605,9 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
 
         # Get settings for redirect URI
         settings = get_settings()
-        redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
+        # Use localhost for OAuth redirect (not 0.0.0.0)
+        host = "localhost" if settings.host == "0.0.0.0" else settings.host
+        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
 
         # Create flow from client config
         flow = Flow.from_client_config(
