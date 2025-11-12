@@ -8,6 +8,7 @@ recognize uploaded document content.
 
 import os
 import sys
+from datetime import datetime
 
 import pytest
 
@@ -15,6 +16,17 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from services.context_builder import ContextBuilder
+
+
+class TestDataFactory:
+    """Factory for creating test data"""
+
+    @staticmethod
+    def create_current_date_context() -> str:
+        """Create current date context"""
+        current_date = datetime.now().strftime("%B %d, %Y")
+        current_year = datetime.now().year
+        return f"**IMPORTANT - Current Date Information:**\n- Today's date: {current_date}\n- Current year: {current_year}\n- When using web_search tool, do NOT add years to search queries unless the user explicitly mentions a specific year. Use the current year ({current_year}) only if the user asks about 'this year' or 'current year'."
 
 
 class TestUploadedDocumentDelineation:
@@ -251,9 +263,10 @@ class TestUploadedDocumentDelineation:
             conversation_history=[],
             system_message="Base system message",
         )
+        current_date_context = TestDataFactory.create_current_date_context()
 
         # Should return base system message without RAG context
-        assert system_message == "Base system message"
+        assert system_message == f"Base system message\n\n{current_date_context}"
         # Should not have any section markers
         assert "=== UPLOADED DOCUMENT" not in system_message
         assert "=== KNOWLEDGE BASE" not in system_message
