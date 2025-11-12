@@ -1232,70 +1232,55 @@ function ViewTaskModal({ task, onClose }) {
         <div className="modal-header">
           <h5 className="modal-title">
             <Eye size={20} className="me-2" />
-            Task Details
+            {task.name || taskType}
           </h5>
           <button type="button" className="btn-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
-        <div className="modal-body">
-          {/* Task Type */}
-          <div className="mb-3">
-            <label className="form-label"><strong>Task Type</strong></label>
-            <div className="form-control-plaintext">
-              <code>{taskType}</code>
-            </div>
-          </div>
-
-          {/* Task Name */}
-          {task.name && (
-            <div className="mb-3">
-              <label className="form-label"><strong>Task Name</strong></label>
-              <div className="form-control-plaintext">{task.name}</div>
-            </div>
-          )}
-
-          {/* Task Description */}
-          {task.description && (
-            <div className="mb-3">
-              <label className="form-label"><strong>Description</strong></label>
-              <div className="form-control-plaintext">{task.description}</div>
-            </div>
-          )}
-
-          {/* Schedule */}
-          <div className="mb-3">
-            <label className="form-label"><strong>Schedule</strong></label>
-            <div className="form-control-plaintext">
-              <code>{task.trigger || 'Unknown'}</code>
-            </div>
-          </div>
-
-          {/* Status and Next Run */}
-          <div className="row mb-3">
+        <div className="modal-body" style={{fontSize: '14px'}}>
+          {/* Main Info Grid */}
+          <div className="row g-3 mb-4">
             <div className="col-md-6">
-              <label className="form-label"><strong>Status</strong></label>
-              <div className="form-control-plaintext">
-                <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
-                  {task.next_run_time ? 'Active' : 'Paused'}
-                </span>
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">TASK TYPE</div>
+                <div className="fw-bold"><code>{taskType}</code></div>
               </div>
             </div>
             <div className="col-md-6">
-              <label className="form-label"><strong>Next Run</strong></label>
-              <div className="form-control-plaintext">
-                {task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">SCHEDULE</div>
+                <div className="fw-bold"><code>{task.trigger || 'Unknown'}</code></div>
               </div>
             </div>
           </div>
 
-          {/* Task Parameters */}
+          <div className="row g-3 mb-4">
+            <div className="col-md-6">
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">STATUS</div>
+                <div>
+                  <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
+                    {task.next_run_time ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">NEXT RUN</div>
+                <div className="fw-bold">{task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Parameters Section */}
           {Object.keys(parameters).length > 0 && (
-            <div className="mb-3">
-              <label className="form-label"><strong>Parameters</strong></label>
+            <div className="mb-4">
+              <h6 className="mb-3">Parameters</h6>
               <div className="table-responsive">
-                <table className="table table-sm table-bordered">
-                  <thead>
+                <table className="table table-sm table-bordered mb-0">
+                  <thead className="table-light">
                     <tr>
                       <th style={{width: '30%'}}>Parameter</th>
                       <th>Value</th>
@@ -1304,11 +1289,11 @@ function ViewTaskModal({ task, onClose }) {
                   <tbody>
                     {Object.entries(parameters).map(([key, value]) => (
                       <tr key={key}>
-                        <td><code>{key}</code></td>
+                        <td className="text-muted"><code className="text-dark">{key}</code></td>
                         <td>
                           {typeof value === 'object'
-                            ? <pre className="mb-0">{JSON.stringify(value, null, 2)}</pre>
-                            : <span>{String(value)}</span>
+                            ? <pre className="mb-0 small">{JSON.stringify(value, null, 2)}</pre>
+                            : <span className="fw-semibold">{String(value)}</span>
                           }
                         </td>
                       </tr>
@@ -1319,12 +1304,9 @@ function ViewTaskModal({ task, onClose }) {
             </div>
           )}
 
-          {/* Task ID (for reference) */}
-          <div className="mb-3">
-            <label className="form-label"><strong>Task ID</strong></label>
-            <div className="form-control-plaintext">
-              <small className="text-muted font-monospace">{task.id}</small>
-            </div>
+          {/* Task ID */}
+          <div className="text-muted small">
+            <strong>Task ID:</strong> <code className="text-muted">{task.id}</code>
           </div>
         </div>
         <div className="modal-footer">
