@@ -256,7 +256,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
     <>
       <div className="modal-backdrop fade show" onClick={onClose}></div>
       <div className="modal fade show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <div className="modal-dialog" style={{ maxWidth: '100%', margin: '1rem' }}>
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">
