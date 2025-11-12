@@ -531,11 +531,8 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
                 500,
             )
 
-        # Get settings for redirect URI
-        settings = get_settings()
-        # Use localhost for OAuth redirect (not 0.0.0.0)
-        host = "localhost" if settings.host == "0.0.0.0" else settings.host
-        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
+        # Hardcoded redirect URI to external port
+        redirect_uri = "http://localhost:5001/api/gdrive/auth/callback"
 
         # Create flow from client config (not from file)
         flow = Flow.from_client_config(
@@ -603,11 +600,8 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         if not client_id or not client_secret:
             return jsonify({"error": "Google OAuth not configured"}), 500
 
-        # Get settings for redirect URI
-        settings = get_settings()
-        # Use localhost for OAuth redirect (not 0.0.0.0)
-        host = "localhost" if settings.host == "0.0.0.0" else settings.host
-        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
+        # Hardcoded redirect URI to external port
+        redirect_uri = "http://localhost:5001/api/gdrive/auth/callback"
 
         # Create flow from client config
         flow = Flow.from_client_config(
