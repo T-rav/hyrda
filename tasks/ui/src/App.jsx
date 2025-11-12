@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X } from 'lucide-react'
+import GDriveAuthButton from './components/GDriveAuthButton'
 import './App.css'
 
 // Custom hook for managing document title
@@ -829,6 +830,13 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
   const [runDate, setRunDate] = useState('')
   const [taskTypes, setTaskTypes] = useState([])
   const [loading, setLoading] = useState(false)
+  const [taskId, setTaskId] = useState(null)  // Unique ID for this task instance
+
+  // Generate unique task ID on component mount
+  React.useEffect(() => {
+    const uniqueId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    setTaskId(uniqueId)
+  }, [])
 
   // Load task types on component mount
   React.useEffect(() => {
@@ -926,6 +934,11 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
             }
           }
         }
+      }
+
+      // Add token_file parameter for gdrive_ingest tasks
+      if (taskType === 'gdrive_ingest' && taskId) {
+        parameters.token_file = `auth/gdrive_tokens/${taskId}_token.json`
       }
 
       const taskData = {
@@ -1132,7 +1145,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 Task Parameters
               </label>
               {taskType ? (
-                <TaskParameters taskType={taskType} taskTypes={taskTypes} />
+                <TaskParameters taskType={taskType} taskTypes={taskTypes} taskId={taskId} />
               ) : (
                 <div className="alert alert-info">
                   <Activity size={16} className="me-2" />
@@ -1251,7 +1264,7 @@ function ViewTaskModal({ task, onClose }) {
 }
 
 // Task Parameters Component
-function TaskParameters({ taskType, taskTypes }) {
+function TaskParameters({ taskType, taskTypes, taskId }) {
   const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
 
   if (!selectedTaskType) {
@@ -1263,7 +1276,16 @@ function TaskParameters({ taskType, taskTypes }) {
     )
   }
 
+  // Special handling for Google Drive ingestion - show OAuth button first
+  const isGDriveIngest = taskType === 'gdrive_ingest'
+  const [gdriveAuthComplete, setGdriveAuthComplete] = React.useState(false)
+
   const renderParameter = (param, isRequired = false) => {
+    // Skip credentials_file and token_file for gdrive_ingest (handled by OAuth)
+    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file')) {
+      return null
+    }
+
     // Specific parameter handling for known parameters
     switch(param) {
       case 'workspace_filter':
@@ -1473,15 +1495,29 @@ function TaskParameters({ taskType, taskTypes }) {
 
   return (
     <div>
+      {/* Google Drive OAuth Authentication */}
+      {isGDriveIngest && taskId && (
+        <div className="mb-4">
+          <h6>Google Drive Authentication</h6>
+          <GDriveAuthButton
+            taskId={taskId}
+            onAuthComplete={() => setGdriveAuthComplete(true)}
+          />
+        </div>
+      )}
+
       {/* Required Parameters */}
       {selectedTaskType.required_params && selectedTaskType.required_params.length > 0 && (
         <div className="mb-4">
           <h6>Required Parameters:</h6>
-          {selectedTaskType.required_params.map((param) => (
-            <div key={param} className="mb-3">
-              {renderParameter(param, true)}
-            </div>
-          ))}
+          {selectedTaskType.required_params.map((param) => {
+            const rendered = renderParameter(param, true)
+            return rendered ? (
+              <div key={param} className="mb-3">
+                {rendered}
+              </div>
+            ) : null
+          })}
         </div>
       )}
 
@@ -1489,11 +1525,14 @@ function TaskParameters({ taskType, taskTypes }) {
       {selectedTaskType.optional_params && selectedTaskType.optional_params.length > 0 && (
         <div>
           <h6>Optional Parameters:</h6>
-          {selectedTaskType.optional_params.map((param) => (
-            <div key={param} className="mb-3">
-              {renderParameter(param, false)}
-            </div>
-          ))}
+          {selectedTaskType.optional_params.map((param) => {
+            const rendered = renderParameter(param, false)
+            return rendered ? (
+              <div key={param} className="mb-3">
+                {rendered}
+              </div>
+            ) : null
+          })}
         </div>
       )}
 

@@ -8,6 +8,7 @@ from apscheduler.job import Job
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
+from .gdrive_ingest import GDriveIngestJob
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
 from .slack_user_import import SlackUserImportJob
@@ -54,6 +55,7 @@ def execute_job_by_type(
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
         "portal_sync": PortalSyncJob,
+        "gdrive_ingest": GDriveIngestJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -143,6 +145,7 @@ class JobRegistry:
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
             "portal_sync": PortalSyncJob,
+            "gdrive_ingest": GDriveIngestJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:
