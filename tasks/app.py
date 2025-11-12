@@ -12,6 +12,7 @@ from config.settings import get_settings
 from jobs.job_registry import JobRegistry
 from models.base import get_db_session
 from models.task_run import TaskRun
+from models.task_metadata import TaskMetadata
 from services.scheduler_service import SchedulerService
 
 # Environment variables loaded by Pydantic from docker-compose.yml
@@ -94,9 +95,21 @@ def list_jobs() -> Response | tuple[Response, int]:
     jobs = scheduler_service.get_jobs()
     jobs_data = []
 
+    # Load all task metadata
+    db_session = get_db_session()
+    try:
+        metadata_map = {m.job_id: m for m in db_session.query(TaskMetadata).all()}
+    finally:
+        db_session.close()
+
     for job in jobs:
         job_info = scheduler_service.get_job_info(job.id)
         if job_info:
+            # Add custom task name and description if available
+            metadata = metadata_map.get(job.id)
+            if metadata:
+                job_info["name"] = metadata.task_name
+                job_info["description"] = metadata.task_description
             jobs_data.append(job_info)
 
     return jsonify({"jobs": jobs_data})
@@ -169,6 +182,8 @@ def create_job() -> Response | tuple[Response, int]:
         job_id = data.get("job_id")
         schedule = data.get("schedule", {})
         job_params = data.get("parameters", {})
+        task_name = data.get("task_name")
+        task_description = data.get("task_description")
 
         if not job_type:
             return jsonify({"error": "job_type is required"}), 400
@@ -177,6 +192,23 @@ def create_job() -> Response | tuple[Response, int]:
         job = job_registry.create_job(
             job_type=job_type, job_id=job_id, schedule=schedule, **job_params
         )
+
+        # Save task metadata (custom name and description)
+        if task_name:
+            db_session = get_db_session()
+            try:
+                metadata = TaskMetadata(
+                    job_id=job.id,
+                    task_name=task_name,
+                    task_description=task_description
+                )
+                db_session.add(metadata)
+                db_session.commit()
+            except Exception as e:
+                logger.error(f"Error saving task metadata: {e}")
+                db_session.rollback()
+            finally:
+                db_session.close()
 
         return jsonify(
             {"message": f"Job {job.id} created successfully", "job_id": job.id}
