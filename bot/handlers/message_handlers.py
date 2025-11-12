@@ -37,6 +37,7 @@ from agents.registry import agent_registry
 from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
+from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
 from services.prompt_service import get_prompt_service
@@ -798,11 +799,26 @@ async def handle_message(
                 channel=channel, text=formatted_response, thread_ts=thread_ts
             )
         else:
+            response = (
+                "I apologize, but I couldn't generate a response. Please try again."
+            )
             await slack_service.send_message(
                 channel=channel,
-                text="I apologize, but I couldn't generate a response. Please try again.",
+                text=response,
                 thread_ts=thread_ts,
             )
+
+        # Record conversation turn in Langfuse for lifetime stats
+        langfuse_service = get_langfuse_service()
+        if langfuse_service:
+            try:
+                langfuse_service.trace_conversation_turn(
+                    user_message=text,
+                    bot_response=response or "",
+                    conversation_id=thread_ts or channel,
+                )
+            except Exception as e:
+                logger.warning(f"Error tracing conversation turn to Langfuse: {e}")
 
         # Record successful request timing
         if metrics_service:
