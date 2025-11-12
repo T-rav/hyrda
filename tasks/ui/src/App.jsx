@@ -1220,14 +1220,11 @@ function ViewTaskModal({ task, onClose }) {
     return new Date(dateString).toLocaleString()
   }
 
-  // Parse schedule from trigger
-  const getScheduleDisplay = () => {
-    if (!task.trigger) return 'Unknown'
-    if (task.trigger.includes('cron')) return 'Cron Schedule'
-    if (task.trigger.includes('interval')) return 'Interval Schedule'
-    if (task.trigger.includes('date')) return 'One-time Schedule'
-    return task.trigger
-  }
+  // Extract task type from args (first element is the job type)
+  const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
+
+  // Extract parameters from args (second element is the params dict)
+  const parameters = task.args && task.args.length > 1 ? task.args[1] : {}
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -1235,103 +1232,100 @@ function ViewTaskModal({ task, onClose }) {
         <div className="modal-header">
           <h5 className="modal-title">
             <Eye size={20} className="me-2" />
-            View Task
+            Task Details
           </h5>
           <button type="button" className="btn-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
         <div className="modal-body">
-          {/* Task Name */}
+          {/* Task Type */}
           <div className="mb-3">
-            <label className="form-label">Task Name</label>
-            <input
-              type="text"
-              className="form-control"
-              value={task.name || task.id}
-              readOnly
-              disabled
-            />
+            <label className="form-label"><strong>Task Type</strong></label>
+            <div className="form-control-plaintext">
+              <code>{taskType}</code>
+            </div>
           </div>
+
+          {/* Task Name */}
+          {task.name && (
+            <div className="mb-3">
+              <label className="form-label"><strong>Task Name</strong></label>
+              <div className="form-control-plaintext">{task.name}</div>
+            </div>
+          )}
 
           {/* Task Description */}
           {task.description && (
             <div className="mb-3">
-              <label className="form-label">Description</label>
-              <textarea
-                className="form-control"
-                value={task.description}
-                rows="2"
-                readOnly
-                disabled
-              />
+              <label className="form-label"><strong>Description</strong></label>
+              <div className="form-control-plaintext">{task.description}</div>
             </div>
           )}
 
-          {/* Task Type */}
-          <div className="mb-3">
-            <label className="form-label">Task Type</label>
-            <input
-              type="text"
-              className="form-control"
-              value={task.func || 'Unknown'}
-              readOnly
-              disabled
-            />
-          </div>
-
           {/* Schedule */}
           <div className="mb-3">
-            <label className="form-label">Schedule</label>
-            <input
-              type="text"
-              className="form-control"
-              value={getScheduleDisplay()}
-              readOnly
-              disabled
-            />
+            <label className="form-label"><strong>Schedule</strong></label>
+            <div className="form-control-plaintext">
+              <code>{task.trigger || 'Unknown'}</code>
+            </div>
           </div>
 
           {/* Status and Next Run */}
           <div className="row mb-3">
             <div className="col-md-6">
-              <label className="form-label">Status</label>
-              <div>
+              <label className="form-label"><strong>Status</strong></label>
+              <div className="form-control-plaintext">
                 <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
                   {task.next_run_time ? 'Active' : 'Paused'}
                 </span>
               </div>
             </div>
             <div className="col-md-6">
-              <label className="form-label">Next Run</label>
-              <input
-                type="text"
-                className="form-control"
-                value={task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}
-                readOnly
-                disabled
-              />
+              <label className="form-label"><strong>Next Run</strong></label>
+              <div className="form-control-plaintext">
+                {task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}
+              </div>
             </div>
           </div>
 
           {/* Task Parameters */}
-          {task.kwargs && Object.keys(task.kwargs).length > 0 && (
+          {Object.keys(parameters).length > 0 && (
             <div className="mb-3">
-              <label className="form-label">Task Parameters</label>
-              {Object.entries(task.kwargs).map(([key, value]) => (
-                <div key={key} className="mb-2">
-                  <label className="form-label text-muted small">{key}</label>
-                  <input
-                    type="text"
-                    className="form-control form-control-sm"
-                    value={typeof value === 'object' ? JSON.stringify(value) : value}
-                    readOnly
-                    disabled
-                  />
-                </div>
-              ))}
+              <label className="form-label"><strong>Parameters</strong></label>
+              <div className="table-responsive">
+                <table className="table table-sm table-bordered">
+                  <thead>
+                    <tr>
+                      <th style={{width: '30%'}}>Parameter</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(parameters).map(([key, value]) => (
+                      <tr key={key}>
+                        <td><code>{key}</code></td>
+                        <td>
+                          {typeof value === 'object'
+                            ? <pre className="mb-0">{JSON.stringify(value, null, 2)}</pre>
+                            : <span>{String(value)}</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+
+          {/* Task ID (for reference) */}
+          <div className="mb-3">
+            <label className="form-label"><strong>Task ID</strong></label>
+            <div className="form-control-plaintext">
+              <small className="text-muted font-monospace">{task.id}</small>
+            </div>
+          </div>
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onClose}>
