@@ -1220,73 +1220,116 @@ function ViewTaskModal({ task, onClose }) {
     return new Date(dateString).toLocaleString()
   }
 
+  // Parse schedule from trigger
+  const getScheduleDisplay = () => {
+    if (!task.trigger) return 'Unknown'
+    if (task.trigger.includes('cron')) return 'Cron Schedule'
+    if (task.trigger.includes('interval')) return 'Interval Schedule'
+    if (task.trigger.includes('date')) return 'One-time Schedule'
+    return task.trigger
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h5 className="modal-title">
             <Eye size={20} className="me-2" />
-            Task Details
+            View Task
           </h5>
           <button type="button" className="btn-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
         <div className="modal-body">
-          <div className="row">
-            <div className="col-md-6">
-              <h6>Basic Information</h6>
-              <table className="table table-sm">
-                <tbody>
-                  <tr>
-                    <td><strong>ID:</strong></td>
-                    <td><code>{task.id}</code></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Name:</strong></td>
-                    <td>{task.name || 'Unnamed'}</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Function:</strong></td>
-                    <td><code>{task.func || 'Unknown'}</code></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Status:</strong></td>
-                    <td>
-                      <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
-                        {task.next_run_time ? 'Active' : 'Paused'}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="col-md-6">
-              <h6>Schedule Information</h6>
-              <table className="table table-sm">
-                <tbody>
-                  <tr>
-                    <td><strong>Trigger:</strong></td>
-                    <td>{task.trigger || 'Unknown'}</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Next Run:</strong></td>
-                    <td>{task.next_run_time ? formatDate(task.next_run_time) : 'N/A'}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          {/* Task Name */}
+          <div className="mb-3">
+            <label className="form-label">Task Name</label>
+            <input
+              type="text"
+              className="form-control"
+              value={task.name || task.id}
+              readOnly
+              disabled
+            />
           </div>
-          {task.args && task.args.length > 0 && (
-            <div className="mt-3">
-              <h6>Arguments</h6>
-              <pre className="code-block">{JSON.stringify(task.args, null, 2)}</pre>
+
+          {/* Task Description */}
+          {task.description && (
+            <div className="mb-3">
+              <label className="form-label">Description</label>
+              <textarea
+                className="form-control"
+                value={task.description}
+                rows="2"
+                readOnly
+                disabled
+              />
             </div>
           )}
+
+          {/* Task Type */}
+          <div className="mb-3">
+            <label className="form-label">Task Type</label>
+            <input
+              type="text"
+              className="form-control"
+              value={task.func || 'Unknown'}
+              readOnly
+              disabled
+            />
+          </div>
+
+          {/* Schedule */}
+          <div className="mb-3">
+            <label className="form-label">Schedule</label>
+            <input
+              type="text"
+              className="form-control"
+              value={getScheduleDisplay()}
+              readOnly
+              disabled
+            />
+          </div>
+
+          {/* Status and Next Run */}
+          <div className="row mb-3">
+            <div className="col-md-6">
+              <label className="form-label">Status</label>
+              <div>
+                <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
+                  {task.next_run_time ? 'Active' : 'Paused'}
+                </span>
+              </div>
+            </div>
+            <div className="col-md-6">
+              <label className="form-label">Next Run</label>
+              <input
+                type="text"
+                className="form-control"
+                value={task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}
+                readOnly
+                disabled
+              />
+            </div>
+          </div>
+
+          {/* Task Parameters */}
           {task.kwargs && Object.keys(task.kwargs).length > 0 && (
-            <div className="mt-3">
-              <h6>Keyword Arguments</h6>
-              <pre className="code-block">{JSON.stringify(task.kwargs, null, 2)}</pre>
+            <div className="mb-3">
+              <label className="form-label">Task Parameters</label>
+              {Object.entries(task.kwargs).map(([key, value]) => (
+                <div key={key} className="mb-2">
+                  <label className="form-label text-muted small">{key}</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={typeof value === 'object' ? JSON.stringify(value) : value}
+                    readOnly
+                    disabled
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>
