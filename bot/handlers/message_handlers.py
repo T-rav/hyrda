@@ -37,6 +37,7 @@ from agents.registry import agent_registry
 from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
+from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
 from services.prompt_service import get_prompt_service
@@ -355,6 +356,7 @@ async def handle_bot_command(
     llm_service: LLMService | None = None,
     check_thread_context: bool = False,
     conversation_cache=None,
+    conversation_id: str | None = None,
 ) -> bool:
     """
     Handle bot agent commands using router pattern.
@@ -521,6 +523,21 @@ async def handle_bot_command(
         else:
             logger.info("Agent returned empty response (likely already posted message)")
 
+        # Record agent conversation turn in Langfuse for lifetime stats
+        langfuse_service = get_langfuse_service()
+        if langfuse_service and response:  # Only track if we have a response
+            try:
+                langfuse_service.trace_conversation(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=query,  # Agent query
+                    bot_response=response or "",
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Error tracing agent conversation turn to Langfuse: {e}"
+                )
+
         return True
 
     except Exception as e:
@@ -548,9 +565,32 @@ async def handle_message(
     thread_ts: str | None = None,
     files: list[dict] | None = None,
     conversation_cache=None,
+    message_ts: str | None = None,
 ):
-    """Handle an incoming message from Slack"""
+    """Handle an incoming message from Slack
+
+    Args:
+        message_ts: Message timestamp - used as unique conversation ID when not in thread
+    """
     start_time = time.time()
+
+    # Unique conversation ID logic:
+    # 1. Thread in channel: thread_ts (groups all messages in that thread)
+    # 2. DM conversation: channel ID (unique per user DM, like "D0123ABCD")
+    # 3. Non-threaded @ mention: message_ts (each mention is separate conversation)
+    #
+    # For DMs, channel ID is stable across the conversation (NOT reused across users)
+    # For channels, NEVER use raw channel ID (it's reused) - always need thread_ts or message_ts
+    is_dm = channel.startswith("D")
+
+    if thread_ts:
+        conversation_id = thread_ts  # Threaded conversation
+    elif is_dm:
+        conversation_id = channel  # DM conversation (channel is unique per user)
+    elif message_ts:
+        conversation_id = message_ts  # Non-threaded mention (each is separate)
+    else:
+        raise ValueError("Must provide thread_ts or message_ts for non-DM messages")
 
     logger.info(
         "Processing user message",
@@ -559,6 +599,8 @@ async def handle_message(
             "user_id": user_id,
             "channel_id": channel,
             "thread_ts": thread_ts,
+            "message_ts": message_ts,
+            "conversation_id": conversation_id,
             "event_type": "user_message",
         },
     )
@@ -571,9 +613,8 @@ async def handle_message(
         )
 
         # Track active conversations with proper conversation ID
-        # Use thread_ts for threaded conversations, otherwise use channel
+        # Use thread_ts for threaded conversations, message_ts for standalone, channel as fallback
         # This matches the conversation_id used by LLM service for Langfuse tracing
-        conversation_id = thread_ts or channel
         metrics_service.record_conversation_activity(conversation_id)
 
         # Categorize query type for metrics
@@ -621,6 +662,7 @@ async def handle_message(
             llm_service=llm_service,
             check_thread_context=True,  # Enable thread-aware routing
             conversation_cache=conversation_cache,  # Pass cache for agent-generated docs
+            conversation_id=conversation_id,  # Pass for Langfuse tracking
         )
 
         if handled:
@@ -664,6 +706,21 @@ async def handle_message(
                         blocks=agent_blocks,
                         thread_ts=thread_ts,
                     )
+
+                    # Record agent process conversation turn in Langfuse for lifetime stats
+                    langfuse_service = get_langfuse_service()
+                    if langfuse_service:
+                        try:
+                            langfuse_service.trace_conversation(
+                                user_id=user_id,
+                                conversation_id=conversation_id,
+                                user_message=text,  # Original "start X" command
+                                bot_response=response_text,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error tracing agent process turn to Langfuse: {e}"
+                            )
 
                 except Exception as e:
                     # Clean up thinking message on error
@@ -777,7 +834,7 @@ async def handle_message(
             current_query=text,
             document_content=document_content if document_content else None,
             document_filename=document_filename,
-            conversation_id=thread_ts or channel,  # Use thread_ts for conversation ID
+            conversation_id=conversation_id,  # Use thread_ts for conversation ID
             conversation_cache=conversation_cache,  # Pass cache for summary management
             use_rag=use_rag,  # Disable RAG only for profile reports
         )
@@ -798,11 +855,27 @@ async def handle_message(
                 channel=channel, text=formatted_response, thread_ts=thread_ts
             )
         else:
+            response = (
+                "I apologize, but I couldn't generate a response. Please try again."
+            )
             await slack_service.send_message(
                 channel=channel,
-                text="I apologize, but I couldn't generate a response. Please try again.",
+                text=response,
                 thread_ts=thread_ts,
             )
+
+        # Record conversation turn in Langfuse for lifetime stats
+        langfuse_service = get_langfuse_service()
+        if langfuse_service:
+            try:
+                langfuse_service.trace_conversation(
+                    user_id=user_id,
+                    conversation_id=conversation_id,
+                    user_message=text,
+                    bot_response=response or "",
+                )
+            except Exception as e:
+                logger.warning(f"Error tracing conversation turn to Langfuse: {e}")
 
         # Record successful request timing
         if metrics_service:
