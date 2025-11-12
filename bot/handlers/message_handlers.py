@@ -522,6 +522,20 @@ async def handle_bot_command(
         else:
             logger.info("Agent returned empty response (likely already posted message)")
 
+        # Record agent conversation turn in Langfuse for lifetime stats
+        langfuse_service = get_langfuse_service()
+        if langfuse_service and response:  # Only track if we have a response
+            try:
+                langfuse_service.trace_conversation_turn(
+                    user_message=query,  # Agent query
+                    bot_response=response or "",
+                    conversation_id=thread_ts or channel,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Error tracing agent conversation turn to Langfuse: {e}"
+                )
+
         return True
 
     except Exception as e:
@@ -665,6 +679,20 @@ async def handle_message(
                         blocks=agent_blocks,
                         thread_ts=thread_ts,
                     )
+
+                    # Record agent process conversation turn in Langfuse for lifetime stats
+                    langfuse_service = get_langfuse_service()
+                    if langfuse_service:
+                        try:
+                            langfuse_service.trace_conversation_turn(
+                                user_message=text,  # Original "start X" command
+                                bot_response=response_text,
+                                conversation_id=thread_ts or channel,
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error tracing agent process turn to Langfuse: {e}"
+                            )
 
                 except Exception as e:
                     # Clean up thinking message on error
