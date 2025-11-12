@@ -176,6 +176,7 @@ class JobRegistry:
                     "description": getattr(job_class, "JOB_DESCRIPTION", ""),
                     "required_params": getattr(job_class, "REQUIRED_PARAMS", []),
                     "optional_params": getattr(job_class, "OPTIONAL_PARAMS", []),
+                    "param_groups": getattr(job_class, "PARAM_GROUPS", []),
                 }
             )
 
