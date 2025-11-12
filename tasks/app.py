@@ -649,8 +649,8 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         session.pop("oauth_task_id", None)
         session.pop("oauth_credential_id", None)
 
-        # Redirect to UI with success message
-        return redirect(f"http://{settings.host}:3001/?auth_success=true&task_id={task_id}")
+        # Redirect to UI with success message (hardcoded for simplicity)
+        return redirect(f"http://localhost:5001/?auth_success=true&credential_id={credential_id}")
 
     except Exception as e:
         logger.error(f"Error handling Google Drive auth callback: {e}")
