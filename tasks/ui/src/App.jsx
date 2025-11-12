@@ -1360,17 +1360,16 @@ function TaskParameters({ taskType, taskTypes }) {
         return (
           <div>
             <label htmlFor={`param_${param}`} className="form-label">
-              folder_id {isRequired && <span className="text-danger">*</span>}
+              folder_id <span className="text-warning">*</span>
             </label>
             <input
               type="text"
               className="form-control"
               id={`param_${param}`}
               placeholder="Google Drive folder ID"
-              required={isRequired}
             />
             <div className="form-text">
-              <small className="text-muted">The Google Drive folder ID to ingest documents from (provide either folder_id OR file_id, not both)</small>
+              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). Folder ID for ingesting a folder of documents.</small>
             </div>
           </div>
         )
@@ -1379,17 +1378,16 @@ function TaskParameters({ taskType, taskTypes }) {
         return (
           <div>
             <label htmlFor={`param_${param}`} className="form-label">
-              file_id {isRequired && <span className="text-danger">*</span>}
+              file_id <span className="text-warning">*</span>
             </label>
             <input
               type="text"
               className="form-control"
               id={`param_${param}`}
               placeholder="Google Drive file ID"
-              required={isRequired}
             />
             <div className="form-text">
-              <small className="text-muted">The Google Drive file ID to ingest a single document (provide either folder_id OR file_id, not both)</small>
+              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). File ID for ingesting a single document.</small>
             </div>
           </div>
         )
