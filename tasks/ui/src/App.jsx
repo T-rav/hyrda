@@ -839,13 +839,6 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
   const [runDate, setRunDate] = useState('')
   const [taskTypes, setTaskTypes] = useState([])
   const [loading, setLoading] = useState(false)
-  const [taskId, setTaskId] = useState(null)  // Unique ID for this task instance
-
-  // Generate unique task ID on component mount
-  React.useEffect(() => {
-    const uniqueId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    setTaskId(uniqueId)
-  }, [])
 
   // Load task types on component mount
   React.useEffect(() => {
@@ -945,10 +938,6 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         }
       }
 
-      // Add credential_id parameter for gdrive_ingest tasks
-      if (taskType === 'gdrive_ingest' && selectedCredential) {
-        parameters.credential_id = selectedCredential
-      }
 
       const taskData = {
         job_type: taskType,
@@ -1154,7 +1143,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 Task Parameters
               </label>
               {taskType ? (
-                <TaskParameters taskType={taskType} taskTypes={taskTypes} taskId={taskId} />
+                <TaskParameters taskType={taskType} taskTypes={taskTypes} />
               ) : (
                 <div className="alert alert-info">
                   <Activity size={16} className="me-2" />
@@ -1273,7 +1262,7 @@ function ViewTaskModal({ task, onClose }) {
 }
 
 // Task Parameters Component
-function TaskParameters({ taskType, taskTypes, taskId }) {
+function TaskParameters({ taskType, taskTypes }) {
   const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
 
   if (!selectedTaskType) {
@@ -1285,11 +1274,10 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
     )
   }
 
-  const [gdriveAuthComplete, setGdriveAuthComplete] = React.useState(false)
   const [selectedCredential, setSelectedCredential] = React.useState('')
   const [availableCredentials, setAvailableCredentials] = React.useState([])
 
-  // Special handling for Google Drive ingestion - show OAuth button first
+  // Special handling for Google Drive ingestion - show credential selector
   const isGDriveIngest = taskType === 'gdrive_ingest'
 
   // Load available credentials for gdrive_ingest tasks
@@ -1308,8 +1296,8 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
   }, [isGDriveIngest])
 
   const renderParameter = (param, isRequired = false) => {
-    // Skip credentials_file and token_file for gdrive_ingest (handled by OAuth)
-    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file')) {
+    // Skip credentials_file, token_file, and credential_id for gdrive_ingest (handled separately)
+    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
       return null
     }
 
@@ -1557,8 +1545,8 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
 
   return (
     <div>
-      {/* Google Drive OAuth Authentication */}
-      {isGDriveIngest && taskId && (
+      {/* Google Drive Credential Selection */}
+      {isGDriveIngest && (
         <div className="mb-4">
           <h6>Google Drive Authentication</h6>
 
@@ -1567,35 +1555,30 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
               <small>No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.</small>
             </div>
           ) : (
-            <>
-              <div className="mb-3">
-                <label className="form-label">Select Credential</label>
-                <select
-                  className="form-select"
-                  value={selectedCredential}
-                  onChange={(e) => setSelectedCredential(e.target.value)}
-                  required
-                >
-                  <option value="">Choose a credential...</option>
-                  {availableCredentials.map((cred) => (
-                    <option key={cred.id} value={cred.id}>
-                      {cred.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="form-text">
-                  <small className="text-muted">
-                    Select which Google account to use for this task
-                  </small>
-                </div>
+            <div className="mb-3">
+              <label className="form-label">
+                Select Credential <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                id="param_credential_id"
+                value={selectedCredential}
+                onChange={(e) => setSelectedCredential(e.target.value)}
+                required
+              >
+                <option value="">Choose a credential...</option>
+                {availableCredentials.map((cred) => (
+                  <option key={cred.id} value={cred.id}>
+                    {cred.name}
+                  </option>
+                ))}
+              </select>
+              <div className="form-text">
+                <small className="text-muted">
+                  Select which Google account to use for this task
+                </small>
               </div>
-
-              <GDriveAuthButton
-                taskId={taskId}
-                credentialId={selectedCredential}
-                onAuthComplete={() => setGdriveAuthComplete(true)}
-              />
-            </>
+            </div>
           )}
         </div>
       )}
