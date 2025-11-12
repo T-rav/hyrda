@@ -981,7 +981,8 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
 
       const taskData = {
         job_type: taskType,
-        name: taskName,
+        task_name: taskName,
+        task_description: taskDescription || null,
         schedule: {
           trigger: triggerType,
           hours: parseInt(hours) || 0,
