@@ -253,24 +253,20 @@ function AddCredentialModal({ onClose, onSuccess }) {
   }
 
   return (
-    <>
-      <div className="modal-backdrop fade show" onClick={onClose}></div>
-      <div className="modal fade show d-block" tabIndex="-1">
-        <div className="modal-dialog" style={{ maxWidth: '100%', margin: '1rem' }}>
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">
-                <Key size={20} className="me-2" />
-                Add Google OAuth Credential
-              </h5>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={onClose}
-                aria-label="Close"
-              ></button>
-            </div>
-            <div className="modal-body">
+    <div className="glass-card">
+      <div className="card-header d-flex justify-content-between align-items-center">
+        <div className="header-title">
+          <Key size={20} />
+          <h5 className="mb-0">Add Google OAuth Credential</h5>
+        </div>
+        <button
+          type="button"
+          className="btn-close"
+          onClick={onClose}
+          aria-label="Close"
+        ></button>
+      </div>
+      <div className="card-body">
               <div className="alert alert-info">
                 <AlertCircle size={16} className="me-2" />
                 <small>
@@ -331,7 +327,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               )}
             </div>
-            <div className="modal-footer">
+            <div className="card-footer d-flex justify-content-end">
               <button
                 type="button"
                 className="btn btn-outline-secondary"
@@ -341,10 +337,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
-      </div>
-    </>
+    </div>
   )
 }
 
