@@ -1356,7 +1356,42 @@ function TaskParameters({ taskType, taskTypes, taskId }) {
               required={isRequired}
             />
             <div className="form-text">
-              <small className="text-muted">The Google Drive folder ID to ingest documents from</small>
+              <small className="text-muted">The Google Drive folder ID to ingest documents from (provide either folder_id OR file_id, not both)</small>
+            </div>
+          </div>
+        )
+
+      case 'file_id':
+        return (
+          <div>
+            <label htmlFor={`param_${param}`} className="form-label">
+              file_id {isRequired && <span className="text-danger">*</span>}
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              id={`param_${param}`}
+              placeholder="Google Drive file ID"
+              required={isRequired}
+            />
+            <div className="form-text">
+              <small className="text-muted">The Google Drive file ID to ingest a single document (provide either folder_id OR file_id, not both)</small>
+            </div>
+          </div>
+        )
+
+      case 'recursive':
+        return (
+          <div>
+            <label htmlFor={`param_${param}`} className="form-label">
+              recursive {isRequired && <span className="text-danger">*</span>}
+            </label>
+            <select className="form-select" id={`param_${param}`} required={isRequired}>
+              <option value="true" defaultSelected>Yes - Include subfolders</option>
+              <option value="false">No - Only top-level folder</option>
+            </select>
+            <div className="form-text">
+              <small className="text-muted">Whether to recursively ingest documents from subfolders (only applies to folder_id)</small>
             </div>
           </div>
         )
