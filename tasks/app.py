@@ -371,6 +371,14 @@ def list_task_runs() -> Response | tuple[Response, int]:
                 "metrics_collection": "Metrics Collection",
             }
 
+            # Load task metadata to get custom names
+            metadata_map = {}
+            try:
+                with get_db_session() as db_session:
+                    metadata_map = {m.job_id: m.task_name for m in db_session.query(TaskMetadata).all()}
+            except Exception as e:
+                logger.error(f"Error loading task metadata: {e}")
+
             runs_data = []
             for run in task_runs:
                 # Extract job type from task config snapshot
@@ -378,12 +386,17 @@ def list_task_runs() -> Response | tuple[Response, int]:
                 job_name = "Unknown Job"
                 if run.task_config_snapshot:
                     job_type = run.task_config_snapshot.get("job_type")
-                    job_name = job_type_names.get(
-                        job_type,
-                        job_type.replace("_", " ").title()
-                        if job_type
-                        else "Unknown Job",
-                    )
+                    # Try to get custom task name first, fallback to job type name
+                    job_id = run.task_config_snapshot.get("job_id")
+                    if job_id and job_id in metadata_map:
+                        job_name = metadata_map[job_id]
+                    else:
+                        job_name = job_type_names.get(
+                            job_type,
+                            job_type.replace("_", " ").title()
+                            if job_type
+                            else "Unknown Job",
+                        )
 
                 runs_data.append(
                     {
