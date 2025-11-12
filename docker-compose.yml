@@ -91,8 +91,6 @@ services:
     env_file:
       - .env
     environment:
-      - FLASK_PORT=8081  # Flask binds to 8081 inside container, nginx proxies from 5001
-      - TASKS_PUBLIC_PORT=${TASKS_PORT:-5001}  # External port for OAuth redirects
       - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SLACK_BOT_API_URL=http://bot:8080
@@ -100,6 +98,7 @@ services:
       - QDRANT_PORT=6333
       - QDRANT_API_KEY=${VECTOR_API_KEY:-}
       - ENVIRONMENT=production
+      - FLASK_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
