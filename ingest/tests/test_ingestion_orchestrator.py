@@ -88,7 +88,7 @@ class TestIngestionOrchestrator:
         # Mock the Google Drive client to avoid authentication issues
         orchestrator.google_drive_client.download_file_content = Mock(return_value=None)
 
-        success_count, error_count = await orchestrator.ingest_files(files)
+        success_count, error_count, skipped_count = await orchestrator.ingest_files(files)
 
         # Should fail due to download failure, not embedding service
         assert success_count == 0
@@ -138,7 +138,7 @@ class TestIngestionOrchestrator:
             "sys.modules",
             {"services.embedding_service": Mock(chunk_text=mock_chunk_text)},
         ):
-            success_count, error_count = await orchestrator.ingest_files(files)
+            success_count, error_count, skipped_count = await orchestrator.ingest_files(files)
 
             assert success_count == 1
             assert error_count == 0
@@ -164,7 +164,7 @@ class TestIngestionOrchestrator:
             }
         ]
 
-        success_count, error_count = await orchestrator.ingest_files(files)
+        success_count, error_count, skipped_count = await orchestrator.ingest_files(files)
 
         assert success_count == 0
         assert error_count == 0
@@ -189,7 +189,7 @@ class TestIngestionOrchestrator:
 
         orchestrator.google_drive_client.download_file_content = Mock(return_value=None)
 
-        success_count, error_count = await orchestrator.ingest_files(files)
+        success_count, error_count, skipped_count = await orchestrator.ingest_files(files)
 
         assert success_count == 0
         assert error_count == 1
@@ -232,7 +232,7 @@ class TestIngestionOrchestrator:
             "sys.modules",
             {"services.embedding_service": Mock(chunk_text=mock_chunk_text)},
         ):
-            success_count, error_count = await orchestrator.ingest_folder("folder_id")
+            success_count, error_count, skipped_count = await orchestrator.ingest_folder("folder_id")
 
             assert success_count == 1
             assert error_count == 0
@@ -251,7 +251,7 @@ class TestIngestionOrchestrator:
 
         orchestrator.google_drive_client.list_folder_contents = Mock(return_value=[])
 
-        success_count, error_count = await orchestrator.ingest_folder("folder_id")
+        success_count, error_count, skipped_count = await orchestrator.ingest_folder("folder_id")
 
         assert success_count == 0
         assert error_count == 0
@@ -286,7 +286,7 @@ class TestIngestionOrchestrator:
         custom_metadata = {"department": "engineering", "project": "docs"}
 
         # This should NOT raise TypeError about 'base_metadata' parameter
-        success_count, error_count = await orchestrator.ingest_files(
+        success_count, error_count, skipped_count = await orchestrator.ingest_files(
             [file_info], metadata=custom_metadata
         )
 
@@ -333,7 +333,7 @@ class TestIngestionOrchestrator:
             "sys.modules",
             {"services.embedding_service": Mock(chunk_text=mock_chunk_text)},
         ):
-            success_count, error_count = await orchestrator.ingest_folder(
+            success_count, error_count, skipped_count = await orchestrator.ingest_folder(
                 "folder_id", metadata=custom_metadata
             )
 
