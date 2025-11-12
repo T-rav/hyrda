@@ -5,7 +5,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, redirect, request, session
 from flask_cors import CORS
 
 from config.settings import get_settings
@@ -382,6 +382,169 @@ def list_task_runs() -> Response | tuple[Response, int]:
 
     except Exception as e:
         logger.error(f"Error fetching task runs: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/gdrive/auth/initiate", methods=["POST"])
+def initiate_gdrive_auth() -> Response | tuple[Response, int]:
+    """Initiate Google Drive OAuth flow."""
+    try:
+        data = request.get_json()
+        task_id = data.get("task_id")  # Unique identifier for this task's credentials
+
+        if not task_id:
+            return jsonify({"error": "task_id is required"}), 400
+
+        # Add ingest path to sys.path
+        ingest_path = str(Path(__file__).parent.parent / "ingest")
+        if ingest_path not in sys.path:
+            sys.path.insert(0, ingest_path)
+
+        from google_auth_oauthlib.flow import Flow
+
+        # Define scopes
+        scopes = [
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+        ]
+
+        # Path to credentials file (shared, not per-task)
+        credentials_file = str(Path(__file__).parent.parent / "ingest" / "credentials.json")
+
+        if not Path(credentials_file).exists():
+            return (
+                jsonify(
+                    {
+                        "error": "Google OAuth credentials not found",
+                        "details": "Please set up credentials.json in the ingest directory",
+                    }
+                ),
+                500,
+            )
+
+        # Get settings for redirect URI
+        settings = get_settings()
+        redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
+
+        # Create flow
+        flow = Flow.from_client_secrets_file(
+            credentials_file, scopes=scopes, redirect_uri=redirect_uri
+        )
+
+        # Generate authorization URL
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+
+        # Store state and task_id in session
+        session["oauth_state"] = state
+        session["oauth_task_id"] = task_id
+
+        return jsonify({"authorization_url": authorization_url, "state": state})
+
+    except Exception as e:
+        logger.error(f"Error initiating Google Drive auth: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/gdrive/auth/callback")
+def gdrive_auth_callback() -> Response | tuple[Response, int]:
+    """Handle Google Drive OAuth callback."""
+    try:
+        # Get state and task_id from session
+        state = session.get("oauth_state")
+        task_id = session.get("oauth_task_id")
+
+        if not state or not task_id:
+            return jsonify({"error": "Invalid session state"}), 400
+
+        # Add ingest path to sys.path
+        ingest_path = str(Path(__file__).parent.parent / "ingest")
+        if ingest_path not in sys.path:
+            sys.path.insert(0, ingest_path)
+
+        from google_auth_oauthlib.flow import Flow
+
+        # Define scopes
+        scopes = [
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+        ]
+
+        # Path to credentials file
+        credentials_file = str(Path(__file__).parent.parent / "ingest" / "credentials.json")
+
+        # Get settings for redirect URI
+        settings = get_settings()
+        redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
+
+        # Create flow
+        flow = Flow.from_client_secrets_file(
+            credentials_file, scopes=scopes, redirect_uri=redirect_uri, state=state
+        )
+
+        # Fetch token using authorization response
+        authorization_response = request.url
+        flow.fetch_token(authorization_response=authorization_response)
+
+        # Get credentials
+        credentials = flow.credentials
+
+        # Save credentials to task-specific token file
+        token_dir = Path(__file__).parent / "auth" / "gdrive_tokens"
+        token_dir.mkdir(parents=True, exist_ok=True)
+        token_file = token_dir / f"{task_id}_token.json"
+
+        with open(token_file, "w") as f:
+            f.write(credentials.to_json())
+
+        logger.info(f"Google Drive credentials saved for task: {task_id}")
+
+        # Clear session
+        session.pop("oauth_state", None)
+        session.pop("oauth_task_id", None)
+
+        # Redirect to UI with success message
+        return redirect(f"http://{settings.host}:3001/?auth_success=true&task_id={task_id}")
+
+    except Exception as e:
+        logger.error(f"Error handling Google Drive auth callback: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/gdrive/auth/status/<task_id>")
+def check_gdrive_auth_status(task_id: str) -> Response | tuple[Response, int]:
+    """Check if Google Drive authentication exists for a task."""
+    try:
+        token_file = Path(__file__).parent / "auth" / "gdrive_tokens" / f"{task_id}_token.json"
+
+        if token_file.exists():
+            # Verify token is valid
+            from google.oauth2.credentials import Credentials
+
+            creds = Credentials.from_authorized_user_file(
+                str(token_file),
+                [
+                    "https://www.googleapis.com/auth/drive.readonly",
+                    "https://www.googleapis.com/auth/drive.metadata.readonly",
+                ],
+            )
+
+            return jsonify(
+                {
+                    "authenticated": True,
+                    "token_file": str(token_file),
+                    "valid": creds.valid,
+                    "expired": creds.expired if hasattr(creds, "expired") else False,
+                }
+            )
+        else:
+            return jsonify({"authenticated": False})
+
+    except Exception as e:
+        logger.error(f"Error checking Google Drive auth status: {e}")
         return jsonify({"error": str(e)}), 500
 
 
