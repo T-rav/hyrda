@@ -977,6 +977,7 @@ class TestBotCommandHandling:
                 llm_service=llm_service,
                 channel="C123",
                 thread_ts=None,
+                message_ts="1234567890.123456",  # Required for conversation tracking
             )
 
         # Profile agent sends status message, then returns empty response when PDF uploaded
