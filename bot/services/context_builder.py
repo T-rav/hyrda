@@ -6,6 +6,7 @@ Manages prompt engineering and context formatting.
 """
 
 import logging
+from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,16 @@ class ContextBuilder:
             final_system_message can be None if no system message or context provided
         """
         final_system_message = system_message
+
+        # Add current date to system message so LLM knows the correct year
+        current_date = datetime.now().strftime("%B %d, %Y")
+        current_year = datetime.now().year
+        date_context = f"**IMPORTANT - Current Date Information:**\n- Today's date: {current_date}\n- Current year: {current_year}\n- When using web_search tool, do NOT add years to search queries unless the user explicitly mentions a specific year. Use the current year ({current_year}) only if the user asks about 'this year' or 'current year'."
+
+        if final_system_message:
+            final_system_message = f"{final_system_message}\n\n{date_context}"
+        else:
+            final_system_message = date_context
 
         if context_chunks:
             # Separate uploaded documents from RAG-retrieved chunks
@@ -97,10 +108,7 @@ class ContextBuilder:
                 f"Context:\n{context_section}\n\n"
             )
 
-            if final_system_message:
-                final_system_message = f"{final_system_message}\n\n{rag_instruction}"
-            else:
-                final_system_message = rag_instruction
+            final_system_message = f"{final_system_message}\n\n{rag_instruction}"
 
             logger.info(f"🔍 Using RAG with {len(context_chunks)} context chunks")
         else:
