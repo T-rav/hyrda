@@ -938,6 +938,30 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         }
       }
 
+      // Special validation for gdrive_ingest: must have either folder_id OR file_id (not both, not neither)
+      if (taskType === 'gdrive_ingest') {
+        const hasFolderId = parameters.folder_id && parameters.folder_id.trim() !== ''
+        const hasFileId = parameters.file_id && parameters.file_id.trim() !== ''
+
+        if (!hasFolderId && !hasFileId) {
+          alert('Google Drive Ingestion requires either a folder_id OR a file_id. Please provide one.')
+          setLoading(false)
+          return
+        }
+
+        if (hasFolderId && hasFileId) {
+          alert('Google Drive Ingestion requires either folder_id OR file_id, not both. Please provide only one.')
+          setLoading(false)
+          return
+        }
+
+        // Also validate credential_id is selected
+        if (!parameters.credential_id || parameters.credential_id === '') {
+          alert('Please select a Google Drive credential from the dropdown.')
+          setLoading(false)
+          return
+        }
+      }
 
       const taskData = {
         job_type: taskType,
