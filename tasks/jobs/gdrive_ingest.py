@@ -148,7 +148,7 @@ class GDriveIngestJob(BaseJob):
             # Execute ingestion based on folder_id or file_id
             if folder_id:
                 logger.info(f"Ingesting folder: {folder_id} (recursive={recursive})")
-                success_count, error_count = await orchestrator.ingest_folder(
+                success_count, error_count, skipped_count = await orchestrator.ingest_folder(
                     folder_id=folder_id,
                     recursive=recursive,
                     metadata=metadata,
@@ -174,16 +174,16 @@ class GDriveIngestJob(BaseJob):
 
                 # Ingest as single-item list
                 files = [file_info]
-                success_count, error_count = await orchestrator.ingest_files(
+                success_count, error_count, skipped_count = await orchestrator.ingest_files(
                     files, metadata=metadata
                 )
 
             # Standardized result structure
-            processed_count = success_count + error_count
+            processed_count = success_count + error_count + skipped_count
 
             logger.info(
                 f"Google Drive ingestion completed: "
-                f"success={success_count}, errors={error_count}"
+                f"success={success_count}, skipped={skipped_count}, errors={error_count}"
             )
 
             return {
@@ -191,7 +191,8 @@ class GDriveIngestJob(BaseJob):
                 "records_processed": processed_count,
                 "records_success": success_count,
                 "records_failed": error_count,
-                # Job-specific details
+                # Job-specific details (stored in result_data JSON)
+                "records_skipped": skipped_count,
                 "folder_id": folder_id,
                 "file_id": file_id,
                 "recursive": recursive,

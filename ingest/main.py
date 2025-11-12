@@ -184,7 +184,7 @@ async def main():
     try:
         if args.folder_id:
             print(f"\n📂 Ingesting folder: {args.folder_id}")
-            success_count, error_count = await orchestrator.ingest_folder(
+            success_count, error_count, skipped_count = await orchestrator.ingest_folder(
                 args.folder_id, recursive=args.recursive, metadata=metadata
             )
         else:  # args.file_id
@@ -201,12 +201,13 @@ async def main():
 
             # Ingest as single-item list
             files = [file_info]
-            success_count, error_count = await orchestrator.ingest_files(files, metadata=metadata)
+            success_count, error_count, skipped_count = await orchestrator.ingest_files(files, metadata=metadata)
 
         print("\n📊 Ingestion Summary:")
-        print(f"✅ Successfully processed: {success_count}")
+        print(f"✅ Successfully ingested: {success_count}")
+        print(f"⏭️  Skipped (unchanged): {skipped_count}")
         print(f"❌ Errors: {error_count}")
-        print(f"📊 Total items: {success_count + error_count}")
+        print(f"📊 Total items: {success_count + error_count + skipped_count}")
 
     except Exception as e:
         print(f"❌ Ingestion failed: {e}")

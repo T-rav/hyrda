@@ -96,6 +96,7 @@ class IngestionOrchestrator:
 
         success_count = 0
         error_count = 0
+        skipped_count = 0
 
         for file_info in files:
             try:
@@ -123,7 +124,7 @@ class IngestionOrchestrator:
 
                 if not needs_reindex:
                     print(f"⏭️  Skipping (unchanged): {file_info['name']}")
-                    success_count += 1
+                    skipped_count += 1
                     continue
 
                 if existing_uuid:
@@ -273,11 +274,11 @@ class IngestionOrchestrator:
                 except Exception:
                     pass  # Don't fail on tracking failures
 
-        return success_count, error_count
+        return success_count, error_count, skipped_count
 
     async def ingest_folder(
         self, folder_id: str, recursive: bool = True, metadata: dict | None = None
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, int]:
         """
         Ingest all files from a Google Drive folder.
 
@@ -287,7 +288,7 @@ class IngestionOrchestrator:
             metadata: Additional metadata to add to each document
 
         Returns:
-            Tuple of (success_count, error_count)
+            Tuple of (success_count, error_count, skipped_count)
         """
         print(f"Scanning folder: {folder_id} (recursive: {recursive})")
         files = self.google_drive_client.list_folder_contents(
