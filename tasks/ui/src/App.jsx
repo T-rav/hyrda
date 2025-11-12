@@ -574,26 +574,30 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const isActive = !!task.next_run_time
   const currentAction = actionLoading[task.id]
 
-  // Get task type from args
+  // Get task type from args and create user-friendly description
   const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
 
-  // Format display: "Task Name / Task Type"
-  const displayName = task.name && task.name !== task.id
-    ? `${task.name} / ${taskType}`
-    : taskType
+  // Map task types to user-friendly descriptions
+  const taskTypeDescriptions = {
+    'slack_user_import': 'Slack User Import',
+    'metric_sync': 'Metric.ai Data Sync',
+    'gdrive_ingest': 'Google Drive Ingestion'
+  }
+
+  const taskDescription = taskTypeDescriptions[taskType] || taskType
 
   return (
     <tr>
       <td>
         <div>
-          <strong>{displayName}</strong>
+          <strong>{task.name && task.name !== task.id ? task.name : taskDescription}</strong>
           {isActive ? (
             <span className="badge bg-success ms-2">Active</span>
           ) : (
             <span className="badge bg-warning ms-2">Paused</span>
           )}
         </div>
-        <small className="text-muted">{task.id}</small>
+        <small className="text-muted">{taskDescription}</small>
       </td>
       <td>
         <span className="badge bg-secondary">
