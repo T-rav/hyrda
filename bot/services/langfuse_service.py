@@ -634,6 +634,8 @@ class LangfuseService:
 
                 # Filter for conversation_turn observations (actual user messages)
                 # Each user message creates a "conversation_turn" generation
+                # NOTE: Not filtering by environment tags because older traces don't have tags
+                # This shows all queries across all environments
                 user_messages_params = {
                     "fromTimestamp": start_datetime.isoformat(),
                     "page": 1,
