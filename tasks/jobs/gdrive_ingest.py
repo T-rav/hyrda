@@ -25,6 +25,17 @@ class GDriveIngestJob(BaseJob):
         "metadata",
         "credential_id",
     ]
+    # Define parameter groups: at least one from each group is required
+    PARAM_GROUPS = [
+        {
+            "name": "source",
+            "description": "Google Drive source",
+            "params": ["folder_id", "file_id"],
+            "min_required": 1,
+            "max_required": 1,
+            "error_message": "Provide either folder_id OR file_id (not both, not neither)",
+        }
+    ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
         """Initialize the Google Drive ingestion job."""

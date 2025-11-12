@@ -938,24 +938,40 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         }
       }
 
-      // Special validation for gdrive_ingest: must have either folder_id OR file_id (not both, not neither)
+      // Generic validation for parameter groups (e.g., "one of X required")
+      if (selectedTaskType?.param_groups) {
+        for (const group of selectedTaskType.param_groups) {
+          const filledParams = group.params.filter(param => {
+            const value = parameters[param]
+            return value && value.toString().trim() !== ''
+          })
+
+          const filledCount = filledParams.length
+          const minRequired = group.min_required || 1
+          const maxRequired = group.max_required || group.params.length
+
+          // Check minimum requirement
+          if (filledCount < minRequired) {
+            const errorMsg = group.error_message ||
+              `${group.description || 'Parameter group'}: At least ${minRequired} parameter(s) required from: ${group.params.join(', ')}`
+            alert(errorMsg)
+            setLoading(false)
+            return
+          }
+
+          // Check maximum requirement
+          if (filledCount > maxRequired) {
+            const errorMsg = group.error_message ||
+              `${group.description || 'Parameter group'}: At most ${maxRequired} parameter(s) allowed from: ${group.params.join(', ')}`
+            alert(errorMsg)
+            setLoading(false)
+            return
+          }
+        }
+      }
+
+      // Special validation for gdrive_ingest credential (still task-specific for now)
       if (taskType === 'gdrive_ingest') {
-        const hasFolderId = parameters.folder_id && parameters.folder_id.trim() !== ''
-        const hasFileId = parameters.file_id && parameters.file_id.trim() !== ''
-
-        if (!hasFolderId && !hasFileId) {
-          alert('Google Drive Ingestion requires either a folder_id OR a file_id. Please provide one.')
-          setLoading(false)
-          return
-        }
-
-        if (hasFolderId && hasFileId) {
-          alert('Google Drive Ingestion requires either folder_id OR file_id, not both. Please provide only one.')
-          setLoading(false)
-          return
-        }
-
-        // Also validate credential_id is selected
         if (!parameters.credential_id || parameters.credential_id === '') {
           alert('Please select a Google Drive credential from the dropdown.')
           setLoading(false)
