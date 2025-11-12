@@ -945,9 +945,9 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         }
       }
 
-      // Add token_file parameter for gdrive_ingest tasks
-      if (taskType === 'gdrive_ingest' && taskId) {
-        parameters.token_file = `auth/gdrive_tokens/${taskId}_token.json`
+      // Add credential_id parameter for gdrive_ingest tasks
+      if (taskType === 'gdrive_ingest' && selectedCredential) {
+        parameters.credential_id = selectedCredential
       }
 
       const taskData = {
