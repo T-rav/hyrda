@@ -1,6 +1,6 @@
 """Configuration settings for the tasks service."""
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +10,7 @@ class TasksSettings(BaseSettings):
     model_config = SettingsConfigDict(env_ignore_empty=True, extra="ignore")
 
     # Server configuration
-    port: int = Field(default=8081, alias="FLASK_PORT")
+    port: int = Field(default=5001, validation_alias=AliasChoices("TASKS_PORT", "FLASK_PORT"))
     host: str = Field(default="0.0.0.0", alias="TASKS_HOST")
     secret_key: str = Field(
         default="dev-secret-key-change-in-production", alias="SECRET_KEY"
