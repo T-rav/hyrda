@@ -532,10 +532,14 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
             )
 
         # Get settings for redirect URI
+        import os
+
         settings = get_settings()
         # Use localhost for OAuth redirect (not 0.0.0.0)
         host = "localhost" if settings.host == "0.0.0.0" else settings.host
-        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
+        # Use public port for OAuth redirects (may differ from Flask bind port in containers)
+        public_port = os.getenv("TASKS_PUBLIC_PORT", str(settings.port))
+        redirect_uri = f"http://{host}:{public_port}/api/gdrive/auth/callback"
 
         # Create flow from client config (not from file)
         flow = Flow.from_client_config(
@@ -604,10 +608,14 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
             return jsonify({"error": "Google OAuth not configured"}), 500
 
         # Get settings for redirect URI
+        import os
+
         settings = get_settings()
         # Use localhost for OAuth redirect (not 0.0.0.0)
         host = "localhost" if settings.host == "0.0.0.0" else settings.host
-        redirect_uri = f"http://{host}:{settings.port}/api/gdrive/auth/callback"
+        # Use public port for OAuth redirects (may differ from Flask bind port in containers)
+        public_port = os.getenv("TASKS_PUBLIC_PORT", str(settings.port))
+        redirect_uri = f"http://{host}:{public_port}/api/gdrive/auth/callback"
 
         # Create flow from client config
         flow = Flow.from_client_config(
