@@ -23,8 +23,7 @@ class GDriveIngestJob(BaseJob):
         "file_id",
         "recursive",
         "metadata",
-        "credentials_file",
-        "token_file",
+        "credential_id",
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
@@ -60,13 +59,15 @@ class GDriveIngestJob(BaseJob):
         file_id = self.params.get("file_id")
         recursive = self.params.get("recursive", True)
         metadata = self.params.get("metadata", {})
-        credentials_file = self.params.get("credentials_file")
-        token_file = self.params.get("token_file")
+        credential_id = self.params.get("credential_id")
+
+        if not credential_id:
+            raise ValueError("credential_id is required")
 
         logger.info(
             f"Starting Google Drive ingestion: "
             f"folder_id={folder_id}, file_id={file_id}, "
-            f"recursive={recursive}"
+            f"recursive={recursive}, credential={credential_id}"
         )
 
         try:
@@ -82,14 +83,16 @@ class GDriveIngestJob(BaseJob):
             from services.llm_wrapper import SimpleLLMService
             from services.vector_store import QdrantVectorStore
 
-            # Resolve token_file path relative to tasks directory if it's a relative path
-            if token_file and not Path(token_file).is_absolute():
-                tasks_dir = Path(__file__).parent.parent
-                token_file = str(tasks_dir / token_file)
+            # Get token file path from credential_id
+            tasks_dir = Path(__file__).parent.parent
+            token_file = str(tasks_dir / "auth" / "gdrive_credentials" / f"{credential_id}.json")
 
-            # Initialize orchestrator with credentials
+            if not Path(token_file).exists():
+                raise FileNotFoundError(f"Credential token not found: {credential_id}")
+
+            # Initialize orchestrator with token file (no credentials_file needed - using env vars)
             orchestrator = IngestionOrchestrator(
-                credentials_file=credentials_file,
+                credentials_file=None,  # Not used - OAuth handled by env vars
                 token_file=token_file,
             )
 

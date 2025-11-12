@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { Key, Trash2, Plus, X, AlertCircle, Check } from 'lucide-react'
+import { Key, Trash2, Plus, X, AlertCircle, Check, ExternalLink } from 'lucide-react'
 
 /**
  * Credentials Manager Component
  *
- * Manages Google OAuth credentials for Google Drive tasks.
- * Each credential represents a different Google account that can access different files.
+ * Simple OAuth-based credential management - no file uploads needed!
+ * Just enter a name and click "Connect Google" to set up credentials.
  */
 function CredentialsManager() {
   const [credentials, setCredentials] = useState([])
@@ -74,7 +74,7 @@ function CredentialsManager() {
             Google Drive Credentials
           </h2>
           <p className="text-muted">
-            Manage Google OAuth credentials for accessing different Google Drive accounts
+            Connect different Google accounts to access different files
           </p>
         </div>
         <button
@@ -151,16 +151,79 @@ function CredentialsManager() {
 
 function AddCredentialModal({ onClose, onSuccess }) {
   const [name, setName] = useState('')
-  const [credentials, setCredentials] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [credentialId, setCredentialId] = useState(null)
+  const [authInProgress, setAuthInProgress] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
+  // Generate credential ID from name
+  useEffect(() => {
+    if (name) {
+      const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_')
+      setCredentialId(id)
+    }
+  }, [name])
+
+  const handleOAuthClick = async () => {
+    if (!name || !credentialId) {
+      setError('Please enter a credential name first')
+      return
+    }
 
     try {
+      setAuthInProgress(true)
+      setError(null)
+
+      // Initiate OAuth flow with a temporary task ID for credential setup
+      const tempTaskId = `cred_setup_${credentialId}_${Date.now()}`
+
+      const response = await fetch('/api/gdrive/auth/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          task_id: tempTaskId,
+          credential_id: credentialId,
+          is_credential_setup: true  // Flag to indicate this is credential setup
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate authentication')
+      }
+
+      // Open OAuth URL in new window
+      const authWindow = window.open(
+        data.authorization_url,
+        'Google Drive Authentication',
+        'width=600,height=700,left=200,top=100'
+      )
+
+      // Poll for window closure
+      const pollTimer = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(pollTimer)
+          setAuthInProgress(false)
+          // On success, save the credential name to our system
+          saveCredentialName()
+        }
+      }, 500)
+
+    } catch (err) {
+      console.error('Error during OAuth:', err)
+      setError(err.message)
+      setAuthInProgress(false)
+    }
+  }
+
+  const saveCredentialName = async () => {
+    try {
+      setLoading(true)
+
+      // Just save the metadata - the OAuth flow already saved the actual credentials
       const response = await fetch('/api/credentials', {
         method: 'POST',
         headers: {
@@ -168,44 +231,30 @@ function AddCredentialModal({ onClose, onSuccess }) {
         },
         body: JSON.stringify({
           name: name.trim(),
-          credentials: credentials.trim(),
+          id: credentialId,
         }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to add credential')
+        throw new Error(data.error || 'Failed to save credential')
       }
 
       onSuccess()
     } catch (err) {
-      console.error('Error adding credential:', err)
+      console.error('Error saving credential:', err)
       setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      setCredentials(event.target.result)
-      if (!name) {
-        setName(file.name.replace('.json', ''))
-      }
-    }
-    reader.readAsText(file)
-  }
-
   return (
     <>
       <div className="modal-backdrop fade show" onClick={onClose}></div>
       <div className="modal fade show d-block" tabIndex="-1">
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog">
           <div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">
@@ -219,97 +268,77 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 aria-label="Close"
               ></button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body">
-                <div className="alert alert-info">
-                  <AlertCircle size={16} className="me-2" />
-                  <small>
-                    <strong>How to get credentials:</strong><br />
-                    1. Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud Console</a><br />
-                    2. Create OAuth 2.0 Client ID (Application type: Web application)<br />
-                    3. Add authorized redirect URI: <code>http://localhost:5001/api/gdrive/auth/callback</code><br />
-                    4. Download the JSON file
-                  </small>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label">Credential Name</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g., Personal Account, Work Account, Client XYZ"
-                    required
-                  />
-                  <div className="form-text">
-                    Give this credential a memorable name
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label">Upload Credentials File</label>
-                  <input
-                    type="file"
-                    className="form-control"
-                    accept=".json,application/json"
-                    onChange={handleFileUpload}
-                  />
-                  <div className="form-text">
-                    Upload the credentials.json file from Google Cloud Console
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label">Or Paste JSON Content</label>
-                  <textarea
-                    className="form-control font-monospace"
-                    rows="8"
-                    value={credentials}
-                    onChange={(e) => setCredentials(e.target.value)}
-                    placeholder='{"web":{"client_id":"...","client_secret":"..."}}'
-                    required
-                  ></textarea>
-                  <div className="form-text">
-                    Paste the content of your credentials.json file
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="alert alert-danger">
-                    <AlertCircle size={16} className="me-2" />
-                    {error}
-                  </div>
-                )}
+            <div className="modal-body">
+              <div className="alert alert-info">
+                <AlertCircle size={16} className="me-2" />
+                <small>
+                  <strong>Simple setup:</strong><br />
+                  1. Enter a name for this credential<br />
+                  2. Click "Connect Google Drive"<br />
+                  3. Sign in with your Google account<br />
+                  That's it - no files to upload!
+                </small>
               </div>
-              <div className="modal-footer">
+
+              <div className="mb-3">
+                <label className="form-label">Credential Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., Personal Account, Work Account, Client XYZ"
+                  required
+                  disabled={authInProgress || loading}
+                />
+                <div className="form-text">
+                  Give this credential a memorable name
+                </div>
+              </div>
+
+              {!authInProgress && !loading && (
                 <button
                   type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={onClose}
-                  disabled={loading}
+                  className="btn btn-primary w-100"
+                  onClick={handleOAuthClick}
+                  disabled={!name}
                 >
-                  Cancel
+                  <ExternalLink size={16} className="me-1" />
+                  Connect Google Drive
                 </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loading || !name || !credentials}
-                >
-                  {loading ? (
-                    <>
-                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} className="me-1" />
-                      Add Credential
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+              )}
+
+              {authInProgress && (
+                <div className="alert alert-info mb-0">
+                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                  Waiting for Google authentication...
+                </div>
+              )}
+
+              {loading && (
+                <div className="alert alert-info mb-0">
+                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                  Saving credential...
+                </div>
+              )}
+
+              {error && (
+                <div className="alert alert-danger mt-3 mb-0">
+                  <AlertCircle size={16} className="me-2" />
+                  {error}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onClose}
+                disabled={authInProgress || loading}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>

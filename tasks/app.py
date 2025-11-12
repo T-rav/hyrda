@@ -389,17 +389,19 @@ def list_task_runs() -> Response | tuple[Response, int]:
 def list_credentials() -> Response | tuple[Response, int]:
     """List all stored Google OAuth credentials."""
     try:
+        import json
         creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
         creds_dir.mkdir(parents=True, exist_ok=True)
 
         credentials = []
-        for cred_file in creds_dir.glob("*.json"):
-            cred_id = cred_file.stem
-            credentials.append({
-                "id": cred_id,
-                "name": cred_id,  # Default to ID, can be customized later
-                "created_at": cred_file.stat().st_mtime,
-            })
+        for meta_file in creds_dir.glob("*.meta.json"):
+            try:
+                with open(meta_file) as f:
+                    metadata = json.load(f)
+                    credentials.append(metadata)
+            except Exception as e:
+                logger.warning(f"Failed to read metadata file {meta_file}: {e}")
+                continue
 
         return jsonify({"credentials": credentials})
 
@@ -410,41 +412,48 @@ def list_credentials() -> Response | tuple[Response, int]:
 
 @app.route("/api/credentials", methods=["POST"])
 def create_credential() -> Response | tuple[Response, int]:
-    """Store a new Google OAuth credentials file."""
+    """Register a new Google OAuth credential (metadata only - token saved during OAuth)."""
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
         cred_name = data.get("name")
-        cred_content = data.get("credentials")
+        cred_id = data.get("id")
 
-        if not cred_name or not cred_content:
-            return jsonify({"error": "name and credentials are required"}), 400
+        if not cred_name or not cred_id:
+            return jsonify({"error": "name and id are required"}), 400
 
-        # Validate it's valid JSON
-        import json
-        try:
-            json.loads(cred_content)
-        except json.JSONDecodeError:
-            return jsonify({"error": "Invalid JSON in credentials"}), 400
-
-        # Save credentials file
+        # Check if token file exists (should have been created during OAuth)
         creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
         creds_dir.mkdir(parents=True, exist_ok=True)
-        cred_file = creds_dir / f"{cred_name}.json"
+        token_file = creds_dir / f"{cred_id}.json"
 
-        if cred_file.exists():
-            return jsonify({"error": "Credential with this name already exists"}), 409
+        if not token_file.exists():
+            return jsonify({
+                "error": "Token not found",
+                "details": "OAuth must be completed before saving credential metadata"
+            }), 400
 
-        with open(cred_file, "w") as f:
-            f.write(cred_content)
+        # Save metadata file (just name and creation time)
+        metadata_file = creds_dir / f"{cred_id}.meta.json"
 
-        logger.info(f"Credential created: {cred_name}")
+        if metadata_file.exists():
+            return jsonify({"error": "Credential with this ID already exists"}), 409
+
+        import json
+        with open(metadata_file, "w") as f:
+            json.dump({
+                "id": cred_id,
+                "name": cred_name,
+                "created_at": datetime.now(UTC).timestamp()
+            }, f)
+
+        logger.info(f"Credential metadata saved: {cred_name} ({cred_id})")
 
         return jsonify({
             "message": "Credential created successfully",
-            "id": cred_name,
+            "id": cred_id,
             "name": cred_name,
         })
 
@@ -455,15 +464,21 @@ def create_credential() -> Response | tuple[Response, int]:
 
 @app.route("/api/credentials/<cred_id>", methods=["DELETE"])
 def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
-    """Delete a stored Google OAuth credentials file."""
+    """Delete a stored Google OAuth credential (token + metadata)."""
     try:
         creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
-        cred_file = creds_dir / f"{cred_id}.json"
+        token_file = creds_dir / f"{cred_id}.json"
+        meta_file = creds_dir / f"{cred_id}.meta.json"
 
-        if not cred_file.exists():
+        if not meta_file.exists():
             return jsonify({"error": "Credential not found"}), 404
 
-        cred_file.unlink()
+        # Delete both files
+        if token_file.exists():
+            token_file.unlink()
+        if meta_file.exists():
+            meta_file.unlink()
+
         logger.info(f"Credential deleted: {cred_id}")
 
         return jsonify({"message": f"Credential {cred_id} deleted successfully"})
@@ -500,27 +515,38 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
             "https://www.googleapis.com/auth/drive.metadata.readonly",
         ]
 
-        # Path to selected credentials file
-        credentials_file = str(Path(__file__).parent / "auth" / "gdrive_credentials" / f"{credential_id}.json")
+        # Get OAuth app credentials from environment (shared for all users)
+        import os
+        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 
-        if not Path(credentials_file).exists():
+        if not client_id or not client_secret:
             return (
                 jsonify(
                     {
-                        "error": "Google OAuth credentials not found",
-                        "details": f"Credential '{credential_id}' does not exist",
+                        "error": "Google OAuth not configured",
+                        "details": "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables must be set",
                     }
                 ),
-                404,
+                500,
             )
 
         # Get settings for redirect URI
         settings = get_settings()
         redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
 
-        # Create flow
-        flow = Flow.from_client_secrets_file(
-            credentials_file, scopes=scopes, redirect_uri=redirect_uri
+        # Create flow from client config (not from file)
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=scopes,
+            redirect_uri=redirect_uri
         )
 
         # Generate authorization URL
@@ -567,34 +593,50 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
             "https://www.googleapis.com/auth/drive.metadata.readonly",
         ]
 
-        # Path to credentials file (same one used to initiate)
-        credentials_file = str(Path(__file__).parent / "auth" / "gdrive_credentials" / f"{credential_id}.json")
+        # Get OAuth app credentials from environment (shared for all users)
+        import os
+        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            return jsonify({"error": "Google OAuth not configured"}), 500
 
         # Get settings for redirect URI
         settings = get_settings()
         redirect_uri = f"http://{settings.host}:{settings.port}/api/gdrive/auth/callback"
 
-        # Create flow
-        flow = Flow.from_client_secrets_file(
-            credentials_file, scopes=scopes, redirect_uri=redirect_uri, state=state
+        # Create flow from client config
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=scopes,
+            redirect_uri=redirect_uri,
+            state=state
         )
 
         # Fetch token using authorization response
         authorization_response = request.url
         flow.fetch_token(authorization_response=authorization_response)
 
-        # Get credentials
+        # Get credentials (token)
         credentials = flow.credentials
 
-        # Save credentials to task-specific token file
-        token_dir = Path(__file__).parent / "auth" / "gdrive_tokens"
-        token_dir.mkdir(parents=True, exist_ok=True)
-        token_file = token_dir / f"{task_id}_token.json"
+        # Save token to credential-specific file (not task-specific)
+        # This allows multiple tasks to share the same credential
+        creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
+        creds_dir.mkdir(parents=True, exist_ok=True)
+        token_file = creds_dir / f"{credential_id}.json"
 
         with open(token_file, "w") as f:
             f.write(credentials.to_json())
 
-        logger.info(f"Google Drive credentials saved for task: {task_id}")
+        logger.info(f"Google Drive token saved for credential: {credential_id}")
 
         # Clear session
         session.pop("oauth_state", None)
