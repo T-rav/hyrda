@@ -492,6 +492,10 @@ def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
 def initiate_gdrive_auth() -> Response | tuple[Response, int]:
     """Initiate Google Drive OAuth flow."""
     try:
+        # Allow OAuth over HTTP for local development
+        import os
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
         data = request.get_json()
         task_id = data.get("task_id")  # Unique identifier for this task
         credential_id = data.get("credential_id")  # Which credential set to use
@@ -571,6 +575,10 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
 def gdrive_auth_callback() -> Response | tuple[Response, int]:
     """Handle Google Drive OAuth callback."""
     try:
+        # Allow OAuth over HTTP for local development
+        import os
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
         # Get state, task_id, and credential_id from session
         state = session.get("oauth_state")
         task_id = session.get("oauth_task_id")
