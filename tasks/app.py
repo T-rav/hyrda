@@ -96,11 +96,8 @@ def list_jobs() -> Response | tuple[Response, int]:
     jobs_data = []
 
     # Load all task metadata
-    db_session = get_db_session()
-    try:
+    with get_db_session() as db_session:
         metadata_map = {m.job_id: m for m in db_session.query(TaskMetadata).all()}
-    finally:
-        db_session.close()
 
     for job in jobs:
         job_info = scheduler_service.get_job_info(job.id)
@@ -195,20 +192,18 @@ def create_job() -> Response | tuple[Response, int]:
 
         # Save task metadata (custom name and description)
         if task_name:
-            db_session = get_db_session()
             try:
-                metadata = TaskMetadata(
-                    job_id=job.id,
-                    task_name=task_name,
-                    task_description=task_description
-                )
-                db_session.add(metadata)
-                db_session.commit()
+                with get_db_session() as db_session:
+                    metadata = TaskMetadata(
+                        job_id=job.id,
+                        task_name=task_name,
+                        task_description=task_description
+                    )
+                    db_session.add(metadata)
+                    db_session.commit()
             except Exception as e:
                 logger.error(f"Error saving task metadata: {e}")
-                db_session.rollback()
-            finally:
-                db_session.close()
+                # Don't fail job creation if metadata save fails
 
         return jsonify(
             {"message": f"Job {job.id} created successfully", "job_id": job.id}
