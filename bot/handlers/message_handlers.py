@@ -526,10 +526,11 @@ async def handle_bot_command(
         langfuse_service = get_langfuse_service()
         if langfuse_service and response:  # Only track if we have a response
             try:
-                langfuse_service.trace_conversation_turn(
+                langfuse_service.trace_conversation(
+                    user_id=user_id,
+                    conversation_id=thread_ts or channel,
                     user_message=query,  # Agent query
                     bot_response=response or "",
-                    conversation_id=thread_ts or channel,
                 )
             except Exception as e:
                 logger.warning(
@@ -684,10 +685,11 @@ async def handle_message(
                     langfuse_service = get_langfuse_service()
                     if langfuse_service:
                         try:
-                            langfuse_service.trace_conversation_turn(
+                            langfuse_service.trace_conversation(
+                                user_id=user_id,
+                                conversation_id=thread_ts or channel,
                                 user_message=text,  # Original "start X" command
                                 bot_response=response_text,
-                                conversation_id=thread_ts or channel,
                             )
                         except Exception as e:
                             logger.warning(
@@ -840,10 +842,11 @@ async def handle_message(
         langfuse_service = get_langfuse_service()
         if langfuse_service:
             try:
-                langfuse_service.trace_conversation_turn(
+                langfuse_service.trace_conversation(
+                    user_id=user_id,
+                    conversation_id=thread_ts or channel,
                     user_message=text,
                     bot_response=response or "",
-                    conversation_id=thread_ts or channel,
                 )
             except Exception as e:
                 logger.warning(f"Error tracing conversation turn to Langfuse: {e}")
