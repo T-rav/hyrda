@@ -152,14 +152,29 @@ def resume_job(job_id: str) -> Response | tuple[Response, int]:
 
 @app.route("/api/jobs/<job_id>", methods=["DELETE"])
 def delete_job(job_id: str) -> Response | tuple[Response, int]:
-    """Delete a job."""
+    """Delete a job and its associated metadata."""
     if not scheduler_service:
         return jsonify({"error": "Scheduler not initialized"}), 500
 
     try:
+        # Remove the scheduled job from APScheduler
         scheduler_service.remove_job(job_id)
+
+        # Clean up associated metadata from database
+        with get_db_session() as db_session:
+            metadata = (
+                db_session.query(TaskMetadata)
+                .filter(TaskMetadata.job_id == job_id)
+                .first()
+            )
+            if metadata:
+                db_session.delete(metadata)
+                db_session.commit()
+                logger.info(f"Deleted metadata for job {job_id}")
+
         return jsonify({"message": f"Job {job_id} deleted successfully"})
     except Exception as e:
+        logger.error(f"Error deleting job {job_id}: {e}")
         return jsonify({"error": str(e)}), 400
 
 
