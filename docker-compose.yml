@@ -110,8 +110,6 @@ services:
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
     ports:
       - "${TASKS_PORT:-5001}:5001"
-    volumes:
-      - gdrive_credentials:/app/auth/gdrive_credentials
     depends_on:
       mysql:
         condition: service_healthy
@@ -245,8 +243,6 @@ volumes:
   redis_data:
     driver: local
   loki_data:
-    driver: local
-  gdrive_credentials:
     driver: local
 
 networks:

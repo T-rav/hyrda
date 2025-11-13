@@ -17,8 +17,8 @@ WORKDIR /app
 # Create non-root user early
 RUN useradd -m -u 1000 appuser
 
-# Create logs, cache, and auth directories with proper permissions
-RUN mkdir -p /app/logs /app/.edgar /app/auth/gdrive_credentials && \
+# Create logs and cache directories with proper permissions
+RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
 # Copy tasks application code first (needed for pyproject.toml to work)

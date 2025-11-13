@@ -95,118 +95,149 @@ class GDriveIngestJob(BaseJob):
             from services.llm_wrapper import SimpleLLMService
             from services.vector_store import QdrantVectorStore
 
-            # Get token file path from credential_id
-            tasks_dir = Path(__file__).parent.parent
-            token_file = str(tasks_dir / "auth" / "gdrive_credentials" / f"{credential_id}.json")
+            # Load encrypted token from database
+            from models.base import get_db_session
+            from models.oauth_credential import OAuthCredential
+            from services.encryption_service import get_encryption_service
 
-            if not Path(token_file).exists():
-                raise FileNotFoundError(f"Credential token not found: {credential_id}")
+            encryption_service = get_encryption_service()
 
-            # Initialize orchestrator with token file (no credentials_file needed - using env vars)
-            orchestrator = IngestionOrchestrator(
-                credentials_file=None,  # Not used - OAuth handled by env vars
-                token_file=token_file,
-            )
+            with get_db_session() as db_session:
+                credential = db_session.query(OAuthCredential).filter(
+                    OAuthCredential.credential_id == credential_id
+                ).first()
 
-            # Authenticate with Google Drive
-            logger.info("Authenticating with Google Drive...")
-            if not orchestrator.authenticate():
-                raise RuntimeError("Google Drive authentication failed")
+                if not credential:
+                    raise FileNotFoundError(f"Credential not found in database: {credential_id}")
 
-            # Initialize vector and embedding services using environment variables
-            logger.info("Initializing vector database and embedding service...")
-            import os
+                # Decrypt token
+                token_json = encryption_service.decrypt(credential.encrypted_token)
 
-            # Initialize embedding provider
-            embedding_provider = OpenAIEmbeddingProvider(
-                api_key=os.getenv("EMBEDDING_API_KEY"),
-                model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-            )
+                # Update last_used_at
+                from datetime import UTC
+                credential.last_used_at = datetime.now(UTC)
+                db_session.commit()
 
-            # Initialize vector store
-            vector_store = QdrantVectorStore(
-                host=os.getenv("VECTOR_HOST", "localhost"),
-                port=int(os.getenv("VECTOR_PORT", "6333")),
-                collection_name=os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"),
-                api_key=os.getenv("VECTOR_API_KEY"),
-                use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
-            )
+            # Create temporary token file for ingestion orchestrator
+            # (Orchestrator expects a file path - we can refactor this later)
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                f.write(token_json)
+                token_file = f.name
 
-            await vector_store.initialize(
-                embedding_dimension=embedding_provider.get_dimension()
-            )
-
-            # Initialize LLM service for contextual retrieval if enabled
-            llm_service = None
-            enable_contextual = os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower() == "true"
-            if enable_contextual and os.getenv("LLM_API_KEY"):
-                llm_service = SimpleLLMService(
-                    api_key=os.getenv("LLM_API_KEY"),
-                    model=os.getenv("LLM_MODEL", "gpt-4o"),
+            try:
+                # Initialize orchestrator with temporary token file
+                orchestrator = IngestionOrchestrator(
+                    credentials_file=None,  # Not used - OAuth handled by env vars
+                    token_file=token_file,
                 )
-                logger.info("Contextual retrieval enabled")
 
-            # Set services in orchestrator
-            orchestrator.set_services(
-                vector_store,
-                embedding_provider,
-                llm_service=llm_service,
-                enable_contextual_retrieval=llm_service is not None,
-            )
+                # Authenticate with Google Drive
+                logger.info("Authenticating with Google Drive...")
+                if not orchestrator.authenticate():
+                    raise RuntimeError("Google Drive authentication failed")
 
-            # Execute ingestion based on folder_id or file_id
-            if folder_id:
-                logger.info(f"Ingesting folder: {folder_id} (recursive={recursive})")
-                success_count, error_count, skipped_count = await orchestrator.ingest_folder(
-                    folder_id=folder_id,
-                    recursive=recursive,
-                    metadata=metadata,
+                # Initialize vector and embedding services using environment variables
+                logger.info("Initializing vector database and embedding service...")
+                import os
+
+                # Initialize embedding provider
+                embedding_provider = OpenAIEmbeddingProvider(
+                    api_key=os.getenv("EMBEDDING_API_KEY"),
+                    model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
                 )
-            else:  # file_id
-                logger.info(f"Ingesting single file: {file_id}")
-                # Get file info with Shared Drive support
-                file_info = (
-                    orchestrator.google_drive_client.api_service.service.files()
-                    .get(
-                        fileId=file_id,
-                        fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime",
-                        supportsAllDrives=True,
+
+                # Initialize vector store
+                vector_store = QdrantVectorStore(
+                    host=os.getenv("VECTOR_HOST", "localhost"),
+                    port=int(os.getenv("VECTOR_PORT", "6333")),
+                    collection_name=os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"),
+                    api_key=os.getenv("VECTOR_API_KEY"),
+                    use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
+                )
+
+                await vector_store.initialize(
+                    embedding_dimension=embedding_provider.get_dimension()
+                )
+
+                # Initialize LLM service for contextual retrieval if enabled
+                llm_service = None
+                enable_contextual = os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower() == "true"
+                if enable_contextual and os.getenv("LLM_API_KEY"):
+                    llm_service = SimpleLLMService(
+                        api_key=os.getenv("LLM_API_KEY"),
+                        model=os.getenv("LLM_MODEL", "gpt-4o"),
                     )
-                    .execute()
+                    logger.info("Contextual retrieval enabled")
+
+                # Set services in orchestrator
+                orchestrator.set_services(
+                    vector_store,
+                    embedding_provider,
+                    llm_service=llm_service,
+                    enable_contextual_retrieval=llm_service is not None,
                 )
 
-                # Add folder path context
-                file_info["folder_path"] = "/"
-                file_info["folder_id"] = (
-                    file_info.get("parents", [""])[0] if file_info.get("parents") else ""
+                # Execute ingestion based on folder_id or file_id
+                if folder_id:
+                    logger.info(f"Ingesting folder: {folder_id} (recursive={recursive})")
+                    success_count, error_count, skipped_count = await orchestrator.ingest_folder(
+                        folder_id=folder_id,
+                        recursive=recursive,
+                        metadata=metadata,
+                    )
+                else:  # file_id
+                    logger.info(f"Ingesting single file: {file_id}")
+                    # Get file info with Shared Drive support
+                    file_info = (
+                        orchestrator.google_drive_client.api_service.service.files()
+                        .get(
+                            fileId=file_id,
+                            fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime",
+                            supportsAllDrives=True,
+                        )
+                        .execute()
+                    )
+
+                    # Add folder path context
+                    file_info["folder_path"] = "/"
+                    file_info["folder_id"] = (
+                        file_info.get("parents", [""])[0] if file_info.get("parents") else ""
+                    )
+
+                    # Ingest as single-item list
+                    files = [file_info]
+                    success_count, error_count, skipped_count = await orchestrator.ingest_files(
+                        files, metadata=metadata
+                    )
+
+                # Standardized result structure
+                processed_count = success_count + error_count + skipped_count
+
+                logger.info(
+                    f"Google Drive ingestion completed: "
+                    f"success={success_count}, skipped={skipped_count}, errors={error_count}"
                 )
 
-                # Ingest as single-item list
-                files = [file_info]
-                success_count, error_count, skipped_count = await orchestrator.ingest_files(
-                    files, metadata=metadata
-                )
+                return {
+                    # Standardized fields for task run tracking
+                    "records_processed": processed_count,
+                    "records_success": success_count,
+                    "records_failed": error_count,
+                    # Job-specific details (stored in result_data JSON)
+                    "records_skipped": skipped_count,
+                    "folder_id": folder_id,
+                    "file_id": file_id,
+                    "recursive": recursive,
+                    "metadata": metadata,
+                }
 
-            # Standardized result structure
-            processed_count = success_count + error_count + skipped_count
-
-            logger.info(
-                f"Google Drive ingestion completed: "
-                f"success={success_count}, skipped={skipped_count}, errors={error_count}"
-            )
-
-            return {
-                # Standardized fields for task run tracking
-                "records_processed": processed_count,
-                "records_success": success_count,
-                "records_failed": error_count,
-                # Job-specific details (stored in result_data JSON)
-                "records_skipped": skipped_count,
-                "folder_id": folder_id,
-                "file_id": file_id,
-                "recursive": recursive,
-                "metadata": metadata,
-            }
+            finally:
+                # Clean up temporary token file
+                import os
+                if os.path.exists(token_file):
+                    os.unlink(token_file)
+                    logger.debug(f"Cleaned up temporary token file: {token_file}")
 
         except Exception as e:
             logger.error(f"Error in Google Drive ingestion: {str(e)}")
