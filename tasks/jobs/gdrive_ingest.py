@@ -116,9 +116,61 @@ class GDriveIngestJob(BaseJob):
                 # Decrypt token
                 token_json = encryption_service.decrypt(credential.encrypted_token)
 
-                # Update last_used_at
-                from datetime import UTC, datetime
+                # Check if token is expired or expiring soon and refresh if needed
+                import json
+                from datetime import UTC, datetime, timedelta
 
+                from google.auth.transport.requests import Request
+                from google.oauth2.credentials import Credentials
+
+                token_data = json.loads(token_json)
+                should_refresh = False
+
+                # Check token expiry
+                if token_data.get("expiry"):
+                    try:
+                        expiry = datetime.fromisoformat(
+                            token_data["expiry"].replace("Z", "+00:00")
+                        )
+                        now = datetime.now(UTC)
+                        # Refresh if expired or expiring within 5 minutes
+                        if expiry <= now + timedelta(minutes=5):
+                            should_refresh = True
+                            logger.info(
+                                f"Token expired or expiring soon for {credential_id}, refreshing..."
+                            )
+                    except Exception as e:
+                        logger.warning(f"Could not parse token expiry: {e}")
+
+                # Refresh token if needed
+                if should_refresh and token_data.get("refresh_token"):
+                    try:
+                        creds = Credentials.from_authorized_user_info(token_data)
+                        creds.refresh(Request())
+
+                        # Update token in database
+                        new_token_json = creds.to_json()
+                        new_encrypted_token = encryption_service.encrypt(new_token_json)
+
+                        new_token_data = json.loads(new_token_json)
+                        new_token_metadata = {
+                            "scopes": new_token_data.get("scopes", []),
+                            "token_uri": new_token_data.get("token_uri"),
+                            "expiry": new_token_data.get("expiry"),
+                        }
+
+                        credential.encrypted_token = new_encrypted_token
+                        credential.token_metadata = new_token_metadata
+                        logger.info(f"Token refreshed successfully for {credential_id}")
+
+                        # Use the new token
+                        token_json = new_token_json
+                    except Exception as e:
+                        logger.error(f"Token refresh failed: {e}")
+                        # Continue with old token and let it fail if truly expired
+                        # This allows Google's library to handle the error gracefully
+
+                # Update last_used_at
                 credential.last_used_at = datetime.now(UTC)
                 db_session.commit()
 
