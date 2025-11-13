@@ -186,7 +186,7 @@ class IngestionOrchestrator:
                 # Prepare metadata for each chunk
                 chunk_metadata = []
                 chunk_ids = []
-                for i, chunk in enumerate(chunks):
+                for i, _chunk in enumerate(chunks):
                     chunk_meta = doc_metadata.copy()
                     chunk_meta["chunk_id"] = f"{file_info['id']}_chunk_{i}"
                     chunk_meta["chunk_index"] = i

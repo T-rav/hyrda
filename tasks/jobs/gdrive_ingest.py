@@ -1,7 +1,6 @@
 """Google Drive document ingestion job for scheduled RAG updates."""
 
 import logging
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -82,22 +81,14 @@ class GDriveIngestJob(BaseJob):
         )
 
         try:
-            # Add ingest directory to Python path at the FRONT to override /app/services
-            ingest_path = str(Path(__file__).parent.parent.parent / "ingest")
-            # Remove it first if it exists to ensure it's at position 0
-            if ingest_path in sys.path:
-                sys.path.remove(ingest_path)
-            sys.path.insert(0, ingest_path)
-
-            # Import ingest orchestrator and services (from ingest/services, not tasks/services)
-            # Load encrypted token from database
+            # Import services (now located in tasks/services/gdrive)
             from models.base import get_db_session
             from models.oauth_credential import OAuthCredential
-            from services.embedding_provider import OpenAIEmbeddingProvider
             from services.encryption_service import get_encryption_service
-            from services.ingestion_orchestrator import IngestionOrchestrator
-            from services.llm_wrapper import SimpleLLMService
-            from services.vector_store import QdrantVectorStore
+            from services.gdrive.embedding_provider import OpenAIEmbeddingProvider
+            from services.gdrive.ingestion_orchestrator import IngestionOrchestrator
+            from services.gdrive.llm_wrapper import SimpleLLMService
+            from services.gdrive.vector_store import QdrantVectorStore
 
             encryption_service = get_encryption_service()
 

@@ -36,10 +36,7 @@ class QdrantVectorStore:
         self.collection_name = collection_name
 
         # Build the URL based on protocol
-        if use_https:
-            url = f"https://{host}:{port}"
-        else:
-            url = f"http://{host}:{port}"
+        url = f"https://{host}:{port}" if use_https else f"http://{host}:{port}"
 
         # Initialize client with URL instead of host/port for better control
         # Explicitly set https=False when not using HTTPS to prevent SSL attempts

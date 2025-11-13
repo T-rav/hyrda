@@ -16,9 +16,10 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks"))
 
 # Import from tasks/models/base.py (not bot/models/base.py)
-from models.base import Base, get_db_session  # noqa: E402
 from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
+
+from models.base import Base, get_db_session  # noqa: E402
 
 
 class GoogleDriveDocument(Base):
