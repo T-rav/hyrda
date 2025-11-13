@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Key, Trash2, Plus, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
+import { Key, Trash2, Plus, AlertCircle, ExternalLink } from 'lucide-react'
 
 /**
  * Credentials Manager Component
@@ -53,43 +53,6 @@ function CredentialsManager() {
     }
   }
 
-  const handleRefresh = async (credId, credName) => {
-    if (!confirm(`Refresh token for "${credName}"?`)) {
-      return
-    }
-
-    try {
-      const response = await fetch(`/api/credentials/${credId}/refresh`, {
-        method: 'POST',
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        // If refresh token doesn't work, offer to re-authenticate
-        if (data.requires_reauth) {
-          const shouldReauth = confirm(
-            `Token refresh failed: ${data.details}\n\nWould you like to re-authenticate?`
-          )
-          if (shouldReauth) {
-            // TODO: Trigger full OAuth flow for re-authentication
-            alert('Re-authentication flow not yet implemented. Please delete and recreate this credential.')
-          }
-        } else {
-          throw new Error(data.error || 'Failed to refresh token')
-        }
-        return
-      }
-
-      // Success - reload credentials to show updated expiry
-      await loadCredentials()
-      alert(`Token refreshed successfully for "${credName}"`)
-
-    } catch (err) {
-      console.error('Error refreshing credential:', err)
-      alert('Failed to refresh credential: ' + err.message)
-    }
-  }
 
   if (loading) {
     return (
@@ -146,7 +109,6 @@ function CredentialsManager() {
                 <tr>
                   <th>Name</th>
                   <th>Created</th>
-                  <th>Expires</th>
                   <th className="text-end">Actions</th>
                 </tr>
               </thead>
@@ -160,29 +122,7 @@ function CredentialsManager() {
                     <td style={{ color: 'var(--text-secondary)' }}>
                       {new Date(cred.created_at).toLocaleString()}
                     </td>
-                    <td>
-                      {cred.expires_at ? (
-                        <span className={`${
-                          cred.status === 'active' ? 'text-success' :
-                          cred.status === 'expiring_soon' ? 'text-warning' :
-                          cred.status === 'expired' ? 'text-danger' :
-                          'text-secondary'
-                        }`}>
-                          {new Date(cred.expires_at).toLocaleString()}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--text-secondary)' }}>Unknown</span>
-                      )}
-                    </td>
                     <td className="text-end">
-                      <button
-                        className="btn btn-sm btn-outline-primary me-2"
-                        onClick={() => handleRefresh(cred.credential_id, cred.credential_name)}
-                        title="Refresh token"
-                      >
-                        <RefreshCw size={14} className="me-1" />
-                        Refresh
-                      </button>
                       <button
                         className="btn btn-sm btn-outline-danger"
                         onClick={() => handleDelete(cred.credential_id, cred.credential_name)}
