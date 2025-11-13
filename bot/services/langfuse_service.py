@@ -585,6 +585,147 @@ class LangfuseService:
             logger.error(f"Error fetching prompt template '{template_name}': {e}")
             return None
 
+    async def get_lifetime_stats(
+        self, start_date: str = "2025-10-21"
+    ) -> dict[str, Any]:
+        """
+        Get lifetime conversation statistics from Langfuse API since start_date
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format (default: Oct 21, 2025)
+
+        Returns:
+            Dictionary with:
+            - total_interactions: Total number of observations (LLM calls, RAG, tools, etc)
+            - unique_sessions: Number of unique conversation threads
+            - start_date: The start date used for the query
+        """
+        if not self.enabled or not self.settings.public_key:
+            return {
+                "total_traces": 0,
+                "total_observations": 0,
+                "unique_sessions": 0,
+                "start_date": start_date,
+                "error": "Langfuse not enabled or credentials missing",
+            }
+
+        try:
+            from datetime import datetime
+
+            import aiohttp
+
+            # Langfuse API endpoint
+            api_base = self.settings.host.rstrip("/")
+
+            # Convert start_date to timestamp
+            start_datetime = datetime.fromisoformat(f"{start_date}T00:00:00Z")
+
+            # Use basic auth with public_key as username and secret_key as password
+            auth = aiohttp.BasicAuth(
+                login=self.settings.public_key,
+                password=self.settings.secret_key.get_secret_value(),
+            )
+
+            async with aiohttp.ClientSession() as session:
+                # Query observations for user messages (conversation_turn)
+                # Note: We use start_span in v3.x which creates observations, not traces
+                observations_url = f"{api_base}/api/public/observations"
+                sessions_url = f"{api_base}/api/public/sessions"
+
+                # Filter for conversation_turn observations (actual user messages)
+                # Each user message creates a "conversation_turn" generation
+                # NOTE: Not filtering by environment tags because older traces don't have tags
+                # This shows all queries across all environments
+                user_messages_params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,  # We only need the count
+                    "name": "conversation_turn",  # Filter for user message observations
+                }
+
+                # No filter for all observations (count all AI operations)
+                observations_params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,
+                }
+
+                # No filter for sessions
+                sessions_params = {
+                    "fromTimestamp": start_datetime.isoformat(),
+                    "page": 1,
+                    "limit": 1,
+                }
+
+                # Get total user messages (conversation_turn observations)
+                async with session.get(
+                    observations_url, auth=auth, params=user_messages_params, timeout=10
+                ) as response:
+                    if response.status != 200:
+                        logger.error(
+                            f"Langfuse API error (user messages): {response.status} - {await response.text()}"
+                        )
+                        total_user_messages = 0
+                    else:
+                        user_messages_data = await response.json()
+                        total_user_messages = user_messages_data.get("meta", {}).get(
+                            "totalItems", 0
+                        )
+
+                # Get total observations (all AI operations)
+                async with session.get(
+                    observations_url, auth=auth, params=observations_params, timeout=10
+                ) as response:
+                    if response.status != 200:
+                        logger.error(
+                            f"Langfuse API error (observations): {response.status} - {await response.text()}"
+                        )
+                        return {
+                            "total_traces": 0,
+                            "total_observations": 0,
+                            "unique_sessions": 0,
+                            "start_date": start_date,
+                            "error": f"API returned {response.status}",
+                        }
+
+                    data = await response.json()
+                    total_observations = data.get("meta", {}).get("totalItems", 0)
+
+                # Query sessions endpoint for unique sessions
+                sessions_url = f"{api_base}/api/public/sessions"
+                async with session.get(
+                    sessions_url, auth=auth, params=sessions_params, timeout=10
+                ) as response:
+                    if response.status != 200:
+                        logger.warning(f"Could not fetch sessions: {response.status}")
+                        unique_sessions = 0
+                    else:
+                        sessions_data = await response.json()
+                        unique_sessions = sessions_data.get("meta", {}).get(
+                            "totalItems", 0
+                        )
+
+                logger.info(
+                    f"Langfuse lifetime stats: {total_user_messages} user messages, {total_observations} observations, {unique_sessions} unique sessions since {start_date}"
+                )
+
+                return {
+                    "total_traces": total_user_messages,  # Return as total_traces for backwards compatibility
+                    "total_observations": total_observations,
+                    "unique_sessions": unique_sessions,
+                    "start_date": start_date,
+                }
+
+        except Exception as e:
+            logger.error(f"Error fetching Langfuse lifetime stats: {e}")
+            return {
+                "total_traces": 0,
+                "total_observations": 0,
+                "unique_sessions": 0,
+                "start_date": start_date,
+                "error": str(e),
+            }
+
     async def close(self):
         """Close Langfuse client and flush pending traces"""
         if self.enabled and self.client:
