@@ -133,12 +133,14 @@ class GDriveIngestJob(BaseJob):
                             token_data["expiry"].replace("Z", "+00:00")
                         )
                         now = datetime.now(UTC)
-                        # Refresh if expired or expiring within 24 hours
-                        # This ensures tokens stay fresh even for infrequent jobs
-                        if expiry <= now + timedelta(hours=24):
+                        # Refresh if expired or expiring within 5 minutes
+                        # Since tokens expire after 1 hour, this handles both:
+                        # - Frequent jobs: proactively refreshes before expiry
+                        # - Infrequent jobs: token already expired, gets refreshed
+                        if expiry <= now + timedelta(minutes=5):
                             should_refresh = True
                             logger.info(
-                                f"Token expired or expiring within 24 hours for {credential_id}, refreshing..."
+                                f"Token expired or expiring soon for {credential_id}, refreshing..."
                             )
                     except Exception as e:
                         logger.warning(f"Could not parse token expiry: {e}")
