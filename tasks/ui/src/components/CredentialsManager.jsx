@@ -72,7 +72,7 @@ function CredentialsManager() {
         <div className="card-header">
           <div className="header-title">
             <Key size={28} />
-            <h2>Google Drive Credentials</h2>
+            <h2>Google Credentials</h2>
           </div>
           <button
             className="btn btn-outline-success"
