@@ -442,13 +442,59 @@ def list_task_runs() -> Response | tuple[Response, int]:
 
 @app.route("/api/credentials", methods=["GET"])
 def list_credentials() -> Response | tuple[Response, int]:
-    """List all stored Google OAuth credentials."""
+    """List all stored Google OAuth credentials with status."""
     try:
+        from datetime import UTC, datetime
+
         from models.oauth_credential import OAuthCredential
 
         with get_db_session() as db_session:
             credentials = db_session.query(OAuthCredential).all()
-            return jsonify({"credentials": [cred.to_dict() for cred in credentials]})
+            creds_with_status = []
+
+            for cred in credentials:
+                cred_dict = cred.to_dict()
+
+                # Check token expiry status
+                expiry_str = (
+                    cred.token_metadata.get("expiry") if cred.token_metadata else None
+                )
+                if expiry_str:
+                    try:
+                        # Parse ISO format expiry timestamp
+                        expiry = datetime.fromisoformat(
+                            expiry_str.replace("Z", "+00:00")
+                        )
+                        now = datetime.now(UTC)
+
+                        if expiry <= now:
+                            cred_dict["status"] = "expired"
+                            cred_dict["status_message"] = (
+                                "Token expired - refresh required"
+                            )
+                        elif (
+                            expiry - now
+                        ).total_seconds() < 86400:  # Less than 24 hours
+                            cred_dict["status"] = "expiring_soon"
+                            cred_dict["status_message"] = "Token expires soon"
+                        else:
+                            cred_dict["status"] = "active"
+                            cred_dict["status_message"] = "Active"
+
+                        cred_dict["expires_at"] = expiry_str
+                    except Exception as e:
+                        logger.warning(
+                            f"Error parsing token expiry for {cred.credential_id}: {e}"
+                        )
+                        cred_dict["status"] = "unknown"
+                        cred_dict["status_message"] = "Status unknown"
+                else:
+                    cred_dict["status"] = "unknown"
+                    cred_dict["status_message"] = "No expiry info"
+
+                creds_with_status.append(cred_dict)
+
+            return jsonify({"credentials": creds_with_status})
 
     except Exception as e:
         logger.error(f"Error listing credentials: {e}")
@@ -526,6 +572,106 @@ def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
 
     except Exception as e:
         logger.error(f"Error deleting credential: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/credentials/<cred_id>/refresh", methods=["POST"])
+def refresh_credential(cred_id: str) -> Response | tuple[Response, int]:
+    """Initiate OAuth refresh flow for an existing credential."""
+    try:
+        from models.oauth_credential import OAuthCredential
+
+        # Check if credential exists
+        with get_db_session() as db_session:
+            credential = (
+                db_session.query(OAuthCredential)
+                .filter(OAuthCredential.credential_id == cred_id)
+                .first()
+            )
+
+            if not credential:
+                return jsonify({"error": "Credential not found"}), 404
+
+            credential_name = credential.credential_name
+
+        # Initiate OAuth flow with existing credential_id
+        # This will replace the token while keeping the same credential_id
+        task_id = f"refresh_{cred_id}_{int(__import__('time').time())}"
+
+        # Allow OAuth over HTTP for local development
+        import os
+
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+        # Add ingest path to sys.path
+        ingest_path = str(Path(__file__).parent.parent / "ingest")
+        if ingest_path not in sys.path:
+            sys.path.insert(0, ingest_path)
+
+        from google_auth_oauthlib.flow import Flow
+
+        # Define scopes
+        scopes = [
+            "https://www.googleapis.com/auth/drive.readonly",
+            "https://www.googleapis.com/auth/drive.metadata.readonly",
+        ]
+
+        # Get OAuth app credentials from environment
+        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+        client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            return (
+                jsonify(
+                    {
+                        "error": "Google OAuth not configured",
+                        "details": "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables must be set",
+                    }
+                ),
+                500,
+            )
+
+        # Hardcoded redirect URI to external port
+        redirect_uri = "http://localhost:5001/api/gdrive/auth/callback"
+
+        # Create flow from client config
+        flow = Flow.from_client_config(
+            {
+                "web": {
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            },
+            scopes=scopes,
+            redirect_uri=redirect_uri,
+        )
+
+        # Generate authorization URL
+        authorization_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+
+        # Store state, task_id, credential_id, and credential_name in session
+        session["oauth_state"] = state
+        session["oauth_task_id"] = task_id
+        session["oauth_credential_id"] = cred_id  # Use existing credential_id
+        session["oauth_credential_name"] = credential_name
+        session["oauth_is_refresh"] = True  # Flag to indicate this is a refresh
+
+        return jsonify(
+            {
+                "authorization_url": authorization_url,
+                "state": state,
+                "credential_id": cred_id,
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error initiating credential refresh: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -699,36 +845,61 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         token_json = credentials.to_json()
         encrypted_token = encryption_service.encrypt(token_json)
 
-        # Extract metadata (non-sensitive info)
+        # Extract metadata (non-sensitive info including expiry)
         import json
 
         token_data = json.loads(token_json)
         token_metadata = {
             "scopes": token_data.get("scopes", []),
             "token_uri": token_data.get("token_uri"),
+            "expiry": token_data.get("expiry"),  # ISO format timestamp
         }
 
-        # Save to database with credential_name
-        with get_db_session() as db_session:
-            oauth_credential = OAuthCredential(
-                credential_id=credential_id,
-                credential_name=credential_name,
-                provider="google_drive",
-                encrypted_token=encrypted_token,
-                token_metadata=token_metadata,
-            )
-            db_session.add(oauth_credential)
-            db_session.commit()
+        # Check if this is a refresh or new credential
+        is_refresh = session.get("oauth_is_refresh", False)
 
-        logger.info(
-            f"Google Drive token saved (encrypted) for credential: {credential_name} ({credential_id})"
-        )
+        # Save to database (create or update)
+        with get_db_session() as db_session:
+            if is_refresh:
+                # Update existing credential
+                existing = (
+                    db_session.query(OAuthCredential)
+                    .filter(OAuthCredential.credential_id == credential_id)
+                    .first()
+                )
+                if existing:
+                    existing.encrypted_token = encrypted_token
+                    existing.token_metadata = token_metadata
+                    logger.info(
+                        f"Google Drive token refreshed for credential: {credential_name} ({credential_id})"
+                    )
+                else:
+                    logger.error(
+                        f"Refresh failed: credential {credential_id} not found"
+                    )
+                    return jsonify({"error": "Credential not found"}), 404
+            else:
+                # Create new credential
+                oauth_credential = OAuthCredential(
+                    credential_id=credential_id,
+                    credential_name=credential_name,
+                    provider="google_drive",
+                    encrypted_token=encrypted_token,
+                    token_metadata=token_metadata,
+                )
+                db_session.add(oauth_credential)
+                logger.info(
+                    f"Google Drive token saved (encrypted) for credential: {credential_name} ({credential_id})"
+                )
+
+            db_session.commit()
 
         # Clear session
         session.pop("oauth_state", None)
         session.pop("oauth_task_id", None)
         session.pop("oauth_credential_id", None)
         session.pop("oauth_credential_name", None)
+        session.pop("oauth_is_refresh", None)
 
         # Redirect to UI with success message (hardcoded for simplicity)
         return redirect(
