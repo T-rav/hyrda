@@ -83,8 +83,8 @@ services:
   # Task Scheduler Service (nginx + Flask in single container)
   tasks:
     build:
-      context: ./tasks
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: tasks/Dockerfile
     image: insightmesh-tasks:latest
     container_name: insightmesh-tasks
     restart: unless-stopped
@@ -97,8 +97,17 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_API_KEY=${VECTOR_API_KEY:-}
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - ENVIRONMENT=production
       - FLASK_PORT=8081
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+      - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
