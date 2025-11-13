@@ -145,7 +145,7 @@ class GoogleDriveClient:
 
         return files
 
-    def download_file_content(self, file_id: str, mime_type: str) -> str | None:
+    def download_file_content(self, file_id: str, mime_type: str) -> str | None:  # noqa: PLR0911
         """
         Download the content of a file from Google Drive and extract text.
 

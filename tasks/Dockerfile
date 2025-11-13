@@ -24,13 +24,9 @@ RUN mkdir -p /app/logs /app/.edgar && \
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
 
-# Copy ingest module
-COPY --chown=appuser:appuser ingest/ /app/ingest
-
-# Install Python dependencies from both tasks and ingest modules
+# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e . && \
-    pip install --no-cache-dir -e /app/ingest
+    pip install --no-cache-dir -e .
 
 # Setup nginx configuration (as root)
 COPY tasks/nginx.conf /etc/nginx/sites-available/default
