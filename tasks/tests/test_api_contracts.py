@@ -386,11 +386,19 @@ class TestTasksAPIContracts:
 
     def test_jobs_list_contract(self, client):
         """Test /api/jobs returns expected structure for job list"""
-        with patch("app.scheduler_service") as mock_scheduler:
+        with patch("app.scheduler_service") as mock_scheduler, patch(
+            "app.get_db_session"
+        ) as mock_session:
             mock_scheduler_instance = (
                 SchedulerServiceMockFactory.create_scheduler_with_jobs(1)
             )
             mock_scheduler.return_value = mock_scheduler_instance
+
+            # Mock database session for TaskMetadata
+            mock_query = DatabaseQueryMockFactory.create_empty_query_mock()
+            mock_db_session = Mock()
+            mock_db_session.query.return_value = mock_query
+            mock_session.return_value.__enter__.return_value = mock_db_session
 
             # Mock job info for the job
             mock_scheduler_instance.get_job_info.return_value = {

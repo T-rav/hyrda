@@ -438,21 +438,11 @@ def list_task_runs() -> Response | tuple[Response, int]:
 def list_credentials() -> Response | tuple[Response, int]:
     """List all stored Google OAuth credentials."""
     try:
-        import json
-        creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
-        creds_dir.mkdir(parents=True, exist_ok=True)
+        from models.oauth_credential import OAuthCredential
 
-        credentials = []
-        for meta_file in creds_dir.glob("*.meta.json"):
-            try:
-                with open(meta_file) as f:
-                    metadata = json.load(f)
-                    credentials.append(metadata)
-            except Exception as e:
-                logger.warning(f"Failed to read metadata file {meta_file}: {e}")
-                continue
-
-        return jsonify({"credentials": credentials})
+        with get_db_session() as db_session:
+            credentials = db_session.query(OAuthCredential).all()
+            return jsonify({"credentials": [cred.to_dict() for cred in credentials]})
 
     except Exception as e:
         logger.error(f"Error listing credentials: {e}")
@@ -463,6 +453,8 @@ def list_credentials() -> Response | tuple[Response, int]:
 def create_credential() -> Response | tuple[Response, int]:
     """Register a new Google OAuth credential (metadata only - token saved during OAuth)."""
     try:
+        from models.oauth_credential import OAuthCredential
+
         data = request.get_json()
         if not data:
             return jsonify({"error": "No data provided"}), 400
@@ -473,30 +465,24 @@ def create_credential() -> Response | tuple[Response, int]:
         if not cred_name or not cred_id:
             return jsonify({"error": "name and id are required"}), 400
 
-        # Check if token file exists (should have been created during OAuth)
-        creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
-        creds_dir.mkdir(parents=True, exist_ok=True)
-        token_file = creds_dir / f"{cred_id}.json"
+        # Check if credential already exists in database
+        with get_db_session() as db_session:
+            existing = db_session.query(OAuthCredential).filter(
+                OAuthCredential.credential_id == cred_id
+            ).first()
 
-        if not token_file.exists():
-            return jsonify({
-                "error": "Token not found",
-                "details": "OAuth must be completed before saving credential metadata"
-            }), 400
+            if not existing:
+                return jsonify({
+                    "error": "Token not found",
+                    "details": "OAuth must be completed before saving credential metadata"
+                }), 400
 
-        # Save metadata file (just name and creation time)
-        metadata_file = creds_dir / f"{cred_id}.meta.json"
+            if existing.credential_name:
+                return jsonify({"error": "Credential with this ID already exists"}), 409
 
-        if metadata_file.exists():
-            return jsonify({"error": "Credential with this ID already exists"}), 409
-
-        import json
-        with open(metadata_file, "w") as f:
-            json.dump({
-                "id": cred_id,
-                "name": cred_name,
-                "created_at": datetime.now(UTC).timestamp()
-            }, f)
+            # Update the credential name (OAuth callback created the record)
+            existing.credential_name = cred_name
+            db_session.commit()
 
         logger.info(f"Credential metadata saved: {cred_name} ({cred_id})")
 
@@ -515,18 +501,18 @@ def create_credential() -> Response | tuple[Response, int]:
 def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
     """Delete a stored Google OAuth credential (token + metadata)."""
     try:
-        creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
-        token_file = creds_dir / f"{cred_id}.json"
-        meta_file = creds_dir / f"{cred_id}.meta.json"
+        from models.oauth_credential import OAuthCredential
 
-        if not meta_file.exists():
-            return jsonify({"error": "Credential not found"}), 404
+        with get_db_session() as db_session:
+            credential = db_session.query(OAuthCredential).filter(
+                OAuthCredential.credential_id == cred_id
+            ).first()
 
-        # Delete both files
-        if token_file.exists():
-            token_file.unlink()
-        if meta_file.exists():
-            meta_file.unlink()
+            if not credential:
+                return jsonify({"error": "Credential not found"}), 404
+
+            db_session.delete(credential)
+            db_session.commit()
 
         logger.info(f"Credential deleted: {cred_id}")
 
@@ -682,16 +668,35 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         # Get credentials (token)
         credentials = flow.credentials
 
-        # Save token to credential-specific file (not task-specific)
-        # This allows multiple tasks to share the same credential
-        creds_dir = Path(__file__).parent / "auth" / "gdrive_credentials"
-        creds_dir.mkdir(parents=True, exist_ok=True)
-        token_file = creds_dir / f"{credential_id}.json"
+        # Save encrypted token to database
+        from models.oauth_credential import OAuthCredential
+        from services.encryption_service import get_encryption_service
 
-        with open(token_file, "w") as f:
-            f.write(credentials.to_json())
+        encryption_service = get_encryption_service()
+        token_json = credentials.to_json()
+        encrypted_token = encryption_service.encrypt(token_json)
 
-        logger.info(f"Google Drive token saved for credential: {credential_id}")
+        # Extract metadata (non-sensitive info)
+        import json
+        token_data = json.loads(token_json)
+        token_metadata = {
+            "scopes": token_data.get("scopes", []),
+            "token_uri": token_data.get("token_uri"),
+        }
+
+        # Save to database
+        with get_db_session() as db_session:
+            oauth_credential = OAuthCredential(
+                credential_id=credential_id,
+                credential_name="",  # Will be set later by create_credential endpoint
+                provider="google_drive",
+                encrypted_token=encrypted_token,
+                token_metadata=token_metadata,
+            )
+            db_session.add(oauth_credential)
+            db_session.commit()
+
+        logger.info(f"Google Drive token saved (encrypted) for credential: {credential_id}")
 
         # Clear session
         session.pop("oauth_state", None)
