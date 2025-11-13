@@ -27,9 +27,10 @@ COPY --chown=appuser:appuser tasks/ .
 # Copy ingest module
 COPY --chown=appuser:appuser ingest/ /app/ingest
 
-# Install Python dependencies from pyproject.toml
+# Install Python dependencies from both tasks and ingest modules
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e . && \
+    pip install --no-cache-dir -e /app/ingest
 
 # Setup nginx configuration (as root)
 COPY tasks/nginx.conf /etc/nginx/sites-available/default
