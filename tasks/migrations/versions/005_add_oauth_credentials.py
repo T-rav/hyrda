@@ -1,7 +1,7 @@
 """Add oauth_credentials table for encrypted token storage
 
-Revision ID: 005
-Revises: 004
+Revision ID: 005_add_oauth_credentials
+Revises: 004_add_task_metadata
 Create Date: 2025-11-13
 
 """
@@ -12,8 +12,8 @@ from sqlalchemy.dialects import mysql
 
 
 # revision identifiers, used by Alembic.
-revision = "005"
-down_revision = "004"
+revision = "005_add_oauth_credentials"
+down_revision = "004_add_task_metadata"
 branch_labels = None
 depends_on = None
 
