@@ -43,7 +43,7 @@ class GoogleDriveClient:
         self.service = None
         self.document_processor = DocumentProcessor()
 
-    def authenticate(self) -> bool:
+    def authenticate(self) -> bool:  # noqa: PLR0911
         """
         Authenticate with Google Drive API using OAuth2 or environment variables.
 
@@ -74,12 +74,9 @@ class GoogleDriveClient:
             except Exception as e:
                 print(f"❌ Environment credentials failed: {e}")
                 return False
-        else:
-            # Load existing token if available
-            if os.path.exists(self.token_file):
-                creds = Credentials.from_authorized_user_file(
-                    self.token_file, self.SCOPES
-                )
+        # Load existing token if available
+        elif os.path.exists(self.token_file):
+            creds = Credentials.from_authorized_user_file(self.token_file, self.SCOPES)
 
         # If there are no (valid) credentials available, let the user log in
         if not creds or not creds.valid:

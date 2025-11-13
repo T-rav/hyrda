@@ -1,0 +1,357 @@
+import React, { useState, useEffect } from 'react'
+import { Key, Trash2, Plus, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
+
+/**
+ * Credentials Manager Component
+ *
+ * Simple OAuth-based credential management - no file uploads needed!
+ * Just enter a name and click "Connect Google" to set up credentials.
+ */
+function CredentialsManager() {
+  const [credentials, setCredentials] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  useEffect(() => {
+    loadCredentials()
+  }, [])
+
+  const loadCredentials = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/credentials')
+      const data = await response.json()
+      setCredentials(data.credentials || [])
+      setError(null)
+    } catch (err) {
+      console.error('Error loading credentials:', err)
+      setError('Failed to load credentials')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (credId, credName) => {
+    if (!confirm(`Delete credential "${credName}"? Tasks using this credential will fail.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/credentials/${credId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete credential')
+      }
+
+      await loadCredentials()
+    } catch (err) {
+      console.error('Error deleting credential:', err)
+      alert('Failed to delete credential: ' + err.message)
+    }
+  }
+
+  const handleRefresh = async (credId, credName) => {
+    if (!confirm(`Refresh token for "${credName}"?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/credentials/${credId}/refresh`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        // If refresh token doesn't work, offer to re-authenticate
+        if (data.requires_reauth) {
+          const shouldReauth = confirm(
+            `Token refresh failed: ${data.details}\n\nWould you like to re-authenticate?`
+          )
+          if (shouldReauth) {
+            // TODO: Trigger full OAuth flow for re-authentication
+            alert('Re-authentication flow not yet implemented. Please delete and recreate this credential.')
+          }
+        } else {
+          throw new Error(data.error || 'Failed to refresh token')
+        }
+        return
+      }
+
+      // Success - reload credentials to show updated expiry
+      await loadCredentials()
+      alert(`Token refreshed successfully for "${credName}"`)
+
+    } catch (err) {
+      console.error('Error refreshing credential:', err)
+      alert('Failed to refresh credential: ' + err.message)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="container-fluid py-4">
+        <div className="text-center">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container-fluid py-4">
+      <div className="glass-card mb-4">
+        <div className="card-header">
+          <div className="header-title">
+            <Key size={28} />
+            <h2>Google Drive Credentials</h2>
+          </div>
+          <button
+            className="btn btn-outline-success"
+            onClick={() => setShowAddModal(true)}
+          >
+            <Plus size={18} className="me-1" />
+            Add Credential
+          </button>
+        </div>
+        <div className="card-body">
+          <p style={{ color: 'var(--text-primary)', opacity: 0.9 }}>
+            Connect different Google accounts to access different files
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="alert alert-danger" style={{ color: '#721c24' }}>
+          <AlertCircle size={16} className="me-2" />
+          {error}
+        </div>
+      )}
+
+      {credentials.length === 0 ? (
+        <div className="alert alert-info" style={{ color: '#004085', backgroundColor: 'rgba(209, 236, 241, 0.3)' }}>
+          <AlertCircle size={16} className="me-2" />
+          No credentials configured. Add a credential to start using Google Drive ingestion.
+        </div>
+      ) : (
+        <div className="glass-card">
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Created</th>
+                  <th>Expires</th>
+                  <th className="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {credentials.map((cred) => (
+                  <tr key={cred.credential_id}>
+                    <td>
+                      <Key size={16} className="me-2 text-primary" />
+                      <strong>{cred.credential_name}</strong>
+                    </td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      {new Date(cred.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      {cred.expires_at ? (
+                        <span className={`${
+                          cred.status === 'active' ? 'text-success' :
+                          cred.status === 'expiring_soon' ? 'text-warning' :
+                          cred.status === 'expired' ? 'text-danger' :
+                          'text-secondary'
+                        }`}>
+                          {new Date(cred.expires_at).toLocaleString()}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>Unknown</span>
+                      )}
+                    </td>
+                    <td className="text-end">
+                      <button
+                        className="btn btn-sm btn-outline-primary me-2"
+                        onClick={() => handleRefresh(cred.credential_id, cred.credential_name)}
+                        title="Refresh token"
+                      >
+                        <RefreshCw size={14} className="me-1" />
+                        Refresh
+                      </button>
+                      <button
+                        className="btn btn-sm btn-outline-danger"
+                        onClick={() => handleDelete(cred.credential_id, cred.credential_name)}
+                      >
+                        <Trash2 size={14} className="me-1" />
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {showAddModal && (
+        <AddCredentialModal
+          onClose={() => setShowAddModal(false)}
+          onSuccess={() => {
+            setShowAddModal(false)
+            loadCredentials()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function AddCredentialModal({ onClose, onSuccess }) {
+  const [name, setName] = useState('')
+  const [error, setError] = useState(null)
+  const [authInProgress, setAuthInProgress] = useState(false)
+
+  const handleOAuthClick = async () => {
+    if (!name) {
+      setError('Please enter a credential name first')
+      return
+    }
+
+    try {
+      setAuthInProgress(true)
+      setError(null)
+
+      // Initiate OAuth flow - backend will generate UUID
+      const tempTaskId = `cred_setup_${Date.now()}`
+
+      const response = await fetch('/api/gdrive/auth/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          task_id: tempTaskId,
+          credential_name: name.trim(),
+          is_credential_setup: true  // Flag to indicate this is credential setup
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate authentication')
+      }
+
+      // Open OAuth URL in new window
+      const authWindow = window.open(
+        data.authorization_url,
+        'Google Drive Authentication',
+        'width=600,height=700,left=200,top=100'
+      )
+
+      // Poll for window closure
+      const pollTimer = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(pollTimer)
+          setAuthInProgress(false)
+          // OAuth callback saves everything - just reload credentials list
+          onSuccess()
+        }
+      }, 500)
+
+    } catch (err) {
+      console.error('Error during OAuth:', err)
+      setError(err.message)
+      setAuthInProgress(false)
+    }
+  }
+
+  return (
+    <div className="glass-card">
+      <div className="card-header d-flex justify-content-between align-items-center">
+        <div className="header-title">
+          <Key size={20} />
+          <h5 className="mb-0">Add Google OAuth Credential</h5>
+        </div>
+        <button
+          type="button"
+          className="btn-close"
+          onClick={onClose}
+          aria-label="Close"
+        ></button>
+      </div>
+      <div className="card-body">
+              <div className="alert alert-info">
+                <AlertCircle size={16} className="me-2" />
+                <small>
+                  <strong>Simple setup:</strong><br />
+                  1. Enter a name for this credential<br />
+                  2. Click "Connect Google Drive"<br />
+                  3. Sign in with your Google account<br />
+                  That's it - no files to upload!
+                </small>
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label">Credential Name</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g., Personal Account, Work Account, Client XYZ"
+                  required
+                  disabled={authInProgress}
+                />
+                <div className="form-text">
+                  Give this credential a memorable name
+                </div>
+              </div>
+
+              {!authInProgress && (
+                <button
+                  type="button"
+                  className="btn btn-primary w-100"
+                  onClick={handleOAuthClick}
+                  disabled={!name}
+                >
+                  <ExternalLink size={16} className="me-1" />
+                  Connect Google Drive
+                </button>
+              )}
+
+              {authInProgress && (
+                <div className="alert alert-info mb-0">
+                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                  Waiting for Google authentication...
+                </div>
+              )}
+
+              {error && (
+                <div className="alert alert-danger mt-3 mb-0">
+                  <AlertCircle size={16} className="me-2" />
+                  {error}
+                </div>
+              )}
+            </div>
+            <div className="card-footer d-flex justify-content-end">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onClose}
+                disabled={authInProgress}
+              >
+                Cancel
+              </button>
+            </div>
+    </div>
+  )
+}
+
+export default CredentialsManager

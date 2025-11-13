@@ -8,6 +8,7 @@ from apscheduler.job import Job
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
+from .gdrive_ingest import GDriveIngestJob
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
 from .slack_user_import import SlackUserImportJob
@@ -16,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 def execute_job_by_type(
-    job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler"
+    job_type: str,
+    job_params: dict[str, Any],
+    triggered_by: str = "scheduler",
+    job_id: str = None,
 ) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
@@ -26,6 +30,7 @@ def execute_job_by_type(
 
     from config.settings import TasksSettings
     from models.base import get_db_session
+    from models.task_metadata import TaskMetadata
     from models.task_run import TaskRun
 
     # Configure logging for job execution (file + console)
@@ -54,6 +59,7 @@ def execute_job_by_type(
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
         "portal_sync": PortalSyncJob,
+        "gdrive_ingest": GDriveIngestJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -64,14 +70,35 @@ def execute_job_by_type(
     settings = TasksSettings()
     job_instance = job_class(settings, **job_params)
 
+    # Get task name from metadata if available
+    task_name = None
+    if job_id:
+        try:
+            with get_db_session() as session:
+                metadata = (
+                    session.query(TaskMetadata)
+                    .filter(TaskMetadata.job_id == job_id)
+                    .first()
+                )
+                if metadata:
+                    task_name = metadata.task_name
+        except Exception as e:
+            logger.error(f"Error loading task metadata: {e}")
+
     # Create TaskRun record
     run_id = str(uuid.uuid4())
+    config_snapshot = {"job_type": job_type, "params": job_params}
+    if job_id:
+        config_snapshot["job_id"] = job_id
+    if task_name:
+        config_snapshot["task_name"] = task_name
+
     task_run = TaskRun(
         run_id=run_id,
         status="running",
         started_at=datetime.now(UTC),
         triggered_by=triggered_by,
-        task_config_snapshot={"job_type": job_type, "params": job_params},
+        task_config_snapshot=config_snapshot,
     )
 
     try:
@@ -143,6 +170,7 @@ class JobRegistry:
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
             "portal_sync": PortalSyncJob,
+            "gdrive_ingest": GDriveIngestJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:
@@ -173,6 +201,7 @@ class JobRegistry:
                     "description": getattr(job_class, "JOB_DESCRIPTION", ""),
                     "required_params": getattr(job_class, "REQUIRED_PARAMS", []),
                     "optional_params": getattr(job_class, "OPTIONAL_PARAMS", []),
+                    "param_groups": getattr(job_class, "PARAM_GROUPS", []),
                 }
             )
 
@@ -211,7 +240,12 @@ class JobRegistry:
             trigger=trigger,
             job_id=final_job_id,
             name=f"{job_class.JOB_NAME}",
-            args=[job_type, kwargs, triggered_by],  # Include trigger type
+            args=[
+                job_type,
+                kwargs,
+                triggered_by,
+                final_job_id,
+            ],  # Include job_id for task_name lookup
             **schedule_params,
         )
 

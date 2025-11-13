@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
+import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
 // Custom hook for managing document title
@@ -53,6 +54,13 @@ function App() {
               <ListChecks size={20} />
               Tasks
             </button>
+            <button
+              className={`nav-link ${activeTab === 'credentials' ? 'active' : ''}`}
+              onClick={() => handleTabChange('credentials')}
+            >
+              <Key size={20} />
+              Credentials
+            </button>
             <a
               href="http://localhost:8080/ui"
               target="_blank"
@@ -70,6 +78,7 @@ function App() {
       <main className="main-content">
         {activeTab === 'dashboard' && <DashboardContent showNotification={showNotification} />}
         {activeTab === 'tasks' && <TasksContent showNotification={showNotification} />}
+        {activeTab === 'credentials' && <CredentialsManager />}
       </main>
 
       <footer className="footer">
@@ -564,33 +573,30 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const isActive = !!task.next_run_time
   const currentAction = actionLoading[task.id]
 
-  // Clean up the task name display
-  const getDisplayName = (task) => {
-    if (task.name && task.name !== task.id) {
-      return task.name
-    }
+  // Get task type from args and create user-friendly description
+  const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
 
-    // If no name or name is same as ID, try to derive a clean name from the ID
-    if (task.id.includes('slack_user_import')) {
-      return 'Slack User Import'
-    }
-
-    // Default fallback
-    return task.name || 'Unnamed Task'
+  // Map task types to user-friendly descriptions
+  const taskTypeDescriptions = {
+    'slack_user_import': 'Slack User Import',
+    'metric_sync': 'Metric.ai Data Sync',
+    'gdrive_ingest': 'Google Drive Ingestion'
   }
+
+  const taskDescription = taskTypeDescriptions[taskType] || taskType
 
   return (
     <tr>
       <td>
         <div>
-          <strong>{getDisplayName(task)}</strong>
+          <strong>{task.name && task.name !== task.id ? task.name : taskDescription}</strong>
           {isActive ? (
             <span className="badge bg-success ms-2">Active</span>
           ) : (
             <span className="badge bg-warning ms-2">Paused</span>
           )}
         </div>
-        <small className="text-muted">{task.id}</small>
+        <small className="text-muted">{taskDescription}</small>
       </td>
       <td>
         <span className="badge bg-secondary">
@@ -928,9 +934,50 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         }
       }
 
+      // Generic validation for parameter groups (e.g., "one of X required")
+      if (selectedTaskType?.param_groups) {
+        for (const group of selectedTaskType.param_groups) {
+          const filledParams = group.params.filter(param => {
+            const value = parameters[param]
+            return value && value.toString().trim() !== ''
+          })
+
+          const filledCount = filledParams.length
+          const minRequired = group.min_required || 1
+          const maxRequired = group.max_required || group.params.length
+
+          // Check minimum requirement
+          if (filledCount < minRequired) {
+            const errorMsg = group.error_message ||
+              `${group.description || 'Parameter group'}: At least ${minRequired} parameter(s) required from: ${group.params.join(', ')}`
+            alert(errorMsg)
+            setLoading(false)
+            return
+          }
+
+          // Check maximum requirement
+          if (filledCount > maxRequired) {
+            const errorMsg = group.error_message ||
+              `${group.description || 'Parameter group'}: At most ${maxRequired} parameter(s) allowed from: ${group.params.join(', ')}`
+            alert(errorMsg)
+            setLoading(false)
+            return
+          }
+        }
+      }
+
+      // Special validation for gdrive_ingest credential (still task-specific for now)
+      if (taskType === 'gdrive_ingest') {
+        if (!parameters.credential_id || parameters.credential_id === '') {
+          alert('Please select a Google Drive credential from the dropdown.')
+          setLoading(false)
+          return
+        }
+      }
+
       const taskData = {
         job_type: taskType,
-        name: taskName,
+        task_name: taskName,
         schedule: {
           trigger: triggerType,
           hours: parseInt(hours) || 0,
@@ -1002,7 +1049,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 <div className="mb-4">
                   <label htmlFor="taskName" className="form-label">
                     <Play size={16} className="me-1" />
-                    Task Name/Description
+                    Task Name
                   </label>
                   <input
                     type="text"
@@ -1010,7 +1057,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                     id="taskName"
                     value={taskName}
                     onChange={(e) => setTaskName(e.target.value)}
-                    placeholder="Enter a descriptive name for this task"
+                    placeholder="Enter a name for this task"
                     required
                   />
                 </div>
@@ -1169,75 +1216,94 @@ function ViewTaskModal({ task, onClose }) {
     return new Date(dateString).toLocaleString()
   }
 
+  // Extract task type from args (first element is the job type)
+  const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
+
+  // Extract parameters from args (second element is the params dict)
+  const parameters = task.args && task.args.length > 1 ? task.args[1] : {}
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h5 className="modal-title">
             <Eye size={20} className="me-2" />
-            Task Details
+            {task.name || taskType}
           </h5>
           <button type="button" className="btn-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
-        <div className="modal-body">
-          <div className="row">
+        <div className="modal-body" style={{fontSize: '14px'}}>
+          {/* Main Info Grid */}
+          <div className="row g-3 mb-4">
             <div className="col-md-6">
-              <h6>Basic Information</h6>
-              <table className="table table-sm">
-                <tbody>
-                  <tr>
-                    <td><strong>ID:</strong></td>
-                    <td><code>{task.id}</code></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Name:</strong></td>
-                    <td>{task.name || 'Unnamed'}</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Function:</strong></td>
-                    <td><code>{task.func || 'Unknown'}</code></td>
-                  </tr>
-                  <tr>
-                    <td><strong>Status:</strong></td>
-                    <td>
-                      <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
-                        {task.next_run_time ? 'Active' : 'Paused'}
-                      </span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">TASK TYPE</div>
+                <div className="fw-bold"><code>{taskType}</code></div>
+              </div>
             </div>
             <div className="col-md-6">
-              <h6>Schedule Information</h6>
-              <table className="table table-sm">
-                <tbody>
-                  <tr>
-                    <td><strong>Trigger:</strong></td>
-                    <td>{task.trigger || 'Unknown'}</td>
-                  </tr>
-                  <tr>
-                    <td><strong>Next Run:</strong></td>
-                    <td>{task.next_run_time ? formatDate(task.next_run_time) : 'N/A'}</td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">SCHEDULE</div>
+                <div className="fw-bold"><code>{task.trigger || 'Unknown'}</code></div>
+              </div>
             </div>
           </div>
-          {task.args && task.args.length > 0 && (
-            <div className="mt-3">
-              <h6>Arguments</h6>
-              <pre className="code-block">{JSON.stringify(task.args, null, 2)}</pre>
+
+          <div className="row g-3 mb-4">
+            <div className="col-md-6">
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">STATUS</div>
+                <div>
+                  <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
+                    {task.next_run_time ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">NEXT RUN</div>
+                <div className="fw-bold">{task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Parameters Section */}
+          {Object.keys(parameters).length > 0 && (
+            <div className="mb-4">
+              <h6 className="mb-3">Parameters</h6>
+              <div className="table-responsive">
+                <table className="table table-sm table-bordered mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{width: '30%'}}>Parameter</th>
+                      <th>Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(parameters).map(([key, value]) => (
+                      <tr key={key}>
+                        <td className="text-muted"><code className="text-dark">{key}</code></td>
+                        <td>
+                          {typeof value === 'object'
+                            ? <pre className="mb-0 small">{JSON.stringify(value, null, 2)}</pre>
+                            : <span className="fw-semibold">{String(value)}</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-          {task.kwargs && Object.keys(task.kwargs).length > 0 && (
-            <div className="mt-3">
-              <h6>Keyword Arguments</h6>
-              <pre className="code-block">{JSON.stringify(task.kwargs, null, 2)}</pre>
-            </div>
-          )}
+
+          {/* Task ID */}
+          <div className="text-muted small">
+            <strong>Task ID:</strong> <code className="text-muted">{task.id}</code>
+          </div>
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onClose}>
@@ -1252,7 +1318,32 @@ function ViewTaskModal({ task, onClose }) {
 
 // Task Parameters Component
 function TaskParameters({ taskType, taskTypes }) {
+  // All hooks must be called at the top, before any returns
+  const [selectedCredential, setSelectedCredential] = React.useState('')
+  const [availableCredentials, setAvailableCredentials] = React.useState([])
+
   const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
+
+  // Special handling for Google Drive ingestion - show credential selector
+  const isGDriveIngest = taskType === 'gdrive_ingest'
+
+  // Load available credentials for gdrive_ingest tasks
+  React.useEffect(() => {
+    if (isGDriveIngest) {
+      fetch('/api/credentials')
+        .then(r => r.json())
+        .then(data => {
+          setAvailableCredentials(data.credentials || [])
+          if (data.credentials && data.credentials.length === 1) {
+            setSelectedCredential(data.credentials[0].credential_id)
+          }
+        })
+        .catch(err => {
+          // Silently fail if credentials endpoint not available
+          console.error('Error loading credentials:', err)
+        })
+    }
+  }, [isGDriveIngest])
 
   if (!selectedTaskType) {
     return (
@@ -1264,6 +1355,11 @@ function TaskParameters({ taskType, taskTypes }) {
   }
 
   const renderParameter = (param, isRequired = false) => {
+    // Skip credentials_file, token_file, and credential_id for gdrive_ingest (handled separately)
+    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
+      return null
+    }
+
     // Specific parameter handling for known parameters
     switch(param) {
       case 'workspace_filter':
@@ -1323,17 +1419,50 @@ function TaskParameters({ taskType, taskTypes }) {
         return (
           <div>
             <label htmlFor={`param_${param}`} className="form-label">
-              folder_id {isRequired && <span className="text-danger">*</span>}
+              folder_id <span className="text-warning">*</span>
             </label>
             <input
               type="text"
               className="form-control"
               id={`param_${param}`}
               placeholder="Google Drive folder ID"
-              required={isRequired}
             />
             <div className="form-text">
-              <small className="text-muted">The Google Drive folder ID to ingest documents from</small>
+              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). Folder ID for ingesting a folder of documents.</small>
+            </div>
+          </div>
+        )
+
+      case 'file_id':
+        return (
+          <div>
+            <label htmlFor={`param_${param}`} className="form-label">
+              file_id <span className="text-warning">*</span>
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              id={`param_${param}`}
+              placeholder="Google Drive file ID"
+            />
+            <div className="form-text">
+              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). File ID for ingesting a single document.</small>
+            </div>
+          </div>
+        )
+
+      case 'recursive':
+        return (
+          <div>
+            <label htmlFor={`param_${param}`} className="form-label">
+              recursive {isRequired && <span className="text-danger">*</span>}
+            </label>
+            <select className="form-select" id={`param_${param}`} required={isRequired}>
+              <option value="true" defaultSelected>Yes - Include subfolders</option>
+              <option value="false">No - Only top-level folder</option>
+            </select>
+            <div className="form-text">
+              <small className="text-muted">Whether to recursively ingest documents from subfolders (only applies to folder_id)</small>
             </div>
           </div>
         )
@@ -1473,15 +1602,56 @@ function TaskParameters({ taskType, taskTypes }) {
 
   return (
     <div>
+      {/* Google Drive Credential Selection */}
+      {isGDriveIngest && (
+        <div className="mb-4">
+          <h6>Google Drive Authentication</h6>
+
+          {availableCredentials.length === 0 ? (
+            <div className="alert alert-warning">
+              <small>No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.</small>
+            </div>
+          ) : (
+            <div className="mb-3">
+              <label className="form-label">
+                Select Credential <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select"
+                id="param_credential_id"
+                value={selectedCredential}
+                onChange={(e) => setSelectedCredential(e.target.value)}
+                required
+              >
+                <option value="">Choose a credential...</option>
+                {availableCredentials.map((cred) => (
+                  <option key={cred.credential_id} value={cred.credential_id}>
+                    {cred.credential_name}
+                  </option>
+                ))}
+              </select>
+              <div className="form-text">
+                <small className="text-muted">
+                  Select which Google account to use for this task
+                </small>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Required Parameters */}
       {selectedTaskType.required_params && selectedTaskType.required_params.length > 0 && (
         <div className="mb-4">
           <h6>Required Parameters:</h6>
-          {selectedTaskType.required_params.map((param) => (
-            <div key={param} className="mb-3">
-              {renderParameter(param, true)}
-            </div>
-          ))}
+          {selectedTaskType.required_params.map((param) => {
+            const rendered = renderParameter(param, true)
+            return rendered ? (
+              <div key={param} className="mb-3">
+                {rendered}
+              </div>
+            ) : null
+          })}
         </div>
       )}
 
@@ -1489,11 +1659,14 @@ function TaskParameters({ taskType, taskTypes }) {
       {selectedTaskType.optional_params && selectedTaskType.optional_params.length > 0 && (
         <div>
           <h6>Optional Parameters:</h6>
-          {selectedTaskType.optional_params.map((param) => (
-            <div key={param} className="mb-3">
-              {renderParameter(param, false)}
-            </div>
-          ))}
+          {selectedTaskType.optional_params.map((param) => {
+            const rendered = renderParameter(param, false)
+            return rendered ? (
+              <div key={param} className="mb-3">
+                {rendered}
+              </div>
+            ) : null
+          })}
         </div>
       )}
 
