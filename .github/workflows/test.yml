@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [lint, test, ingest-lint, ingest-test, task-lint, task-test]
+        task: [lint, test, task-lint, task-test]
     name: Python ${{ matrix.task }}
 
     steps:
@@ -24,7 +24,6 @@ jobs:
         cache-dependency-path: |
           bot/pyproject.toml
           tasks/pyproject.toml
-          ingest/pyproject.toml
 
     - name: Cache pip packages
       uses: actions/cache@v4
@@ -40,9 +39,6 @@ jobs:
         # Install project dependencies based on task
         if [[ "${{ matrix.task }}" == "lint" || "${{ matrix.task }}" == "test" ]]; then
           pip install -e "bot/.[dev,test]"
-        elif [[ "${{ matrix.task }}" == "ingest-lint" || "${{ matrix.task }}" == "ingest-test" ]]; then
-          pip install -e "bot/.[dev,test]"
-          pip install -e "ingest/.[test]"
         elif [[ "${{ matrix.task }}" == "task-lint" || "${{ matrix.task }}" == "task-test" ]]; then
           pip install -e "bot/.[dev,test]"
           pip install -e "tasks/[test]"
@@ -71,24 +67,10 @@ jobs:
         PIP: pip
       run: make test-coverage
 
-    - name: Run ingest linting
-      if: matrix.task == 'ingest-lint'
-      run: |
-        cd ingest && python -m ruff check . --no-fix
-
     - name: Run task linting
       if: matrix.task == 'task-lint'
       run: |
         cd tasks && python -m ruff check . --no-fix
-
-    - name: Run ingest tests
-      if: matrix.task == 'ingest-test'
-      env:
-        ENVIRONMENT: test
-        LOG_LEVEL: WARNING
-        PYTHON: python
-        PIP: pip
-      run: make test-ingest
 
     - name: Run task tests
       if: matrix.task == 'task-test'

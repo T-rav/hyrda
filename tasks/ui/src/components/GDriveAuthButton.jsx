@@ -12,6 +12,14 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
   const [authError, setAuthError] = useState(null)
   const [authInProgress, setAuthInProgress] = useState(false)
 
+  // Check auth status on mount and when taskId changes
+  useEffect(() => {
+    if (taskId && credentialId) {
+      checkAuthStatus()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, credentialId])
+
   if (!credentialId) {
     return (
       <div className="alert alert-warning">
@@ -20,13 +28,6 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
       </div>
     )
   }
-
-  // Check auth status on mount and when taskId changes
-  useEffect(() => {
-    if (taskId) {
-      checkAuthStatus()
-    }
-  }, [taskId])
 
   const checkAuthStatus = async () => {
     try {

@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
-import GDriveAuthButton from './components/GDriveAuthButton'
 import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
@@ -1319,19 +1318,11 @@ function ViewTaskModal({ task, onClose }) {
 
 // Task Parameters Component
 function TaskParameters({ taskType, taskTypes }) {
-  const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
-
-  if (!selectedTaskType) {
-    return (
-      <div className="alert alert-info">
-        <Activity size={16} className="me-2" />
-        <small>Parameters will appear here based on the selected task type</small>
-      </div>
-    )
-  }
-
+  // All hooks must be called at the top, before any returns
   const [selectedCredential, setSelectedCredential] = React.useState('')
   const [availableCredentials, setAvailableCredentials] = React.useState([])
+
+  const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
 
   // Special handling for Google Drive ingestion - show credential selector
   const isGDriveIngest = taskType === 'gdrive_ingest'
@@ -1344,12 +1335,24 @@ function TaskParameters({ taskType, taskTypes }) {
         .then(data => {
           setAvailableCredentials(data.credentials || [])
           if (data.credentials && data.credentials.length === 1) {
-            setSelectedCredential(data.credentials[0].id)
+            setSelectedCredential(data.credentials[0].credential_id)
           }
         })
-        .catch(err => console.error('Error loading credentials:', err))
+        .catch(err => {
+          // Silently fail if credentials endpoint not available
+          console.error('Error loading credentials:', err)
+        })
     }
   }, [isGDriveIngest])
+
+  if (!selectedTaskType) {
+    return (
+      <div className="alert alert-info">
+        <Activity size={16} className="me-2" />
+        <small>Parameters will appear here based on the selected task type</small>
+      </div>
+    )
+  }
 
   const renderParameter = (param, isRequired = false) => {
     // Skip credentials_file, token_file, and credential_id for gdrive_ingest (handled separately)

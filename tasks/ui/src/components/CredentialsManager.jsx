@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Key, Trash2, Plus, X, AlertCircle, Check, ExternalLink, RefreshCw } from 'lucide-react'
+import { Key, Trash2, Plus, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
 
 /**
  * Credentials Manager Component
