@@ -4,7 +4,7 @@ Tasks API Contract Tests
 Protect against API changes that could break the dashboard UI.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -583,12 +583,21 @@ class TestTasksAPIContracts:
             data = response.get_json()
             assert "message" in data
 
-            # Test delete
+            # Test delete (now requires database mock for metadata cleanup)
             mock_scheduler.remove_job.return_value = None
-            response = client.delete(f"/api/jobs/{job_id}")
-            assert response.status_code == 200
-            data = response.get_json()
-            assert "message" in data
+            with patch("app.get_db_session") as mock_get_session:
+                # Mock database session with no metadata found
+                mock_session = MagicMock()
+                mock_session.query.return_value.filter.return_value.first.return_value = (
+                    None
+                )
+                mock_get_session.return_value.__enter__.return_value = mock_session
+                mock_get_session.return_value.__exit__.return_value = None
+
+                response = client.delete(f"/api/jobs/{job_id}")
+                assert response.status_code == 200
+                data = response.get_json()
+                assert "message" in data
 
     def test_error_response_format_consistency(self, client):
         """Test all endpoints return errors in consistent format"""
