@@ -33,7 +33,8 @@ def main():
 
         # Filter to active employees with groups
         active_with_groups = [
-            e for e in employees
+            e
+            for e in employees
             if not e.get("endedWorking") and len(e.get("groups", [])) > 2
         ]
 
@@ -63,7 +64,9 @@ def main():
             title_fields = [
                 f for f in all_fields if "title" in f.lower() or "role" in f.lower()
             ]
-            print(f"\nTitle/Role fields: {title_fields if title_fields else 'NONE FOUND'}")
+            print(
+                f"\nTitle/Role fields: {title_fields if title_fields else 'NONE FOUND'}"
+            )
 
     except Exception as e:
         print(f"❌ Error: {e}")

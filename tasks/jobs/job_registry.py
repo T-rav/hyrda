@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 def execute_job_by_type(
-    job_type: str, job_params: dict[str, Any], triggered_by: str = "scheduler", job_id: str = None
+    job_type: str,
+    job_params: dict[str, Any],
+    triggered_by: str = "scheduler",
+    job_id: str = None,
 ) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
@@ -27,8 +30,8 @@ def execute_job_by_type(
 
     from config.settings import TasksSettings
     from models.base import get_db_session
-    from models.task_run import TaskRun
     from models.task_metadata import TaskMetadata
+    from models.task_run import TaskRun
 
     # Configure logging for job execution (file + console)
     log_dir = Path(__file__).parent.parent / "logs"
@@ -72,7 +75,11 @@ def execute_job_by_type(
     if job_id:
         try:
             with get_db_session() as session:
-                metadata = session.query(TaskMetadata).filter(TaskMetadata.job_id == job_id).first()
+                metadata = (
+                    session.query(TaskMetadata)
+                    .filter(TaskMetadata.job_id == job_id)
+                    .first()
+                )
                 if metadata:
                     task_name = metadata.task_name
         except Exception as e:
@@ -233,7 +240,12 @@ class JobRegistry:
             trigger=trigger,
             job_id=final_job_id,
             name=f"{job_class.JOB_NAME}",
-            args=[job_type, kwargs, triggered_by, final_job_id],  # Include job_id for task_name lookup
+            args=[
+                job_type,
+                kwargs,
+                triggered_by,
+                final_job_id,
+            ],  # Include job_id for task_name lookup
             **schedule_params,
         )
 

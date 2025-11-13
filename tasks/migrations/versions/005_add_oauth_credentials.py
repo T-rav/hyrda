@@ -6,10 +6,8 @@ Create Date: 2025-11-13
 
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import mysql
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "005_add_oauth_credentials"
@@ -24,11 +22,21 @@ def upgrade():
         "oauth_credentials",
         sa.Column("credential_id", sa.String(191), nullable=False),
         sa.Column("credential_name", sa.String(255), nullable=False),
-        sa.Column("provider", sa.String(50), nullable=False, server_default="google_drive"),
+        sa.Column(
+            "provider", sa.String(50), nullable=False, server_default="google_drive"
+        ),
         sa.Column("encrypted_token", sa.Text, nullable=False),
         sa.Column("token_metadata", sa.JSON, nullable=True),
-        sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime, server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime, server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime,
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column("last_used_at", sa.DateTime, nullable=True),
         sa.PrimaryKeyConstraint("credential_id"),
         sa.Index("idx_oauth_provider", "provider"),

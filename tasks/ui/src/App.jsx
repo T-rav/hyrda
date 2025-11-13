@@ -1622,8 +1622,8 @@ function TaskParameters({ taskType, taskTypes }) {
               >
                 <option value="">Choose a credential...</option>
                 {availableCredentials.map((cred) => (
-                  <option key={cred.id} value={cred.id}>
-                    {cred.name}
+                  <option key={cred.credential_id} value={cred.credential_id}>
+                    {cred.credential_name}
                   </option>
                 ))}
               </select>

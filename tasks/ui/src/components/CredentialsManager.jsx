@@ -113,18 +113,18 @@ function CredentialsManager() {
               </thead>
               <tbody>
                 {credentials.map((cred) => (
-                  <tr key={cred.id}>
+                  <tr key={cred.credential_id}>
                     <td>
                       <Key size={16} className="me-2 text-primary" />
-                      <strong>{cred.name}</strong>
+                      <strong>{cred.credential_name}</strong>
                     </td>
                     <td style={{ color: 'var(--text-secondary)' }}>
-                      {new Date(cred.created_at * 1000).toLocaleString()}
+                      {new Date(cred.created_at).toLocaleString()}
                     </td>
                     <td className="text-end">
                       <button
                         className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleDelete(cred.id)}
+                        onClick={() => handleDelete(cred.credential_id)}
                       >
                         <Trash2 size={14} className="me-1" />
                         Delete
@@ -153,21 +153,11 @@ function CredentialsManager() {
 
 function AddCredentialModal({ onClose, onSuccess }) {
   const [name, setName] = useState('')
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [credentialId, setCredentialId] = useState(null)
   const [authInProgress, setAuthInProgress] = useState(false)
 
-  // Generate credential ID from name
-  useEffect(() => {
-    if (name) {
-      const id = name.toLowerCase().replace(/[^a-z0-9]/g, '_')
-      setCredentialId(id)
-    }
-  }, [name])
-
   const handleOAuthClick = async () => {
-    if (!name || !credentialId) {
+    if (!name) {
       setError('Please enter a credential name first')
       return
     }
@@ -176,8 +166,8 @@ function AddCredentialModal({ onClose, onSuccess }) {
       setAuthInProgress(true)
       setError(null)
 
-      // Initiate OAuth flow with a temporary task ID for credential setup
-      const tempTaskId = `cred_setup_${credentialId}_${Date.now()}`
+      // Initiate OAuth flow - backend will generate UUID
+      const tempTaskId = `cred_setup_${Date.now()}`
 
       const response = await fetch('/api/gdrive/auth/initiate', {
         method: 'POST',
@@ -186,7 +176,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
         },
         body: JSON.stringify({
           task_id: tempTaskId,
-          credential_id: credentialId,
+          credential_name: name.trim(),
           is_credential_setup: true  // Flag to indicate this is credential setup
         }),
       })
@@ -209,8 +199,8 @@ function AddCredentialModal({ onClose, onSuccess }) {
         if (authWindow.closed) {
           clearInterval(pollTimer)
           setAuthInProgress(false)
-          // On success, save the credential name to our system
-          saveCredentialName()
+          // OAuth callback saves everything - just reload credentials list
+          onSuccess()
         }
       }, 500)
 
@@ -218,37 +208,6 @@ function AddCredentialModal({ onClose, onSuccess }) {
       console.error('Error during OAuth:', err)
       setError(err.message)
       setAuthInProgress(false)
-    }
-  }
-
-  const saveCredentialName = async () => {
-    try {
-      setLoading(true)
-
-      // Just save the metadata - the OAuth flow already saved the actual credentials
-      const response = await fetch('/api/credentials', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          id: credentialId,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save credential')
-      }
-
-      onSuccess()
-    } catch (err) {
-      console.error('Error saving credential:', err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -287,14 +246,14 @@ function AddCredentialModal({ onClose, onSuccess }) {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g., Personal Account, Work Account, Client XYZ"
                   required
-                  disabled={authInProgress || loading}
+                  disabled={authInProgress}
                 />
                 <div className="form-text">
                   Give this credential a memorable name
                 </div>
               </div>
 
-              {!authInProgress && !loading && (
+              {!authInProgress && (
                 <button
                   type="button"
                   className="btn btn-primary w-100"
@@ -313,13 +272,6 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               )}
 
-              {loading && (
-                <div className="alert alert-info mb-0">
-                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
-                  Saving credential...
-                </div>
-              )}
-
               {error && (
                 <div className="alert alert-danger mt-3 mb-0">
                   <AlertCircle size={16} className="me-2" />
@@ -332,7 +284,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 type="button"
                 className="btn btn-outline-secondary"
                 onClick={onClose}
-                disabled={authInProgress || loading}
+                disabled={authInProgress}
               >
                 Cancel
               </button>
