@@ -43,11 +43,24 @@ test-coverage:
 lint:
 	python3 -m ruff format .
 	python3 -m ruff check --fix .
+	@echo "Running UI linting..."
+	cd ui && npm run lint --if-present 2>/dev/null || echo "UI linting skipped (npm not available or no lint script)"
 
 lint-check:
 	python3 -m ruff format --check .
 	python3 -m ruff check .
 	python3 -m pyright .
+	@echo "Running UI lint check..."
+	cd ui && npm run lint --if-present 2>/dev/null || echo "UI lint check skipped (npm not available or no lint script)"
+
+ui-lint:
+	cd ui && npm run lint
+
+ui-lint-fix:
+	cd ui && npm run lint -- --fix
+
+ui-test:
+	cd ui && npm test
 
 # Legacy type checking (use lint-check instead)
 typecheck:
