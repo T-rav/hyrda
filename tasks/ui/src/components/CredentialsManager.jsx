@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Key, Trash2, Plus, X, AlertCircle, Check, ExternalLink } from 'lucide-react'
+import { Key, Trash2, Plus, X, AlertCircle, Check, ExternalLink, RefreshCw } from 'lucide-react'
 
 /**
  * Credentials Manager Component
@@ -32,8 +32,8 @@ function CredentialsManager() {
     }
   }
 
-  const handleDelete = async (credId) => {
-    if (!confirm(`Delete credential "${credId}"? Tasks using this credential will fail.`)) {
+  const handleDelete = async (credId, credName) => {
+    if (!confirm(`Delete credential "${credName}"? Tasks using this credential will fail.`)) {
       return
     }
 
@@ -50,6 +50,40 @@ function CredentialsManager() {
     } catch (err) {
       console.error('Error deleting credential:', err)
       alert('Failed to delete credential: ' + err.message)
+    }
+  }
+
+  const handleRefresh = async (credId, credName) => {
+    try {
+      const response = await fetch(`/api/credentials/${credId}/refresh`, {
+        method: 'POST',
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to initiate refresh')
+      }
+
+      // Open OAuth URL in new window
+      const authWindow = window.open(
+        data.authorization_url,
+        'Google Drive Authentication',
+        'width=600,height=700,left=200,top=100'
+      )
+
+      // Poll for window closure
+      const pollTimer = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(pollTimer)
+          // Reload credentials to show updated status
+          loadCredentials()
+        }
+      }, 500)
+
+    } catch (err) {
+      console.error('Error refreshing credential:', err)
+      alert('Failed to refresh credential: ' + err.message)
     }
   }
 
@@ -107,6 +141,7 @@ function CredentialsManager() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Status</th>
                   <th>Created</th>
                   <th className="text-end">Actions</th>
                 </tr>
@@ -118,13 +153,31 @@ function CredentialsManager() {
                       <Key size={16} className="me-2 text-primary" />
                       <strong>{cred.credential_name}</strong>
                     </td>
+                    <td>
+                      <span className={`badge ${
+                        cred.status === 'active' ? 'bg-success' :
+                        cred.status === 'expiring_soon' ? 'bg-warning' :
+                        cred.status === 'expired' ? 'bg-danger' :
+                        'bg-secondary'
+                      }`}>
+                        {cred.status_message || 'Unknown'}
+                      </span>
+                    </td>
                     <td style={{ color: 'var(--text-secondary)' }}>
                       {new Date(cred.created_at).toLocaleString()}
                     </td>
                     <td className="text-end">
                       <button
+                        className="btn btn-sm btn-outline-primary me-2"
+                        onClick={() => handleRefresh(cred.credential_id, cred.credential_name)}
+                        title="Refresh token"
+                      >
+                        <RefreshCw size={14} className="me-1" />
+                        Refresh
+                      </button>
+                      <button
                         className="btn btn-sm btn-outline-danger"
-                        onClick={() => handleDelete(cred.credential_id)}
+                        onClick={() => handleDelete(cred.credential_id, cred.credential_name)}
                       >
                         <Trash2 size={14} className="me-1" />
                         Delete
