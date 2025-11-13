@@ -4,6 +4,7 @@ Tests for ContextBuilder service using factory patterns.
 Tests context building, prompt engineering, and context formatting functionality.
 """
 
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -205,18 +206,42 @@ class TestContextBuilder:
         query = TestDataFactory.create_query()
         system_message = TestDataFactory.create_system_message()
 
-        system_msg, messages = context_builder.build_rag_prompt(
+        final_system_message, messages = context_builder.build_rag_prompt(
             query, [], conversation_history, system_message
         )
 
         # Check system message is unchanged
-        assert system_msg == system_message
-        assert "Use the following context" not in system_msg
+        assert system_message in final_system_message
+        assert "Use the following context" not in final_system_message
 
         # Check messages structure
         assert len(messages) == 3
         assert messages[-1]["role"] == "user"
         assert messages[-1]["content"] == query
+
+    def test_build_rag_prompt_with_current_date_context(self):
+        """Test building RAG prompt with current date context"""
+        context_builder = ContextBuilderFactory.create_context_builder()
+        sample_context_chunks = ContextChunksFactory.create_sample_chunks()
+        conversation_history = ConversationHistoryFactory.create_sample_history()
+        query = TestDataFactory.create_query()
+        system_message = TestDataFactory.create_system_message()
+
+        system_msg, messages = context_builder.build_rag_prompt(
+            query, sample_context_chunks, conversation_history, system_message
+        )
+
+        current_date = datetime.now().strftime("%B %d, %Y")
+        current_year = datetime.now().year
+
+        # Check that the current date context is added to the system message
+        assert "IMPORTANT - Current Date Information:" in system_msg
+        assert f"Today's date: {current_date}" in system_msg
+        assert f"Current year: {current_year}" in system_msg
+        assert (
+            f"Use the current year ({current_year}) only if the user asks about 'this year' or 'current year'."
+            in system_msg
+        )
 
     def test_build_rag_prompt_no_system_message(self):
         """Test building RAG prompt without initial system message"""
@@ -229,10 +254,8 @@ class TestContextBuilder:
             query, sample_context_chunks, conversation_history, None
         )
 
-        # Check system message is just the RAG instruction
-        assert system_msg.startswith(
-            "You have access to relevant information from the knowledge base below"
-        )
+        # Check system message is just the current date context and the RAG instruction
+        assert system_msg.startswith("**IMPORTANT - Current Date Information:**")
         assert "doc1.pdf" in system_msg
 
         # Check messages structure

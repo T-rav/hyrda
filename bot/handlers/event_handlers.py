@@ -63,6 +63,7 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 thread_ts=thread_ts,
                 files=body["event"].get("files", []),
                 conversation_cache=conversation_cache,
+                message_ts=event.get("ts"),  # Unique message timestamp
             )
         except Exception as e:
             await handle_error(
