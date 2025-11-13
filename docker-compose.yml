@@ -97,6 +97,9 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - QDRANT_API_KEY=${VECTOR_API_KEY:-}
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - ENVIRONMENT=production
       - FLASK_PORT=8081
     ports:
