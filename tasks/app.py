@@ -577,11 +577,18 @@ def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
 
 @app.route("/api/credentials/<cred_id>/refresh", methods=["POST"])
 def refresh_credential(cred_id: str) -> Response | tuple[Response, int]:
-    """Initiate OAuth refresh flow for an existing credential."""
+    """Refresh OAuth token using refresh token (no re-authentication needed)."""
     try:
-        from models.oauth_credential import OAuthCredential
+        import json
 
-        # Check if credential exists
+        from google.oauth2.credentials import Credentials
+
+        from models.oauth_credential import OAuthCredential
+        from services.encryption_service import get_encryption_service
+
+        encryption_service = get_encryption_service()
+
+        # Load credential from database
         with get_db_session() as db_session:
             credential = (
                 db_session.query(OAuthCredential)
@@ -592,87 +599,66 @@ def refresh_credential(cred_id: str) -> Response | tuple[Response, int]:
             if not credential:
                 return jsonify({"error": "Credential not found"}), 404
 
-            credential_name = credential.credential_name
+            # Decrypt token
+            token_json = encryption_service.decrypt(credential.encrypted_token)
+            token_data = json.loads(token_json)
 
-        # Initiate OAuth flow with existing credential_id
-        # This will replace the token while keeping the same credential_id
-        task_id = f"refresh_{cred_id}_{int(__import__('time').time())}"
-
-        # Allow OAuth over HTTP for local development
-        import os
-
-        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
-        # Add ingest path to sys.path
-        ingest_path = str(Path(__file__).parent.parent / "ingest")
-        if ingest_path not in sys.path:
-            sys.path.insert(0, ingest_path)
-
-        from google_auth_oauthlib.flow import Flow
-
-        # Define scopes
-        scopes = [
-            "https://www.googleapis.com/auth/drive.readonly",
-            "https://www.googleapis.com/auth/drive.metadata.readonly",
-        ]
-
-        # Get OAuth app credentials from environment
-        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
-        client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
-
-        if not client_id or not client_secret:
-            return (
-                jsonify(
+            # Check if we have a refresh token
+            if not token_data.get("refresh_token"):
+                return jsonify(
                     {
-                        "error": "Google OAuth not configured",
-                        "details": "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables must be set",
+                        "error": "No refresh token available",
+                        "details": "Please re-authenticate to get a new token",
+                        "requires_reauth": True,
                     }
-                ),
-                500,
+                ), 400
+
+            # Create credentials object from stored token
+            creds = Credentials.from_authorized_user_info(token_data)
+
+            # Refresh the token using Google's API
+            from google.auth.transport.requests import Request
+
+            creds.refresh(Request())
+
+            # Encrypt and save the new token
+            new_token_json = creds.to_json()
+            new_encrypted_token = encryption_service.encrypt(new_token_json)
+
+            # Extract new metadata
+            new_token_data = json.loads(new_token_json)
+            new_token_metadata = {
+                "scopes": new_token_data.get("scopes", []),
+                "token_uri": new_token_data.get("token_uri"),
+                "expiry": new_token_data.get("expiry"),  # ISO format timestamp
+            }
+
+            # Update database
+            credential.encrypted_token = new_encrypted_token
+            credential.token_metadata = new_token_metadata
+            db_session.commit()
+
+            logger.info(
+                f"Token refreshed successfully for credential: {credential.credential_name} ({cred_id})"
             )
 
-        # Hardcoded redirect URI to external port
-        redirect_uri = "http://localhost:5001/api/gdrive/auth/callback"
-
-        # Create flow from client config
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
+            return jsonify(
+                {
+                    "message": "Token refreshed successfully",
+                    "credential_id": cred_id,
+                    "expires_at": new_token_metadata.get("expiry"),
                 }
-            },
-            scopes=scopes,
-            redirect_uri=redirect_uri,
-        )
-
-        # Generate authorization URL
-        authorization_url, state = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            prompt="consent",
-        )
-
-        # Store state, task_id, credential_id, and credential_name in session
-        session["oauth_state"] = state
-        session["oauth_task_id"] = task_id
-        session["oauth_credential_id"] = cred_id  # Use existing credential_id
-        session["oauth_credential_name"] = credential_name
-        session["oauth_is_refresh"] = True  # Flag to indicate this is a refresh
-
-        return jsonify(
-            {
-                "authorization_url": authorization_url,
-                "state": state,
-                "credential_id": cred_id,
-            }
-        )
+            )
 
     except Exception as e:
-        logger.error(f"Error initiating credential refresh: {e}")
-        return jsonify({"error": str(e)}), 500
+        logger.error(f"Error refreshing credential: {e}")
+        return jsonify(
+            {
+                "error": str(e),
+                "details": "Token refresh failed - may need to re-authenticate",
+                "requires_reauth": True,
+            }
+        ), 500
 
 
 @app.route("/api/gdrive/auth/initiate", methods=["POST"])

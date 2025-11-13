@@ -54,6 +54,10 @@ function CredentialsManager() {
   }
 
   const handleRefresh = async (credId, credName) => {
+    if (!confirm(`Refresh token for "${credName}"?`)) {
+      return
+    }
+
     try {
       const response = await fetch(`/api/credentials/${credId}/refresh`, {
         method: 'POST',
@@ -62,24 +66,24 @@ function CredentialsManager() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to initiate refresh')
+        // If refresh token doesn't work, offer to re-authenticate
+        if (data.requires_reauth) {
+          const shouldReauth = confirm(
+            `Token refresh failed: ${data.details}\n\nWould you like to re-authenticate?`
+          )
+          if (shouldReauth) {
+            // TODO: Trigger full OAuth flow for re-authentication
+            alert('Re-authentication flow not yet implemented. Please delete and recreate this credential.')
+          }
+        } else {
+          throw new Error(data.error || 'Failed to refresh token')
+        }
+        return
       }
 
-      // Open OAuth URL in new window
-      const authWindow = window.open(
-        data.authorization_url,
-        'Google Drive Authentication',
-        'width=600,height=700,left=200,top=100'
-      )
-
-      // Poll for window closure
-      const pollTimer = setInterval(() => {
-        if (authWindow.closed) {
-          clearInterval(pollTimer)
-          // Reload credentials to show updated status
-          loadCredentials()
-        }
-      }, 500)
+      // Success - reload credentials to show updated expiry
+      await loadCredentials()
+      alert(`Token refreshed successfully for "${credName}"`)
 
     } catch (err) {
       console.error('Error refreshing credential:', err)
@@ -141,8 +145,8 @@ function CredentialsManager() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Status</th>
                   <th>Created</th>
+                  <th>Expires</th>
                   <th className="text-end">Actions</th>
                 </tr>
               </thead>
@@ -153,18 +157,22 @@ function CredentialsManager() {
                       <Key size={16} className="me-2 text-primary" />
                       <strong>{cred.credential_name}</strong>
                     </td>
-                    <td>
-                      <span className={`badge ${
-                        cred.status === 'active' ? 'bg-success' :
-                        cred.status === 'expiring_soon' ? 'bg-warning' :
-                        cred.status === 'expired' ? 'bg-danger' :
-                        'bg-secondary'
-                      }`}>
-                        {cred.status_message || 'Unknown'}
-                      </span>
-                    </td>
                     <td style={{ color: 'var(--text-secondary)' }}>
                       {new Date(cred.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      {cred.expires_at ? (
+                        <span className={`${
+                          cred.status === 'active' ? 'text-success' :
+                          cred.status === 'expiring_soon' ? 'text-warning' :
+                          cred.status === 'expired' ? 'text-danger' :
+                          'text-secondary'
+                        }`}>
+                          {new Date(cred.expires_at).toLocaleString()}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--text-secondary)' }}>Unknown</span>
+                      )}
                     </td>
                     <td className="text-end">
                       <button
