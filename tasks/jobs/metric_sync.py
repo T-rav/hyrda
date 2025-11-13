@@ -263,7 +263,11 @@ class MetricSyncJob(BaseJob):
             # Extract job title/craft level from groups (groupType: GROUP_TYPE_11)
             # This contains craft levels like: Crafter, Senior Crafter, Lead Crafter, Principal Crafter, Partner
             title = next(
-                (g["name"] for g in employee.get("groups", []) if g["groupType"] == "GROUP_TYPE_11"),
+                (
+                    g["name"]
+                    for g in employee.get("groups", [])
+                    if g["groupType"] == "GROUP_TYPE_11"
+                ),
                 "N/A",
             )
 

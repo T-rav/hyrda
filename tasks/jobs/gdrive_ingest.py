@@ -90,38 +90,45 @@ class GDriveIngestJob(BaseJob):
             sys.path.insert(0, ingest_path)
 
             # Import ingest orchestrator and services (from ingest/services, not tasks/services)
-            from services.ingestion_orchestrator import IngestionOrchestrator
-            from services.embedding_provider import OpenAIEmbeddingProvider
-            from services.llm_wrapper import SimpleLLMService
-            from services.vector_store import QdrantVectorStore
-
             # Load encrypted token from database
             from models.base import get_db_session
             from models.oauth_credential import OAuthCredential
+            from services.embedding_provider import OpenAIEmbeddingProvider
             from services.encryption_service import get_encryption_service
+            from services.ingestion_orchestrator import IngestionOrchestrator
+            from services.llm_wrapper import SimpleLLMService
+            from services.vector_store import QdrantVectorStore
 
             encryption_service = get_encryption_service()
 
             with get_db_session() as db_session:
-                credential = db_session.query(OAuthCredential).filter(
-                    OAuthCredential.credential_id == credential_id
-                ).first()
+                credential = (
+                    db_session.query(OAuthCredential)
+                    .filter(OAuthCredential.credential_id == credential_id)
+                    .first()
+                )
 
                 if not credential:
-                    raise FileNotFoundError(f"Credential not found in database: {credential_id}")
+                    raise FileNotFoundError(
+                        f"Credential not found in database: {credential_id}"
+                    )
 
                 # Decrypt token
                 token_json = encryption_service.decrypt(credential.encrypted_token)
 
                 # Update last_used_at
-                from datetime import UTC
+                from datetime import UTC, datetime
+
                 credential.last_used_at = datetime.now(UTC)
                 db_session.commit()
 
             # Create temporary token file for ingestion orchestrator
             # (Orchestrator expects a file path - we can refactor this later)
             import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as f:
                 f.write(token_json)
                 token_file = f.name
 
@@ -151,7 +158,9 @@ class GDriveIngestJob(BaseJob):
                 vector_store = QdrantVectorStore(
                     host=os.getenv("VECTOR_HOST", "localhost"),
                     port=int(os.getenv("VECTOR_PORT", "6333")),
-                    collection_name=os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"),
+                    collection_name=os.getenv(
+                        "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
+                    ),
                     api_key=os.getenv("VECTOR_API_KEY"),
                     use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
                 )
@@ -162,7 +171,10 @@ class GDriveIngestJob(BaseJob):
 
                 # Initialize LLM service for contextual retrieval if enabled
                 llm_service = None
-                enable_contextual = os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower() == "true"
+                enable_contextual = (
+                    os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower()
+                    == "true"
+                )
                 if enable_contextual and os.getenv("LLM_API_KEY"):
                     llm_service = SimpleLLMService(
                         api_key=os.getenv("LLM_API_KEY"),
@@ -180,8 +192,14 @@ class GDriveIngestJob(BaseJob):
 
                 # Execute ingestion based on folder_id or file_id
                 if folder_id:
-                    logger.info(f"Ingesting folder: {folder_id} (recursive={recursive})")
-                    success_count, error_count, skipped_count = await orchestrator.ingest_folder(
+                    logger.info(
+                        f"Ingesting folder: {folder_id} (recursive={recursive})"
+                    )
+                    (
+                        success_count,
+                        error_count,
+                        skipped_count,
+                    ) = await orchestrator.ingest_folder(
                         folder_id=folder_id,
                         recursive=recursive,
                         metadata=metadata,
@@ -202,14 +220,18 @@ class GDriveIngestJob(BaseJob):
                     # Add folder path context
                     file_info["folder_path"] = "/"
                     file_info["folder_id"] = (
-                        file_info.get("parents", [""])[0] if file_info.get("parents") else ""
+                        file_info.get("parents", [""])[0]
+                        if file_info.get("parents")
+                        else ""
                     )
 
                     # Ingest as single-item list
                     files = [file_info]
-                    success_count, error_count, skipped_count = await orchestrator.ingest_files(
-                        files, metadata=metadata
-                    )
+                    (
+                        success_count,
+                        error_count,
+                        skipped_count,
+                    ) = await orchestrator.ingest_files(files, metadata=metadata)
 
                 # Standardized result structure
                 processed_count = success_count + error_count + skipped_count
@@ -235,6 +257,7 @@ class GDriveIngestJob(BaseJob):
             finally:
                 # Clean up temporary token file
                 import os
+
                 if os.path.exists(token_file):
                     os.unlink(token_file)
                     logger.debug(f"Cleaned up temporary token file: {token_file}")
