@@ -5,7 +5,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, request, session
+from flask import Flask, Response, jsonify, render_template, request, session
 from flask_cors import CORS
 
 from config.settings import get_settings
@@ -904,14 +904,16 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         session.pop("oauth_credential_name", None)
         session.pop("oauth_is_refresh", None)
 
-        # Redirect to UI with success message (hardcoded for simplicity)
-        return redirect(
-            f"http://localhost:5001/?auth_success=true&credential_id={credential_id}"
+        # Render success page with auto-close
+        return render_template(
+            "oauth_success.html",
+            credential_name=credential_name,
+            credential_id=credential_id,
         )
 
     except Exception as e:
         logger.error(f"Error handling Google Drive auth callback: {e}")
-        return jsonify({"error": str(e)}), 500
+        return render_template("oauth_error.html", error=str(e)), 500
 
 
 @app.route("/api/gdrive/auth/status/<task_id>")
