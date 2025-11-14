@@ -66,20 +66,37 @@ make docker-run                # Run Docker container with .env
 docker logs -f insightmesh-bot      # Bot logs
 ```
 
-### Document Ingestion - Google Drive Only
+### Document Ingestion - Scheduled Google Drive Tasks
 ```bash
-# THE ONLY SUPPORTED INGESTION METHOD
-# Ingest documents from Google Drive with comprehensive metadata using the new modular architecture
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
+# PRODUCTION INGESTION METHOD
+# Document ingestion is now handled via scheduled tasks in the tasks service
+# Access the tasks dashboard at http://localhost:5001 (or your server URL)
 
-# Legacy command still works with deprecation warnings
-cd ingest && python ingester.py --folder-id "1ABC123DEF456GHI789"
+# 1. Navigate to Tasks Dashboard
+open http://localhost:5001
 
-# First-time setup requires Google OAuth2 credentials
-# See ingest/README.md for detailed setup instructions
-# Now supports comprehensive document formats: PDF, Word, Excel, PowerPoint, Google Workspace files
-# Includes file paths, permissions, and access control metadata
+# 2. Create Google Drive Ingestion Job:
+#    - Job Type: "Google Drive Ingestion"
+#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
+#    - Click "Authenticate" to connect Google Drive via OAuth
+#    - Set schedule (e.g., daily at 3 AM)
+#    - Add custom metadata if needed
+
+# 3. Prerequisites:
+# - Google Cloud Console OAuth credentials configured (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET)
+# - SERVER_BASE_URL must match redirect URI in Google Cloud Console
+# - Vector database (Qdrant) running and accessible
+# - Embedding service (OpenAI) configured
+
+# OAuth Authentication Flow:
+# - Click "Authenticate" button in web UI
+# - Grant Google Drive permissions in popup
+# - Success page appears and auto-closes
+# - Job can now run on schedule
+
+# Supported Formats:
+# PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
+# Includes comprehensive metadata: file paths, permissions, owners, sharing settings
 ```
 
 
