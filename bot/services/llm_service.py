@@ -9,7 +9,6 @@ from config.settings import Settings
 
 # Hybrid search removed
 from services.langfuse_service import (
-    get_langfuse_service,
     initialize_langfuse_service,
     observe,
 )
@@ -86,7 +85,6 @@ class LLMService:
         Returns:
             Generated response or None if failed
         """
-        langfuse_service = get_langfuse_service()
         metrics_service = get_metrics_service()
         start_time = time.time()
 
@@ -130,23 +128,9 @@ class LLMService:
                 conversation_cache=conversation_cache,
             )
 
-            # Trace complete conversation with Langfuse
-            if langfuse_service and user_id and response:
-                langfuse_service.trace_conversation(
-                    user_id=user_id,
-                    conversation_id=conversation_id or "unknown",
-                    user_message=current_query,
-                    bot_response=response,
-                    metadata={
-                        "rag_enabled": use_rag,
-                        "system_prompt_used": system_message is not None,
-                        "langfuse_prompt_template": self.settings.langfuse.system_prompt_template,
-                        "prompt_from_langfuse": self.settings.langfuse.use_prompt_templates,
-                        "message_count": len(conversation_history),
-                        "llm_provider": self.settings.llm.provider,
-                        "llm_model": self.settings.llm.model,
-                    },
-                )
+            # NOTE: conversation_turn tracking moved to message_handlers.py to avoid double-counting
+            # Each message handler (handle_message, handle_agent_command) calls trace_conversation()
+            # Tracking here would create duplicate observations for every user message
 
             # Record metrics
             if metrics_service and response:
