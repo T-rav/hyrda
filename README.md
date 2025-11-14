@@ -105,30 +105,32 @@ docker logs -f insightmesh-bot
 
 ### 4. **Set Up Document Ingestion (via Tasks Service)**
 
-**IMPORTANT**: Authenticate Google Drive BEFORE creating the scheduled task!
+**Workflow**: Update .env → Authenticate → Create Scheduled Task
 
 ```bash
-# 1. Start the tasks service (included in docker compose)
+# Step 1: Update .env with Google OAuth credentials (from Google Cloud Console)
+# Add these to your .env file:
+#   GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+#   GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+#   SERVER_BASE_URL=http://localhost:5001
+#   OAUTH_ENCRYPTION_KEY=your-fernet-key
+
+# Step 2: Start services and authenticate Google Drive
 docker compose up -d
 
-# 2. Authenticate Google Drive FIRST:
+# Visit OAuth URL to grant permissions (saves credential to database):
 open http://localhost:5001/api/gdrive/auth
 # - Grant Google Drive permissions in OAuth popup
 # - Success page appears and auto-closes after 3 seconds
 # - Credential saved with ID (e.g., "prod_gdrive")
 
-# 3. THEN create scheduled ingestion job:
+# Step 3: Create scheduled ingestion job in web UI
 open http://localhost:5001
-# In the web UI:
+# In the tasks dashboard:
 #   - Job Type: "Google Drive Ingestion"
 #   - Credential ID: "prod_gdrive" (from step 2)
-#   - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
+#   - Folder ID: "0AMXFYdnvxhbpUk9PVA" (production documents folder)
 #   - Schedule: Daily at 3 AM (or your preferred schedule)
-
-# Prerequisites:
-# - GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env
-# - SERVER_BASE_URL must match redirect URI in Google Cloud Console
-# - Qdrant and embedding service configured
 ```
 
 **Supported Formats**: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
