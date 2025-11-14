@@ -66,20 +66,42 @@ make docker-run                # Run Docker container with .env
 docker logs -f insightmesh-bot      # Bot logs
 ```
 
-### Document Ingestion - Google Drive Only
+### Document Ingestion - Scheduled Google Drive Tasks
 ```bash
-# THE ONLY SUPPORTED INGESTION METHOD
-# Ingest documents from Google Drive with comprehensive metadata using the new modular architecture
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
+# PRODUCTION INGESTION METHOD
+# Document ingestion is now handled via scheduled tasks in the tasks service
+# Access the tasks dashboard at http://localhost:5001 (or your server URL)
 
-# Legacy command still works with deprecation warnings
-cd ingest && python ingester.py --folder-id "1ABC123DEF456GHI789"
+# WORKFLOW: Update .env → Authenticate → Create Scheduled Task
 
-# First-time setup requires Google OAuth2 credentials
-# See ingest/README.md for detailed setup instructions
-# Now supports comprehensive document formats: PDF, Word, Excel, PowerPoint, Google Workspace files
-# Includes file paths, permissions, and access control metadata
+# 1. Update .env with OAuth credentials (from Google Cloud Console):
+# GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+# SERVER_BASE_URL=http://localhost:5001  # Must match Google Cloud Console redirect URI
+# OAUTH_ENCRYPTION_KEY=your-fernet-key  # For credential storage
+
+# Also ensure these are configured:
+# - Vector database (Qdrant): VECTOR_HOST, VECTOR_PORT
+# - Embedding service: EMBEDDING_PROVIDER, EMBEDDING_API_KEY
+
+# 2. Authenticate Google Drive (saves OAuth credential to database):
+open http://localhost:5001/api/gdrive/auth
+# - Grant Google Drive permissions in OAuth popup
+# - Success page appears and auto-closes after 3 seconds
+# - Credential saved encrypted in database with ID (e.g., "prod_gdrive")
+
+# 3. Create Google Drive Ingestion Scheduled Task:
+open http://localhost:5001
+# In the tasks dashboard web UI:
+#    - Job Type: "Google Drive Ingestion"
+#    - Credential ID: "prod_gdrive" (the ID from step 2)
+#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (production documents folder)
+#    - Set schedule (e.g., daily at 3 AM)
+#    - Optional: Add custom metadata for all documents
+
+# Supported Formats:
+# PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
+# Includes comprehensive metadata: file paths, permissions, owners, sharing settings
 ```
 
 
