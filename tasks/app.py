@@ -5,7 +5,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, render_template, request, session
+from flask import Flask, Response, jsonify, render_template, request, session
 from flask_cors import CORS
 
 from config.settings import get_settings
