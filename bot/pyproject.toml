@@ -44,12 +44,12 @@ dependencies = [
     "langfuse>=3.3.0",
 
     # LangChain and LangGraph for deep research
-    "langchain-core>=0.3.0",
+    "langchain-core>=1.0.0",  # Upgraded to 1.0 (stable API)
     "langchain-community>=0.3.0",
-    "langchain-openai>=0.2.0",
-    "langchain-qdrant>=0.1.0",  # Qdrant vector store integration
+    "langchain-openai>=0.3.0",  # Compatible with langchain-core 1.0
+    "langchain-qdrant>=0.2.0",  # Qdrant vector store integration (updated)
     "langchain-google-genai>=2.0.0",  # Google Gemini integration
-    "langgraph>=0.2.0",
+    "langgraph>=1.0.0",  # Upgraded to 1.0 (stable API)
     "langgraph-checkpoint-sqlite>=2.0.0",  # Persistent checkpoint storage
 
     # Slack formatting
