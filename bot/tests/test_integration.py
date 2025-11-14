@@ -344,6 +344,7 @@ class TestIntegration:
                 slack_service=mock_slack_service,
                 llm_service=mock_llm_service,
                 channel="C12345",
+                message_ts="1234567890.123456",  # Required for non-DM messages
             )
 
         # Verify error handler was called
