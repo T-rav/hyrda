@@ -12,6 +12,11 @@ class TasksSettings(BaseSettings):
     # Server configuration
     port: int = Field(default=8081, alias="FLASK_PORT")
     host: str = Field(default="0.0.0.0", alias="TASKS_HOST")
+    server_base_url: str = Field(
+        default="http://localhost:5001",
+        alias="SERVER_BASE_URL",
+        description="Public base URL for OAuth redirects (e.g., http://3.133.107.199:5001)",
+    )
     secret_key: str = Field(
         default="dev-secret-key-change-in-production", alias="SECRET_KEY"
     )
