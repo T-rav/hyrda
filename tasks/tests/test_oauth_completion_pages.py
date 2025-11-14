@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 
 class TestOAuthCompletionPages:
     """Test that OAuth completion templates exist and are properly structured."""
