@@ -72,27 +72,28 @@ docker logs -f insightmesh-bot      # Bot logs
 # Document ingestion is now handled via scheduled tasks in the tasks service
 # Access the tasks dashboard at http://localhost:5001 (or your server URL)
 
-# 1. Navigate to Tasks Dashboard
-open http://localhost:5001
+# IMPORTANT: Complete OAuth authentication BEFORE creating the task!
 
-# 2. Create Google Drive Ingestion Job:
-#    - Job Type: "Google Drive Ingestion"
-#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
-#    - Click "Authenticate" to connect Google Drive via OAuth
-#    - Set schedule (e.g., daily at 3 AM)
-#    - Add custom metadata if needed
-
-# 3. Prerequisites:
-# - Google Cloud Console OAuth credentials configured (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET)
+# 1. Prerequisites (must be configured first):
+# - Google Cloud Console OAuth credentials (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET)
 # - SERVER_BASE_URL must match redirect URI in Google Cloud Console
 # - Vector database (Qdrant) running and accessible
 # - Embedding service (OpenAI) configured
 
-# OAuth Authentication Flow:
-# - Click "Authenticate" button in web UI
-# - Grant Google Drive permissions in popup
+# 2. Authenticate Google Drive FIRST:
+open http://localhost:5001/api/gdrive/auth
+# - Grant Google Drive permissions in OAuth popup
 # - Success page appears and auto-closes
-# - Job can now run on schedule
+# - Credential saved with ID (e.g., "prod_gdrive")
+
+# 3. THEN Create Google Drive Ingestion Job:
+open http://localhost:5001
+# In the web UI:
+#    - Job Type: "Google Drive Ingestion"
+#    - Credential ID: "prod_gdrive" (from step 2)
+#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
+#    - Set schedule (e.g., daily at 3 AM)
+#    - Add custom metadata if needed
 
 # Supported Formats:
 # PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
