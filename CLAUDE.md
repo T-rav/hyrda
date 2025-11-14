@@ -72,28 +72,32 @@ docker logs -f insightmesh-bot      # Bot logs
 # Document ingestion is now handled via scheduled tasks in the tasks service
 # Access the tasks dashboard at http://localhost:5001 (or your server URL)
 
-# IMPORTANT: Complete OAuth authentication BEFORE creating the task!
+# WORKFLOW: Update .env → Authenticate → Create Scheduled Task
 
-# 1. Prerequisites (must be configured first):
-# - Google Cloud Console OAuth credentials (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET)
-# - SERVER_BASE_URL must match redirect URI in Google Cloud Console
-# - Vector database (Qdrant) running and accessible
-# - Embedding service (OpenAI) configured
+# 1. Update .env with OAuth credentials (from Google Cloud Console):
+# GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+# SERVER_BASE_URL=http://localhost:5001  # Must match Google Cloud Console redirect URI
+# OAUTH_ENCRYPTION_KEY=your-fernet-key  # For credential storage
 
-# 2. Authenticate Google Drive FIRST:
+# Also ensure these are configured:
+# - Vector database (Qdrant): VECTOR_HOST, VECTOR_PORT
+# - Embedding service: EMBEDDING_PROVIDER, EMBEDDING_API_KEY
+
+# 2. Authenticate Google Drive (saves OAuth credential to database):
 open http://localhost:5001/api/gdrive/auth
 # - Grant Google Drive permissions in OAuth popup
-# - Success page appears and auto-closes
-# - Credential saved with ID (e.g., "prod_gdrive")
+# - Success page appears and auto-closes after 3 seconds
+# - Credential saved encrypted in database with ID (e.g., "prod_gdrive")
 
-# 3. THEN Create Google Drive Ingestion Job:
+# 3. Create Google Drive Ingestion Scheduled Task:
 open http://localhost:5001
-# In the web UI:
+# In the tasks dashboard web UI:
 #    - Job Type: "Google Drive Ingestion"
-#    - Credential ID: "prod_gdrive" (from step 2)
-#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
+#    - Credential ID: "prod_gdrive" (the ID from step 2)
+#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (production documents folder)
 #    - Set schedule (e.g., daily at 3 AM)
-#    - Add custom metadata if needed
+#    - Optional: Add custom metadata for all documents
 
 # Supported Formats:
 # PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
