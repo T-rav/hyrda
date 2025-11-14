@@ -39,8 +39,8 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 
 ### 🚀 **Easy Setup & Deployment**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
-- **Docker Compose**: Full stack deployment (bot + Qdrant + Redis + MySQL)
-- **Document Ingestion**: CLI tool for loading from Google Drive with OAuth2
+- **Docker Compose**: Full stack deployment (bot + Qdrant + Redis + MySQL + Tasks Service)
+- **Scheduled Document Ingestion**: Web UI-based Google Drive ingestion with OAuth2 authentication
 - **Multiple LLM Providers**: OpenAI, Anthropic, or Ollama support
 - **Flexible Configuration**: Environment-based settings with sensible defaults
 
@@ -103,17 +103,35 @@ docker compose ps
 docker logs -f insightmesh-bot
 ```
 
-### 4. **Load Your Knowledge Base**
+### 4. **Set Up Document Ingestion (via Tasks Service)**
+
+**IMPORTANT**: Authenticate Google Drive BEFORE creating the scheduled task!
+
 ```bash
-# Ingest documentation from Google Drive
-cd ingest && python main.py --folder-id "YOUR_GOOGLE_DRIVE_FOLDER_ID"
+# 1. Start the tasks service (included in docker compose)
+docker compose up -d
 
-# With custom metadata
-cd ingest && python main.py --folder-id "YOUR_FOLDER_ID" --metadata '{"department": "engineering"}'
+# 2. Authenticate Google Drive FIRST:
+open http://localhost:5001/api/gdrive/auth
+# - Grant Google Drive permissions in OAuth popup
+# - Success page appears and auto-closes after 3 seconds
+# - Credential saved with ID (e.g., "prod_gdrive")
 
-# First-time setup requires Google OAuth2 credentials
-# See ingest/README.md for detailed instructions
+# 3. THEN create scheduled ingestion job:
+open http://localhost:5001
+# In the web UI:
+#   - Job Type: "Google Drive Ingestion"
+#   - Credential ID: "prod_gdrive" (from step 2)
+#   - Folder ID: "0AMXFYdnvxhbpUk9PVA" (main documents folder)
+#   - Schedule: Daily at 3 AM (or your preferred schedule)
+
+# Prerequisites:
+# - GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env
+# - SERVER_BASE_URL must match redirect URI in Google Cloud Console
+# - Qdrant and embedding service configured
 ```
+
+**Supported Formats**: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
 
 ### 5. **Test Your Bot**
 Message your bot in Slack:
@@ -171,14 +189,24 @@ make docker-build                 # Build Docker images
 make docker-run                   # Run Docker container with .env
 ```
 
-### Document Ingestion
+### Document Ingestion (Tasks Service)
 ```bash
-# THE ONLY SUPPORTED METHOD: Google Drive with OAuth2
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering"}'
+# PRODUCTION METHOD: Web UI-based scheduled ingestion
 
-# First-time setup requires Google OAuth2 credentials
-# See ingest/README.md for detailed setup instructions
+# 1. Authenticate Google Drive FIRST (opens OAuth flow)
+open http://localhost:5001/api/gdrive/auth
+
+# 2. Create scheduled job in web UI
+open http://localhost:5001
+# - Job Type: Google Drive Ingestion
+# - Credential ID: From step 1 (e.g., "prod_gdrive")
+# - Folder ID: "0AMXFYdnvxhbpUk9PVA" (production folder)
+# - Schedule: Daily at 3 AM or your preferred schedule
+
+# Prerequisites in .env:
+# GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_OAUTH_CLIENT_SECRET=your-secret
+# SERVER_BASE_URL=http://localhost:5001 (must match Google Cloud Console)
 ```
 
 ## 🔧 Qdrant Setup
@@ -565,12 +593,13 @@ See `CLAUDE.md` for complete development workflow and testing standards.
 3. Commit normally
 
 ### Document Ingestion
-Google Drive is the **ONLY** supported ingestion method:
-```bash
-cd ingest && python main.py --folder-id "YOUR_FOLDER_ID"
-```
+Google Drive ingestion is handled via **scheduled tasks** in the tasks service:
 
-First-time setup requires Google OAuth2 credentials. See `ingest/README.md`.
+1. **Authenticate first**: Visit `http://localhost:5001/api/gdrive/auth` and grant permissions
+2. **Create scheduled job**: In web UI at `http://localhost:5001`, set up ingestion task
+3. **Production folder**: Use folder ID `0AMXFYdnvxhbpUk9PVA`
+
+Requires Google OAuth2 credentials configured in `.env`. See `CLAUDE.md` for detailed workflow.
 
 ### LangGraph Recursion Limits
 The deep research agent has recursion limits set to 100 (increased from default 25) to support complex research tasks with many tool calls. This is safe because:
