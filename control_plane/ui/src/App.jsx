@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, Activity, Bot, ChevronRight } from 'lucide-react'
+import { Shield, Users, Activity, Bot, UserPlus, Plus, X } from 'lucide-react'
 import './App.css'
 
 function App() {
   const [activeTab, setActiveTab] = useState('agents')
   const [agents, setAgents] = useState([])
+  const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
 
   useEffect(() => {
     document.title = 'InsightMesh - Control Plane'
     fetchAgents()
+    fetchGroups()
   }, [])
 
   const fetchAgents = async () => {
@@ -25,6 +28,37 @@ function App() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch('/api/groups')
+      if (!response.ok) throw new Error('Failed to fetch groups')
+      const data = await response.json()
+      setGroups(data.groups || [])
+    } catch (err) {
+      console.error('Error fetching groups:', err)
+      // Mock data for now
+      setGroups([
+        { group_name: 'analysts', display_name: 'Data Analysts', description: 'Team members who analyze data', user_count: 3 },
+        { group_name: 'sales', display_name: 'Sales Team', description: 'Sales representatives', user_count: 5 },
+      ])
+    }
+  }
+
+  const createGroup = async (groupData) => {
+    try {
+      const response = await fetch('/api/groups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(groupData)
+      })
+      if (!response.ok) throw new Error('Failed to create group')
+      fetchGroups()
+      setShowCreateGroup(false)
+    } catch (err) {
+      alert(`Error: ${err.message}`)
     }
   }
 
@@ -46,11 +80,11 @@ function App() {
               Agents
             </button>
             <button
-              className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
+              className={`nav-link ${activeTab === 'groups' ? 'active' : ''}`}
+              onClick={() => setActiveTab('groups')}
             >
               <Users size={20} />
-              Users
+              Groups
             </button>
             <a
               href="http://localhost:8080/health"
@@ -74,7 +108,15 @@ function App() {
             onRefresh={fetchAgents}
           />
         )}
-        {activeTab === 'users' && <UsersView />}
+        {activeTab === 'groups' && (
+          <GroupsView
+            groups={groups}
+            onRefresh={fetchGroups}
+            showCreateGroup={showCreateGroup}
+            setShowCreateGroup={setShowCreateGroup}
+            onCreateGroup={createGroup}
+          />
+        )}
       </main>
     </div>
   )
@@ -152,23 +194,157 @@ function AgentCard({ agent }) {
             {agent.authorized_users === 0 ? 'All users' : `${agent.authorized_users} users`}
           </span>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function GroupsView({ groups, onRefresh, showCreateGroup, setShowCreateGroup, onCreateGroup }) {
+  return (
+    <div className="content-section">
+      <div className="section-header">
+        <h2>Permission Groups ({groups.length})</h2>
+        <div>
+          <button onClick={onRefresh} className="btn-secondary">
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowCreateGroup(true)}
+            className="btn-primary"
+            style={{ marginLeft: '0.5rem' }}
+          >
+            <Plus size={16} />
+            Create Group
+          </button>
+        </div>
+      </div>
+
+      {showCreateGroup && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroup(false)}
+          onCreate={onCreateGroup}
+        />
+      )}
+
+      <div className="groups-list">
+        {groups.map(group => (
+          <GroupCard key={group.group_name} group={group} />
+        ))}
+      </div>
+
+      {groups.length === 0 && !showCreateGroup && (
+        <div className="empty-state">
+          <Users size={48} />
+          <p>No groups created yet</p>
+          <button onClick={() => setShowCreateGroup(true)} className="btn-primary">
+            Create Your First Group
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GroupCard({ group }) {
+  return (
+    <div className="group-card">
+      <div className="group-header">
+        <div>
+          <h3>{group.display_name || group.group_name}</h3>
+          <p className="group-id">@{group.group_name}</p>
+        </div>
+        <div className="group-stats">
+          <span className="stat-badge users">
+            <Users size={14} />
+            {group.user_count || 0} users
+          </span>
+        </div>
+      </div>
+
+      {group.description && (
+        <p className="group-description">{group.description}</p>
+      )}
+
+      <div className="group-footer">
         <button className="btn-link">
-          Manage <ChevronRight size={16} />
+          <UserPlus size={16} />
+          Manage Users
+        </button>
+        <button className="btn-link">
+          <Bot size={16} />
+          Manage Agents
         </button>
       </div>
     </div>
   )
 }
 
-function UsersView() {
+function CreateGroupModal({ onClose, onCreate }) {
+  const [formData, setFormData] = useState({
+    group_name: '',
+    display_name: '',
+    description: '',
+    created_by: 'admin' // TODO: Get from auth
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onCreate(formData)
+  }
+
   return (
-    <div className="content-section">
-      <div className="section-header">
-        <h2>User Management</h2>
-      </div>
-      <div className="empty-state">
-        <Users size={48} />
-        <p>User management coming soon</p>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Create New Group</h2>
+          <button onClick={onClose} className="modal-close">
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="modal-form">
+          <div className="form-group">
+            <label>Group ID (lowercase, no spaces)</label>
+            <input
+              type="text"
+              value={formData.group_name}
+              onChange={e => setFormData({ ...formData, group_name: e.target.value })}
+              placeholder="analysts"
+              pattern="[a-z_]+"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Display Name</label>
+            <input
+              type="text"
+              value={formData.display_name}
+              onChange={e => setFormData({ ...formData, display_name: e.target.value })}
+              placeholder="Data Analysts"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Description (optional)</label>
+            <textarea
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Team members who analyze data"
+              rows={3}
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button type="button" onClick={onClose} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              Create Group
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )

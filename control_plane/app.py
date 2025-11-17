@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, request
 from flask_cors import CORS
 
 # Configure logging
@@ -160,6 +160,152 @@ def list_users() -> Response:
 def health_check() -> Response:
     """Health check endpoint."""
     return jsonify({"status": "healthy", "service": "control_plane"})
+
+
+# Group Management API Routes
+@app.route("/api/groups", methods=["GET", "POST"])
+def manage_groups() -> Response:
+    """List all groups or create a new group."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
+
+    try:
+        from services.permission_service import get_permission_service
+
+        permission_service = get_permission_service()
+
+        if request.method == "GET":
+            # TODO: Implement list_groups method in PermissionService
+            return jsonify({"groups": []})
+
+        elif request.method == "POST":
+            data = request.json
+            success = permission_service.create_group(
+                group_name=data.get("group_name"),
+                display_name=data.get("display_name"),
+                description=data.get("description"),
+                created_by=data.get("created_by"),
+            )
+
+            if success:
+                return jsonify({"status": "created", "group_name": data.get("group_name")})
+            return jsonify({"error": "Failed to create group"}), 400
+
+    except Exception as e:
+        logger.error(f"Error managing groups: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/groups/<string:group_name>/users", methods=["GET", "POST", "DELETE"])
+def manage_group_users(group_name: str) -> Response:
+    """Manage users in a group."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
+
+    try:
+        from services.permission_service import get_permission_service
+
+        permission_service = get_permission_service()
+
+        if request.method == "GET":
+            # TODO: Implement get_group_users method
+            return jsonify({"users": []})
+
+        elif request.method == "POST":
+            data = request.json
+            success = permission_service.add_user_to_group(
+                user_id=data.get("user_id"),
+                group_name=group_name,
+                added_by=data.get("added_by"),
+            )
+
+            if success:
+                return jsonify({"status": "added"})
+            return jsonify({"error": "Failed to add user to group"}), 400
+
+        elif request.method == "DELETE":
+            user_id = request.args.get("user_id")
+            success = permission_service.remove_user_from_group(user_id, group_name)
+
+            if success:
+                return jsonify({"status": "removed"})
+            return jsonify({"error": "Failed to remove user from group"}), 400
+
+    except Exception as e:
+        logger.error(f"Error managing group users: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/groups/<string:group_name>/agents", methods=["POST", "DELETE"])
+def manage_group_agents(group_name: str) -> Response:
+    """Grant or revoke agent access for a group."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
+
+    try:
+        from services.permission_service import get_permission_service
+
+        permission_service = get_permission_service()
+
+        if request.method == "POST":
+            data = request.json
+            success = permission_service.grant_group_permission(
+                group_name=group_name,
+                agent_name=data.get("agent_name"),
+                granted_by=data.get("granted_by"),
+            )
+
+            if success:
+                return jsonify({"status": "granted"})
+            return jsonify({"error": "Failed to grant permission"}), 400
+
+        elif request.method == "DELETE":
+            agent_name = request.args.get("agent_name")
+            success = permission_service.revoke_group_permission(group_name, agent_name)
+
+            if success:
+                return jsonify({"status": "revoked"})
+            return jsonify({"error": "Failed to revoke permission"}), 400
+
+    except Exception as e:
+        logger.error(f"Error managing group agents: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/users/<string:user_id>/permissions", methods=["POST", "DELETE"])
+def manage_user_permissions(user_id: str) -> Response:
+    """Grant or revoke direct user permissions."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
+
+    try:
+        from services.permission_service import get_permission_service
+
+        permission_service = get_permission_service()
+
+        if request.method == "POST":
+            data = request.json
+            success = permission_service.grant_permission(
+                user_id=user_id,
+                agent_name=data.get("agent_name"),
+                granted_by=data.get("granted_by"),
+            )
+
+            if success:
+                return jsonify({"status": "granted"})
+            return jsonify({"error": "Failed to grant permission"}), 400
+
+        elif request.method == "DELETE":
+            agent_name = request.args.get("agent_name")
+            success = permission_service.revoke_permission(user_id, agent_name)
+
+            if success:
+                return jsonify({"status": "revoked"})
+            return jsonify({"error": "Failed to revoke permission"}), 400
+
+    except Exception as e:
+        logger.error(f"Error managing user permissions: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 # Initialize app
