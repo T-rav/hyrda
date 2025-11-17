@@ -3,10 +3,10 @@
 from sqlalchemy import Column, DateTime, Enum, Integer, String
 from sqlalchemy.sql import func
 
-from .base import Base
+from .security_base import SecurityBase
 
 
-class AgentPermission(Base):
+class AgentPermission(SecurityBase):
     """Model for storing user permissions for agents."""
 
     __tablename__ = "agent_permissions"

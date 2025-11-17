@@ -7,8 +7,8 @@ from typing import Any
 from config.settings import Settings
 from models.agent_metadata import AgentMetadata
 from models.agent_permission import AgentPermission
-from models.base import get_db_session
 from models.permission_group import AgentGroupPermission, PermissionGroup, UserGroup
+from models.security_base import get_security_db_session
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +164,7 @@ class PermissionService:
             (allowed: bool, reason: str) tuple
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 # 1. Get agent metadata
                 agent_meta = (
                     session.query(AgentMetadata)
@@ -299,7 +299,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 # Check if permission already exists
                 existing = (
                     session.query(AgentPermission)
@@ -351,7 +351,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 permission = (
                     session.query(AgentPermission)
                     .filter(
@@ -401,7 +401,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 # Check if group already exists
                 existing = (
                     session.query(PermissionGroup)
@@ -444,7 +444,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 # Check if group exists
                 group = (
                     session.query(PermissionGroup)
@@ -502,7 +502,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 user_group = (
                     session.query(UserGroup)
                     .filter(
@@ -543,7 +543,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 # Check if group exists
                 group = (
                     session.query(PermissionGroup)
@@ -604,7 +604,7 @@ class PermissionService:
             True if successful, False otherwise
         """
         try:
-            with get_db_session(self.database_url) as session:
+            with get_security_db_session(self.database_url) as session:
                 permission = (
                     session.query(AgentGroupPermission)
                     .filter(

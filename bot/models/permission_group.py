@@ -3,10 +3,10 @@
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.sql import func
 
-from .base import Base
+from .security_base import SecurityBase
 
 
-class PermissionGroup(Base):
+class PermissionGroup(SecurityBase):
     """Model for permission groups (e.g., 'analysts', 'sales', 'admins')."""
 
     __tablename__ = "permission_groups"
@@ -29,7 +29,7 @@ class PermissionGroup(Base):
         return f"<PermissionGroup(group_name={self.group_name})>"
 
 
-class UserGroup(Base):
+class UserGroup(SecurityBase):
     """Model for user-to-group membership (many-to-many)."""
 
     __tablename__ = "user_groups"
@@ -61,7 +61,7 @@ class UserGroup(Base):
         return f"<UserGroup(user={self.slack_user_id}, group={self.group_name})>"
 
 
-class AgentGroupPermission(Base):
+class AgentGroupPermission(SecurityBase):
     """Model for agent-to-group permissions."""
 
     __tablename__ = "agent_group_permissions"
