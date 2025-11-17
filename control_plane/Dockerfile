@@ -6,13 +6,13 @@ FROM node:18-alpine AS ui-builder
 WORKDIR /app/ui
 
 # Copy UI package files
-COPY ui/package*.json ./
+COPY control_plane/ui/package*.json ./
 
 # Install dependencies
 RUN npm ci --no-audit
 
 # Copy UI source
-COPY ui/ ./
+COPY control_plane/ui/ ./
 
 # Build for production
 RUN npm run build

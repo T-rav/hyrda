@@ -2,18 +2,17 @@
 
 from .agent_metadata import AgentMetadata
 from .agent_permission import AgentPermission
-from .base import Base, get_db_session, metadata
+from .base import Base, get_data_db_session, get_db_session, metadata
 from .permission_group import AgentGroupPermission, PermissionGroup, UserGroup
-from .user import User
 
 __all__ = [
     "Base",
     "metadata",
     "get_db_session",
+    "get_data_db_session",
     "AgentMetadata",
     "AgentPermission",
     "PermissionGroup",
     "UserGroup",
     "AgentGroupPermission",
-    "User",
 ]

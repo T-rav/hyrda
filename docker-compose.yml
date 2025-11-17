@@ -223,6 +223,7 @@ services:
       - .env
     environment:
       - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
       - FLASK_ENV=production
     ports:
