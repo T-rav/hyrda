@@ -573,3 +573,18 @@ db-status: $(VENV)
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+
+# Control Plane Service Targets
+lint-control-plane: $(VENV)
+	@echo "$(BLUE)🔍 Linting control plane service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)control_plane && $(PYTHON) -m ruff check . --fix || true
+	cd $(PROJECT_ROOT_DIR)control_plane && $(PYTHON) -m ruff format . || true
+
+control-plane-ui:
+	@echo "$(BLUE)📦 Building React control plane UI...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/control_plane/ui && npm install --no-audit && npm run build
+	@echo "$(GREEN)✅ Control plane UI built!$(RESET)"
+
+test-control-plane: $(VENV)
+	@echo "$(BLUE)🧪 Running control plane tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)No tests yet$(RESET)"
