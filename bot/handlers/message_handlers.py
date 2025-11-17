@@ -483,7 +483,37 @@ async def handle_bot_command(
             context["files"] = files
             context["file_names"] = [f.get("name", "unknown") for f in files]
 
-        # Execute agent
+        # Check permissions before execution
+        from services.permission_service import get_permission_service
+
+        permission_service = get_permission_service()
+        allowed, reason = permission_service.can_use_agent(user_id, primary_name)
+
+        if not allowed:
+            # Permission denied - don't execute agent
+            logger.warning(
+                f"Permission denied: user {user_id} tried to use agent {primary_name}: {reason}"
+            )
+
+            # Clean up thinking message
+            if thinking_message_ts:
+                try:
+                    await slack_service.delete_thinking_indicator(
+                        channel, thinking_message_ts
+                    )
+                except Exception as e:
+                    logger.warning(f"Error deleting thinking message: {e}")
+
+            # Send permission denied message
+            await slack_service.send_message(
+                channel=channel,
+                text=f"🔒 *Access Denied*\n\n{reason}\n\nContact an administrator if you need access to this agent.",
+                thread_ts=thread_ts,
+            )
+            return True  # Command handled (but denied)
+
+        # Permission granted - execute agent
+        logger.info(f"Permission granted: user {user_id} can use agent {primary_name}")
         result = await agent.run(query, context)
         response = result.get("response", "No response from agent")
         metadata = result.get("metadata", {})
