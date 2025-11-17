@@ -10,6 +10,10 @@ requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
+    "sqlalchemy>=2.0.0",
+    "pymysql>=1.1.0",
+    "cryptography>=41.0.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]

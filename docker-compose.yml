@@ -134,8 +134,6 @@ services:
         alembic upgrade head &&
         echo '=== Running data database migrations ===' &&
         alembic -c alembic_data.ini upgrade head &&
-        echo '=== Running security database migrations ===' &&
-        alembic -c alembic_security.ini upgrade head &&
         echo '=== Starting services ===' &&
         /usr/bin/supervisord
       "
@@ -216,15 +214,15 @@ services:
   # Control Plane Service
   control_plane:
     build:
-      context: ./control_plane
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: control_plane/Dockerfile
     image: insightmesh-control-plane:latest
     container_name: insightmesh-control-plane
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
       - FLASK_ENV=production
     ports:
@@ -232,8 +230,13 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-      bot:
-        condition: service_started
+    command: >
+      sh -c "
+        echo '=== Running security database migrations ===' &&
+        alembic upgrade head &&
+        echo '=== Starting Flask app ===' &&
+        python -u app.py
+      "
     logging:
       driver: "json-file"
       options:

@@ -25,18 +25,19 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    default-mysql-client \
     default-libmysqlclient-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python dependencies
-COPY pyproject.toml ./
+# Copy control plane Python dependencies
+COPY control_plane/pyproject.toml ./
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -e .
 
-# Copy application code
-COPY . .
+# Copy control plane application code
+COPY control_plane/ ./
 
 # Copy built React UI from stage 1
 COPY --from=ui-builder /app/ui/dist ./ui/dist
