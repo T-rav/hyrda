@@ -226,6 +226,7 @@ services:
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
       - FLASK_ENV=production
+      - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:

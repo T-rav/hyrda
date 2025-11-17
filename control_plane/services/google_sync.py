@@ -1,12 +1,13 @@
 """User sync service for control plane.
 
 Syncs users from slack_users table (data database) to users table (security database).
-Filters for @8thlight.com emails only, excludes bots, and only includes active users.
+Filters by email domain (configurable), excludes bots, and only includes active users.
 
 TODO: Replace with Google Workspace sync once credentials are configured.
 """
 
 import logging
+import os
 from datetime import datetime
 
 from sqlalchemy import text
@@ -20,7 +21,7 @@ def sync_users_to_database() -> dict:
     """Sync users from slack_users table to security database.
 
     Filters:
-    - Only @8thlight.com email addresses
+    - Only emails matching ALLOWED_EMAIL_DOMAIN (default: @8thlight.com)
     - Excludes bots (is_bot = 0 AND user_type != 'bot')
     - Only active users (is_active = 1)
 
@@ -29,8 +30,12 @@ def sync_users_to_database() -> dict:
     """
     stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
 
+    # Get allowed email domain from environment (default to @8thlight.com)
+    allowed_domain = os.getenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com")
+    logger.info(f"Syncing users with email domain: {allowed_domain}")
+
     try:
-        # Fetch 8th Light users from slack_users table in data database
+        # Fetch users from slack_users table in data database
         with get_data_db_session() as data_session:
             result = data_session.execute(
                 text("""
@@ -44,13 +49,14 @@ def sync_users_to_database() -> dict:
                     WHERE is_bot = 0
                     AND user_type != 'bot'
                     AND is_active = 1
-                    AND email_address LIKE '%@8thlight.com'
+                    AND email_address LIKE :domain_pattern
                     ORDER BY email_address
-                """)
+                """),
+                {"domain_pattern": f"%{allowed_domain}"}
             )
 
             slack_users = result.fetchall()
-            logger.info(f"Found {len(slack_users)} 8th Light users in slack_users table")
+            logger.info(f"Found {len(slack_users)} users matching {allowed_domain} in slack_users table")
 
             # Sync to security database
             with get_db_session() as security_session:
