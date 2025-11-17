@@ -8,6 +8,7 @@ from config.settings import Settings
 from models.agent_metadata import AgentMetadata
 from models.agent_permission import AgentPermission
 from models.base import get_db_session
+from models.permission_group import AgentGroupPermission, PermissionGroup, UserGroup
 
 logger = logging.getLogger(__name__)
 
@@ -200,8 +201,8 @@ class PermissionService:
                     logger.info(f"Admin user {user_id} granted access to {agent_name}")
                     return True, "Admin access granted"
 
-                # 4. Check explicit permissions in database
-                permission = (
+                # 4. Check explicit user permissions (highest priority)
+                user_permission = (
                     session.query(AgentPermission)
                     .filter(
                         AgentPermission.agent_name == agent_name,
@@ -210,24 +211,67 @@ class PermissionService:
                     .first()
                 )
 
-                if permission:
-                    if permission.permission_type == "allow":
+                if user_permission:
+                    if user_permission.permission_type == "allow":
                         logger.info(
-                            f"User {user_id} explicitly allowed for {agent_name} (granted by {permission.granted_by})"
+                            f"User {user_id} explicitly allowed for {agent_name} (granted by {user_permission.granted_by})"
                         )
                         return (
                             True,
-                            f"Access granted by {permission.granted_by or 'admin'}",
+                            f"Access granted by {user_permission.granted_by or 'admin'}",
                         )
 
                     logger.info(
-                        f"User {user_id} explicitly denied for {agent_name} (denied by {permission.granted_by})"
+                        f"User {user_id} explicitly denied for {agent_name} (denied by {user_permission.granted_by})"
                     )
-                    return False, f"Access denied by {permission.granted_by or 'admin'}"
+                    return (
+                        False,
+                        f"Access denied by {user_permission.granted_by or 'admin'}",
+                    )
 
-                # 5. Private agent with no explicit permission - deny
+                # 5. Check group permissions
+                # Get all groups user belongs to
+                user_groups = (
+                    session.query(UserGroup.group_name)
+                    .filter(UserGroup.slack_user_id == user_id)
+                    .all()
+                )
+
+                if user_groups:
+                    group_names = [g.group_name for g in user_groups]
+                    logger.debug(f"User {user_id} belongs to groups: {group_names}")
+
+                    # Check if any of user's groups have permission for this agent
+                    group_permission = (
+                        session.query(AgentGroupPermission)
+                        .filter(
+                            AgentGroupPermission.agent_name == agent_name,
+                            AgentGroupPermission.group_name.in_(group_names),
+                        )
+                        .first()
+                    )
+
+                    if group_permission:
+                        if group_permission.permission_type == "allow":
+                            logger.info(
+                                f"User {user_id} allowed for {agent_name} via group '{group_permission.group_name}'"
+                            )
+                            return (
+                                True,
+                                f"Access via group '{group_permission.group_name}'",
+                            )
+
+                        logger.info(
+                            f"User {user_id} denied for {agent_name} via group '{group_permission.group_name}'"
+                        )
+                        return (
+                            False,
+                            f"Access denied via group '{group_permission.group_name}'",
+                        )
+
+                # 6. Private agent with no permission - deny
                 logger.info(
-                    f"User {user_id} denied access to private agent {agent_name} (no explicit permission)"
+                    f"User {user_id} denied access to private agent {agent_name} (no explicit permission or group)"
                 )
                 return False, "You don't have permission to use this agent"
 
@@ -335,6 +379,281 @@ class PermissionService:
         except Exception as e:
             logger.error(f"Error revoking permission: {e}", exc_info=True)
             return False
+
+    # Group Management Methods
+
+    def create_group(
+        self,
+        group_name: str,
+        display_name: str | None = None,
+        description: str | None = None,
+        created_by: str | None = None,
+    ) -> bool:
+        """Create a permission group.
+
+        Args:
+            group_name: Unique group identifier (e.g., "analysts", "sales")
+            display_name: Human-readable name (e.g., "Data Analysts")
+            description: Group description
+            created_by: Slack user ID who created the group
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with get_db_session(self.database_url) as session:
+                # Check if group already exists
+                existing = (
+                    session.query(PermissionGroup)
+                    .filter(PermissionGroup.group_name == group_name)
+                    .first()
+                )
+
+                if existing:
+                    logger.warning(f"Group {group_name} already exists")
+                    return False
+
+                # Create new group
+                group = PermissionGroup(
+                    group_name=group_name,
+                    display_name=display_name,
+                    description=description,
+                    created_by=created_by,
+                )
+                session.add(group)
+                session.commit()
+
+                logger.info(f"Created group '{group_name}' (by {created_by})")
+                return True
+
+        except Exception as e:
+            logger.error(f"Error creating group: {e}", exc_info=True)
+            return False
+
+    def add_user_to_group(
+        self, user_id: str, group_name: str, added_by: str | None = None
+    ) -> bool:
+        """Add a user to a permission group.
+
+        Args:
+            user_id: Slack user ID
+            group_name: Group to add user to
+            added_by: Slack user ID who added the user
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with get_db_session(self.database_url) as session:
+                # Check if group exists
+                group = (
+                    session.query(PermissionGroup)
+                    .filter(PermissionGroup.group_name == group_name)
+                    .first()
+                )
+
+                if not group:
+                    logger.warning(f"Group {group_name} does not exist")
+                    return False
+
+                # Check if user is already in group
+                existing = (
+                    session.query(UserGroup)
+                    .filter(
+                        UserGroup.slack_user_id == user_id,
+                        UserGroup.group_name == group_name,
+                    )
+                    .first()
+                )
+
+                if existing:
+                    logger.warning(f"User {user_id} is already in group {group_name}")
+                    return False
+
+                # Add user to group
+                user_group = UserGroup(
+                    slack_user_id=user_id,
+                    group_name=group_name,
+                    added_by=added_by,
+                )
+                session.add(user_group)
+                session.commit()
+
+                # Invalidate cache for this user (all agents)
+                self.invalidate_cache(user_id=user_id)
+
+                logger.info(
+                    f"Added user {user_id} to group '{group_name}' (by {added_by})"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Error adding user to group: {e}", exc_info=True)
+            return False
+
+    def remove_user_from_group(self, user_id: str, group_name: str) -> bool:
+        """Remove a user from a permission group.
+
+        Args:
+            user_id: Slack user ID
+            group_name: Group to remove user from
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with get_db_session(self.database_url) as session:
+                user_group = (
+                    session.query(UserGroup)
+                    .filter(
+                        UserGroup.slack_user_id == user_id,
+                        UserGroup.group_name == group_name,
+                    )
+                    .first()
+                )
+
+                if user_group:
+                    session.delete(user_group)
+                    session.commit()
+
+                    # Invalidate cache for this user (all agents)
+                    self.invalidate_cache(user_id=user_id)
+
+                    logger.info(f"Removed user {user_id} from group '{group_name}'")
+                    return True
+
+                logger.warning(f"User {user_id} is not in group {group_name}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error removing user from group: {e}", exc_info=True)
+            return False
+
+    def grant_group_permission(
+        self, group_name: str, agent_name: str, granted_by: str | None = None
+    ) -> bool:
+        """Grant a group permission to use an agent.
+
+        Args:
+            group_name: Group name
+            agent_name: Agent name
+            granted_by: Slack user ID who granted permission
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with get_db_session(self.database_url) as session:
+                # Check if group exists
+                group = (
+                    session.query(PermissionGroup)
+                    .filter(PermissionGroup.group_name == group_name)
+                    .first()
+                )
+
+                if not group:
+                    logger.warning(f"Group {group_name} does not exist")
+                    return False
+
+                # Check if permission already exists
+                existing = (
+                    session.query(AgentGroupPermission)
+                    .filter(
+                        AgentGroupPermission.agent_name == agent_name,
+                        AgentGroupPermission.group_name == group_name,
+                    )
+                    .first()
+                )
+
+                if existing:
+                    # Update existing permission
+                    existing.permission_type = "allow"
+                    existing.granted_by = granted_by
+                else:
+                    # Create new permission
+                    permission = AgentGroupPermission(
+                        agent_name=agent_name,
+                        group_name=group_name,
+                        permission_type="allow",
+                        granted_by=granted_by,
+                    )
+                    session.add(permission)
+
+                session.commit()
+
+                # Invalidate cache for all users in this group
+                self._invalidate_cache_for_group(session, group_name)
+
+                logger.info(
+                    f"Granted group '{group_name}' access to {agent_name} (by {granted_by})"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Error granting group permission: {e}", exc_info=True)
+            return False
+
+    def revoke_group_permission(self, group_name: str, agent_name: str) -> bool:
+        """Revoke a group's permission for an agent.
+
+        Args:
+            group_name: Group name
+            agent_name: Agent name
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            with get_db_session(self.database_url) as session:
+                permission = (
+                    session.query(AgentGroupPermission)
+                    .filter(
+                        AgentGroupPermission.agent_name == agent_name,
+                        AgentGroupPermission.group_name == group_name,
+                    )
+                    .first()
+                )
+
+                if permission:
+                    session.delete(permission)
+                    session.commit()
+
+                    # Invalidate cache for all users in this group
+                    self._invalidate_cache_for_group(session, group_name)
+
+                    logger.info(f"Revoked group '{group_name}' access to {agent_name}")
+                    return True
+
+                logger.warning(
+                    f"No permission found to revoke for group {group_name}:{agent_name}"
+                )
+                return False
+
+        except Exception as e:
+            logger.error(f"Error revoking group permission: {e}", exc_info=True)
+            return False
+
+    def _invalidate_cache_for_group(self, session, group_name: str) -> None:
+        """Invalidate cache for all users in a group.
+
+        Args:
+            session: Database session
+            group_name: Group name
+        """
+        # Get all users in group
+        user_groups = (
+            session.query(UserGroup.slack_user_id)
+            .filter(UserGroup.group_name == group_name)
+            .all()
+        )
+
+        # Invalidate cache for each user
+        for user_group in user_groups:
+            self.invalidate_cache(user_id=user_group.slack_user_id)
+
+        logger.info(
+            f"Invalidated cache for {len(user_groups)} users in group '{group_name}'"
+        )
 
 
 # Global instance
