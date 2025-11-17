@@ -151,48 +151,61 @@ def get_agent_details(agent_name: str) -> Response:
 
 @app.route("/api/users")
 def list_users() -> Response:
-    """List all users from slack_users table in data database."""
+    """List all users from security database (synced from Google Workspace)."""
     try:
-        from models.base import get_data_db_session
-        from sqlalchemy import text
+        from models import User, get_db_session
 
-        with get_data_db_session() as session:
-            # Query slack_users table from data database
-            result = session.execute(
-                text("""
-                    SELECT
-                        id,
-                        slack_user_id,
-                        email_address,
-                        real_name,
-                        display_name,
-                        is_active,
-                        is_admin,
-                        is_bot,
-                        user_type
-                    FROM slack_users
-                    WHERE is_bot = 0 AND user_type != 'bot'
-                    ORDER BY email_address
-                """)
-            )
-
+        with get_db_session() as session:
+            users = session.query(User).order_by(User.email).all()
             users_data = [
                 {
-                    "id": row[0],
-                    "slack_user_id": row[1],
-                    "email": row[2],
-                    "full_name": row[3] or row[4],  # real_name or display_name
-                    "is_active": bool(row[5]),
-                    "is_admin": bool(row[6]),
-                    "user_type": row[8],
+                    "id": user.id,
+                    "slack_user_id": user.slack_user_id,
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "is_active": user.is_active,
+                    "is_admin": user.is_admin,
+                    "last_synced_at": user.last_synced_at.isoformat() if user.last_synced_at else None,
                 }
-                for row in result
+                for user in users
             ]
             return jsonify({"users": users_data})
 
     except Exception as e:
         logger.error(f"Error listing users: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/users/sync", methods=["POST"])
+def sync_users() -> Response:
+    """Sync users from Google Workspace to security database.
+
+    Links users to slack_users table in data database via slack_user_id.
+    """
+    try:
+        from services import sync_users_from_google
+
+        stats = sync_users_from_google()
+        return jsonify({
+            "status": "success",
+            "message": "User sync completed",
+            "stats": stats,
+        })
+
+    except ValueError as e:
+        # Configuration error
+        logger.error(f"Configuration error during user sync: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error syncing users: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Sync failed: {str(e)}",
+        }), 500
 
 
 
