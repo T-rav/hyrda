@@ -1,32 +1,10 @@
 """Alembic environment configuration for security database (insightmesh_security)."""
 
 import os
-import sys
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-
-# Add the project root to the path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Import security metadata from bot models
-# We need to add bot to sys.path
-bot_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "bot"
-)
-sys.path.insert(0, bot_path)
-
-from models.security_base import security_metadata  # noqa: E402
-
-# Import all security models to ensure they're registered
-from models.agent_metadata import AgentMetadata  # noqa: E402, F401
-from models.agent_permission import AgentPermission  # noqa: E402, F401
-from models.permission_group import (  # noqa: E402, F401
-    AgentGroupPermission,
-    PermissionGroup,
-    UserGroup,
-)
+from sqlalchemy import MetaData, engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -36,8 +14,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Define metadata for security database tables
-target_metadata = security_metadata
+# Define empty metadata for security database
+# Migrations define schema explicitly without importing models (best practice)
+target_metadata = MetaData()
 
 
 def get_url():
