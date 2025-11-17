@@ -151,9 +151,58 @@ def get_agent_details(agent_name: str) -> Response:
 
 @app.route("/api/users")
 def list_users() -> Response:
-    """List all users with their permissions."""
-    # TODO: Implement user listing from database
-    return jsonify({"users": []})
+    """List all users from security database."""
+    try:
+        from models import User, get_db_session
+
+        with get_db_session() as session:
+            users = session.query(User).order_by(User.email).all()
+            users_data = [
+                {
+                    "id": user.id,
+                    "slack_user_id": user.slack_user_id,
+                    "email": user.email,
+                    "full_name": user.full_name,
+                    "is_active": user.is_active,
+                    "is_admin": user.is_admin,
+                    "last_synced_at": user.last_synced_at.isoformat() if user.last_synced_at else None,
+                }
+                for user in users
+            ]
+            return jsonify({"users": users_data})
+
+    except Exception as e:
+        logger.error(f"Error listing users: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/users/sync", methods=["POST"])
+def sync_users() -> Response:
+    """Sync users from Google Workspace."""
+    try:
+        from services import sync_users_from_google
+
+        stats = sync_users_from_google()
+        return jsonify({
+            "status": "success",
+            "message": "User sync completed",
+            "stats": stats,
+        })
+
+    except ValueError as e:
+        # Configuration error
+        logger.error(f"Configuration error during user sync: {e}")
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        }), 400
+
+    except Exception as e:
+        logger.error(f"Error syncing users: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Sync failed: {str(e)}",
+        }), 500
 
 
 @app.route("/api/health")
