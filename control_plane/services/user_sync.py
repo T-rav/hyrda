@@ -45,9 +45,13 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
     }
 
     # Get allowed email domain filter (optional)
+    # Use "*" to allow all domains
     allowed_domain = os.getenv("ALLOWED_EMAIL_DOMAIN", "")
-    if allowed_domain:
+    if allowed_domain and allowed_domain != "*":
         logger.info(f"Filtering users by email domain: {allowed_domain}")
+    elif allowed_domain == "*":
+        logger.info("Accepting users from all email domains (ALLOWED_EMAIL_DOMAIN=*)")
+        allowed_domain = ""  # Disable filtering
 
     try:
         # Get the configured provider
