@@ -184,17 +184,23 @@ def list_users() -> Response:
 
 @app.route("/api/users/sync", methods=["POST"])
 def sync_users() -> Response:
-    """Sync users from Google Workspace to security database.
+    """Sync users from configured identity provider to security database.
 
-    Links users to slack_users table in data database via slack_user_id.
+    Provider is configured via USER_MANAGEMENT_PROVIDER environment variable
+    (defaults to 'slack'). Supports: slack, google.
     """
     try:
-        from services.google_sync import sync_users_from_google
+        from services.user_sync import sync_users_from_provider
 
-        stats = sync_users_from_google()
+        # Get provider type from request body or use configured default
+        provider_type = request.json.get("provider") if request.json else None
+
+        stats = sync_users_from_provider(provider_type=provider_type)
+
+        provider_name = provider_type or os.getenv("USER_MANAGEMENT_PROVIDER", "slack")
         return jsonify({
             "status": "success",
-            "message": "User sync completed",
+            "message": f"User sync from {provider_name} completed",
             "stats": stats,
         })
 
