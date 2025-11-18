@@ -201,15 +201,6 @@ function App() {
               <Users size={20} />
               Groups
             </button>
-            <a
-              href="http://localhost:8080/health"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="nav-link external"
-            >
-              <Activity size={20} />
-              Health
-            </a>
           </nav>
         </div>
       </header>

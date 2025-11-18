@@ -4,6 +4,12 @@ import logging
 import sys
 from pathlib import Path
 
+# CRITICAL: Ensure control_plane directory is first in sys.path
+# This prevents importing bot/models instead of control_plane/models
+control_plane_dir = str(Path(__file__).parent.absolute())
+if control_plane_dir not in sys.path:
+    sys.path.insert(0, control_plane_dir)
+
 from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -183,7 +189,7 @@ def sync_users() -> Response:
     Links users to slack_users table in data database via slack_user_id.
     """
     try:
-        from services import sync_users_from_google
+        from services.google_sync import sync_users_from_google
 
         stats = sync_users_from_google()
         return jsonify({
@@ -220,30 +226,42 @@ def health_check() -> Response:
 @app.route("/api/groups", methods=["GET", "POST"])
 def manage_groups() -> Response:
     """List all groups or create a new group."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from services.permission_service import get_permission_service
-
-        permission_service = get_permission_service()
+        from models import PermissionGroup, UserGroup, get_db_session
+        from sqlalchemy import func
 
         if request.method == "GET":
-            # TODO: Implement list_groups method in PermissionService
-            return jsonify({"groups": []})
+            with get_db_session() as session:
+                groups = session.query(
+                    PermissionGroup,
+                    func.count(UserGroup.slack_user_id).label('user_count')
+                ).outerjoin(
+                    UserGroup, PermissionGroup.group_name == UserGroup.group_name
+                ).group_by(PermissionGroup.group_name).all()
+
+                groups_data = [
+                    {
+                        "group_name": group.PermissionGroup.group_name,
+                        "display_name": group.PermissionGroup.display_name,
+                        "description": group.PermissionGroup.description,
+                        "user_count": group.user_count,
+                    }
+                    for group in groups
+                ]
+                return jsonify({"groups": groups_data})
 
         elif request.method == "POST":
             data = request.json
-            success = permission_service.create_group(
-                group_name=data.get("group_name"),
-                display_name=data.get("display_name"),
-                description=data.get("description"),
-                created_by=data.get("created_by"),
-            )
-
-            if success:
+            with get_db_session() as session:
+                new_group = PermissionGroup(
+                    group_name=data.get("group_name"),
+                    display_name=data.get("display_name"),
+                    description=data.get("description"),
+                    created_by=data.get("created_by", "admin"),
+                )
+                session.add(new_group)
+                session.commit()
                 return jsonify({"status": "created", "group_name": data.get("group_name")})
-            return jsonify({"error": "Failed to create group"}), 400
 
     except Exception as e:
         logger.error(f"Error managing groups: {e}", exc_info=True)
@@ -253,37 +271,78 @@ def manage_groups() -> Response:
 @app.route("/api/groups/<string:group_name>/users", methods=["GET", "POST", "DELETE"])
 def manage_group_users(group_name: str) -> Response:
     """Manage users in a group."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from services.permission_service import get_permission_service
-
-        permission_service = get_permission_service()
+        from models import User, UserGroup, get_db_session
 
         if request.method == "GET":
-            # TODO: Implement get_group_users method
-            return jsonify({"users": []})
+            with get_db_session() as session:
+                memberships = session.query(UserGroup).filter(
+                    UserGroup.group_name == group_name
+                ).all()
+
+                users_data = []
+                for membership in memberships:
+                    user = session.query(User).filter(
+                        User.slack_user_id == membership.slack_user_id
+                    ).first()
+                    if user:
+                        users_data.append({
+                            "user_id": user.slack_user_id,
+                            "email": user.email,
+                            "full_name": user.full_name,
+                            "added_at": membership.added_at.isoformat() if membership.added_at else None,
+                        })
+
+                return jsonify({"users": users_data})
 
         elif request.method == "POST":
             data = request.json
-            success = permission_service.add_user_to_group(
-                user_id=data.get("user_id"),
-                group_name=group_name,
-                added_by=data.get("added_by"),
-            )
+            user_id = data.get("user_id")
+            added_by = data.get("added_by", "admin")
 
-            if success:
+            with get_db_session() as session:
+                # Check if user exists
+                user = session.query(User).filter(
+                    User.slack_user_id == user_id
+                ).first()
+                if not user:
+                    return jsonify({"error": "User not found"}), 404
+
+                # Check if already in group
+                existing = session.query(UserGroup).filter(
+                    UserGroup.slack_user_id == user_id,
+                    UserGroup.group_name == group_name
+                ).first()
+                if existing:
+                    return jsonify({"error": "User already in group"}), 400
+
+                # Add user to group
+                new_membership = UserGroup(
+                    slack_user_id=user_id,
+                    group_name=group_name,
+                    added_by=added_by
+                )
+                session.add(new_membership)
+                session.commit()
                 return jsonify({"status": "added"})
-            return jsonify({"error": "Failed to add user to group"}), 400
 
         elif request.method == "DELETE":
             user_id = request.args.get("user_id")
-            success = permission_service.remove_user_from_group(user_id, group_name)
+            if not user_id:
+                return jsonify({"error": "user_id is required"}), 400
 
-            if success:
+            with get_db_session() as session:
+                membership = session.query(UserGroup).filter(
+                    UserGroup.slack_user_id == user_id,
+                    UserGroup.group_name == group_name
+                ).first()
+
+                if not membership:
+                    return jsonify({"error": "User not in group"}), 404
+
+                session.delete(membership)
+                session.commit()
                 return jsonify({"status": "removed"})
-            return jsonify({"error": "Failed to remove user from group"}), 400
 
     except Exception as e:
         logger.error(f"Error managing group users: {e}", exc_info=True)
@@ -293,33 +352,61 @@ def manage_group_users(group_name: str) -> Response:
 @app.route("/api/groups/<string:group_name>/agents", methods=["POST", "DELETE"])
 def manage_group_agents(group_name: str) -> Response:
     """Grant or revoke agent access for a group."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from services.permission_service import get_permission_service
-
-        permission_service = get_permission_service()
+        from models import AgentGroupPermission, PermissionGroup, get_db_session
 
         if request.method == "POST":
             data = request.json
-            success = permission_service.grant_group_permission(
-                group_name=group_name,
-                agent_name=data.get("agent_name"),
-                granted_by=data.get("granted_by"),
-            )
+            agent_name = data.get("agent_name")
+            granted_by = data.get("granted_by", "admin")
 
-            if success:
+            if not agent_name:
+                return jsonify({"error": "agent_name is required"}), 400
+
+            with get_db_session() as session:
+                # Check if group exists
+                group = session.query(PermissionGroup).filter(
+                    PermissionGroup.group_name == group_name
+                ).first()
+                if not group:
+                    return jsonify({"error": "Group not found"}), 404
+
+                # Check if permission already exists
+                existing = session.query(AgentGroupPermission).filter(
+                    AgentGroupPermission.agent_name == agent_name,
+                    AgentGroupPermission.group_name == group_name
+                ).first()
+                if existing:
+                    return jsonify({"error": "Permission already granted"}), 400
+
+                # Grant permission
+                new_permission = AgentGroupPermission(
+                    agent_name=agent_name,
+                    group_name=group_name,
+                    granted_by=granted_by,
+                    permission_type="allow"
+                )
+                session.add(new_permission)
+                session.commit()
                 return jsonify({"status": "granted"})
-            return jsonify({"error": "Failed to grant permission"}), 400
 
         elif request.method == "DELETE":
             agent_name = request.args.get("agent_name")
-            success = permission_service.revoke_group_permission(group_name, agent_name)
+            if not agent_name:
+                return jsonify({"error": "agent_name is required"}), 400
 
-            if success:
+            with get_db_session() as session:
+                permission = session.query(AgentGroupPermission).filter(
+                    AgentGroupPermission.agent_name == agent_name,
+                    AgentGroupPermission.group_name == group_name
+                ).first()
+
+                if not permission:
+                    return jsonify({"error": "Permission not found"}), 404
+
+                session.delete(permission)
+                session.commit()
                 return jsonify({"status": "revoked"})
-            return jsonify({"error": "Failed to revoke permission"}), 400
 
     except Exception as e:
         logger.error(f"Error managing group agents: {e}", exc_info=True)
@@ -329,33 +416,61 @@ def manage_group_agents(group_name: str) -> Response:
 @app.route("/api/users/<string:user_id>/permissions", methods=["POST", "DELETE"])
 def manage_user_permissions(user_id: str) -> Response:
     """Grant or revoke direct user permissions."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from services.permission_service import get_permission_service
-
-        permission_service = get_permission_service()
+        from models import AgentPermission, User, get_db_session
 
         if request.method == "POST":
             data = request.json
-            success = permission_service.grant_permission(
-                user_id=user_id,
-                agent_name=data.get("agent_name"),
-                granted_by=data.get("granted_by"),
-            )
+            agent_name = data.get("agent_name")
+            granted_by = data.get("granted_by", "admin")
 
-            if success:
+            if not agent_name:
+                return jsonify({"error": "agent_name is required"}), 400
+
+            with get_db_session() as session:
+                # Check if user exists
+                user = session.query(User).filter(
+                    User.slack_user_id == user_id
+                ).first()
+                if not user:
+                    return jsonify({"error": "User not found"}), 404
+
+                # Check if permission already exists
+                existing = session.query(AgentPermission).filter(
+                    AgentPermission.slack_user_id == user_id,
+                    AgentPermission.agent_name == agent_name
+                ).first()
+                if existing:
+                    return jsonify({"error": "Permission already granted"}), 400
+
+                # Grant permission
+                new_permission = AgentPermission(
+                    agent_name=agent_name,
+                    slack_user_id=user_id,
+                    granted_by=granted_by,
+                    permission_type="allow"
+                )
+                session.add(new_permission)
+                session.commit()
                 return jsonify({"status": "granted"})
-            return jsonify({"error": "Failed to grant permission"}), 400
 
         elif request.method == "DELETE":
             agent_name = request.args.get("agent_name")
-            success = permission_service.revoke_permission(user_id, agent_name)
+            if not agent_name:
+                return jsonify({"error": "agent_name is required"}), 400
 
-            if success:
+            with get_db_session() as session:
+                permission = session.query(AgentPermission).filter(
+                    AgentPermission.slack_user_id == user_id,
+                    AgentPermission.agent_name == agent_name
+                ).first()
+
+                if not permission:
+                    return jsonify({"error": "Permission not found"}), 404
+
+                session.delete(permission)
+                session.commit()
                 return jsonify({"status": "revoked"})
-            return jsonify({"error": "Failed to revoke permission"}), 400
 
     except Exception as e:
         logger.error(f"Error managing user permissions: {e}", exc_info=True)
