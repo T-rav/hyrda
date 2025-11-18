@@ -137,7 +137,9 @@ class SlackUserProvider(UserProvider):
             User's full name
         """
         profile = user.get("profile", {})
-        return profile.get("real_name", profile.get("display_name", "Unknown"))
+        real_name = profile.get("real_name", "")
+        display_name = profile.get("display_name", "")
+        return real_name or display_name or "Unknown"
 
     def is_bot(self, user: Dict[str, Any]) -> bool:
         """Check if Slack user is a bot.
