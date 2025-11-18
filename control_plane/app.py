@@ -4,7 +4,7 @@ import logging
 import sys
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 # Configure logging
@@ -29,7 +29,7 @@ root_logger.addHandler(file_handler)
 logger = logging.getLogger(__name__)
 
 # Global instances
-app = Flask(__name__)
+app = Flask(__name__, static_folder="ui/dist", static_url_path="")
 
 
 def create_app() -> Flask:
@@ -364,6 +364,17 @@ def manage_user_permissions(user_id: str) -> Response:
 
 # Initialize app
 create_app()
+
+
+# Serve React UI (must be last to act as catch-all)
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_ui(path: str) -> Response:
+    """Serve React UI for all non-API routes."""
+    if path and Path(app.static_folder, path).exists():
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, "index.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=6001, debug=True)
