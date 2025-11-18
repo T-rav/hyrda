@@ -1,8 +1,14 @@
 """Control Plane Flask application for agent and permission management."""
 
 import logging
+import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment from parent directory .env
+parent_env = Path(__file__).parent.parent / ".env"
+load_dotenv(parent_env)
 
 # CRITICAL: Ensure control_plane directory is first in sys.path
 # This prevents importing bot/models instead of control_plane/models

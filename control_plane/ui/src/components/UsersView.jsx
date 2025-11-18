@@ -25,19 +25,41 @@ function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, on
         </div>
       </div>
 
-      <div className="users-list">
-        {users.map(user => (
-          <UserCard
-            key={user.id}
-            user={user}
-            agents={agents}
-            onGrantAgent={onGrantAgent}
-            onRevokeAgent={onRevokeAgent}
-            isSelected={selectedUser?.id === user.id}
-            onClick={() => setSelectedUser(user)}
-          />
-        ))}
-      </div>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Admin</th>
+            <th>Last Synced</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(user => (
+            <tr key={user.id}>
+              <td>{user.full_name}</td>
+              <td>{user.email}</td>
+              <td>
+                <span className={`status-badge ${user.is_active ? 'status-active' : 'status-inactive'}`}>
+                  {user.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </td>
+              <td>{user.is_admin ? 'Yes' : 'No'}</td>
+              <td>{user.last_synced_at ? new Date(user.last_synced_at).toLocaleDateString() : 'Never'}</td>
+              <td>
+                <button
+                  onClick={() => setSelectedUser(user)}
+                  className="btn-secondary btn-small"
+                >
+                  Manage Permissions
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
       {users.length === 0 && (
         <div className="empty-state">

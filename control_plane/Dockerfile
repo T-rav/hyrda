@@ -20,6 +20,9 @@ RUN npm run build
 # Stage 2: Python Flask API
 FROM python:3.11-slim
 
+# Suppress debconf/Perl warnings during apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+
 WORKDIR /app
 
 # Install system dependencies

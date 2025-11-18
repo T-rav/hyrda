@@ -67,7 +67,11 @@ function App() {
   const syncUsers = async () => {
     try {
       setSyncing(true)
-      const response = await fetch('/api/users/sync', { method: 'POST' })
+      const response = await fetch('/api/users/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
       if (!response.ok) throw new Error('Failed to sync users')
       const data = await response.json()
       alert(`Sync complete: ${data.stats.created} created, ${data.stats.updated} updated`)
