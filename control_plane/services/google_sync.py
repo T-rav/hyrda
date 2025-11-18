@@ -28,7 +28,7 @@ def sync_users_to_database() -> dict:
     Returns:
         Dict with sync statistics
     """
-    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0}
+    stats = {"created": 0, "updated": 0, "skipped": 0, "errors": 0, "deactivated": 0}
 
     # Get allowed email domain from environment (default to @8thlight.com)
     allowed_domain = os.getenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com")
@@ -106,6 +106,21 @@ def sync_users_to_database() -> dict:
                         stats["errors"] += 1
                         continue
 
+                # Soft delete users no longer in slack_users or inactive
+                # Get all currently active users in security database
+                all_security_users = security_session.query(User).filter(User.is_active == True).all()
+
+                # Get all active slack user IDs from this sync
+                active_slack_ids = {user[0] for user in slack_users}
+
+                # Mark users as inactive if they're not in the current active sync
+                for security_user in all_security_users:
+                    if security_user.slack_user_id not in active_slack_ids:
+                        logger.info(f"Soft deleting user: {security_user.email} (no longer active in Slack)")
+                        security_user.is_active = False
+                        security_user.last_synced_at = datetime.utcnow()
+                        stats["deactivated"] += 1
+
                 # Commit all changes
                 security_session.commit()
 
@@ -115,7 +130,7 @@ def sync_users_to_database() -> dict:
 
     logger.info(
         f"User sync complete: {stats['created']} created, {stats['updated']} updated, "
-        f"{stats['skipped']} skipped, {stats['errors']} errors"
+        f"{stats['skipped']} skipped, {stats['deactivated']} deactivated, {stats['errors']} errors"
     )
 
     return stats
