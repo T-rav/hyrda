@@ -202,6 +202,40 @@ class SECInMemoryVectorSearch:
             "filings": list({m["type"] for m in self.metadata}),
         }
 
+    def load_from_cache(
+        self,
+        chunks: list[str],
+        chunk_metadata: list[dict[str, Any]],
+        embeddings: np.ndarray,
+    ) -> None:
+        """Load pre-computed embeddings from cache.
+
+        Args:
+            chunks: Text chunks
+            chunk_metadata: Metadata for each chunk
+            embeddings: Pre-computed embeddings array (shape: [n_chunks, embedding_dim])
+        """
+        self.chunks = chunks
+        self.metadata = chunk_metadata
+        # Convert 2D array to list of 1D arrays
+        self.embeddings = [embeddings[i] for i in range(embeddings.shape[0])]
+
+        logger.info(
+            f"✅ Loaded {len(self.chunks)} chunks from cache "
+            f"(embeddings shape: {embeddings.shape})"
+        )
+
+    def get_embeddings_array(self) -> np.ndarray | None:
+        """Get embeddings as a numpy array for caching.
+
+        Returns:
+            2D numpy array of embeddings or None if empty
+        """
+        if not self.embeddings:
+            return None
+
+        return np.array(self.embeddings)
+
     def clear(self) -> None:
         """Clear all data from memory."""
         self.embeddings = []

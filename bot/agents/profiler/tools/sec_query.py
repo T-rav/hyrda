@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
+from agents.profiler.services.sec_cache import SECFilingsCache
 from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
 from agents.profiler.services.sec_vector_search import SECInMemoryVectorSearch
 
@@ -147,37 +148,86 @@ class SECQueryTool(BaseTool):
             sub_queries = await self._generate_sub_queries(query, num_queries)
             logger.info(f"Generated {len(sub_queries)} sub-queries")
 
-            # Step 1: Fetch SEC documents on-demand
-            fetcher = SECOnDemandFetcher()
-            try:
-                filing_data = await fetcher.get_company_filings_for_research(
-                    company_identifier
-                )
-            except Exception as e:
-                logger.error(f"Failed to fetch SEC filings: {e}")
-                return f"Error: Could not fetch SEC filings for {company_identifier}. Company may not be public or ticker/CIK not found."
+            # Initialize cache and vector search
+            import os
 
-            company_name = filing_data["company_name"]
-            filings = filing_data["filings"]
-
-            logger.info(
-                f"✅ Fetched {len(filings)} filings for {company_name} "
-                f"({filing_data['total_characters']:,} characters)"
-            )
-
-            # Step 2: Chunk and vectorize in-memory
+            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+            cache = SECFilingsCache(redis_url=redis_url)
             vector_search = SECInMemoryVectorSearch(self.openai_api_key)
 
-            for filing in filings:
-                chunks = fetcher.chunk_filing_content(filing["content"])
-                filing_metadata = {
-                    "type": filing["type"],
-                    "date": filing["date"],
-                    "url": filing["url"],
-                    "accession": filing["accession_number"],
-                    "company_name": company_name,
-                }
-                await vector_search.add_filing_chunks(chunks, filing_metadata)
+            # Step 1: Check cache first
+            cached_data = await cache.get_cached_filings(company_identifier)
+
+            if cached_data:
+                # Cache hit - load from cache
+                logger.info(
+                    f"💨 Cache hit for {company_identifier} "
+                    f"({cached_data['total_chunks']} chunks)"
+                )
+
+                vector_search.load_from_cache(
+                    cached_data["chunks"],
+                    cached_data["chunk_metadata"],
+                    cached_data["embeddings"],
+                )
+
+                company_name = cached_data["company_name"]
+                filings = cached_data["filings"]
+
+            else:
+                # Cache miss - fetch and process
+                logger.info(
+                    f"Cache miss for {company_identifier}, fetching from SEC..."
+                )
+
+                # Fetch SEC documents on-demand
+                fetcher = SECOnDemandFetcher()
+                try:
+                    filing_data = await fetcher.get_company_filings_for_research(
+                        company_identifier
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to fetch SEC filings: {e}")
+                    return f"Error: Could not fetch SEC filings for {company_identifier}. Company may not be public or ticker/CIK not found."
+
+                company_name = filing_data["company_name"]
+                filings = filing_data["filings"]
+
+                logger.info(
+                    f"✅ Fetched {len(filings)} filings for {company_name} "
+                    f"({filing_data['total_characters']:,} characters)"
+                )
+
+                # Chunk and vectorize in-memory
+                all_chunks = []
+                all_chunk_metadata = []
+
+                for filing in filings:
+                    chunks = fetcher.chunk_filing_content(filing["content"])
+                    filing_metadata = {
+                        "type": filing["type"],
+                        "date": filing["date"],
+                        "url": filing["url"],
+                        "accession": filing["accession_number"],
+                        "company_name": company_name,
+                    }
+
+                    await vector_search.add_filing_chunks(chunks, filing_metadata)
+
+                    # Track for caching
+                    all_chunks.extend(chunks)
+                    all_chunk_metadata.extend([filing_metadata] * len(chunks))
+
+                # Cache the results
+                embeddings_array = vector_search.get_embeddings_array()
+                await cache.cache_filings(
+                    company_identifier=company_identifier,
+                    company_name=company_name,
+                    filings=filings,
+                    chunks=all_chunks,
+                    chunk_metadata=all_chunk_metadata,
+                    embeddings=embeddings_array,
+                )
 
             # Step 3: Search across all sub-queries
             all_results = []
