@@ -1027,7 +1027,7 @@ Generate EXACTLY 3 bullet points now.
 """
 
 # Employee/Person Profile Final Report Generation Prompt
-# This template should be uploaded to Langfuse as: CompanyProfiler/Final_Report_Generation_Employee
+# This template should be uploaded to Langfuse as: Profiler/Person/FinalReport
 employee_final_report_generation_prompt_template = """You are an expert Business Development associate generating an individual profile for relationship-building and sales prospecting.
 
 CRITICAL: Do NOT add a document header with "PROFILE:", "PREPARED FOR:", "PREPARED BY:", or "DATE:" fields. Start directly with the first section "## Professional Profile & Background".

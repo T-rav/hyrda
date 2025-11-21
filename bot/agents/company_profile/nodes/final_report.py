@@ -127,7 +127,7 @@ async def final_report_generation(
         raise RuntimeError("PromptService not available - required for profile agent")
 
     if profile_type == "employee":
-        prompt_name = "CompanyProfiler/Final_Report_Generation_Employee"
+        prompt_name = "Profiler/Person/FinalReport"
     else:
         prompt_name = "CompanyProfiler/Final_Report_Generation"
 
