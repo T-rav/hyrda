@@ -59,7 +59,7 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         notes: Compressed and synthesized research findings
         final_report: Generated comprehensive profile report
         executive_summary: Short summary for Slack display (3-5 bullets)
-        profile_type: Type of profile (company, employee, project)
+        profile_type: Type of profile (company or employee)
         focus_area: Specific intent/aspect to emphasize (e.g., "AI needs", "hiring challenges")
         revision_count: Number of quality control revisions attempted
         revision_prompt: Specific instructions for next revision
