@@ -5,7 +5,7 @@ established pattern in test_message_handlers.py
 """
 
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from agents.base_agent import BaseAgent
 
@@ -17,9 +17,19 @@ class AgentContextBuilder:
         self._user_id = "U123"
         self._channel = "C123"
         self._thread_ts = None
-        self._slack_service = "mock_slack_service"
+        # Create proper AsyncMock for slack_service by default
+        self._slack_service = self._create_default_slack_mock()
         self._llm_service = None
         self._additional_fields = {}
+
+    @staticmethod
+    def _create_default_slack_mock():
+        """Create default AsyncMock slack service"""
+        mock = AsyncMock()
+        mock.send_message = AsyncMock(return_value=None)
+        mock.send_thinking_indicator = AsyncMock(return_value="thinking_ts")
+        mock.delete_thinking_indicator = AsyncMock(return_value=None)
+        return mock
 
     def with_user_id(self, user_id: str) -> "AgentContextBuilder":
         self._user_id = user_id
@@ -75,7 +85,7 @@ class AgentContextBuilder:
     @classmethod
     def invalid_missing_channel(cls) -> dict[str, Any]:
         """Create invalid context missing channel"""
-        return {"user_id": "U123", "slack_service": "mock"}
+        return {"user_id": "U123", "slack_service": cls._create_default_slack_mock()}
 
     @classmethod
     def invalid_missing_slack_service(cls) -> dict[str, Any]:
