@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.company_profile.configuration import ProfileConfiguration
+from agents.profiler.configuration import ProfileConfiguration
 
 
 class TestProfileConfiguration:
@@ -97,7 +97,7 @@ class TestProfileConfiguration:
 
     def test_from_runnable_config_partial(self):
         """Test loading from config with missing values uses defaults"""
-        from agents.company_profile.configuration import SearchAPI
+        from agents.profiler.configuration import SearchAPI
 
         runnable_config = {
             "configurable": {
@@ -124,7 +124,7 @@ class TestProfileConfiguration:
 
     def test_pdf_style_configuration(self):
         """Test PDF style configuration"""
-        from agents.company_profile.configuration import PDFStyle
+        from agents.profiler.configuration import PDFStyle
 
         with patch.dict(
             os.environ,

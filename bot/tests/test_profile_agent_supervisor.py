@@ -11,7 +11,7 @@ from langgraph.types import Command
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.company_profile.nodes.supervisor import (
+from agents.profiler.nodes.supervisor import (
     execute_researcher,
     supervisor,
     supervisor_tools,
@@ -233,7 +233,7 @@ class TestSupervisorToolsNode:
         )
 
         with patch(
-            "agents.company_profile.nodes.graph_builder.build_researcher_subgraph",
+            "agents.profiler.nodes.graph_builder.build_researcher_subgraph",
             return_value=mock_researcher_graph,
         ):
             result = await supervisor_tools(state, config)
@@ -288,7 +288,7 @@ class TestSupervisorToolsNode:
         )
 
         with patch(
-            "agents.company_profile.nodes.graph_builder.build_researcher_subgraph",
+            "agents.profiler.nodes.graph_builder.build_researcher_subgraph",
             return_value=mock_researcher_graph,
         ):
             result = await supervisor_tools(state, config)
@@ -398,7 +398,7 @@ class TestSupervisorToolsNode:
         )
 
         with patch(
-            "agents.company_profile.nodes.graph_builder.build_researcher_subgraph",
+            "agents.profiler.nodes.graph_builder.build_researcher_subgraph",
             return_value=mock_researcher_graph,
         ):
             await supervisor_tools(state, config)
@@ -463,7 +463,7 @@ class TestSupervisorToolsNode:
         )
 
         with patch(
-            "agents.company_profile.nodes.graph_builder.build_researcher_subgraph",
+            "agents.profiler.nodes.graph_builder.build_researcher_subgraph",
             return_value=mock_researcher_graph,
         ):
             result = await supervisor_tools(state, config)

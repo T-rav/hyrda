@@ -12,9 +12,9 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
 from agents.base_agent import BaseAgent
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.nodes.graph_builder import build_profile_researcher
-from agents.company_profile.utils import detect_profile_type, extract_focus_area
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.nodes.graph_builder import build_profile_researcher
+from agents.profiler.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 

@@ -9,9 +9,9 @@ from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 
-from agents.company_profile import prompts
-from agents.company_profile.state import ProfileAgentState
-from agents.company_profile.utils import (
+from agents.profiler import prompts
+from agents.profiler.state import ProfileAgentState
+from agents.profiler.utils import (
     create_human_message,
     detect_profile_type,
 )
