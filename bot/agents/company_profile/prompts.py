@@ -294,10 +294,10 @@ Your research brief must plan for gathering information across these specific se
 5. **Target specific sources** - LinkedIn activity, conference talks, blog posts, YouTube videos, interviews
 
 **IMPORTANT - Tool Usage Guidelines**:
-- **For LinkedIn profiles**: Use deep_research or web_search, NOT scrape_url (LinkedIn blocks scrapers)
-- **For professional background**: Prefer deep_research tool for comprehensive synthesis
-- **For articles/blogs**: scrape_url is fine for non-protected content
-- **For public presence**: Combine web_search + deep_research for best results
+- **For LinkedIn profiles**: ONLY use deep_research (Perplexity), NOT web_search or scrape_url
+- **For professional background**: Use deep_research tool for comprehensive synthesis
+- **For articles/blogs**: web_search to find, then scrape_url for content
+- **For public presence**: Use web_search for discovery, deep_research for synthesis
 
 **Example of GOOD vs BAD research questions**:
 
@@ -391,7 +391,7 @@ Your job is to delegate these questions strategically to specialized researchers
    - Pass the **exact questions** from the research brief, not broad topics
    - Each researcher will approach questions from multiple angles
    - Researchers have access to: web_search, deep_research (Perplexity), internal_search, scrape_url
-   - **IMPORTANT**: For LinkedIn profiles, researchers should use deep_research or web_search, NOT scrape_url
+   - **CRITICAL**: For LinkedIn profiles, researchers must ONLY use deep_research (never web_search or scrape_url)
    - Group related questions together for context
 
 2. **ResearchComplete**: Signal that all research is complete
