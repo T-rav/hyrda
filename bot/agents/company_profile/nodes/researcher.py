@@ -274,8 +274,14 @@ async def researcher_tools(
                     )
                     continue
 
+                # Add profile_type from state to tool args
+                tool_args_with_profile = {
+                    **tool_args,
+                    "profile_type": state.get("profile_type", "company"),
+                }
+
                 # Invoke the tool
-                result_text = await internal_search.ainvoke(tool_args)
+                result_text = await internal_search.ainvoke(tool_args_with_profile)
 
                 tool_results.append(
                     ToolMessage(content=result_text, tool_call_id=tool_id)
