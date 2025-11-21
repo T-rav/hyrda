@@ -771,6 +771,16 @@ Respond with ONLY a JSON object:
             response.content if hasattr(response, "content") else str(response)
         )
 
+        # Strip markdown code blocks if present
+        response_text = response_text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]  # Remove ```json
+        elif response_text.startswith("```"):
+            response_text = response_text[3:]  # Remove ```
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]  # Remove trailing ```
+        response_text = response_text.strip()
+
         # Parse JSON response
         result = json.loads(response_text)
         profile_type = result.get("profile_type", "company")
