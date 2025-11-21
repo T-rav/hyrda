@@ -948,6 +948,9 @@ Examples:
 - "what are snowflake's data governance practices" → "data governance and compliance practices"
 - "acme corp hiring challenges" → "hiring challenges and talent acquisition"
 - "profile google devops practices" → "DevOps practices and infrastructure"
+- "profile John Smith for technical gaps to help me grow him" → "technical gaps and growth opportunities for manager development"
+- "profile Jane Doe to understand her leadership potential" → "leadership potential and advancement readiness"
+- "profile Travis for skill development and career planning" → "skill development and career planning opportunities"
 
 Return ONLY a JSON object: {{"focus_area": "extracted focus with URL context incorporated", "url_context": "brief summary of URL content if URLs were provided, otherwise empty string"}}"""
 
