@@ -10,10 +10,10 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
 from langgraph.types import Command
 
-from agents.company_profile import prompts
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.state import ProfileAgentState
-from agents.company_profile.utils import create_human_message
+from agents.profiler import prompts
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.state import ProfileAgentState
+from agents.profiler.utils import create_human_message
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ async def clarify_with_user(
         logger.info(f"Detected URL in query: {url}")
 
         # Extract company name from URL
-        from agents.company_profile.utils import extract_company_from_url
+        from agents.profiler.utils import extract_company_from_url
 
         company_name = await extract_company_from_url(url)
 

@@ -8,7 +8,7 @@ import logging
 
 from langchain_core.runnables import RunnableConfig
 
-from agents.company_profile.state import ResearcherState
+from agents.profiler.state import ResearcherState
 
 logger = logging.getLogger(__name__)
 

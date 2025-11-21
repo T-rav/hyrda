@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 
-from agents.company_profile.tools.sec_research import (
+from agents.profiler.tools.sec_research import (
     format_sec_research_results,
     research_sec_filings,
 )

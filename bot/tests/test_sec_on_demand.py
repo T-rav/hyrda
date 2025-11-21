@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from agents.company_profile.services.sec_on_demand import SECOnDemandFetcher
+from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
 
 
 class TestSECCIKLookup:

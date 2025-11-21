@@ -9,7 +9,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.company_profile.utils import (
+from agents.profile_agent import format_duration
+from agents.profiler.utils import (
     compress_message_if_needed,
     create_human_message,
     create_system_message,
@@ -22,7 +23,6 @@ from agents.company_profile.utils import (
     select_messages_within_budget,
     think_tool,
 )
-from agents.profile_agent import format_duration
 
 
 class TestDetectProfileType:

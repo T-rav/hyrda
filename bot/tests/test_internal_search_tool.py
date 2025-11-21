@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agents.company_profile.tools.internal_search import (
+from agents.profiler.tools.internal_search import (
     InternalSearchInput,
     InternalSearchTool,
     internal_search_tool,
@@ -461,7 +461,7 @@ class TestInternalSearchToolFactory:
         assert isinstance(tool, InternalSearchTool)
         # LLM and embeddings will be lazy-loaded from environment if needed
 
-    @patch("agents.company_profile.tools.internal_search.InternalSearchTool")
+    @patch("agents.profiler.tools.internal_search.InternalSearchTool")
     def test_factory_error_handling(self, mock_tool_class):
         """Test factory handles errors gracefully"""
         mock_tool_class.side_effect = Exception("Initialization failed")

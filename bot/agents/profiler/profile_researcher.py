@@ -6,7 +6,7 @@ All nodes have been refactored into the nodes/ subdirectory with comprehensive L
 
 import logging
 
-from agents.company_profile.nodes.graph_builder import build_profile_researcher
+from agents.profiler.nodes.graph_builder import build_profile_researcher
 
 logger = logging.getLogger(__name__)
 

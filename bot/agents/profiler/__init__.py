@@ -1,11 +1,11 @@
-"""Company Profile Deep Research Package.
+"""Profiler Deep Research Package.
 
 LangGraph-based deep research system for generating comprehensive
-company, employee, and project profiles.
+company and employee profiles.
 """
 
-from agents.company_profile.configuration import ProfileConfiguration, SearchAPI
-from agents.company_profile.state import (
+from agents.profiler.configuration import ProfileConfiguration, SearchAPI
+from agents.profiler.state import (
     ClarifyWithUser,
     ConductResearch,
     ProfileAgentInputState,
