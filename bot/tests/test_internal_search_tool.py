@@ -430,6 +430,79 @@ class TestInternalSearchTool:
         assert "async" in result.lower()
         assert "ainvoke" in result.lower()
 
+    @pytest.mark.asyncio
+    async def test_employee_profile_synthesis(self):
+        """Test that employee profile_type uses employee-specific synthesis"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results - simulate finding project docs
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "text": "Travis Frisinger worked on Partner Hub project using React and Node.js",
+            "file_name": "partner_hub_case_study.pdf",
+        }
+        mock_point.score = 0.9
+
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for employee
+        mock_synthesis = MagicMock()
+        mock_synthesis.content = """**Projects**: Travis worked on Partner Hub (React, Node.js) for Samaritan Ministries.
+**Skills**: React, Node.js, TypeScript
+**Role**: Senior Software Engineer"""
+
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Travis Frisinger projects"]'),  # Query decomposition
+            mock_synthesis,  # Employee synthesis
+        ]
+
+        # Execute search with employee profile_type
+        result = await self.tool._arun(
+            query="Travis Frisinger", effort="low", profile_type="employee"
+        )
+
+        # Verify employee-focused output (NOT "Relationship status:")
+        assert "Relationship status:" not in result
+        assert "Projects" in result or "Skills" in result or "Role" in result
+        assert "Travis" in result or "React" in result
+
+    @pytest.mark.asyncio
+    async def test_company_profile_synthesis_still_works(self):
+        """Test that company profile_type still uses relationship status"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "text": "Partner Hub project for Samaritan Ministries",
+            "file_name": "samaritan_case_study.pdf",
+        }
+        mock_point.score = 0.9
+
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for company
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Samaritan Ministries"]'),  # Query decomposition
+            MagicMock(
+                content="Based on case study found, Samaritan is an existing client."
+            ),  # Company synthesis
+        ]
+
+        # Execute search with company profile_type (default)
+        result = await self.tool._arun(
+            query="Samaritan Ministries", effort="low", profile_type="company"
+        )
+
+        # Verify company-focused output includes "Relationship status:"
+        assert "Relationship status:" in result
+
 
 class TestInternalSearchToolFactory:
     """Test factory function"""
