@@ -293,6 +293,12 @@ Your research brief must plan for gathering information across these specific se
 4. **Find connection points** - shared interests, mutual connections, common ground
 5. **Target specific sources** - LinkedIn activity, conference talks, blog posts, YouTube videos, interviews
 
+**IMPORTANT - Tool Usage Guidelines**:
+- **For LinkedIn profiles**: Use deep_research or web_search, NOT scrape_url (LinkedIn blocks scrapers)
+- **For professional background**: Prefer deep_research tool for comprehensive synthesis
+- **For articles/blogs**: scrape_url is fine for non-protected content
+- **For public presence**: Combine web_search + deep_research for best results
+
 **Example of GOOD vs BAD research questions**:
 
 ❌ BAD (too basic): "Find out where they went to school"
@@ -384,7 +390,8 @@ Your job is to delegate these questions strategically to specialized researchers
 1. **ConductResearch**: Delegate specific investigative questions to a specialized researcher
    - Pass the **exact questions** from the research brief, not broad topics
    - Each researcher will approach questions from multiple angles
-   - Researchers have access to web search and will follow leads
+   - Researchers have access to: web_search, deep_research (Perplexity), internal_search, scrape_url
+   - **IMPORTANT**: For LinkedIn profiles, researchers should use deep_research or web_search, NOT scrape_url
    - Group related questions together for context
 
 2. **ResearchComplete**: Signal that all research is complete
