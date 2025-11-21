@@ -247,6 +247,7 @@ Your research brief must plan for gathering information across these specific se
    - Social media activity (Twitter, LinkedIn posts, blogs)
    - Conference presentations or speaking engagements
    - Published articles, papers, or books
+   - YouTube videos, vlogs, or channel content
    - Interviews or quotes in industry media
    - Professional community involvement
    - Podcasts or webinar appearances
@@ -290,7 +291,7 @@ Your research brief must plan for gathering information across these specific se
 2. **Follow their digital footprint** - what do they share? What topics engage them?
 3. **Identify pain points** - what problems might 8th Light solve for them?
 4. **Find connection points** - shared interests, mutual connections, common ground
-5. **Target specific sources** - LinkedIn activity, conference talks, blog posts, interviews
+5. **Target specific sources** - LinkedIn activity, conference talks, blog posts, YouTube videos, interviews
 
 **Example of GOOD vs BAD research questions**:
 
@@ -1102,6 +1103,10 @@ Structure the report with exactly these sections in this order:
   - Platforms (Medium, company blog, industry publications)
   - Recurring themes and subjects
   - Writing style and perspective
+- YouTube videos and channel content [cite sources]
+  - Technical tutorials, talks, or vlogs
+  - Topics and themes covered
+  - Audience engagement and reach
 - Social media presence and engagement [cite sources]
   - LinkedIn, Twitter/X, GitHub, etc.
   - Posting frequency and topics
