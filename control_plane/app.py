@@ -61,70 +61,86 @@ def create_app() -> Flask:
 @app.route("/api/agents")
 def list_agents() -> Response:
     """List all registered agents with permission info."""
-    # Import here to avoid circular dependencies
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from agents.registry import agent_registry
+        from models import AgentGroupPermission, AgentMetadata, get_db_session
 
-        agents = agent_registry.list_agents()
-        agents_data = []
+        # Try to get agents from bot registry, but fall back to known agents if not available
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
 
-        for agent in agents:
-            agent_class = agent.get("agent_class")
+        try:
+            from agents.registry import agent_registry
+            agents = agent_registry.list_agents()
+            agents_data = []
 
-            # Try to instantiate agent to get description, but handle failures gracefully
-            description = "No description"
-            try:
-                instance = agent_class() if agent_class else None
-                if instance and hasattr(instance, 'description'):
-                    description = instance.description
-            except Exception as inst_error:
-                logger.warning(f"Could not instantiate agent {agent['name']}: {inst_error}")
-                # Try to get description from class attribute
-                if agent_class and hasattr(agent_class, 'description'):
-                    description = agent_class.description
+            for agent in agents:
+                agent_class = agent.get("agent_class")
 
-            agents_data.append({
-                "name": agent["name"],
-                "aliases": agent.get("aliases", []),
-                "description": description,
-                "is_public": True,  # TODO: Get from database
-                "requires_admin": False,  # TODO: Get from database
-                "authorized_users": 0,  # TODO: Count from database
-            })
+                # Try to instantiate agent to get description
+                description = "No description"
+                try:
+                    instance = agent_class() if agent_class else None
+                    if instance and hasattr(instance, 'description'):
+                        description = instance.description
+                except Exception as inst_error:
+                    logger.warning(f"Could not instantiate agent {agent['name']}: {inst_error}")
+                    if agent_class and hasattr(agent_class, 'description'):
+                        description = agent_class.description
 
-        return jsonify({"agents": agents_data})
-    except ImportError as import_error:
-        logger.error(f"Cannot import bot agents: {import_error}")
-        # Return mock data for development
-        return jsonify({"agents": [
-            {
-                "name": "profile",
-                "aliases": ["-profile"],
-                "description": "Generate comprehensive company profiles through deep research",
-                "is_public": True,
-                "requires_admin": False,
-                "authorized_users": 0
-            },
-            {
-                "name": "meddic",
-                "aliases": ["-meddic", "-medic"],
-                "description": "MEDDIC sales methodology coach",
-                "is_public": True,
-                "requires_admin": False,
-                "authorized_users": 0
-            },
-            {
-                "name": "help",
-                "aliases": ["-help", "?"],
-                "description": "Show available commands and help",
-                "is_public": True,
-                "requires_admin": False,
-                "authorized_users": 0
-            }
-        ]})
+                # Get metadata and group count from database
+                with get_db_session() as session:
+                    group_count = session.query(AgentGroupPermission).filter(
+                        AgentGroupPermission.agent_name == agent["name"]
+                    ).count()
+
+                    # Get agent metadata for enabled state
+                    metadata = session.query(AgentMetadata).filter(
+                        AgentMetadata.agent_name == agent["name"]
+                    ).first()
+                    is_enabled = metadata.is_public if metadata else False  # Default to disabled
+
+                agents_data.append({
+                    "name": agent["name"],
+                    "aliases": agent.get("aliases", []),
+                    "description": description,
+                    "is_public": is_enabled,
+                    "requires_admin": False,
+                    "authorized_groups": group_count,
+                })
+
+            return jsonify({"agents": agents_data})
+
+        except ImportError:
+            # Return mock data with real permission counts
+            logger.warning("Cannot import bot agents, using mock data")
+            mock_agents = [
+                {"name": "profile", "aliases": ["-profile"], "description": "Generate comprehensive company profiles"},
+                {"name": "meddic", "aliases": ["-meddic"], "description": "MEDDIC sales methodology coach"},
+                {"name": "help", "aliases": ["-help", "?"], "description": "Show available commands and help"},
+            ]
+
+            agents_data = []
+            with get_db_session() as session:
+                for agent in mock_agents:
+                    group_count = session.query(AgentGroupPermission).filter(
+                        AgentGroupPermission.agent_name == agent["name"]
+                    ).count()
+
+                    # Get agent metadata for enabled state
+                    metadata = session.query(AgentMetadata).filter(
+                        AgentMetadata.agent_name == agent["name"]
+                    ).first()
+                    is_enabled = metadata.is_public if metadata else False  # Default to disabled
+
+                    agents_data.append({
+                        **agent,
+                        "is_public": is_enabled,
+                        "requires_admin": False,
+                        "authorized_groups": group_count,
+                    })
+
+            return jsonify({"agents": agents_data})
+
     except Exception as e:
         logger.error(f"Error listing agents: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
@@ -133,26 +149,37 @@ def list_agents() -> Response:
 @app.route("/api/agents/<string:agent_name>")
 def get_agent_details(agent_name: str) -> Response:
     """Get detailed information about a specific agent."""
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
     try:
-        from agents.registry import agent_registry
+        from models import AgentPermission, AgentGroupPermission, AgentMetadata, get_db_session
 
-        agent_info = agent_registry.get(agent_name)
-        if not agent_info:
-            return jsonify({"error": "Agent not found"}), 404
+        # Get authorized users and groups from database
+        authorized_user_ids = []
+        authorized_group_names = []
 
-        agent_class = agent_info.get("agent_class")
-        instance = agent_class() if agent_class else None
+        with get_db_session() as session:
+            # Get direct user permissions
+            user_perms = session.query(AgentPermission).filter(
+                AgentPermission.agent_name == agent_name
+            ).all()
+            authorized_user_ids = [p.slack_user_id for p in user_perms]
+
+            # Get group permissions
+            group_perms = session.query(AgentGroupPermission).filter(
+                AgentGroupPermission.agent_name == agent_name
+            ).all()
+            authorized_group_names = [p.group_name for p in group_perms]
+
+            # Get agent metadata for enabled state
+            metadata = session.query(AgentMetadata).filter(
+                AgentMetadata.agent_name == agent_name
+            ).first()
+            is_enabled = metadata.is_public if metadata else False  # Default to disabled
 
         details = {
             "name": agent_name,
-            "aliases": agent_info.get("aliases", []),
-            "description": instance.description if instance else "No description",
-            "is_public": True,  # TODO: Get from database
-            "requires_admin": False,  # TODO: Get from database
-            "authorized_users": [],  # TODO: Get from database
+            "authorized_user_ids": authorized_user_ids,
+            "authorized_group_names": authorized_group_names,
+            "is_public": is_enabled,
         }
 
         return jsonify(details)
@@ -161,16 +188,67 @@ def get_agent_details(agent_name: str) -> Response:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/agents/<string:agent_name>/toggle", methods=["POST"])
+def toggle_agent(agent_name: str) -> Response:
+    """Toggle agent enabled/disabled state."""
+    try:
+        from models import AgentMetadata, get_db_session
+
+        with get_db_session() as session:
+            # Get or create agent metadata
+            agent_metadata = session.query(AgentMetadata).filter(
+                AgentMetadata.agent_name == agent_name
+            ).first()
+
+            if not agent_metadata:
+                # Create new metadata entry, default to enabled (is_public=True)
+                agent_metadata = AgentMetadata(
+                    agent_name=agent_name,
+                    is_public=False,  # Toggle will make it True
+                )
+                session.add(agent_metadata)
+
+            # Toggle the state
+            agent_metadata.is_public = not agent_metadata.is_public
+            session.commit()
+
+            return jsonify({
+                "agent_name": agent_name,
+                "is_enabled": agent_metadata.is_public,
+            })
+
+    except Exception as e:
+        logger.error(f"Error toggling agent: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/users")
 def list_users() -> Response:
-    """List all users from security database (synced from Google Workspace)."""
+    """List all users from security database with their group memberships."""
     try:
-        from models import User, get_db_session
+        from models import User, UserGroup, PermissionGroup, get_db_session
 
         with get_db_session() as session:
             users = session.query(User).order_by(User.email).all()
-            users_data = [
-                {
+            users_data = []
+
+            for user in users:
+                # Get groups this user belongs to
+                memberships = session.query(UserGroup, PermissionGroup).join(
+                    PermissionGroup, UserGroup.group_name == PermissionGroup.group_name
+                ).filter(
+                    UserGroup.slack_user_id == user.slack_user_id
+                ).all()
+
+                groups = [
+                    {
+                        "group_name": membership.PermissionGroup.group_name,
+                        "display_name": membership.PermissionGroup.display_name,
+                    }
+                    for membership in memberships
+                ]
+
+                users_data.append({
                     "id": user.id,
                     "slack_user_id": user.slack_user_id,
                     "email": user.email,
@@ -178,9 +256,9 @@ def list_users() -> Response:
                     "is_active": user.is_active,
                     "is_admin": user.is_admin,
                     "last_synced_at": user.last_synced_at.isoformat() if user.last_synced_at else None,
-                }
-                for user in users
-            ]
+                    "groups": groups,
+                })
+
             return jsonify({"users": users_data})
 
     except Exception as e:
@@ -439,13 +517,23 @@ def manage_group_agents(group_name: str) -> Response:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/users/<string:user_id>/permissions", methods=["POST", "DELETE"])
+@app.route("/api/users/<string:user_id>/permissions", methods=["GET", "POST", "DELETE"])
 def manage_user_permissions(user_id: str) -> Response:
-    """Grant or revoke direct user permissions."""
+    """Get, grant, or revoke direct user permissions."""
     try:
         from models import AgentPermission, User, get_db_session
 
-        if request.method == "POST":
+        if request.method == "GET":
+            with get_db_session() as session:
+                # Get user's direct permissions
+                permissions = session.query(AgentPermission).filter(
+                    AgentPermission.slack_user_id == user_id
+                ).all()
+
+                agent_names = [p.agent_name for p in permissions]
+                return jsonify({"agent_names": agent_names})
+
+        elif request.method == "POST":
             data = request.json
             agent_name = data.get("agent_name")
             granted_by = data.get("granted_by", "admin")

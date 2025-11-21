@@ -1,55 +1,30 @@
 import React, { useState } from 'react'
-import { Users, X, Plus, Trash2, Shield } from 'lucide-react'
+import { X, Plus, Trash2, Users as UsersIcon, Shield } from 'lucide-react'
 
-function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle }) {
+function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFromGroup }) {
   const [searchTerm, setSearchTerm] = useState('')
 
-  // Create set of authorized group names
-  const authorizedGroupNames = new Set(agent.authorized_group_names || [])
+  // Create set of group names user is already in
+  const userGroupNames = new Set((user.groups || []).map(g => g.group_name))
 
   const filteredGroups = groups.filter(group =>
     (group.display_name || group.group_name).toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const handleToggle = () => {
-    onToggle(agent.name)
-  }
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content large" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Manage Group Access: /{agent.name}</h2>
+          <h2>Manage Groups: {user.full_name}</h2>
           <button onClick={onClose} className="modal-close">
             <X size={20} />
           </button>
         </div>
 
         <div className="modal-body">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>Agent Status</h3>
-              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                Control whether this agent is enabled or disabled
-              </p>
-            </div>
-            <div className="toggle-switch" onClick={handleToggle}>
-              <input
-                type="checkbox"
-                checked={agent.is_public}
-                onChange={() => {}}
-                className="toggle-checkbox"
-              />
-              <span className="toggle-slider"></span>
-              <span className="toggle-label">
-                {agent.is_public ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
-          </div>
-
           <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
             <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-              💡 Grant or revoke access to groups. Users in these groups will automatically have access to this agent.
+              💡 Add or remove this user from groups. The user will automatically inherit agent permissions from their group memberships.
             </p>
           </div>
 
@@ -65,40 +40,41 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
 
           <div className="user-selection-list">
             {filteredGroups.map(group => {
-              const hasAccess = authorizedGroupNames.has(group.group_name)
+              const isMember = userGroupNames.has(group.group_name)
 
               return (
                 <div key={group.group_name} className="user-selection-item">
                   <div>
                     <div className="user-name">
                       {group.display_name || group.group_name}
-                      {hasAccess && <span className="badge-in-group"><Shield size={12} /> Has Access</span>}
+                      {isMember && <span className="badge-in-group"><Shield size={12} /> Member</span>}
                     </div>
                     <div className="user-email">@{group.group_name} • {group.user_count} users</div>
                   </div>
                   <div>
-                    {!hasAccess && (
+                    {!isMember && (
                       <button
-                        onClick={() => onGrantToGroup(group.group_name, agent.name)}
+                        onClick={() => onAddToGroup(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-primary"
                       >
                         <Plus size={14} />
-                        Grant
+                        Add
                       </button>
                     )}
-                    {hasAccess && (
+                    {isMember && (
                       <button
-                        onClick={() => onRevokeFromGroup(group.group_name, agent.name)}
+                        onClick={() => onRemoveFromGroup(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-danger"
                       >
                         <Trash2 size={14} />
-                        Revoke
+                        Remove
                       </button>
                     )}
                   </div>
                 </div>
               )
-            })}</div>
+            })}
+          </div>
         </div>
 
         <div className="modal-actions">
@@ -111,4 +87,4 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
   )
 }
 
-export default ManageAgentAccessModal
+export default ManageUserGroupsModal

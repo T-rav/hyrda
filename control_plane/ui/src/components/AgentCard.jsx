@@ -3,7 +3,7 @@ import { Users } from 'lucide-react'
 
 function AgentCard({ agent, onClick }) {
   return (
-    <div className="agent-card" onClick={() => onClick(agent)} style={{ cursor: 'pointer' }}>
+    <div className="agent-card" style={{ cursor: 'pointer' }} onClick={() => onClick(agent)}>
       <div className="agent-card-header">
         <div className="agent-info">
           <h3>/{agent.name}</h3>
@@ -15,8 +15,10 @@ function AgentCard({ agent, onClick }) {
             </div>
           )}
         </div>
-        <div className={`agent-status ${agent.is_public ? 'public' : 'private'}`}>
-          {agent.is_public ? 'Public' : 'Private'}
+        <div>
+          <span className={`stat-badge ${agent.is_public ? 'enabled' : 'disabled'}`}>
+            {agent.is_public ? 'Enabled' : 'Disabled'}
+          </span>
         </div>
       </div>
 
@@ -29,7 +31,7 @@ function AgentCard({ agent, onClick }) {
           )}
           <span className="stat-badge users">
             <Users size={14} />
-            {agent.authorized_users === 0 ? 'All users' : `${agent.authorized_users} users`}
+            {agent.authorized_groups === 0 ? 'No groups' : `${agent.authorized_groups} ${agent.authorized_groups === 1 ? 'group' : 'groups'}`}
           </span>
         </div>
       </div>

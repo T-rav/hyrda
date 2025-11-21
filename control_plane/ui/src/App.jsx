@@ -4,20 +4,57 @@ import './App.css'
 import AgentsView from './components/AgentsView'
 import UsersView from './components/UsersView'
 import GroupsView from './components/GroupsView'
+import Toast from './components/Toast'
+import { useAgents } from './hooks/useAgents'
+import { useUsers } from './hooks/useUsers'
+import { useGroups } from './hooks/useGroups'
+import { usePermissions } from './hooks/usePermissions'
+import { useToast } from './hooks/useToast'
 
 function App() {
   const [activeTab, setActiveTab] = useState('agents')
-  const [agents, setAgents] = useState([])
-  const [groups, setGroups] = useState([])
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [showCreateGroup, setShowCreateGroup] = useState(false)
-  const [selectedGroup, setSelectedGroup] = useState(null)
-  const [selectedUser, setSelectedUser] = useState(null)
-  const [selectedAgent, setSelectedAgent] = useState(null)
-  const [syncing, setSyncing] = useState(false)
 
+  // Toast notifications
+  const toast = useToast()
+
+  // Custom hooks for data management
+  const {
+    agents,
+    loading,
+    error,
+    selectedAgent,
+    selectedAgentDetails,
+    setSelectedAgent,
+    fetchAgents,
+    fetchAgentDetails,
+    toggleAgent,
+  } = useAgents(toast)
+
+  const {
+    users,
+    syncing,
+    fetchUsers,
+    syncUsers,
+  } = useUsers(toast)
+
+  const {
+    groups,
+    showCreateGroup,
+    selectedGroup,
+    setShowCreateGroup,
+    setSelectedGroup,
+    fetchGroups,
+    createGroup,
+    addUserToGroup,
+    removeUserFromGroup,
+  } = useGroups(toast, fetchUsers)
+
+  const {
+    grantAgentToGroup,
+    revokeAgentFromGroup,
+  } = usePermissions(toast, fetchAgentDetails)
+
+  // Initial data fetch
   useEffect(() => {
     document.title = 'InsightMesh - Control Plane'
     fetchAgents()
@@ -25,158 +62,12 @@ function App() {
     fetchUsers()
   }, [])
 
-  const fetchAgents = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch('/api/agents')
-      if (!response.ok) throw new Error('Failed to fetch agents')
-      const data = await response.json()
-      setAgents(data.agents || [])
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+  // Fetch agent details when an agent is selected
+  useEffect(() => {
+    if (selectedAgent) {
+      fetchAgentDetails(selectedAgent.name)
     }
-  }
-
-  const fetchGroups = async () => {
-    try {
-      const response = await fetch('/api/groups')
-      if (!response.ok) throw new Error('Failed to fetch groups')
-      const data = await response.json()
-      setGroups(data.groups || [])
-    } catch (err) {
-      console.error('Error fetching groups:', err)
-      setGroups([])
-    }
-  }
-
-  const fetchUsers = async () => {
-    try {
-      const response = await fetch('/api/users')
-      if (!response.ok) throw new Error('Failed to fetch users')
-      const data = await response.json()
-      setUsers(data.users || [])
-    } catch (err) {
-      console.error('Error fetching users:', err)
-      setUsers([])
-    }
-  }
-
-  const syncUsers = async () => {
-    try {
-      setSyncing(true)
-      const response = await fetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      })
-      if (!response.ok) throw new Error('Failed to sync users')
-      const data = await response.json()
-      alert(`Sync complete: ${data.stats.created} created, ${data.stats.updated} updated`)
-      fetchUsers()
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const createGroup = async (groupData) => {
-    try {
-      const response = await fetch('/api/groups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(groupData)
-      })
-      if (!response.ok) throw new Error('Failed to create group')
-      fetchGroups()
-      setShowCreateGroup(false)
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const addUserToGroup = async (groupName, userId) => {
-    try {
-      const response = await fetch(`/api/groups/${groupName}/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, added_by: 'admin' })
-      })
-      if (!response.ok) throw new Error('Failed to add user')
-      fetchGroups()
-      alert('User added to group successfully')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const removeUserFromGroup = async (groupName, userId) => {
-    try {
-      const response = await fetch(`/api/groups/${groupName}/users?user_id=${userId}`, {
-        method: 'DELETE'
-      })
-      if (!response.ok) throw new Error('Failed to remove user')
-      fetchGroups()
-      alert('User removed from group successfully')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const grantAgentToGroup = async (groupName, agentName) => {
-    try {
-      const response = await fetch(`/api/groups/${groupName}/agents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent_name: agentName, granted_by: 'admin' })
-      })
-      if (!response.ok) throw new Error('Failed to grant agent access')
-      alert('Agent access granted to group')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const revokeAgentFromGroup = async (groupName, agentName) => {
-    try {
-      const response = await fetch(`/api/groups/${groupName}/agents?agent_name=${agentName}`, {
-        method: 'DELETE'
-      })
-      if (!response.ok) throw new Error('Failed to revoke agent access')
-      alert('Agent access revoked from group')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const grantAgentToUser = async (userId, agentName) => {
-    try {
-      const response = await fetch(`/api/users/${userId}/permissions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agent_name: agentName, granted_by: 'admin' })
-      })
-      if (!response.ok) throw new Error('Failed to grant permission')
-      alert('Permission granted to user')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
-
-  const revokeAgentFromUser = async (userId, agentName) => {
-    try {
-      const response = await fetch(`/api/users/${userId}/permissions?agent_name=${agentName}`, {
-        method: 'DELETE'
-      })
-      if (!response.ok) throw new Error('Failed to revoke permission')
-      alert('Permission revoked from user')
-    } catch (err) {
-      alert(`Error: ${err.message}`)
-    }
-  }
+  }, [selectedAgent])
 
   return (
     <div className="app">
@@ -217,30 +108,27 @@ function App() {
         {activeTab === 'agents' && (
           <AgentsView
             agents={agents}
-            users={users}
             groups={groups}
             loading={loading}
             error={error}
             onRefresh={fetchAgents}
             selectedAgent={selectedAgent}
+            selectedAgentDetails={selectedAgentDetails}
             setSelectedAgent={setSelectedAgent}
-            onGrantToUser={grantAgentToUser}
-            onRevokeFromUser={revokeAgentFromUser}
             onGrantToGroup={grantAgentToGroup}
             onRevokeFromGroup={revokeAgentFromGroup}
+            onToggle={toggleAgent}
           />
         )}
         {activeTab === 'users' && (
           <UsersView
             users={users}
-            agents={agents}
+            groups={groups}
             onRefresh={fetchUsers}
             onSync={syncUsers}
             syncing={syncing}
-            onGrantAgent={grantAgentToUser}
-            onRevokeAgent={revokeAgentFromUser}
-            selectedUser={selectedUser}
-            setSelectedUser={setSelectedUser}
+            onAddUserToGroup={addUserToGroup}
+            onRemoveUserFromGroup={removeUserFromGroup}
           />
         )}
         {activeTab === 'groups' && (
@@ -261,6 +149,18 @@ function App() {
           />
         )}
       </main>
+
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toast.toasts.map(t => (
+          <Toast
+            key={t.id}
+            message={t.message}
+            type={t.type}
+            onClose={() => toast.removeToast(t.id)}
+          />
+        ))}
+      </div>
     </div>
   )
 }

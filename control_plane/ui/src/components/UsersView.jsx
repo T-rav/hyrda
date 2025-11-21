@@ -1,9 +1,10 @@
-import React from 'react'
-import { Users, RefreshCw } from 'lucide-react'
-import UserCard from './UserCard'
-import PermissionModal from './PermissionModal'
+import React, { useState } from 'react'
+import { Users, RefreshCw, Shield } from 'lucide-react'
+import ManageUserGroupsModal from './ManageUserGroupsModal'
 
-function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, onRevokeAgent, selectedUser, setSelectedUser }) {
+function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup, onRemoveUserFromGroup }) {
+  const [selectedUser, setSelectedUser] = useState(null)
+
   return (
     <div className="content-section">
       <div className="section-header">
@@ -30,6 +31,7 @@ function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, on
           <tr>
             <th>Name</th>
             <th>Email</th>
+            <th>Groups</th>
             <th>Status</th>
             <th>Admin</th>
             <th>Last Synced</th>
@@ -42,6 +44,19 @@ function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, on
               <td>{user.full_name}</td>
               <td>{user.email}</td>
               <td>
+                {user.groups && user.groups.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                    {user.groups.map(group => (
+                      <span key={group.group_name} className="stat-badge users" style={{ fontSize: '0.75rem' }}>
+                        {group.display_name || group.group_name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No groups</span>
+                )}
+              </td>
+              <td>
                 <span className={`status-badge ${user.is_active ? 'status-active' : 'status-inactive'}`}>
                   {user.is_active ? 'Active' : 'Inactive'}
                 </span>
@@ -53,7 +68,8 @@ function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, on
                   onClick={() => setSelectedUser(user)}
                   className="btn-secondary btn-small"
                 >
-                  Manage Permissions
+                  <Shield size={14} />
+                  Manage Groups
                 </button>
               </td>
             </tr>
@@ -71,13 +87,19 @@ function UsersView({ users, agents, onRefresh, onSync, syncing, onGrantAgent, on
         </div>
       )}
 
+      <div style={{ marginTop: '2rem', padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0' }}>
+        <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
+          💡 <strong>Agent permissions are managed at the group level.</strong> Add users to groups, then grant agent access to those groups in the Groups or Agents tabs.
+        </p>
+      </div>
+
       {selectedUser && (
-        <PermissionModal
-          title={`Manage Permissions: ${selectedUser.full_name}`}
-          agents={agents}
+        <ManageUserGroupsModal
+          user={selectedUser}
+          groups={groups}
           onClose={() => setSelectedUser(null)}
-          onGrant={(agentName) => onGrantAgent(selectedUser.slack_user_id, agentName)}
-          onRevoke={(agentName) => onRevokeAgent(selectedUser.slack_user_id, agentName)}
+          onAddToGroup={onAddUserToGroup}
+          onRemoveFromGroup={onRemoveUserFromGroup}
         />
       )}
     </div>

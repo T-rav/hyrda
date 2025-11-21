@@ -4,6 +4,9 @@ import { X, Plus, Trash2 } from 'lucide-react'
 function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser }) {
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Get set of user IDs already in the group
+  const groupUserIds = new Set((group.users || []).map(u => u.slack_user_id))
+
   const filteredUsers = users.filter(user =>
     user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -31,31 +34,41 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
           </div>
 
           <div className="user-selection-list">
-            {filteredUsers.map(user => (
-              <div key={user.id} className="user-selection-item">
-                <div>
-                  <div className="user-name">{user.full_name}</div>
-                  <div className="user-email">{user.email}</div>
+            {filteredUsers.map(user => {
+              const isInGroup = groupUserIds.has(user.slack_user_id)
+
+              return (
+                <div key={user.id} className="user-selection-item">
+                  <div>
+                    <div className="user-name">
+                      {user.full_name}
+                      {isInGroup && <span className="badge-in-group">In Group</span>}
+                    </div>
+                    <div className="user-email">{user.email}</div>
+                  </div>
+                  <div>
+                    {!isInGroup && (
+                      <button
+                        onClick={() => onAddUser(user.slack_user_id)}
+                        className="btn-sm btn-primary"
+                      >
+                        <Plus size={14} />
+                        Add
+                      </button>
+                    )}
+                    {isInGroup && (
+                      <button
+                        onClick={() => onRemoveUser(user.slack_user_id)}
+                        className="btn-sm btn-danger"
+                      >
+                        <Trash2 size={14} />
+                        Remove
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <button
-                    onClick={() => onAddUser(user.slack_user_id)}
-                    className="btn-sm btn-primary"
-                  >
-                    <Plus size={14} />
-                    Add
-                  </button>
-                  <button
-                    onClick={() => onRemoveUser(user.slack_user_id)}
-                    className="btn-sm btn-danger"
-                    style={{ marginLeft: '0.5rem' }}
-                  >
-                    <Trash2 size={14} />
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

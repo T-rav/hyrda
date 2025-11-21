@@ -3,7 +3,7 @@ import { Bot, RefreshCw } from 'lucide-react'
 import AgentCard from './AgentCard'
 import ManageAgentAccessModal from './ManageAgentAccessModal'
 
-function AgentsView({ agents, users, groups, loading, error, onRefresh, selectedAgent, setSelectedAgent, onGrantToUser, onRevokeFromUser, onGrantToGroup, onRevokeFromGroup }) {
+function AgentsView({ agents, groups, loading, error, onRefresh, selectedAgent, selectedAgentDetails, setSelectedAgent, onGrantToGroup, onRevokeFromGroup, onToggle }) {
   const [showManageAccess, setShowManageAccess] = useState(false)
 
   const handleAgentClick = (agent) => {
@@ -49,19 +49,17 @@ function AgentsView({ agents, users, groups, loading, error, onRefresh, selected
         </div>
       )}
 
-      {showManageAccess && selectedAgent && (
+      {showManageAccess && selectedAgent && selectedAgentDetails && (
         <ManageAgentAccessModal
-          agent={selectedAgent}
-          users={users}
+          agent={selectedAgentDetails}
           groups={groups}
           onClose={() => {
             setShowManageAccess(false)
             setSelectedAgent(null)
           }}
-          onGrantToUser={onGrantToUser}
-          onRevokeFromUser={onRevokeFromUser}
           onGrantToGroup={onGrantToGroup}
           onRevokeFromGroup={onRevokeFromGroup}
+          onToggle={onToggle}
         />
       )}
     </div>
