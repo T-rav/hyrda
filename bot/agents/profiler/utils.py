@@ -42,7 +42,7 @@ class _InternalSearchToolSingleton:
             return cls._instance
 
         try:
-            from agents.company_profile.tools import InternalSearchTool
+            from agents.profiler.tools import InternalSearchTool
 
             cls._instance = InternalSearchTool()
             logger.info("Internal search tool singleton initialized")
@@ -81,7 +81,7 @@ class _SECQueryToolSingleton:
         """Get or create singleton instance."""
         if cls._instance is None:
             try:
-                from agents.company_profile.tools.sec_query import SECQueryTool
+                from agents.profiler.tools.sec_query import SECQueryTool
 
                 cls._instance = SECQueryTool()
                 logger.info("Initialized sec_query tool singleton")
@@ -716,19 +716,100 @@ async def extract_company_from_url(url: str) -> str | None:
         return None
 
 
-def detect_profile_type(query: str) -> str:
-    """Detect the type of profile from the query.
+async def detect_profile_type(query: str, llm_service: Any = None) -> str:
+    """Detect the type of profile from the query using LLM analysis.
 
-    This agent is scoped to company profiles only.
+    Analyzes the query to determine if it's about a company or person (employee).
+    Uses patterns like:
+    - Person indicators: "profile John Doe", personal names, LinkedIn URLs
+    - Company indicators: "profile Acme Corp", company URLs, corporate language
 
     Args:
         query: User query
+        llm_service: Optional LLM service for detection (if not provided, creates one)
 
     Returns:
-        Profile type: always "company"
+        Profile type: "company" or "employee"
+
+    Examples:
+        "profile Travis Frisinger" -> "employee"
+        "profile Acme Corporation" -> "company"
     """
-    # Scoped to company profiles only
-    return "company"
+    import json
+
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    # Create LLM service if not provided
+    if llm_service is None:
+        settings = Settings()
+        llm_service = ChatOpenAI(
+            model=settings.llm.model,
+            api_key=settings.llm.api_key,
+            temperature=0,
+        )
+
+    detection_prompt = f"""Analyze this query and determine if it's requesting a profile about a company or person (employee).
+
+Query: "{query}"
+
+Guidelines:
+- **Person/Employee**: Personal names (John Smith, Jane Doe), titles like "profile [person name]", LinkedIn profiles, individual contributors, executives as individuals
+- **Company**: Company names (Acme Corp, Microsoft), corporate websites, "profile [company name]", organizational entities
+
+Respond with ONLY a JSON object:
+{{
+    "profile_type": "company" | "employee",
+    "confidence": "high" | "medium" | "low",
+    "reasoning": "Brief explanation of why this type was selected"
+}}"""
+
+    try:
+        response = await llm_service.ainvoke([create_human_message(detection_prompt)])
+        response_text = (
+            response.content if hasattr(response, "content") else str(response)
+        )
+
+        # Strip markdown code blocks if present
+        response_text = response_text.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]  # Remove ```json
+        elif response_text.startswith("```"):
+            response_text = response_text[3:]  # Remove ```
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]  # Remove trailing ```
+        response_text = response_text.strip()
+
+        # Parse JSON response
+        result = json.loads(response_text)
+        profile_type = result.get("profile_type", "company")
+        confidence = result.get("confidence", "medium")
+        reasoning = result.get("reasoning", "")
+
+        logger.info(
+            f"Profile type detected: {profile_type} (confidence: {confidence}) - {reasoning}"
+        )
+
+        # Validate profile type
+        valid_types = ["company", "employee"]
+        if profile_type not in valid_types:
+            logger.warning(
+                f"Invalid profile type '{profile_type}' detected, defaulting to 'company'"
+            )
+            return "company"
+
+        return profile_type
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse profile type detection response: {e}")
+        logger.error(f"Response was: {response_text}")
+        # Default to company on parse error
+        return "company"
+    except Exception as e:
+        logger.error(f"Error detecting profile type: {e}", exc_info=True)
+        # Default to company on any error
+        return "company"
 
 
 async def extract_focus_area(query: str, llm_service: Any = None) -> str:
@@ -867,6 +948,9 @@ Examples:
 - "what are snowflake's data governance practices" → "data governance and compliance practices"
 - "acme corp hiring challenges" → "hiring challenges and talent acquisition"
 - "profile google devops practices" → "DevOps practices and infrastructure"
+- "profile John Smith for technical gaps to help me grow him" → "technical gaps and growth opportunities for manager development"
+- "profile Jane Doe to understand her leadership potential" → "leadership potential and advancement readiness"
+- "profile Travis for skill development and career planning" → "skill development and career planning opportunities"
 
 Return ONLY a JSON object: {{"focus_area": "extracted focus with URL context incorporated", "url_context": "brief summary of URL content if URLs were provided, otherwise empty string"}}"""
 

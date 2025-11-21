@@ -9,7 +9,8 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.company_profile.utils import (
+from agents.profile_agent import format_duration
+from agents.profiler.utils import (
     compress_message_if_needed,
     create_human_message,
     create_system_message,
@@ -22,33 +23,108 @@ from agents.company_profile.utils import (
     select_messages_within_budget,
     think_tool,
 )
-from agents.profile_agent import format_duration
 
 
 class TestDetectProfileType:
     """Tests for detect_profile_type function"""
 
-    def test_detect_company_profile(self):
+    @pytest.mark.asyncio
+    async def test_detect_company_profile(self):
         """Test detecting company profile"""
-        queries = [
-            "Tell me about Tesla",
-            "What is Apple doing?",
-            "Research Microsoft",
-            "SpaceX profile",
-        ]
-        for query in queries:
-            assert detect_profile_type(query) == "company"
+        from unittest.mock import AsyncMock, patch
 
-    def test_detect_with_empty_query(self):
-        """Test with empty query"""
-        assert detect_profile_type("") == "company"
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = Mock(
+            content='{"profile_type": "company", "confidence": "high", "reasoning": "Corporate entity"}'
+        )
 
-    def test_detect_always_returns_company(self):
-        """Test that function is scoped to company profiles"""
-        # Even with other keywords, should return company (as per implementation)
-        queries = ["employee John", "project Apollo", "person Jane"]
-        for query in queries:
-            assert detect_profile_type(query) == "company"
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("Tell me about Tesla")
+            assert result == "company"
+
+    @pytest.mark.asyncio
+    async def test_detect_employee_profile(self):
+        """Test detecting employee/person profile"""
+        from unittest.mock import AsyncMock, patch
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = Mock(
+            content='{"profile_type": "employee", "confidence": "high", "reasoning": "Personal name"}'
+        )
+
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("profile Travis Frisinger")
+            assert result == "employee"
+
+    @pytest.mark.asyncio
+    async def test_detect_with_empty_query(self):
+        """Test with empty query defaults to company"""
+        from unittest.mock import AsyncMock, patch
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = Mock(
+            content='{"profile_type": "company", "confidence": "low", "reasoning": "Empty query"}'
+        )
+
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("")
+            assert result == "company"
+
+    @pytest.mark.asyncio
+    async def test_detect_invalid_profile_type_defaults_to_company(self):
+        """Test that invalid profile types default to company"""
+        from unittest.mock import AsyncMock, patch
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = Mock(
+            content='{"profile_type": "invalid_type", "confidence": "low", "reasoning": "Unknown"}'
+        )
+
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("something random")
+            assert result == "company"
+
+    @pytest.mark.asyncio
+    async def test_detect_json_parse_error_defaults_to_company(self):
+        """Test that JSON parse errors default to company"""
+        from unittest.mock import AsyncMock, patch
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = Mock(content="Not valid JSON")
+
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("some query")
+            assert result == "company"
+
+    @pytest.mark.asyncio
+    async def test_detect_exception_defaults_to_company(self):
+        """Test that exceptions default to company"""
+        from unittest.mock import AsyncMock, patch
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("LLM error")
+
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch("config.settings.Settings"),
+        ):
+            result = await detect_profile_type("some query")
+            assert result == "company"
 
 
 class TestFormatDuration:

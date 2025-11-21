@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langgraph.types import Command
 
-from agents.company_profile.nodes.clarification import clarify_with_user
-from agents.company_profile.state import ProfileAgentState
+from agents.profiler.nodes.clarification import clarify_with_user
+from agents.profiler.state import ProfileAgentState
 
 
 @pytest.mark.asyncio
@@ -18,9 +18,7 @@ class TestClarificationUrlHandling:
         state: ProfileAgentState = {"query": "profile www.costco.com"}
         config = {"configurable": {"allow_clarification": True}}
 
-        with patch(
-            "agents.company_profile.utils.extract_company_from_url"
-        ) as mock_extract:
+        with patch("agents.profiler.utils.extract_company_from_url") as mock_extract:
             mock_extract.return_value = "Costco"
 
             result = await clarify_with_user(state, config)
@@ -36,9 +34,7 @@ class TestClarificationUrlHandling:
         state: ProfileAgentState = {"query": "profile https://stripe.com"}
         config = {"configurable": {"allow_clarification": True}}
 
-        with patch(
-            "agents.company_profile.utils.extract_company_from_url"
-        ) as mock_extract:
+        with patch("agents.profiler.utils.extract_company_from_url") as mock_extract:
             mock_extract.return_value = "Stripe"
 
             result = await clarify_with_user(state, config)
@@ -51,9 +47,7 @@ class TestClarificationUrlHandling:
         state: ProfileAgentState = {"query": "profile www.example.com/about"}
         config = {"configurable": {"allow_clarification": True}}
 
-        with patch(
-            "agents.company_profile.utils.extract_company_from_url"
-        ) as mock_extract:
+        with patch("agents.profiler.utils.extract_company_from_url") as mock_extract:
             mock_extract.return_value = "Example Corp"
 
             result = await clarify_with_user(state, config)
@@ -66,9 +60,7 @@ class TestClarificationUrlHandling:
         state: ProfileAgentState = {"query": "profile www.invalid.com"}
         config = {"configurable": {"allow_clarification": True}}
 
-        with patch(
-            "agents.company_profile.utils.extract_company_from_url"
-        ) as mock_extract:
+        with patch("agents.profiler.utils.extract_company_from_url") as mock_extract:
             mock_extract.return_value = None  # Extraction failed
 
             with patch("config.settings.Settings"):
@@ -113,9 +105,7 @@ class TestClarificationUrlHandling:
         state: ProfileAgentState = {"query": "profile www.example.com"}
         config = {"configurable": {"allow_clarification": False}}
 
-        with patch(
-            "agents.company_profile.utils.extract_company_from_url"
-        ) as mock_extract:
+        with patch("agents.profiler.utils.extract_company_from_url") as mock_extract:
             result = await clarify_with_user(state, config)
 
             # Should not call extraction when clarification disabled

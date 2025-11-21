@@ -11,11 +11,11 @@ from langgraph.types import Command
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from agents.company_profile.nodes.clarification import clarify_with_user
-from agents.company_profile.nodes.compression import compress_research
-from agents.company_profile.nodes.final_report import final_report_generation
-from agents.company_profile.nodes.research_brief import write_research_brief
-from agents.company_profile.nodes.researcher import researcher, researcher_tools
+from agents.profiler.nodes.clarification import clarify_with_user
+from agents.profiler.nodes.compression import compress_research
+from agents.profiler.nodes.final_report import final_report_generation
+from agents.profiler.nodes.research_brief import write_research_brief
+from agents.profiler.nodes.researcher import researcher, researcher_tools
 
 
 class TestResearchBriefNode:
@@ -266,11 +266,9 @@ class TestResearcherNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.utils.search_tool", new_callable=AsyncMock
+                "agents.profiler.utils.search_tool", new_callable=AsyncMock
             ) as mock_search_tool,
-            patch(
-                "agents.company_profile.utils.internal_search_tool"
-            ) as mock_internal_tool,
+            patch("agents.profiler.utils.internal_search_tool") as mock_internal_tool,
         ):
             # Setup mocks
             mock_search_tool.return_value = [Mock()]  # Mock tool definitions
@@ -310,11 +308,9 @@ class TestResearcherNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.utils.search_tool", new_callable=AsyncMock
+                "agents.profiler.utils.search_tool", new_callable=AsyncMock
             ) as mock_search_tool,
-            patch(
-                "agents.company_profile.utils.internal_search_tool"
-            ) as mock_internal_tool,
+            patch("agents.profiler.utils.internal_search_tool") as mock_internal_tool,
         ):
             mock_search_tool.return_value = [Mock()]
             mock_internal_tool.return_value = None
@@ -346,7 +342,7 @@ class TestResearcherNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.utils.search_tool", new_callable=AsyncMock
+                "agents.profiler.utils.search_tool", new_callable=AsyncMock
             ) as mock_search_tool,
         ):
             mock_search_tool.return_value = []
@@ -487,7 +483,7 @@ class TestResearcherToolsNode:
 
         with (
             patch(
-                "agents.company_profile.utils.internal_search_tool",
+                "agents.profiler.utils.internal_search_tool",
                 return_value=mock_internal_tool,
             ),
             patch("services.search_clients.get_tavily_client", return_value=None),
@@ -530,7 +526,7 @@ class TestResearcherToolsNode:
 
         with (
             patch(
-                "agents.company_profile.nodes.researcher.sec_query_tool",
+                "agents.profiler.nodes.researcher.sec_query_tool",
                 return_value=mock_sec_tool,
             ),
             patch("services.search_clients.get_tavily_client", return_value=None),
@@ -730,7 +726,7 @@ class TestFinalReportNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.nodes.final_report.get_prompt_service"
+                "agents.profiler.nodes.final_report.get_prompt_service"
             ) as mock_get_service,
         ):
             # Mock PromptService to return prompt
@@ -778,7 +774,7 @@ class TestFinalReportNode:
             patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_gemini,
             patch("langchain_openai.ChatOpenAI") as mock_openai,
             patch(
-                "agents.company_profile.nodes.final_report.get_prompt_service"
+                "agents.profiler.nodes.final_report.get_prompt_service"
             ) as mock_get_service,
         ):
             # Configure settings for Gemini
@@ -848,7 +844,7 @@ class TestFinalReportNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.nodes.final_report.get_prompt_service"
+                "agents.profiler.nodes.final_report.get_prompt_service"
             ) as mock_get_service,
         ):
             # Mock PromptService
@@ -897,7 +893,7 @@ class TestFinalReportNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.nodes.final_report.get_prompt_service"
+                "agents.profiler.nodes.final_report.get_prompt_service"
             ) as mock_get_service,
         ):
             # Mock PromptService
@@ -939,7 +935,7 @@ class TestFinalReportNode:
         with (
             patch("langchain_openai.ChatOpenAI") as mock_chat,
             patch(
-                "agents.company_profile.nodes.final_report.get_prompt_service"
+                "agents.profiler.nodes.final_report.get_prompt_service"
             ) as mock_get_service,
         ):
             # Mock PromptService
@@ -972,7 +968,7 @@ class TestFinalReportNode:
 
         # Mock PromptService to return None (prompt not found)
         with patch(
-            "agents.company_profile.nodes.final_report.get_prompt_service"
+            "agents.profiler.nodes.final_report.get_prompt_service"
         ) as mock_get_service:
             mock_prompt_service = Mock()
             mock_prompt_service.get_custom_prompt = Mock(return_value=None)
@@ -999,7 +995,7 @@ class TestFinalReportNode:
 
         # Mock PromptService to be unavailable (returns None)
         with patch(
-            "agents.company_profile.nodes.final_report.get_prompt_service",
+            "agents.profiler.nodes.final_report.get_prompt_service",
             return_value=None,
         ):
             # Should raise RuntimeError when PromptService not available

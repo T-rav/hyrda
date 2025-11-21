@@ -14,14 +14,14 @@ from langgraph.graph import END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
-from agents.company_profile import prompts
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.state import (
+from agents.profiler import prompts
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.state import (
     ConductResearch,
     ResearchComplete,
     SupervisorState,
 )
-from agents.company_profile.utils import (
+from agents.profiler.utils import (
     create_human_message,
     create_system_message,
     think_tool,
@@ -155,7 +155,7 @@ async def supervisor_tools(
     Returns:
         Command to return to supervisor or END
     """
-    from agents.company_profile.nodes.graph_builder import build_researcher_subgraph
+    from agents.profiler.nodes.graph_builder import build_researcher_subgraph
 
     configuration = ProfileConfiguration.from_runnable_config(config)
     messages = state.get("supervisor_messages", [])

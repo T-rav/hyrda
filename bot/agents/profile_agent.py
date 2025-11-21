@@ -12,9 +12,9 @@ from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import MemorySaver
 
 from agents.base_agent import BaseAgent
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.nodes.graph_builder import build_profile_researcher
-from agents.company_profile.utils import detect_profile_type, extract_focus_area
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.nodes.graph_builder import build_profile_researcher
+from agents.profiler.utils import detect_profile_type, extract_focus_area
 from agents.registry import agent_registry
 from utils.pdf_generator import get_pdf_filename, markdown_to_pdf
 
@@ -140,7 +140,7 @@ class ProfileAgent(BaseAgent):
             }
 
         # Detect profile type and extract focus area
-        profile_type = detect_profile_type(query)
+        profile_type = await detect_profile_type(query, llm_service)
         focus_area = await extract_focus_area(query, llm_service)
 
         if focus_area:
@@ -574,13 +574,14 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                 )
 
                 if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
-                    pdf_title = f"{entity_name} - {profile_type.title()} Profile"
+                    # Use simple "Profile" for both company and employee
+                    pdf_title = f"{entity_name} - Profile"
                     logger.info(
                         f"✅ Using extracted entity name in PDF title: '{pdf_title}'"
                     )
                 else:
                     # Fallback to generic title
-                    pdf_title = f"{profile_type.title()} Profile"
+                    pdf_title = "Profile"
                     logger.warning(
                         f"⚠️ Entity name invalid ('{entity_name}'), using generic title: '{pdf_title}'"
                     )
@@ -589,7 +590,8 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                 logger.warning(
                     f"Error extracting entity name: {e}, using generic title"
                 )
-                pdf_title = f"{profile_type.title()} Profile"
+                # Use simple "Profile" for both company and employee
+                pdf_title = "Profile"
 
             pdf_metadata = {
                 "Query": query,

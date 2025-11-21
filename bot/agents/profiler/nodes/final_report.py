@@ -9,10 +9,10 @@ from datetime import datetime
 
 from langchain_core.runnables import RunnableConfig
 
-from agents.company_profile import prompts
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.state import ProfileAgentState
-from agents.company_profile.utils import (
+from agents.profiler import prompts
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.state import ProfileAgentState
+from agents.profiler.utils import (
     create_human_message,
     create_system_message,
     format_research_context,
@@ -121,26 +121,30 @@ async def final_report_generation(
         focus_guidance = ""
 
     # Get prompt from Langfuse (required - no local fallback)
+    # Select prompt based on profile type
     prompt_service = get_prompt_service()
     if not prompt_service:
         raise RuntimeError("PromptService not available - required for profile agent")
 
-    logger.info(
-        "Fetching prompt from Langfuse: CompanyProfiler/Final_Report_Generation"
-    )
+    if profile_type == "employee":
+        prompt_name = "Profiler/Person/FinalReport"
+    else:
+        prompt_name = "CompanyProfiler/Final_Report_Generation"
+
+    logger.info(f"Fetching {profile_type} prompt from Langfuse: {prompt_name}")
     prompt_template = prompt_service.get_custom_prompt(
-        template_name="CompanyProfiler/Final_Report_Generation",
+        template_name=prompt_name,
         fallback=None,  # Force error if Langfuse prompt not found
     )
 
     if not prompt_template:
         logger.error(
-            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
+            f"Langfuse prompt '{prompt_name}' not found. "
             "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
             "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
         )
         raise RuntimeError(
-            "Langfuse prompt 'CompanyProfiler/Final_Report_Generation' not found. "
+            f"Langfuse prompt '{prompt_name}' not found. "
             "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
         )
 

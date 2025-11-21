@@ -8,21 +8,21 @@ import logging
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.company_profile.nodes.brief_validation import (
+from agents.profiler.nodes.brief_validation import (
     research_brief_router,
     validate_research_brief,
 )
-from agents.company_profile.nodes.clarification import clarify_with_user
-from agents.company_profile.nodes.compression import compress_research
-from agents.company_profile.nodes.final_report import final_report_generation
-from agents.company_profile.nodes.quality_control import (
+from agents.profiler.nodes.clarification import clarify_with_user
+from agents.profiler.nodes.compression import compress_research
+from agents.profiler.nodes.final_report import final_report_generation
+from agents.profiler.nodes.quality_control import (
     quality_control_node,
     quality_control_router,
 )
-from agents.company_profile.nodes.research_brief import write_research_brief
-from agents.company_profile.nodes.researcher import researcher, researcher_tools
-from agents.company_profile.nodes.supervisor import supervisor, supervisor_tools
-from agents.company_profile.state import (
+from agents.profiler.nodes.research_brief import write_research_brief
+from agents.profiler.nodes.researcher import researcher, researcher_tools
+from agents.profiler.nodes.supervisor import supervisor, supervisor_tools
+from agents.profiler.state import (
     ProfileAgentInputState,
     ProfileAgentOutputState,
     ProfileAgentState,

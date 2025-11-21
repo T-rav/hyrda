@@ -2,8 +2,8 @@ import re
 
 import pytest
 
-from agents.company_profile import prompts
-from agents.company_profile.utils import format_research_context
+from agents.profiler import prompts
+from agents.profiler.utils import format_research_context
 
 
 @pytest.mark.asyncio
