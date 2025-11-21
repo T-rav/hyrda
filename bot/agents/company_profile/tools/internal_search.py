@@ -25,6 +25,10 @@ class InternalSearchInput(BaseModel):
         default="medium",
         description='Research depth - "low" (2 queries), "medium" (3 queries), "high" (5 queries). Default: "medium"',
     )
+    profile_type: str = Field(
+        default="company",
+        description='Type of profile being researched: "company" or "employee". Used to format output appropriately.',
+    )
 
 
 class InternalSearchTool(BaseTool):
@@ -224,12 +228,15 @@ class InternalSearchTool(BaseTool):
 
         return results
 
-    async def _arun(self, query: str, effort: str = "medium") -> str:
+    async def _arun(
+        self, query: str, effort: str = "medium", profile_type: str = "company"
+    ) -> str:
         """Execute internal search asynchronously.
 
         Args:
             query: Search query
             effort: Research depth level
+            profile_type: Type of profile ("company" or "employee")
 
         Returns:
             Formatted search results with citations
@@ -403,7 +410,9 @@ class InternalSearchTool(BaseTool):
             if not final_docs:
                 return "**No relevant information found in internal knowledge base.**"
 
-            summary = await self._synthesize_findings(query, final_docs, sub_queries)
+            summary = await self._synthesize_findings(
+                query, final_docs, sub_queries, profile_type
+            )
 
             # Step 5: Format results
             result_text = self._format_results(
@@ -746,7 +755,11 @@ Return ONLY the JSON array, no explanation."""
             return [query]
 
     async def _synthesize_findings(
-        self, query: str, docs: list[dict], sub_queries: list[str]
+        self,
+        query: str,
+        docs: list[dict],
+        sub_queries: list[str],
+        profile_type: str = "company",
     ) -> str:
         """Synthesize findings into a summary using LLM.
 
@@ -754,6 +767,7 @@ Return ONLY the JSON array, no explanation."""
             query: Original query
             docs: Retrieved documents
             sub_queries: Sub-queries used
+            profile_type: Type of profile ("company" or "employee")
 
         Returns:
             Synthesized summary
@@ -931,8 +945,32 @@ Return ONLY the JSON array, no explanation."""
         except Exception as e:
             logger.debug(f"Failed to check metric/CRM records: {e}")
 
-        # Generate synthesis
-        prompt = f"""You are a research synthesizer reviewing 8th Light's internal knowledge base.
+        # Generate synthesis with profile-type specific prompts
+        if profile_type == "employee":
+            # EMPLOYEE/PERSON synthesis - return projects, skills, role info
+            prompt = f"""You are a research synthesizer reviewing 8th Light's internal knowledge base for information about a person.
+
+Research Query: "{query}"
+
+Sub-queries explored:
+{chr(10).join(f"{i}. {sq}" for i, sq in enumerate(sub_queries, 1))}
+
+Retrieved Context:
+{context}
+
+Provide a well-structured answer focusing on:
+1. **Projects**: What 8th Light projects has this person worked on? (client names, project names, roles, dates if available)
+2. **Skills & Technologies**: What technologies, frameworks, or methodologies have they used?
+3. **Role & Expertise**: What is their role/title? What are they known for professionally?
+4. **Collaborations**: Who have they worked with? (8th Light team members, clients)
+5. **Current Status**: Any information about their current work or focus areas?
+
+If no information is found, state: "No internal records found for this person."
+
+Keep your response focused and informative (2-3 paragraphs)."""
+        else:
+            # COMPANY synthesis - return relationship status (existing behavior)
+            prompt = f"""You are a research synthesizer reviewing 8th Light's internal knowledge base.
 
 **CRITICAL RELATIONSHIP RULES (STRICT)**
 - Relationship evidence means any signal of past project work (e.g., filenames or content mentioning "Case Study", "client engagement", "project delivered", "retrospective", "project summary", "Partner Hub", "approached us", "partnered with us", "we introduced", "we built").
@@ -967,6 +1005,12 @@ Keep your response focused and informative (2-3 paragraphs)."""
                 response.content if hasattr(response, "content") else str(response)
             )
             content = content or "Unable to synthesize findings."
+
+            # For employee profiles, return content as-is (no relationship status prefix)
+            if profile_type == "employee":
+                return content
+
+            # For company profiles, add relationship status prefix
             # Deterministic prefix: Relationship status and optional project bullets
             status = (
                 "Relationship status: Existing client"
@@ -999,6 +1043,8 @@ Keep your response focused and informative (2-3 paragraphs)."""
             return content
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")
+            if profile_type == "employee":
+                return "No internal records found for this person.\n\nError synthesizing findings."
             return "Relationship status: No prior engagement\n\nError synthesizing findings."
 
     def _format_results(
