@@ -574,24 +574,14 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                 )
 
                 if entity_name and len(entity_name) > 0 and len(entity_name) < 100:
-                    # Use friendly profile type names
-                    profile_label = (
-                        "Professional Profile"
-                        if profile_type == "employee"
-                        else "Company Profile"
-                    )
-                    pdf_title = f"{entity_name} - {profile_label}"
+                    # Use simple "Profile" for both company and employee
+                    pdf_title = f"{entity_name} - Profile"
                     logger.info(
                         f"✅ Using extracted entity name in PDF title: '{pdf_title}'"
                     )
                 else:
                     # Fallback to generic title
-                    profile_label = (
-                        "Professional Profile"
-                        if profile_type == "employee"
-                        else "Company Profile"
-                    )
-                    pdf_title = profile_label
+                    pdf_title = "Profile"
                     logger.warning(
                         f"⚠️ Entity name invalid ('{entity_name}'), using generic title: '{pdf_title}'"
                     )
@@ -600,12 +590,8 @@ Return ONLY a JSON object in this format: {{"entity": "name here"}}"""
                 logger.warning(
                     f"Error extracting entity name: {e}, using generic title"
                 )
-                profile_label = (
-                    "Professional Profile"
-                    if profile_type == "employee"
-                    else "Company Profile"
-                )
-                pdf_title = profile_label
+                # Use simple "Profile" for both company and employee
+                pdf_title = "Profile"
 
             pdf_metadata = {
                 "Query": query,
