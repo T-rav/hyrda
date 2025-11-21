@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agents.company_profile.tools.internal_search import (
+from agents.profiler.tools.internal_search import (
     InternalSearchInput,
     InternalSearchTool,
     internal_search_tool,
@@ -63,7 +63,9 @@ class TestInternalSearchTool:
 
         # Mock qdrant_client to return empty results
         mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = []
+        mock_result = MagicMock()
+        mock_result.points = []
+        mock_qdrant.query_points.return_value = mock_result
 
         tool = InternalSearchTool(
             llm=self.mock_llm,
@@ -166,7 +168,9 @@ class TestInternalSearchTool:
             "record_type": "client",  # This is a metric/CRM record
         }
 
-        self.mock_qdrant_client.search.return_value = [mock_point]
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
 
         # Mock synthesis LLM response - should see relationship_evidence: FALSE
         synthesis_response = MagicMock()
@@ -221,7 +225,9 @@ class TestInternalSearchTool:
             "record_type": "client",  # Metric/CRM record
         }
 
-        self.mock_qdrant_client.search.return_value = [mock_point]
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
 
         # Mock synthesis response - should see relationship_evidence: TRUE
         synthesis_response = MagicMock()
@@ -286,9 +292,13 @@ class TestInternalSearchTool:
         }
         mock_result2.score = 0.85
 
-        self.mock_qdrant_client.search.side_effect = [
-            [mock_result1],  # First sub-query results
-            [mock_result2],  # Second sub-query results
+        mock_response1 = MagicMock()
+        mock_response1.points = [mock_result1]
+        mock_response2 = MagicMock()
+        mock_response2.points = [mock_result2]
+        self.mock_qdrant_client.query_points.side_effect = [
+            mock_response1,  # First sub-query results
+            mock_response2,  # Second sub-query results
         ]
 
         result = await self.tool._arun("test query", effort="low")
@@ -302,7 +312,7 @@ class TestInternalSearchTool:
         assert (
             self.mock_llm.ainvoke.call_count == 2
         )  # decompose + synthesis (no rewriting anymore)
-        assert self.mock_qdrant_client.search.call_count == 2
+        assert self.mock_qdrant_client.query_points.call_count == 2
 
     @pytest.mark.asyncio
     async def test_deduplication(self):
@@ -330,9 +340,11 @@ class TestInternalSearchTool:
         }
         duplicate_result.score = 0.9
 
-        self.mock_qdrant_client.search.side_effect = [
-            [duplicate_result],
-            [duplicate_result],
+        mock_response = MagicMock()
+        mock_response.points = [duplicate_result]
+        self.mock_qdrant_client.query_points.side_effect = [
+            mock_response,
+            mock_response,
         ]
 
         result = await self.tool._arun("test query", effort="low")
@@ -347,7 +359,9 @@ class TestInternalSearchTool:
         self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # Mock Qdrant search
-        self.mock_qdrant_client.search.return_value = []
+        mock_result = MagicMock()
+        mock_result.points = []
+        self.mock_qdrant_client.query_points.return_value = mock_result
 
         # Test different effort levels
         for effort, expected_queries in [("low", 2), ("medium", 3), ("high", 5)]:
@@ -378,7 +392,9 @@ class TestInternalSearchTool:
         self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # No results from Qdrant
-        self.mock_qdrant_client.search.return_value = []
+        mock_result = MagicMock()
+        mock_result.points = []
+        self.mock_qdrant_client.query_points.return_value = mock_result
 
         result = await self.tool._arun("test query")
 
@@ -394,7 +410,9 @@ class TestInternalSearchTool:
         self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # Mock Qdrant to return no results
-        self.mock_qdrant_client.search.return_value = []
+        mock_result = MagicMock()
+        mock_result.points = []
+        self.mock_qdrant_client.query_points.return_value = mock_result
 
         result = await self.tool._arun("test query")
 
@@ -411,6 +429,111 @@ class TestInternalSearchTool:
 
         assert "async" in result.lower()
         assert "ainvoke" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_employee_profile_synthesis(self):
+        """Test that employee profile_type uses employee-specific synthesis"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results - simulate finding project docs
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "text": "Travis Frisinger worked on Partner Hub project using React and Node.js",
+            "file_name": "partner_hub_case_study.pdf",
+        }
+        mock_point.score = 0.9
+
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for employee
+        mock_synthesis = MagicMock()
+        mock_synthesis.content = """**Projects**: Travis worked on Partner Hub (React, Node.js) for Samaritan Ministries.
+**Skills**: React, Node.js, TypeScript
+**Role**: Senior Software Engineer"""
+
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Travis Frisinger projects"]'),  # Query decomposition
+            mock_synthesis,  # Employee synthesis
+        ]
+
+        # Execute search with employee profile_type
+        result = await self.tool._arun(
+            query="Travis Frisinger", effort="low", profile_type="employee"
+        )
+
+        # Verify employee-focused output (NOT "Relationship status:")
+        assert "Relationship status:" not in result
+        assert "Projects" in result or "Skills" in result or "Role" in result
+        assert "Travis" in result or "React" in result
+
+    @pytest.mark.asyncio
+    async def test_company_profile_synthesis_still_works(self):
+        """Test that company profile_type still uses relationship status"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results
+        mock_point = MagicMock()
+        mock_point.payload = {
+            "text": "Partner Hub project for Samaritan Ministries",
+            "file_name": "samaritan_case_study.pdf",
+        }
+        mock_point.score = 0.9
+
+        mock_result = MagicMock()
+        mock_result.points = [mock_point]
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for company
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Samaritan Ministries"]'),  # Query decomposition
+            MagicMock(
+                content="Based on case study found, Samaritan is an existing client."
+            ),  # Company synthesis
+        ]
+
+        # Execute search with company profile_type (default)
+        result = await self.tool._arun(
+            query="Samaritan Ministries", effort="low", profile_type="company"
+        )
+
+        # Verify company-focused output includes "Relationship status:"
+        assert "Relationship status:" in result
+
+    @pytest.mark.asyncio
+    async def test_employee_profile_no_data_found(self):
+        """Test employee profile_type with no data returns neutral message"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results - NO documents found
+        mock_result = MagicMock()
+        mock_result.points = []
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for employee with no data
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Jane Doe"]'),  # Query decomposition
+            MagicMock(
+                content="No 8th Light project records found for this person."
+            ),  # No data synthesis
+        ]
+
+        # Execute search with employee profile_type
+        result = await self.tool._arun(
+            query="Jane Doe", effort="low", profile_type="employee"
+        )
+
+        # Verify neutral "no data" message (not an error)
+        # When no docs found, returns early before synthesis
+        assert (
+            "No relevant information found" in result
+            or "No 8th Light project records found" in result
+        )
+        assert "Relationship status:" not in result
 
 
 class TestInternalSearchToolFactory:
@@ -443,7 +566,7 @@ class TestInternalSearchToolFactory:
         assert isinstance(tool, InternalSearchTool)
         # LLM and embeddings will be lazy-loaded from environment if needed
 
-    @patch("agents.company_profile.tools.internal_search.InternalSearchTool")
+    @patch("agents.profiler.tools.internal_search.InternalSearchTool")
     def test_factory_error_handling(self, mock_tool_class):
         """Test factory handles errors gracefully"""
         mock_tool_class.side_effect = Exception("Initialization failed")
@@ -489,7 +612,9 @@ class TestInternalSearchToolIntegration:
         mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
 
         # Mock Qdrant results
-        mock_qdrant_client.search.return_value = []
+        mock_result = MagicMock()
+        mock_result.points = []
+        mock_qdrant_client.query_points.return_value = mock_result
 
         # Simulate tool invocation via LangChain
         result = await tool.ainvoke({"query": "test", "effort": "low"})

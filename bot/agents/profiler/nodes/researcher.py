@@ -10,10 +10,10 @@ from datetime import datetime
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from agents.company_profile import prompts
-from agents.company_profile.configuration import ProfileConfiguration
-from agents.company_profile.state import ResearcherState
-from agents.company_profile.utils import (
+from agents.profiler import prompts
+from agents.profiler.configuration import ProfileConfiguration
+from agents.profiler.state import ResearcherState
+from agents.profiler.utils import (
     create_system_message,
     internal_search_tool,
     search_tool,
@@ -274,8 +274,14 @@ async def researcher_tools(
                     )
                     continue
 
+                # Add profile_type from state to tool args
+                tool_args_with_profile = {
+                    **tool_args,
+                    "profile_type": state.get("profile_type", "company"),
+                }
+
                 # Invoke the tool
-                result_text = await internal_search.ainvoke(tool_args)
+                result_text = await internal_search.ainvoke(tool_args_with_profile)
 
                 tool_results.append(
                     ToolMessage(content=result_text, tool_call_id=tool_id)

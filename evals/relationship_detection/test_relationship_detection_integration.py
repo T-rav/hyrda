@@ -4,9 +4,9 @@ from pathlib import Path
 import pytest
 from dotenv import load_dotenv
 
-from agents.company_profile import prompts
-from agents.company_profile.utils import format_research_context
-from agents.company_profile.tools.internal_search import internal_search_tool
+from agents.profiler import prompts
+from agents.profiler.utils import format_research_context
+from agents.profiler.tools.internal_search import internal_search_tool
 
 # Load root-level .env so VECTOR_* and LLM keys are available
 ROOT_DIR = Path(__file__).resolve().parents[2]

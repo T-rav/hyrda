@@ -21,7 +21,7 @@ load_dotenv()
 # Add bot to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "bot"))
 
-from agents.company_profile.tools.internal_search import InternalSearchTool
+from agents.profiler.tools.internal_search import InternalSearchTool
 
 
 class TestFalsePositivePrevention:

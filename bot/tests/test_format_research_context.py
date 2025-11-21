@@ -2,7 +2,7 @@
 
 import pytest
 
-from agents.company_profile.utils import format_research_context
+from agents.profiler.utils import format_research_context
 
 
 @pytest.mark.asyncio

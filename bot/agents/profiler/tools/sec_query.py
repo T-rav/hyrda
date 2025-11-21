@@ -11,8 +11,8 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from agents.company_profile.services.sec_on_demand import SECOnDemandFetcher
-from agents.company_profile.services.sec_vector_search import SECInMemoryVectorSearch
+from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
+from agents.profiler.services.sec_vector_search import SECInMemoryVectorSearch
 
 logger = logging.getLogger(__name__)
 

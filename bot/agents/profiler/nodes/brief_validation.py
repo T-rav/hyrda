@@ -11,12 +11,12 @@ import re
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agents.company_profile.state import ProfileAgentState
+from agents.profiler.state import ProfileAgentState
 from config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
-# Validation prompt for LLM judge
+# Validation prompt for LLM judge (COMPANY profiles)
 BRIEF_VALIDATION_PROMPT = """You are validating a research brief for a company profile investigation.
 
 <Research Brief to Evaluate>
@@ -139,6 +139,67 @@ Return ONLY a JSON object:
 Validate the brief and return JSON only.
 """
 
+# Validation prompt for LLM judge (EMPLOYEE/PERSON profiles)
+EMPLOYEE_BRIEF_VALIDATION_PROMPT = """You are validating a research brief for an individual/employee profile investigation.
+
+<Research Brief to Evaluate>
+{research_brief}
+</Research Brief to Evaluate>
+
+<Focus Area (if specified)>
+{focus_area}
+</Focus Area>
+
+<Validation Criteria - Keep it Practical>
+
+Your job is to check these 4 things:
+
+1. **Question Count & Depth**
+   - Does the brief have 15-30 specific investigative questions?
+   - Are questions specific and investigative (not generic "tell me about...")?
+   - Example GOOD: "What thought leadership has [Person] published on AI/ML topics?"
+   - Example BAD: "Tell me about their background"
+
+2. **Section Coverage for EMPLOYEE profiles**
+   - Does it cover the 8 core sections: Professional Background & Career Path, Current Role & Responsibilities, Professional Expertise & Specializations, Public Presence & Thought Leadership, Current Company Context, Professional Interests & Priorities, Network & Relationships, Engagement Opportunities & Approach?
+   - At least 2-3 questions per major section?
+
+3. **Focus Alignment** (if focus area was specified)
+   - If user asked about a specific focus, do 50-70% of questions relate to it?
+   - Does the brief explicitly call out the focus area in "Research Priorities"?
+
+4. **Research Priorities Section**
+   - Is there a clear "Research Priorities" section identifying what's most important?
+   - Does it explain WHY certain areas matter for BD/relationship building?
+
+**Don't nitpick minor formatting or wording - focus on whether this brief will produce USEFUL research about this PERSON.**
+
+<Your Response Format>
+
+Return ONLY a JSON object:
+
+```json
+{{
+  "passes_validation": true/false,
+  "issues": ["Issue 1", "Issue 2"],
+  "question_count": 25,
+  "has_research_priorities": true/false,
+  "section_coverage": {{
+    "covered_sections": 8,
+    "missing_sections": []
+  }},
+  "focus_alignment": {{
+    "focus_requested": "AI expertise and interests" or "None",
+    "relevant_question_ratio": 0.65,
+    "alignment_adequate": true/false
+  }},
+  "revision_instructions": "Specific instructions if it fails (or empty string if passes)"
+}}
+```
+
+Validate the brief and return JSON only.
+"""
+
 
 def count_questions_in_brief(brief: str) -> int:
     """Count question marks in research brief as proxy for question count.
@@ -176,13 +237,16 @@ async def validate_research_brief(
     research_brief = state.get("research_brief", "")
     focus_area = state.get("focus_area", "")
     brief_revision_count = state.get("brief_revision_count", 0)
+    profile_type = state.get("profile_type", "company")
 
     if focus_area:
         logger.info(
-            f"Validating research brief (revision {brief_revision_count}) - Focus: {focus_area}"
+            f"Validating {profile_type} research brief (revision {brief_revision_count}) - Focus: {focus_area}"
         )
     else:
-        logger.info(f"Validating research brief (revision {brief_revision_count})")
+        logger.info(
+            f"Validating {profile_type} research brief (revision {brief_revision_count})"
+        )
 
     # Quick sanity check
     question_count = count_questions_in_brief(research_brief)
@@ -200,8 +264,14 @@ async def validate_research_brief(
             max_completion_tokens=500,
         )
 
+        # Select appropriate validation prompt based on profile type
+        if profile_type == "employee":
+            validation_prompt = EMPLOYEE_BRIEF_VALIDATION_PROMPT
+        else:
+            validation_prompt = BRIEF_VALIDATION_PROMPT
+
         # Run validation
-        prompt = BRIEF_VALIDATION_PROMPT.format(
+        prompt = validation_prompt.format(
             research_brief=research_brief,
             focus_area=focus_area if focus_area else "None (general profile)",
         )
