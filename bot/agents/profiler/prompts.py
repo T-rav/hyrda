@@ -1073,10 +1073,13 @@ Depth Requirements:
 Structure the report with exactly these sections in this order:
 
 ## Professional Profile & Background
-- Full name, current title, and company [cite sources]
+Begin with a 2-3 paragraph biographical introduction that naturally includes:
+- Full name, current title, and company in the opening sentence [cite sources]
 - Professional biography and career narrative [cite sources]
-- Career history and trajectory (roles, companies, timeline) [cite sources]
 - Educational background (degrees, institutions, years) [cite sources]
+
+Then provide detailed analysis of:
+- Career history and trajectory (roles, companies, timeline) [cite sources]
 - Certifications and professional credentials [cite sources]
 - Key career milestones and achievements [cite sources]
 - Career transitions and pivotal moments [cite sources]
