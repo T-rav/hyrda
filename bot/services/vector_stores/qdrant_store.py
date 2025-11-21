@@ -175,17 +175,17 @@ class QdrantVectorStore(VectorStore):
                     ]
                 )
 
-                # Run query in executor to avoid blocking
+                # Run query in executor to avoid blocking (using new query_points API)
                 search_result = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda ns=namespace, f=query_filter: self.client.search(
+                    lambda ns=namespace, f=query_filter: self.client.query_points(
                         collection_name=self.collection_name,
-                        query_vector=query_embedding,
+                        query=query_embedding,
                         limit=limit,
                         query_filter=f,
                         with_payload=True,
                         with_vectors=False,
-                    ),
+                    ).points,
                 )
 
                 for match in search_result:
@@ -208,14 +208,14 @@ class QdrantVectorStore(VectorStore):
 
             default_result = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda f=default_filter: self.client.search(
+                lambda f=default_filter: self.client.query_points(
                     collection_name=self.collection_name,
-                    query_vector=query_embedding,
+                    query=query_embedding,
                     limit=limit,
                     query_filter=None,  # Get all documents for now
                     with_payload=True,
                     with_vectors=False,
-                ),
+                ).points,
             )
 
             for match in default_result:

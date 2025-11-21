@@ -201,13 +201,13 @@ class InternalSearchTool(BaseTool):
             # Fallback for other embedding types
             query_vector = self.embeddings.embed_query(query)
 
-        # Search Qdrant directly
-        search_results = self.qdrant_client.search(
+        # Search Qdrant directly (using new query_points API)
+        search_results = self.qdrant_client.query_points(
             collection_name=self.vector_collection,
-            query_vector=query_vector,
+            query=query_vector,
             limit=k,
             with_payload=True,
-        )
+        ).points
 
         # Convert to LangChain-compatible format
         results = []
