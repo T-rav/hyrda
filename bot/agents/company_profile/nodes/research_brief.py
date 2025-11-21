@@ -44,7 +44,12 @@ async def write_research_brief(
         logger.info(f"Cleaned Slack URLs from query: '{query}' → '{cleaned_query}'")
         query = cleaned_query
 
-    profile_type = state.get("profile_type", detect_profile_type(query))
+    # Detect profile type if not already set
+    if "profile_type" not in state or not state.get("profile_type"):
+        profile_type = await detect_profile_type(query)
+    else:
+        profile_type = state["profile_type"]
+
     focus_area = state.get("focus_area", "")
     brief_revision_count = state.get("brief_revision_count", 0)
     brief_revision_prompt = state.get("brief_revision_prompt", "")
@@ -113,8 +118,17 @@ async def write_research_brief(
             logger.info("Using revision prompt from validation feedback")
             messages = [create_human_message(brief_revision_prompt)]
         else:
-            # First attempt - use the standard prompt
-            prompt = prompts.transform_messages_into_research_topic_prompt.format(
+            # Select the appropriate prompt template based on profile type
+            if profile_type == "employee":
+                logger.info("Using employee/person-focused research brief prompt")
+                prompt_template = (
+                    prompts.transform_messages_into_employee_research_topic_prompt
+                )
+            else:  # Default to company
+                prompt_template = prompts.transform_messages_into_research_topic_prompt
+
+            # Format the selected prompt
+            prompt = prompt_template.format(
                 query=query,
                 profile_type=profile_type,
                 current_date=current_date,

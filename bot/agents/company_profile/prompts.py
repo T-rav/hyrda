@@ -1,18 +1,18 @@
 """System prompts for company profile deep research workflow.
 
 Profile-specific prompts that guide the research agents through
-company, employee, and project profile generation.
+company and employee profile generation.
 """
 
 # Clarification prompt
-clarify_with_user_instructions = """You are helping with company profile research.
+clarify_with_user_instructions = """You are helping with profile research.
 Analyze the user's query to determine if you need clarification before proceeding.
 
 <Guidelines>
-- If the query is about a specific company/person/project name, NO clarification needed
+- If the query is about a specific company/person name, NO clarification needed
 - If the query is vague (e.g., "tell me about them"), ask for specific name
 - If the query mentions multiple entities, ask which one to focus on
-- If the profile type is unclear, ask if they want company, employee, or project info
+- If the profile type is unclear, ask if they want company or employee/person info
 </Guidelines>
 
 User query: {query}
@@ -196,6 +196,163 @@ Write as the lead researcher planning the investigation:
 </Output Format>
 
 Generate a comprehensive strategic research brief with specific investigative questions for each section. Think like a detective, not just a fact-gatherer.
+{focus_guidance}
+"""
+
+# Employee/Person profile research brief generation
+transform_messages_into_employee_research_topic_prompt = """You are an expert Business Development researcher creating individual profiles for relationship-building and sales prospecting.
+
+**Current Date: {current_date}**
+
+Transform the user's query into a strategic research brief with **specific investigative questions** following professional profiling best practices.
+
+<User Query>
+{query}
+
+Profile Type: {profile_type}
+Focus Area: {focus_area}
+</User Query>
+
+<Research Focus Strategy>
+{focus_strategy}
+</Research Focus Strategy>
+
+<Individual/Employee Profile Structure>
+Your research brief must plan for gathering information across these specific sections:
+
+1. **Professional Background & Career Path**
+   - Full name, current title, and company
+   - Professional history (previous roles, companies, career trajectory)
+   - Educational background (degrees, institutions, relevant certifications)
+   - Years of experience in industry
+   - Notable career achievements or transitions
+   - LinkedIn profile and professional online presence
+
+2. **Current Role & Responsibilities**
+   - Specific responsibilities and scope of role
+   - Team size or organizational influence
+   - Key projects or initiatives they lead
+   - Decision-making authority and budget control
+   - Reporting structure (who they report to, who reports to them)
+   - Recent promotions or role changes
+
+3. **Professional Expertise & Specializations**
+   - Technical skills and domain expertise
+   - Industry knowledge and specializations
+   - Thought leadership (publications, speaking engagements, patents)
+   - Professional certifications or awards
+   - Recognized areas of expertise by peers/industry
+
+4. **Public Presence & Thought Leadership**
+   - Social media activity (Twitter, LinkedIn posts, blogs)
+   - Conference presentations or speaking engagements
+   - Published articles, papers, or books
+   - Interviews or quotes in industry media
+   - Professional community involvement
+   - Podcasts or webinar appearances
+
+5. **Current Company Context**
+   - Overview of current employer (size, industry, position)
+   - Company's current priorities and challenges
+   - How their role fits into company strategy
+   - Company's recent news or changes affecting their work
+   - Company culture and values alignment
+
+6. **Professional Interests & Priorities**
+   - Topics they frequently discuss or write about
+   - Technologies or methodologies they advocate for
+   - Industry trends they follow or comment on
+   - Professional pain points or challenges they mention
+   - What seems to motivate them professionally
+
+7. **Network & Relationships**
+   - Professional associations or communities
+   - Known connections at target companies
+   - Industry influencers they follow or interact with
+   - Past colleagues or business partners
+   - Shared connections with 8th Light network
+
+8. **Engagement Opportunities & Approach**
+   - Best channels for outreach (LinkedIn, email, events)
+   - Topics likely to resonate based on their interests
+   - Potential value propositions aligned with their priorities
+   - Mutual connections who could provide introductions
+   - Upcoming events or conferences they may attend
+   - How 8th Light's services align with their needs
+
+</Individual/Employee Profile Structure>
+
+<Strategic Research Brief Guidelines>
+**CRITICAL**: Generate **specific investigative questions** that reveal engagement opportunities, not just biographical facts.
+
+**Think like a BD researcher**:
+1. **Understand their world** - what challenges do they face? What keeps them up at night?
+2. **Follow their digital footprint** - what do they share? What topics engage them?
+3. **Identify pain points** - what problems might 8th Light solve for them?
+4. **Find connection points** - shared interests, mutual connections, common ground
+5. **Target specific sources** - LinkedIn activity, conference talks, blog posts, interviews
+
+**Example of GOOD vs BAD research questions**:
+
+❌ BAD (too basic): "Find out where they went to school"
+✅ GOOD (revealing): "What's their educational background - technical or business? Any career pivots that shaped their current focus? Do they mention formative experiences in interviews or posts?"
+
+❌ BAD (surface-level): "What's their current role?"
+✅ GOOD (strategic): "What specific challenges do they mention in their role? What initiatives are they leading? What do they say about their team's priorities? Any mentions of technical debt, scaling issues, or process problems?"
+
+❌ BAD (fact-gathering): "Find their LinkedIn profile"
+✅ GOOD (engagement-focused): "What topics do they post about on LinkedIn? Who do they engage with? What content do they share or comment on? What language do they use - what seems to resonate with them?"
+
+❌ BAD (basic): "What conferences do they attend?"
+✅ GOOD (opportunity-revealing): "What conferences have they spoken at or attended? What topics did they present on? What communities are they active in? Are there upcoming events where we could connect? What topics would resonate if we were on a panel together?"
+
+**For each of the 8 sections above**:
+- Generate 3-5 **specific investigative questions** that reveal engagement opportunities
+- Include **source targeting** (LinkedIn, Twitter, conference recordings, publications)
+- Add **why it matters** (how this helps build a relationship or approach)
+- Think strategically: **what creates consulting opportunities or relationship-building angles?**
+
+**BD Focus**: Every question should help uncover:
+- **Professional pain points** (challenges they're facing, problems they're trying to solve)
+- **Decision-making authority** (can they hire consultants? What's their budget?)
+- **Technical interests** (what technologies, methodologies, or approaches do they care about?)
+- **Engagement style** (how do they prefer to interact? What tone resonates?)
+- **Relationship entry points** (mutual connections, shared interests, common ground)
+- **Timing signals** (company initiatives, role changes, challenges creating urgency)
+
+</Strategic Research Brief Guidelines>
+
+<Output Format>
+Write as the lead researcher planning the investigation:
+
+# Research Brief: [Person's Full Name]
+
+## Investigation Strategy
+[Brief overview of research approach - what angles will you pursue? If a focus area is specified, explain how it guides the research.]
+
+## Section 1: Professional Background & Career Path
+**Key Questions:**
+- [Specific question 1 with source targeting]
+- [Specific question 2 revealing career trajectory]
+- [Specific question 3 connecting dots]
+
+## Section 2: Current Role & Responsibilities
+**Key Questions:**
+- [Investigative question 1]
+- [Investigative question 2]
+...
+
+[Continue for all 8 sections, adjusting depth based on focus area]
+
+## Research Priorities
+[What sections need deepest investigation? What's most critical for building a relationship or engagement strategy? How does the focus area influence priority?]
+
+## Potential Engagement Approach
+[Based on the questions above, what preliminary approach seems promising? What value proposition might resonate?]
+
+</Output Format>
+
+Generate a comprehensive strategic research brief with specific investigative questions for each section. Think like a relationship-builder, not just a fact-gatherer.
 {focus_guidance}
 """
 
@@ -401,7 +558,7 @@ Answer the investigative questions above by:
 - ResearchComplete with insight: "Series B funded, launching AI product, scaling eng 3x, CTO worried about tech debt, engineers mention process gaps, expert analysis indicates prime opportunities for 8th Light's software excellence, process improvement, and team development services"
 
 **For each question you're investigating**:
-1. **Check internal first** - use internal_search_tool for any company/person/project names
+1. **Check internal first** - use internal_search_tool for any company/person names
 2. **Check SEC filings** - if public company, use sec_query for official data (fetches latest 10-K + 8-Ks on-demand)
 3. **Plan next** - use think_tool to map out search angles for external research
 4. **Search strategically** - multiple angles, follow leads

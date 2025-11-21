@@ -140,7 +140,7 @@ class ProfileAgent(BaseAgent):
             }
 
         # Detect profile type and extract focus area
-        profile_type = detect_profile_type(query)
+        profile_type = await detect_profile_type(query, llm_service)
         focus_area = await extract_focus_area(query, llm_service)
 
         if focus_area:
