@@ -694,3 +694,87 @@
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
 }
+
+/* Group Users List */
+.group-users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+}
+
+.user-chip:hover {
+  border-color: #9f7aea;
+  background: #faf5ff;
+  transform: translateX(4px);
+}
+
+.user-chip-name {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.875rem;
+}
+
+.user-chip-email {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-left: auto;
+}
+
+.user-chip-more {
+  justify-content: center;
+  color: #9f7aea;
+  font-weight: 500;
+  border-style: dashed;
+  border-color: #c4b5fd;
+  background: #faf5ff;
+  cursor: default;
+}
+
+.user-chip-more:hover {
+  transform: none;
+  background: #faf5ff;
+  border-color: #c4b5fd;
+}
+
+.group-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+/* Improved stat badge colors */
+.stat-badge.users {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.stat-badge.admin {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}

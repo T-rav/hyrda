@@ -240,26 +240,40 @@ def manage_groups() -> Response:
     """List all groups or create a new group."""
     try:
         from models import PermissionGroup, UserGroup, get_db_session
-        from sqlalchemy import func
 
         if request.method == "GET":
             with get_db_session() as session:
-                groups = session.query(
-                    PermissionGroup,
-                    func.count(UserGroup.slack_user_id).label('user_count')
-                ).outerjoin(
-                    UserGroup, PermissionGroup.group_name == UserGroup.group_name
-                ).group_by(PermissionGroup.group_name).all()
+                from models import User
 
-                groups_data = [
-                    {
-                        "group_name": group.PermissionGroup.group_name,
-                        "display_name": group.PermissionGroup.display_name,
-                        "description": group.PermissionGroup.description,
-                        "user_count": group.user_count,
-                    }
-                    for group in groups
-                ]
+                # Get all groups with their user counts and user details
+                groups = session.query(PermissionGroup).all()
+
+                groups_data = []
+                for group in groups:
+                    # Get users for this group with their details
+                    user_memberships = session.query(UserGroup, User).join(
+                        User, UserGroup.slack_user_id == User.slack_user_id
+                    ).filter(
+                        UserGroup.group_name == group.group_name
+                    ).all()
+
+                    users_list = [
+                        {
+                            "slack_user_id": membership.User.slack_user_id,
+                            "full_name": membership.User.full_name,
+                            "email": membership.User.email,
+                        }
+                        for membership in user_memberships
+                    ]
+
+                    groups_data.append({
+                        "group_name": group.group_name,
+                        "display_name": group.display_name,
+                        "description": group.description,
+                        "user_count": len(users_list),
+                        "users": users_list,
+                    })
+
                 return jsonify({"groups": groups_data})
 
         elif request.method == "POST":

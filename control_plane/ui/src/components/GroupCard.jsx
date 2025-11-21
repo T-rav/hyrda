@@ -2,6 +2,10 @@ import React from 'react'
 import { Users, UserPlus, Bot } from 'lucide-react'
 
 function GroupCard({ group, onManageUsers, onManageAgents }) {
+  const users = group.users || []
+  const displayedUsers = users.slice(0, 3)
+  const remainingCount = users.length - displayedUsers.length
+
   return (
     <div className="group-card">
       <div className="group-header">
@@ -12,13 +16,37 @@ function GroupCard({ group, onManageUsers, onManageAgents }) {
         <div className="group-stats">
           <span className="stat-badge users">
             <Users size={14} />
-            {group.user_count || 0} users
+            {group.user_count || 0} {group.user_count === 1 ? 'user' : 'users'}
           </span>
         </div>
       </div>
 
       {group.description && (
         <p className="group-description">{group.description}</p>
+      )}
+
+      {/* Display users list */}
+      {users.length > 0 && (
+        <div className="group-users-list">
+          {displayedUsers.map((user, index) => (
+            <div key={user.slack_user_id} className="user-chip">
+              <span className="user-chip-name">{user.full_name}</span>
+              <span className="user-chip-email">{user.email}</span>
+            </div>
+          ))}
+          {remainingCount > 0 && (
+            <div className="user-chip user-chip-more">
+              +{remainingCount} more
+            </div>
+          )}
+        </div>
+      )}
+
+      {users.length === 0 && (
+        <div className="group-empty-state">
+          <Users size={16} style={{ opacity: 0.3 }} />
+          <span>No users in this group</span>
+        </div>
       )}
 
       <div className="group-footer">
