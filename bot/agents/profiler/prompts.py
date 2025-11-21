@@ -267,6 +267,7 @@ Your research brief must plan for gathering information across these specific se
    - What seems to motivate them professionally
 
 7. **Network & Relationships**
+   - **CRITICAL: Search internal 8th Light knowledge base** for this person's project history, collaborations, and any past work with 8th Light
    - Professional associations or communities
    - Known connections at target companies
    - Industry influencers they follow or interact with
