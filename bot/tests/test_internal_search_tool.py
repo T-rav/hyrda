@@ -503,6 +503,38 @@ class TestInternalSearchTool:
         # Verify company-focused output includes "Relationship status:"
         assert "Relationship status:" in result
 
+    @pytest.mark.asyncio
+    async def test_employee_profile_no_data_found(self):
+        """Test employee profile_type with no data returns neutral message"""
+        # Mock embeddings
+        self.mock_embeddings.aembed_query = AsyncMock(return_value=[0.1] * 1536)
+
+        # Mock Qdrant results - NO documents found
+        mock_result = MagicMock()
+        mock_result.points = []
+        self.mock_qdrant_client.query_points.return_value = mock_result
+
+        # Mock LLM synthesis for employee with no data
+        self.mock_llm.ainvoke.side_effect = [
+            MagicMock(content='["Jane Doe"]'),  # Query decomposition
+            MagicMock(
+                content="No 8th Light project records found for this person."
+            ),  # No data synthesis
+        ]
+
+        # Execute search with employee profile_type
+        result = await self.tool._arun(
+            query="Jane Doe", effort="low", profile_type="employee"
+        )
+
+        # Verify neutral "no data" message (not an error)
+        # When no docs found, returns early before synthesis
+        assert (
+            "No relevant information found" in result
+            or "No 8th Light project records found" in result
+        )
+        assert "Relationship status:" not in result
+
 
 class TestInternalSearchToolFactory:
     """Test factory function"""
