@@ -965,7 +965,7 @@ Provide a well-structured answer focusing on:
 4. **Collaborations**: Who have they worked with? (8th Light team members, clients)
 5. **Current Status**: Any information about their current work or focus areas?
 
-If no information is found, state: "No internal records found for this person."
+If no information is found, simply state: "No 8th Light project records found for this person."
 
 Keep your response focused and informative (2-3 paragraphs)."""
         else:
@@ -1044,7 +1044,7 @@ Keep your response focused and informative (2-3 paragraphs)."""
         except Exception as e:
             logger.error(f"Synthesis failed: {e}")
             if profile_type == "employee":
-                return "No internal records found for this person.\n\nError synthesizing findings."
+                return "No 8th Light project records found for this person."
             return "Relationship status: No prior engagement\n\nError synthesizing findings."
 
     def _format_results(
