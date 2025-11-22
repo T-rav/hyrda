@@ -1,33 +1,22 @@
 import React, { useState } from 'react'
 import { X } from 'lucide-react'
 
-function CreateGroupModal({ onClose, onCreate }) {
+function EditGroupModal({ group, onClose, onUpdate }) {
   const [formData, setFormData] = useState({
-    display_name: '',
-    description: '',
-    created_by: 'admin'
+    display_name: group.display_name || group.group_name,
+    description: group.description || '',
   })
-
-  // Auto-generate group_name from display_name (slugify)
-  const generateGroupName = (displayName) => {
-    return displayName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')  // Replace non-alphanumeric with underscore
-      .replace(/^_+|_+$/g, '')       // Remove leading/trailing underscores
-      .replace(/_+/g, '_')           // Replace multiple underscores with single
-  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const group_name = generateGroupName(formData.display_name)
-    onCreate({ ...formData, group_name })
+    onUpdate(group.group_name, formData)
   }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>Create New Group</h2>
+          <h2>Edit Group</h2>
           <button onClick={onClose} className="modal-close">
             <X size={20} />
           </button>
@@ -60,7 +49,7 @@ function CreateGroupModal({ onClose, onCreate }) {
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              Create Group
+              Save Changes
             </button>
           </div>
         </form>
@@ -69,4 +58,4 @@ function CreateGroupModal({ onClose, onCreate }) {
   )
 }
 
-export default CreateGroupModal
+export default EditGroupModal

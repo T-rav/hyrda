@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export function usePermissions(toast, refreshAgentDetails) {
+export function usePermissions(toast, refreshAgentDetails, refreshAgentList) {
   const [userPermissions, setUserPermissions] = useState([])
 
   const fetchUserPermissions = async (userId) => {
@@ -57,6 +57,8 @@ export function usePermissions(toast, refreshAgentDetails) {
       if (toast) toast.success('Agent access granted to group')
       // Refresh agent details to update UI
       if (refreshAgentDetails) refreshAgentDetails(agentName)
+      // Refresh agent list to update group counts
+      if (refreshAgentList) refreshAgentList()
     } catch (err) {
       if (toast) toast.error(`Failed to grant access: ${err.message}`)
     }
@@ -71,6 +73,8 @@ export function usePermissions(toast, refreshAgentDetails) {
       if (toast) toast.success('Agent access revoked from group')
       // Refresh agent details to update UI
       if (refreshAgentDetails) refreshAgentDetails(agentName)
+      // Refresh agent list to update group counts
+      if (refreshAgentList) refreshAgentList()
     } catch (err) {
       if (toast) toast.error(`Failed to revoke access: ${err.message}`)
     }

@@ -45,14 +45,16 @@ function App() {
     setSelectedGroup,
     fetchGroups,
     createGroup,
+    updateGroup,
     addUserToGroup,
     removeUserFromGroup,
+    deleteGroup,
   } = useGroups(toast, fetchUsers)
 
   const {
     grantAgentToGroup,
     revokeAgentFromGroup,
-  } = usePermissions(toast, fetchAgentDetails)
+  } = usePermissions(toast, fetchAgentDetails, fetchAgents)
 
   // Initial data fetch
   useEffect(() => {
@@ -140,8 +142,10 @@ function App() {
             showCreateGroup={showCreateGroup}
             setShowCreateGroup={setShowCreateGroup}
             onCreateGroup={createGroup}
+            onUpdateGroup={updateGroup}
             onAddUserToGroup={addUserToGroup}
             onRemoveUserFromGroup={removeUserFromGroup}
+            onDeleteGroup={deleteGroup}
             onGrantAgent={grantAgentToGroup}
             onRevokeAgent={revokeAgentFromGroup}
             selectedGroup={selectedGroup}

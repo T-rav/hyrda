@@ -221,6 +221,9 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
             # Commit all changes
             session.commit()
 
+        # Add all active users to the "All Users" system group
+        add_all_users_to_system_group()
+
     except Exception as e:
         logger.error(f"Error during user sync: {e}", exc_info=True)
         raise
@@ -232,3 +235,58 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
     )
 
     return stats
+
+
+def add_all_users_to_system_group() -> None:
+    """Add all active users to the 'All Users' system group."""
+    try:
+        from models import UserGroup, PermissionGroup
+
+        with get_db_session() as session:
+            # Get the "all_users" group
+            all_users_group = session.query(PermissionGroup).filter(
+                PermissionGroup.group_name == "all_users"
+            ).first()
+
+            if not all_users_group:
+                logger.warning("'All Users' system group not found, skipping auto-assignment")
+                return
+
+            # Get all active users
+            active_users = session.query(User).filter(User.is_active == True).all()
+
+            # Get existing memberships
+            existing_memberships = session.query(UserGroup).filter(
+                UserGroup.group_name == "all_users"
+            ).all()
+            existing_user_ids = {m.slack_user_id for m in existing_memberships}
+
+            # Add missing users to the group
+            added_count = 0
+            for user in active_users:
+                if user.slack_user_id not in existing_user_ids:
+                    new_membership = UserGroup(
+                        slack_user_id=user.slack_user_id,
+                        group_name="all_users",
+                        added_by="system"
+                    )
+                    session.add(new_membership)
+                    added_count += 1
+
+            # Remove inactive users from the group
+            removed_count = 0
+            active_user_ids = {user.slack_user_id for user in active_users}
+            for membership in existing_memberships:
+                if membership.slack_user_id not in active_user_ids:
+                    session.delete(membership)
+                    removed_count += 1
+
+            session.commit()
+
+            if added_count > 0 or removed_count > 0:
+                logger.info(
+                    f"Updated 'All Users' group: {added_count} users added, {removed_count} users removed"
+                )
+
+    except Exception as e:
+        logger.error(f"Error adding users to 'All Users' group: {e}", exc_info=True)

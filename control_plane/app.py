@@ -53,8 +53,60 @@ def create_app() -> Flask:
     # Enable CORS
     CORS(app)
 
+    # Ensure "All Users" system group exists
+    ensure_all_users_group()
+
     logger.info("Control Plane application initialized on port 6001")
     return app
+
+
+def ensure_all_users_group() -> None:
+    """Ensure the 'All Users' system group exists and populate it."""
+    try:
+        from models import PermissionGroup, User, UserGroup, get_db_session
+
+        with get_db_session() as session:
+            # Check if "all_users" group exists
+            existing_group = session.query(PermissionGroup).filter(
+                PermissionGroup.group_name == "all_users"
+            ).first()
+
+            if not existing_group:
+                # Create the system group
+                all_users_group = PermissionGroup(
+                    group_name="all_users",
+                    display_name="All Users",
+                    description="System group that includes all users automatically",
+                    created_by="system",
+                )
+                session.add(all_users_group)
+                session.commit()
+                logger.info("Created 'All Users' system group")
+
+            # Add all active users to the group
+            active_users = session.query(User).filter(User.is_active == True).all()
+            existing_memberships = session.query(UserGroup).filter(
+                UserGroup.group_name == "all_users"
+            ).all()
+            existing_user_ids = {m.slack_user_id for m in existing_memberships}
+
+            added_count = 0
+            for user in active_users:
+                if user.slack_user_id not in existing_user_ids:
+                    new_membership = UserGroup(
+                        slack_user_id=user.slack_user_id,
+                        group_name="all_users",
+                        added_by="system"
+                    )
+                    session.add(new_membership)
+                    added_count += 1
+
+            if added_count > 0:
+                session.commit()
+                logger.info(f"Added {added_count} users to 'All Users' group on startup")
+
+    except Exception as e:
+        logger.error(f"Error ensuring All Users group: {e}", exc_info=True)
 
 
 # API Routes
@@ -372,6 +424,74 @@ def manage_groups() -> Response:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/groups/<string:group_name>", methods=["PUT", "DELETE"])
+def manage_group(group_name: str) -> Response:
+    """Update or delete a permission group."""
+    try:
+        from models import PermissionGroup, UserGroup, AgentGroupPermission, get_db_session
+
+        if request.method == "PUT":
+            # Update group display name and description
+            data = request.json
+
+            with get_db_session() as session:
+                group = session.query(PermissionGroup).filter(
+                    PermissionGroup.group_name == group_name
+                ).first()
+
+                if not group:
+                    return jsonify({"error": "Group not found"}), 404
+
+                # Update fields
+                if "display_name" in data:
+                    group.display_name = data["display_name"]
+                if "description" in data:
+                    group.description = data["description"]
+
+                session.commit()
+
+                return jsonify({
+                    "status": "updated",
+                    "group_name": group_name,
+                    "display_name": group.display_name,
+                    "description": group.description
+                })
+
+        elif request.method == "DELETE":
+            # Prevent deletion of system groups
+            if group_name == "all_users":
+                return jsonify({"error": "Cannot delete system group"}), 403
+
+            with get_db_session() as session:
+                # Check if group exists
+                group = session.query(PermissionGroup).filter(
+                    PermissionGroup.group_name == group_name
+                ).first()
+
+                if not group:
+                    return jsonify({"error": "Group not found"}), 404
+
+                # Delete all user memberships
+                session.query(UserGroup).filter(
+                    UserGroup.group_name == group_name
+                ).delete()
+
+                # Delete all agent permissions
+                session.query(AgentGroupPermission).filter(
+                    AgentGroupPermission.group_name == group_name
+                ).delete()
+
+                # Delete the group itself
+                session.delete(group)
+                session.commit()
+
+                return jsonify({"status": "deleted", "group_name": group_name})
+
+    except Exception as e:
+        logger.error(f"Error managing group: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/groups/<string:group_name>/users", methods=["GET", "POST", "DELETE"])
 def manage_group_users(group_name: str) -> Response:
     """Manage users in a group."""
@@ -435,6 +555,10 @@ def manage_group_users(group_name: str) -> Response:
             if not user_id:
                 return jsonify({"error": "user_id is required"}), 400
 
+            # Prevent manual removal from system groups
+            if group_name == "all_users":
+                return jsonify({"error": "Cannot manually remove users from system group"}), 403
+
             with get_db_session() as session:
                 membership = session.query(UserGroup).filter(
                     UserGroup.slack_user_id == user_id,
@@ -453,13 +577,23 @@ def manage_group_users(group_name: str) -> Response:
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/groups/<string:group_name>/agents", methods=["POST", "DELETE"])
+@app.route("/api/groups/<string:group_name>/agents", methods=["GET", "POST", "DELETE"])
 def manage_group_agents(group_name: str) -> Response:
-    """Grant or revoke agent access for a group."""
+    """Get, grant, or revoke agent access for a group."""
     try:
         from models import AgentGroupPermission, PermissionGroup, get_db_session
 
-        if request.method == "POST":
+        if request.method == "GET":
+            with get_db_session() as session:
+                # Get all agents this group has access to
+                permissions = session.query(AgentGroupPermission).filter(
+                    AgentGroupPermission.group_name == group_name
+                ).all()
+
+                agent_names = [p.agent_name for p in permissions]
+                return jsonify({"agent_names": agent_names})
+
+        elif request.method == "POST":
             data = request.json
             agent_name = data.get("agent_name")
             granted_by = data.get("granted_by", "admin")

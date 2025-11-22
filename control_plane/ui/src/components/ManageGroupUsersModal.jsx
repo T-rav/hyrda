@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, Shield } from 'lucide-react'
 
 function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser }) {
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Check if this is a system group
+  const isSystemGroup = group.group_name === 'all_users'
 
   // Get set of user IDs already in the group
   const groupUserIds = new Set((group.users || []).map(u => u.slack_user_id))
@@ -23,6 +26,14 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
         </div>
 
         <div className="modal-body">
+          {isSystemGroup && (
+            <div style={{ padding: '1rem', background: '#fef3c7', borderRadius: '0.5rem', border: '1px solid #fbbf24', marginBottom: '1rem' }}>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e' }}>
+                ⚠️ System group: All active users are automatically included and cannot be manually modified.
+              </p>
+            </div>
+          )}
+
           <div className="form-group">
             <input
               type="text"
@@ -47,7 +58,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
                     <div className="user-email">{user.email}</div>
                   </div>
                   <div>
-                    {!isInGroup && (
+                    {!isSystemGroup && !isInGroup && (
                       <button
                         onClick={() => onAddUser(user.slack_user_id)}
                         className="btn-sm btn-primary"
@@ -56,7 +67,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
                         Add
                       </button>
                     )}
-                    {isInGroup && (
+                    {!isSystemGroup && isInGroup && (
                       <button
                         onClick={() => onRemoveUser(user.slack_user_id)}
                         className="btn-sm btn-danger"
@@ -64,6 +75,11 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
                         <Trash2 size={14} />
                         Remove
                       </button>
+                    )}
+                    {isSystemGroup && isInGroup && (
+                      <span className="badge-in-group">
+                        <Shield size={12} /> Auto-added
+                      </span>
                     )}
                   </div>
                 </div>

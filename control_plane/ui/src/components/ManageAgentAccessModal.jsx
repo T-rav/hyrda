@@ -66,15 +66,32 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
           <div className="user-selection-list">
             {filteredGroups.map(group => {
               const hasAccess = authorizedGroupNames.has(group.group_name)
+              const isSystemGroup = group.group_name === 'all_users'
 
               return (
                 <div key={group.group_name} className="user-selection-item">
                   <div>
-                    <div className="user-name">
-                      {group.display_name || group.group_name}
-                      {hasAccess && <span className="badge-in-group"><Shield size={12} /> Has Access</span>}
+                    <div className="user-name">{group.display_name || group.group_name}</div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                      {isSystemGroup && (
+                        <span className="stat-badge" style={{
+                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                          color: '#92400e',
+                          border: '1px solid #fbbf24',
+                          fontSize: '0.7rem'
+                        }}>
+                          System
+                        </span>
+                      )}
+                      {hasAccess && (
+                        <span className="badge-in-group">
+                          <Shield size={12} /> Has Access
+                        </span>
+                      )}
                     </div>
-                    <div className="user-email">@{group.group_name} • {group.user_count} users</div>
+                    <div className="user-email" style={{ marginTop: '0.25rem' }}>
+                      {group.description || `${group.user_count} users`}
+                    </div>
                   </div>
                   <div>
                     {!hasAccess && (

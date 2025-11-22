@@ -41,18 +41,23 @@ function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFr
           <div className="user-selection-list">
             {filteredGroups.map(group => {
               const isMember = userGroupNames.has(group.group_name)
+              const isSystemGroup = group.group_name === 'all_users'
 
               return (
                 <div key={group.group_name} className="user-selection-item">
                   <div>
                     <div className="user-name">
                       {group.display_name || group.group_name}
-                      {isMember && <span className="badge-in-group"><Shield size={12} /> Member</span>}
+                      {isMember && (
+                        <span className="badge-in-group">
+                          <Shield size={12} /> Member
+                        </span>
+                      )}
                     </div>
-                    <div className="user-email">@{group.group_name} • {group.user_count} users</div>
+                    <div className="user-email">{group.description || `${group.user_count} users`}</div>
                   </div>
                   <div>
-                    {!isMember && (
+                    {!isMember && !isSystemGroup && (
                       <button
                         onClick={() => onAddToGroup(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-primary"
@@ -61,7 +66,7 @@ function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFr
                         Add
                       </button>
                     )}
-                    {isMember && (
+                    {isMember && !isSystemGroup && (
                       <button
                         onClick={() => onRemoveFromGroup(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-danger"

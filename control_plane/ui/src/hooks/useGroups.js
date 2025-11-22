@@ -63,6 +63,35 @@ export function useGroups(toast, refreshUsers) {
     }
   }
 
+  const updateGroup = async (groupName, groupData) => {
+    try {
+      const response = await fetch(`/api/groups/${groupName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(groupData)
+      })
+      if (!response.ok) throw new Error('Failed to update group')
+      fetchGroups()
+      if (toast) toast.success('Group updated successfully')
+    } catch (err) {
+      if (toast) toast.error(`Failed to update group: ${err.message}`)
+    }
+  }
+
+  const deleteGroup = async (groupName) => {
+    try {
+      const response = await fetch(`/api/groups/${groupName}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) throw new Error('Failed to delete group')
+      fetchGroups()
+      if (refreshUsers) refreshUsers()
+      if (toast) toast.success('Group deleted successfully')
+    } catch (err) {
+      if (toast) toast.error(`Failed to delete group: ${err.message}`)
+    }
+  }
+
   return {
     groups,
     showCreateGroup,
@@ -71,7 +100,9 @@ export function useGroups(toast, refreshUsers) {
     setSelectedGroup,
     fetchGroups,
     createGroup,
+    updateGroup,
     addUserToGroup,
     removeUserFromGroup,
+    deleteGroup,
   }
 }

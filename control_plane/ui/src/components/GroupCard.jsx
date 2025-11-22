@@ -1,7 +1,12 @@
 import React from 'react'
-import { Users, UserPlus, Bot } from 'lucide-react'
+import { Users, UserPlus, Bot, Trash2, Edit } from 'lucide-react'
 
-function GroupCard({ group, onManageUsers, onManageAgents }) {
+function GroupCard({ group, onEdit, onManageUsers, onManageAgents, onDelete }) {
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to delete the group "${group.display_name || group.group_name}"? This will remove all user memberships and agent permissions.`)) {
+      onDelete(group.group_name)
+    }
+  }
   const users = group.users || []
   const displayedUsers = users.slice(0, 3)
   const remainingCount = users.length - displayedUsers.length
@@ -11,12 +16,22 @@ function GroupCard({ group, onManageUsers, onManageAgents }) {
       <div className="group-header">
         <div>
           <h3>{group.display_name || group.group_name}</h3>
-          <p className="group-id">@{group.group_name}</p>
+          {group.group_name === 'all_users' && (
+            <span className="stat-badge" style={{
+              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+              color: '#92400e',
+              border: '1px solid #fbbf24',
+              fontSize: '0.7rem',
+              marginTop: '0.25rem'
+            }}>
+              System Group
+            </span>
+          )}
         </div>
         <div className="group-stats">
           <span className="stat-badge users">
             <Users size={14} />
-            {group.user_count || 0} {group.user_count === 1 ? 'user' : 'users'}
+            {group.user_count} {group.user_count === 1 ? 'user' : 'users'}
           </span>
         </div>
       </div>
@@ -25,39 +40,32 @@ function GroupCard({ group, onManageUsers, onManageAgents }) {
         <p className="group-description">{group.description}</p>
       )}
 
-      {/* Display users list */}
-      {users.length > 0 && (
-        <div className="group-users-list">
-          {displayedUsers.map((user, index) => (
-            <div key={user.slack_user_id} className="user-chip">
-              <span className="user-chip-name">{user.full_name}</span>
-              <span className="user-chip-email">{user.email}</span>
-            </div>
-          ))}
-          {remainingCount > 0 && (
-            <div className="user-chip user-chip-more">
-              +{remainingCount} more
-            </div>
-          )}
-        </div>
-      )}
-
-      {users.length === 0 && (
-        <div className="group-empty-state">
-          <Users size={16} style={{ opacity: 0.3 }} />
-          <span>No users in this group</span>
-        </div>
-      )}
-
       <div className="group-footer">
-        <button className="btn-link" onClick={() => onManageUsers(group)}>
-          <UserPlus size={16} />
-          Manage Users
-        </button>
-        <button className="btn-link" onClick={() => onManageAgents(group)}>
-          <Bot size={16} />
-          Manage Agents
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button className="btn-link" onClick={() => onEdit(group)}>
+            <Edit size={16} />
+            Edit
+          </button>
+          <button className="btn-link" onClick={() => onManageUsers(group)}>
+            <UserPlus size={16} />
+            Manage Users
+          </button>
+          <button className="btn-link" onClick={() => onManageAgents(group)}>
+            <Bot size={16} />
+            Manage Agents
+          </button>
+        </div>
+        {group.group_name !== 'all_users' && (
+          <button
+            className="btn-link"
+            onClick={handleDelete}
+            style={{ color: '#dc2626' }}
+            title="Delete group"
+          >
+            <Trash2 size={16} />
+            Delete
+          </button>
+        )}
       </div>
     </div>
   )
