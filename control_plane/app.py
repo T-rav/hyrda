@@ -56,6 +56,9 @@ def create_app() -> Flask:
     # Ensure "All Users" system group exists
     ensure_all_users_group()
 
+    # Ensure "help" system agent exists and has all_users access
+    ensure_help_agent_system()
+
     logger.info("Control Plane application initialized on port 6001")
     return app
 
@@ -107,6 +110,57 @@ def ensure_all_users_group() -> None:
 
     except Exception as e:
         logger.error(f"Error ensuring All Users group: {e}", exc_info=True)
+
+
+def ensure_help_agent_system() -> None:
+    """Ensure the 'help' agent is marked as system and has all_users access."""
+    try:
+        from models import AgentMetadata, AgentGroupPermission, get_db_session
+
+        with get_db_session() as session:
+            # Ensure help agent exists and is marked as system
+            help_agent = session.query(AgentMetadata).filter(
+                AgentMetadata.agent_name == "help"
+            ).first()
+
+            if not help_agent:
+                # Create help agent
+                help_agent = AgentMetadata(
+                    agent_name="help",
+                    display_name="Help",
+                    description="System agent for help and assistance",
+                    is_public=True,
+                    is_system=True
+                )
+                session.add(help_agent)
+                session.commit()
+                logger.info("Created 'help' system agent")
+            elif not help_agent.is_system or not help_agent.is_public:
+                # Update existing help agent to be system and enabled
+                help_agent.is_system = True
+                help_agent.is_public = True
+                session.commit()
+                logger.info("Updated 'help' agent to system agent")
+
+            # Ensure all_users group has access to help agent
+            existing_permission = session.query(AgentGroupPermission).filter(
+                AgentGroupPermission.agent_name == "help",
+                AgentGroupPermission.group_name == "all_users"
+            ).first()
+
+            if not existing_permission:
+                permission = AgentGroupPermission(
+                    agent_name="help",
+                    group_name="all_users",
+                    permission_type="allow",
+                    granted_by="system"
+                )
+                session.add(permission)
+                session.commit()
+                logger.info("Granted 'all_users' access to 'help' agent")
+
+    except Exception as e:
+        logger.error(f"Error ensuring help agent system status: {e}", exc_info=True)
 
 
 # API Routes
@@ -221,17 +275,19 @@ def get_agent_details(agent_name: str) -> Response:
             ).all()
             authorized_group_names = [p.group_name for p in group_perms]
 
-            # Get agent metadata for enabled state
+            # Get agent metadata for enabled state and system status
             metadata = session.query(AgentMetadata).filter(
                 AgentMetadata.agent_name == agent_name
             ).first()
             is_enabled = metadata.is_public if metadata else False  # Default to disabled
+            is_system = metadata.is_system if metadata else False
 
         details = {
             "name": agent_name,
             "authorized_user_ids": authorized_user_ids,
             "authorized_group_names": authorized_group_names,
             "is_public": is_enabled,
+            "is_system": is_system,
         }
 
         return jsonify(details)
@@ -259,6 +315,10 @@ def toggle_agent(agent_name: str) -> Response:
                     is_public=False,  # Toggle will make it True
                 )
                 session.add(agent_metadata)
+
+            # Prevent disabling system agents
+            if agent_metadata.is_system and agent_metadata.is_public:
+                return jsonify({"error": "Cannot disable system agents"}), 403
 
             # Toggle the state
             agent_metadata.is_public = not agent_metadata.is_public
@@ -602,6 +662,18 @@ def manage_group_agents(group_name: str) -> Response:
                 return jsonify({"error": "agent_name is required"}), 400
 
             with get_db_session() as session:
+                from models import AgentMetadata
+
+                # Check if agent is system agent
+                agent_metadata = session.query(AgentMetadata).filter(
+                    AgentMetadata.agent_name == agent_name
+                ).first()
+
+                if agent_metadata and agent_metadata.is_system and group_name != "all_users":
+                    return jsonify({
+                        "error": "System agents can only be granted to 'all_users' group"
+                    }), 403
+
                 # Check if group exists
                 group = session.query(PermissionGroup).filter(
                     PermissionGroup.group_name == group_name
@@ -634,6 +706,18 @@ def manage_group_agents(group_name: str) -> Response:
                 return jsonify({"error": "agent_name is required"}), 400
 
             with get_db_session() as session:
+                from models import AgentMetadata
+
+                # Check if agent is system agent
+                agent_metadata = session.query(AgentMetadata).filter(
+                    AgentMetadata.agent_name == agent_name
+                ).first()
+
+                if agent_metadata and agent_metadata.is_system and group_name == "all_users":
+                    return jsonify({
+                        "error": "Cannot revoke system agents from 'all_users' group"
+                    }), 403
+
                 permission = session.query(AgentGroupPermission).filter(
                     AgentGroupPermission.agent_name == agent_name,
                     AgentGroupPermission.group_name == group_name

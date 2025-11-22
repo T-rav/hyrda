@@ -1,12 +1,20 @@
 import React from 'react'
-import { Users } from 'lucide-react'
+import { Users, Shield } from 'lucide-react'
 
 function AgentCard({ agent, onClick }) {
   return (
-    <div className="agent-card" style={{ cursor: 'pointer' }} onClick={() => onClick(agent)}>
+    <div className="agent-card clickable" onClick={() => onClick(agent)}>
       <div className="agent-card-header">
         <div className="agent-info">
-          <h3>/{agent.name}</h3>
+          <div className="agent-name-header">
+            <h3>/{agent.name}</h3>
+            {agent.is_system && (
+              <span className="stat-badge system">
+                <Shield size={10} />
+                System
+              </span>
+            )}
+          </div>
           {agent.aliases && agent.aliases.length > 0 && (
             <div className="agent-aliases">
               {agent.aliases.map(alias => (

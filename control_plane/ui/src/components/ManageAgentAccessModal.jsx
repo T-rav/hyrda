@@ -7,9 +7,12 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
   // Create set of authorized group names
   const authorizedGroupNames = new Set(agent.authorized_group_names || [])
 
-  const filteredGroups = groups.filter(group =>
-    (group.display_name || group.group_name).toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // For system agents, only show all_users group
+  const filteredGroups = groups
+    .filter(group => !agent.is_system || group.group_name === 'all_users')
+    .filter(group =>
+      (group.display_name || group.group_name).toLowerCase().includes(searchTerm.toLowerCase())
+    )
 
   const handleToggle = () => {
     onToggle(agent.name)
@@ -26,34 +29,46 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
         </div>
 
         <div className="modal-body">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #e2e8f0' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>Agent Status</h3>
-              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                Control whether this agent is enabled or disabled
+          {agent.is_system && (
+            <div className="system-agent-banner">
+              <div className="system-agent-banner-header">
+                <Shield size={16} />
+                <strong>System Agent</strong>
+              </div>
+              <p>
+                This agent is always enabled and accessible to all users. It cannot be disabled or restricted.
               </p>
             </div>
-            <div className="toggle-switch" onClick={handleToggle}>
-              <input
-                type="checkbox"
-                checked={agent.is_public}
-                onChange={() => {}}
-                className="toggle-checkbox"
-              />
-              <span className="toggle-slider"></span>
-              <span className="toggle-label">
-                {agent.is_public ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
-          </div>
+          )}
 
-          <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '0.5rem', border: '1px solid #e2e8f0', marginBottom: '1rem' }}>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
+          {!agent.is_system && (
+            <div className="agent-status-section">
+              <div className="agent-status-info">
+                <h3>Agent Status</h3>
+                <p>Control whether this agent is enabled or disabled</p>
+              </div>
+              <div className="toggle-switch" onClick={handleToggle}>
+                <input
+                  type="checkbox"
+                  checked={agent.is_public}
+                  onChange={() => {}}
+                  className="toggle-checkbox"
+                />
+                <span className="toggle-slider"></span>
+                <span className="toggle-label">
+                  {agent.is_public ? 'Enabled' : 'Disabled'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="info-box">
+            <p>
               💡 Grant or revoke access to groups. Users in these groups will automatically have access to this agent.
             </p>
           </div>
 
-          <div className="form-group" style={{ padding: '0 1rem 1rem' }}>
+          <div className="form-group search-group">
             <input
               type="text"
               placeholder="Search groups..."
@@ -72,14 +87,9 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                 <div key={group.group_name} className="user-selection-item">
                   <div>
                     <div className="user-name">{group.display_name || group.group_name}</div>
-                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                    <div className="badge-container">
                       {isSystemGroup && (
-                        <span className="stat-badge" style={{
-                          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                          color: '#92400e',
-                          border: '1px solid #fbbf24',
-                          fontSize: '0.7rem'
-                        }}>
+                        <span className="stat-badge system">
                           System
                         </span>
                       )}
@@ -89,12 +99,12 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                         </span>
                       )}
                     </div>
-                    <div className="user-email" style={{ marginTop: '0.25rem' }}>
+                    <div className="user-email">
                       {group.description || `${group.user_count} users`}
                     </div>
                   </div>
                   <div>
-                    {!hasAccess && (
+                    {!hasAccess && !agent.is_system && (
                       <button
                         onClick={() => onGrantToGroup(group.group_name, agent.name)}
                         className="btn-sm btn-primary"
@@ -103,7 +113,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                         Grant
                       </button>
                     )}
-                    {hasAccess && (
+                    {hasAccess && !(agent.is_system && isSystemGroup) && (
                       <button
                         onClick={() => onRevokeFromGroup(group.group_name, agent.name)}
                         className="btn-sm btn-danger"
@@ -111,6 +121,11 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                         <Trash2 size={14} />
                         Revoke
                       </button>
+                    )}
+                    {agent.is_system && isSystemGroup && (
+                      <span className="always-enabled-text">
+                        Always enabled
+                      </span>
                     )}
                   </div>
                 </div>

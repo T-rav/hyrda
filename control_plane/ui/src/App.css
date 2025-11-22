@@ -926,3 +926,111 @@
   border: 1px solid #cbd5e1;
   font-weight: 600;
 }
+
+/* System Agent Styles */
+.stat-badge.system {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border: 1px solid #fbbf24;
+  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.system-agent-banner {
+  padding: 1rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 0.5rem;
+  border: 1px solid #fbbf24;
+  margin-bottom: 1rem;
+}
+
+.system-agent-banner-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.system-agent-banner-header strong {
+  color: #92400e;
+  font-size: 0.875rem;
+}
+
+.system-agent-banner p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #92400e;
+}
+
+.system-agent-banner svg {
+  color: #92400e;
+}
+
+.agent-status-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.agent-status-info h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.agent-status-info p {
+  margin: 0.25rem 0 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.info-box {
+  padding: 1rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.info-box p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.agent-name-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge-container {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.always-enabled-text {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-style: italic;
+}
+
+.search-group {
+  padding: 0 1rem 1rem;
+}
+
+.user-email {
+  margin-top: 0.25rem;
+}
+
+.clickable {
+  cursor: pointer;
+}

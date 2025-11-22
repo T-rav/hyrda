@@ -23,6 +23,9 @@ class AgentMetadata(Base):
         Boolean, nullable=False, default=True
     )  # Public = everyone can use
     requires_admin = Column(Boolean, nullable=False, default=False)  # Admin-only access
+    is_system = Column(
+        Boolean, nullable=False, default=False
+    )  # System agents cannot be disabled and have special access rules
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=func.now())
