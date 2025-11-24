@@ -472,58 +472,110 @@ class MetricsService:
     def record_agent_invocation(
         self, agent_name: str, status: str = "success", duration: float = 0.0
     ):
-        """Record an agent invocation"""
-        if not self.enabled:
-            # Still track in-memory stats even if Prometheus is disabled
-            self._agent_stats["total_invocations"] += 1
-            if status == "success":
-                self._agent_stats["successful_invocations"] += 1
-            else:
-                self._agent_stats["failed_invocations"] += 1
-
-            # Track by agent
-            if agent_name not in self._agent_stats["by_agent"]:
-                self._agent_stats["by_agent"][agent_name] = 0
-            self._agent_stats["by_agent"][agent_name] += 1
-            return
-
+        """Record an agent invocation (persisted to database)."""
+        # Persist to database for survival across restarts
         try:
-            # Prometheus metrics
-            self.agent_invocations.labels(agent_name=agent_name, status=status).inc()
-            if duration > 0:
-                self.agent_duration.labels(agent_name=agent_name).observe(duration)
+            from datetime import datetime as dt
 
-            # In-memory stats for dashboard
-            self._agent_stats["total_invocations"] += 1
-            if status == "success":
-                self._agent_stats["successful_invocations"] += 1
-            else:
-                self._agent_stats["failed_invocations"] += 1
+            from models.agent_usage import AgentUsage
+            from models.base import get_db_session
 
-            # Track by agent
-            if agent_name not in self._agent_stats["by_agent"]:
-                self._agent_stats["by_agent"][agent_name] = 0
-            self._agent_stats["by_agent"][agent_name] += 1
+            with get_db_session() as session:
+                # Get or create agent usage record
+                usage = (
+                    session.query(AgentUsage)
+                    .filter(AgentUsage.agent_name == agent_name)
+                    .first()
+                )
 
+                if not usage:
+                    usage = AgentUsage(
+                        agent_name=agent_name,
+                        total_invocations=0,
+                        successful_invocations=0,
+                        failed_invocations=0,
+                        first_invocation=dt.utcnow(),
+                    )
+                    session.add(usage)
+
+                # Increment counters
+                usage.total_invocations += 1
+                if status == "success":
+                    usage.successful_invocations += 1
+                else:
+                    usage.failed_invocations += 1
+                usage.last_invocation = dt.utcnow()
+
+                session.commit()
         except Exception as e:
-            logger.error(f"Error recording agent invocation metric: {e}")
+            logger.error(f"Error persisting agent invocation to database: {e}")
+
+        # In-memory stats for dashboard (fast access)
+        self._agent_stats["total_invocations"] += 1
+        if status == "success":
+            self._agent_stats["successful_invocations"] += 1
+        else:
+            self._agent_stats["failed_invocations"] += 1
+
+        if agent_name not in self._agent_stats["by_agent"]:
+            self._agent_stats["by_agent"][agent_name] = 0
+        self._agent_stats["by_agent"][agent_name] += 1
+
+        # Prometheus metrics (if enabled)
+        if self.enabled:
+            try:
+                self.agent_invocations.labels(agent_name=agent_name, status=status).inc()
+                if duration > 0:
+                    self.agent_duration.labels(agent_name=agent_name).observe(duration)
+            except Exception as e:
+                logger.error(f"Error recording Prometheus metric: {e}")
 
     def get_agent_stats(self) -> dict:
-        """Get agent invocation statistics for dashboard display"""
-        stats = self._agent_stats.copy()
+        """Get agent invocation statistics (from database for persistence)."""
+        try:
+            from models.agent_usage import AgentUsage
+            from models.base import get_db_session
 
-        # Calculate success rate
-        total = stats["total_invocations"]
-        if total > 0:
-            stats["success_rate"] = round(
-                (stats["successful_invocations"] / total) * 100, 1
-            )
-            stats["error_rate"] = round((stats["failed_invocations"] / total) * 100, 1)
-        else:
-            stats["success_rate"] = 0.0
-            stats["error_rate"] = 0.0
+            with get_db_session() as session:
+                usages = (
+                    session.query(AgentUsage)
+                    .filter(AgentUsage.is_active == True)  # noqa: E712
+                    .all()
+                )
 
-        return stats
+                total = sum(u.total_invocations for u in usages)
+                successful = sum(u.successful_invocations for u in usages)
+                failed = sum(u.failed_invocations for u in usages)
+
+                by_agent = {u.agent_name: u.total_invocations for u in usages}
+
+                return {
+                    "total_invocations": total,
+                    "successful_invocations": successful,
+                    "failed_invocations": failed,
+                    "success_rate": round((successful / total) * 100, 1)
+                    if total > 0
+                    else 0.0,
+                    "error_rate": round((failed / total) * 100, 1) if total > 0 else 0.0,
+                    "by_agent": by_agent,
+                    "last_reset": self._agent_stats["last_reset"],
+                }
+        except Exception as e:
+            logger.error(f"Error getting agent stats from database: {e}")
+            # Fallback to in-memory stats
+            stats = self._agent_stats.copy()
+            total = stats["total_invocations"]
+            if total > 0:
+                stats["success_rate"] = round(
+                    (stats["successful_invocations"] / total) * 100, 1
+                )
+                stats["error_rate"] = round(
+                    (stats["failed_invocations"] / total) * 100, 1
+                )
+            else:
+                stats["success_rate"] = 0.0
+                stats["error_rate"] = 0.0
+            return stats
 
     def reset_agent_stats(self):
         """Reset agent statistics (useful for daily/weekly resets)"""
