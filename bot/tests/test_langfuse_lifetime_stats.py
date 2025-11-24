@@ -465,6 +465,7 @@ class TestHealthEndpointLifetimeStats:
         mock_settings = MagicMock()
         mock_settings.llm.api_key.get_secret_value.return_value = "test-key"
         mock_settings.llm.provider = "openai"
+        mock_settings.llm.model = "gpt-4"
         mock_settings.slack.bot_token = "xoxb-test"
 
         # Mock Langfuse service that returns error
@@ -480,20 +481,42 @@ class TestHealthEndpointLifetimeStats:
             }
         )
 
-        health_checker = HealthChecker(
-            mock_settings, conversation_cache=None, langfuse_service=mock_langfuse
-        )
+        # Mock metrics service to avoid MagicMock serialization issues
+        with patch("health.get_metrics_service") as mock_get_metrics:
+            mock_metrics = MagicMock()
+            mock_metrics.enabled = True
+            mock_metrics.get_active_conversation_count.return_value = 0
+            mock_metrics.get_rag_stats.return_value = {
+                "total_queries": 0,
+                "success_rate": 0.0,
+                "miss_rate": 0.0,
+                "avg_chunks": 0.0,
+                "documents_used": 0,
+            }
+            mock_metrics.get_agent_stats.return_value = {
+                "total": 0,
+                "successful": 0,
+                "failed": 0,
+                "success_rate": 0.0,
+                "error_rate": 0.0,
+                "by_agent": {},
+            }
+            mock_get_metrics.return_value = mock_metrics
 
-        mock_request = MagicMock()
-        response = await health_checker.metrics(mock_request)
+            health_checker = HealthChecker(
+                mock_settings, conversation_cache=None, langfuse_service=mock_langfuse
+            )
 
-        import json
+            mock_request = MagicMock()
+            response = await health_checker.metrics(mock_request)
 
-        data = json.loads(response.body)
+            import json
 
-        # Should include error in lifetime stats
-        assert "lifetime_stats" in data
-        assert data["lifetime_stats"]["error"] == "API authentication failed"
+            data = json.loads(response.body)
+
+            # Should include error in lifetime stats
+            assert "lifetime_stats" in data
+            assert data["lifetime_stats"]["error"] == "API authentication failed"
 
     @pytest.mark.asyncio
     async def test_metrics_endpoint_no_langfuse_service(self):
@@ -502,25 +525,49 @@ class TestHealthEndpointLifetimeStats:
 
         mock_settings = MagicMock()
         mock_settings.llm.api_key.get_secret_value.return_value = "test-key"
+        mock_settings.llm.provider = "openai"
+        mock_settings.llm.model = "gpt-4"
         mock_settings.slack.bot_token = "xoxb-test"
 
-        # No Langfuse service provided
-        health_checker = HealthChecker(
-            mock_settings, conversation_cache=None, langfuse_service=None
-        )
+        # Mock metrics service to avoid MagicMock serialization issues
+        with patch("health.get_metrics_service") as mock_get_metrics:
+            mock_metrics = MagicMock()
+            mock_metrics.enabled = True
+            mock_metrics.get_active_conversation_count.return_value = 0
+            mock_metrics.get_rag_stats.return_value = {
+                "total_queries": 0,
+                "success_rate": 0.0,
+                "miss_rate": 0.0,
+                "avg_chunks": 0.0,
+                "documents_used": 0,
+            }
+            mock_metrics.get_agent_stats.return_value = {
+                "total": 0,
+                "successful": 0,
+                "failed": 0,
+                "success_rate": 0.0,
+                "error_rate": 0.0,
+                "by_agent": {},
+            }
+            mock_get_metrics.return_value = mock_metrics
 
-        mock_request = MagicMock()
-        response = await health_checker.metrics(mock_request)
-
-        import json
-
-        data = json.loads(response.body)
-
-        # Should handle gracefully - check if lifetime_stats exists
-        # If not, that's acceptable behavior
-        if "lifetime_stats" in data:
-            # If included, should indicate service is unavailable
-            assert (
-                data["lifetime_stats"].get("error") is not None
-                or data["lifetime_stats"].get("total_traces") == 0
+            # No Langfuse service provided
+            health_checker = HealthChecker(
+                mock_settings, conversation_cache=None, langfuse_service=None
             )
+
+            mock_request = MagicMock()
+            response = await health_checker.metrics(mock_request)
+
+            import json
+
+            data = json.loads(response.body)
+
+            # Should handle gracefully - check if lifetime_stats exists
+            # If not, that's acceptable behavior
+            if "lifetime_stats" in data:
+                # If included, should indicate service is unavailable
+                assert (
+                    data["lifetime_stats"].get("error") is not None
+                    or data["lifetime_stats"].get("total_traces") == 0
+                )

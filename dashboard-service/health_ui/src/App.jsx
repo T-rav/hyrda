@@ -74,7 +74,7 @@ function App() {
                 <StatusCard
                   title="Application"
                   status={health?.status || 'unknown'}
-                  details="InsightMesh Dashboard"
+                  details="Health API Server"
                   icon={<Activity size={20} />}
                 />
                 <StatusCard
@@ -331,6 +331,32 @@ function InfrastructureServices({ ready, metrics }) {
     )
   }
 
+  const renderServiceDetails = (details) => {
+    if (!details || typeof details !== 'object') return null
+
+    return Object.entries(details).map(([key, value]) => {
+      // Format the key for display
+      const label = key.replace(/_/g, ' ') + ':'
+
+      // Format the value for display
+      let displayValue = value
+      if (typeof value === 'boolean') {
+        displayValue = value ? 'Yes' : 'No'
+      } else if (Array.isArray(value)) {
+        displayValue = value.join(', ')
+      } else if (typeof value === 'object') {
+        displayValue = JSON.stringify(value)
+      }
+
+      return (
+        <div key={key} className="service-detail">
+          <span className="detail-label">{label}</span>
+          <span className="detail-value">{displayValue}</span>
+        </div>
+      )
+    })
+  }
+
   return (
     <div className="grid-section">
       <h2><Server size={20} /> Infrastructure</h2>
@@ -349,6 +375,11 @@ function InfrastructureServices({ ready, metrics }) {
                 </span>
               </div>
             </div>
+            {service.details && (
+              <div className="service-details">
+                {renderServiceDetails(service.details)}
+              </div>
+            )}
           </div>
         ))}
       </div>
