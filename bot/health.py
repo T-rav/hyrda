@@ -99,7 +99,6 @@ class HealthChecker:
             {
                 "status": "healthy",
                 "uptime_seconds": int(uptime.total_seconds()),
-                "timestamp": datetime.now(UTC).isoformat(),
                 "version": get_app_version(),
             }
         )

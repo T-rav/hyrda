@@ -958,7 +958,6 @@ def health_check() -> Response:
     return jsonify(
         {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
             "scheduler_running": scheduler_service.scheduler.running
             if scheduler_service and scheduler_service.scheduler
             else False,
