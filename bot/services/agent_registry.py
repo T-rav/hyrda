@@ -54,8 +54,12 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
             agents = data.get("agents", [])
 
             # Build registry dict mapping names/aliases to agent info
+            # Only include enabled agents (is_public=true)
             registry = {}
             for agent in agents:
+                # Skip disabled agents
+                if not agent.get("is_public", False):
+                    continue
                 name = agent["name"]
                 aliases = agent.get("aliases", [])
 
