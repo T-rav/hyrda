@@ -463,7 +463,7 @@ def sync_users() -> Response:
 @app.route("/api/health")
 def health_check() -> Response:
     """Health check endpoint."""
-    return jsonify({"status": "healthy", "service": "control_plane"})
+    return jsonify({"service": "control_plane"})
 
 
 # Group Management API Routes

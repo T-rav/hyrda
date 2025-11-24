@@ -957,7 +957,6 @@ def health_check() -> Response:
     """Health check endpoint."""
     return jsonify(
         {
-            "status": "healthy",
             "scheduler_running": scheduler_service.scheduler.running
             if scheduler_service and scheduler_service.scheduler
             else False,

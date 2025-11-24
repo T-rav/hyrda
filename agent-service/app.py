@@ -71,7 +71,7 @@ app.include_router(agents_router, prefix="/api")
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "healthy", "service": "agent-service"}
+    return {"service": "agent-service"}
 
 
 @app.get("/api/metrics")
