@@ -34,15 +34,15 @@ def init_db(database_url: str):
 def get_db_session():
     """Get database session context manager for agent metrics storage.
 
-    Uses DATA_DATABASE_URL to connect to the same database where tasks
-    store agent_usage records. This ensures agent invocation metrics
-    persist across service restarts.
+    Uses SYSTEM_DATABASE_URL to connect to the insightmesh_system database
+    where operational metrics like agent_usage are stored. This separates
+    system metrics from application data.
     """
     if _SessionLocal is None:
-        # Get DATABASE_URL from environment (shared with tasks service)
-        database_url = os.getenv("DATA_DATABASE_URL")
+        # Get SYSTEM_DATABASE_URL from environment
+        database_url = os.getenv("SYSTEM_DATABASE_URL")
         if not database_url:
-            raise ValueError("DATA_DATABASE_URL environment variable not set")
+            raise ValueError("SYSTEM_DATABASE_URL environment variable not set")
         init_db(database_url)
 
     session = _SessionLocal()

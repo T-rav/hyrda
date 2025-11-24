@@ -12,6 +12,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword"]
@@ -94,6 +95,7 @@ services:
       - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
       - SLACK_BOT_API_URL=http://bot:8080
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
@@ -258,6 +260,7 @@ services:
     environment:
       - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
       - FLASK_ENV=production
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
@@ -298,6 +301,7 @@ services:
     environment:
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
