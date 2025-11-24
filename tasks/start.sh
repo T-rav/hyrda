@@ -20,4 +20,4 @@ echo "✅ Migrations completed successfully"
 
 # Start the Flask application with Gunicorn
 echo "🌐 Starting Gunicorn..."
-exec gunicorn --bind 0.0.0.0:8081 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - app:app
+exec gunicorn --bind 0.0.0.0:8081 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - "app:create_app()"
