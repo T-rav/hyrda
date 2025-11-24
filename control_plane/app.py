@@ -166,86 +166,38 @@ def ensure_help_agent_system() -> None:
 # API Routes
 @app.route("/api/agents")
 def list_agents() -> Response:
-    """List all registered agents with permission info."""
+    """List all registered agents from database.
+
+    Agents are now stored in the database (agent_metadata table) and can be
+    configured dynamically without code changes. Bot and agent-service query
+    this endpoint to discover available agents.
+    """
     try:
         from models import AgentGroupPermission, AgentMetadata, get_db_session
 
-        # Try to get agents from bot registry, but fall back to known agents if not available
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
-
-        try:
-            from agents.registry import agent_registry
-            agents = agent_registry.list_agents()
-            agents_data = []
+        agents_data = []
+        with get_db_session() as session:
+            # Get all agents from database
+            agents = session.query(AgentMetadata).all()
 
             for agent in agents:
-                agent_class = agent.get("agent_class")
-
-                # Try to instantiate agent to get description
-                description = "No description"
-                try:
-                    instance = agent_class() if agent_class else None
-                    if instance and hasattr(instance, 'description'):
-                        description = instance.description
-                except Exception as inst_error:
-                    logger.warning(f"Could not instantiate agent {agent['name']}: {inst_error}")
-                    if agent_class and hasattr(agent_class, 'description'):
-                        description = agent_class.description
-
-                # Get metadata and group count from database
-                with get_db_session() as session:
-                    group_count = session.query(AgentGroupPermission).filter(
-                        AgentGroupPermission.agent_name == agent["name"]
-                    ).count()
-
-                    # Get agent metadata for enabled state
-                    metadata = session.query(AgentMetadata).filter(
-                        AgentMetadata.agent_name == agent["name"]
-                    ).first()
-                    is_enabled = metadata.is_public if metadata else False  # Default to disabled
+                # Count groups with access to this agent
+                group_count = session.query(AgentGroupPermission).filter(
+                    AgentGroupPermission.agent_name == agent.agent_name
+                ).count()
 
                 agents_data.append({
-                    "name": agent["name"],
-                    "aliases": agent.get("aliases", []),
-                    "description": description,
-                    "is_public": is_enabled,
-                    "requires_admin": False,
+                    "name": agent.agent_name,
+                    "display_name": agent.display_name,
+                    "aliases": agent.get_aliases(),
+                    "description": agent.description or "No description",
+                    "is_public": agent.is_public,
+                    "requires_admin": agent.requires_admin,
+                    "is_system": agent.is_system,
                     "authorized_groups": group_count,
                 })
 
-            return jsonify({"agents": agents_data})
-
-        except ImportError:
-            # Return mock data with real permission counts
-            logger.warning("Cannot import bot agents, using mock data")
-            mock_agents = [
-                {"name": "profile", "aliases": ["-profile"], "description": "Generate comprehensive company profiles"},
-                {"name": "meddic", "aliases": ["-meddic"], "description": "MEDDIC sales methodology coach"},
-                {"name": "help", "aliases": ["-help", "?"], "description": "Show available commands and help"},
-            ]
-
-            agents_data = []
-            with get_db_session() as session:
-                for agent in mock_agents:
-                    group_count = session.query(AgentGroupPermission).filter(
-                        AgentGroupPermission.agent_name == agent["name"]
-                    ).count()
-
-                    # Get agent metadata for enabled state
-                    metadata = session.query(AgentMetadata).filter(
-                        AgentMetadata.agent_name == agent["name"]
-                    ).first()
-                    is_enabled = metadata.is_public if metadata else False  # Default to disabled
-
-                    agents_data.append({
-                        **agent,
-                        "is_public": is_enabled,
-                        "requires_admin": False,
-                        "authorized_groups": group_count,
-                    })
-
-            return jsonify({"agents": agents_data})
+        return jsonify({"agents": agents_data})
 
     except Exception as e:
         logger.error(f"Error listing agents: {e}", exc_info=True)

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agents import agent_registry
+from services import agent_registry
 
 logger = logging.getLogger(__name__)
 
