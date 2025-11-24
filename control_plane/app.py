@@ -824,4 +824,8 @@ def serve_ui(path: str) -> Response:
         return send_from_directory(app.static_folder, "index.html")
 
 if __name__ == "__main__":
+    # For local development only - use gunicorn in production
+    import os
+    if os.getenv("ENVIRONMENT") == "production":
+        logger.warning("Running Flask dev server in production! Use gunicorn instead.")
     app.run(host="0.0.0.0", port=6001, debug=True)
