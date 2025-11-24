@@ -18,6 +18,6 @@ alembic -c alembic_data.ini upgrade head
 
 echo "✅ Migrations completed successfully"
 
-# Start the Flask application
-echo "🌐 Starting Flask application..."
-exec python -u /app/app.py
+# Start the Flask application with Gunicorn
+echo "🌐 Starting Gunicorn..."
+exec gunicorn --bind 0.0.0.0:8081 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - app:app

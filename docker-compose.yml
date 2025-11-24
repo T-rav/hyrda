@@ -236,8 +236,8 @@ services:
       sh -c "
         echo '=== Running security database migrations ===' &&
         alembic upgrade head &&
-        echo '=== Starting Flask app ===' &&
-        python -u app.py
+        echo '=== Starting Gunicorn ===' &&
+        exec gunicorn --bind 0.0.0.0:6001 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - app:app
       "
     logging:
       driver: "json-file"
