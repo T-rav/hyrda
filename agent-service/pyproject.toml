@@ -1,0 +1,154 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "insightmesh-agent-service"
+version = "1.0.0"
+description = "FastAPI service for LangGraph agent execution"
+authors = [
+    {name = "Travis Frisinger", email = "travis@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+    # FastAPI and ASGI server
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "gunicorn>=21.0.0",  # For production deployment
+
+    # Core async/web
+    "aiohttp>=3.8.0",
+    "httpx>=0.27.0",
+
+    # Configuration & environment
+    "python-dotenv>=1.0.0",
+    "pydantic>=1.9.0",
+    "pydantic-settings>=2.0.0",
+
+    # Logging
+    "loguru>=0.7.0",
+
+    # HTTP & requests
+    "requests>=2.28.0",
+
+    # Database
+    "pymysql>=1.1.0",
+    "sqlalchemy>=2.0.0",
+    "cryptography>=41.0.0",  # For MySQL auth
+
+    # Caching
+    "redis>=5.0.0",
+
+    # RAG and LLM dependencies
+    "openai>=1.35.0",
+    "anthropic>=0.25.0",
+    "qdrant-client>=1.7.0",
+    "cohere>=5.0.0",
+    "numpy>=1.24.0",
+    "langfuse>=3.3.0",
+
+    # LangChain and LangGraph
+    "langchain-core>=1.0.0",
+    "langchain-community>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-qdrant>=0.2.0",
+    "langchain-google-genai>=2.0.0",
+    "langgraph>=1.0.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",
+
+    # Document processing
+    "PyMuPDF>=1.23.0",
+    "python-docx>=0.8.11",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.21",
+    "weasyprint>=60.0",
+    "markdown>=3.5.0",
+    "beautifulsoup4>=4.12.0",
+    "tiktoken>=0.5.0",
+
+    # Search and research APIs
+    "tavily-python>=0.3.0",
+]
+
+[project.optional-dependencies]
+# Test dependencies
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "aioresponses>=0.7.4",
+    "fakeredis>=2.20.0",
+]
+
+# Development tools
+dev = [
+    "ruff==0.14.0",
+    "pyright==1.1.390",
+    "bandit[toml]==1.8.0",
+    "pre-commit==4.0.1",
+    "langgraph-cli[inmem]>=0.1.50",
+]
+
+[project.scripts]
+agent-service = "app:main"
+
+# Package discovery configuration
+[tool.setuptools]
+packages = ["agents", "api", "config", "services", "models", "utils"]
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["."]
+exclude = [
+    ".bzr", ".direnv", ".eggs", ".git", ".git-rewrite", ".hg",
+    ".mypy_cache", ".nox", ".pants.d", ".pytype", ".ruff_cache",
+    ".svn", ".tox", ".venv", "__pypackages__", "_build",
+    "buck-out", "build", "dist", "node_modules", "venv", "htmlcov",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "PL",   # pylint
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+    "PLR2004", # magic value used in comparison
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "B011", "F811"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["."]
+
+# Ruff formatting configuration
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# Pyright configuration
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["."]
+exclude = ["tests", "**/__pycache__", "**/node_modules"]
+typeCheckingMode = "standard"

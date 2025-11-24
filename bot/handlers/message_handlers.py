@@ -461,10 +461,6 @@ async def handle_bot_command(
         logger.error(f"Error posting thinking message: {e}")
 
     try:
-        # Instantiate and run agent
-        agent_class = agent_info["agent_class"]
-        agent = agent_class()
-
         # Build context for agent
         context = {
             "user_id": user_id,
@@ -512,9 +508,12 @@ async def handle_bot_command(
             )
             return True  # Command handled (but denied)
 
-        # Permission granted - execute agent
+        # Permission granted - execute agent via agent-service
         logger.info(f"Permission granted: user {user_id} can use agent {primary_name}")
-        result = await agent.run(query, context)
+        from services.agent_client import get_agent_client
+
+        agent_client = get_agent_client()
+        result = await agent_client.invoke_agent(primary_name, query, context)
         response = result.get("response", "No response from agent")
         metadata = result.get("metadata", {})
 

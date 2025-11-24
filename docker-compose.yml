@@ -186,6 +186,7 @@ services:
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
+      - AGENT_SERVICE_URL=http://agent_service:8000
     ports:
       - "${HEALTH_PORT:-8080}:8080"
     depends_on:
@@ -195,6 +196,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      agent_service:
+        condition: service_started
     command: >
       sh -c "
         python -u app.py
@@ -248,6 +251,52 @@ services:
       logging: "promtail"
       service: "control_plane"
       component: "admin-ui"
+    networks:
+      - insightmesh
+
+  # Agent Service - LangGraph agent execution
+  agent_service:
+    build:
+      context: ./agent-service
+      dockerfile: Dockerfile
+    image: insightmesh-agent-service:latest
+    container_name: insightmesh-agent-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - CACHE_REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=production
+      - PORT=8000
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+      - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+    ports:
+      - "${AGENT_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "agent_service"
+      component: "agents"
     networks:
       - insightmesh
 

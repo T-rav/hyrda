@@ -19,6 +19,7 @@ dependencies = [
 
     # Core async/web
     "aiohttp>=3.8.0",
+    "httpx>=0.27.0",  # For agent-service HTTP client
 
     # Configuration & environment
     "python-dotenv>=1.0.0",
@@ -35,41 +36,29 @@ dependencies = [
     "redis>=5.0.0",
     "pymysql>=1.1.0",  # MySQL driver for database features
 
-    # RAG and LLM dependencies
+    # LLM dependencies (for basic operations)
     "openai>=1.35.0",
     "anthropic>=0.25.0",
-    "qdrant-client>=1.7.0",
-    "cohere>=5.0.0",  # For cross-encoder reranking
-    "numpy>=1.24.0",
     "langfuse>=3.3.0",
-
-    # LangChain and LangGraph for deep research
-    "langchain-core>=1.0.0",  # Upgraded to 1.0 (stable API)
-    "langchain-community>=0.3.0",
-    "langchain-openai>=0.3.0",  # Compatible with langchain-core 1.0
-    "langchain-qdrant>=0.2.0",  # Qdrant vector store integration (updated)
-    "langchain-google-genai>=2.0.0",  # Google Gemini integration
-    "langgraph>=1.0.0",  # Upgraded to 1.0 (stable API)
-    "langgraph-checkpoint-sqlite>=2.0.0",  # Persistent checkpoint storage
 
     # Slack formatting
     "slackify-markdown>=0.2.0",
 
-    # Document processing
+    # Document processing (for file attachments)
     "PyMuPDF>=1.23.0",  # PDF processing (fitz)
     "python-docx>=0.8.11",  # Word documents
     "openpyxl>=3.1.0",  # Excel files
     "python-pptx>=0.6.21",  # PowerPoint files
     "weasyprint>=60.0",  # PDF generation from HTML/markdown
     "markdown>=3.5.0",  # Markdown to HTML conversion
-    "beautifulsoup4>=4.12.0",  # HTML parsing for SEC filings
-    "tiktoken>=0.5.0",  # Token counting for OpenAI embeddings
+    "beautifulsoup4>=4.12.0",  # HTML parsing
+    "tiktoken>=0.5.0",  # Token counting
 
     # Observability and monitoring
     "prometheus-client>=0.19.0",
 
-    # Search and research APIs (direct integrations)
-    "tavily-python>=0.3.0",  # Tavily web search & scrape
+    # NOTE: Agent execution dependencies (LangChain/LangGraph, Tavily, Qdrant, etc.)
+    # have been moved to agent-service. Bot now calls agent-service via HTTP.
 ]
 
 [project.optional-dependencies]
