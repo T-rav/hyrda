@@ -10,10 +10,10 @@ from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
 
-from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
+from services import agent_registry
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
@@ -61,9 +61,14 @@ def create_app():
     logger.info("Prompt service initialized")
 
     # Log registered agents
-    registered_agents = agent_registry.list_agents()
-    agent_names = [agent["name"] for agent in registered_agents]
-    logger.info(f"Registered {len(agent_names)} agents: {', '.join(agent_names)}")
+    registry = agent_registry.get_agent_registry()
+    # Get unique agent names (registry has both primary names and aliases as keys)
+    unique_agents = {
+        info["name"] for info in registry.values() if info.get("is_primary", True)
+    }
+    logger.info(
+        f"Registered {len(unique_agents)} agents: {', '.join(sorted(unique_agents))}"
+    )
 
     # Create LLM service
     llm_service = LLMService(settings)

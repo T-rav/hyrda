@@ -44,6 +44,65 @@ async def health():
     return {"status": "healthy", "service": "dashboard"}
 
 
+@app.get("/api/ready")
+async def ready():
+    """Readiness check - aggregates health from all services."""
+    checks = {
+        "dashboard": {"status": "healthy"},
+    }
+
+    # Check all services
+    async with aiohttp.ClientSession() as session:
+        for service_name, base_url in SERVICES.items():
+            try:
+                async with session.get(
+                    f"{base_url}/health", timeout=aiohttp.ClientTimeout(total=5)
+                ) as response:
+                    if response.status == 200:
+                        checks[service_name] = {
+                            "status": "healthy",
+                            "url": base_url,
+                        }
+                    else:
+                        checks[service_name] = {
+                            "status": "unhealthy",
+                            "error": f"HTTP {response.status}",
+                        }
+            except aiohttp.ClientConnectorError:
+                checks[service_name] = {
+                    "status": "unavailable",
+                    "error": "Service not reachable",
+                }
+            except Exception as e:
+                checks[service_name] = {"status": "error", "error": str(e)}
+
+        # Fetch RAG performance data from bot for the UI
+        try:
+            async with session.get(
+                f"{SERVICES['bot']}/api/metrics", timeout=aiohttp.ClientTimeout(total=5)
+            ) as response:
+                if response.status == 200:
+                    bot_metrics = await response.json()
+                    rag_data = bot_metrics.get("rag_performance", {})
+                    if rag_data:
+                        checks["rag"] = {
+                            "status": "enabled",
+                            **rag_data,
+                        }
+        except Exception as e:
+            logger.warning(f"Failed to fetch RAG data: {e}")
+
+    # Overall readiness - consider "enabled" status as healthy for optional features like RAG
+    all_healthy = all(
+        c.get("status") in ["healthy", "enabled"] for c in checks.values()
+    )
+
+    return {
+        "status": "ready" if all_healthy else "not_ready",
+        "checks": checks,
+    }
+
+
 @app.get("/api/metrics")
 async def get_all_metrics():
     """Aggregate metrics from all services."""
@@ -75,6 +134,10 @@ async def get_all_metrics():
                 }
             except Exception as e:
                 metrics[service_name] = {"status": "error", "error": str(e)}
+
+    # Flatten lifetime_stats to top level for UI compatibility
+    if "bot" in metrics and "lifetime_stats" in metrics["bot"]:
+        metrics["lifetime_stats"] = metrics["bot"]["lifetime_stats"]
 
     return metrics
 

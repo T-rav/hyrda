@@ -304,8 +304,6 @@ class HealthChecker:
 
         metrics = {
             "uptime_seconds": int(uptime.total_seconds()),
-            "start_time": self.start_time.isoformat(),
-            "current_time": datetime.now(UTC).isoformat(),
         }
 
         # Add cache statistics if available

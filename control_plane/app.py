@@ -459,6 +459,7 @@ def sync_users() -> Response:
 
 
 
+@app.route("/health")
 @app.route("/api/health")
 def health_check() -> Response:
     """Health check endpoint."""

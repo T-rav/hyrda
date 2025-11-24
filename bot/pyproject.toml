@@ -34,12 +34,17 @@ dependencies = [
 
     # Database & caching
     "redis>=5.0.0",
+    "sqlalchemy>=2.0.0",  # ORM for database models
     "pymysql>=1.1.0",  # MySQL driver for database features
 
     # LLM dependencies (for basic operations)
     "openai>=1.35.0",
     "anthropic>=0.25.0",
     "langfuse>=3.3.0",
+
+    # RAG dependencies (for vector search)
+    "qdrant-client>=1.7.0",  # Vector database client for RAG
+    "cohere>=5.0.0",  # Used by Qdrant for some operations
 
     # Slack formatting
     "slackify-markdown>=0.2.0",
