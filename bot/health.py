@@ -93,13 +93,9 @@ class HealthChecker:
 
     async def health_check(self, request):
         """Basic health check - is the service running?"""
-        uptime = datetime.now(UTC) - self.start_time
-
         return web.json_response(
             {
                 "status": "healthy",
-                "uptime_seconds": int(uptime.total_seconds()),
-                "version": get_app_version(),
             }
         )
 
