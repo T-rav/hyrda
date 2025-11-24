@@ -2,7 +2,7 @@ import io
 import os
 import sys
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -230,6 +230,97 @@ class ProfileAgentMockHelper:
         mock_graph.astream = mock_astream
         mock_graph.aget_state = mock_aget_state
         return mock_graph
+
+
+class AgentRegistryMockFactory:
+    """Factory for creating agent registry mocks (route_command, agent_info)"""
+
+    @staticmethod
+    def create_profile_agent_info():
+        """Create mock agent info for profile agent"""
+        return {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+            "description": "Company research agent",
+        }
+
+    @staticmethod
+    def create_meddic_agent_info():
+        """Create mock agent info for MEDDIC agent"""
+        return {
+            "name": "meddic",
+            "endpoint": "http://agent-service:8000/agents/meddic/invoke",
+            "description": "MEDDIC sales framework analysis agent",
+        }
+
+    @staticmethod
+    def create_route_command_mock(agent_name: str, query: str):
+        """Create a mock route_command function that returns agent info"""
+        agent_info_map = {
+            "profile": AgentRegistryMockFactory.create_profile_agent_info(),
+            "meddic": AgentRegistryMockFactory.create_meddic_agent_info(),
+        }
+
+        agent_info = agent_info_map.get(agent_name)
+        if not agent_info:
+            return None, query, None
+
+        return agent_info, query, agent_name
+
+
+class AgentClientMockFactory:
+    """Factory for creating agent client mocks (HTTP invocation)"""
+
+    @staticmethod
+    def create_successful_response():
+        """Create a mock successful agent response"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "output": {"result": "Agent completed successfully"},
+            "status": "success",
+        }
+        return mock_response
+
+    @staticmethod
+    def create_error_response(error_message: str = "Agent service unavailable"):
+        """Create a mock error response"""
+        mock_response = Mock()
+        mock_response.status_code = 503
+        mock_response.json.return_value = {"error": error_message}
+        return mock_response
+
+    @staticmethod
+    def create_mock_client(success: bool = True):
+        """Create a mock agent client"""
+        mock_client = Mock()
+        if success:
+            mock_client.invoke_agent = AsyncMock(
+                return_value=AgentClientMockFactory.create_successful_response()
+            )
+        else:
+            mock_client.invoke_agent = AsyncMock(
+                side_effect=Exception("Unable to connect to agent service")
+            )
+        return mock_client
+
+
+class PermissionServiceMockFactory:
+    """Factory for creating permission service mocks"""
+
+    @staticmethod
+    def create_allowed_permission():
+        """Create a permission service that allows access"""
+        mock_service = Mock()
+        mock_service.can_use_agent = Mock(return_value=(True, None))
+        return mock_service
+
+    @staticmethod
+    def create_denied_permission(reason: str = "Access denied"):
+        """Create a permission service that denies access"""
+        mock_service = Mock()
+        mock_service.can_use_agent = Mock(return_value=(False, reason))
+        return mock_service
 
 
 class FileProcessingTestDataFactory:
@@ -687,23 +778,23 @@ class TestBotCommandHandling:
         # Mock the ProfileAgent graph at module level
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        # Mock route_command to return profile agent info
-        mock_agent_info = {
-            "name": "profile",
-            "endpoint": "http://agent-service:8000/agents/profile/invoke",
-            "description": "Company research agent",
-        }
+        # Use factory to create route_command mock
+        route_result = AgentRegistryMockFactory.create_route_command_mock(
+            "profile", "tell me about Charlotte"
+        )
 
         with (
             patch("agents.profile_agent.profile_researcher", mock_graph),
-            patch("handlers.message_handlers.route_command") as mock_route,
+            patch("handlers.message_handlers.route_command", return_value=route_result),
+            patch(
+                "services.permission_service.get_permission_service",
+                return_value=PermissionServiceMockFactory.create_allowed_permission(),
+            ),
+            patch(
+                "services.agent_client.get_agent_client",
+                return_value=AgentClientMockFactory.create_mock_client(success=True),
+            ),
         ):
-            mock_route.return_value = (
-                mock_agent_info,
-                "tell me about Charlotte",
-                "profile",
-            )
-
             result = await handle_bot_command(
                 text="-profile tell me about Charlotte",
                 user_id="U123",
@@ -828,19 +919,22 @@ class TestBotCommandHandling:
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        # Mock route_command to return profile agent with empty query
-        mock_agent_info = {
-            "name": "profile",
-            "endpoint": "http://agent-service:8000/agents/profile/invoke",
-        }
+        # Use factories for all mocks
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
+        route_result = AgentRegistryMockFactory.create_route_command_mock("profile", "")
 
         with (
             patch("agents.profile_agent.profile_researcher", mock_graph),
-            patch("handlers.message_handlers.route_command") as mock_route,
+            patch("handlers.message_handlers.route_command", return_value=route_result),
+            patch(
+                "services.permission_service.get_permission_service",
+                return_value=PermissionServiceMockFactory.create_allowed_permission(),
+            ),
+            patch(
+                "services.agent_client.get_agent_client",
+                return_value=AgentClientMockFactory.create_mock_client(success=True),
+            ),
         ):
-            mock_route.return_value = (mock_agent_info, "", "profile")
-
             result = await handle_bot_command(
                 text="-profile ",
                 user_id="U123",  # Empty query
@@ -868,19 +962,24 @@ class TestBotCommandHandling:
             side_effect=[Exception("Slack API error"), None]
         )
 
-        # Mock route_command to return profile agent
-        mock_agent_info = {
-            "name": "profile",
-            "endpoint": "http://agent-service:8000/agents/profile/invoke",
-        }
+        # Use factories for all mocks
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
+        route_result = AgentRegistryMockFactory.create_route_command_mock(
+            "profile", "test query"
+        )
 
         with (
             patch("agents.profile_agent.profile_researcher", mock_graph),
-            patch("handlers.message_handlers.route_command") as mock_route,
+            patch("handlers.message_handlers.route_command", return_value=route_result),
+            patch(
+                "services.permission_service.get_permission_service",
+                return_value=PermissionServiceMockFactory.create_allowed_permission(),
+            ),
+            patch(
+                "services.agent_client.get_agent_client",
+                return_value=AgentClientMockFactory.create_mock_client(success=True),
+            ),
         ):
-            mock_route.return_value = (mock_agent_info, "test query", "profile")
-
             result = await handle_bot_command(
                 text="-profile test query",
                 user_id="U123",
@@ -908,19 +1007,24 @@ class TestBotCommandHandling:
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        # Mock route_command to return profile agent
-        mock_agent_info = {
-            "name": "profile",
-            "endpoint": "http://agent-service:8000/agents/profile/invoke",
-        }
+        # Use factories for all mocks
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
+        route_result = AgentRegistryMockFactory.create_route_command_mock(
+            "profile", "test"
+        )
 
         with (
             patch("agents.profile_agent.profile_researcher", mock_graph),
-            patch("handlers.message_handlers.route_command") as mock_route,
+            patch("handlers.message_handlers.route_command", return_value=route_result),
+            patch(
+                "services.permission_service.get_permission_service",
+                return_value=PermissionServiceMockFactory.create_allowed_permission(),
+            ),
+            patch(
+                "services.agent_client.get_agent_client",
+                return_value=AgentClientMockFactory.create_mock_client(success=True),
+            ),
         ):
-            mock_route.return_value = (mock_agent_info, "test", "profile")
-
             await handle_bot_command(
                 text="-profile test",
                 user_id="U123",
@@ -1018,21 +1122,24 @@ class TestBotCommandHandling:
             return_value="Please provide more details about what you'd like to know."
         )
 
-        # Mock the ProfileAgent graph at module level
+        # Use factories for all mocks
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
-
-        # Mock route_command to return profile agent
-        mock_agent_info = {
-            "name": "profile",
-            "endpoint": "http://agent-service:8000/agents/profile/invoke",
-        }
+        route_result = AgentRegistryMockFactory.create_route_command_mock(
+            "profile", "test"
+        )
 
         with (
             patch("agents.profile_agent.profile_researcher", mock_graph),
-            patch("handlers.message_handlers.route_command") as mock_route,
+            patch("handlers.message_handlers.route_command", return_value=route_result),
+            patch(
+                "services.permission_service.get_permission_service",
+                return_value=PermissionServiceMockFactory.create_allowed_permission(),
+            ),
+            patch(
+                "services.agent_client.get_agent_client",
+                return_value=AgentClientMockFactory.create_mock_client(success=True),
+            ),
         ):
-            mock_route.return_value = (mock_agent_info, "test", "profile")
-
             # Test uppercase
             await handle_message(
                 text="-PROFILE test",
