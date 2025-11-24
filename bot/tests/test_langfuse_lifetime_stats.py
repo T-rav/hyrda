@@ -5,6 +5,7 @@ Tests the new get_lifetime_stats method that queries Langfuse API for historical
 conversation and trace data since a given start date.
 """
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -495,14 +496,16 @@ class TestHealthEndpointLifetimeStats:
                 "avg_chunks_per_query": 0.0,
                 "documents_used": 0,
                 "total_documents_used": 0,
+                "last_reset": datetime.now(),
             }
             mock_metrics.get_agent_stats.return_value = {
-                "total": 0,
-                "successful": 0,
-                "failed": 0,
+                "total_invocations": 0,
+                "successful_invocations": 0,
+                "failed_invocations": 0,
                 "success_rate": 0.0,
                 "error_rate": 0.0,
                 "by_agent": {},
+                "last_reset": datetime.now(),
             }
             mock_get_metrics.return_value = mock_metrics
 
@@ -546,14 +549,16 @@ class TestHealthEndpointLifetimeStats:
                 "avg_chunks_per_query": 0.0,
                 "documents_used": 0,
                 "total_documents_used": 0,
+                "last_reset": datetime.now(),
             }
             mock_metrics.get_agent_stats.return_value = {
-                "total": 0,
-                "successful": 0,
-                "failed": 0,
+                "total_invocations": 0,
+                "successful_invocations": 0,
+                "failed_invocations": 0,
                 "success_rate": 0.0,
                 "error_rate": 0.0,
                 "by_agent": {},
+                "last_reset": datetime.now(),
             }
             mock_get_metrics.return_value = mock_metrics
 

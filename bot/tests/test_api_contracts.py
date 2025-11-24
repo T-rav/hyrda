@@ -5,6 +5,7 @@ Tests to ensure API endpoints maintain expected contracts and protect against
 dashboard/frontend breaking changes.
 """
 
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 from aiohttp import web
@@ -51,6 +52,12 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         settings = Mock(spec=Settings)
         settings.health_port = 8080
         settings.environment = "test"
+
+        # Mock LLM settings for metrics endpoint
+        llm_settings = Mock()
+        llm_settings.provider = "openai"
+        llm_settings.model = "gpt-4o-mini"
+        settings.llm = llm_settings
 
         # Create health checker
         health_checker = HealthChecker(settings)
@@ -108,14 +115,16 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                 "avg_chunks_per_query": 0.0,
                 "documents_used": 0,
                 "total_documents_used": 0,
+                "last_reset": datetime.now(),
             }
             mock_metrics.get_agent_stats.return_value = {
-                "total": 0,
-                "successful": 0,
-                "failed": 0,
+                "total_invocations": 0,
+                "successful_invocations": 0,
+                "failed_invocations": 0,
                 "success_rate": 0.0,
                 "error_rate": 0.0,
                 "by_agent": {},
+                "last_reset": datetime.now(),
             }
             mock_metrics_svc.return_value = mock_metrics
 
