@@ -28,3 +28,13 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["api*", "models*", "services*"]
+exclude = [
+    "ui*",
+    "node_modules*",
+    "dist*",
+    "build*",
+    "tests*",
+    "logs*",
+    "venv*",
+    "*.egg-info*",
+]
