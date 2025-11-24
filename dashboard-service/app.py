@@ -38,6 +38,7 @@ SERVICES = {
 
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
     """Health check for dashboard service itself."""
     return {"status": "healthy", "service": "dashboard"}
