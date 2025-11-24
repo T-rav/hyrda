@@ -578,30 +578,28 @@ db-status: $(VENV)
 db-setup-system:
 	@echo "$(BLUE)🔧 Setting up system database (insightmesh_system)...$(RESET)"
 	@echo "$(YELLOW)This will create the database and agent_usage table without destroying existing data$(RESET)"
-	@docker exec -i insightmesh-mysql mysql -ppassword <<-EOF || (echo "$(RED)❌ Failed to setup system database$(RESET)" && exit 1)
-		CREATE DATABASE IF NOT EXISTS insightmesh_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-		CREATE USER IF NOT EXISTS 'insightmesh_system'@'%' IDENTIFIED BY 'insightmesh_system_password';
-		GRANT ALL PRIVILEGES ON insightmesh_system.* TO 'insightmesh_system'@'%';
-		FLUSH PRIVILEGES;
-		USE insightmesh_system;
-		CREATE TABLE IF NOT EXISTS agent_usage (
-		    id INT PRIMARY KEY AUTO_INCREMENT,
-		    agent_name VARCHAR(100) NOT NULL UNIQUE,
-		    total_invocations INT NOT NULL DEFAULT 0,
-		    successful_invocations INT NOT NULL DEFAULT 0,
-		    failed_invocations INT NOT NULL DEFAULT 0,
-		    first_invocation DATETIME NULL,
-		    last_invocation DATETIME NULL,
-		    is_active BOOLEAN NOT NULL DEFAULT 1,
-		    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		    INDEX ix_agent_usage_agent_name (agent_name),
-		    INDEX ix_agent_usage_is_active (is_active)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-	EOF
+	@docker exec insightmesh-mysql mysql -ppassword -e "CREATE DATABASE IF NOT EXISTS insightmesh_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
+	@docker exec insightmesh-mysql mysql -ppassword -e "CREATE USER IF NOT EXISTS 'insightmesh_system'@'%' IDENTIFIED BY 'insightmesh_system_password';" 2>/dev/null || true
+	@docker exec insightmesh-mysql mysql -ppassword -e "GRANT ALL PRIVILEGES ON insightmesh_system.* TO 'insightmesh_system'@'%';" 2>/dev/null || true
+	@docker exec insightmesh-mysql mysql -ppassword -e "FLUSH PRIVILEGES;" 2>/dev/null || true
+	@docker exec insightmesh-mysql mysql -ppassword insightmesh_system -e "\
+		CREATE TABLE IF NOT EXISTS agent_usage ( \
+		    id INT PRIMARY KEY AUTO_INCREMENT, \
+		    agent_name VARCHAR(100) NOT NULL UNIQUE, \
+		    total_invocations INT NOT NULL DEFAULT 0, \
+		    successful_invocations INT NOT NULL DEFAULT 0, \
+		    failed_invocations INT NOT NULL DEFAULT 0, \
+		    first_invocation DATETIME NULL, \
+		    last_invocation DATETIME NULL, \
+		    is_active BOOLEAN NOT NULL DEFAULT 1, \
+		    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+		    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, \
+		    INDEX ix_agent_usage_agent_name (agent_name), \
+		    INDEX ix_agent_usage_is_active (is_active) \
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;" 2>/dev/null || (echo "$(RED)❌ Failed to setup system database$(RESET)" && exit 1)
 	@echo "$(GREEN)✅ System database setup complete!$(RESET)"
 	@echo "$(BLUE)📊 Verifying setup...$(RESET)"
-	@docker exec -i insightmesh-mysql mysql -ppassword -e "SHOW TABLES FROM insightmesh_system;" || echo "$(RED)Failed to verify$(RESET)"
+	@docker exec insightmesh-mysql mysql -ppassword -e "SHOW TABLES FROM insightmesh_system;" 2>/dev/null || echo "$(RED)Failed to verify$(RESET)"
 
 # Control Plane Service Targets
 lint-control-plane: $(VENV)
