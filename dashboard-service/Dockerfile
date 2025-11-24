@@ -1,4 +1,12 @@
-# Use Python 3.11 slim image
+# Stage 1: Build React UI
+FROM node:18-alpine AS ui-builder
+WORKDIR /app/health_ui
+COPY health_ui/package*.json ./
+RUN npm ci --no-audit
+COPY health_ui/ ./
+RUN npm run build
+
+# Stage 2: Python application
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Use bash with pipefail
@@ -18,6 +26,9 @@ RUN useradd -m -u 1000 appuser && \
 
 # Copy application code
 COPY --chown=appuser:appuser . .
+
+# Copy built UI from stage 1
+COPY --from=ui-builder /app/health_ui/dist ./health_ui/dist
 
 # Install dependencies
 RUN pip install --no-cache-dir --upgrade pip wheel setuptools && \
