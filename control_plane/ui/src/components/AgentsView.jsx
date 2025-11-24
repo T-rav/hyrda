@@ -3,7 +3,7 @@ import { Bot, RefreshCw } from 'lucide-react'
 import AgentCard from './AgentCard'
 import ManageAgentAccessModal from './ManageAgentAccessModal'
 
-function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, selectedAgent, selectedAgentDetails, setSelectedAgent, onGrantToGroup, onRevokeFromGroup, onToggle }) {
+function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, onForceRefresh, selectedAgent, selectedAgentDetails, setSelectedAgent, onGrantToGroup, onRevokeFromGroup, onToggle }) {
   const [showManageAccess, setShowManageAccess] = useState(false)
 
   const handleAgentClick = (agent) => {
@@ -30,10 +30,16 @@ function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, sel
     <div className="content-section">
       <div className="section-header">
         <h2>Registered Agents ({agents.length})</h2>
-        <button onClick={onRefresh} className="btn-secondary">
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button onClick={onForceRefresh} className="btn-secondary" title="Force refresh from agent-service (clears cache)">
+            <RefreshCw size={16} />
+            Force Refresh
+          </button>
+          <button onClick={onRefresh} className="btn-secondary">
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="agents-grid">

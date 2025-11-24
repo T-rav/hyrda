@@ -31,7 +31,18 @@ from api import agents_router  # noqa: E402
 async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI application."""
     logger.info("Starting Agent Service...")
-    logger.info(f"Registered agents: {[a['name'] for a in agent_registry.list_agents()]}")
+
+    # Sync agents to control plane on startup
+    from services.agent_sync import sync_agents_to_control_plane
+
+    sync_agents_to_control_plane()
+
+    # Log registered agents
+    from services import agent_registry as dynamic_registry
+
+    agents = dynamic_registry.list_agents()
+    logger.info(f"Registered agents: {[a['name'] for a in agents]}")
+
     yield
     logger.info("Shutting down Agent Service...")
 

@@ -32,9 +32,9 @@ export function useAgents(toast) {
     }
   }
 
-  const fetchAgents = async () => {
+  const fetchAgents = async (showLoading = true) => {
     try {
-      setLoading(true)
+      if (showLoading) setLoading(true)
       const response = await fetch('/api/agents')
       if (!response.ok) throw new Error('Failed to fetch agents')
       const data = await response.json()
@@ -47,8 +47,13 @@ export function useAgents(toast) {
     } catch (err) {
       setError(err.message)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
+  }
+
+  const refreshAgents = async () => {
+    // Force refresh without showing loading spinner
+    await fetchAgents(false)
   }
 
   const fetchAgentDetails = async (agentName) => {
@@ -97,6 +102,7 @@ export function useAgents(toast) {
     usageStats,
     setSelectedAgent,
     fetchAgents,
+    refreshAgents,
     fetchAgentDetails,
     toggleAgent,
   }

@@ -204,6 +204,66 @@ def list_agents() -> Response:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/agents/register", methods=["POST"])
+def register_agent() -> Response:
+    """Register or update an agent in the database.
+
+    Called by agent-service on startup to sync available agents.
+    Upserts agent metadata - creates if doesn't exist, updates if it does.
+    """
+    try:
+        from models import AgentMetadata, get_db_session
+
+        data = request.get_json()
+        agent_name = data.get("name")
+        display_name = data.get("display_name", agent_name)
+        description = data.get("description", "")
+        aliases = data.get("aliases", [])
+        is_system = data.get("is_system", False)
+
+        if not agent_name:
+            return jsonify({"error": "name is required"}), 400
+
+        with get_db_session() as session:
+            # Check if agent exists
+            agent = session.query(AgentMetadata).filter(
+                AgentMetadata.agent_name == agent_name
+            ).first()
+
+            if agent:
+                # Update existing agent
+                agent.display_name = display_name
+                agent.description = description
+                agent.set_aliases(aliases)
+                agent.is_system = is_system
+                logger.info(f"Updated agent '{agent_name}' in database")
+            else:
+                # Create new agent (default enabled)
+                agent = AgentMetadata(
+                    agent_name=agent_name,
+                    display_name=display_name,
+                    description=description,
+                    is_public=True,  # Default enabled
+                    requires_admin=False,
+                    is_system=is_system,
+                )
+                agent.set_aliases(aliases)
+                session.add(agent)
+                logger.info(f"Registered new agent '{agent_name}' in database")
+
+            session.commit()
+
+        return jsonify({
+            "success": True,
+            "agent": agent_name,
+            "action": "updated" if agent else "created"
+        })
+
+    except Exception as e:
+        logger.error(f"Error registering agent: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/agents/<string:agent_name>")
 def get_agent_details(agent_name: str) -> Response:
     """Get detailed information about a specific agent."""

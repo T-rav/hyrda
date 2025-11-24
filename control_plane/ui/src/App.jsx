@@ -27,6 +27,7 @@ function App() {
     usageStats,
     setSelectedAgent,
     fetchAgents,
+    refreshAgents,
     fetchAgentDetails,
     toggleAgent,
   } = useAgents(toast)
@@ -116,6 +117,7 @@ function App() {
             error={error}
             usageStats={usageStats}
             onRefresh={fetchAgents}
+            onForceRefresh={refreshAgents}
             selectedAgent={selectedAgent}
             selectedAgentDetails={selectedAgentDetails}
             setSelectedAgent={setSelectedAgent}
