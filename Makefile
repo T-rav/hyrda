@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -95,13 +95,14 @@ help:
 	@echo "  quality-all     Run all quality checks (Python + React)"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
-	@echo "  db-stop         🛑 Stop MySQL databases"
-	@echo "  db-migrate      📋 Generate new migration files"
-	@echo "  db-upgrade      ⬆️  Apply pending migrations"
-	@echo "  db-downgrade    ⬇️  Rollback last migration"
-	@echo "  db-reset        🔄 Reset databases (WARNING: destroys data)"
-	@echo "  db-status       📊 Show migration status"
+	@echo "  db-start         🐳 Start MySQL databases (main docker-compose.yml)"
+	@echo "  db-stop          🛑 Stop MySQL databases"
+	@echo "  db-setup-system  🔧 Setup system database (agent_usage) without destroying data"
+	@echo "  db-migrate       📋 Generate new migration files"
+	@echo "  db-upgrade       ⬆️  Apply pending migrations"
+	@echo "  db-downgrade     ⬇️  Rollback last migration"
+	@echo "  db-reset         🔄 Reset databases (WARNING: destroys data)"
+	@echo "  db-status        📊 Show migration status"
 
 $(VENV):
 	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
@@ -573,6 +574,34 @@ db-status: $(VENV)
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+
+db-setup-system:
+	@echo "$(BLUE)🔧 Setting up system database (insightmesh_system)...$(RESET)"
+	@echo "$(YELLOW)This will create the database and agent_usage table without destroying existing data$(RESET)"
+	@docker exec -i insightmesh-mysql mysql -ppassword <<-EOF || (echo "$(RED)❌ Failed to setup system database$(RESET)" && exit 1)
+		CREATE DATABASE IF NOT EXISTS insightmesh_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+		CREATE USER IF NOT EXISTS 'insightmesh_system'@'%' IDENTIFIED BY 'insightmesh_system_password';
+		GRANT ALL PRIVILEGES ON insightmesh_system.* TO 'insightmesh_system'@'%';
+		FLUSH PRIVILEGES;
+		USE insightmesh_system;
+		CREATE TABLE IF NOT EXISTS agent_usage (
+		    id INT PRIMARY KEY AUTO_INCREMENT,
+		    agent_name VARCHAR(100) NOT NULL UNIQUE,
+		    total_invocations INT NOT NULL DEFAULT 0,
+		    successful_invocations INT NOT NULL DEFAULT 0,
+		    failed_invocations INT NOT NULL DEFAULT 0,
+		    first_invocation DATETIME NULL,
+		    last_invocation DATETIME NULL,
+		    is_active BOOLEAN NOT NULL DEFAULT 1,
+		    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		    INDEX ix_agent_usage_agent_name (agent_name),
+		    INDEX ix_agent_usage_is_active (is_active)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+	EOF
+	@echo "$(GREEN)✅ System database setup complete!$(RESET)"
+	@echo "$(BLUE)📊 Verifying setup...$(RESET)"
+	@docker exec -i insightmesh-mysql mysql -ppassword -e "SHOW TABLES FROM insightmesh_system;" || echo "$(RED)Failed to verify$(RESET)"
 
 # Control Plane Service Targets
 lint-control-plane: $(VENV)
