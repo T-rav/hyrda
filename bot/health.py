@@ -388,6 +388,13 @@ class HealthChecker:
             },
         }
 
+        # Add LLM configuration from settings
+        if self.settings and self.settings.llm:
+            metrics["llm"] = {
+                "provider": self.settings.llm.provider,
+                "model": self.settings.llm.model,
+            }
+
         return web.json_response(metrics)
 
     async def prometheus_metrics(self, request):

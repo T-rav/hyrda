@@ -74,7 +74,7 @@ function App() {
                 <StatusCard
                   title="Application"
                   status={health?.status || 'unknown'}
-                  details={`Version: ${health?.version || '1.0.0'}`}
+                  details="InsightMesh Dashboard"
                   icon={<Activity size={20} />}
                 />
                 <StatusCard

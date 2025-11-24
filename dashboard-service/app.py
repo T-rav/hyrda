@@ -76,21 +76,55 @@ async def ready():
             except Exception as e:
                 checks[service_name] = {"status": "error", "error": str(e)}
 
-        # Fetch RAG performance data from bot for the UI
+        # Fetch additional data from bot metrics for the UI
         try:
             async with session.get(
                 f"{SERVICES['bot']}/api/metrics", timeout=aiohttp.ClientTimeout(total=5)
             ) as response:
                 if response.status == 200:
                     bot_metrics = await response.json()
+
+                    # RAG performance data
                     rag_data = bot_metrics.get("rag_performance", {})
                     if rag_data:
                         checks["rag"] = {
                             "status": "enabled",
                             **rag_data,
                         }
+
+                    # Cache data
+                    cache_data = bot_metrics.get("cache", {})
+                    if cache_data:
+                        checks["cache"] = {
+                            "status": "healthy" if cache_data.get("status") == "available" else "unhealthy",
+                            "cached_conversations": cache_data.get("cached_conversations", 0),
+                            "memory_used": cache_data.get("memory_used", "N/A"),
+                        }
+
+                    # Langfuse data
+                    langfuse_data = bot_metrics.get("services", {}).get("langfuse", {})
+                    if langfuse_data:
+                        checks["langfuse"] = {
+                            "status": "healthy" if langfuse_data.get("enabled") and langfuse_data.get("available") else "disabled",
+                            "host": "cloud.langfuse.com",
+                        }
+
+                    # LLM API data from bot metrics
+                    llm_data = bot_metrics.get("llm", {})
+                    if llm_data:
+                        checks["llm_api"] = {
+                            "status": "healthy",
+                            "provider": llm_data.get("provider", "Unknown"),
+                            "model": llm_data.get("model", "Unknown"),
+                        }
+                    else:
+                        checks["llm_api"] = {
+                            "status": "unknown",
+                            "provider": "Not configured",
+                            "model": "N/A",
+                        }
         except Exception as e:
-            logger.warning(f"Failed to fetch RAG data: {e}")
+            logger.warning(f"Failed to fetch bot metrics: {e}")
 
     # Overall readiness - consider "enabled" status as healthy for optional features like RAG
     all_healthy = all(
