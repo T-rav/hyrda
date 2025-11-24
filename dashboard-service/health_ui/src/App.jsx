@@ -346,22 +346,6 @@ function InfrastructureServices({ ready, metrics }) {
                 </span>
               </div>
             </div>
-            {service.details && (
-              <div className="service-details">
-                {Object.entries(service.details).map(([detailKey, value]) => (
-                  <div key={detailKey} className="detail-item">
-                    <span className="detail-key">{detailKey.replace(/_/g, ' ')}:</span>
-                    <span className="detail-value">
-                      {typeof value === 'boolean'
-                        ? (value ? 'Yes' : 'No')
-                        : Array.isArray(value)
-                          ? value.join(', ')
-                          : value}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         ))}
       </div>

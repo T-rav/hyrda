@@ -124,7 +124,7 @@ async def ready():
                             "model": "N/A",
                         }
         except Exception as e:
-            logger.warning(f"Failed to fetch bot metrics: {e}")
+            logger.error(f"Failed to fetch bot metrics: {type(e).__name__}: {e}", exc_info=True)
 
     # Overall readiness - consider "enabled" status as healthy for optional features like RAG
     all_healthy = all(
