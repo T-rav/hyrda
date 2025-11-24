@@ -24,6 +24,7 @@ function App() {
     error,
     selectedAgent,
     selectedAgentDetails,
+    usageStats,
     setSelectedAgent,
     fetchAgents,
     fetchAgentDetails,
@@ -113,6 +114,7 @@ function App() {
             groups={groups}
             loading={loading}
             error={error}
+            usageStats={usageStats}
             onRefresh={fetchAgents}
             selectedAgent={selectedAgent}
             selectedAgentDetails={selectedAgentDetails}
