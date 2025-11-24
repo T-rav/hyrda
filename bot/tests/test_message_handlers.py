@@ -685,10 +685,25 @@ class TestBotCommandHandling:
         )
 
         # Mock the ProfileAgent graph at module level
-
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        with patch("agents.profile_agent.profile_researcher", mock_graph):
+        # Mock route_command to return profile agent info
+        mock_agent_info = {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+            "description": "Company research agent",
+        }
+
+        with (
+            patch("agents.profile_agent.profile_researcher", mock_graph),
+            patch("handlers.message_handlers.route_command") as mock_route,
+        ):
+            mock_route.return_value = (
+                mock_agent_info,
+                "tell me about Charlotte",
+                "profile",
+            )
+
             result = await handle_bot_command(
                 text="-profile tell me about Charlotte",
                 user_id="U123",
@@ -813,13 +828,26 @@ class TestBotCommandHandling:
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        result = await handle_bot_command(
-            text="-profile ",
-            user_id="U123",  # Empty query
-            slack_service=slack_service,
-            channel="C123",
-            thread_ts=None,
-        )
+        # Mock route_command to return profile agent with empty query
+        mock_agent_info = {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+        }
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
+
+        with (
+            patch("agents.profile_agent.profile_researcher", mock_graph),
+            patch("handlers.message_handlers.route_command") as mock_route,
+        ):
+            mock_route.return_value = (mock_agent_info, "", "profile")
+
+            result = await handle_bot_command(
+                text="-profile ",
+                user_id="U123",  # Empty query
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
+            )
 
         assert result is True
         # Should still handle it, just with empty query
@@ -840,13 +868,26 @@ class TestBotCommandHandling:
             side_effect=[Exception("Slack API error"), None]
         )
 
-        result = await handle_bot_command(
-            text="-profile test query",
-            user_id="U123",
-            slack_service=slack_service,
-            channel="C123",
-            thread_ts=None,
-        )
+        # Mock route_command to return profile agent
+        mock_agent_info = {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+        }
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
+
+        with (
+            patch("agents.profile_agent.profile_researcher", mock_graph),
+            patch("handlers.message_handlers.route_command") as mock_route,
+        ):
+            mock_route.return_value = (mock_agent_info, "test query", "profile")
+
+            result = await handle_bot_command(
+                text="-profile test query",
+                user_id="U123",
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
+            )
 
         # Should still return True (handled), but send error message
         assert result is True
@@ -867,13 +908,26 @@ class TestBotCommandHandling:
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        await handle_bot_command(
-            text="-profile test",
-            user_id="U123",
-            slack_service=slack_service,
-            channel="C123",
-            thread_ts=None,
-        )
+        # Mock route_command to return profile agent
+        mock_agent_info = {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+        }
+        mock_graph = ProfileAgentMockHelper.create_mock_graph()
+
+        with (
+            patch("agents.profile_agent.profile_researcher", mock_graph),
+            patch("handlers.message_handlers.route_command") as mock_route,
+        ):
+            mock_route.return_value = (mock_agent_info, "test", "profile")
+
+            await handle_bot_command(
+                text="-profile test",
+                user_id="U123",
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
+            )
 
         # Thinking indicator should be deleted
         slack_service.delete_thinking_indicator.assert_called_once_with(
@@ -965,10 +1019,20 @@ class TestBotCommandHandling:
         )
 
         # Mock the ProfileAgent graph at module level
-
         mock_graph = ProfileAgentMockHelper.create_mock_graph()
 
-        with patch("agents.profile_agent.profile_researcher", mock_graph):
+        # Mock route_command to return profile agent
+        mock_agent_info = {
+            "name": "profile",
+            "endpoint": "http://agent-service:8000/agents/profile/invoke",
+        }
+
+        with (
+            patch("agents.profile_agent.profile_researcher", mock_graph),
+            patch("handlers.message_handlers.route_command") as mock_route,
+        ):
+            mock_route.return_value = (mock_agent_info, "test", "profile")
+
             # Test uppercase
             await handle_message(
                 text="-PROFILE test",

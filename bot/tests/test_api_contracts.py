@@ -103,7 +103,9 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                 "total_queries": 0,
                 "success_rate": 0.0,
                 "miss_rate": 0.0,
+                "hit_rate": 0.0,
                 "avg_chunks": 0.0,
+                "avg_chunks_per_query": 0.0,
                 "documents_used": 0,
             }
             mock_metrics.get_agent_stats.return_value = {
