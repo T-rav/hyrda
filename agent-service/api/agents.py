@@ -1,6 +1,7 @@
 """Agent execution API endpoints."""
 
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -99,12 +100,19 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
     Raises:
         HTTPException: If agent not found or execution fails
     """
+    from services.metrics_service import get_metrics_service
+
     logger.info(f"Invoking agent '{agent_name}' with query: {request.query[:100]}...")
 
     # Get agent from registry
     agent_info = agent_registry.get(agent_name)
     if not agent_info:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    # Track invocation timing
+    start_time = time.time()
+    status = "error"
+    primary_name = agent_registry.get_primary_name(agent_name)
 
     try:
         # Instantiate and run agent
@@ -114,8 +122,7 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
         # Execute agent
         result = await agent_instance.run(request.query, request.context)
 
-        primary_name = agent_registry.get_primary_name(agent_name)
-
+        status = "success"
         return AgentInvokeResponse(
             agent_name=primary_name,
             response=result.get("response", ""),
@@ -127,6 +134,14 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
         raise HTTPException(
             status_code=500, detail=f"Agent execution failed: {str(e)}"
         ) from e
+    finally:
+        # Record metrics (tracks ALL invocations - Slack, API, LibreChat, etc.)
+        duration = time.time() - start_time
+        metrics_service = get_metrics_service()
+        if metrics_service:
+            metrics_service.record_agent_invocation(
+                agent_name=primary_name, status=status, duration=duration
+            )
 
 
 @router.post("/{agent_name}/stream")

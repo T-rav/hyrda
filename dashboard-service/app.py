@@ -131,11 +131,15 @@ async def get_services_health():
 
 @app.get("/api/agent-metrics")
 async def get_agent_metrics():
-    """Get agent-specific metrics from bot service."""
+    """Get agent-specific metrics from agent-service.
+
+    NOTE: Metrics are tracked at the source (agent-service) to count
+    ALL invocations regardless of client (Slack, LibreChat, direct API).
+    """
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{SERVICES['bot']}/api/metrics",
+                f"{SERVICES['agent_service']}/api/metrics",
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as response:
                 if response.status == 200:

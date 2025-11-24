@@ -51,6 +51,15 @@ class MetricsService:
             "last_reset": datetime.now(),
         }
 
+        # Track agent invocation stats (in-memory counters)
+        self._agent_stats = {
+            "total_invocations": 0,
+            "successful_invocations": 0,
+            "failed_invocations": 0,
+            "by_agent": {},  # agent_name -> count
+            "last_reset": datetime.now(),
+        }
+
         if not self.enabled:
             return
 
@@ -73,6 +82,12 @@ class MetricsService:
             ["provider", "model", "status"],
         )
 
+        self.agent_invocations = Counter(
+            "agent_invocations_total",
+            "Total number of agent invocations",
+            ["agent_name", "status"],  # status: success, error
+        )
+
         # Performance metrics
         self.request_duration = Histogram(
             "request_duration_seconds",
@@ -93,6 +108,13 @@ class MetricsService:
             "LLM API request duration",
             ["provider", "model"],
             buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0),
+        )
+
+        self.agent_duration = Histogram(
+            "agent_invocation_duration_seconds",
+            "Agent invocation duration",
+            ["agent_name"],
+            buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0),
         )
 
         # System metrics
@@ -444,6 +466,72 @@ class MetricsService:
             "failed_queries": 0,
             "total_documents_used": 0,
             "avg_chunks_per_query": 0.0,
+            "last_reset": datetime.now(),
+        }
+
+    def record_agent_invocation(
+        self, agent_name: str, status: str = "success", duration: float = 0.0
+    ):
+        """Record an agent invocation"""
+        if not self.enabled:
+            # Still track in-memory stats even if Prometheus is disabled
+            self._agent_stats["total_invocations"] += 1
+            if status == "success":
+                self._agent_stats["successful_invocations"] += 1
+            else:
+                self._agent_stats["failed_invocations"] += 1
+
+            # Track by agent
+            if agent_name not in self._agent_stats["by_agent"]:
+                self._agent_stats["by_agent"][agent_name] = 0
+            self._agent_stats["by_agent"][agent_name] += 1
+            return
+
+        try:
+            # Prometheus metrics
+            self.agent_invocations.labels(agent_name=agent_name, status=status).inc()
+            if duration > 0:
+                self.agent_duration.labels(agent_name=agent_name).observe(duration)
+
+            # In-memory stats for dashboard
+            self._agent_stats["total_invocations"] += 1
+            if status == "success":
+                self._agent_stats["successful_invocations"] += 1
+            else:
+                self._agent_stats["failed_invocations"] += 1
+
+            # Track by agent
+            if agent_name not in self._agent_stats["by_agent"]:
+                self._agent_stats["by_agent"][agent_name] = 0
+            self._agent_stats["by_agent"][agent_name] += 1
+
+        except Exception as e:
+            logger.error(f"Error recording agent invocation metric: {e}")
+
+    def get_agent_stats(self) -> dict:
+        """Get agent invocation statistics for dashboard display"""
+        stats = self._agent_stats.copy()
+
+        # Calculate success rate
+        total = stats["total_invocations"]
+        if total > 0:
+            stats["success_rate"] = round(
+                (stats["successful_invocations"] / total) * 100, 1
+            )
+            stats["error_rate"] = round((stats["failed_invocations"] / total) * 100, 1)
+        else:
+            stats["success_rate"] = 0.0
+            stats["error_rate"] = 0.0
+
+        return stats
+
+    def reset_agent_stats(self):
+        """Reset agent statistics (useful for daily/weekly resets)"""
+        self._agent_stats = {
+            "total_invocations": 0,
+            "successful_invocations": 0,
+            "failed_invocations": 0,
+            "by_agent": {},
             "last_reset": datetime.now(),
         }
 

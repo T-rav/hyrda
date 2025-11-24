@@ -63,6 +63,31 @@ async def health():
     return {"status": "healthy", "service": "agent-service"}
 
 
+@app.get("/api/metrics")
+async def metrics():
+    """Agent service metrics including invocation stats."""
+    from services.metrics_service import get_metrics_service
+
+    metrics_service = get_metrics_service()
+    if not metrics_service:
+        return {"agent_invocations": {"error": "Metrics service not available"}}
+
+    agent_stats = metrics_service.get_agent_stats()
+
+    return {
+        "service": "agent-service",
+        "agent_invocations": {
+            "total": agent_stats["total_invocations"],
+            "successful": agent_stats["successful_invocations"],
+            "failed": agent_stats["failed_invocations"],
+            "success_rate": agent_stats["success_rate"],
+            "error_rate": agent_stats["error_rate"],
+            "by_agent": agent_stats["by_agent"],
+            "description": f"Agent invocations across all clients (since {agent_stats['last_reset'].strftime('%H:%M')})",
+        },
+    }
+
+
 @app.get("/")
 async def root():
     """Root endpoint with service info."""

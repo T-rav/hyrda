@@ -1,7 +1,6 @@
 """HTTP client for calling agent-service."""
 
 import logging
-import time
 from typing import Any
 
 import httpx
@@ -37,14 +36,8 @@ class AgentClient:
         Raises:
             AgentClientError: If agent execution fails
         """
-        from services.metrics_service import get_metrics_service
-
         url = f"{self.base_url}/api/agents/{agent_name}/invoke"
         logger.info(f"Calling agent-service: {url}")
-
-        # Track invocation timing
-        start_time = time.time()
-        status = "error"
 
         # Serialize context - remove non-serializable objects
         serializable_context = self._prepare_context(context)
@@ -65,7 +58,6 @@ class AgentClient:
                     )
 
                 result = response.json()
-                status = "success"
                 return {
                     "response": result.get("response", ""),
                     "metadata": result.get("metadata", {}),
@@ -84,14 +76,9 @@ class AgentClient:
         except Exception as e:
             logger.error(f"Error calling agent-service: {e}", exc_info=True)
             raise AgentClientError(f"Agent execution failed: {str(e)}") from e
-        finally:
-            # Record metrics
-            duration = time.time() - start_time
-            metrics_service = get_metrics_service()
-            if metrics_service:
-                metrics_service.record_agent_invocation(
-                    agent_name=agent_name, status=status, duration=duration
-                )
+        # NOTE: Agent invocation metrics are tracked in agent-service itself,
+        # not here. This ensures ALL invocations (Slack, LibreChat, direct API)
+        # are counted at the source.
 
     async def list_agents(self) -> list[dict[str, Any]]:
         """List available agents.
