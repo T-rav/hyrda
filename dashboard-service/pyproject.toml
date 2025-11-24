@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "insightmesh-dashboard"
+version = "1.0.0"
+description = "System-wide health and metrics dashboard"
+authors = [
+    {name = "Travis Frisinger", email = "travis@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+
+dependencies = [
+    # FastAPI and ASGI server
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.23.0",
+    "gunicorn>=21.0.0",
+
+    # HTTP client for service aggregation
+    "aiohttp>=3.8.0",
+    "httpx>=0.27.0",
+
+    # Configuration
+    "python-dotenv>=1.0.0",
+    "pydantic>=1.9.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.14.0",
+    "pyright==1.1.390",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "PL", "SIM"]
+ignore = ["E501", "PLR0913", "PLR0912", "PLR0915", "PLR2004"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# Pyright configuration
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"

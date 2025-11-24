@@ -168,6 +168,37 @@ services:
     networks:
       - insightmesh
 
+  # System Dashboard Service
+  dashboard:
+    build:
+      context: ./dashboard-service
+      dockerfile: Dockerfile
+    image: insightmesh-dashboard:latest
+    container_name: insightmesh-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      bot:
+        condition: service_started
+      agent_service:
+        condition: service_started
+      tasks:
+        condition: service_started
+      control_plane:
+        condition: service_started
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "dashboard"
+      component: "monitoring"
+    networks:
+      - insightmesh
+
   # AI Slack Bot Service
   bot:
     build:
@@ -187,8 +218,8 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - AGENT_SERVICE_URL=http://agent_service:8000
-    ports:
-      - "${HEALTH_PORT:-8080}:8080"
+      - ENABLE_HEALTH_SERVER=true  # Internal metrics only, no external port
+    # No external ports - dashboard service aggregates metrics
     depends_on:
       mysql:
         condition: service_healthy
