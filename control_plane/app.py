@@ -296,6 +296,35 @@ def get_agent_details(agent_name: str) -> Response:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/agents/<string:agent_name>/usage")
+def get_agent_usage(agent_name: str) -> Response:
+    """Get usage statistics for a specific agent from agent-service."""
+    try:
+        import requests
+
+        agent_service_url = os.getenv("AGENT_SERVICE_URL", "http://agent_service:8000")
+        response = requests.get(f"{agent_service_url}/api/metrics", timeout=5)
+
+        if response.status_code != 200:
+            return jsonify({"error": "Unable to fetch usage stats"}), 503
+
+        data = response.json()
+        agent_invocations = data.get("agent_invocations", {})
+        by_agent = agent_invocations.get("by_agent", {})
+
+        # Get stats for this specific agent
+        total = by_agent.get(agent_name, 0)
+
+        return jsonify({
+            "agent_name": agent_name,
+            "total_invocations": total,
+            "all_time_stats": agent_invocations,  # Include overall stats for context
+        })
+    except Exception as e:
+        logger.error(f"Error getting agent usage: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/agents/<string:agent_name>/toggle", methods=["POST"])
 def toggle_agent(agent_name: str) -> Response:
     """Toggle agent enabled/disabled state."""

@@ -1,7 +1,7 @@
 import React from 'react'
-import { Users, Shield } from 'lucide-react'
+import { Users, Shield, Activity } from 'lucide-react'
 
-function AgentCard({ agent, onClick }) {
+function AgentCard({ agent, onClick, usageStats }) {
   return (
     <div className="agent-card clickable" onClick={() => onClick(agent)}>
       <div className="agent-card-header">
@@ -41,6 +41,12 @@ function AgentCard({ agent, onClick }) {
             <Users size={14} />
             {agent.authorized_groups === 0 ? 'No groups' : `${agent.authorized_groups} ${agent.authorized_groups === 1 ? 'group' : 'groups'}`}
           </span>
+          {usageStats && usageStats.total_invocations > 0 && (
+            <span className="stat-badge usage">
+              <Activity size={14} />
+              {usageStats.total_invocations.toLocaleString()} {usageStats.total_invocations === 1 ? 'call' : 'calls'}
+            </span>
+          )}
         </div>
       </div>
     </div>
