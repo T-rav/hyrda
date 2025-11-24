@@ -338,6 +338,18 @@ class HealthChecker:
                 "description": f"RAG queries processed (since {rag_stats['last_reset'].strftime('%H:%M')})",
             }
 
+            # Get agent invocation stats
+            agent_stats = metrics_service.get_agent_stats()
+            metrics["agent_invocations"] = {
+                "total": agent_stats["total_invocations"],
+                "successful": agent_stats["successful_invocations"],
+                "failed": agent_stats["failed_invocations"],
+                "success_rate": agent_stats["success_rate"],
+                "error_rate": agent_stats["error_rate"],
+                "by_agent": agent_stats["by_agent"],
+                "description": f"Agent invocations (since {agent_stats['last_reset'].strftime('%H:%M')})",
+            }
+
         # Add Langfuse lifetime stats
         if self.langfuse_service and self.langfuse_service.enabled:
             try:
