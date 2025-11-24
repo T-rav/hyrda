@@ -168,8 +168,9 @@ function App() {
 // Lifetime Statistics Component
 function LifetimeStatisticsSection({ metrics }) {
   const lifetimeStats = metrics?.lifetime_stats
+  const botMetrics = metrics?.bot
 
-  if (!lifetimeStats) {
+  if (!lifetimeStats && !botMetrics) {
     return null
   }
 
@@ -180,13 +181,13 @@ function LifetimeStatisticsSection({ metrics }) {
     return 'N/A'
   }
 
-  const hasError = lifetimeStats.error
+  const hasError = lifetimeStats?.error
 
   return (
     <div className="grid-section">
       <h2><Activity size={20} /> Lifetime Statistics</h2>
       <p className="section-description">
-        {lifetimeStats.description || `Statistics since ${lifetimeStats.since_date}`}
+        {lifetimeStats?.description || `Comprehensive bot usage metrics`}
       </p>
       {hasError && (
         <div className="error-banner">
@@ -194,25 +195,47 @@ function LifetimeStatisticsSection({ metrics }) {
         </div>
       )}
       <div className="cards-row">
-        <MetricsCard
-          title="Total User Messages"
-          value={formatNumber(lifetimeStats.total_traces)}
-          label={`User interactions since ${lifetimeStats.since_date}`}
-          icon={<Activity size={20} />}
-          status={hasError ? 'error' : 'info'}
-        />
-        <MetricsCard
-          title="Unique Conversation Threads"
-          value={formatNumber(lifetimeStats.unique_threads)}
-          label={`Distinct sessions since ${lifetimeStats.since_date}`}
-          icon={<Server size={20} />}
-          status={hasError ? 'error' : 'info'}
-        />
-        {lifetimeStats.total_traces > 0 && lifetimeStats.unique_threads > 0 && (
+        {lifetimeStats && (
+          <>
+            <MetricsCard
+              title="Total User Messages"
+              value={formatNumber(lifetimeStats.total_traces)}
+              label={`User interactions since ${lifetimeStats.since_date}`}
+              icon={<Activity size={20} />}
+              status={hasError ? 'error' : 'info'}
+            />
+            <MetricsCard
+              title="Unique Conversation Threads"
+              value={formatNumber(lifetimeStats.unique_threads)}
+              label={`Distinct sessions since ${lifetimeStats.since_date}`}
+              icon={<Server size={20} />}
+              status={hasError ? 'error' : 'info'}
+            />
+            {lifetimeStats.total_traces > 0 && lifetimeStats.unique_threads > 0 && (
+              <MetricsCard
+                title="Avg Messages per Thread"
+                value={(lifetimeStats.total_traces / lifetimeStats.unique_threads).toFixed(1)}
+                label="User messages per conversation"
+                icon={<Zap size={20} />}
+                status="info"
+              />
+            )}
+          </>
+        )}
+        {botMetrics?.active_conversations && (
           <MetricsCard
-            title="Avg Messages per Thread"
-            value={(lifetimeStats.total_traces / lifetimeStats.unique_threads).toFixed(1)}
-            label="User messages per conversation"
+            title="Active Conversations"
+            value={formatNumber(botMetrics.active_conversations.total)}
+            label="Active in last 7 days"
+            icon={<Activity size={20} />}
+            status="info"
+          />
+        )}
+        {botMetrics?.agent_invocations && (
+          <MetricsCard
+            title="Agent Invocations"
+            value={formatNumber(botMetrics.agent_invocations.total)}
+            label={`${botMetrics.agent_invocations.successful} successful, ${botMetrics.agent_invocations.failed} failed`}
             icon={<Zap size={20} />}
             status="info"
           />
