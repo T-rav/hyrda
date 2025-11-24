@@ -1,5 +1,5 @@
 # Stage 1: Build React UI
-FROM node:18-alpine AS ui-builder
+FROM node:20-alpine AS ui-builder
 WORKDIR /app/health_ui
 COPY health_ui/package*.json ./
 RUN npm ci --no-audit
