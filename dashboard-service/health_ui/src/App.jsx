@@ -253,7 +253,10 @@ function InfrastructureServices({ ready, metrics }) {
 
   const fetchServices = async () => {
     try {
-      setLoading(true)
+      // Only show loading on initial fetch, not on refresh
+      if (!services) {
+        setLoading(true)
+      }
       const response = await fetch('/api/services/health')
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
