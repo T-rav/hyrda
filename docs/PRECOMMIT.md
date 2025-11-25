@@ -69,13 +69,10 @@ make pre-commit
 # OR
 pre-commit run --all-files
 
-# Run specific hook
-pre-commit run ruff
-pre-commit run black
-pre-commit run mypy
-
-# Run security scan
-make security
+# Run specific checks
+make lint              # Auto-fix linting and formatting
+make lint-check        # Check only (no fixes)
+make quality           # Full quality pipeline
 ```
 
 ### Skip Hooks (Emergency Only)
@@ -94,8 +91,7 @@ SKIP=mypy git commit -m "Skip type checking"
 - Controls which hooks run and their settings
 
 ### Tool Configs
-- **Ruff/Black/isort/MyPy**: `pyproject.toml`
-- **Bandit**: `pyproject.toml`
+- **Ruff + Pyright + Bandit**: `pyproject.toml`
 - **Coverage**: `pyproject.toml`
 
 ### Updating Hooks
@@ -119,11 +115,11 @@ pre-commit install
 pre-commit clean
 ```
 
-### MyPy Errors
-MyPy runs with `--ignore-missing-imports` but may still complain:
-```bash
-# Install missing type stubs
-pip install types-redis types-requests
+### Type Errors
+Pyright may report type issues. Fix by adding type hints:
+```python
+def process(data: str) -> bool:
+    return True
 ```
 
 ### Performance
@@ -137,7 +133,7 @@ pre-commit run --all-files
 
 Most IDEs can be configured to run these tools on save:
 - **VS Code**: Python extension + Ruff extension
-- **PyCharm**: Configure external tools for ruff, black, isort
+- **PyCharm**: Configure external tools for Ruff
 - **Vim/Neovim**: Use ALE, coc-pyright, or similar plugins
 
 This ensures code is formatted before pre-commit hooks even run.

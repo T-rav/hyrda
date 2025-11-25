@@ -187,7 +187,7 @@ config = MeddpiccConfiguration(
 Run the test suite:
 
 ```bash
-cd bot/agents/meddpicc_coach
+cd agent-service/agents/meddpicc_coach
 python test_meddpicc_coach.py
 ```
 

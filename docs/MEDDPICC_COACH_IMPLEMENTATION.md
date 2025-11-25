@@ -7,7 +7,7 @@ Implementation of a LangGraph-based agent that transforms unstructured sales cal
 ## Architecture
 
 ```
-bot/agents/meddpicc_coach/
+agent-service/agents/meddpicc_coach/
 ├── __init__.py
 ├── configuration.py          # MeddpiccConfiguration settings
 ├── state.py                  # State definitions for workflow
