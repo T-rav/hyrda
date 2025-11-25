@@ -27,11 +27,15 @@ function App() {
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Health Dashboard')
 
-  if (loading && !health) {
+  // Only show loading spinner on initial load (no data yet)
+  // During refresh, keep showing old data
+  if (loading && !health && !metrics && !ready) {
     return <LoadingSpinner />
   }
 
-  if (error && !health) {
+  // Only show error page if no data exists yet
+  // During refresh, keep showing old data with error banner
+  if (error && !health && !metrics && !ready) {
     return (
       <div className="app">
         <ErrorMessage error={error} onRetry={refetch} />
@@ -64,7 +68,15 @@ function App() {
         </header>
 
         <main className="main">
-          {error && <ErrorMessage error={error} onRetry={refetch} />}
+          {/* Show error banner during refresh if fetch fails, but keep showing old data */}
+          {error && (health || metrics || ready) && (
+            <div className="error-banner-refresh">
+              ⚠️ Failed to refresh: {error}
+              <button onClick={refetch} className="retry-button-small">
+                Retry
+              </button>
+            </div>
+          )}
 
           <div className="dashboard-grid">
             {/* System Status */}
