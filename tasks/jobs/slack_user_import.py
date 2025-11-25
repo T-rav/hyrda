@@ -231,10 +231,10 @@ class SlackUserImportJob(BaseJob):
                     f"Processing bot user: {user_data['id']} - {user_data.get('name')} - type: {user_type}"
                 )
 
-            # Debug print to see what's in user_data
-            print(f"DEBUG: user_data keys: {list(user_data.keys())}")
-            print(
-                f"DEBUG: user_data for {user_data['id']}: is_active={user_data.get('is_active')}, user_type={user_data.get('user_type')}"
+            # Debug log to see what's in user_data
+            logger.debug(f"user_data keys: {list(user_data.keys())}")
+            logger.debug(
+                f"user_data for {user_data['id']}: is_active={user_data.get('is_active')}, user_type={user_data.get('user_type')}"
             )
 
             filtered.append(user_data)
@@ -268,16 +268,16 @@ class SlackUserImportJob(BaseJob):
                         existing_user.is_active = user_data.get("is_active", True)
                         existing_user.user_type = user_data.get("user_type")
                         updated_users_count += 1
-                        print(
-                            f"DEBUG: Updating user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
+                        logger.debug(
+                            f"Updating user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
                         )
                         logger.info(
                             f"Updated user: {user_data['id']} (active: {existing_user.is_active}, type: {existing_user.user_type})"
                         )
                     else:
                         # Create new user
-                        print(
-                            f"DEBUG: Creating new user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
+                        logger.debug(
+                            f"Creating new user {user_data['id']} with is_active={user_data.get('is_active')} user_type={user_data.get('user_type')}"
                         )
                         new_user = SlackUser(
                             slack_user_id=user_data["id"],

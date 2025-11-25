@@ -90,20 +90,20 @@ class GoogleDriveAPI:
         # Filter to only files that have our folder_id as parent
         all_files = all_results.get("files", [])
 
-        # DEBUG: Check if files have parents field
-        print(f"🔍 DEBUG: Checking {len(all_files)} files for parent {folder_id}")
+        # Log file parent checking for debugging
+        logger.debug(f"Checking {len(all_files)} files for parent {folder_id}")
         files_with_parents = [f for f in all_files if "parents" in f]
-        print(f"   {len(files_with_parents)} files have 'parents' field")
+        logger.debug(f"{len(files_with_parents)} files have 'parents' field")
 
-        # DEBUG: Show a few examples
+        # Log a few examples for debugging
         for i, f in enumerate(all_files[:3]):
-            print(
-                f"   Example {i + 1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}"
+            logger.debug(
+                f"Example {i + 1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}"
             )
 
         filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
-        # DEBUG: Log what was found
+        # Log what was found for debugging
         folders = [
             f
             for f in filtered_files
@@ -114,19 +114,19 @@ class GoogleDriveAPI:
             for f in filtered_files
             if f.get("mimeType") != "application/vnd.google-apps.folder"
         ]
-        print(
-            f"DEBUG: Found {len(all_files)} total accessible files, "
+        logger.debug(
+            f"Found {len(all_files)} total accessible files, "
             f"{len(filtered_files)} in target folder "
             f"({len(folders)} folders, {len(documents)} documents)"
         )
 
-        # DEBUG: List the folders found
+        # Log the folders found for debugging
         if folders:
-            print("📁 Folders found:")
+            logger.debug("Folders found:")
             for folder in folders:
-                print(f"   - {folder.get('name')} ({folder.get('id')})")
+                logger.debug(f"- {folder.get('name')} ({folder.get('id')})")
         else:
-            print("⚠️ No folders found in target folder!")
+            logger.debug("No folders found in target folder")
 
         return filtered_files
 
