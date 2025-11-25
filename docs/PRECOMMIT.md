@@ -33,14 +33,10 @@ pre-commit run --all-files
 
 When you commit, the following will run automatically:
 
-### Code Quality & Formatting
-- **Ruff**: Fast linting with auto-fix for Python code
-- **Ruff Format**: Fast formatting (alternative to Black)
-- **Black**: Code formatting (backup/compatibility)
-- **isort**: Import statement sorting
-
-### Type Checking
-- **MyPy**: Static type checking (excludes tests)
+### Unified Quality Checks (via Makefile)
+- **Ruff**: Fast linting, formatting, and import sorting
+- **Pyright**: Type checking (strict mode)
+- **Bandit**: Security vulnerability scanning
 
 ### General Cleanup
 - Remove trailing whitespace
