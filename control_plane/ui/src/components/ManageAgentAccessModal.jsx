@@ -62,23 +62,25 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
             </div>
           )}
 
-          <div className="info-box">
-            <p>
-              💡 Grant or revoke access to groups. Users in these groups will automatically have access to this agent.
-            </p>
-          </div>
+          {!agent.is_system && (
+            <>
+              <div className="info-box">
+                <p>
+                  💡 Grant or revoke access to groups. Users in these groups will automatically have access to this agent.
+                </p>
+              </div>
 
-          <div className="form-group search-group">
-            <input
-              type="text"
-              placeholder="Search groups..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="search-input"
-            />
-          </div>
+              <div className="form-group search-group">
+                <input
+                  type="text"
+                  placeholder="Search groups..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="search-input"
+                />
+              </div>
 
-          <div className="user-selection-list">
+              <div className="user-selection-list">
             {filteredGroups.map(group => {
               const hasAccess = authorizedGroupNames.has(group.group_name)
               const isSystemGroup = group.group_name === 'all_users'
@@ -130,7 +132,10 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                   </div>
                 </div>
               )
-            })}</div>
+            })}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="modal-actions">

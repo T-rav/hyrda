@@ -87,7 +87,7 @@ def ensure_all_users_group() -> None:
                 logger.info("Created 'All Users' system group")
 
             # Add all active users to the group
-            active_users = session.query(User).filter(User.is_active == True).all()
+            active_users = session.query(User).filter(User.is_active).all()
             existing_memberships = session.query(UserGroup).filter(
                 UserGroup.group_name == "all_users"
             ).all()

@@ -30,16 +30,10 @@ function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, onF
     <div className="content-section">
       <div className="section-header">
         <h2>Registered Agents ({agents.length})</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={onForceRefresh} className="btn-secondary" title="Force refresh from agent-service (clears cache)">
-            <RefreshCw size={16} />
-            Force Refresh
-          </button>
-          <button onClick={onRefresh} className="btn-secondary">
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-        </div>
+        <button onClick={onRefresh} className="btn-secondary">
+          <RefreshCw size={16} />
+          Refresh
+        </button>
       </div>
 
       <div className="agents-grid">
