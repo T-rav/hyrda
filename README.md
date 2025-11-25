@@ -7,23 +7,17 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 ## 🆕 What's New in v1.1.0
 
 ### Architecture Improvements
-- **Microservices Architecture**: Agents extracted to separate HTTP-based service
-- **Agent Service**: FastAPI-based agent-service for specialized AI agents (Profile, MEDDIC, Help)
-- **HTTP Communication**: Bot calls agents via REST API for better isolation and scalability
+- **Microservices Architecture**: Agents extracted to separate HTTP-based service for better scalability
+- **Agent Service**: FastAPI-based service for specialized AI agents (Profile, MEDDIC, Help)
 - **Control Plane**: New web-based management UI for agent permissions and user access
-  - Flask API backend (port 6001)
-  - React + Vite frontend (port 6002 in dev)
   - Agent registry viewer and permission management
   - Coming soon: RBAC, audit logs, usage analytics
-- **Improved Testing**: Expanded test suite from 245 to 556 tests (100% pass rate)
-- **Test Coverage**: Comprehensive HTTP integration tests for agent communication layer
 
 ### Benefits
-- Better service isolation and independent scaling
-- Easier to add new agents without modifying bot code
-- Centralized management of agent permissions and user access
-- More robust testing with dedicated agent client tests
-- Clear separation of concerns between Slack integration and agent logic
+- **Better Scalability**: Independent scaling of bot and agent services
+- **Easier Extensibility**: Add new agents without modifying bot code
+- **Centralized Management**: Control plane for permissions and access control
+- **Production Ready**: Clean separation of concerns and service boundaries
 
 ## ✨ Features
 
@@ -57,8 +51,6 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 - **Health Dashboard**: Real-time monitoring UI at `http://localhost:8080/ui`
 - **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
 - **Prometheus Metrics**: Native metrics collection for infrastructure monitoring
-- **Comprehensive Testing**: 556 tests with 72% code coverage (100% pass rate)
-- **Pre-commit Hooks**: Unified quality checks (Ruff + Pyright + Bandit)
 
 ### 🚀 **Easy Setup & Deployment**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
@@ -183,13 +175,11 @@ docker compose up -d
 docker logs -f insightmesh-bot
 ```
 
-### Testing and Code Quality
+### Code Quality
 ```bash
-make test         # Run test suite with pytest (556 tests)
-make lint         # Auto-fix linting, formatting, and import issues
-make lint-check   # Check code quality without fixing (used by pre-commit and CI)
-make quality      # Run complete pipeline: linting + type checking + tests
-make test-coverage # Tests with coverage report (requires >70%, currently ~72%)
+make lint         # Auto-fix linting and formatting
+make quality      # Run complete quality pipeline
+make test         # Run test suite
 ```
 
 ### Pre-commit and CI
@@ -393,9 +383,8 @@ The application uses a **microservices architecture** with HTTP-based communicat
 **Benefits of v1.1.0 Architecture:**
 - Independent scaling of bot and agent services
 - Better fault isolation and service boundaries
-- Easier to add new agents without modifying bot code
+- Easier to add new agents
 - Centralized governance via control plane
-- Comprehensive HTTP integration testing
 
 ### Project Structure
 
@@ -420,7 +409,7 @@ bot/                              # Slack bot service
 │   ├── embedding_service.py      # Text embedding generation
 │   ├── langfuse_service.py       # Observability and tracing
 │   └── slack_service.py          # Slack API integration
-├── tests/                        # Test suite (556 tests, 72% coverage)
+├── tests/                        # Comprehensive test suite
 ├── utils/                        # Utilities
 │   ├── pdf_generator.py          # PDF report generation
 │   └── errors.py                 # Error handling
@@ -607,56 +596,7 @@ Metrics endpoint at `http://localhost:8080/api/prometheus`:
 
 See `docs/LANGFUSE_SETUP.md` for complete setup instructions.
 
-## 🧪 Testing Framework
-
-### Test Suite Requirements
-
-**🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
-
-The project maintains a **556/556 test success rate (100%)** with **72% code coverage**.
-
-#### Test Commands
-```bash
-make test              # Run all 556 tests
-make test-coverage     # Tests with coverage report (>70% required)
-make test-file FILE=test_name.py  # Run specific test file
-```
-
-#### Quality Checks
-```bash
-make lint              # Auto-fix with ruff + pyright + bandit
-make lint-check        # Check-only mode (used by pre-commit and CI)
-make quality           # Complete pipeline: linting + type checking + tests
-```
-
-### Code Quality Standards
-
-#### Unified Quality Tooling
-- **Ruff**: Fast linting, formatting, and import sorting
-- **Pyright**: Type checking (strict mode)
-- **Bandit**: Security vulnerability scanning
-
-**🎯 Unified Makefile**: `make lint-check` ensures identical behavior across:
-- Local development
-- Pre-commit hooks
-- CI pipeline (GitHub Actions)
-
-#### Pre-commit Hooks
-```bash
-make setup-dev        # Install dev tools + pre-commit hooks
-make pre-commit       # Run all hooks manually
-git commit            # Hooks run automatically
-```
-
-See `CLAUDE.md` for complete development workflow and testing standards.
-
 ## 🚨 Important Notes
-
-### Never Skip Commit Hooks
-**NEVER** use `git commit --no-verify`. Always fix code issues first:
-1. Run `make lint` to auto-fix issues
-2. Run `make test` to ensure tests pass
-3. Commit normally
 
 ### Document Ingestion
 Google Drive ingestion is handled via **scheduled tasks** in the tasks service:
@@ -666,12 +606,6 @@ Google Drive ingestion is handled via **scheduled tasks** in the tasks service:
 3. **Production folder**: Use folder ID `0AMXFYdnvxhbpUk9PVA`
 
 Requires Google OAuth2 credentials configured in `.env`. See `CLAUDE.md` for detailed workflow.
-
-### LangGraph Recursion Limits
-The deep research agent has recursion limits set to 100 (increased from default 25) to support complex research tasks with many tool calls. This is safe because:
-- `max_react_tool_calls=15` limits researcher tool calls
-- `max_researcher_iterations=8` limits supervisor iterations
-- Proper termination via `ResearchComplete` signal
 
 ## 🔧 Troubleshooting
 
@@ -785,16 +719,12 @@ MIT License - See LICENSE file for details.
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes following code quality standards
-4. Run tests: `make quality`
-5. Commit with pre-commit hooks
+4. Run quality checks: `make quality`
+5. Commit your changes
 6. Push to your branch
 7. Open a Pull Request
 
-All PRs must:
-- Pass all 556 tests (100% pass rate)
-- Maintain >70% code coverage
-- Pass unified quality checks (Ruff + Pyright + Bandit)
-- Include comprehensive tests for new features
+See `CLAUDE.md` for detailed development workflow and standards.
 
 ---
 
