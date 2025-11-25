@@ -43,7 +43,7 @@ make run          # Run the Slack bot (requires .env file)
 
 ### Testing and Code Quality
 ```bash
-make test         # Run test suite with pytest (556 tests)
+make test         # Run full test suite
 make lint         # Auto-fix linting, formatting, and import issues
 make lint-check   # Check code quality without fixing (used by pre-commit)
 make quality      # Run complete pipeline: linting + type checking + tests
@@ -185,79 +185,30 @@ VECTOR_ENABLED=false
 
 ## Architecture Overview
 
-This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and **microservices architecture** (v1.1.0).
+Production-ready Python Slack bot with:
+- **Microservices architecture**: Bot, agent-service, control-plane, tasks
+- **RAG capabilities**: Vector search with Qdrant
+- **Multiple services**: HTTP communication between services
+- **Agent system**: Specialized AI agents called via HTTP API
 
-### 🏗️ v1.1.0 Microservices Architecture
+### Key Concepts
 
-#### Service Breakdown
-- **bot**: Slack integration and conversation management (Python/slack-bolt)
-  - Handles all Slack events and message routing
-  - Calls agent-service via HTTP for specialized agents
-  - Manages RAG pipeline and LLM responses
-- **agent-service**: Specialized AI agents via HTTP API (Python/FastAPI)
-  - Profile agent: Company research and profiling
-  - MEDDIC agent: Sales methodology coaching
-  - Help agent: Onboarding and assistance
-  - Independently deployable and scalable
-- **control-plane**: Agent permissions and user management (Flask + React)
-  - Web UI for managing agent access
-  - Permission management and audit logs
-  - Ports 6001 (API) and 6002 (UI dev mode)
-- **tasks**: Background job scheduler with web UI
-  - Handles Google Drive document ingestion via OAuth2
-  - Scheduled jobs with cron-like scheduling
-  - Port 5001
-- **Supporting Services**:
-  - Qdrant: Vector database
-  - Redis: Conversation caching
-  - MySQL: Data persistence
+#### Service Communication
+- **bot** handles Slack integration
+- **agent-service** provides specialized agents via HTTP
+- **control-plane** manages permissions
+- **tasks** handles scheduled jobs (document ingestion)
 
-#### Core Bot Structure
-- **bot/app.py**: Main application entry point with async Socket Mode handler
-- **bot/config/**: Pydantic settings with environment-based configuration
-- **bot/handlers/**: Event and message handling, including agent process management
-- **bot/services/**: Core services including RAG, LLM providers, vector storage, and agent HTTP client
-- **bot/utils/**: Error handling and logging utilities
-
-#### Agent Service Structure
+#### Development Focus Areas
+- **bot/handlers/**: Slack event and message handling
+- **bot/services/**: Core services (LLM, RAG, agent client)
 - **agent-service/agents/**: Individual agent implementations
-- **agent-service/app.py**: FastAPI application with HTTP endpoints
-- **agent-service/tests/**: Agent-specific test suite
 
-### Key Components
-
-#### Settings Management (config/settings.py)
-Uses Pydantic with environment variable prefixes:
-- `SlackSettings` (SLACK_*)
-- `LLMSettings` (LLM_*)  
-- `AgentSettings` (AGENT_*)
-
-#### Message Flow
-1. Slack events → `bot/handlers/event_handlers.py`
-2. Message processing → `bot/handlers/message_handlers.py`
-3. Agent routing → `bot/services/agent_registry.py` determines if agent needed
-4. **Agent invocation** → `bot/services/agent_client.py` calls agent-service via HTTP
-5. LLM API calls → `bot/services/llm_service.py` (for non-agent responses)
-6. Response formatting → `bot/services/formatting.py`
-7. Slack response → `bot/services/slack_service.py`
-
-#### Document Ingestion Flow (Tasks Service)
-Document ingestion is handled via the **tasks service** with OAuth2:
-1. OAuth2 authentication → Visit `http://localhost:5001/api/gdrive/auth`
-2. Create scheduled ingestion job → Tasks service web UI
-3. Job runs on schedule → Downloads and processes documents
-4. Content chunking and embedding → Vector service
-5. Vector storage with rich metadata → Qdrant
-
-See "Document Ingestion - Scheduled Google Drive Tasks" section for detailed setup.
-
-#### Agent Invocation Flow (v1.1.0)
-1. Bot determines agent needed → `bot/handlers/message_handlers.py`
-2. Route to agent → `bot/services/agent_registry.py`
-3. HTTP call → `bot/services/agent_client.py` calls `agent-service/api/agents/{name}/invoke`
-4. Agent processes → Agent-service executes agent logic
-5. Response returned → Agent-service returns result via HTTP
-6. Bot formats → Bot sends response to Slack
+#### Message Processing
+1. Slack event received
+2. Message processed and routed
+3. Agent invoked via HTTP (if needed) OR LLM called directly
+4. Response formatted and sent to Slack
 
 ### Threading and Context
 - Automatically creates and maintains Slack threads
@@ -341,19 +292,18 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **556/556 test success rate (100%)** - this standard must be preserved.
+The project maintains **100% test pass rate** - this standard must be preserved.
 
 #### Test Commands
 ```bash
 # Run all tests (REQUIRED before any commit)
-make test                    # Full test suite (556 tests)
-make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
+make test                    # Full test suite (must show 100% pass rate)
+make test-coverage          # Tests with coverage report (requires >70%)
 make test-file FILE=test_name.py  # Run specific test file
 
-# Quality checks (REQUIRED before commit)  
-make lint                   # Auto-fix with ruff + pyright + bandit (unified Makefile)
-make lint-check            # Check-only mode with ruff + pyright + bandit (unified Makefile)
-make typecheck             # Run pyright type checking only (legacy, use lint-check instead)
+# Quality checks (REQUIRED before commit)
+make lint                   # Auto-fix with ruff + pyright + bandit
+make lint-check            # Check-only mode (used by pre-commit and CI)
 make quality               # Run complete pipeline: linting + type checking + tests
 ```
 
@@ -373,32 +323,11 @@ make ci                   # Run complete CI pipeline locally
 ### Testing Standards
 
 #### 1. Test Coverage Requirements
-- **Minimum 80% code coverage** (enforced by CI)
+- **Minimum 70% code coverage** (enforced by CI)
 - **All new functions/classes MUST have tests**
 - **Critical paths require 100% coverage**
 
-#### 2. Test Types & Structure
-```
-bot/tests/
-├── test_app.py              # Application initialization
-├── test_config.py           # Configuration management
-├── test_conversation_cache.py  # Redis caching
-├── test_event_handlers.py   # Slack event handling
-├── test_formatting.py       # Message formatting
-├── test_health_endpoints.py # Health check endpoints
-├── test_integration.py      # End-to-end workflows
-├── test_llm_service.py      # LLM API integration
-├── test_message_handlers.py # Message processing
-├── test_slack_service.py    # Slack API integration
-├── test_agent_client.py     # Agent HTTP client integration
-└── test_utils.py            # Utilities and helpers
-
-agent-service/tests/         # Agent-specific tests
-tasks/tests/                 # Background job tests
-control-plane/tests/         # Control plane tests
-```
-
-#### 3. Test Patterns (Follow These Examples)
+#### 2. Test Patterns (Follow These Examples)
 ```python
 # ✅ GOOD: Async test with proper mocking
 @pytest.mark.asyncio
@@ -503,7 +432,7 @@ make lint-check        # Verify everything passes (what pre-commit uses)
 make test-file FILE=test_your_modified_service.py
 
 # Run full test suite to ensure no regressions
-make test              # Must show 556/556 tests passing
+make test              # Must show 100% pass rate
 ```
 
 #### 6. **Verify Complete Quality Pipeline**
@@ -579,8 +508,8 @@ make quality
 | **If pre-commit fails** | `make lint` → fix issues → try commit again | Fix quality issues |
 
 ### **Remember**
-- 🚨 **556/556 tests must always pass** - never commit with failing tests
-- 🔧 **Always run `make lint` after code changes** - fixes most issues automatically  
+- 🚨 **100% test pass rate required** - never commit with failing tests
+- 🔧 **Always run `make lint` after code changes** - fixes most issues automatically
 - ✅ **Use `make quality` before commits** - runs everything (linting + tests)
 - 🚫 **Never use `git commit --no-verify`** - quality gates exist for good reason
 
@@ -651,10 +580,7 @@ make quality
 
 #### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)
-- **Current Coverage**: ~72% (excluding CLI scripts)
-- **Coverage Exclusions**: `bot/app.py` (CLI entry point)
 - **Coverage Command**: `make test-coverage`
-- **Configuration**: `.coveragerc` with realistic production thresholds
 
 #### Pre-commit Hooks (Local)
 - **Unified Quality Checks**: Uses `make lint-check` (same as CI)
