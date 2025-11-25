@@ -39,7 +39,7 @@ function App() {
     )
   }
 
-  const uptime = health?.uptime_seconds || 0
+  const uptime = metrics?.uptime_seconds || 0
   const uptimeFormatted = formatUptime(uptime)
   const overallStatus = getOverallStatus(ready)
 
