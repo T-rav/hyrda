@@ -43,7 +43,7 @@ make run          # Run the Slack bot (requires .env file)
 
 ### Testing and Code Quality
 ```bash
-make test         # Run test suite with pytest (245 tests)
+make test         # Run test suite with pytest (556 tests)
 make lint         # Auto-fix linting, formatting, and import issues
 make lint-check   # Check code quality without fixing (used by pre-commit)
 make quality      # Run complete pipeline: linting + type checking + tests
@@ -185,24 +185,44 @@ VECTOR_ENABLED=false
 
 ## Architecture Overview
 
-This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and comprehensive testing.
+This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and **microservices architecture** (v1.1.0).
 
-### 🏗️ Core Architecture
+### 🏗️ v1.1.0 Microservices Architecture
 
-#### New RAG-Enabled Design
-- **Direct LLM Integration**: OpenAI, Anthropic, or Ollama (no proxy required)
-- **Vector Database**: Qdrant for self-hosted vector search
-- **Embedding Service**: Configurable text vectorization
-- **RAG Pipeline**: Retrieval-augmented response generation
-- **Document Ingestion**: CLI tool for knowledge base management
+#### Service Breakdown
+- **bot**: Slack integration and conversation management (Python/slack-bolt)
+  - Handles all Slack events and message routing
+  - Calls agent-service via HTTP for specialized agents
+  - Manages RAG pipeline and LLM responses
+- **agent-service**: Specialized AI agents via HTTP API (Python/FastAPI)
+  - Profile agent: Company research and profiling
+  - MEDDIC agent: Sales methodology coaching
+  - Help agent: Onboarding and assistance
+  - Independently deployable and scalable
+- **control-plane**: Agent permissions and user management (Flask + React)
+  - Web UI for managing agent access
+  - Permission management and audit logs
+  - Ports 6001 (API) and 6002 (UI dev mode)
+- **tasks**: Background job scheduler with web UI
+  - Handles Google Drive document ingestion via OAuth2
+  - Scheduled jobs with cron-like scheduling
+  - Port 5001
+- **Supporting Services**:
+  - Qdrant: Vector database
+  - Redis: Conversation caching
+  - MySQL: Data persistence
 
-#### Core Structure
+#### Core Bot Structure
 - **bot/app.py**: Main application entry point with async Socket Mode handler
 - **bot/config/**: Pydantic settings with environment-based configuration
 - **bot/handlers/**: Event and message handling, including agent process management
-- **bot/services/**: Core services including RAG, LLM providers, and vector storage
+- **bot/services/**: Core services including RAG, LLM providers, vector storage, and agent HTTP client
 - **bot/utils/**: Error handling and logging utilities
-- **ingest/**: Google Drive document ingestion system with OAuth2 authentication
+
+#### Agent Service Structure
+- **agent-service/agents/**: Individual agent implementations
+- **agent-service/app.py**: FastAPI application with HTTP endpoints
+- **agent-service/tests/**: Agent-specific test suite
 
 ### Key Components
 
@@ -215,19 +235,29 @@ Uses Pydantic with environment variable prefixes:
 #### Message Flow
 1. Slack events → `bot/handlers/event_handlers.py`
 2. Message processing → `bot/handlers/message_handlers.py`
-3. LLM API calls → `bot/services/llm_service.py`
-4. Response formatting → `bot/services/formatting.py`
-5. Slack response → `bot/services/slack_service.py`
+3. Agent routing → `bot/services/agent_registry.py` determines if agent needed
+4. **Agent invocation** → `bot/services/agent_client.py` calls agent-service via HTTP
+5. LLM API calls → `bot/services/llm_service.py` (for non-agent responses)
+6. Response formatting → `bot/services/formatting.py`
+7. Slack response → `bot/services/slack_service.py`
 
-#### Document Ingestion Flow (Google Drive Only)
-1. OAuth2 authentication → `ingest/google_drive_ingester.py`
-2. Comprehensive metadata extraction → File paths, permissions, owners
-3. Document download and processing → Google Drive API
-4. Content chunking and embedding → `bot/services/vector_service.py`
+#### Document Ingestion Flow (Tasks Service)
+Document ingestion is handled via the **tasks service** with OAuth2:
+1. OAuth2 authentication → Visit `http://localhost:5001/api/gdrive/auth`
+2. Create scheduled ingestion job → Tasks service web UI
+3. Job runs on schedule → Downloads and processes documents
+4. Content chunking and embedding → Vector service
 5. Vector storage with rich metadata → Qdrant
 
-#### Agent Processes
-Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. Users can trigger data processing jobs through natural language requests.
+See "Document Ingestion - Scheduled Google Drive Tasks" section for detailed setup.
+
+#### Agent Invocation Flow (v1.1.0)
+1. Bot determines agent needed → `bot/handlers/message_handlers.py`
+2. Route to agent → `bot/services/agent_registry.py`
+3. HTTP call → `bot/services/agent_client.py` calls `agent-service/api/agents/{name}/invoke`
+4. Agent processes → Agent-service executes agent logic
+5. Response returned → Agent-service returns result via HTTP
+6. Bot formats → Bot sends response to Slack
 
 ### Threading and Context
 - Automatically creates and maintains Slack threads
@@ -264,7 +294,7 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 **Workarounds:**
 1. **Re-upload the document** after adding the bot (recommended)
 2. **Add bot BEFORE** sharing sensitive documents
-3. **Use RAG knowledge base** - Pre-ingest documents via `ingest/` module so bot can search them without Slack file access
+3. **Use RAG knowledge base** - Pre-ingest documents via tasks service so bot can search them without Slack file access
 
 **Technical details:**
 - Bot sees file metadata (name, ID) in thread history
@@ -305,62 +335,18 @@ The bot **cannot access files uploaded before it joined a channel**, even though
 - **Langfuse Tracing**: All tool calls are traced for observability
 - **Auto-discovery**: Bot detects when queries need real-time web data
 
-### Relationship Verification System
-
-The bot includes a sophisticated system to prevent false positives when identifying past client relationships in company profiles.
-
-#### How It Works
-
-1. **Internal Search Tool** (`bot/agents/company_profile/tools/internal_search.py`):
-   - Performs deep search of internal knowledge base for company-specific documents
-   - Uses enhanced entity boosting to prioritize company-specific docs over generic index files
-   - Returns explicit "Relationship status: Existing client" or "Relationship status: No prior engagement"
-   - Filters out index/overview files that contaminate results
-
-2. **Langfuse Prompt Versioning**:
-   - Prompt v10 (production): Trusts internal_search_tool's relationship determination
-   - Scripts in `scripts/`: `update_final_report_prompt.py` and `fix_final_report_prompt.py`
-   - Prompt tells LLM to trust the "Relationship status:" line, not validate it again
-
-3. **Entity Boosting Logic**:
-   - 20% boost for company name in content (vs 5% for other terms)
-   - 30% boost for company name in title (vs 10% for other terms)
-   - -50% penalty for index/overview files
-   - Smart company name extraction from queries
-
-#### Integration Tests
-
-Comprehensive test suite in `evals/relationship_detection/`:
-- `test_relationship_verification_integration.py`: 4 integration tests using real vector DB
-- Tests validate false positive prevention (Vail Resorts, Costco) and true positive detection (AllCampus, 3Step)
-- Run with: `PYTHONPATH=bot venv/bin/python -m pytest evals/relationship_detection/test_relationship_verification_integration.py`
-
-#### Key Files
-
-- `bot/agents/company_profile/tools/internal_search.py`: Entity boosting logic (lines 466-527)
-- `scripts/fix_final_report_prompt.py`: Prompt updater to trust internal search
-- `evals/relationship_detection/*.py`: Integration and unit tests
-
-#### Updating the Prompt
-
-To update the Langfuse prompt:
-```bash
-PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
-```
-Then promote the new version to production in Langfuse UI.
-
 ## Testing Framework & Quality Standards
 
 ### Test Suite Requirements
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **245/245 test success rate (100%)** - this standard must be preserved.
+The project maintains a **556/556 test success rate (100%)** - this standard must be preserved.
 
 #### Test Commands
 ```bash
 # Run all tests (REQUIRED before any commit)
-make test                    # Full test suite (245 tests)
+make test                    # Full test suite (556 tests)
 make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
 make test-file FILE=test_name.py  # Run specific test file
 
@@ -395,7 +381,7 @@ make ci                   # Run complete CI pipeline locally
 ```
 bot/tests/
 ├── test_app.py              # Application initialization
-├── test_config.py           # Configuration management  
+├── test_config.py           # Configuration management
 ├── test_conversation_cache.py  # Redis caching
 ├── test_event_handlers.py   # Slack event handling
 ├── test_formatting.py       # Message formatting
@@ -404,10 +390,12 @@ bot/tests/
 ├── test_llm_service.py      # LLM API integration
 ├── test_message_handlers.py # Message processing
 ├── test_slack_service.py    # Slack API integration
+├── test_agent_client.py     # Agent HTTP client integration
 └── test_utils.py            # Utilities and helpers
 
-ingest/
-└── tests/                   # Google Drive ingestion tests (future)
+agent-service/tests/         # Agent-specific tests
+tasks/tests/                 # Background job tests
+control-plane/tests/         # Control plane tests
 ```
 
 #### 3. Test Patterns (Follow These Examples)
@@ -515,7 +503,7 @@ make lint-check        # Verify everything passes (what pre-commit uses)
 make test-file FILE=test_your_modified_service.py
 
 # Run full test suite to ensure no regressions
-make test              # Must show 245/245 tests passing
+make test              # Must show 556/556 tests passing
 ```
 
 #### 6. **Verify Complete Quality Pipeline**
@@ -591,7 +579,7 @@ make quality
 | **If pre-commit fails** | `make lint` → fix issues → try commit again | Fix quality issues |
 
 ### **Remember**
-- 🚨 **245/245 tests must always pass** - never commit with failing tests
+- 🚨 **556/556 tests must always pass** - never commit with failing tests
 - 🔧 **Always run `make lint` after code changes** - fixes most issues automatically  
 - ✅ **Use `make quality` before commits** - runs everything (linting + tests)
 - 🚫 **Never use `git commit --no-verify`** - quality gates exist for good reason
@@ -664,7 +652,7 @@ make quality
 #### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)
 - **Current Coverage**: ~72% (excluding CLI scripts)
-- **Coverage Exclusions**: `bot/app.py`, `ingest/google_drive_ingester.py` (CLI scripts)
+- **Coverage Exclusions**: `bot/app.py` (CLI entry point)
 - **Coverage Command**: `make test-coverage`
 - **Configuration**: `.coveragerc` with realistic production thresholds
 
@@ -780,3 +768,51 @@ HEALTH_PORT=8080              # Health check server port
 - Auto-restart on crashes
 - Health check integration with orchestrators
 - Connection recovery for network issues
+
+---
+
+## 📚 Appendix
+
+### A. Relationship Verification System (Advanced)
+
+The bot includes a sophisticated system to prevent false positives when identifying past client relationships in company profiles. This is specific to the company profile agent.
+
+#### How It Works
+
+1. **Internal Search Tool** (`bot/agents/company_profile/tools/internal_search.py`):
+   - Performs deep search of internal knowledge base for company-specific documents
+   - Uses enhanced entity boosting to prioritize company-specific docs over generic index files
+   - Returns explicit "Relationship status: Existing client" or "Relationship status: No prior engagement"
+   - Filters out index/overview files that contaminate results
+
+2. **Langfuse Prompt Versioning**:
+   - Prompt v10 (production): Trusts internal_search_tool's relationship determination
+   - Scripts in `scripts/`: `update_final_report_prompt.py` and `fix_final_report_prompt.py`
+   - Prompt tells LLM to trust the "Relationship status:" line, not validate it again
+
+3. **Entity Boosting Logic**:
+   - 20% boost for company name in content (vs 5% for other terms)
+   - 30% boost for company name in title (vs 10% for other terms)
+   - -50% penalty for index/overview files
+   - Smart company name extraction from queries
+
+#### Integration Tests
+
+Comprehensive test suite in `evals/relationship_detection/`:
+- `test_relationship_verification_integration.py`: 4 integration tests using real vector DB
+- Tests validate false positive prevention (Vail Resorts, Costco) and true positive detection (AllCampus, 3Step)
+- Run with: `PYTHONPATH=bot venv/bin/python -m pytest evals/relationship_detection/test_relationship_verification_integration.py`
+
+#### Key Files
+
+- `bot/agents/company_profile/tools/internal_search.py`: Entity boosting logic (lines 466-527)
+- `scripts/fix_final_report_prompt.py`: Prompt updater to trust internal search
+- `evals/relationship_detection/*.py`: Integration and unit tests
+
+#### Updating the Prompt
+
+To update the Langfuse prompt:
+```bash
+PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
+```
+Then promote the new version to production in Langfuse UI.
