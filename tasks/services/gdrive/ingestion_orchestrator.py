@@ -8,11 +8,14 @@ Main service that coordinates the ingestion process by:
 - Managing the overall ingestion workflow
 """
 
+import logging
 import uuid
 from datetime import datetime
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionOrchestrator:
@@ -104,14 +107,14 @@ class IngestionOrchestrator:
                 if file_info["mimeType"] == "application/vnd.google-apps.folder":
                     continue
 
-                print(f"Processing: {file_info['name']}")
+                logger.info(f"Processing: {file_info['name']}")
 
                 # Download file content
                 content = self.google_drive_client.download_file_content(
                     file_info["id"], file_info["mimeType"]
                 )
                 if not content:
-                    print(f"Failed to download: {file_info['name']}")
+                    logger.error(f"Failed to download: {file_info['name']}")
                     error_count += 1
                     continue
 
@@ -123,12 +126,12 @@ class IngestionOrchestrator:
                 )
 
                 if not needs_reindex:
-                    print(f"⏭️  Skipping (unchanged): {file_info['name']}")
+                    logger.info(f"⏭️  Skipping (unchanged): {file_info['name']}")
                     skipped_count += 1
                     continue
 
                 if existing_uuid:
-                    print(f"🔄 Content changed, reindexing: {file_info['name']}")
+                    logger.info(f"🔄 Content changed, reindexing: {file_info['name']}")
 
                 # Generate or reuse UUID for this document
                 base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
@@ -170,7 +173,7 @@ class IngestionOrchestrator:
 
                 # Add contextual descriptions if enabled
                 if self.enable_contextual_retrieval and self.llm_service:
-                    print(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                    logger.info(f"Adding contextual descriptions to {len(chunks)} chunks...")
                     enhanced_chunks = []
                     for chunk in chunks_with_title:
                         context = await self.llm_service.generate_chunk_context(
@@ -213,7 +216,7 @@ class IngestionOrchestrator:
                     metadatas=chunk_metadata,
                     texts=chunks_with_title,
                 )
-                print(f"   📊 Ingested {len(chunks)} chunks")
+                logger.info(f"   📊 Ingested {len(chunks)} chunks")
 
                 # Record successful ingestion in tracking table
                 try:
@@ -243,13 +246,13 @@ class IngestionOrchestrator:
                         status="success",
                     )
                 except Exception as tracking_error:
-                    print(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
+                    logger.warning(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
 
-                print(f"✅ Successfully ingested: {file_info['name']}")
+                logger.info(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
 
             except Exception as e:
-                print(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
+                logger.error(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
                 error_count += 1
 
                 # Record failed ingestion
@@ -290,14 +293,14 @@ class IngestionOrchestrator:
         Returns:
             Tuple of (success_count, error_count, skipped_count)
         """
-        print(f"Scanning folder: {folder_id} (recursive: {recursive})")
+        logger.info(f"Scanning folder: {folder_id} (recursive: {recursive})")
         files = self.google_drive_client.list_folder_contents(
             folder_id, recursive, folder_path=""
         )
 
         # Debug output
         if not files:
-            print("Found 0 items - folder appears to be empty or inaccessible")
+            logger.warning("Found 0 items - folder appears to be empty or inaccessible")
         else:
             folders = [
                 f
@@ -310,22 +313,22 @@ class IngestionOrchestrator:
                 if f["mimeType"] != "application/vnd.google-apps.folder"
             ]
 
-            print(f"Found {len(files)} total items:")
-            print(f"  📁 {len(folders)} folders")
-            print(f"  📄 {len(documents)} documents")
+            logger.info(f"Found {len(files)} total items:")
+            logger.info(f"  📁 {len(folders)} folders")
+            logger.info(f"  📄 {len(documents)} documents")
 
             if folders:
-                print("  Folders found:")
+                logger.debug("  Folders found:")
                 for folder in folders[:5]:  # Show first 5 folders
-                    print(f"    - {folder['full_path']}")
+                    logger.debug(f"    - {folder['full_path']}")
                 if len(folders) > 5:
-                    print(f"    ... and {len(folders) - 5} more folders")
+                    logger.debug(f"    ... and {len(folders) - 5} more folders")
 
             if documents:
-                print("  Documents found:")
+                logger.debug("  Documents found:")
                 for doc in documents[:5]:  # Show first 5 documents
-                    print(f"    - {doc['full_path']} ({doc['mimeType']})")
+                    logger.debug(f"    - {doc['full_path']} ({doc['mimeType']})")
                 if len(documents) > 5:
-                    print(f"    ... and {len(documents) - 5} more documents")
+                    logger.debug(f"    ... and {len(documents) - 5} more documents")
 
         return await self.ingest_files(files, metadata)

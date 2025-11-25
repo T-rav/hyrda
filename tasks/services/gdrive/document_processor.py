@@ -8,6 +8,7 @@ Handles text extraction from various document formats including:
 - Text files
 """
 
+import logging
 from io import BytesIO
 
 # Document processing libraries
@@ -15,6 +16,8 @@ import fitz  # PyMuPDF for PDF
 from docx import Document  # python-docx for Word documents
 from openpyxl import load_workbook  # openpyxl for Excel
 from pptx import Presentation  # python-pptx for PowerPoint
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentProcessor:
@@ -51,7 +54,7 @@ class DocumentProcessor:
         elif mime_type.startswith("text/"):
             return self._extract_text_content(content)
         else:
-            print(f"Unsupported MIME type for text extraction: {mime_type}")
+            logger.warning(f"Unsupported MIME type for text extraction: {mime_type}")
             return None
 
     def _extract_text_content(self, content: bytes) -> str | None:
@@ -91,7 +94,7 @@ class DocumentProcessor:
             return full_text if full_text.strip() else None
 
         except Exception as e:
-            print(f"Error extracting PDF text: {e}")
+            logger.error(f"Error extracting PDF text: {e}")
             return None
 
     def _extract_docx_text(self, docx_content: bytes) -> str | None:
@@ -132,7 +135,7 @@ class DocumentProcessor:
             return full_text if full_text.strip() else None
 
         except Exception as e:
-            print(f"Error extracting Word document text: {e}")
+            logger.error(f"Error extracting Word document text: {e}")
             return None
 
     def _extract_xlsx_text(self, xlsx_content: bytes) -> str | None:
@@ -180,7 +183,7 @@ class DocumentProcessor:
             return full_text if full_text.strip() else None
 
         except Exception as e:
-            print(f"Error extracting Excel spreadsheet text: {e}")
+            logger.error(f"Error extracting Excel spreadsheet text: {e}")
             return None
 
     def _extract_pptx_text(self, pptx_content: bytes) -> str | None:
@@ -231,5 +234,5 @@ class DocumentProcessor:
             return full_text if full_text.strip() else None
 
         except Exception as e:
-            print(f"Error extracting PowerPoint presentation text: {e}")
+            logger.error(f"Error extracting PowerPoint presentation text: {e}")
             return None
