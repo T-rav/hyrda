@@ -1,6 +1,29 @@
 # InsightMesh Slack AI Bot
 
+**Version 1.1.0** - HTTP-Based Agent Architecture
+
 A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **Deep Research Agents**, and **Web Search** capabilities that provides intelligent, context-aware assistance using your own knowledge base and real-time web data.
+
+## 🆕 What's New in v1.1.0
+
+### Architecture Improvements
+- **Microservices Architecture**: Agents extracted to separate HTTP-based service
+- **Agent Service**: FastAPI-based agent-service for specialized AI agents (Profile, MEDDIC, Help)
+- **HTTP Communication**: Bot calls agents via REST API for better isolation and scalability
+- **Control Plane**: New web-based management UI for agent permissions and user access
+  - Flask API backend (port 6001)
+  - React + Vite frontend (port 6002 in dev)
+  - Agent registry viewer and permission management
+  - Coming soon: RBAC, audit logs, usage analytics
+- **Improved Testing**: Expanded test suite from 245 to 556 tests (100% pass rate)
+- **Test Coverage**: Comprehensive HTTP integration tests for agent communication layer
+
+### Benefits
+- Better service isolation and independent scaling
+- Easier to add new agents without modifying bot code
+- Centralized management of agent permissions and user access
+- More robust testing with dedicated agent client tests
+- Clear separation of concerns between Slack integration and agent logic
 
 ## ✨ Features
 
@@ -34,13 +57,13 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 - **Health Dashboard**: Real-time monitoring UI at `http://localhost:8080/ui`
 - **LLM Observability**: Langfuse integration for tracing, analytics, and cost monitoring
 - **Prometheus Metrics**: Native metrics collection for infrastructure monitoring
-- **Comprehensive Testing**: 245 tests with 72% code coverage
+- **Comprehensive Testing**: 556 tests with 72% code coverage (100% pass rate)
 - **Pre-commit Hooks**: Unified quality checks (Ruff + Pyright + Bandit)
 
 ### 🚀 **Easy Setup & Deployment**
 - **No Proxy Required**: Direct API integration eliminates infrastructure complexity
 - **Docker Compose**: Full stack deployment (bot + Qdrant + Redis + MySQL + Tasks Service)
-- **Scheduled Document Ingestion**: Web UI-based Google Drive ingestion with OAuth2 authentication
+- **Scheduled Document Ingestion**: OAuth2-based Google Drive ingestion via tasks service (replaces CLI)
 - **Multiple LLM Providers**: OpenAI, Anthropic, or Ollama support
 - **Flexible Configuration**: Environment-based settings with sensible defaults
 
@@ -162,7 +185,7 @@ docker logs -f insightmesh-bot
 
 ### Testing and Code Quality
 ```bash
-make test         # Run test suite with pytest (245 tests)
+make test         # Run test suite with pytest (556 tests)
 make lint         # Auto-fix linting, formatting, and import issues
 make lint-check   # Check code quality without fixing (used by pre-commit and CI)
 make quality      # Run complete pipeline: linting + type checking + tests
@@ -338,6 +361,7 @@ Access at `http://localhost:8123` - See `LANGGRAPH_STUDIO.md` for details.
 
 - **slack-bolt**: Slack's official Python framework
 - **LangChain/LangGraph**: Agent orchestration and workflows
+- **FastAPI**: HTTP API for agent-service
 - **OpenAI/Anthropic**: LLM providers (GPT-4o, Claude)
 - **Qdrant**: Self-hosted vector database
 - **Tavily & Perplexity**: Direct web search and deep research integration
@@ -346,22 +370,46 @@ Access at `http://localhost:8123` - See `LANGGRAPH_STUDIO.md` for details.
 - **Langfuse**: LLM observability and prompt management
 - **Docker Compose**: Service orchestration
 
+### Service Architecture
+
+The application uses a **microservices architecture** with HTTP-based communication:
+
+- **bot**: Slack integration and conversation management (Python/slack-bolt)
+  - Port 8080: Health dashboard and metrics
+- **agent-service**: Specialized AI agents via HTTP API (Python/FastAPI)
+  - Profile agent: Company research and profiling
+  - MEDDIC agent: Sales methodology coaching
+  - Help agent: Onboarding and assistance
+- **control-plane**: Agent permissions and user management (Flask + React)
+  - Port 6001: Flask API backend
+  - Port 6002: React frontend (dev mode)
+  - Features: Agent registry, permission management, audit logs (coming soon)
+- **tasks**: Background job scheduler with web UI
+  - Port 5001: Task management and Google Drive ingestion
+- **qdrant**: Vector database for semantic search
+- **redis**: Conversation caching
+- **mysql**: Data persistence
+
+**Benefits of v1.1.0 Architecture:**
+- Independent scaling of bot and agent services
+- Better fault isolation and service boundaries
+- Easier to add new agents without modifying bot code
+- Centralized governance via control plane
+- Comprehensive HTTP integration testing
+
 ### Project Structure
 
 ```
-bot/
-├── agents/
-│   └── company_profile/          # Deep research agent (LangGraph)
-│       ├── nodes/                # Graph nodes: supervisor, researcher, compression, etc.
-│       ├── state.py              # State definitions
-│       ├── prompts.py            # LLM prompts
-│       └── configuration.py      # Agent config
+bot/                              # Slack bot service
 ├── config/                       # Configuration management
 │   └── settings.py               # Pydantic settings for LLM, RAG, etc.
 ├── handlers/                     # Event handling
 │   ├── event_handlers.py         # Slack event handlers
-│   └── message_handlers.py       # Message handling logic
+│   ├── message_handlers.py       # Message handling logic
+│   └── agent_processes.py        # Agent process management
 ├── services/                     # Core services
+│   ├── agent_client.py           # HTTP client for agent-service
+│   ├── agent_registry.py         # Agent routing and metadata
 │   ├── search_clients.py         # Web search clients (Tavily, Perplexity)
 │   ├── internal_deep_research.py # Internal knowledge base deep research
 │   ├── conversation_manager.py   # Conversation context management
@@ -372,19 +420,35 @@ bot/
 │   ├── embedding_service.py      # Text embedding generation
 │   ├── langfuse_service.py       # Observability and tracing
 │   └── slack_service.py          # Slack API integration
-├── tests/                        # Test suite (245 tests, 72% coverage)
+├── tests/                        # Test suite (556 tests, 72% coverage)
 ├── utils/                        # Utilities
 │   ├── pdf_generator.py          # PDF report generation
 │   └── errors.py                 # Error handling
 ├── app.py                        # Main application entry point
 └── health.py                     # Health check endpoints
 
-ingest/                           # Document ingestion
-├── main.py                       # Google Drive ingestion CLI
-├── services/                     # Modular ingestion services
-└── auth/                         # Google OAuth2
+agent-service/                    # Agent service (HTTP API) [NEW in v1.1.0]
+├── agents/                       # Specialized AI agents
+│   ├── profiler/                 # Company profiler agent (LangGraph)
+│   │   ├── nodes/                # Graph nodes: supervisor, researcher, compression
+│   │   ├── state.py              # State definitions
+│   │   └── prompts.py            # LLM prompts
+│   └── meddpicc_coach/           # MEDDPICC coaching agent
+├── tests/                        # Agent-specific tests
+└── app.py                        # FastAPI application
 
-tasks/                            # Background task scheduler
+control-plane/                    # Management UI [NEW in v1.1.0]
+├── api/                          # Flask API backend
+├── models/                       # Data models
+├── services/                     # Business logic
+├── ui/                           # React frontend
+│   ├── src/                      # React components
+│   └── public/                   # Static assets
+├── app.py                        # Flask application
+└── README.md                     # Control plane docs
+
+tasks/                            # Background task scheduler (port 5001)
+                                  # Handles Google Drive ingestion via OAuth2
 evals/                            # LLM evaluation framework
 ```
 
@@ -549,11 +613,11 @@ See `docs/LANGFUSE_SETUP.md` for complete setup instructions.
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **245/245 test success rate (100%)** with **72% code coverage**.
+The project maintains a **556/556 test success rate (100%)** with **72% code coverage**.
 
 #### Test Commands
 ```bash
-make test              # Run all 245 tests
+make test              # Run all 556 tests
 make test-coverage     # Tests with coverage report (>70% required)
 make test-file FILE=test_name.py  # Run specific test file
 ```
@@ -635,7 +699,7 @@ docker compose restart bot
 ```
 
 ### Qdrant Issues
-- **Collection not found**: Run `cd ingest && python main.py --folder-id YOUR_ID`
+- **Collection not found**: Collections are auto-created on first document ingestion via tasks service
 - **Wrong dimensions**: Ensure embedding model matches collection (1536 for text-embedding-3-small)
 - **Connection errors**: Check `VECTOR_HOST` is `localhost` locally or `qdrant` in Docker
 
@@ -664,7 +728,7 @@ docker compose restart bot
 - **CLAUDE.md**: Complete development workflow and coding standards
 - **DEEP_RESEARCH_TRANSFER_GUIDE.md**: Deep research agent architecture and implementation
 - **LANGGRAPH_STUDIO.md**: LangGraph Studio setup and debugging
-- **ingest/README.md**: Document ingestion setup and Google OAuth2
+- **control_plane/README.md**: Control plane setup and API documentation
 - **docs/LANGFUSE_SETUP.md**: Langfuse observability setup
 - **evals/README.md**: LLM evaluation framework
 
@@ -727,7 +791,7 @@ MIT License - See LICENSE file for details.
 7. Open a Pull Request
 
 All PRs must:
-- Pass all 245 tests
+- Pass all 556 tests (100% pass rate)
 - Maintain >70% code coverage
 - Pass unified quality checks (Ruff + Pyright + Bandit)
 - Include comprehensive tests for new features
