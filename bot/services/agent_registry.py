@@ -43,9 +43,9 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
     try:
         import requests
 
-        from config.settings import get_settings
+        from config.settings import Settings
 
-        settings = get_settings()
+        settings = Settings()
         agent_service_url = settings.agent_service_url or "http://agent_service:8000"
 
         response = requests.get(f"{agent_service_url}/api/agents", timeout=5)
