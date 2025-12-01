@@ -80,8 +80,9 @@ class FlaskAppFactory:
 
         # Clear cached modules for true isolation
         modules_to_clear = [
-            m for m in list(sys.modules.keys())
-            if m.startswith('app') or m.startswith('api.')
+            m
+            for m in list(sys.modules.keys())
+            if m.startswith("app") or m.startswith("api.")
         ]
         for module in modules_to_clear:
             sys.modules.pop(module, None)
@@ -92,17 +93,14 @@ class FlaskAppFactory:
         if mock_registry is None:
             mock_registry = MockJobRegistryFactory.create()
 
-        # Patch at module level before import
-        original_scheduler = sys.modules.get('app.SchedulerService')
-        original_registry = sys.modules.get('app.JobRegistry')
-        original_settings = sys.modules.get('app.get_settings')
-
         # Import and patch
         import app
+
         app.SchedulerService = Mock(return_value=mock_scheduler)
         app.JobRegistry = Mock(return_value=mock_registry)
 
         from config.settings import TasksSettings
+
         mock_settings = MagicMock(spec=TasksSettings)
         mock_settings.secret_key = "test-secret-key"
         mock_settings.flask_env = "testing"
@@ -111,12 +109,14 @@ class FlaskAppFactory:
 
         # Create app
         from app import create_app
+
         test_app = create_app()
         test_app.config["TESTING"] = True
         test_app.config["WTF_CSRF_ENABLED"] = False
 
         # Patch auth module to use test domain (ALLOWED_DOMAIN is loaded at import time)
         import utils.auth
+
         # Read from environment (set by conftest or mock_oauth_env) with fallback to "test.com"
         # This allows tests to override the domain via env vars
         test_domain = os.getenv("ALLOWED_EMAIL_DOMAIN", "test.com")
@@ -149,17 +149,12 @@ class FlaskAppFactory:
 
         # Patch get_db_session
         import models.base
+
         models.base.get_db_session = mock_db_session
 
-        # Update blueprint services
-        import api.jobs
-        import api.task_runs
-        import api.health
-
-        api.jobs.scheduler_service = mock_scheduler
-        api.jobs.job_registry = mock_registry
-        api.task_runs.scheduler_service = mock_scheduler
-        api.health.scheduler_service = mock_scheduler
+        # Store mock services in app.extensions (new pattern - no more globals!)
+        test_app.extensions["scheduler_service"] = mock_scheduler
+        test_app.extensions["job_registry"] = mock_registry
 
         return test_app
 

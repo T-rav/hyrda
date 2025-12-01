@@ -8,6 +8,11 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from config.settings import TasksSettings
+from tests.factories import (
+    FlaskAppFactory,
+    MockJobRegistryFactory,
+    MockSchedulerFactory,
+)
 
 
 @pytest.fixture
@@ -102,7 +107,6 @@ def sample_slack_users():
 
 
 # Flask app testing fixtures using factories
-from tests.factories import FlaskAppFactory, MockJobRegistryFactory, MockSchedulerFactory
 
 
 @pytest.fixture
@@ -127,7 +131,9 @@ def app_factory():
 def app(monkeypatch, mock_scheduler, mock_job_registry):
     """Create a fresh Flask app for each test with mocked services."""
     # Set OAuth env vars
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv(
+        "GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+    )
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
     monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "test.com")  # Domain without @ prefix

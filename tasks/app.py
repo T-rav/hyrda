@@ -3,17 +3,13 @@
 import logging
 import os
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, redirect, render_template, request, session
+from flask import Flask, redirect, request, session
 from flask_cors import CORS
 
 from config.settings import get_settings
 from jobs.job_registry import JobRegistry
-from models.base import get_db_session
-from models.task_metadata import TaskMetadata
-from models.task_run import TaskRun
 from services.scheduler_service import SchedulerService
 
 # Environment variables loaded by Pydantic from docker-compose.yml
@@ -43,16 +39,12 @@ root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
 
-# Global instances
+# Flask app instance (standard pattern)
 app = Flask(__name__)
-scheduler_service: SchedulerService | None = None
-job_registry: JobRegistry | None = None
 
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
-    global scheduler_service, job_registry
-
     # Load settings
     settings = get_settings()
 
@@ -67,15 +59,22 @@ def create_app() -> Flask:
     if not app.config.get("TESTING"):
         CORS(app)
 
-    # Initialize services
+    # Initialize services and store in app.extensions (Flask best practice)
     scheduler_service = SchedulerService(settings)
     job_registry = JobRegistry(settings, scheduler_service)
+
+    # Store services in app context (eliminates global state)
+    app.extensions["scheduler_service"] = scheduler_service
+    app.extensions["job_registry"] = job_registry
 
     # Register blueprints
     register_blueprints()
 
     # Start scheduler
     scheduler_service.start()
+
+    # Register cleanup handler
+    register_cleanup_handlers()
 
     return app
 
@@ -91,7 +90,10 @@ def register_blueprints() -> None:
     from api.jobs import jobs_bp
     from api.task_runs import task_runs_bp
 
-    # Initialize services with global references
+    # Initialize services from app context (no globals!)
+    scheduler_service = app.extensions["scheduler_service"]
+    job_registry = app.extensions["job_registry"]
+
     init_health_services(scheduler_service)
     init_job_services(scheduler_service, job_registry)
 
@@ -106,8 +108,24 @@ def register_blueprints() -> None:
     logger.info("Registered all API blueprints")
 
 
+def register_cleanup_handlers() -> None:
+    """Register cleanup handlers for graceful shutdown."""
+
+    @app.teardown_appcontext
+    def shutdown_services(exception=None):
+        """Cleanup services on app context teardown."""
+        scheduler_service = app.extensions.get("scheduler_service")
+        if scheduler_service:
+            try:
+                scheduler_service.shutdown()
+                logger.info("Scheduler service shut down successfully")
+            except Exception as e:
+                logger.error(f"Error shutting down scheduler: {e}")
+
+
 # UI serving removed - handled by nginx
 # Flask app now serves only API routes
+
 
 # Authentication middleware - protect all routes except health and auth
 @app.before_request
@@ -120,7 +138,9 @@ def require_authentication():
         request.path.startswith("/health")
         or request.path.startswith("/api/health")
         or request.path.startswith("/auth/")
-        or request.path.startswith("/api/gdrive/auth/")  # Google Drive OAuth uses different flow
+        or request.path.startswith(
+            "/api/gdrive/auth/"
+        )  # Google Drive OAuth uses different flow
     ):
         return None
 
@@ -145,6 +165,7 @@ def require_authentication():
 
     # Not authenticated - redirect to login
     import secrets
+
     from utils.auth import get_flow, get_redirect_uri
 
     service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
@@ -173,9 +194,10 @@ def require_authentication():
 
 
 def shutdown_scheduler():
-    """Shutdown the scheduler gracefully."""
-    if scheduler_service:
-        scheduler_service.shutdown()
+    """Shutdown the scheduler gracefully (deprecated - uses teardown handler now)."""
+    # Services are now cleaned up via app.teardown_appcontext
+    # This function kept for backward compatibility but does nothing
+    logger.info("Shutdown handled by teardown_appcontext")
 
 
 def main():

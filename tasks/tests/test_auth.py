@@ -1,29 +1,18 @@
 """Test suite for Tasks service OAuth authentication."""
 
-import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import Flask, session
 
 # Add tasks to path
 tasks_dir = Path(__file__).parent.parent
 if str(tasks_dir) not in sys.path:
     sys.path.insert(0, str(tasks_dir))
 
-from utils.auth import (
-    AuditLogger,
-    AuthError,
-    flask_auth_callback,
-    flask_logout,
-    get_flow,
-    get_redirect_uri,
-    verify_domain,
-    verify_token,
-)
+import utils.auth  # noqa: E402, I001
 
 
 # Uses shared fixtures from conftest.py: app, client, unauthenticated_client
@@ -32,19 +21,20 @@ from utils.auth import (
 @pytest.fixture
 def mock_oauth_env():
     """Mock OAuth environment variables."""
-    with patch.dict(
-        os.environ,
-        {
-            "GOOGLE_OAUTH_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
-            "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
-            "ALLOWED_EMAIL_DOMAIN": "8thlight.com",  # Without @ - verify_domain() adds it
-            "SERVER_BASE_URL": "http://localhost:5001",
-        },
-        clear=False,
-    ):
-        # Also patch the module-level variable directly since it's loaded at import time
-        with patch("utils.auth.ALLOWED_DOMAIN", "8thlight.com"):  # Without @ prefix
-            yield
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "GOOGLE_OAUTH_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
+                "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
+                "ALLOWED_EMAIL_DOMAIN": "8thlight.com",  # Without @ - verify_domain() adds it
+                "SERVER_BASE_URL": "http://localhost:5001",
+            },
+            clear=False,
+        ),
+        patch("utils.auth.ALLOWED_DOMAIN", "8thlight.com"),
+    ):  # Without @ prefix
+        yield
 
 
 class TestDomainVerification:
@@ -52,13 +42,13 @@ class TestDomainVerification:
 
     def test_verify_domain_allows_8thlight(self, mock_oauth_env):
         """Test that @8thlight.com emails are allowed."""
-        assert verify_domain("user@8thlight.com") is True
-        assert verify_domain("test.user@8thlight.com") is True
+        assert utils.auth.verify_domain("user@8thlight.com") is True
+        assert utils.auth.verify_domain("test.user@8thlight.com") is True
 
     def test_verify_domain_rejects_other_domains(self, mock_oauth_env):
         """Test that other domains are rejected."""
-        assert verify_domain("user@example.com") is False
-        assert verify_domain("user@gmail.com") is False
+        assert utils.auth.verify_domain("user@example.com") is False
+        assert utils.auth.verify_domain("user@gmail.com") is False
 
 
 class TestAuthMiddleware:
@@ -75,7 +65,9 @@ class TestAuthMiddleware:
         # May return error but shouldn't redirect to web OAuth
         assert response.status_code != 302 or "/auth/callback" not in response.location
 
-    def test_protected_endpoint_redirects_when_not_authenticated(self, unauthenticated_client, mock_oauth_env):
+    def test_protected_endpoint_redirects_when_not_authenticated(
+        self, unauthenticated_client, mock_oauth_env
+    ):
         """Test that protected endpoints redirect to OAuth when not authenticated."""
         with patch("utils.auth.get_flow") as mock_get_flow:
             mock_flow = MagicMock()

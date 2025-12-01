@@ -7,8 +7,7 @@ that require Google OAuth authentication restricted to specific email domains.
 import logging
 import os
 from datetime import UTC, datetime
-from functools import wraps
-from typing import Any, Callable, Optional
+from typing import Any
 
 from flask import Response, jsonify, redirect, request, session
 from google.auth.transport.requests import Request
@@ -21,7 +20,11 @@ logger = logging.getLogger(__name__)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 ALLOWED_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com").lstrip("@")
-OAUTH_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+OAUTH_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 
 
 class AuthError(Exception):
@@ -36,12 +39,12 @@ class AuditLogger:
     @staticmethod
     def log_auth_event(
         event_type: str,
-        email: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        email: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
         success: bool = True,
-        error: Optional[str] = None,
-        path: Optional[str] = None,
+        error: str | None = None,
+        path: str | None = None,
     ) -> None:
         """Log authentication event for auditing."""
         log_data = {
@@ -49,8 +52,15 @@ class AuditLogger:
             "event_type": event_type,
             "success": success,
             "email": email,
-            "ip_address": ip_address or request.remote_addr if hasattr(request, "remote_addr") else None,
-            "user_agent": user_agent or (request.headers.get("User-Agent") if hasattr(request, "headers") else None),
+            "ip_address": ip_address or request.remote_addr
+            if hasattr(request, "remote_addr")
+            else None,
+            "user_agent": user_agent
+            or (
+                request.headers.get("User-Agent")
+                if hasattr(request, "headers")
+                else None
+            ),
             "path": path or (request.path if hasattr(request, "path") else None),
         }
         if error:
@@ -62,7 +72,9 @@ class AuditLogger:
             logger.warning(f"AUTH_AUDIT: {event_type} FAILED", extra=log_data)
 
 
-def get_redirect_uri(service_base_url: str, callback_path: str = "/auth/callback") -> str:
+def get_redirect_uri(
+    service_base_url: str, callback_path: str = "/auth/callback"
+) -> str:
     """Get OAuth redirect URI for a service."""
     return f"{service_base_url.rstrip('/')}{callback_path}"
 
@@ -77,7 +89,9 @@ def verify_domain(email: str) -> bool:
 def get_flow(redirect_uri: str) -> Flow:
     """Create OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise AuthError("Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET")
+        raise AuthError(
+            "Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"
+        )
 
     return Flow.from_client_config(
         {
@@ -102,7 +116,9 @@ def verify_token(token: str) -> dict[str, Any]:
         raise AuthError(f"Invalid token: {e}") from e
 
 
-def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callback") -> Response:
+def flask_auth_callback(  # noqa: PLR0911
+    service_base_url: str, callback_path: str = "/auth/callback"
+) -> Response:
     """Handle OAuth callback for Flask."""
     redirect_uri = get_redirect_uri(service_base_url, callback_path)
     state = session.get("oauth_state")
@@ -152,7 +168,9 @@ def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callb
                 error=f"Email domain not allowed: {email}",
             )
             session.clear()
-            return jsonify({"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}), 403
+            return jsonify(
+                {"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}
+            ), 403
 
         # Store user info in session
         session["user_email"] = email
