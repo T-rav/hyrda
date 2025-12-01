@@ -243,12 +243,20 @@ from utils.permissions import require_admin, check_admin
 from utils.errors import error_response, success_response
 from utils.validation import validate_agent_name, validate_group_name, validate_display_name
 from utils.audit import log_agent_action, log_permission_action, log_user_action, log_group_action, AuditAction
+from utils.pagination import get_pagination_params, paginate_query, build_pagination_response
+from utils.idempotency import require_idempotency
+from utils.rate_limit import rate_limit
 
 
 # Authentication routes
 @app.route("/auth/callback")
+@rate_limit(max_requests=10, window_seconds=60)  # 10 requests per minute per IP
 def auth_callback() -> Response:
-    """Handle OAuth callback."""
+    """Handle OAuth callback.
+
+    Rate limited to prevent brute force attacks on OAuth flow.
+    Limit: 10 requests per minute per IP address.
+    """
     from utils.auth import flask_auth_callback
 
     service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
@@ -274,6 +282,8 @@ def list_agents() -> Response:
 
     Query params:
         include_deleted: If "true", include soft-deleted agents (default: false)
+        page: Page number (1-indexed, default: 1)
+        per_page: Items per page (default: 50, max: 100)
     """
     try:
         from models import AgentGroupPermission, AgentMetadata, get_db_session
@@ -281,15 +291,20 @@ def list_agents() -> Response:
         # Check if we should include deleted agents
         include_deleted = request.args.get("include_deleted", "false").lower() == "true"
 
-        agents_data = []
+        # Get pagination parameters
+        page, per_page = get_pagination_params(default_per_page=50, max_per_page=100)
+
         with get_db_session() as session:
             # Get agents from database, filtering deleted by default
-            query = session.query(AgentMetadata)
+            query = session.query(AgentMetadata).order_by(AgentMetadata.agent_name)
             if not include_deleted:
                 query = query.filter(~AgentMetadata.is_deleted)
 
-            agents = query.all()
+            # Paginate query
+            agents, total_count = paginate_query(query, page, per_page)
 
+            # Build agent data
+            agents_data = []
             for agent in agents:
                 # Count groups with access to this agent
                 group_count = session.query(AgentGroupPermission).filter(
@@ -308,19 +323,26 @@ def list_agents() -> Response:
                     "authorized_groups": group_count,
                 })
 
-        return jsonify({"agents": agents_data})
+            # Build paginated response
+            response = build_pagination_response(agents_data, total_count, page, per_page)
+            # Keep "agents" key for backward compatibility
+            return jsonify({"agents": response["items"], "pagination": response["pagination"]})
 
     except Exception as e:
         logger.error(f"Error listing agents: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/agents/register", methods=["POST"])
+@require_idempotency(ttl_hours=24)
 def register_agent() -> Response:
     """Register or update an agent in the database.
 
     Called by agent-service on startup to sync available agents.
     Upserts agent metadata - creates if doesn't exist, updates if it does.
+
+    Headers:
+        Idempotency-Key: Optional unique key to prevent duplicate registrations
     """
     try:
         from models import AgentMetadata, get_db_session
@@ -601,8 +623,12 @@ def delete_agent(agent_name: str) -> Response:
 
 
 @app.route("/api/me")
+@rate_limit(max_requests=100, window_seconds=60)  # 100 requests per minute per IP
 def get_current_user() -> Response:
-    """Get current authenticated user info."""
+    """Get current authenticated user info.
+
+    Rate limited to 100 requests per minute per IP address.
+    """
     try:
         user_email = session.get("user_email")
         user_info = session.get("user_info", {})
@@ -623,14 +649,30 @@ def get_current_user() -> Response:
 
 @app.route("/api/users")
 def list_users() -> Response:
-    """List all users from security database with their group memberships."""
+    """List all users from security database with their group memberships.
+
+    Query Parameters:
+        page: Page number (1-indexed, default: 1)
+        per_page: Items per page (default: 50, max: 100)
+
+    Returns:
+        JSON response with paginated users and pagination metadata
+    """
     try:
         from models import User, UserGroup, PermissionGroup, get_db_session
 
-        with get_db_session() as session:
-            users = session.query(User).order_by(User.email).all()
-            users_data = []
+        # Get pagination parameters
+        page, per_page = get_pagination_params(default_per_page=50, max_per_page=100)
 
+        with get_db_session() as session:
+            # Build query
+            query = session.query(User).order_by(User.email)
+
+            # Paginate query
+            users, total_count = paginate_query(query, page, per_page)
+
+            # Build user data with group memberships
+            users_data = []
             for user in users:
                 # Get groups this user belongs to
                 memberships = session.query(UserGroup, PermissionGroup).join(
@@ -658,11 +700,14 @@ def list_users() -> Response:
                     "groups": groups,
                 })
 
-            return jsonify({"users": users_data})
+            # Build paginated response
+            response = build_pagination_response(users_data, total_count, page, per_page)
+            # Keep "users" key for backward compatibility
+            return jsonify({"users": response["items"], "pagination": response["pagination"]})
 
     except Exception as e:
         logger.error(f"Error listing users: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/users/sync", methods=["POST"])
@@ -721,12 +766,19 @@ def manage_groups() -> Response:
         from models import PermissionGroup, UserGroup, get_db_session
 
         if request.method == "GET":
+            # Get pagination parameters
+            page, per_page = get_pagination_params(default_per_page=50, max_per_page=100)
+
             with get_db_session() as session:
                 from models import User
 
-                # Get all groups with their user counts and user details
-                groups = session.query(PermissionGroup).all()
+                # Build query
+                query = session.query(PermissionGroup).order_by(PermissionGroup.group_name)
 
+                # Paginate query
+                groups, total_count = paginate_query(query, page, per_page)
+
+                # Build group data with user details
                 groups_data = []
                 for group in groups:
                     # Get users for this group with their details
@@ -753,7 +805,10 @@ def manage_groups() -> Response:
                         "users": users_list,
                     })
 
-                return jsonify({"groups": groups_data})
+                # Build paginated response
+                response = build_pagination_response(groups_data, total_count, page, per_page)
+                # Keep "groups" key for backward compatibility
+                return jsonify({"groups": response["items"], "pagination": response["pagination"]})
 
         elif request.method == "POST":
             # Admin check for group creation

@@ -9,7 +9,19 @@ from .audit import (
     log_user_action,
 )
 from .errors import error_response, success_response
+from .idempotency import (
+    check_idempotency,
+    get_idempotency_key,
+    require_idempotency,
+    store_idempotency,
+)
+from .pagination import (
+    build_pagination_response,
+    get_pagination_params,
+    paginate_query,
+)
 from .permissions import check_admin, check_authenticated, get_current_user
+from .rate_limit import check_rate_limit, get_rate_limit_key, rate_limit
 from .validation import (
     validate_agent_name,
     validate_display_name,
@@ -35,4 +47,14 @@ __all__ = [
     "log_permission_action",
     "log_user_action",
     "AuditAction",
+    "get_pagination_params",
+    "paginate_query",
+    "build_pagination_response",
+    "get_idempotency_key",
+    "check_idempotency",
+    "store_idempotency",
+    "require_idempotency",
+    "rate_limit",
+    "check_rate_limit",
+    "get_rate_limit_key",
 ]
