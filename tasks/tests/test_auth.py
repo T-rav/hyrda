@@ -73,7 +73,7 @@ class TestAuthMiddleware:
         # May return error but shouldn't redirect to web OAuth
         assert response.status_code != 302 or "/auth/callback" not in response.location
 
-    def test_protected_endpoint_redirects_when_not_authenticated(self, client, mock_oauth_env):
+    def test_protected_endpoint_redirects_when_not_authenticated(self, unauthenticated_client, mock_oauth_env):
         """Test that protected endpoints redirect to OAuth when not authenticated."""
         with patch("utils.auth.get_flow") as mock_get_flow:
             mock_flow = MagicMock()
@@ -83,7 +83,7 @@ class TestAuthMiddleware:
             )
             mock_get_flow.return_value = mock_flow
 
-            response = client.get("/api/jobs")
+            response = unauthenticated_client.get("/api/jobs")
 
             # Should redirect to Google OAuth
             assert response.status_code == 302

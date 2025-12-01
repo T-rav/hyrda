@@ -118,6 +118,35 @@ class FlaskAppFactory:
         import utils.auth
         utils.auth.ALLOWED_DOMAIN = "test.com"
 
+        # Ensure OAuth vars are set (required by auth middleware)
+        if not utils.auth.GOOGLE_CLIENT_ID:
+            utils.auth.GOOGLE_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
+        if not utils.auth.GOOGLE_CLIENT_SECRET:
+            utils.auth.GOOGLE_CLIENT_SECRET = "test-client-secret"
+
+        # Mock database session to avoid "no such table" errors
+        from contextlib import contextmanager
+
+        @contextmanager
+        def mock_db_session():
+            """Mock database session that returns empty results."""
+            mock_session = Mock()
+            mock_query = Mock()
+            mock_query.all.return_value = []
+            mock_query.first.return_value = None
+            mock_query.filter.return_value = mock_query
+            mock_query.order_by.return_value = mock_query
+            mock_query.limit.return_value = mock_query
+            mock_session.query.return_value = mock_query
+            mock_session.add = Mock()
+            mock_session.delete = Mock()
+            mock_session.commit = Mock()
+            yield mock_session
+
+        # Patch get_db_session
+        import models.base
+        models.base.get_db_session = mock_db_session
+
         # Update blueprint services
         import api.jobs
         import api.task_runs
