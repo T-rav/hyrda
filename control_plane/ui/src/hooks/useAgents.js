@@ -93,6 +93,38 @@ export function useAgents(toast) {
     }
   }
 
+  const deleteAgent = async (agentName) => {
+    try {
+      const response = await fetch(`/api/agents/${agentName}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete agent')
+      }
+
+      if (toast) {
+        toast.success(`Agent "${agentName}" has been deleted`)
+      }
+
+      // Refresh agent list to remove deleted agent
+      await fetchAgents()
+
+      // Close modal if currently viewing this agent
+      if (selectedAgent && selectedAgent.name === agentName) {
+        setSelectedAgent(null)
+        setSelectedAgentDetails(null)
+      }
+
+      return true
+    } catch (err) {
+      console.error('Error deleting agent:', err)
+      if (toast) toast.error(`Failed to delete agent: ${err.message}`)
+      throw err
+    }
+  }
+
   return {
     agents,
     loading,
@@ -105,5 +137,6 @@ export function useAgents(toast) {
     refreshAgents,
     fetchAgentDetails,
     toggleAgent,
+    deleteAgent,
   }
 }

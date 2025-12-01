@@ -152,6 +152,24 @@
   border-color: #cbd5e1;
 }
 
+.btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  border: 1px solid #dc2626;
+}
+
+.btn-danger:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  border-color: #b91c1c;
+}
+
+.btn-danger:disabled {
+  background: #fca5a5;
+  border-color: #fca5a5;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-outline-secondary {
   color: #64748b;
   border-color: #64748b;

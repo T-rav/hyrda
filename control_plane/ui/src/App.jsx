@@ -30,13 +30,16 @@ function App() {
     refreshAgents,
     fetchAgentDetails,
     toggleAgent,
+    deleteAgent,
   } = useAgents(toast)
 
   const {
     users,
     syncing,
+    currentUserEmail,
     fetchUsers,
     syncUsers,
+    updateAdminStatus,
   } = useUsers(toast)
 
   const {
@@ -124,6 +127,7 @@ function App() {
             onGrantToGroup={grantAgentToGroup}
             onRevokeFromGroup={revokeAgentFromGroup}
             onToggle={toggleAgent}
+            onDelete={deleteAgent}
           />
         )}
         {activeTab === 'users' && (
@@ -135,6 +139,8 @@ function App() {
             syncing={syncing}
             onAddUserToGroup={addUserToGroup}
             onRemoveUserFromGroup={removeUserFromGroup}
+            onUpdateAdminStatus={updateAdminStatus}
+            currentUserEmail={currentUserEmail}
           />
         )}
         {activeTab === 'groups' && (

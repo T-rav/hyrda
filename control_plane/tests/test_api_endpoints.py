@@ -1,18 +1,39 @@
 """Test suite for Control Plane API endpoints."""
 
+import contextlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
+from unittest.mock import patch
 import pytest
 from flask import Flask
+
+# Create temporary file-based SQLite databases for tests
+security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+data_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+security_db_path = security_db_file.name
+data_db_path = data_db_file.name
+security_db_file.close()
+data_db_file.close()
+
+# Set up SQLite for tests BEFORE any imports
+os.environ["SECURITY_DATABASE_URL"] = f"sqlite:///{security_db_path}"
+os.environ["DATA_DATABASE_URL"] = f"sqlite:///{data_db_path}"
 
 # Add control_plane to path BEFORE importing app
 control_plane_dir = Path(__file__).parent.parent
 if str(control_plane_dir) not in sys.path:
     sys.path.insert(0, str(control_plane_dir))
 
-# Now import from control_plane
+# Now import from control_plane - but create tables first
+from models.base import Base
 from models import PermissionGroup, UserGroup, AgentGroupPermission, AgentMetadata, User, get_db_session
+
+# Create tables in SQLite BEFORE app initialization
+with get_db_session() as session:
+    Base.metadata.create_all(session.bind)
 
 
 @pytest.fixture(scope="module")
@@ -27,9 +48,53 @@ def app():
 
 
 @pytest.fixture
-def client(app):
-    """Create test client."""
+def mock_oauth_env():
+    """Mock OAuth environment variables."""
+    with patch.dict(
+        os.environ,
+        {
+            "GOOGLE_OAUTH_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
+            "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
+            "ALLOWED_EMAIL_DOMAIN": "@8thlight.com",
+            "CONTROL_PLANE_BASE_URL": "http://localhost:6001",
+        },
+        clear=False,
+    ):
+        yield
+
+
+@pytest.fixture
+def client(app, mock_oauth_env):
+    """Create test client with OAuth env mocked."""
     return app.test_client()
+
+
+@pytest.fixture
+def authenticated_client(client, db_session):
+    """Create authenticated test client with valid session and admin user."""
+    # Create admin user in database if doesn't exist
+    admin_user = db_session.query(User).filter(
+        User.email == "admin@8thlight.com"
+    ).first()
+
+    if not admin_user:
+        admin_user = User(
+            email="admin@8thlight.com",
+            full_name="Test Admin",
+            slack_user_id="U_ADMIN_TEST",
+            is_admin=True
+        )
+        db_session.add(admin_user)
+        db_session.commit()
+
+    # Set up authenticated session
+    with client.session_transaction() as sess:
+        sess["user_email"] = "admin@8thlight.com"
+        sess["user_info"] = {
+            "email": "admin@8thlight.com",
+            "name": "Test Admin",
+        }
+    return client
 
 
 @pytest.fixture
@@ -85,17 +150,17 @@ def db_session():
 class TestGroupsAPI:
     """Test group management endpoints."""
 
-    def test_list_groups(self, client):
+    def test_list_groups(self, authenticated_client):
         """Test listing all groups."""
-        response = client.get("/api/groups")
+        response = authenticated_client.get("/api/groups")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert "groups" in data
         assert isinstance(data["groups"], list)
 
-    def test_create_group(self, client, db_session):
+    def test_create_group(self, authenticated_client, db_session):
         """Test creating a new group."""
-        response = client.post(
+        response = authenticated_client.post(
             "/api/groups",
             json={
                 "group_name": "test_group",
@@ -118,7 +183,7 @@ class TestGroupsAPI:
         assert group.display_name == "Test Group"
         assert group.description == "A test group"
 
-    def test_update_group(self, client, db_session):
+    def test_update_group(self, authenticated_client, db_session):
         """Test updating group display name and description."""
         # Create test group
         group = PermissionGroup(
@@ -131,7 +196,7 @@ class TestGroupsAPI:
         db_session.commit()
 
         # Update group
-        response = client.put(
+        response = authenticated_client.put(
             "/api/groups/update_test",
             json={
                 "display_name": "Updated Name",
@@ -153,7 +218,7 @@ class TestGroupsAPI:
         assert updated_group.display_name == "Updated Name"
         assert updated_group.description == "Updated description"
 
-    def test_delete_group(self, client, db_session):
+    def test_delete_group(self, authenticated_client, db_session):
         """Test deleting a group."""
         # Create test group
         group = PermissionGroup(
@@ -166,7 +231,7 @@ class TestGroupsAPI:
         db_session.commit()
 
         # Delete group
-        response = client.delete("/api/groups/delete_test")
+        response = authenticated_client.delete("/api/groups/delete_test")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["status"] == "deleted"
@@ -178,9 +243,9 @@ class TestGroupsAPI:
         ).first()
         assert deleted_group is None
 
-    def test_cannot_delete_system_group(self, client):
+    def test_cannot_delete_system_group(self, authenticated_client):
         """Test that system groups cannot be deleted."""
-        response = client.delete("/api/groups/all_users")
+        response = authenticated_client.delete("/api/groups/all_users")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "Cannot delete system group" in data["error"]
@@ -189,7 +254,7 @@ class TestGroupsAPI:
 class TestGroupMembersAPI:
     """Test group membership endpoints."""
 
-    def test_add_user_to_group(self, client, db_session):
+    def test_add_user_to_group(self, authenticated_client, db_session):
         """Test adding a user to a group."""
         # Create test group
         group = PermissionGroup(
@@ -211,7 +276,7 @@ class TestGroupMembersAPI:
         db_session.commit()
 
         # Add user to group
-        response = client.post(
+        response = authenticated_client.post(
             "/api/groups/member_test/users",
             json={"user_id": "U123TEST", "added_by": "test"},
             content_type="application/json"
@@ -228,7 +293,7 @@ class TestGroupMembersAPI:
         ).first()
         assert membership is not None
 
-    def test_remove_user_from_group(self, client, db_session):
+    def test_remove_user_from_group(self, authenticated_client, db_session):
         """Test removing a user from a group."""
         # Create test group, user, and membership
         group = PermissionGroup(
@@ -253,7 +318,7 @@ class TestGroupMembersAPI:
         db_session.commit()
 
         # Remove user from group
-        response = client.delete("/api/groups/remove_test/users?user_id=U456TEST")
+        response = authenticated_client.delete("/api/groups/remove_test/users?user_id=U456TEST")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["status"] == "removed"
@@ -266,9 +331,9 @@ class TestGroupMembersAPI:
         ).first()
         assert removed_membership is None
 
-    def test_cannot_remove_from_system_group(self, client, db_session):
+    def test_cannot_remove_from_system_group(self, authenticated_client, db_session):
         """Test that users cannot be manually removed from system groups."""
-        response = client.delete("/api/groups/all_users/users?user_id=U123")
+        response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "Cannot manually remove" in data["error"]
@@ -277,7 +342,7 @@ class TestGroupMembersAPI:
 class TestAgentPermissionsAPI:
     """Test agent permission endpoints."""
 
-    def test_grant_agent_to_group(self, client, db_session):
+    def test_grant_agent_to_group(self, authenticated_client, db_session):
         """Test granting agent access to a group."""
         # Create test group
         group = PermissionGroup(
@@ -289,7 +354,7 @@ class TestAgentPermissionsAPI:
         db_session.commit()
 
         # Grant agent to group
-        response = client.post(
+        response = authenticated_client.post(
             "/api/groups/agent_test/agents",
             json={"agent_name": "test_agent", "granted_by": "admin"},
             content_type="application/json"
@@ -306,7 +371,7 @@ class TestAgentPermissionsAPI:
         assert permission is not None
         assert permission.permission_type == "allow"
 
-    def test_revoke_agent_from_group(self, client, db_session):
+    def test_revoke_agent_from_group(self, authenticated_client, db_session):
         """Test revoking agent access from a group."""
         try:
             # Create test group
@@ -329,7 +394,7 @@ class TestAgentPermissionsAPI:
             db_session.commit()
 
             # Revoke agent from group
-            response = client.delete("/api/groups/revoke_test/agents?agent_name=revoke_agent")
+            response = authenticated_client.delete("/api/groups/revoke_test/agents?agent_name=revoke_agent")
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data["status"] == "revoked"
@@ -345,7 +410,7 @@ class TestAgentPermissionsAPI:
             db_session.rollback()
             raise
 
-    def test_get_group_agents(self, client, db_session):
+    def test_get_group_agents(self, authenticated_client, db_session):
         """Test getting agents a group has access to."""
         try:
             # Create test group
@@ -377,7 +442,7 @@ class TestAgentPermissionsAPI:
             db_session.commit()
 
             # Get group agents
-            response = client.get("/api/groups/list_agents_test/agents")
+            response = authenticated_client.get("/api/groups/list_agents_test/agents")
             assert response.status_code == 200
             data = json.loads(response.data)
             assert "agent_names" in data
@@ -392,7 +457,7 @@ class TestAgentPermissionsAPI:
 class TestAgentToggleAPI:
     """Test agent enable/disable endpoints."""
 
-    def test_toggle_agent_enabled(self, client, db_session):
+    def test_toggle_agent_enabled(self, authenticated_client, db_session):
         """Test toggling agent from disabled to enabled."""
         try:
             # Create disabled agent
@@ -404,7 +469,7 @@ class TestAgentToggleAPI:
             db_session.commit()
 
             # Toggle to enabled
-            response = client.post("/api/agents/toggle_test_enabled/toggle")
+            response = authenticated_client.post("/api/agents/toggle_test_enabled/toggle")
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data["is_enabled"] is True
@@ -423,7 +488,7 @@ class TestAgentToggleAPI:
             db_session.rollback()
             raise
 
-    def test_toggle_creates_metadata_if_missing(self, client, db_session):
+    def test_toggle_creates_metadata_if_missing(self, authenticated_client, db_session):
         """Test that toggle creates metadata entry if it doesn't exist."""
         try:
             # Use a unique agent name to avoid conflicts
@@ -438,7 +503,7 @@ class TestAgentToggleAPI:
                 db_session.commit()
 
             # Toggle (should create and enable)
-            response = client.post(f"/api/agents/{test_agent_name}/toggle")
+            response = authenticated_client.post(f"/api/agents/{test_agent_name}/toggle")
             assert response.status_code == 200
             data = json.loads(response.data)
             assert data["is_enabled"] is True
@@ -463,9 +528,9 @@ class TestAgentToggleAPI:
 class TestSystemGroups:
     """Test system group behavior."""
 
-    def test_all_users_group_exists(self, client):
+    def test_all_users_group_exists(self, authenticated_client):
         """Test that 'All Users' system group is created on startup."""
-        response = client.get("/api/groups")
+        response = authenticated_client.get("/api/groups")
         assert response.status_code == 200
         data = json.loads(response.data)
 
@@ -477,16 +542,16 @@ class TestSystemGroups:
         assert all_users_group["display_name"] == "All Users"
         assert "automatically" in all_users_group["description"].lower()
 
-    def test_system_group_protected_from_deletion(self, client):
+    def test_system_group_protected_from_deletion(self, authenticated_client):
         """Test that system groups cannot be deleted."""
-        response = client.delete("/api/groups/all_users")
+        response = authenticated_client.delete("/api/groups/all_users")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "system group" in data["error"].lower()
 
-    def test_system_group_protected_from_manual_membership(self, client):
+    def test_system_group_protected_from_manual_membership(self, authenticated_client):
         """Test that users cannot be manually removed from system groups."""
-        response = client.delete("/api/groups/all_users/users?user_id=U123")
+        response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "system group" in data["error"].lower()
@@ -495,29 +560,29 @@ class TestSystemGroups:
 class TestSystemAgents:
     """Test system agent behavior."""
 
-    def test_help_agent_is_system(self, client):
+    def test_help_agent_is_system(self, authenticated_client):
         """Test that help agent is marked as system agent."""
-        response = client.get("/api/agents/help")
+        response = authenticated_client.get("/api/agents/help")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["is_system"] is True
         assert data["is_public"] is True
 
-    def test_help_agent_has_all_users_access(self, client):
+    def test_help_agent_has_all_users_access(self, authenticated_client):
         """Test that help agent has all_users group access."""
-        response = client.get("/api/agents/help")
+        response = authenticated_client.get("/api/agents/help")
         assert response.status_code == 200
         data = json.loads(response.data)
         assert "all_users" in data["authorized_group_names"]
 
-    def test_cannot_disable_system_agent(self, client):
+    def test_cannot_disable_system_agent(self, authenticated_client):
         """Test that system agents cannot be disabled."""
-        response = client.post("/api/agents/help/toggle")
+        response = authenticated_client.post("/api/agents/help/toggle")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "Cannot disable system agents" in data["error"]
 
-    def test_cannot_grant_system_agent_to_non_all_users(self, client, db_session):
+    def test_cannot_grant_system_agent_to_non_all_users(self, authenticated_client, db_session):
         """Test that system agents can only be granted to all_users group."""
         # Create a test group
         from models import PermissionGroup
@@ -530,7 +595,7 @@ class TestSystemAgents:
         db_session.commit()
 
         # Try to grant help agent to non-all_users group
-        response = client.post(
+        response = authenticated_client.post(
             "/api/groups/test_group_system/agents",
             json={"agent_name": "help", "granted_by": "admin"},
             content_type="application/json"
@@ -539,9 +604,9 @@ class TestSystemAgents:
         data = json.loads(response.data)
         assert "System agents can only be granted to 'all_users' group" in data["error"]
 
-    def test_cannot_revoke_system_agent_from_all_users(self, client):
+    def test_cannot_revoke_system_agent_from_all_users(self, authenticated_client):
         """Test that system agents cannot be revoked from all_users."""
-        response = client.delete("/api/groups/all_users/agents?agent_name=help")
+        response = authenticated_client.delete("/api/groups/all_users/agents?agent_name=help")
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "Cannot revoke system agents from 'all_users' group" in data["error"]

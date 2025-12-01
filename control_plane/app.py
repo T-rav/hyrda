@@ -16,7 +16,7 @@ control_plane_dir = str(Path(__file__).parent.absolute())
 if control_plane_dir not in sys.path:
     sys.path.insert(0, control_plane_dir)
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory, session
 from flask_cors import CORS
 
 # Configure logging
@@ -46,9 +46,14 @@ app = Flask(__name__, static_folder="ui/dist", static_url_path="")
 
 def create_app() -> Flask:
     """Create and configure the Flask application."""
+    import os
+
     # Configure Flask
-    app.config["SECRET_KEY"] = "dev-secret-key-change-in-prod"
-    app.config["ENV"] = "development"
+    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
+    app.config["ENV"] = os.getenv("FLASK_ENV", "development")
+    app.config["SESSION_COOKIE_SECURE"] = os.getenv("ENVIRONMENT") == "production"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Enable CORS
     CORS(app)
@@ -163,7 +168,90 @@ def ensure_help_agent_system() -> None:
         logger.error(f"Error ensuring help agent system status: {e}", exc_info=True)
 
 
-# API Routes
+# Authentication middleware - protect all routes except health and auth
+@app.before_request
+def require_authentication():
+    """Require authentication for all routes except health checks and auth endpoints."""
+    from utils.auth import verify_domain
+
+    # Skip auth for health checks, auth endpoints, and static files
+    if (
+        request.path.startswith("/health")
+        or request.path.startswith("/api/health")
+        or request.path.startswith("/auth/")
+        or request.path.startswith("/assets/")
+        or request.path == "/"
+    ):
+        return None
+
+    # Check if user is authenticated
+    if "user_email" in session and "user_info" in session:
+        email = session["user_email"]
+        # Verify domain on each request
+        if verify_domain(email):
+            return None
+        else:
+            # Domain changed or invalid
+            session.clear()
+            from utils.auth import AuditLogger
+
+            AuditLogger.log_auth_event(
+                "access_denied_domain",
+                email=email,
+                path=request.path,
+                success=False,
+                error=f"Email domain not allowed: {email}",
+            )
+
+    # Not authenticated - redirect to login
+    from utils.auth import get_flow, get_redirect_uri
+
+    service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
+    redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
+    flow = get_flow(redirect_uri)
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="select_account",
+    )
+    session["oauth_state"] = state
+    session["oauth_redirect"] = request.url
+
+    from utils.auth import AuditLogger
+
+    AuditLogger.log_auth_event(
+        "login_initiated",
+        path=request.path,
+    )
+
+    from flask import redirect
+
+    return redirect(authorization_url)
+
+
+# Import centralized permission system
+from utils.permissions import require_admin, check_admin
+
+
+# Authentication routes
+@app.route("/auth/callback")
+def auth_callback() -> Response:
+    """Handle OAuth callback."""
+    from utils.auth import flask_auth_callback
+
+    service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
+    return flask_auth_callback(service_base_url, "/auth/callback")
+
+
+@app.route("/auth/logout", methods=["POST"])
+def logout() -> Response:
+    """Handle logout."""
+    from utils.auth import flask_logout
+
+    return flask_logout()
+
+
+# API Routes - Protected with authentication
 @app.route("/api/agents")
 def list_agents() -> Response:
     """List all registered agents from database.
@@ -171,14 +259,24 @@ def list_agents() -> Response:
     Agents are now stored in the database (agent_metadata table) and can be
     configured dynamically without code changes. Bot and agent-service query
     this endpoint to discover available agents.
+
+    Query params:
+        include_deleted: If "true", include soft-deleted agents (default: false)
     """
     try:
         from models import AgentGroupPermission, AgentMetadata, get_db_session
 
+        # Check if we should include deleted agents
+        include_deleted = request.args.get("include_deleted", "false").lower() == "true"
+
         agents_data = []
         with get_db_session() as session:
-            # Get all agents from database
-            agents = session.query(AgentMetadata).all()
+            # Get agents from database, filtering deleted by default
+            query = session.query(AgentMetadata)
+            if not include_deleted:
+                query = query.filter(~AgentMetadata.is_deleted)
+
+            agents = query.all()
 
             for agent in agents:
                 # Count groups with access to this agent
@@ -194,6 +292,7 @@ def list_agents() -> Response:
                     "is_public": agent.is_public,
                     "requires_admin": agent.requires_admin,
                     "is_system": agent.is_system,
+                    "is_deleted": agent.is_deleted,
                     "authorized_groups": group_count,
                 })
 
@@ -225,18 +324,30 @@ def register_agent() -> Response:
             return jsonify({"error": "name is required"}), 400
 
         with get_db_session() as session:
-            # Check if agent exists
+            # Check if agent exists (deleted or not)
             agent = session.query(AgentMetadata).filter(
                 AgentMetadata.agent_name == agent_name
             ).first()
 
-            if agent:
-                # Update existing agent
+            # Check for conflict: non-deleted agent with same name
+            if agent and not agent.is_deleted:
+                # Update existing active agent
                 agent.display_name = display_name
                 agent.description = description
                 agent.set_aliases(aliases)
                 agent.is_system = is_system
                 logger.info(f"Updated agent '{agent_name}' in database")
+                action = "updated"
+            elif agent and agent.is_deleted:
+                # Reactivate deleted agent (undelete and update)
+                agent.is_deleted = False
+                agent.is_public = True  # Re-enable when reactivating
+                agent.display_name = display_name
+                agent.description = description
+                agent.set_aliases(aliases)
+                agent.is_system = is_system
+                logger.info(f"Reactivated deleted agent '{agent_name}'")
+                action = "reactivated"
             else:
                 # Create new agent (default enabled)
                 agent = AgentMetadata(
@@ -246,17 +357,19 @@ def register_agent() -> Response:
                     is_public=True,  # Default enabled
                     requires_admin=False,
                     is_system=is_system,
+                    is_deleted=False,
                 )
                 agent.set_aliases(aliases)
                 session.add(agent)
                 logger.info(f"Registered new agent '{agent_name}' in database")
+                action = "created"
 
             session.commit()
 
         return jsonify({
             "success": True,
             "agent": agent_name,
-            "action": "updated" if agent else "created"
+            "action": action
         })
 
     except Exception as e:
@@ -338,6 +451,7 @@ def get_agent_usage(agent_name: str) -> Response:
 
 
 @app.route("/api/agents/<string:agent_name>/toggle", methods=["POST"])
+@require_admin
 def toggle_agent(agent_name: str) -> Response:
     """Toggle agent enabled/disabled state."""
     try:
@@ -372,6 +486,68 @@ def toggle_agent(agent_name: str) -> Response:
 
     except Exception as e:
         logger.error(f"Error toggling agent: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/agents/<string:agent_name>", methods=["DELETE"])
+@require_admin
+def delete_agent(agent_name: str) -> Response:
+    """Soft delete an agent (mark as deleted, don't remove from database).
+
+    System agents cannot be deleted.
+    Deleted agents are hidden from list_agents() by default.
+    """
+    try:
+        from models import AgentMetadata, get_db_session
+
+        with get_db_session() as session:
+            agent_metadata = session.query(AgentMetadata).filter(
+                AgentMetadata.agent_name == agent_name
+            ).first()
+
+            if not agent_metadata:
+                return jsonify({"error": f"Agent '{agent_name}' not found"}), 404
+
+            # Prevent deleting system agents
+            if agent_metadata.is_system:
+                return jsonify({"error": "Cannot delete system agents"}), 403
+
+            # Soft delete: mark as deleted
+            agent_metadata.is_deleted = True
+            agent_metadata.is_public = False  # Also disable when deleting
+            session.commit()
+
+            logger.info(f"Soft deleted agent '{agent_name}'")
+
+            return jsonify({
+                "success": True,
+                "agent_name": agent_name,
+                "message": f"Agent '{agent_name}' marked as deleted"
+            })
+
+    except Exception as e:
+        logger.error(f"Error deleting agent: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/me")
+def get_current_user() -> Response:
+    """Get current authenticated user info."""
+    try:
+        user_email = session.get("user_email")
+        user_info = session.get("user_info", {})
+
+        if not user_email:
+            return jsonify({"error": "Not authenticated"}), 401
+
+        return jsonify({
+            "email": user_email,
+            "name": user_info.get("name", ""),
+            "picture": user_info.get("picture", ""),
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting current user: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -420,6 +596,7 @@ def list_users() -> Response:
 
 
 @app.route("/api/users/sync", methods=["POST"])
+@require_admin
 def sync_users() -> Response:
     """Sync users from configured identity provider to security database.
 
@@ -509,6 +686,11 @@ def manage_groups() -> Response:
                 return jsonify({"groups": groups_data})
 
         elif request.method == "POST":
+            # Admin check for group creation
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
+
             data = request.json
             with get_db_session() as session:
                 new_group = PermissionGroup(
@@ -527,6 +709,7 @@ def manage_groups() -> Response:
 
 
 @app.route("/api/groups/<string:group_name>", methods=["PUT", "DELETE"])
+@require_admin
 def manage_group(group_name: str) -> Response:
     """Update or delete a permission group."""
     try:
@@ -594,6 +777,63 @@ def manage_group(group_name: str) -> Response:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/users/<int:user_id>/admin", methods=["PUT"])
+def update_user_admin_status(user_id: int) -> Response:
+    """Update user admin status.
+
+    Special case: If no admins exist, anyone can promote the first admin.
+    Otherwise, only admins can change admin status.
+    """
+    try:
+        from models import User, get_db_session
+
+        if not request.json or "is_admin" not in request.json:
+            return jsonify({"error": "Missing is_admin field"}), 400
+
+        new_admin_status = request.json["is_admin"]
+
+        with get_db_session() as db_session:
+            # Check if any admins exist
+            admin_count = db_session.query(User).filter(User.is_admin).count()
+
+            # If no admins exist, allow bootstrap (first admin creation)
+            if admin_count == 0:
+                logger.info("No admins exist - allowing bootstrap admin creation")
+            else:
+                # Otherwise, require current user to be admin
+                current_user_email = session.get("user_email")
+                if not current_user_email:
+                    return jsonify({"error": "Not authenticated"}), 401
+
+                current_user = db_session.query(User).filter(User.email == current_user_email).first()
+                if not current_user or not current_user.is_admin:
+                    return jsonify({"error": "Only admins can manage admin status"}), 403
+
+            # Update the target user
+            user = db_session.query(User).filter(User.id == user_id).first()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+
+            user.is_admin = new_admin_status
+            db_session.commit()
+
+            logger.info(f"User {user.email} admin status changed to {new_admin_status}")
+
+            return jsonify({
+                "status": "success",
+                "message": "User admin status updated",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "is_admin": user.is_admin,
+                }
+            })
+
+    except Exception as e:
+        logger.error(f"Error updating user admin status: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/groups/<string:group_name>/users", methods=["GET", "POST", "DELETE"])
 def manage_group_users(group_name: str) -> Response:
     """Manage users in a group."""
@@ -622,6 +862,11 @@ def manage_group_users(group_name: str) -> Response:
                 return jsonify({"users": users_data})
 
         elif request.method == "POST":
+            # Admin check for adding users to groups
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
+
             data = request.json
             user_id = data.get("user_id")
             added_by = data.get("added_by", "admin")
@@ -653,6 +898,11 @@ def manage_group_users(group_name: str) -> Response:
                 return jsonify({"status": "added"})
 
         elif request.method == "DELETE":
+            # Admin check for removing users from groups
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
+
             user_id = request.args.get("user_id")
             if not user_id:
                 return jsonify({"error": "user_id is required"}), 400
@@ -696,6 +946,11 @@ def manage_group_agents(group_name: str) -> Response:
                 return jsonify({"agent_names": agent_names})
 
         elif request.method == "POST":
+            # Admin check for granting agent access
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
+
             data = request.json
             agent_name = data.get("agent_name")
             granted_by = data.get("granted_by", "admin")
@@ -743,6 +998,11 @@ def manage_group_agents(group_name: str) -> Response:
                 return jsonify({"status": "granted"})
 
         elif request.method == "DELETE":
+            # Admin check for revoking agent access
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
+
             agent_name = request.args.get("agent_name")
             if not agent_name:
                 return jsonify({"error": "agent_name is required"}), 400

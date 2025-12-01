@@ -1,8 +1,10 @@
 import React, { useState } from 'react'
 import { Users, X, Plus, Trash2, Shield } from 'lucide-react'
 
-function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle }) {
+function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle, onDelete }) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Create set of authorized group names
   const authorizedGroupNames = new Set(agent.authorized_group_names || [])
@@ -16,6 +18,18 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
 
   const handleToggle = () => {
     onToggle(agent.name)
+  }
+
+  const handleDelete = async () => {
+    try {
+      setDeleting(true)
+      await onDelete(agent.name)
+      onClose() // Close modal after successful deletion
+    } catch (err) {
+      // Error is handled by useAgents hook with toast
+      setDeleting(false)
+      setShowDeleteConfirm(false)
+    }
   }
 
   return (
@@ -139,6 +153,40 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
         </div>
 
         <div className="modal-actions">
+          {!agent.is_system && (
+            <div style={{ marginRight: 'auto' }}>
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="btn-danger"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Trash2 size={16} />
+                  Delete Agent
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ color: '#ef4444', fontWeight: '500' }}>
+                    Are you sure?
+                  </span>
+                  <button
+                    onClick={handleDelete}
+                    className="btn-danger"
+                    disabled={deleting}
+                  >
+                    {deleting ? 'Deleting...' : 'Yes, Delete'}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="btn-secondary"
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <button onClick={onClose} className="btn-primary">
             Done
           </button>

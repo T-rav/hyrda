@@ -2,8 +2,24 @@ import React, { useState } from 'react'
 import { Users, RefreshCw, Shield } from 'lucide-react'
 import ManageUserGroupsModal from './ManageUserGroupsModal'
 
-function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup, onRemoveUserFromGroup }) {
+function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup, onRemoveUserFromGroup, onUpdateAdminStatus, currentUserEmail }) {
   const [selectedUser, setSelectedUser] = useState(null)
+  const [updatingAdmin, setUpdatingAdmin] = useState(null)
+
+  const handleAdminToggle = async (user) => {
+    setUpdatingAdmin(user.id)
+    try {
+      await onUpdateAdminStatus(user.id, !user.is_admin)
+    } finally {
+      setUpdatingAdmin(null)
+    }
+  }
+
+  // Check if there are any admins
+  const hasAdmins = users.some(u => u.is_admin)
+  // Check if current user is admin
+  const currentUser = users.find(u => u.email === currentUserEmail)
+  const isCurrentUserAdmin = currentUser?.is_admin || false
 
   return (
     <div className="content-section">
@@ -61,7 +77,17 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
                   {user.is_active ? 'Active' : 'Inactive'}
                 </span>
               </td>
-              <td>{user.is_admin ? 'Yes' : 'No'}</td>
+              <td>
+                <button
+                  onClick={() => handleAdminToggle(user)}
+                  className={`btn-small ${user.is_admin ? 'btn-danger' : 'btn-primary'}`}
+                  disabled={updatingAdmin === user.id || (!hasAdmins ? false : !isCurrentUserAdmin)}
+                  title={!hasAdmins ? 'Create first admin' : (isCurrentUserAdmin ? 'Toggle admin status' : 'Only admins can change admin status')}
+                  style={{ minWidth: '80px' }}
+                >
+                  {updatingAdmin === user.id ? '...' : (user.is_admin ? 'Remove Admin' : 'Make Admin')}
+                </button>
+              </td>
               <td>{user.last_synced_at ? new Date(user.last_synced_at).toLocaleDateString() : 'Never'}</td>
               <td>
                 <button
@@ -84,6 +110,20 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
           <button onClick={onSync} className="btn-primary" disabled={syncing}>
             Sync Users from Slack
           </button>
+        </div>
+      )}
+
+      {users.length > 0 && !hasAdmins && (
+        <div style={{
+          marginTop: '1rem',
+          padding: '1rem',
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+          borderRadius: '0.5rem',
+          border: '2px solid #fbbf24'
+        }}>
+          <p style={{ margin: 0, fontSize: '0.875rem', color: '#78350f', fontWeight: '600' }}>
+            ⚠️ <strong>No admins configured!</strong> Click "Make Admin" on any user to create the first admin. After that, only admins can manage admin status.
+          </p>
         </div>
       )}
 

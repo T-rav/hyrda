@@ -16,7 +16,8 @@ class AgentMetadata(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Agent identification
-    agent_name = Column(String(50), nullable=False, unique=True, index=True)
+    # Note: unique constraint only applies to non-deleted agents (see __table_args__)
+    agent_name = Column(String(50), nullable=False, index=True)
     display_name = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
     aliases = Column(Text, nullable=True)  # JSON array of aliases
@@ -29,12 +30,19 @@ class AgentMetadata(Base):
     is_system = Column(
         Boolean, nullable=False, default=False
     )  # System agents cannot be disabled and have special access rules
+    is_deleted = Column(
+        Boolean, nullable=False, default=False
+    )  # Soft delete - hide from active agents list
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=func.now())
     updated_at = Column(
         DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
+
+    # Note: Uniqueness of agent_name among non-deleted agents is enforced
+    # in the application layer (see register_agent endpoint)
+    # This allows reusing agent names after soft deletion
 
     def __repr__(self) -> str:
         return (
@@ -64,4 +72,5 @@ class AgentMetadata(Base):
             "is_public": self.is_public,
             "requires_admin": self.requires_admin,
             "is_system": self.is_system,
+            "is_deleted": self.is_deleted,
         }
