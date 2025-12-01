@@ -11,44 +11,49 @@ class TestJobDeletionCleanup:
     """Test that deleting a job cleans up all related database records."""
 
     @pytest.fixture
-    def client(self):
+    def client(self, monkeypatch):
         """Create a test client with mocked dependencies."""
         from app import create_app
 
-        # Mock services and settings
-        with (
-            patch("app.SchedulerService") as mock_scheduler_class,
-            patch("app.JobRegistry") as mock_registry_class,
-            patch("app.get_settings") as mock_settings,
-        ):
-            # Create mock scheduler
-            mock_scheduler = MagicMock()
-            mock_scheduler.remove_job = MagicMock()
-            mock_scheduler.scheduler.running = True
-            mock_scheduler_class.return_value = mock_scheduler
+        # Set OAuth env vars to avoid auth errors
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
+        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
 
-            # Create mock registry
-            mock_registry = MagicMock()
-            mock_registry_class.return_value = mock_registry
+        # Create mock scheduler
+        mock_scheduler = MagicMock()
+        mock_scheduler.remove_job = MagicMock()
+        mock_scheduler.scheduler.running = True
+        mock_scheduler.start.return_value = None
 
-            # Create mock settings
-            from config.settings import TasksSettings
+        # Create mock registry
+        mock_registry = MagicMock()
 
-            mock_settings_obj = MagicMock(spec=TasksSettings)
-            mock_settings_obj.secret_key = "test-secret"
-            mock_settings_obj.flask_env = "testing"
-            mock_settings.return_value = mock_settings_obj
+        # Create mock settings
+        from config.settings import TasksSettings
 
-            # Create app with mocks
-            test_app = create_app()
+        mock_settings_obj = MagicMock(spec=TasksSettings)
+        mock_settings_obj.secret_key = "test-secret"
+        mock_settings_obj.flask_env = "testing"
 
-            # Update blueprint services
-            import api.jobs
+        # Use monkeypatch to set up mocks
+        monkeypatch.setattr("app.SchedulerService", Mock(return_value=mock_scheduler))
+        monkeypatch.setattr("app.JobRegistry", Mock(return_value=mock_registry))
+        monkeypatch.setattr("app.get_settings", Mock(return_value=mock_settings_obj))
 
-            api.jobs.scheduler_service = mock_scheduler
-            api.jobs.job_registry = mock_registry
+        # Create app with mocks
+        test_app = create_app()
 
-            return test_app.test_client()
+        # Update blueprint services
+        import api.jobs
+        import api.health
+
+        api.jobs.scheduler_service = mock_scheduler
+        api.jobs.job_registry = mock_registry
+        api.health.scheduler_service = mock_scheduler
+
+        return test_app.test_client()
 
     def test_delete_job_removes_metadata(self, client):
         """Test that deleting a job removes its metadata from the database."""
