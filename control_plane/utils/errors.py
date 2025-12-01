@@ -64,7 +64,7 @@ def success_response(
         >>> return success_response({"agent_name": "profile"})
         >>> return success_response(message="Agent deleted successfully")
     """
-    response_data: dict[str, Any] = {}
+    response_data: dict[str, Any] = {"success": True}
 
     if data:
         response_data.update(data)

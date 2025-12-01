@@ -218,21 +218,35 @@ def require_authentication():
     session["oauth_state"] = state
 
     # Validate redirect URL to prevent open redirect attacks
-    # Use allowlist of safe redirect paths
-    ALLOWED_REDIRECT_PATHS = ["/", "/api/agents", "/api/groups", "/api/users"]
+    # Allowlist of safe redirect path prefixes
+    ALLOWED_REDIRECT_PREFIXES = ["/", "/api/agents", "/api/groups", "/api/users"]
 
-    redirect_url = request.url
-    parsed = urlparse(redirect_url)
+    # Check for redirect_to query parameter (user-controlled)
+    redirect_to = request.args.get("redirect_to")
+    if redirect_to:
+        parsed_redirect = urlparse(redirect_to)
 
-    # Check domain (must be same origin)
-    if parsed.netloc and parsed.netloc != request.host:
-        # External redirect attempt - default to home
-        redirect_url = "/"
-    # Check path (must be in allowlist)
-    elif parsed.path and parsed.path not in ALLOWED_REDIRECT_PATHS:
-        # Unknown path - default to home for security
-        logger.warning(f"Blocked redirect to non-allowlisted path: {parsed.path}")
-        redirect_url = "/"
+        # Reject external redirects (different domain)
+        if parsed_redirect.netloc and parsed_redirect.netloc != request.host:
+            logger.warning(f"Blocked external redirect attempt: {redirect_to}")
+            redirect_url = "/"
+        # Check path against allowlist (prefix match)
+        elif parsed_redirect.path:
+            # Check if path starts with any allowed prefix
+            is_allowed = any(
+                parsed_redirect.path.startswith(prefix)
+                for prefix in ALLOWED_REDIRECT_PREFIXES
+            )
+            if is_allowed:
+                redirect_url = redirect_to
+            else:
+                logger.warning(f"Blocked redirect to non-allowlisted path: {parsed_redirect.path}")
+                redirect_url = "/"
+        else:
+            redirect_url = "/"
+    else:
+        # No explicit redirect_to, use referrer or default
+        redirect_url = request.referrer if request.referrer else "/"
 
     session["oauth_redirect"] = redirect_url
 
@@ -1025,11 +1039,22 @@ def manage_group_users(group_name: str) -> Response:
                     UserGroup.group_name == group_name
                 ).all()
 
+                # Batch load all users in one query to prevent N+1
+                user_ids = [m.slack_user_id for m in memberships]
+                if not user_ids:
+                    return jsonify({"users": []})
+
+                all_users = session.query(User).filter(
+                    User.slack_user_id.in_(user_ids)
+                ).all()
+
+                # Build lookup dictionary for O(1) access
+                users_by_id = {u.slack_user_id: u for u in all_users}
+
+                # Build response using lookup dictionary
                 users_data = []
                 for membership in memberships:
-                    user = session.query(User).filter(
-                        User.slack_user_id == membership.slack_user_id
-                    ).first()
+                    user = users_by_id.get(membership.slack_user_id)
                     if user:
                         users_data.append({
                             "user_id": user.slack_user_id,
@@ -1046,9 +1071,22 @@ def manage_group_users(group_name: str) -> Response:
             if not is_admin:
                 return error
 
+            # Validate request body
             data = request.json
+            if not data:
+                return error_response("Request body is required", 400, "INVALID_REQUEST")
+
             user_id = data.get("user_id")
+            if not user_id:
+                return error_response("user_id is required", 400, "MISSING_FIELD")
+            if not isinstance(user_id, str):
+                return error_response("user_id must be a string", 400, "INVALID_TYPE")
+            if len(user_id) > 255:
+                return error_response("user_id too long (max 255 characters)", 400, "INVALID_LENGTH")
+
             added_by = data.get("added_by", "admin")
+            if not isinstance(added_by, str):
+                return error_response("added_by must be a string", 400, "INVALID_TYPE")
 
             with get_db_session() as session:
                 # Check if user exists
@@ -1130,12 +1168,22 @@ def manage_group_agents(group_name: str) -> Response:
             if not is_admin:
                 return error
 
+            # Validate request body
             data = request.json
-            agent_name = data.get("agent_name")
-            granted_by = data.get("granted_by", "admin")
+            if not data:
+                return error_response("Request body is required", 400, "INVALID_REQUEST")
 
+            agent_name = data.get("agent_name")
             if not agent_name:
-                return jsonify({"error": "agent_name is required"}), 400
+                return error_response("agent_name is required", 400, "MISSING_FIELD")
+            if not isinstance(agent_name, str):
+                return error_response("agent_name must be a string", 400, "INVALID_TYPE")
+            if len(agent_name) > 100:
+                return error_response("agent_name too long (max 100 characters)", 400, "INVALID_LENGTH")
+
+            granted_by = data.get("granted_by", "admin")
+            if not isinstance(granted_by, str):
+                return error_response("granted_by must be a string", 400, "INVALID_TYPE")
 
             with get_db_session() as session:
                 from models import AgentMetadata
@@ -1257,12 +1305,22 @@ def manage_user_permissions(user_id: str) -> Response:
                 return jsonify({"agent_names": agent_names})
 
         elif request.method == "POST":
+            # Validate request body
             data = request.json
-            agent_name = data.get("agent_name")
-            granted_by = data.get("granted_by", "admin")
+            if not data:
+                return error_response("Request body is required", 400, "INVALID_REQUEST")
 
+            agent_name = data.get("agent_name")
             if not agent_name:
-                return jsonify({"error": "agent_name is required"}), 400
+                return error_response("agent_name is required", 400, "MISSING_FIELD")
+            if not isinstance(agent_name, str):
+                return error_response("agent_name must be a string", 400, "INVALID_TYPE")
+            if len(agent_name) > 100:
+                return error_response("agent_name too long (max 100 characters)", 400, "INVALID_LENGTH")
+
+            granted_by = data.get("granted_by", "admin")
+            if not isinstance(granted_by, str):
+                return error_response("granted_by must be a string", 400, "INVALID_TYPE")
 
             with get_db_session() as session:
                 # Check if user exists

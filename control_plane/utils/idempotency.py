@@ -52,13 +52,13 @@ def generate_request_hash() -> str:
     return hashlib.sha256(request_str.encode()).hexdigest()
 
 
-def check_idempotency() -> tuple[bool, Response | None]:
+def check_idempotency() -> tuple[bool, tuple[Response, int] | None]:
     """Check if request has already been processed.
 
     Returns:
         Tuple of (is_duplicate, cached_response):
         - (False, None) if this is a new request
-        - (True, Response) if this is a duplicate with cached response
+        - (True, (Response, status_code)) if this is a duplicate with cached response
 
     Example:
         >>> is_duplicate, cached_response = check_idempotency()
@@ -82,8 +82,8 @@ def check_idempotency() -> tuple[bool, Response | None]:
         cached_response, timestamp = _idempotency_cache[cache_key]
         logger.info(f"Idempotency key hit: {idempotency_key}")
 
-        # Return cached response
-        return True, jsonify(cached_response["body"]), cached_response["status"]
+        # Return cached response as tuple (Response, status_code)
+        return True, (jsonify(cached_response["body"]), cached_response["status"])
 
     return False, None
 
