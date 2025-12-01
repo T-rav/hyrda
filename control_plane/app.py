@@ -218,12 +218,22 @@ def require_authentication():
     session["oauth_state"] = state
 
     # Validate redirect URL to prevent open redirect attacks
-    # Only allow same-origin redirects
+    # Use allowlist of safe redirect paths
+    ALLOWED_REDIRECT_PATHS = ["/", "/api/agents", "/api/groups", "/api/users"]
+
     redirect_url = request.url
     parsed = urlparse(redirect_url)
+
+    # Check domain (must be same origin)
     if parsed.netloc and parsed.netloc != request.host:
-        # External redirect attempt - redirect to home instead
+        # External redirect attempt - default to home
         redirect_url = "/"
+    # Check path (must be in allowlist)
+    elif parsed.path and parsed.path not in ALLOWED_REDIRECT_PATHS:
+        # Unknown path - default to home for security
+        logger.warning(f"Blocked redirect to non-allowlisted path: {parsed.path}")
+        redirect_url = "/"
+
     session["oauth_redirect"] = redirect_url
 
     from utils.auth import AuditLogger
@@ -376,62 +386,64 @@ def register_agent() -> Response:
             return error_response(error_msg, 400, "VALIDATION_ERROR")
 
         with get_db_session() as session:
-            # Check if agent exists (deleted or not)
-            # Use row-level locking to prevent race conditions
-            agent = session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == agent_name
-            ).with_for_update().first()
+            # Use explicit transaction to ensure lock is properly held
+            with session.begin():
+                # Check if agent exists (deleted or not)
+                # Use row-level locking to prevent race conditions
+                agent = session.query(AgentMetadata).filter(
+                    AgentMetadata.agent_name == agent_name
+                ).with_for_update().first()
 
-            # Validate uniqueness: ensure no non-deleted agent with same name exists
-            if agent and agent.is_deleted:
-                # Before reactivating, double-check no active agent with same name exists
-                existing_active = session.query(AgentMetadata).filter(
-                    AgentMetadata.agent_name == agent_name,
-                    AgentMetadata.is_deleted == False
-                ).first()
-                if existing_active:
-                    return error_response(
-                        f"Agent '{agent_name}' already exists",
-                        409,
-                        "AGENT_EXISTS"
+                # Validate uniqueness: ensure no non-deleted agent with same name exists
+                if agent and agent.is_deleted:
+                    # Before reactivating, double-check no active agent with same name exists
+                    existing_active = session.query(AgentMetadata).filter(
+                        AgentMetadata.agent_name == agent_name,
+                        AgentMetadata.is_deleted == False
+                    ).first()
+                    if existing_active:
+                        return error_response(
+                            f"Agent '{agent_name}' already exists",
+                            409,
+                            "AGENT_EXISTS"
+                        )
+
+                # Check for conflict: non-deleted agent with same name
+                if agent and not agent.is_deleted:
+                    # Update existing active agent
+                    agent.display_name = display_name
+                    agent.description = description
+                    agent.set_aliases(aliases)
+                    agent.is_system = is_system
+                    logger.info(f"Updated agent '{agent_name}' in database")
+                    action = "updated"
+                elif agent and agent.is_deleted:
+                    # Reactivate deleted agent (undelete and update)
+                    agent.is_deleted = False
+                    agent.is_public = True  # Re-enable when reactivating
+                    agent.display_name = display_name
+                    agent.description = description
+                    agent.set_aliases(aliases)
+                    agent.is_system = is_system
+                    logger.info(f"Reactivated deleted agent '{agent_name}'")
+                    action = "reactivated"
+                else:
+                    # Create new agent (default enabled)
+                    agent = AgentMetadata(
+                        agent_name=agent_name,
+                        display_name=display_name,
+                        description=description,
+                        is_public=True,  # Default enabled
+                        requires_admin=False,
+                        is_system=is_system,
+                        is_deleted=False,
                     )
+                    agent.set_aliases(aliases)
+                    session.add(agent)
+                    logger.info(f"Registered new agent '{agent_name}' in database")
+                    action = "created"
 
-            # Check for conflict: non-deleted agent with same name
-            if agent and not agent.is_deleted:
-                # Update existing active agent
-                agent.display_name = display_name
-                agent.description = description
-                agent.set_aliases(aliases)
-                agent.is_system = is_system
-                logger.info(f"Updated agent '{agent_name}' in database")
-                action = "updated"
-            elif agent and agent.is_deleted:
-                # Reactivate deleted agent (undelete and update)
-                agent.is_deleted = False
-                agent.is_public = True  # Re-enable when reactivating
-                agent.display_name = display_name
-                agent.description = description
-                agent.set_aliases(aliases)
-                agent.is_system = is_system
-                logger.info(f"Reactivated deleted agent '{agent_name}'")
-                action = "reactivated"
-            else:
-                # Create new agent (default enabled)
-                agent = AgentMetadata(
-                    agent_name=agent_name,
-                    display_name=display_name,
-                    description=description,
-                    is_public=True,  # Default enabled
-                    requires_admin=False,
-                    is_system=is_system,
-                    is_deleted=False,
-                )
-                agent.set_aliases(aliases)
-                session.add(agent)
-                logger.info(f"Registered new agent '{agent_name}' in database")
-                action = "created"
-
-            session.commit()
+                session.commit()
 
         return jsonify({
             "success": True,

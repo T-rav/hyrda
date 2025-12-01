@@ -63,16 +63,19 @@ def check_rate_limit(
     now = time.time()
     window_start = now - window_seconds
 
-    # Move key to end (mark as recently used for LRU)
+    # Use constant-time operations to prevent timing attacks
+    # Always get the list (empty list if key doesn't exist)
+    timestamps = _rate_limit_storage.get(key, [])
+
+    # Always perform cleanup regardless of key existence
+    cleaned_timestamps = [t for t in timestamps if t > window_start]
+
+    # Update or create entry (same operation for both cases)
+    _rate_limit_storage[key] = cleaned_timestamps
+
+    # Move to end for LRU (if key exists, this is constant time)
     if key in _rate_limit_storage:
         _rate_limit_storage.move_to_end(key)
-        # Clean up old requests outside the window
-        _rate_limit_storage[key] = [
-            timestamp for timestamp in _rate_limit_storage[key]
-            if timestamp > window_start
-        ]
-    else:
-        _rate_limit_storage[key] = []
 
     # Enforce max size with LRU eviction
     if len(_rate_limit_storage) > MAX_RATE_LIMIT_KEYS:
