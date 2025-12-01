@@ -130,7 +130,7 @@ def app(monkeypatch, mock_scheduler, mock_job_registry):
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
+    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "test.com")  # Domain without @ prefix
     monkeypatch.setenv("TASK_DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setenv("DATA_DATABASE_URL", "sqlite:///:memory:")
 

@@ -114,6 +114,10 @@ class FlaskAppFactory:
         test_app.config["TESTING"] = True
         test_app.config["WTF_CSRF_ENABLED"] = False
 
+        # Patch auth module to use test domain (ALLOWED_DOMAIN is loaded at import time)
+        import utils.auth
+        utils.auth.ALLOWED_DOMAIN = "test.com"
+
         # Update blueprint services
         import api.jobs
         import api.task_runs
@@ -141,9 +145,10 @@ class FlaskAppFactory:
         client = test_app.test_client()
 
         if authenticated:
-            # Set up authenticated session
+            # Set up authenticated session with keys expected by auth middleware
             with client.session_transaction() as sess:
-                sess["user"] = {
+                sess["user_email"] = "test@test.com"
+                sess["user_info"] = {
                     "email": "test@test.com",
                     "name": "Test User",
                 }
