@@ -5,12 +5,12 @@ Future tiers: admin, power_user, read_only, etc.
 """
 
 from functools import wraps
-from typing import Callable
+from typing import Any, Callable
 
-from flask import g, jsonify, session
+from flask import Response, g, jsonify, session
 
 
-def get_current_user():
+def get_current_user() -> Any | None:
     """Get current user from database.
 
     Uses Flask's g object to cache the user for the request lifecycle.
@@ -42,7 +42,7 @@ def get_current_user():
         return None
 
 
-def check_authenticated():
+def check_authenticated() -> tuple[bool, tuple[Response, int] | None]:
     """Check if user is authenticated.
 
     Returns:
@@ -54,7 +54,7 @@ def check_authenticated():
     return True, None
 
 
-def check_admin():
+def check_admin() -> tuple[bool, tuple[Response, int] | None]:
     """Check if current user is an admin.
 
     Returns:

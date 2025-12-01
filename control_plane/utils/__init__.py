@@ -23,6 +23,7 @@ from .pagination import (
 from .permissions import check_admin, check_authenticated, get_current_user
 from .rate_limit import check_rate_limit, get_rate_limit_key, rate_limit
 from .validation import (
+    sanitize_text_input,
     validate_agent_name,
     validate_display_name,
     validate_email,
@@ -41,6 +42,7 @@ __all__ = [
     "validate_display_name",
     "validate_email",
     "validate_required_field",
+    "sanitize_text_input",
     "log_admin_action",
     "log_agent_action",
     "log_group_action",

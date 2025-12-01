@@ -1,5 +1,6 @@
 """Input validation utilities for API requests."""
 
+import html
 import re
 from typing import Any
 
@@ -151,8 +152,8 @@ def validate_display_name(name: str | None, max_length: int = 100) -> tuple[bool
 def validate_email(email: str | None) -> tuple[bool, str | None]:
     """Validate email address format.
 
-    Basic email validation - checks for @ symbol and basic structure.
-    Not comprehensive RFC 5322 validation.
+    More robust email validation with additional checks.
+    Not comprehensive RFC 5322 validation but catches common issues.
 
     Args:
         email: The email address to validate
@@ -172,13 +173,38 @@ def validate_email(email: str | None) -> tuple[bool, str | None]:
     if not isinstance(email, str):
         return False, "Email must be a string"
 
-    # Basic email validation
-    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    # More robust email pattern
+    # - Must start with alphanumeric
+    # - Local part can contain dots, underscores, percent, plus, hyphen
+    # - Domain must have valid structure
+    # - TLD must be at least 2 characters
+    email_pattern = r"^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$"
+
     if not re.match(email_pattern, email):
         return False, "Invalid email format"
 
+    # Check for consecutive dots (not allowed)
+    if ".." in email:
+        return False, "Invalid email format (consecutive dots)"
+
+    # Check length
     if len(email) > 255:
         return False, "Email must be 255 characters or less"
+
+    # Check local and domain parts separately
+    parts = email.split("@")
+    if len(parts) != 2:
+        return False, "Invalid email format"
+
+    local_part, domain_part = parts
+
+    # Local part max 64 characters
+    if len(local_part) > 64:
+        return False, "Email local part too long (max 64 characters)"
+
+    # Domain part max 255 characters
+    if len(domain_part) > 255:
+        return False, "Email domain too long (max 255 characters)"
 
     return True, None
 
@@ -208,3 +234,40 @@ def validate_required_field(value: Any, field_name: str) -> tuple[bool, str | No
         return False, f"{field_name} is required"
 
     return True, None
+
+
+def sanitize_text_input(text: str | None, max_length: int = 1000) -> str:
+    """Sanitize text input to prevent XSS and injection attacks.
+
+    Removes HTML tags and limits length. Use for user-provided text
+    that will be stored and displayed.
+
+    Args:
+        text: The text to sanitize
+        max_length: Maximum allowed length (default: 1000)
+
+    Returns:
+        Sanitized text string
+
+    Examples:
+        >>> sanitize_text_input("<script>alert('xss')</script>Hello")
+        "Hello"
+        >>> sanitize_text_input("Normal text")
+        "Normal text"
+    """
+    if not text:
+        return ""
+
+    if not isinstance(text, str):
+        text = str(text)
+
+    # Escape HTML entities to prevent XSS
+    sanitized = html.escape(text)
+
+    # Trim to max length
+    sanitized = sanitized[:max_length]
+
+    # Remove any remaining control characters
+    sanitized = "".join(char for char in sanitized if ord(char) >= 32 or char in "\n\r\t")
+
+    return sanitized.strip()

@@ -197,15 +197,23 @@ def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callb
             session.clear()
             return jsonify({"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}), 403
 
-        # Store user info in session
+        # Regenerate session to prevent session fixation attacks
+        # Store redirect URL before clearing
+        saved_redirect = session.get("oauth_redirect", "/")
+
+        # Clear old session data (regenerates session ID in Flask)
+        session.clear()
+
+        # Store user info in new session
         session["user_email"] = email
         session["user_info"] = {
             "email": email,
             "name": idinfo.get("name"),
             "picture": idinfo.get("picture"),
         }
-        session.pop("oauth_state", None)
-        session.pop("oauth_redirect", None)
+
+        # Restore redirect URL
+        redirect_url = saved_redirect
 
         AuditLogger.log_auth_event(
             "login_success",
