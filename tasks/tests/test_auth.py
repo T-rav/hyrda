@@ -37,12 +37,14 @@ def mock_oauth_env():
         {
             "GOOGLE_OAUTH_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
             "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
-            "ALLOWED_EMAIL_DOMAIN": "@8thlight.com",
+            "ALLOWED_EMAIL_DOMAIN": "8thlight.com",  # Without @ - verify_domain() adds it
             "SERVER_BASE_URL": "http://localhost:5001",
         },
         clear=False,
     ):
-        yield
+        # Also patch the module-level variable directly since it's loaded at import time
+        with patch("utils.auth.ALLOWED_DOMAIN", "8thlight.com"):  # Without @ prefix
+            yield
 
 
 class TestDomainVerification:

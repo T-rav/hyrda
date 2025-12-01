@@ -353,7 +353,7 @@ class TestTasksAPIContracts:
 
     def test_job_detail_contract(self, client):
         """Test /api/jobs/<job_id> returns expected job details"""
-        with patch("app.scheduler_service") as mock_scheduler:
+        with patch("api.jobs.scheduler_service") as mock_scheduler:
             mock_scheduler.get_job_info.return_value = {
                 "id": "job-1",
                 "name": "Test Job",
@@ -450,12 +450,12 @@ class TestTasksAPIContracts:
         }
 
         # Update the global job_registry directly instead of patching
-        import app
+        import api.jobs
 
         mock_registry_instance = (
             JobRegistryMockFactory.create_registry_with_job_creation("new-job-123")
         )
-        app.job_registry = mock_registry_instance
+        api.jobs.job_registry = mock_registry_instance
 
         response = client.post(
             "/api/jobs",

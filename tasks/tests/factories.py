@@ -1,5 +1,6 @@
 """Test factories for creating test fixtures."""
 
+import os
 from unittest.mock import MagicMock, Mock
 
 from flask import Flask
@@ -116,7 +117,10 @@ class FlaskAppFactory:
 
         # Patch auth module to use test domain (ALLOWED_DOMAIN is loaded at import time)
         import utils.auth
-        utils.auth.ALLOWED_DOMAIN = "test.com"
+        # Read from environment (set by conftest or mock_oauth_env) with fallback to "test.com"
+        # This allows tests to override the domain via env vars
+        test_domain = os.getenv("ALLOWED_EMAIL_DOMAIN", "test.com")
+        utils.auth.ALLOWED_DOMAIN = test_domain
 
         # Ensure OAuth vars are set (required by auth middleware)
         if not utils.auth.GOOGLE_CLIENT_ID:

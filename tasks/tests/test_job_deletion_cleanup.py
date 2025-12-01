@@ -17,8 +17,8 @@ class TestJobDeletionCleanup:
 
         # Mock the database session and metadata query
         with (
-            patch("app.scheduler_service") as mock_scheduler,
-            patch("app.get_db_session") as mock_get_session,
+            patch("api.jobs.scheduler_service") as mock_scheduler,
+            patch("api.jobs.get_db_session") as mock_get_session,
         ):
             # Mock successful job removal from scheduler
             mock_scheduler.remove_job = MagicMock()
@@ -57,8 +57,8 @@ class TestJobDeletionCleanup:
         job_id = "test-job-no-metadata"
 
         with (
-            patch("app.scheduler_service") as mock_scheduler,
-            patch("app.get_db_session") as mock_get_session,
+            patch("api.jobs.scheduler_service") as mock_scheduler,
+            patch("api.jobs.get_db_session") as mock_get_session,
         ):
             # Mock successful job removal from scheduler
             mock_scheduler.remove_job = MagicMock()
@@ -90,8 +90,8 @@ class TestJobDeletionCleanup:
         job_id = "test-job-db-error"
 
         with (
-            patch("app.scheduler_service") as mock_scheduler,
-            patch("app.get_db_session") as mock_get_session,
+            patch("api.jobs.scheduler_service") as mock_scheduler,
+            patch("api.jobs.get_db_session") as mock_get_session,
         ):
             # Mock successful job removal from scheduler
             mock_scheduler.remove_job = MagicMock()
@@ -115,8 +115,8 @@ class TestJobDeletionCleanup:
         job_id = "test-job-scheduler-fail"
 
         with (
-            patch("app.scheduler_service") as mock_scheduler,
-            patch("app.get_db_session") as mock_get_session,
+            patch("api.jobs.scheduler_service") as mock_scheduler,
+            patch("api.jobs.get_db_session") as mock_get_session,
         ):
             # Mock scheduler failure
             mock_scheduler.remove_job.side_effect = Exception("Scheduler error")
