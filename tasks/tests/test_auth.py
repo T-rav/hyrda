@@ -26,46 +26,7 @@ from utils.auth import (
 )
 
 
-@pytest.fixture
-def app(monkeypatch):
-    """Get Flask app for testing."""
-    # Set test database URL to avoid MySQL connection
-    monkeypatch.setenv("TASK_DATABASE_URL", "sqlite:///:memory:")
-    monkeypatch.setenv("DATA_DATABASE_URL", "sqlite:///:memory:")
-
-    # Set OAuth env vars to avoid auth errors
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
-    monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com")
-
-    # Create mocks
-    mock_scheduler = MagicMock()
-    mock_scheduler.scheduler.running = True
-    mock_scheduler.start.return_value = None
-
-    mock_registry = MagicMock()
-
-    monkeypatch.setattr("app.SchedulerService", Mock(return_value=mock_scheduler))
-    monkeypatch.setattr("app.JobRegistry", Mock(return_value=mock_registry))
-
-    from app import create_app
-
-    flask_app = create_app()
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
-
-    # Update blueprint services
-    import api.health
-    api.health.scheduler_service = mock_scheduler
-
-    return flask_app
-
-
-@pytest.fixture
-def client(app):
-    """Create test client."""
-    return app.test_client()
+# Uses shared fixtures from conftest.py: app, client, unauthenticated_client
 
 
 @pytest.fixture

@@ -257,71 +257,7 @@ class APIContractDataFactory:
 
 class TestTasksAPIContracts:
     """Test Tasks/Scheduler API contracts"""
-
-    @pytest.fixture
-    def app(self, monkeypatch):
-        """Create test Flask app"""
-        # Set OAuth env vars to avoid auth errors
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
-        monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
-
-        # Create mock instances that will stay active
-        mock_scheduler = Mock()
-        mock_scheduler.get_scheduler_info.return_value = {
-            "running": True,
-            "jobs_count": 5,
-            "next_run_time": "2024-01-15T10:00:00Z",
-            "uptime_seconds": 3600,
-        }
-        mock_scheduler.get_jobs.return_value = []
-        mock_scheduler.get_job_info.return_value = None
-        mock_scheduler.pause_job.return_value = None
-        mock_scheduler.resume_job.return_value = None
-        mock_scheduler.remove_job.return_value = None
-        mock_scheduler.scheduler.running = True
-        mock_scheduler.start.return_value = None
-
-        mock_registry = Mock()
-        mock_registry.get_available_job_types.return_value = [
-            {
-                "id": "slack_user_import",
-                "name": "Slack User Import",
-                "description": "Import users from Slack",
-                "config_schema": {"token": {"type": "string", "required": True}},
-            }
-        ]
-
-        # Use monkeypatch to set up mocks (persists for the test)
-        monkeypatch.setattr("app.SchedulerService", Mock(return_value=mock_scheduler))
-        monkeypatch.setattr("app.JobRegistry", Mock(return_value=mock_registry))
-        monkeypatch.setattr("app.get_settings", Mock(return_value=FlaskSettingsMockFactory.create_test_settings()))
-
-        from app import create_app
-
-        test_app = create_app()
-
-        # Update blueprint services with mocks
-        import api.jobs
-        import api.task_runs
-        import api.health
-
-        api.jobs.scheduler_service = mock_scheduler
-        api.jobs.job_registry = mock_registry
-        api.task_runs.scheduler_service = mock_scheduler
-        api.health.scheduler_service = mock_scheduler
-
-        return test_app
-
-    @pytest.fixture
-    def client(self, app):
-        """Create test client"""
-        client = app.test_client()
-        # Set up authenticated session
-        with client.session_transaction() as sess:
-            sess["user"] = {"email": "test@test.com", "name": "Test User"}
-        return client
+    # Uses shared fixtures from conftest.py: app, client
 
     def test_scheduler_info_contract(self, client):
         """Test /api/scheduler/info returns expected structure"""
@@ -606,59 +542,7 @@ class TestTasksAPIContracts:
 
 class TestAPISecurityContracts:
     """Test API security and authentication contracts"""
-
-    @pytest.fixture
-    def app(self, monkeypatch):
-        """Create test Flask app"""
-        # Set OAuth env vars to avoid auth errors
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
-        monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
-
-        # Create mock instances that will stay active
-        mock_scheduler = Mock()
-        mock_scheduler.get_scheduler_info.return_value = {
-            "running": True,
-            "jobs_count": 5,
-            "next_run_time": "2024-01-15T10:00:00Z",
-            "uptime_seconds": 3600,
-        }
-        mock_scheduler.get_jobs.return_value = []
-        mock_scheduler.get_job_info.return_value = None
-        mock_scheduler.scheduler.running = True
-        mock_scheduler.start.return_value = None
-
-        mock_registry = Mock()
-        mock_registry.get_available_job_types.return_value = []
-
-        # Use monkeypatch to set up mocks
-        monkeypatch.setattr("app.SchedulerService", Mock(return_value=mock_scheduler))
-        monkeypatch.setattr("app.JobRegistry", Mock(return_value=mock_registry))
-        monkeypatch.setattr("app.get_settings", Mock(return_value=FlaskSettingsMockFactory.create_test_settings()))
-
-        from app import create_app
-
-        test_app = create_app()
-
-        # Update blueprint services with mocks
-        import api.jobs
-        import api.health
-
-        api.jobs.scheduler_service = mock_scheduler
-        api.jobs.job_registry = mock_registry
-        api.health.scheduler_service = mock_scheduler
-
-        return test_app
-
-    @pytest.fixture
-    def client(self, app):
-        """Create test client"""
-        client = app.test_client()
-        # Set up authenticated session
-        with client.session_transaction() as sess:
-            sess["user"] = {"email": "test@test.com", "name": "Test User"}
-        return client
+    # Uses shared fixtures from conftest.py: app, client
 
     def test_cors_headers_present(self, client):
         """Test CORS headers are present for frontend"""
@@ -685,61 +569,7 @@ class TestAPISecurityContracts:
 
 class TestAPIPagination:
     """Test pagination contracts for large datasets"""
-
-    @pytest.fixture
-    def app(self, monkeypatch):
-        """Create test Flask app"""
-        # Set OAuth env vars to avoid auth errors
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
-        monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
-        monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-        monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
-
-        # Create mock instances that will stay active
-        mock_scheduler = Mock()
-        mock_scheduler.get_scheduler_info.return_value = {
-            "running": True,
-            "jobs_count": 5,
-            "next_run_time": "2024-01-15T10:00:00Z",
-            "uptime_seconds": 3600,
-        }
-        mock_scheduler.get_jobs.return_value = []
-        mock_scheduler.get_job_info.return_value = None
-        mock_scheduler.scheduler.running = True
-        mock_scheduler.start.return_value = None
-
-        mock_registry = Mock()
-        mock_registry.get_available_job_types.return_value = []
-
-        # Use monkeypatch to set up mocks
-        monkeypatch.setattr("app.SchedulerService", Mock(return_value=mock_scheduler))
-        monkeypatch.setattr("app.JobRegistry", Mock(return_value=mock_registry))
-        monkeypatch.setattr("app.get_settings", Mock(return_value=FlaskSettingsMockFactory.create_test_settings()))
-
-        from app import create_app
-
-        test_app = create_app()
-
-        # Update blueprint services with mocks
-        import api.jobs
-        import api.task_runs
-        import api.health
-
-        api.jobs.scheduler_service = mock_scheduler
-        api.jobs.job_registry = mock_registry
-        api.task_runs.scheduler_service = mock_scheduler
-        api.health.scheduler_service = mock_scheduler
-
-        return test_app
-
-    @pytest.fixture
-    def client(self, app):
-        """Create test client"""
-        client = app.test_client()
-        # Set up authenticated session
-        with client.session_transaction() as sess:
-            sess["user"] = {"email": "test@test.com", "name": "Test User"}
-        return client
+    # Uses shared fixtures from conftest.py: app, client
 
     def test_pagination_parameters(self, client):
         """Test pagination parameters work consistently"""

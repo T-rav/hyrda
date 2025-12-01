@@ -99,3 +99,57 @@ def sample_slack_users():
             "updated": 1234567890,
         },
     ]
+
+
+# Flask app testing fixtures using factories
+from tests.factories import FlaskAppFactory, MockJobRegistryFactory, MockSchedulerFactory
+
+
+@pytest.fixture
+def mock_scheduler():
+    """Create a mock scheduler instance."""
+    return MockSchedulerFactory.create()
+
+
+@pytest.fixture
+def mock_job_registry():
+    """Create a mock job registry instance."""
+    return MockJobRegistryFactory.create()
+
+
+@pytest.fixture
+def app_factory():
+    """Factory function for creating Flask test apps."""
+    return FlaskAppFactory.create_test_app
+
+
+@pytest.fixture
+def app(monkeypatch, mock_scheduler, mock_job_registry):
+    """Create a fresh Flask app for each test with mocked services."""
+    # Set OAuth env vars
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
+    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "@test.com")
+    monkeypatch.setenv("TASK_DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATA_DATABASE_URL", "sqlite:///:memory:")
+
+    # Create app using factory
+    test_app = FlaskAppFactory.create_test_app(
+        mock_scheduler=mock_scheduler,
+        mock_registry=mock_job_registry,
+    )
+
+    return test_app
+
+
+@pytest.fixture
+def client(app):
+    """Create an authenticated test client."""
+    return FlaskAppFactory.create_test_client(app, authenticated=True)
+
+
+@pytest.fixture
+def unauthenticated_client(app):
+    """Create an unauthenticated test client."""
+    return FlaskAppFactory.create_test_client(app, authenticated=False)

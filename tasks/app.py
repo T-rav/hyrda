@@ -63,8 +63,9 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_HTTPONLY"] = True
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
-    # Enable CORS
-    CORS(app)
+    # Enable CORS (skip in test mode to avoid re-registration issues)
+    if not app.config.get("TESTING"):
+        CORS(app)
 
     # Initialize services
     scheduler_service = SchedulerService(settings)
