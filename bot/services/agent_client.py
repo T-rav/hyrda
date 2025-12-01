@@ -1,5 +1,6 @@
 """HTTP client for calling agent-service."""
 
+import asyncio
 import logging
 from typing import Any
 
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentClient:
-    """Client for calling agent-service HTTP API."""
+    """Client for calling agent-service HTTP API with retry logic."""
 
     def __init__(self, base_url: str = "http://agent_service:8000"):
         """Initialize agent client.
@@ -18,7 +19,24 @@ class AgentClient:
             base_url: Base URL of agent-service (defaults to Docker service name)
         """
         self.base_url = base_url.rstrip("/")
-        self.timeout = httpx.Timeout(300.0, connect=10.0)  # 5min timeout for agents
+        # Reduced timeout from 5min to 30s to fail fast
+        self.timeout = httpx.Timeout(30.0, connect=5.0)
+        # Persistent HTTP client to reuse connections (fixes resource leak)
+        self._client: httpx.AsyncClient | None = None
+        self.max_retries = 3
+        self.retry_delay = 1.0  # Start with 1 second
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create persistent HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
+
+    async def close(self):
+        """Close the HTTP client and cleanup resources."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     async def invoke_agent(
         self, agent_name: str, query: str, context: dict[str, Any]
@@ -42,8 +60,10 @@ class AgentClient:
         # Serialize context - remove non-serializable objects
         serializable_context = self._prepare_context(context)
 
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+        # Retry with exponential backoff for transient failures
+        for attempt in range(self.max_retries):
+            try:
+                client = await self._get_client()
                 response = await client.post(
                     url,
                     json={"query": query, "context": serializable_context},
@@ -63,19 +83,33 @@ class AgentClient:
                     "metadata": result.get("metadata", {}),
                 }
 
-        except httpx.TimeoutException as e:
-            logger.error(f"Timeout calling agent-service: {e}")
-            raise AgentClientError(
-                "Agent execution timed out. Please try again."
-            ) from e
-        except httpx.ConnectError as e:
-            logger.error(f"Connection error calling agent-service: {e}")
-            raise AgentClientError(
-                "Unable to connect to agent service. Please try again later."
-            ) from e
-        except Exception as e:
-            logger.error(f"Error calling agent-service: {e}", exc_info=True)
-            raise AgentClientError(f"Agent execution failed: {str(e)}") from e
+            except httpx.TimeoutException as e:
+                logger.warning(
+                    f"Timeout on attempt {attempt + 1}/{self.max_retries}: {e}"
+                )
+                if attempt < self.max_retries - 1:
+                    delay = self.retry_delay * (2**attempt)  # Exponential backoff
+                    logger.info(f"Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AgentClientError("Agent execution timed out after retries") from e
+
+            except httpx.ConnectError as e:
+                logger.warning(
+                    f"Connection error on attempt {attempt + 1}/{self.max_retries}: {e}"
+                )
+                if attempt < self.max_retries - 1:
+                    delay = self.retry_delay * (2**attempt)
+                    logger.info(f"Retrying in {delay}s...")
+                    await asyncio.sleep(delay)
+                    continue
+                raise AgentClientError(
+                    "Unable to connect to agent service after retries"
+                ) from e
+
+            except Exception as e:
+                logger.error(f"Error calling agent-service: {e}", exc_info=True)
+                raise AgentClientError(f"Agent execution failed: {str(e)}") from e
         # NOTE: Agent invocation metrics are tracked in agent-service itself,
         # not here. This ensures ALL invocations (Slack, LibreChat, direct API)
         # are counted at the source.
@@ -92,16 +126,14 @@ class AgentClient:
         url = f"{self.base_url}/api/agents"
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url)
+            client = await self._get_client()
+            response = await client.get(url)
 
-                if response.status_code != 200:
-                    raise AgentClientError(
-                        f"Failed to list agents: {response.status_code}"
-                    )
+            if response.status_code != 200:
+                raise AgentClientError(f"Failed to list agents: {response.status_code}")
 
-                result = response.json()
-                return result.get("agents", [])
+            result = response.json()
+            return result.get("agents", [])
 
         except Exception as e:
             logger.error(f"Error listing agents: {e}", exc_info=True)

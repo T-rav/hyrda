@@ -106,7 +106,18 @@ def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callb
     """Handle OAuth callback for Flask."""
     redirect_uri = get_redirect_uri(service_base_url, callback_path)
     state = session.get("oauth_state")
+    csrf_token = session.get("oauth_csrf")
     redirect_url = session.get("oauth_redirect", "/")
+
+    # Verify CSRF token
+    if not csrf_token:
+        AuditLogger.log_auth_event(
+            "callback_failed",
+            success=False,
+            error="CSRF token missing - potential session fixation attack",
+        )
+        session.clear()
+        return jsonify({"error": "Invalid session - please try again"}), 403
 
     if not state:
         AuditLogger.log_auth_event(

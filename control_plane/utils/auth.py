@@ -134,6 +134,7 @@ def flask_require_auth(service_base_url: str, callback_path: str = "/auth/callba
                     )
 
             # Not authenticated - redirect to login
+            import secrets
             redirect_uri = get_redirect_uri(service_base_url, callback_path)
             flow = get_flow(redirect_uri)
             authorization_url, state = flow.authorization_url(
@@ -141,7 +142,11 @@ def flask_require_auth(service_base_url: str, callback_path: str = "/auth/callba
                 include_granted_scopes="true",
                 prompt="select_account",
             )
+
+            # Generate CSRF token for additional security
+            csrf_token = secrets.token_urlsafe(32)
             session["oauth_state"] = state
+            session["oauth_csrf"] = csrf_token
             session["oauth_redirect"] = request.url
 
             AuditLogger.log_auth_event(
@@ -160,7 +165,18 @@ def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callb
     """Handle OAuth callback for Flask."""
     redirect_uri = get_redirect_uri(service_base_url, callback_path)
     state = session.get("oauth_state")
+    csrf_token = session.get("oauth_csrf")
     redirect_url = session.get("oauth_redirect", "/")
+
+    # Verify CSRF token
+    if not csrf_token:
+        AuditLogger.log_auth_event(
+            "callback_failed",
+            success=False,
+            error="CSRF token missing - potential session fixation attack",
+        )
+        session.clear()
+        return jsonify({"error": "Invalid session - please try again"}), 403
 
     if not state:
         AuditLogger.log_auth_event(

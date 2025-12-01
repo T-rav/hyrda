@@ -33,16 +33,26 @@ def list_task_runs() -> Response | tuple[Response, int]:
                 "metrics_collection": "Metrics Collection",
             }
 
-            # Load task metadata to get custom names
+            # Extract job IDs from task runs to only load needed metadata
+            job_ids = set()
+            for run in task_runs:
+                if run.task_config_snapshot:
+                    job_id = run.task_config_snapshot.get("job_id")
+                    if job_id:
+                        job_ids.add(job_id)
+
+            # Load ONLY the metadata we need (not all metadata) using same session
             metadata_map = {}
-            try:
-                with get_db_session() as db_session:
-                    metadata_map = {
-                        m.job_id: m.task_name
-                        for m in db_session.query(TaskMetadata).all()
-                    }
-            except Exception as e:
-                logger.error(f"Error loading task metadata: {e}")
+            if job_ids:
+                try:
+                    metadata_records = (
+                        session.query(TaskMetadata)
+                        .filter(TaskMetadata.job_id.in_(job_ids))
+                        .all()
+                    )
+                    metadata_map = {m.job_id: m.task_name for m in metadata_records}
+                except Exception as e:
+                    logger.error(f"Error loading task metadata: {e}")
 
             runs_data = []
             for run in task_runs:

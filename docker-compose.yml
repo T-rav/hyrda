@@ -7,7 +7,7 @@ services:
     container_name: insightmesh-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root_password}
     ports:
       - "3306:3306"
     volumes:
@@ -15,7 +15,7 @@ services:
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -41,7 +41,7 @@ services:
       PMA_HOST: mysql
       PMA_PORT: 3306
       PMA_USER: root
-      PMA_PASSWORD: password
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-changeme_root_password}
     ports:
       - "8081:80"
     depends_on:
@@ -92,10 +92,10 @@ services:
     env_file:
       - .env
     environment:
-      - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
-      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
-      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
-      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
+      - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:${MYSQL_TASKS_PASSWORD:-changeme_tasks_password}@mysql:3306/insightmesh_task
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:${MYSQL_DATA_PASSWORD:-changeme_data_password}@mysql:3306/insightmesh_data
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:${MYSQL_SECURITY_PASSWORD:-changeme_security_password}@mysql:3306/insightmesh_security
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:${MYSQL_SYSTEM_PASSWORD:-changeme_system_password}@mysql:3306/insightmesh_system
       - SLACK_BOT_API_URL=http://bot:8080
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
@@ -125,17 +125,17 @@ services:
     command: >
       sh -c "
         echo '=== Creating databases ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_security CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_security CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
         echo '=== Creating database users ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_tasks'@'%' IDENTIFIED BY 'insightmesh_tasks_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_task.* TO 'insightmesh_tasks'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_security'@'%' IDENTIFIED BY 'insightmesh_security_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_security.* TO 'insightmesh_security'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'FLUSH PRIVILEGES;' &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_tasks'@'%' IDENTIFIED BY '$${MYSQL_TASKS_PASSWORD}';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_task.* TO 'insightmesh_tasks'@'%';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY '$${MYSQL_DATA_PASSWORD}';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_security'@'%' IDENTIFIED BY '$${MYSQL_SECURITY_PASSWORD}';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_security.* TO 'insightmesh_security'@'%';\" &&
+        mysql -h mysql -u root -p$${MYSQL_ROOT_PASSWORD} --skip-ssl -e 'FLUSH PRIVILEGES;' &&
         echo '=== Running task database migrations ===' &&
         alembic upgrade head &&
         echo '=== Running data database migrations ===' &&
@@ -224,8 +224,8 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
-      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-changeme_root_password}@mysql:3306/insightmesh_data
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:${MYSQL_SECURITY_PASSWORD:-changeme_security_password}@mysql:3306/insightmesh_security
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
@@ -270,10 +270,10 @@ services:
     env_file:
       - .env
     environment:
-      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
-      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
-      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:${MYSQL_SECURITY_PASSWORD:-changeme_security_password}@mysql:3306/insightmesh_security
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:${MYSQL_DATA_PASSWORD:-changeme_data_password}@mysql:3306/insightmesh_data
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:${MYSQL_SYSTEM_PASSWORD:-changeme_system_password}@mysql:3306/insightmesh_system
+      - SECRET_KEY=${SECRET_KEY}
       - FLASK_ENV=production
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
@@ -314,9 +314,9 @@ services:
     env_file:
       - .env
     environment:
-      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
-      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
-      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:insightmesh_system_password@mysql:3306/insightmesh_system
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:${MYSQL_DATA_PASSWORD:-changeme_data_password}@mysql:3306/insightmesh_data
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:${MYSQL_SECURITY_PASSWORD:-changeme_security_password}@mysql:3306/insightmesh_security
+      - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:${MYSQL_SYSTEM_PASSWORD:-changeme_system_password}@mysql:3306/insightmesh_system
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}

@@ -144,6 +144,7 @@ def require_authentication():
             )
 
     # Not authenticated - redirect to login
+    import secrets
     from utils.auth import get_flow, get_redirect_uri
 
     service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
@@ -154,7 +155,11 @@ def require_authentication():
         include_granted_scopes="true",
         prompt="select_account",
     )
+
+    # Generate CSRF token for additional security
+    csrf_token = secrets.token_urlsafe(32)
     session["oauth_state"] = state
+    session["oauth_csrf"] = csrf_token
     session["oauth_redirect"] = request.url
 
     from utils.auth import AuditLogger
