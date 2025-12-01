@@ -24,9 +24,15 @@ _SecuritySessionLocal = None
 
 
 def init_security_db(database_url: str):
-    """Initialize security database connection."""
+    """Initialize security database connection with connection pooling."""
     global _security_engine, _SecuritySessionLocal  # noqa: PLW0603
-    _security_engine = create_engine(database_url)
+    _security_engine = create_engine(
+        database_url,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
     _SecuritySessionLocal = sessionmaker(
         autocommit=False, autoflush=False, bind=_security_engine
     )

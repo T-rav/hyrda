@@ -28,16 +28,28 @@ _DataSessionLocal = None
 
 
 def init_db(database_url: str):
-    """Initialize database connection."""
+    """Initialize database connection with connection pooling."""
     global _engine, _SessionLocal
-    _engine = create_engine(database_url)
+    _engine = create_engine(
+        database_url,
+        pool_size=20,  # Max persistent connections
+        max_overflow=10,  # Additional connections when pool exhausted
+        pool_pre_ping=True,  # Verify connections before use
+        pool_recycle=3600,  # Recycle connections after 1 hour
+    )
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
 def init_data_db(database_url: str):
-    """Initialize data database connection."""
+    """Initialize data database connection with connection pooling."""
     global _data_engine, _DataSessionLocal
-    _data_engine = create_engine(database_url)
+    _data_engine = create_engine(
+        database_url,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
     _DataSessionLocal = sessionmaker(
         autocommit=False, autoflush=False, bind=_data_engine
     )

@@ -24,9 +24,15 @@ _SessionLocal = None
 
 
 def init_db(database_url: str):
-    """Initialize database connection."""
+    """Initialize database connection with connection pooling."""
     global _engine, _SessionLocal
-    _engine = create_engine(database_url)
+    _engine = create_engine(
+        database_url,
+        pool_size=20,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
