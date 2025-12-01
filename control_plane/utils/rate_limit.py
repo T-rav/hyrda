@@ -2,7 +2,7 @@
 
 import logging
 import time
-from collections import defaultdict
+from collections import OrderedDict
 from functools import wraps
 from typing import Any, Callable
 
@@ -10,9 +10,12 @@ from flask import Response, jsonify, request
 
 logger = logging.getLogger(__name__)
 
-# In-memory storage for rate limiting
+# Maximum number of keys to store (prevents unbounded memory growth)
+MAX_RATE_LIMIT_KEYS = 10000
+
+# In-memory storage for rate limiting with LRU eviction
 # Format: {key: [(timestamp1, timestamp2, ...)]}
-_rate_limit_storage: dict[str, list[float]] = defaultdict(list)
+_rate_limit_storage: OrderedDict[str, list[float]] = OrderedDict()
 
 
 def get_rate_limit_key(identifier: str | None = None) -> str:
@@ -60,12 +63,22 @@ def check_rate_limit(
     now = time.time()
     window_start = now - window_seconds
 
-    # Clean up old requests outside the window
+    # Move key to end (mark as recently used for LRU)
     if key in _rate_limit_storage:
+        _rate_limit_storage.move_to_end(key)
+        # Clean up old requests outside the window
         _rate_limit_storage[key] = [
             timestamp for timestamp in _rate_limit_storage[key]
             if timestamp > window_start
         ]
+    else:
+        _rate_limit_storage[key] = []
+
+    # Enforce max size with LRU eviction
+    if len(_rate_limit_storage) > MAX_RATE_LIMIT_KEYS:
+        # Remove least recently used key
+        _rate_limit_storage.popitem(last=False)
+        logger.debug(f"Evicted LRU rate limit key (cache size: {MAX_RATE_LIMIT_KEYS})")
 
     # Count requests in current window
     request_count = len(_rate_limit_storage[key])

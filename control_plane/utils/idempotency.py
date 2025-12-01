@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -10,9 +11,12 @@ from flask import Response, jsonify, request
 
 logger = logging.getLogger(__name__)
 
-# In-memory cache for idempotency keys (for simplicity)
-# In production, use Redis or database
-_idempotency_cache: dict[str, tuple[dict[str, Any], datetime]] = {}
+# Maximum number of idempotency keys to store (prevents unbounded memory growth)
+MAX_IDEMPOTENCY_KEYS = 1000
+
+# In-memory cache for idempotency keys with LRU eviction
+# In production, use Redis or database for distributed systems
+_idempotency_cache: OrderedDict[str, tuple[dict[str, Any], datetime]] = OrderedDict()
 
 # Default TTL for idempotency keys (24 hours)
 DEFAULT_TTL_HOURS = 24
@@ -112,7 +116,18 @@ def store_idempotency(
         "status": status_code,
     }
 
+    # If key exists, move to end (mark as recently used)
+    if cache_key in _idempotency_cache:
+        _idempotency_cache.move_to_end(cache_key)
+
     _idempotency_cache[cache_key] = (cached_response, expires_at)
+
+    # Enforce max size with LRU eviction
+    if len(_idempotency_cache) > MAX_IDEMPOTENCY_KEYS:
+        # Remove least recently used key
+        _idempotency_cache.popitem(last=False)
+        logger.debug(f"Evicted LRU idempotency key (cache size: {MAX_IDEMPOTENCY_KEYS})")
+
     logger.info(f"Stored idempotency key: {idempotency_key}, expires: {expires_at}")
 
 

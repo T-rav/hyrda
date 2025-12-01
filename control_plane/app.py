@@ -303,13 +303,24 @@ def list_agents() -> Response:
             # Paginate query
             agents, total_count = paginate_query(query, page, per_page)
 
-            # Build agent data
+            # Batch load group counts for all agents in ONE query using GROUP BY
+            # This prevents N+1 query problem
+            from sqlalchemy import func
+            agent_names = [a.agent_name for a in agents]
+            group_counts_query = session.query(
+                AgentGroupPermission.agent_name,
+                func.count(AgentGroupPermission.id)
+            ).filter(
+                AgentGroupPermission.agent_name.in_(agent_names)
+            ).group_by(AgentGroupPermission.agent_name).all()
+
+            # Build lookup dictionary: agent_name -> count
+            group_counts = dict(group_counts_query)
+
+            # Build agent data using cached counts
             agents_data = []
             for agent in agents:
-                # Count groups with access to this agent
-                group_count = session.query(AgentGroupPermission).filter(
-                    AgentGroupPermission.agent_name == agent.agent_name
-                ).count()
+                group_count = group_counts.get(agent.agent_name, 0)
 
                 agents_data.append({
                     "name": agent.agent_name,
@@ -671,23 +682,28 @@ def list_users() -> Response:
             # Paginate query
             users, total_count = paginate_query(query, page, per_page)
 
-            # Build user data with group memberships
+            # Batch load all group memberships for these users in ONE query
+            # This prevents N+1 query problem
+            user_ids = [user.slack_user_id for user in users]
+            all_memberships = session.query(UserGroup, PermissionGroup).join(
+                PermissionGroup, UserGroup.group_name == PermissionGroup.group_name
+            ).filter(
+                UserGroup.slack_user_id.in_(user_ids)
+            ).all()
+
+            # Build lookup dictionary: user_id -> [groups]
+            from collections import defaultdict
+            memberships_by_user = defaultdict(list)
+            for membership, group in all_memberships:
+                memberships_by_user[membership.slack_user_id].append({
+                    "group_name": group.group_name,
+                    "display_name": group.display_name,
+                })
+
+            # Build user data using cached memberships
             users_data = []
             for user in users:
-                # Get groups this user belongs to
-                memberships = session.query(UserGroup, PermissionGroup).join(
-                    PermissionGroup, UserGroup.group_name == PermissionGroup.group_name
-                ).filter(
-                    UserGroup.slack_user_id == user.slack_user_id
-                ).all()
-
-                groups = [
-                    {
-                        "group_name": membership.PermissionGroup.group_name,
-                        "display_name": membership.PermissionGroup.display_name,
-                    }
-                    for membership in memberships
-                ]
+                groups = memberships_by_user[user.slack_user_id]
 
                 users_data.append({
                     "id": user.id,
@@ -778,24 +794,29 @@ def manage_groups() -> Response:
                 # Paginate query
                 groups, total_count = paginate_query(query, page, per_page)
 
-                # Build group data with user details
+                # Batch load all user memberships for these groups in ONE query
+                # This prevents N+1 query problem
+                group_names = [g.group_name for g in groups]
+                all_memberships = session.query(UserGroup, User).join(
+                    User, UserGroup.slack_user_id == User.slack_user_id
+                ).filter(
+                    UserGroup.group_name.in_(group_names)
+                ).all()
+
+                # Build lookup dictionary: group_name -> [users]
+                from collections import defaultdict
+                users_by_group = defaultdict(list)
+                for membership, user in all_memberships:
+                    users_by_group[membership.group_name].append({
+                        "slack_user_id": user.slack_user_id,
+                        "full_name": user.full_name,
+                        "email": user.email,
+                    })
+
+                # Build group data using cached user lists
                 groups_data = []
                 for group in groups:
-                    # Get users for this group with their details
-                    user_memberships = session.query(UserGroup, User).join(
-                        User, UserGroup.slack_user_id == User.slack_user_id
-                    ).filter(
-                        UserGroup.group_name == group.group_name
-                    ).all()
-
-                    users_list = [
-                        {
-                            "slack_user_id": membership.User.slack_user_id,
-                            "full_name": membership.User.full_name,
-                            "email": membership.User.email,
-                        }
-                        for membership in user_memberships
-                    ]
+                    users_list = users_by_group[group.group_name]
 
                     groups_data.append({
                         "group_name": group.group_name,
@@ -931,29 +952,37 @@ def update_user_admin_status(user_id: int) -> Response:
         new_admin_status = request.json["is_admin"]
 
         with get_db_session() as db_session:
-            # Check if any admins exist
-            admin_count = db_session.query(User).filter(User.is_admin).count()
+            # Use explicit transaction with row-level locking to prevent race conditions
+            # This ensures only ONE request can bootstrap the first admin
+            with db_session.begin():
+                # Lock ALL admin records to prevent concurrent bootstrap
+                # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
+                existing_admins = db_session.query(User).filter(
+                    User.is_admin == True
+                ).with_for_update().all()
 
-            # If no admins exist, allow bootstrap (first admin creation)
-            if admin_count == 0:
-                logger.info("No admins exist - allowing bootstrap admin creation")
-            else:
-                # Otherwise, require current user to be admin
-                current_user_email = session.get("user_email")
-                if not current_user_email:
-                    return jsonify({"error": "Not authenticated"}), 401
+                admin_count = len(existing_admins)
 
-                current_user = db_session.query(User).filter(User.email == current_user_email).first()
-                if not current_user or not current_user.is_admin:
-                    return jsonify({"error": "Only admins can manage admin status"}), 403
+                # If no admins exist, allow bootstrap (first admin creation)
+                if admin_count == 0:
+                    logger.info("No admins exist - allowing bootstrap admin creation")
+                else:
+                    # Otherwise, require current user to be admin
+                    current_user_email = session.get("user_email")
+                    if not current_user_email:
+                        return error_response("Not authenticated", 401, "NOT_AUTHENTICATED")
 
-            # Update the target user
-            user = db_session.query(User).filter(User.id == user_id).first()
-            if not user:
-                return jsonify({"error": "User not found"}), 404
+                    current_user = db_session.query(User).filter(User.email == current_user_email).first()
+                    if not current_user or not current_user.is_admin:
+                        return error_response("Only admins can manage admin status", 403, "ADMIN_REQUIRED")
 
-            user.is_admin = new_admin_status
-            db_session.commit()
+                # Update the target user (also with lock)
+                user = db_session.query(User).filter(User.id == user_id).with_for_update().first()
+                if not user:
+                    return error_response("User not found", 404, "USER_NOT_FOUND")
+
+                user.is_admin = new_admin_status
+                db_session.commit()
 
             logger.info(f"User {user.email} admin status changed to {new_admin_status}")
 
