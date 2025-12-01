@@ -307,45 +307,22 @@ class TestTasksAPIContracts:
             mock_scheduler_class.return_value = mock_scheduler
             mock_registry_class.return_value = mock_registry
 
-            # Set global variables
-            import app
+            # Use actual app with blueprints
+            from app import create_app
 
-            app.scheduler_service = mock_scheduler
-            app.job_registry = mock_registry
+            # Patch services before creating app
+            with patch("app.scheduler_service", mock_scheduler), patch(
+                "app.job_registry", mock_registry
+            ):
+                test_app = create_app()
 
-            # Import and register routes manually
-            from app import (
-                create_job,
-                delete_job,
-                get_job,
-                list_job_types,
-                list_jobs,
-                list_task_runs,
-                pause_job,
-                resume_job,
-                scheduler_info,
-            )
+            # Update blueprint services with mocks
+            import api.jobs
+            import api.task_runs
 
-            # Register routes manually
-            test_app.add_url_rule(
-                "/api/scheduler/info", "scheduler_info", scheduler_info
-            )
-            test_app.add_url_rule("/api/jobs", "list_jobs", list_jobs)
-            test_app.add_url_rule("/api/jobs/<job_id>", "get_job", get_job)
-            test_app.add_url_rule(
-                "/api/jobs/<job_id>/pause", "pause_job", pause_job, methods=["POST"]
-            )
-            test_app.add_url_rule(
-                "/api/jobs/<job_id>/resume", "resume_job", resume_job, methods=["POST"]
-            )
-            test_app.add_url_rule(
-                "/api/jobs/<job_id>", "delete_job", delete_job, methods=["DELETE"]
-            )
-            test_app.add_url_rule(
-                "/api/jobs", "create_job", create_job, methods=["POST"]
-            )
-            test_app.add_url_rule("/api/job-types", "list_job_types", list_job_types)
-            test_app.add_url_rule("/api/task-runs", "list_task_runs", list_task_runs)
+            api.jobs.scheduler_service = mock_scheduler
+            api.jobs.job_registry = mock_registry
+            api.task_runs.scheduler_service = mock_scheduler
 
             return test_app
 
@@ -677,22 +654,20 @@ class TestAPISecurityContracts:
             mock_scheduler_class.return_value = mock_scheduler
             mock_registry_class.return_value = mock_registry
 
-            # Set global variables
-            import app
+            # Use actual app with blueprints
+            from app import create_app
 
-            app.scheduler_service = mock_scheduler
-            app.job_registry = mock_registry
+            # Patch services before creating app
+            with patch("app.scheduler_service", mock_scheduler), patch(
+                "app.job_registry", mock_registry
+            ):
+                test_app = create_app()
 
-            # Import and register routes manually
-            from app import get_job, list_job_types, list_jobs, scheduler_info
+            # Update blueprint services with mocks
+            import api.jobs
 
-            # Register routes manually
-            test_app.add_url_rule(
-                "/api/scheduler/info", "scheduler_info", scheduler_info
-            )
-            test_app.add_url_rule("/api/jobs", "list_jobs", list_jobs)
-            test_app.add_url_rule("/api/jobs/<job_id>", "get_job", get_job)
-            test_app.add_url_rule("/api/job-types", "list_job_types", list_job_types)
+            api.jobs.scheduler_service = mock_scheduler
+            api.jobs.job_registry = mock_registry
 
             return test_app
 
@@ -766,29 +741,22 @@ class TestAPIPagination:
             mock_scheduler_class.return_value = mock_scheduler
             mock_registry_class.return_value = mock_registry
 
-            # Set global variables
-            import app
+            # Use actual app with blueprints
+            from app import create_app
 
-            app.scheduler_service = mock_scheduler
-            app.job_registry = mock_registry
+            # Patch services before creating app
+            with patch("app.scheduler_service", mock_scheduler), patch(
+                "app.job_registry", mock_registry
+            ):
+                test_app = create_app()
 
-            # Import and register routes manually
-            from app import (
-                get_job,
-                list_job_types,
-                list_jobs,
-                list_task_runs,
-                scheduler_info,
-            )
+            # Update blueprint services with mocks
+            import api.jobs
+            import api.task_runs
 
-            # Register routes manually
-            test_app.add_url_rule(
-                "/api/scheduler/info", "scheduler_info", scheduler_info
-            )
-            test_app.add_url_rule("/api/jobs", "list_jobs", list_jobs)
-            test_app.add_url_rule("/api/jobs/<job_id>", "get_job", get_job)
-            test_app.add_url_rule("/api/job-types", "list_job_types", list_job_types)
-            test_app.add_url_rule("/api/task-runs", "list_task_runs", list_task_runs)
+            api.jobs.scheduler_service = mock_scheduler
+            api.jobs.job_registry = mock_registry
+            api.task_runs.scheduler_service = mock_scheduler
 
             return test_app
 

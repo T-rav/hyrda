@@ -13,22 +13,40 @@ class TestJobDeletionCleanup:
     @pytest.fixture
     def client(self):
         """Create a test client with mocked dependencies."""
-        from flask import Flask
+        from app import create_app
 
-        test_app = Flask(__name__)
-        test_app.config["TESTING"] = True
-
-        # Mock the scheduler service
-        with patch("app.scheduler_service") as mock_scheduler:
+        # Mock services and settings
+        with (
+            patch("app.SchedulerService") as mock_scheduler_class,
+            patch("app.JobRegistry") as mock_registry_class,
+            patch("app.get_settings") as mock_settings,
+        ):
+            # Create mock scheduler
+            mock_scheduler = MagicMock()
             mock_scheduler.remove_job = MagicMock()
-            test_app.scheduler_service = mock_scheduler
+            mock_scheduler.scheduler.running = True
+            mock_scheduler_class.return_value = mock_scheduler
 
-            # Import and register the delete route
-            from app import delete_job
+            # Create mock registry
+            mock_registry = MagicMock()
+            mock_registry_class.return_value = mock_registry
 
-            test_app.add_url_rule(
-                "/api/jobs/<job_id>", "delete_job", delete_job, methods=["DELETE"]
-            )
+            # Create mock settings
+            from config.settings import TasksSettings
+
+            mock_settings_obj = MagicMock(spec=TasksSettings)
+            mock_settings_obj.secret_key = "test-secret"
+            mock_settings_obj.flask_env = "testing"
+            mock_settings.return_value = mock_settings_obj
+
+            # Create app with mocks
+            test_app = create_app()
+
+            # Update blueprint services
+            import api.jobs
+
+            api.jobs.scheduler_service = mock_scheduler
+            api.jobs.job_registry = mock_registry
 
             return test_app.test_client()
 

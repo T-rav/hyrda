@@ -34,11 +34,11 @@ def app():
         "TASK_DATABASE_URL": "sqlite:///:memory:",
         "DATA_DATABASE_URL": "sqlite:///:memory:",
     }):
-        from app import app as flask_app
+        from app import create_app
 
+        flask_app = create_app()
         flask_app.config["TESTING"] = True
         flask_app.config["WTF_CSRF_ENABLED"] = False
-        flask_app.config["SECRET_KEY"] = "test-secret-key"
 
         yield flask_app
 
