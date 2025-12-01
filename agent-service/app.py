@@ -32,6 +32,12 @@ async def lifespan(app: FastAPI):
     """Lifecycle manager for FastAPI application."""
     logger.info("Starting Agent Service...")
 
+    # Initialize metrics service
+    from services.metrics_service import initialize_metrics_service
+
+    initialize_metrics_service(enabled=True)
+    logger.info("Metrics service initialized")
+
     # Sync agents to control plane on startup
     from services.agent_sync import sync_agents_to_control_plane
 

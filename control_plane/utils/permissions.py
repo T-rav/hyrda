@@ -7,25 +7,38 @@ Future tiers: admin, power_user, read_only, etc.
 from functools import wraps
 from typing import Callable
 
-from flask import jsonify, session
+from flask import g, jsonify, session
 
 
 def get_current_user():
     """Get current user from database.
 
+    Uses Flask's g object to cache the user for the request lifecycle.
+    This prevents race conditions and improves performance by avoiding
+    multiple database queries per request.
+
     Returns:
         User object if found, None otherwise
     """
+    # Check if user is already cached in request context
+    if hasattr(g, "current_user"):
+        return g.current_user
+
     from models import User, get_db_session
 
     user_email = session.get("user_email")
     if not user_email:
+        g.current_user = None
         return None
 
     try:
         with get_db_session() as db_session:
-            return db_session.query(User).filter(User.email == user_email).first()
+            user = db_session.query(User).filter(User.email == user_email).first()
+            # Cache user for this request
+            g.current_user = user
+            return user
     except Exception:
+        g.current_user = None
         return None
 
 

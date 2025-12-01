@@ -165,11 +165,44 @@ class SECQueryTool(BaseTool):
                     f"({cached_data['total_chunks']} chunks)"
                 )
 
-                vector_search.load_from_cache(
-                    cached_data["chunks"],
-                    cached_data["chunk_metadata"],
-                    cached_data["embeddings"],
-                )
+                # Load embeddings from cache
+                if "embeddings" in cached_data:
+                    vector_search.load_from_cache(
+                        cached_data["chunks"],
+                        cached_data["chunk_metadata"],
+                        cached_data["embeddings"],
+                    )
+                else:
+                    # Old cache format without embeddings - regenerate
+                    logger.warning(
+                        "Cache data missing embeddings, regenerating... "
+                        "(consider clearing old cache)"
+                    )
+                    # Group chunks by filing metadata to ensure correct chunk_index calculation
+                    # Process all chunks from the same filing together
+                    filing_groups: dict[tuple, list[tuple[str, dict]]] = {}
+                    for chunk, metadata in zip(
+                        cached_data["chunks"], cached_data["chunk_metadata"]
+                    ):
+                        # Create a key from filing-level metadata (excluding chunk_index)
+                        filing_key = (
+                            metadata.get("type"),
+                            metadata.get("date"),
+                            metadata.get("url"),
+                            metadata.get("accession"),
+                        )
+                        if filing_key not in filing_groups:
+                            filing_groups[filing_key] = []
+                        filing_groups[filing_key].append((chunk, metadata))
+
+                    # Process each filing group together
+                    for filing_key, chunk_list in filing_groups.items():
+                        chunks = [chunk for chunk, _ in chunk_list]
+                        # Use first chunk's metadata as base (chunk_index will be recalculated)
+                        base_metadata = chunk_list[0][1].copy()
+                        # Remove chunk_index if present - it will be recalculated correctly
+                        base_metadata.pop("chunk_index", None)
+                        await vector_search.add_filing_chunks(chunks, base_metadata)
 
                 company_name = cached_data["company_name"]
                 filings = cached_data["filings"]
@@ -216,7 +249,7 @@ class SECQueryTool(BaseTool):
 
                     # Track for caching
                     all_chunks.extend(chunks)
-                    all_chunk_metadata.extend([filing_metadata] * len(chunks))
+                    all_chunk_metadata.extend([filing_metadata.copy() for _ in range(len(chunks))])
 
                 # Cache the results
                 embeddings_array = vector_search.get_embeddings_array()

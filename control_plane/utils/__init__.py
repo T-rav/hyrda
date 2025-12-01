@@ -1,1 +1,38 @@
 """Utility modules for control plane."""
+
+from .audit import (
+    AuditAction,
+    log_admin_action,
+    log_agent_action,
+    log_group_action,
+    log_permission_action,
+    log_user_action,
+)
+from .errors import error_response, success_response
+from .permissions import check_admin, check_authenticated, get_current_user
+from .validation import (
+    validate_agent_name,
+    validate_display_name,
+    validate_email,
+    validate_group_name,
+    validate_required_field,
+)
+
+__all__ = [
+    "error_response",
+    "success_response",
+    "check_admin",
+    "check_authenticated",
+    "get_current_user",
+    "validate_agent_name",
+    "validate_group_name",
+    "validate_display_name",
+    "validate_email",
+    "validate_required_field",
+    "log_admin_action",
+    "log_agent_action",
+    "log_group_action",
+    "log_permission_action",
+    "log_user_action",
+    "AuditAction",
+]

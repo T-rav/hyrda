@@ -238,8 +238,11 @@ def require_authentication():
     return redirect(authorization_url)
 
 
-# Import centralized permission system
+# Import centralized permission system and error handling
 from utils.permissions import require_admin, check_admin
+from utils.errors import error_response, success_response
+from utils.validation import validate_agent_name, validate_group_name, validate_display_name
+from utils.audit import log_agent_action, log_permission_action, log_user_action, log_group_action, AuditAction
 
 
 # Authentication routes
@@ -329,8 +332,15 @@ def register_agent() -> Response:
         aliases = data.get("aliases", [])
         is_system = data.get("is_system", False)
 
-        if not agent_name:
-            return jsonify({"error": "name is required"}), 400
+        # Validate agent name
+        is_valid, error_msg = validate_agent_name(agent_name)
+        if not is_valid:
+            return error_response(error_msg, 400, "VALIDATION_ERROR")
+
+        # Validate display name (optional)
+        is_valid, error_msg = validate_display_name(display_name)
+        if not is_valid:
+            return error_response(error_msg, 400, "VALIDATION_ERROR")
 
         with get_db_session() as session:
             # Check if agent exists (deleted or not)
@@ -347,7 +357,11 @@ def register_agent() -> Response:
                     AgentMetadata.is_deleted == False
                 ).first()
                 if existing_active:
-                    return jsonify({"error": f"Agent '{agent_name}' already exists"}), 409
+                    return error_response(
+                        f"Agent '{agent_name}' already exists",
+                        409,
+                        "AGENT_EXISTS"
+                    )
 
             # Check for conflict: non-deleted agent with same name
             if agent and not agent.is_deleted:
@@ -394,7 +408,7 @@ def register_agent() -> Response:
 
     except Exception as e:
         logger.error(f"Error registering agent: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/agents/<string:agent_name>")
@@ -493,7 +507,11 @@ def toggle_agent(agent_name: str) -> Response:
 
             # Prevent disabling system agents
             if agent_metadata.is_system and agent_metadata.is_public:
-                return jsonify({"error": "Cannot disable system agents"}), 403
+                return error_response(
+                    "Cannot disable system agents",
+                    403,
+                    "SYSTEM_AGENT_PROTECTED"
+                )
 
             # Toggle the state
             agent_metadata.is_public = not agent_metadata.is_public
@@ -506,7 +524,7 @@ def toggle_agent(agent_name: str) -> Response:
 
     except Exception as e:
         logger.error(f"Error toggling agent: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/agents/<string:agent_name>", methods=["DELETE"])
@@ -516,6 +534,24 @@ def delete_agent(agent_name: str) -> Response:
 
     System agents cannot be deleted.
     Deleted agents are hidden from list_agents() by default.
+
+    Permission Handling:
+    - Related permissions in agent_permissions and agent_group_permissions are PRESERVED
+    - Permissions remain in the database but are effectively inactive (agent won't appear in lists)
+    - If the agent is reactivated via register_agent(), existing permissions are automatically restored
+    - This allows temporary removal without losing access control configuration
+    - To permanently remove an agent and its permissions, manual database cleanup is required
+
+    Args:
+        agent_name: The name of the agent to soft delete
+
+    Returns:
+        JSON response with success status or error message
+
+    Raises:
+        403: If attempting to delete a system agent
+        404: If agent not found
+        500: If database error occurs
     """
     try:
         from models import AgentMetadata, get_db_session
@@ -526,11 +562,19 @@ def delete_agent(agent_name: str) -> Response:
             ).first()
 
             if not agent_metadata:
-                return jsonify({"error": f"Agent '{agent_name}' not found"}), 404
+                return error_response(
+                    f"Agent '{agent_name}' not found",
+                    404,
+                    "AGENT_NOT_FOUND"
+                )
 
             # Prevent deleting system agents
             if agent_metadata.is_system:
-                return jsonify({"error": "Cannot delete system agents"}), 403
+                return error_response(
+                    "Cannot delete system agents",
+                    403,
+                    "SYSTEM_AGENT_PROTECTED"
+                )
 
             # Soft delete: mark as deleted
             agent_metadata.is_deleted = True
@@ -539,15 +583,21 @@ def delete_agent(agent_name: str) -> Response:
 
             logger.info(f"Soft deleted agent '{agent_name}'")
 
-            return jsonify({
-                "success": True,
-                "agent_name": agent_name,
-                "message": f"Agent '{agent_name}' marked as deleted"
-            })
+            # Audit log
+            log_agent_action(
+                AuditAction.AGENT_DELETE,
+                agent_name,
+                {"display_name": agent_metadata.display_name}
+            )
+
+            return success_response(
+                data={"agent_name": agent_name},
+                message=f"Agent '{agent_name}' marked as deleted"
+            )
 
     except Exception as e:
         logger.error(f"Error deleting agent: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/me")
@@ -558,7 +608,7 @@ def get_current_user() -> Response:
         user_info = session.get("user_info", {})
 
         if not user_email:
-            return jsonify({"error": "Not authenticated"}), 401
+            return error_response("Not authenticated", 401, "NOT_AUTHENTICATED")
 
         return jsonify({
             "email": user_email,
@@ -568,7 +618,7 @@ def get_current_user() -> Response:
 
     except Exception as e:
         logger.error(f"Error getting current user: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/users")
@@ -712,20 +762,33 @@ def manage_groups() -> Response:
                 return error
 
             data = request.json
+            group_name = data.get("group_name")
+            display_name = data.get("display_name")
+
+            # Validate group name
+            is_valid, error_msg = validate_group_name(group_name)
+            if not is_valid:
+                return error_response(error_msg, 400, "VALIDATION_ERROR")
+
+            # Validate display name (optional)
+            is_valid, error_msg = validate_display_name(display_name)
+            if not is_valid:
+                return error_response(error_msg, 400, "VALIDATION_ERROR")
+
             with get_db_session() as session:
                 new_group = PermissionGroup(
-                    group_name=data.get("group_name"),
-                    display_name=data.get("display_name"),
+                    group_name=group_name,
+                    display_name=display_name,
                     description=data.get("description"),
                     created_by=data.get("created_by", "admin"),
                 )
                 session.add(new_group)
                 session.commit()
-                return jsonify({"status": "created", "group_name": data.get("group_name")})
+                return jsonify({"status": "created", "group_name": group_name})
 
     except Exception as e:
         logger.error(f"Error managing groups: {e}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return error_response(str(e), 500, "INTERNAL_ERROR")
 
 
 @app.route("/api/groups/<string:group_name>", methods=["PUT", "DELETE"])
@@ -1015,6 +1078,15 @@ def manage_group_agents(group_name: str) -> Response:
                 )
                 session.add(new_permission)
                 session.commit()
+
+                # Audit log
+                log_permission_action(
+                    AuditAction.GRANT_PERMISSION,
+                    "agent_group_permission",
+                    f"{group_name}/{agent_name}",
+                    {"granted_by": granted_by}
+                )
+
                 return jsonify({"status": "granted"})
 
         elif request.method == "DELETE":
@@ -1050,6 +1122,14 @@ def manage_group_agents(group_name: str) -> Response:
 
                 session.delete(permission)
                 session.commit()
+
+                # Audit log
+                log_permission_action(
+                    AuditAction.REVOKE_PERMISSION,
+                    "agent_group_permission",
+                    f"{group_name}/{agent_name}"
+                )
+
                 return jsonify({"status": "revoked"})
 
     except Exception as e:

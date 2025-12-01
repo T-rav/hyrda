@@ -111,6 +111,10 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_HOST:-}
       - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
+      - SERVER_BASE_URL=${SERVER_BASE_URL:-http://localhost:5001}
     ports:
       - "${TASKS_PORT:-5001}:5001"
     depends_on:
@@ -178,6 +182,14 @@ services:
     image: insightmesh-dashboard:latest
     container_name: insightmesh-dashboard
     restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
+      - DASHBOARD_BASE_URL=${DASHBOARD_BASE_URL:-http://localhost:8080}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
     ports:
       - "8080:8080"
     depends_on:
@@ -264,6 +276,9 @@ services:
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change-in-prod}
       - FLASK_ENV=production
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - CONTROL_PLANE_BASE_URL=${CONTROL_PLANE_BASE_URL:-http://localhost:6001}
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:

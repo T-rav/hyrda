@@ -610,3 +610,109 @@ class TestSystemAgents:
         assert response.status_code == 403
         data = json.loads(response.data)
         assert "Cannot revoke system agents from 'all_users' group" in data["error"]
+
+
+class TestAgentDeletionAPI:
+    """Test agent soft delete endpoints."""
+
+    def test_delete_agent_marks_as_deleted(self, authenticated_client, db_session):
+        """Test that deleting an agent marks it as deleted."""
+        # Create test agent
+        agent = AgentMetadata(
+            agent_name="delete_test_agent",
+            display_name="Delete Test",
+            is_public=True,
+            is_deleted=False
+        )
+        db_session.add(agent)
+        db_session.commit()
+
+        # Delete the agent
+        response = authenticated_client.delete("/api/agents/delete_test_agent")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "deleted" in data["message"].lower()
+
+        # Verify agent is marked as deleted in database
+        db_session.expire_all()
+        deleted_agent = db_session.query(AgentMetadata).filter(
+            AgentMetadata.agent_name == "delete_test_agent"
+        ).first()
+        assert deleted_agent is not None
+        assert deleted_agent.is_deleted is True
+        assert deleted_agent.is_public is False
+
+    def test_delete_nonexistent_agent_returns_404(self, authenticated_client):
+        """Test that deleting a non-existent agent returns 404."""
+        response = authenticated_client.delete("/api/agents/nonexistent_agent")
+        assert response.status_code == 404
+        data = json.loads(response.data)
+        assert "not found" in data["error"].lower()
+
+    def test_cannot_delete_system_agent(self, authenticated_client):
+        """Test that system agents cannot be deleted."""
+        response = authenticated_client.delete("/api/agents/help")
+        assert response.status_code == 403
+        data = json.loads(response.data)
+        assert "system" in data["error"].lower()
+
+    def test_deleted_agent_excluded_from_list(self, authenticated_client, db_session):
+        """Test that deleted agents are excluded from the agent list."""
+        # Create and delete an agent
+        agent = AgentMetadata(
+            agent_name="list_test_agent",
+            display_name="List Test",
+            is_public=True,
+            is_deleted=False
+        )
+        db_session.add(agent)
+        db_session.commit()
+
+        # Delete it
+        authenticated_client.delete("/api/agents/list_test_agent")
+
+        # List agents - deleted agent should not appear
+        response = authenticated_client.get("/api/agents")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        agent_names = [a["name"] for a in data["agents"]]
+        assert "list_test_agent" not in agent_names
+
+    def test_can_reregister_deleted_agent(self, authenticated_client, db_session):
+        """Test that a deleted agent can be re-registered."""
+        # Create and delete an agent
+        agent = AgentMetadata(
+            agent_name="reregister_test",
+            display_name="Reregister Test",
+            is_public=True,
+            is_deleted=False
+        )
+        db_session.add(agent)
+        db_session.commit()
+
+        # Delete it
+        authenticated_client.delete("/api/agents/reregister_test")
+
+        # Re-register the agent
+        response = authenticated_client.post(
+            "/api/agents/register",
+            json={
+                "name": "reregister_test",
+                "display_name": "Reregistered",
+                "description": "Reactivated agent"
+            },
+            content_type="application/json"
+        )
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["action"] == "reactivated"
+
+        # Verify agent is active again
+        db_session.expire_all()
+        reactivated_agent = db_session.query(AgentMetadata).filter(
+            AgentMetadata.agent_name == "reregister_test"
+        ).first()
+        assert reactivated_agent is not None
+        assert reactivated_agent.is_deleted is False
+        assert reactivated_agent.is_public is True

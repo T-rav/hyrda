@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from services import agent_registry
+from services.agent_registry import (
+    get as get_agent,
+    get_primary_name,
+    list_agents as list_agents_func,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +49,15 @@ async def list_agents():
     Returns:
         List of agent names and their metadata
     """
-    agents = agent_registry.list_agents()
+    agents = list_agents_func()
     return AgentListResponse(
         agents=[
             {
                 "name": agent["name"],
                 "aliases": agent.get("aliases", []),
-                "description": getattr(agent["agent_class"], "description", ""),
+                "description": agent.get("description", "") or (
+                    getattr(agent.get("agent_class"), "description", "") if agent.get("agent_class") else ""
+                ),
             }
             for agent in agents
         ]
@@ -71,17 +77,19 @@ async def get_agent_info(agent_name: str):
     Raises:
         HTTPException: If agent not found
     """
-    agent_info = agent_registry.get(agent_name)
+    agent_info = get_agent(agent_name)
     if not agent_info:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
 
-    agent_class = agent_info["agent_class"]
-    primary_name = agent_registry.get_primary_name(agent_name)
+    agent_class = agent_info.get("agent_class")
+    primary_name = get_primary_name(agent_name) or agent_name.lower()
 
     return {
         "name": primary_name,
         "aliases": agent_info.get("aliases", []),
-        "description": getattr(agent_class, "description", ""),
+        "description": agent_info.get("description", "") or (
+            getattr(agent_class, "description", "") if agent_class else ""
+        ),
         "is_alias": agent_name.lower() != primary_name,
     }
 
@@ -105,18 +113,25 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
     logger.info(f"Invoking agent '{agent_name}' with query: {request.query[:100]}...")
 
     # Get agent from registry
-    agent_info = agent_registry.get(agent_name)
+    agent_info = get_agent(agent_name)
     if not agent_info:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    # Check if agent class is available
+    agent_class = agent_info.get("agent_class")
+    if not agent_class:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Agent '{agent_name}' is not available (class not loaded)"
+        )
 
     # Track invocation timing
     start_time = time.time()
     status = "error"
-    primary_name = agent_registry.get_primary_name(agent_name)
+    primary_name = get_primary_name(agent_name) or agent_name.lower()
 
     try:
         # Instantiate and run agent
-        agent_class = agent_info["agent_class"]
         agent_instance = agent_class()
 
         # Execute agent
@@ -163,14 +178,23 @@ async def stream_agent(agent_name: str, request: AgentInvokeRequest):
     )
 
     # Get agent from registry
-    agent_info = agent_registry.get(agent_name)
+    agent_info = get_agent(agent_name)
     if not agent_info:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    # Check if agent class is available
+    agent_class = agent_info.get("agent_class")
+    if not agent_class:
+        async def error_generator():
+            yield f"data: ERROR: Agent '{agent_name}' is not available (class not loaded)\n\n"
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
 
     async def event_generator():
         """Generate server-sent events from agent execution."""
         try:
-            agent_class = agent_info["agent_class"]
             agent_instance = agent_class()
 
             # Check if agent supports streaming

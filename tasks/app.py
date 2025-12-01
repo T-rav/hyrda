@@ -1,11 +1,12 @@
 """APScheduler WebUI Flask application."""
 
 import logging
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template, request, session
+from flask import Flask, Response, jsonify, redirect, render_template, request, session
 from flask_cors import CORS
 
 from config.settings import get_settings
@@ -58,6 +59,9 @@ def create_app() -> Flask:
     # Configure Flask
     app.config["SECRET_KEY"] = settings.secret_key
     app.config["ENV"] = settings.flask_env
+    app.config["SESSION_COOKIE_SECURE"] = os.getenv("ENVIRONMENT") == "production"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 
     # Enable CORS
     CORS(app)
@@ -74,6 +78,81 @@ def create_app() -> Flask:
 
 # UI serving removed - handled by nginx
 # Flask app now serves only API routes
+
+# Authentication middleware - protect all routes except health and auth
+@app.before_request
+def require_authentication():
+    """Require authentication for all routes except health checks and auth endpoints."""
+    from utils.auth import verify_domain
+
+    # Skip auth for health checks, auth endpoints, and Google Drive OAuth endpoints
+    if (
+        request.path.startswith("/health")
+        or request.path.startswith("/api/health")
+        or request.path.startswith("/auth/")
+        or request.path.startswith("/api/gdrive/auth/")  # Google Drive OAuth uses different flow
+    ):
+        return None
+
+    # Check if user is authenticated
+    if "user_email" in session and "user_info" in session:
+        email = session["user_email"]
+        # Verify domain on each request
+        if verify_domain(email):
+            return None
+        else:
+            # Domain changed or invalid
+            session.clear()
+            from utils.auth import AuditLogger
+
+            AuditLogger.log_auth_event(
+                "access_denied_domain",
+                email=email,
+                path=request.path,
+                success=False,
+                error=f"Email domain not allowed: {email}",
+            )
+
+    # Not authenticated - redirect to login
+    from utils.auth import get_flow, get_redirect_uri
+
+    service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
+    redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
+    flow = get_flow(redirect_uri)
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="select_account",
+    )
+    session["oauth_state"] = state
+    session["oauth_redirect"] = request.url
+
+    from utils.auth import AuditLogger
+
+    AuditLogger.log_auth_event(
+        "login_initiated",
+        path=request.path,
+    )
+
+    return redirect(authorization_url)
+
+
+# Authentication routes
+@app.route("/auth/callback")
+def auth_callback() -> Response | tuple[Response, int]:
+    """Handle OAuth callback."""
+    from utils.auth import flask_auth_callback
+
+    service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
+    return flask_auth_callback(service_base_url, "/auth/callback")
+
+
+@app.route("/auth/logout", methods=["POST"])
+def logout() -> Response | tuple[Response, int]:
+    """Handle logout."""
+    from utils.auth import flask_logout
+
+    return flask_logout()
 
 
 # API Routes

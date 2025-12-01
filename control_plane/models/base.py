@@ -69,6 +69,10 @@ def get_db_session(database_url: str | None = None):
     session = _SessionLocal()
     try:
         yield session
+    except Exception:
+        # Explicitly rollback on any exception to ensure clean state
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -100,5 +104,9 @@ def get_data_db_session(database_url: str | None = None):
     session = _DataSessionLocal()
     try:
         yield session
+    except Exception:
+        # Explicitly rollback on any exception to ensure clean state
+        session.rollback()
+        raise
     finally:
         session.close()

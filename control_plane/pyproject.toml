@@ -17,6 +17,8 @@ dependencies = [
     "alembic>=1.13.0",
     "python-dotenv>=1.0.0",
     "slack-sdk>=3.0.0",
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib>=1.0.0",
 ]
 
 [project.optional-dependencies]

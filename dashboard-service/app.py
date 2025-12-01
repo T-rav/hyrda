@@ -8,12 +8,15 @@ Aggregates metrics from all services:
 """
 
 import logging
+import os
 from pathlib import Path
 
 import aiohttp
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+
+from utils.auth import FastAPIAuthMiddleware, fastapi_auth_callback, fastapi_logout
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +30,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Add session middleware for authentication
+from starlette.middleware.sessions import SessionMiddleware
+
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "dev-secret-change-in-prod"))
+
+# Add authentication middleware
+service_base_url = os.getenv("DASHBOARD_BASE_URL", "http://localhost:8080")
+app.add_middleware(FastAPIAuthMiddleware, service_base_url=service_base_url, callback_path="/auth/callback")
+
 
 # Service URLs (Docker service names)
 SERVICES = {
@@ -35,6 +47,19 @@ SERVICES = {
     "tasks": "http://tasks:8081",
     "control_plane": "http://control_plane:6001",
 }
+
+
+# Authentication routes
+@app.get("/auth/callback")
+async def auth_callback(request: Request):
+    """Handle OAuth callback."""
+    return await fastapi_auth_callback(request, service_base_url, "/auth/callback")
+
+
+@app.post("/auth/logout")
+async def logout():
+    """Handle logout."""
+    return await fastapi_logout()
 
 
 @app.get("/health")
