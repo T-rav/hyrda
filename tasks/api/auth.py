@@ -4,6 +4,7 @@ import logging
 import os
 
 from flask import Blueprint, Response
+
 from utils.auth import flask_auth_callback, flask_logout
 
 logger = logging.getLogger(__name__)

@@ -3,7 +3,8 @@
 import logging
 from datetime import UTC, datetime
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify
+
 from models.base import get_db_session
 from models.oauth_credential import OAuthCredential
 

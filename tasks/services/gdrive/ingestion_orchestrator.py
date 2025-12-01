@@ -173,7 +173,9 @@ class IngestionOrchestrator:
 
                 # Add contextual descriptions if enabled
                 if self.enable_contextual_retrieval and self.llm_service:
-                    logger.info(f"Adding contextual descriptions to {len(chunks)} chunks...")
+                    logger.info(
+                        f"Adding contextual descriptions to {len(chunks)} chunks..."
+                    )
                     enhanced_chunks = []
                     for chunk in chunks_with_title:
                         context = await self.llm_service.generate_chunk_context(
@@ -246,13 +248,17 @@ class IngestionOrchestrator:
                         status="success",
                     )
                 except Exception as tracking_error:
-                    logger.warning(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
+                    logger.warning(
+                        f"⚠️  Failed to record ingestion tracking: {tracking_error}"
+                    )
 
                 logger.info(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
 
             except Exception as e:
-                logger.error(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
+                logger.error(
+                    f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
+                )
                 error_count += 1
 
                 # Record failed ingestion

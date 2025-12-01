@@ -129,7 +129,9 @@ class GoogleAuthenticator:
     def _print_setup_instructions(self):
         """Print setup instructions for new users"""
         logger.error("\n❌ No OAuth2 credentials found.")
-        logger.info("📝 To create a login screen like n8n, we need OAuth2 app credentials.")
+        logger.info(
+            "📝 To create a login screen like n8n, we need OAuth2 app credentials."
+        )
         logger.info("\n🚀 One-time setup:")
         logger.info("1. Go to: https://console.cloud.google.com/")
         logger.info(
