@@ -205,6 +205,7 @@ def require_authentication():
 
     # Not authenticated - redirect to login
     from utils.auth import get_flow, get_redirect_uri
+    from urllib.parse import urlparse
 
     service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
     redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
@@ -215,7 +216,15 @@ def require_authentication():
         prompt="select_account",
     )
     session["oauth_state"] = state
-    session["oauth_redirect"] = request.url
+
+    # Validate redirect URL to prevent open redirect attacks
+    # Only allow same-origin redirects
+    redirect_url = request.url
+    parsed = urlparse(redirect_url)
+    if parsed.netloc and parsed.netloc != request.host:
+        # External redirect attempt - redirect to home instead
+        redirect_url = "/"
+    session["oauth_redirect"] = redirect_url
 
     from utils.auth import AuditLogger
 
@@ -325,9 +334,20 @@ def register_agent() -> Response:
 
         with get_db_session() as session:
             # Check if agent exists (deleted or not)
+            # Use row-level locking to prevent race conditions
             agent = session.query(AgentMetadata).filter(
                 AgentMetadata.agent_name == agent_name
-            ).first()
+            ).with_for_update().first()
+
+            # Validate uniqueness: ensure no non-deleted agent with same name exists
+            if agent and agent.is_deleted:
+                # Before reactivating, double-check no active agent with same name exists
+                existing_active = session.query(AgentMetadata).filter(
+                    AgentMetadata.agent_name == agent_name,
+                    AgentMetadata.is_deleted == False
+                ).first()
+                if existing_active:
+                    return jsonify({"error": f"Agent '{agent_name}' already exists"}), 409
 
             # Check for conflict: non-deleted agent with same name
             if agent and not agent.is_deleted:
@@ -1042,6 +1062,13 @@ def manage_user_permissions(user_id: str) -> Response:
     """Get, grant, or revoke direct user permissions."""
     try:
         from models import AgentPermission, User, get_db_session
+
+        # GET is public for users to see their own permissions
+        # POST and DELETE require admin privileges
+        if request.method in ["POST", "DELETE"]:
+            is_admin, error = check_admin()
+            if not is_admin:
+                return error
 
         if request.method == "GET":
             with get_db_session() as session:
