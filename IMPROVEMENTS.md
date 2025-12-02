@@ -262,27 +262,77 @@ except HTTPException as e:
 
 ---
 
-### 8. Missing Type Hints in Critical Services
+### 8. Missing Type Hints in Critical Services → **IN PROGRESS**
 **Severity:** HIGH
-**Files:** `bot/services/base.py`, `tasks/api/jobs.py`
+**Files:** `bot/services/`, `tasks/api/jobs.py`
+**Status:** 🚧 **IN PROGRESS** - 24/74 dict[str, Any] replaced (32% complete)
 
-**Issue:** Functions missing return types; `dict[str, Any]` overused
+**Issue:** Functions missing return types; `dict[str, Any]` overused (74 occurrences)
 
-**Fix:**
+**Progress:**
+- ✅ Created `bot/bot_types/__init__.py` with comprehensive TypedDict definitions
+- ✅ Updated `bot/services/agent_client.py` (AgentContext, AgentResponse, AgentInfo, CircuitBreakerStatus)
+- ✅ Updated `bot/services/context_builder.py` (ContextChunk, ContextQuality)
+- ✅ Updated `bot/services/citation_service.py` (ContextChunk)
+- ✅ Updated `bot/services/retrieval_service.py` (ContextChunk for all methods)
+- ✅ Updated `bot/services/agent_registry.py` (AgentInfo)
+- 📊 Reduced from 74 to 50 dict[str, Any] occurrences (24 replaced)
+
+**TypedDict Classes Created:**
 ```python
-# Create proper types
-from typing import TypedDict
+# bot/bot_types/__init__.py
+class ContextChunk(TypedDict):
+    """Vector search result with metadata"""
+    content: str
+    similarity: float
+    metadata: ChunkMetadata
+    id: NotRequired[str | int]
+    namespace: NotRequired[str]
 
-class JobConfig(TypedDict):
-    trigger: str
-    schedule: str
-    enabled: bool
+class AgentContext(TypedDict, total=False):
+    """Context passed to agents"""
+    user_id: str
+    channel: str
+    thread_ts: str
+    document_content: str
+    files: list[dict[str, Any]]
 
-def create_job(config: JobConfig) -> str:  # Not dict[str, Any]!
-    return job_id
+class AgentResponse(TypedDict):
+    """Agent execution result"""
+    response: str
+    metadata: AgentMetadata
+
+class AgentInfo(TypedDict):
+    """Agent registry information"""
+    name: str
+    display_name: str
+    description: str
+    tags: NotRequired[list[str]]
+    enabled: NotRequired[bool]
+
+# + CircuitBreakerStatus, ContextQuality, ChunkMetadata, AgentMetadata
 ```
 
-**Effort:** 8 hours
+**Remaining Work (50 dict[str, Any]):**
+- `bot/services/langfuse_service.py` (13) - Skip, will be extracted to shared lib (#33)
+- `bot/services/query_rewriter.py` (7) - TODO
+- `bot/services/slack_service.py` (5) - TODO
+- `bot/services/user_service.py` (4) - TODO
+- `bot/services/search_clients.py` (4) - TODO
+- `bot/services/contextual_retrieval_service.py` (4) - TODO
+- `tasks/api/jobs.py` - TODO
+
+**Commits:**
+- 2025-12-02: feat: Add TypedDict classes to replace dict[str, Any] types (4379148)
+- 2025-12-02: feat: Add TypedDict to agent_registry for improved type safety (47c72cc)
+
+**Benefits:**
+- Improved type safety and IDE autocomplete
+- Better documentation of data structures
+- Easier code maintenance and refactoring
+- Catches type errors at development time
+
+**Effort:** 8 hours (3 hours spent, 5 hours remaining)
 **Priority:** P1
 
 ---
