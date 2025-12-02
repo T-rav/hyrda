@@ -7,6 +7,8 @@ from typing import Any
 import jwt
 import requests
 
+from task_types import APIResponse, EmployeeProfile
+
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +38,7 @@ class PortalClient:
 
     def _make_request(
         self, endpoint: str, method: str = "GET", data: dict[str, Any] | None = None
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+    ) -> APIResponse:
         """
         Make authenticated request to Portal API.
 
@@ -71,7 +73,7 @@ class PortalClient:
         response.raise_for_status()
         return response.json()
 
-    def get_employees(self) -> list[dict[str, Any]]:
+    def get_employees(self) -> list[EmployeeProfile]:
         """
         Get all current employees with profiles, skills, and allocations.
 
@@ -88,7 +90,7 @@ class PortalClient:
         logger.info(f"Fetched {len(employees)} employees from Portal")
         return employees
 
-    def get_employee(self, metric_id: str) -> dict[str, Any]:
+    def get_employee(self, metric_id: str) -> EmployeeProfile:
         """
         Get detailed information for a specific employee.
 
@@ -104,7 +106,7 @@ class PortalClient:
 
     def update_employee_profile(
         self, metric_id: str, profile_data: dict[str, Any]
-    ) -> dict[str, Any]:
+    ) -> EmployeeProfile:
         """
         Update an employee's profile information including skills.
 

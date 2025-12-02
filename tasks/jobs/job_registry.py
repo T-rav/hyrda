@@ -7,6 +7,7 @@ from apscheduler.job import Job
 
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
+from task_types import JobExecutionResult, JobSchedule, JobTypeInfo
 
 from .gdrive_ingest import GDriveIngestJob
 from .metric_sync import MetricSyncJob
@@ -21,7 +22,7 @@ def execute_job_by_type(
     job_params: dict[str, Any],
     triggered_by: str = "scheduler",
     job_id: str = None,
-) -> dict[str, Any]:
+) -> JobExecutionResult:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
     import uuid
@@ -189,7 +190,7 @@ class JobRegistry:
         self.job_types[job_type] = job_class
         logger.info(f"Registered job type: {job_type} ({job_class.JOB_NAME})")
 
-    def get_available_job_types(self) -> list[dict[str, Any]]:
+    def get_available_job_types(self) -> list[JobTypeInfo]:
         """Get available job types with their descriptions."""
         job_types = []
 
@@ -211,7 +212,7 @@ class JobRegistry:
         self,
         job_type: str,
         job_id: str | None = None,
-        schedule: dict[str, Any] | None = None,
+        schedule: JobSchedule | None = None,
         **kwargs: Any,
     ) -> Job:
         """Create a new job of the specified type."""
