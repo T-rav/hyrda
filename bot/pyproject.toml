@@ -20,6 +20,7 @@ dependencies = [
     # Core async/web
     "aiohttp>=3.8.0",
     "httpx>=0.27.0",  # For agent-service HTTP client
+    "pybreaker>=1.0.1",  # Circuit breaker pattern for resilience
 
     # Configuration & environment
     "python-dotenv>=1.0.0",
