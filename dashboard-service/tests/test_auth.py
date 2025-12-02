@@ -1,7 +1,7 @@
 """Test suite for FastAPI OAuth authentication."""
 
 import os
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from fastapi import Request
@@ -9,15 +9,10 @@ from fastapi.testclient import TestClient
 from starlette.middleware.sessions import SessionMiddleware
 
 from utils.auth import (
-    AuditLogger,
-    AuthError,
     FastAPIAuthMiddleware,
     fastapi_auth_callback,
     fastapi_logout,
-    get_flow,
-    get_redirect_uri,
     verify_domain,
-    verify_token,
 )
 
 
@@ -96,11 +91,18 @@ class TestFastAPIAuthMiddleware:
         """Test that auth endpoints bypass authentication."""
         response = client.get("/auth/callback")
         # May return error but shouldn't redirect
-        assert response.status_code != 302 or "accounts.google.com" not in response.headers.get("location", "")
+        assert (
+            response.status_code != 302
+            or "accounts.google.com" not in response.headers.get("location", "")
+        )
 
-    def test_protected_endpoint_redirects_when_not_authenticated(self, client, mock_oauth_env):
+    def test_protected_endpoint_redirects_when_not_authenticated(
+        self, client, mock_oauth_env
+    ):
         """Test that protected endpoints redirect to OAuth when not authenticated."""
-        with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"):
+        with patch(
+            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        ):
             with patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"):
                 with patch("utils.auth.get_flow") as mock_get_flow:
                     mock_flow = MagicMock()
@@ -118,6 +120,7 @@ class TestFastAPIAuthMiddleware:
 
     def test_protected_endpoint_allows_authenticated_user(self, client, mock_oauth_env):
         """Test that authenticated users can access protected endpoints."""
+
         # Patch the middleware dispatch to simulate authenticated user
         async def mock_dispatch(middleware_self, request, call_next):
             # Set up session to simulate authenticated user
@@ -133,20 +136,21 @@ class TestFastAPIAuthMiddleware:
 
     def test_protected_endpoint_rejects_wrong_domain(self, client, mock_oauth_env):
         """Test that wrong domain users are rejected."""
-        import json
         from itsdangerous import URLSafeTimedSerializer
 
         # Create signed session cookie with wrong domain
         serializer = URLSafeTimedSerializer("test-secret-key")
         session_data = {
             "user_email": "test@example.com",
-            "user_info": {"email": "test@example.com"}
+            "user_info": {"email": "test@example.com"},
         }
         session_cookie = serializer.dumps(session_data)
 
         client.cookies.set("session", session_cookie)
 
-        with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"):
+        with patch(
+            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        ):
             with patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"):
                 with patch("utils.auth.get_flow") as mock_get_flow:
                     mock_flow = MagicMock()
@@ -168,7 +172,9 @@ class TestFastAPIAuthCallback:
     @pytest.mark.asyncio
     @patch("utils.auth.get_flow")
     @patch("utils.auth.verify_token")
-    async def test_auth_callback_success(self, mock_verify_token, mock_get_flow, mock_oauth_env):
+    async def test_auth_callback_success(
+        self, mock_verify_token, mock_get_flow, mock_oauth_env
+    ):
         """Test successful OAuth callback."""
         # Setup mocks
         mock_flow = MagicMock()
@@ -183,18 +189,40 @@ class TestFastAPIAuthCallback:
             "picture": "https://example.com/pic.jpg",
         }
 
-        # Create mock request with session
+        # Create mock request with session (including CSRF token)
         mock_request = MagicMock(spec=Request)
-        mock_request.session = {"oauth_state": "test-state", "oauth_redirect": "/test-protected"}
+        mock_request.session = {
+            "oauth_state": "test-state",
+            "oauth_csrf": "test-csrf-token",
+            "oauth_redirect": "/test-protected",
+        }
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
-        mock_request.url.__str__ = Mock(return_value="http://localhost:8080/auth/callback?code=test&state=test-state")
+        mock_request.url.__str__ = Mock(
+            return_value="http://localhost:8080/auth/callback?code=test&state=test-state"
+        )
         mock_request.cookies = {}
 
-        response = await fastapi_auth_callback(mock_request, "http://localhost:8080", "/auth/callback")
+        response = await fastapi_auth_callback(
+            mock_request, "http://localhost:8080", "/auth/callback"
+        )
 
         # Should redirect
         assert response.status_code == 302
+
+    @pytest.mark.asyncio
+    async def test_auth_callback_missing_csrf_token(self, mock_oauth_env):
+        """Test callback with missing CSRF token (session fixation attack)."""
+        mock_request = MagicMock(spec=Request)
+        mock_request.session = {"oauth_state": "test-state"}  # Missing oauth_csrf!
+        mock_request.cookies = {}
+        mock_request.url = MagicMock()
+        mock_request.url.path = "/auth/callback"
+
+        with pytest.raises(Exception):  # Should raise HTTPException 403
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
 
     @pytest.mark.asyncio
     async def test_auth_callback_missing_state(self, mock_oauth_env):
@@ -206,12 +234,16 @@ class TestFastAPIAuthCallback:
         mock_request.url.path = "/auth/callback"
 
         with pytest.raises(Exception):  # Should raise HTTPException
-            await fastapi_auth_callback(mock_request, "http://localhost:8080", "/auth/callback")
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
 
     @pytest.mark.asyncio
     @patch("utils.auth.get_flow")
     @patch("utils.auth.verify_token")
-    async def test_auth_callback_invalid_domain(self, mock_verify_token, mock_get_flow, mock_oauth_env):
+    async def test_auth_callback_invalid_domain(
+        self, mock_verify_token, mock_get_flow, mock_oauth_env
+    ):
         """Test callback with invalid email domain."""
         mock_flow = MagicMock()
         mock_credentials = MagicMock()
@@ -225,14 +257,22 @@ class TestFastAPIAuthCallback:
         }
 
         mock_request = MagicMock(spec=Request)
-        mock_request.session = {"oauth_state": "test-state", "oauth_redirect": "/test-protected"}
+        mock_request.session = {
+            "oauth_state": "test-state",
+            "oauth_csrf": "test-csrf-token",
+            "oauth_redirect": "/test-protected",
+        }
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
-        mock_request.url.__str__ = Mock(return_value="http://localhost:8080/auth/callback?code=test&state=test-state")
+        mock_request.url.__str__ = Mock(
+            return_value="http://localhost:8080/auth/callback?code=test&state=test-state"
+        )
         mock_request.cookies = {}
 
         with pytest.raises(Exception):  # Should raise HTTPException with 403
-            await fastapi_auth_callback(mock_request, "http://localhost:8080", "/auth/callback")
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
 
 
 class TestFastAPILogout:

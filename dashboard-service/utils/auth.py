@@ -6,16 +6,16 @@ that require Google OAuth authentication restricted to specific email domains.
 
 import logging
 import os
+import secrets
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import ASGIApp
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,11 @@ logger = logging.getLogger(__name__)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 ALLOWED_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com").lstrip("@")
-OAUTH_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+OAUTH_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 
 
 class AuthError(Exception):
@@ -39,12 +43,12 @@ class AuditLogger:
     @staticmethod
     def log_auth_event(
         event_type: str,
-        email: Optional[str] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
+        email: str | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
         success: bool = True,
-        error: Optional[str] = None,
-        path: Optional[str] = None,
+        error: str | None = None,
+        path: str | None = None,
     ) -> None:
         """Log authentication event for auditing."""
         log_data = {
@@ -65,7 +69,9 @@ class AuditLogger:
             logger.warning(f"AUTH_AUDIT: {event_type} FAILED", extra=log_data)
 
 
-def get_redirect_uri(service_base_url: str, callback_path: str = "/auth/callback") -> str:
+def get_redirect_uri(
+    service_base_url: str, callback_path: str = "/auth/callback"
+) -> str:
     """Get OAuth redirect URI for a service."""
     return f"{service_base_url.rstrip('/')}{callback_path}"
 
@@ -80,7 +86,9 @@ def verify_domain(email: str) -> bool:
 def get_flow(redirect_uri: str) -> Flow:
     """Create OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise AuthError("Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET")
+        raise AuthError(
+            "Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"
+        )
 
     return Flow.from_client_config(
         {
@@ -108,7 +116,9 @@ def verify_token(token: str) -> dict[str, Any]:
 class FastAPIAuthMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware for Google OAuth authentication."""
 
-    def __init__(self, app: ASGIApp, service_base_url: str, callback_path: str = "/auth/callback"):
+    def __init__(
+        self, app: ASGIApp, service_base_url: str, callback_path: str = "/auth/callback"
+    ):
         """Initialize FastAPI auth middleware."""
         super().__init__(app)
         self.service_base_url = service_base_url
@@ -131,8 +141,12 @@ class FastAPIAuthMiddleware(BaseHTTPMiddleware):
         # Check session for authentication
         # Use session if available, fallback to cookies
         session = getattr(request, "session", None)
-        user_email = session.get("user_email") if session else request.cookies.get("user_email")
-        user_info = session.get("user_info") if session else request.cookies.get("user_info")
+        user_email = (
+            session.get("user_email") if session else request.cookies.get("user_email")
+        )
+        user_info = (
+            session.get("user_info") if session else request.cookies.get("user_info")
+        )
 
         if user_email and user_info:
             # Verify domain
@@ -165,17 +179,40 @@ class FastAPIAuthMiddleware(BaseHTTPMiddleware):
             prompt="select_account",
         )
 
-        # Store state in session or cookie
+        # Generate CSRF token for additional security
+        csrf_token = secrets.token_urlsafe(32)
+
+        # Store state and CSRF token in session or cookie
         session = getattr(request, "session", None)
         response = RedirectResponse(url=authorization_url, status_code=302)
         if session is not None:
             # SessionMiddleware is active - use session
             session["oauth_state"] = state
+            session["oauth_csrf"] = csrf_token
             session["oauth_redirect"] = str(request.url)
         else:
             # Fallback to cookies if no session middleware
-            response.set_cookie("oauth_state", state, httponly=True, samesite="lax", secure=os.getenv("ENVIRONMENT") == "production")
-            response.set_cookie("oauth_redirect", str(request.url), httponly=True, samesite="lax", secure=os.getenv("ENVIRONMENT") == "production")
+            response.set_cookie(
+                "oauth_state",
+                state,
+                httponly=True,
+                samesite="lax",
+                secure=os.getenv("ENVIRONMENT") == "production",
+            )
+            response.set_cookie(
+                "oauth_csrf",
+                csrf_token,
+                httponly=True,
+                samesite="lax",
+                secure=os.getenv("ENVIRONMENT") == "production",
+            )
+            response.set_cookie(
+                "oauth_redirect",
+                str(request.url),
+                httponly=True,
+                samesite="lax",
+                secure=os.getenv("ENVIRONMENT") == "production",
+            )
 
         AuditLogger.log_auth_event(
             "login_initiated",
@@ -187,12 +224,38 @@ class FastAPIAuthMiddleware(BaseHTTPMiddleware):
         return response
 
 
-async def fastapi_auth_callback(request: Request, service_base_url: str, callback_path: str = "/auth/callback") -> Any:
+async def fastapi_auth_callback(
+    request: Request, service_base_url: str, callback_path: str = "/auth/callback"
+) -> Any:
     """Handle OAuth callback for FastAPI."""
     redirect_uri = get_redirect_uri(service_base_url, callback_path)
     session = getattr(request, "session", None)
-    state = session.get("oauth_state") if session else request.cookies.get("oauth_state")
-    redirect_url = session.get("oauth_redirect", "/") if session else request.cookies.get("oauth_redirect", "/")
+    state = (
+        session.get("oauth_state") if session else request.cookies.get("oauth_state")
+    )
+    csrf_token = (
+        session.get("oauth_csrf") if session else request.cookies.get("oauth_csrf")
+    )
+    redirect_url = (
+        session.get("oauth_redirect", "/")
+        if session
+        else request.cookies.get("oauth_redirect", "/")
+    )
+
+    # Verify CSRF token
+    if not csrf_token:
+        AuditLogger.log_auth_event(
+            "callback_failed",
+            success=False,
+            error="CSRF token missing - potential session fixation attack",
+            path=request.url.path,
+        )
+        # Clear session
+        if session is not None:
+            session.clear()
+        raise HTTPException(
+            status_code=403, detail="Invalid session - please try again"
+        )
 
     if not state:
         AuditLogger.log_auth_event(
@@ -231,11 +294,14 @@ async def fastapi_auth_callback(request: Request, service_base_url: str, callbac
                 error=f"Email domain not allowed: {email}",
                 path=request.url.path,
             )
-            raise HTTPException(status_code=403, detail=f"Access restricted to {ALLOWED_DOMAIN} domain")
+            raise HTTPException(
+                status_code=403, detail=f"Access restricted to {ALLOWED_DOMAIN} domain"
+            )
 
         # Store user info in session or cookies
-        from fastapi.responses import RedirectResponse
         import json
+
+        from fastapi.responses import RedirectResponse
 
         user_info = {
             "email": email,
@@ -251,6 +317,7 @@ async def fastapi_auth_callback(request: Request, service_base_url: str, callbac
             session["user_email"] = email
             session["user_info"] = user_info
             session.pop("oauth_state", None)
+            session.pop("oauth_csrf", None)
             session.pop("oauth_redirect", None)
         else:
             # Fallback to cookies if no session middleware
@@ -269,6 +336,7 @@ async def fastapi_auth_callback(request: Request, service_base_url: str, callbac
                 secure=os.getenv("ENVIRONMENT") == "production",
             )
             response.delete_cookie("oauth_state")
+            response.delete_cookie("oauth_csrf")
             response.delete_cookie("oauth_redirect")
 
         AuditLogger.log_auth_event(
