@@ -2,14 +2,28 @@
 
 import logging
 import os
+import sys
 from typing import Any
+
+# Add shared directory to path
+sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
+from shared.utils.error_responses import (
+    ErrorCode,
+    internal_error,
+    not_found_error,
+    validation_error,
+)
 from sqlalchemy import func
 from utils.audit import AuditAction, log_agent_action
 from utils.idempotency import require_idempotency
-from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
+from utils.pagination import (
+    build_pagination_response,
+    get_pagination_params,
+    paginate_query,
+)
 from utils.permissions import require_admin
 from utils.validation import validate_agent_name, validate_display_name
 
@@ -34,10 +48,14 @@ async def list_agents(request: Request) -> dict[str, Any]:
     """
     try:
         # Check if we should include deleted agents
-        include_deleted = request.query_params.get("include_deleted", "false").lower() == "true"
+        include_deleted = (
+            request.query_params.get("include_deleted", "false").lower() == "true"
+        )
 
         # Get pagination parameters - pass request for query params
-        page, per_page = get_pagination_params(request, default_per_page=50, max_per_page=100)
+        page, per_page = get_pagination_params(
+            request, default_per_page=50, max_per_page=100
+        )
 
         with get_db_session() as session:
             # Get agents from database, filtering deleted by default
@@ -51,12 +69,14 @@ async def list_agents(request: Request) -> dict[str, Any]:
             # Batch load group counts for all agents in ONE query using GROUP BY
             # This prevents N+1 query problem
             agent_names = [a.agent_name for a in agents]
-            group_counts_query = session.query(
-                AgentGroupPermission.agent_name,
-                func.count(AgentGroupPermission.id)
-            ).filter(
-                AgentGroupPermission.agent_name.in_(agent_names)
-            ).group_by(AgentGroupPermission.agent_name).all()
+            group_counts_query = (
+                session.query(
+                    AgentGroupPermission.agent_name, func.count(AgentGroupPermission.id)
+                )
+                .filter(AgentGroupPermission.agent_name.in_(agent_names))
+                .group_by(AgentGroupPermission.agent_name)
+                .all()
+            )
 
             # Build lookup dictionary: agent_name -> count
             group_counts = dict(group_counts_query)
@@ -66,26 +86,30 @@ async def list_agents(request: Request) -> dict[str, Any]:
             for agent in agents:
                 group_count = group_counts.get(agent.agent_name, 0)
 
-                agents_data.append({
-                    "name": agent.agent_name,
-                    "display_name": agent.display_name,
-                    "aliases": agent.get_aliases(),
-                    "description": agent.description or "No description",
-                    "is_public": agent.is_public,
-                    "requires_admin": agent.requires_admin,
-                    "is_system": agent.is_system,
-                    "is_deleted": agent.is_deleted,
-                    "authorized_groups": group_count,
-                })
+                agents_data.append(
+                    {
+                        "name": agent.agent_name,
+                        "display_name": agent.display_name,
+                        "aliases": agent.get_aliases(),
+                        "description": agent.description or "No description",
+                        "is_public": agent.is_public,
+                        "requires_admin": agent.requires_admin,
+                        "is_system": agent.is_system,
+                        "is_deleted": agent.is_deleted,
+                        "authorized_groups": group_count,
+                    }
+                )
 
             # Build paginated response
-            response = build_pagination_response(agents_data, total_count, page, per_page)
+            response = build_pagination_response(
+                agents_data, total_count, page, per_page
+            )
             # Keep "agents" key for backward compatibility
             return {"agents": response["items"], "pagination": response["pagination"]}
 
     except Exception as e:
         logger.error(f"Error listing agents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"})
+        raise HTTPException(status_code=500, detail=internal_error(str(e)))
 
 
 @router.post("/register")
@@ -111,8 +135,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
         is_valid, error_msg = validate_agent_name(agent_name)
         if not is_valid:
             raise HTTPException(
-                status_code=400,
-                detail={"error": error_msg, "error_code": "VALIDATION_ERROR"}
+                status_code=400, detail=validation_error(error_msg, field="name")
             )
 
         # Validate display name (optional)
@@ -120,7 +143,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
         if not is_valid:
             raise HTTPException(
                 status_code=400,
-                detail={"error": error_msg, "error_code": "VALIDATION_ERROR"}
+                detail=validation_error(error_msg, field="display_name"),
             )
 
         with get_db_session() as session:
@@ -128,21 +151,31 @@ async def register_agent(request: Request) -> dict[str, Any]:
             with session.begin():
                 # Check if agent exists (deleted or not)
                 # Use row-level locking to prevent race conditions
-                agent = session.query(AgentMetadata).filter(
-                    AgentMetadata.agent_name == agent_name
-                ).with_for_update().first()
+                agent = (
+                    session.query(AgentMetadata)
+                    .filter(AgentMetadata.agent_name == agent_name)
+                    .with_for_update()
+                    .first()
+                )
 
                 # Validate uniqueness: ensure no non-deleted agent with same name exists
                 if agent and agent.is_deleted:
                     # Before reactivating, double-check no active agent with same name exists
-                    existing_active = session.query(AgentMetadata).filter(
-                        AgentMetadata.agent_name == agent_name,
-                        not AgentMetadata.is_deleted
-                    ).first()
+                    existing_active = (
+                        session.query(AgentMetadata)
+                        .filter(
+                            AgentMetadata.agent_name == agent_name,
+                            not AgentMetadata.is_deleted,
+                        )
+                        .first()
+                    )
                     if existing_active:
                         raise HTTPException(
                             status_code=409,
-                            detail={"error": f"Agent '{agent_name}' already exists", "error_code": "AGENT_EXISTS"}
+                            detail={
+                                "error": f"Agent '{agent_name}' already exists",
+                                "error_code": "AGENT_EXISTS",
+                            },
                         )
 
                 # Check for conflict: non-deleted agent with same name
@@ -182,17 +215,15 @@ async def register_agent(request: Request) -> dict[str, Any]:
 
                 session.commit()
 
-        return {
-            "success": True,
-            "agent": agent_name,
-            "action": action
-        }
+        return {"success": True, "agent": agent_name, "action": action}
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error registering agent: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"})
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
 
 
 @router.get("/{agent_name}")
@@ -205,22 +236,30 @@ async def get_agent_details(agent_name: str) -> dict[str, Any]:
 
         with get_db_session() as session:
             # Get direct user permissions
-            user_perms = session.query(AgentPermission).filter(
-                AgentPermission.agent_name == agent_name
-            ).all()
+            user_perms = (
+                session.query(AgentPermission)
+                .filter(AgentPermission.agent_name == agent_name)
+                .all()
+            )
             authorized_user_ids = [p.slack_user_id for p in user_perms]
 
             # Get group permissions
-            group_perms = session.query(AgentGroupPermission).filter(
-                AgentGroupPermission.agent_name == agent_name
-            ).all()
+            group_perms = (
+                session.query(AgentGroupPermission)
+                .filter(AgentGroupPermission.agent_name == agent_name)
+                .all()
+            )
             authorized_group_names = [p.group_name for p in group_perms]
 
             # Get agent metadata for enabled state and system status
-            metadata = session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == agent_name
-            ).first()
-            is_enabled = metadata.is_public if metadata else False  # Default to disabled
+            metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
+            is_enabled = (
+                metadata.is_public if metadata else False
+            )  # Default to disabled
             is_system = metadata.is_system if metadata else False
 
         details = {
@@ -238,7 +277,9 @@ async def get_agent_details(agent_name: str) -> dict[str, Any]:
 
 
 @router.delete("/{agent_name}")
-async def delete_agent(agent_name: str, admin_check: None = Depends(require_admin)) -> dict[str, Any]:
+async def delete_agent(
+    agent_name: str, admin_check: None = Depends(require_admin)
+) -> dict[str, Any]:
     """Soft delete an agent (mark as deleted, don't remove from database).
 
     System agents cannot be deleted.
@@ -253,21 +294,25 @@ async def delete_agent(agent_name: str, admin_check: None = Depends(require_admi
     """
     try:
         with get_db_session() as session:
-            agent_metadata = session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == agent_name
-            ).first()
+            agent_metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
 
             if not agent_metadata:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"Agent '{agent_name}' not found"
+                    status_code=404, detail=not_found_error("Agent", agent_name)
                 )
 
             # Prevent deleting system agents
             if agent_metadata.is_system:
                 raise HTTPException(
                     status_code=403,
-                    detail="Cannot delete system agents"
+                    detail={
+                        "error": "Cannot delete system agents",
+                        "error_code": ErrorCode.FORBIDDEN,
+                    },
                 )
 
             # Soft delete: mark as deleted
@@ -281,20 +326,22 @@ async def delete_agent(agent_name: str, admin_check: None = Depends(require_admi
             log_agent_action(
                 AuditAction.AGENT_DELETE,
                 agent_name,
-                {"display_name": agent_metadata.display_name}
+                {"display_name": agent_metadata.display_name},
             )
 
             return {
                 "success": True,
                 "data": {"agent_name": agent_name},
-                "message": f"Agent '{agent_name}' marked as deleted"
+                "message": f"Agent '{agent_name}' marked as deleted",
             }
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error deleting agent: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"})
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
 
 
 @router.get("/{agent_name}/usage")
@@ -309,7 +356,9 @@ async def get_agent_usage(agent_name: str) -> dict[str, Any]:
             response = await client.get(f"{agent_service_url}/api/metrics", timeout=5)
 
         if response.status_code != 200:
-            raise HTTPException(status_code=503, detail={"error": "Unable to fetch usage stats"})
+            raise HTTPException(
+                status_code=503, detail={"error": "Unable to fetch usage stats"}
+            )
 
         data = response.json()
         agent_invocations = data.get("agent_invocations", {})
@@ -331,14 +380,18 @@ async def get_agent_usage(agent_name: str) -> dict[str, Any]:
 
 
 @router.post("/{agent_name}/toggle")
-async def toggle_agent(agent_name: str, admin_check: None = Depends(require_admin)) -> dict[str, Any]:
+async def toggle_agent(
+    agent_name: str, admin_check: None = Depends(require_admin)
+) -> dict[str, Any]:
     """Toggle agent enabled/disabled state."""
     try:
         with get_db_session() as session:
             # Get or create agent metadata
-            agent_metadata = session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == agent_name
-            ).first()
+            agent_metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
 
             if not agent_metadata:
                 # Create new metadata entry, default to enabled (is_public=True)
@@ -351,8 +404,7 @@ async def toggle_agent(agent_name: str, admin_check: None = Depends(require_admi
             # Prevent disabling system agents
             if agent_metadata.is_system and agent_metadata.is_public:
                 raise HTTPException(
-                    status_code=403,
-                    detail="Cannot disable system agents"
+                    status_code=403, detail="Cannot disable system agents"
                 )
 
             # Toggle the state
@@ -368,4 +420,6 @@ async def toggle_agent(agent_name: str, admin_check: None = Depends(require_admi
         raise
     except Exception as e:
         logger.error(f"Error toggling agent: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"})
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
