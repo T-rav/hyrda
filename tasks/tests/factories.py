@@ -106,7 +106,6 @@ class FlaskAppFactory:
 
         mock_settings = MagicMock(spec=TasksSettings)
         mock_settings.secret_key = "test-secret-key"
-        mock_settings.flask_env = "testing"
         mock_settings.server_base_url = "http://localhost:5001"
         app.get_settings = Mock(return_value=mock_settings)
 

@@ -13,13 +13,13 @@ class FlaskSettingsMockFactory:
 
     @staticmethod
     def create_test_settings() -> Mock:
-        """Create test Flask settings mock"""
-        return Mock(secret_key="test-secret", flask_env="testing")
+        """Create test settings mock"""
+        return Mock(secret_key="test-secret")
 
     @staticmethod
     def create_production_settings() -> Mock:
-        """Create production-like Flask settings mock"""
-        return Mock(secret_key="production-secret-key", flask_env="production")
+        """Create production-like settings mock"""
+        return Mock(secret_key="production-secret-key")
 
 
 class DatabaseQueryMockFactory:

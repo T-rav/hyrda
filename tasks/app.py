@@ -171,7 +171,7 @@ def main():
         "app:app",
         host=settings.host,
         port=settings.port,
-        reload=(settings.flask_env == "development"),
+        reload=(os.getenv("ENVIRONMENT", "development") == "development"),
         log_level="info",
     )
 
