@@ -95,7 +95,11 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
             ):
                 extracted_text = await extract_office_text(content, file_name, "pptx")
 
-            elif file_type.startswith("text/") or file_name.lower().endswith(".txt"):
+            elif (
+                file_type.startswith("text/")
+                or file_name.lower().endswith((".txt", ".vtt", ".srt"))
+                or "subrip" in file_type.lower()
+            ):
                 try:
                     extracted_text = content.decode("utf-8")
                 except UnicodeDecodeError:
@@ -105,10 +109,14 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
                 logger.info(f"Unsupported file type: {file_type}")
                 extracted_text = f"[Unsupported file type: {file_name}]"
 
-            if extracted_text and not extracted_text.startswith("["):
-                # Add file header
-                all_content.append(f"\n\n=== Content from {file_name} ===\n")
-                all_content.append(extracted_text)
+            if extracted_text:
+                # Add file header (for both successful extraction and errors)
+                if not extracted_text.startswith("["):
+                    all_content.append(f"\n\n=== Content from {file_name} ===\n")
+                    all_content.append(extracted_text)
+                else:
+                    # Include error messages so users know processing failed
+                    all_content.append(f"\n\n{extracted_text}")
 
         except Exception as e:
             logger.error(f"Error processing file {file_name}: {e}")

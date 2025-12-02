@@ -151,18 +151,20 @@ async def extract_office_text(content: bytes, file_name: str, file_type: str) ->
     Args:
         content: File content as bytes
         file_name: Name of the file
-        file_type: Type of file (docx, xlsx, pptx)
+        file_type: Type of file (docx, xlsx, pptx) or full mimetype
 
     Returns:
         Extracted text content
     """
     content_stream = io.BytesIO(content)
 
-    if file_type == "docx":
+    # Normalize file type - handle both simple types and full mimetypes
+    file_type_lower = file_type.lower()
+    if "wordprocessingml" in file_type_lower or file_type_lower == "docx":
         return await extract_word_text(content_stream, file_name)
-    elif file_type == "xlsx":
+    elif "spreadsheetml" in file_type_lower or file_type_lower == "xlsx":
         return await extract_excel_text(content_stream, file_name)
-    elif file_type == "pptx":
+    elif "presentationml" in file_type_lower or file_type_lower == "pptx":
         return await extract_powerpoint_text(content_stream, file_name)
     else:
         return f"[Unsupported Office file type: {file_type}]"

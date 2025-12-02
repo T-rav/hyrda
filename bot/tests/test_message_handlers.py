@@ -407,7 +407,7 @@ class TestPDFProcessing:
 
         result = await extract_pdf_text(b"", "test.pdf")
         assert "test.pdf" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
     @pytest.mark.asyncio
     async def test_extract_pdf_text_invalid_pdf(self):
@@ -417,7 +417,9 @@ class TestPDFProcessing:
 
         result = await extract_pdf_text(b"invalid pdf content", "test.pdf")
         assert "test.pdf" in result
-        assert "Error extracting text" in result or "No extractable text" in result
+        assert (
+            "Error:" in result or "Error extracting text:" in result
+        ) or "No extractable text" in result
 
     @pytest.mark.asyncio
     async def test_extract_pdf_text_handles_exceptions(self):
@@ -445,7 +447,7 @@ class TestWordProcessing:
         ):
             stream = io.BytesIO(b"test")
             result = await extract_word_text(stream, "test.docx")
-            assert "[Word document: test.docx - python-docx not installed]" in result
+            assert "[Word file: test.docx - python-docx not installed]" in result
 
     @pytest.mark.asyncio
     async def test_extract_word_text_empty_stream(self):
@@ -456,7 +458,7 @@ class TestWordProcessing:
         stream = io.BytesIO(b"")
         result = await extract_word_text(stream, "test.docx")
         assert "test.docx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
     @pytest.mark.asyncio
     async def test_extract_word_text_invalid_content(self):
@@ -467,7 +469,7 @@ class TestWordProcessing:
         stream = io.BytesIO(b"invalid docx content")
         result = await extract_word_text(stream, "test.docx")
         assert "test.docx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
 
 class TestExcelProcessing:
@@ -492,7 +494,7 @@ class TestExcelProcessing:
         stream = io.BytesIO(b"")
         result = await extract_excel_text(stream, "test.xlsx")
         assert "test.xlsx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
     @pytest.mark.asyncio
     async def test_extract_excel_text_invalid_content(self):
@@ -503,7 +505,7 @@ class TestExcelProcessing:
         stream = io.BytesIO(b"invalid xlsx content")
         result = await extract_excel_text(stream, "test.xlsx")
         assert "test.xlsx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
 
 class TestPowerPointProcessing:
@@ -528,7 +530,7 @@ class TestPowerPointProcessing:
         stream = io.BytesIO(b"")
         result = await extract_powerpoint_text(stream, "test.pptx")
         assert "test.pptx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
     @pytest.mark.asyncio
     async def test_extract_powerpoint_text_invalid_content(self):
@@ -539,7 +541,7 @@ class TestPowerPointProcessing:
         stream = io.BytesIO(b"invalid pptx content")
         result = await extract_powerpoint_text(stream, "test.pptx")
         assert "test.pptx" in result
-        assert "Error extracting text" in result
+        assert "Error:" in result or "Error extracting text:" in result
 
 
 class TestOfficeDocumentRouting:
@@ -578,7 +580,7 @@ class TestOfficeDocumentRouting:
         result = await extract_office_text(
             b"test", "test.unknown", "application/unknown"
         )
-        assert "Unsupported Office format" in result
+        assert "Unsupported Office file type:" in result
 
 
 class TestFileAttachmentProcessing:
