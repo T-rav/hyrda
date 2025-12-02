@@ -2,11 +2,123 @@
 
 import asyncio
 import logging
+import time
+from enum import Enum
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+class CircuitState(Enum):
+    """Circuit breaker states."""
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests immediately
+    HALF_OPEN = "half_open"  # Testing if service recovered
+
+
+class CircuitBreaker:
+    """Simple circuit breaker to prevent cascading failures.
+
+    - CLOSED: Normal operation, requests pass through
+    - OPEN: Service is failing, requests fail immediately
+    - HALF_OPEN: Testing recovery, allow limited requests
+
+    Args:
+        failure_threshold: Number of failures before opening circuit
+        recovery_timeout: Seconds to wait before trying half-open
+        success_threshold: Successes needed in half-open to close circuit
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout: float = 60.0,
+        success_threshold: int = 2,
+    ):
+        """Initialize circuit breaker."""
+        self.failure_threshold = failure_threshold
+        self.recovery_timeout = recovery_timeout
+        self.success_threshold = success_threshold
+
+        self.state = CircuitState.CLOSED
+        self.failure_count = 0
+        self.success_count = 0
+        self.last_failure_time: float | None = None
+
+    def call(self, func):
+        """Decorator to wrap function with circuit breaker."""
+
+        async def wrapper(*args, **kwargs):
+            # Check if circuit is open
+            if self.state == CircuitState.OPEN:
+                # Check if recovery timeout has passed
+                if (
+                    self.last_failure_time
+                    and time.time() - self.last_failure_time >= self.recovery_timeout
+                ):
+                    logger.info("Circuit breaker: Entering HALF_OPEN state")
+                    self.state = CircuitState.HALF_OPEN
+                    self.success_count = 0
+                else:
+                    raise CircuitBreakerError(
+                        f"Circuit breaker OPEN - agent service unavailable (failing fast). "
+                        f"Will retry in {self.recovery_timeout}s"
+                    )
+
+            try:
+                # Call the actual function
+                result = await func(*args, **kwargs)
+
+                # Success! Update state
+                if self.state == CircuitState.HALF_OPEN:
+                    self.success_count += 1
+                    logger.info(
+                        f"Circuit breaker: Success in HALF_OPEN ({self.success_count}/{self.success_threshold})"
+                    )
+                    if self.success_count >= self.success_threshold:
+                        logger.info(
+                            "Circuit breaker: Closing circuit (service recovered)"
+                        )
+                        self.state = CircuitState.CLOSED
+                        self.failure_count = 0
+                elif self.state == CircuitState.CLOSED:
+                    # Reset failure count on success
+                    self.failure_count = 0
+
+                return result
+
+            except (httpx.TimeoutException, httpx.ConnectError, AgentClientError):
+                # Failure! Update state
+                self.failure_count += 1
+                self.last_failure_time = time.time()
+
+                if self.state == CircuitState.HALF_OPEN:
+                    # Failed in half-open, go back to open
+                    logger.warning(
+                        "Circuit breaker: Failed in HALF_OPEN, reopening circuit"
+                    )
+                    self.state = CircuitState.OPEN
+                    self.success_count = 0
+                elif self.state == CircuitState.CLOSED:
+                    if self.failure_count >= self.failure_threshold:
+                        logger.error(
+                            f"Circuit breaker: Opening circuit after {self.failure_count} failures"
+                        )
+                        self.state = CircuitState.OPEN
+
+                # Re-raise the original exception
+                raise
+
+        return wrapper
+
+
+class CircuitBreakerError(Exception):
+    """Raised when circuit breaker is open."""
+
+    pass
 
 
 class AgentClient:
@@ -26,6 +138,13 @@ class AgentClient:
         self.max_retries = 3
         self.retry_delay = 1.0  # Start with 1 second
 
+        # Circuit breaker to prevent cascading failures
+        self.circuit_breaker = CircuitBreaker(
+            failure_threshold=5,  # Open circuit after 5 failures
+            recovery_timeout=60.0,  # Wait 60s before trying again
+            success_threshold=2,  # Need 2 successes to close circuit
+        )
+
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create persistent HTTP client."""
         if self._client is None or self._client.is_closed:
@@ -41,7 +160,28 @@ class AgentClient:
     async def invoke_agent(
         self, agent_name: str, query: str, context: dict[str, Any]
     ) -> dict[str, Any]:
-        """Invoke an agent via HTTP.
+        """Invoke an agent via HTTP with circuit breaker protection.
+
+        Args:
+            agent_name: Name of agent to invoke
+            query: User query
+            context: Context dictionary for agent
+
+        Returns:
+            Agent execution result with response and metadata
+
+        Raises:
+            AgentClientError: If agent execution fails
+            CircuitBreakerError: If circuit breaker is open
+        """
+        # Wrap with circuit breaker
+        wrapped_func = self.circuit_breaker.call(self._invoke_agent_internal)
+        return await wrapped_func(agent_name, query, context)
+
+    async def _invoke_agent_internal(
+        self, agent_name: str, query: str, context: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Internal method that performs the actual agent invocation.
 
         Args:
             agent_name: Name of agent to invoke
@@ -139,6 +279,20 @@ class AgentClient:
             logger.error(f"Error listing agents: {e}", exc_info=True)
             raise AgentClientError(f"Failed to list agents: {str(e)}") from e
 
+    def get_circuit_breaker_status(self) -> dict[str, Any]:
+        """Get current circuit breaker status for monitoring.
+
+        Returns:
+            Dictionary with circuit breaker state and metrics
+        """
+        return {
+            "state": self.circuit_breaker.state.value,
+            "failure_count": self.circuit_breaker.failure_count,
+            "success_count": self.circuit_breaker.success_count,
+            "last_failure_time": self.circuit_breaker.last_failure_time,
+            "is_open": self.circuit_breaker.state == CircuitState.OPEN,
+        }
+
     def _prepare_context(self, context: dict[str, Any]) -> dict[str, Any]:
         """Prepare context for serialization.
 
@@ -163,7 +317,7 @@ class AgentClient:
                 continue
 
             # Keep simple types
-            if isinstance(value, (str, int, float, bool, type(None), list, dict)):
+            if isinstance(value, (str, int, float, bool, type(None), list, dict)):  # noqa: UP038
                 serializable[key] = value
 
         return serializable

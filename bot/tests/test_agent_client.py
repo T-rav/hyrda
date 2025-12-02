@@ -172,8 +172,11 @@ class TestAgentClientInitialization:
         """Test initialization with default base URL"""
         client = AgentClient()
         assert client.base_url == "http://agent_service:8000"
-        assert client.timeout.read == 300.0
-        assert client.timeout.connect == 10.0
+        assert client.timeout.read == 30.0  # Reduced from 300.0 to fail fast
+        assert client.timeout.connect == 5.0  # Reduced from 10.0
+        # Check circuit breaker is initialized
+        assert client.circuit_breaker is not None
+        assert client.circuit_breaker.failure_threshold == 5
 
     def test_init_custom_base_url(self):
         """Test initialization with custom base URL"""
