@@ -5,6 +5,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
+from task_types import JobExecutionResult
+
 from config.settings import TasksSettings
 
 logger = logging.getLogger(__name__)
@@ -34,11 +36,11 @@ class BaseJob(ABC):
         return self.job_id
 
     @abstractmethod
-    async def _execute_job(self) -> dict[str, Any]:
+    async def _execute_job(self) -> JobExecutionResult:
         """Execute the actual job logic. Must be implemented by subclasses."""
         pass
 
-    async def execute(self) -> dict[str, Any]:
+    async def execute(self) -> JobExecutionResult:
         """Execute the job with error handling and logging."""
         start_time = datetime.utcnow()
         logger.info(f"Starting job: {self.JOB_NAME} (ID: {self.job_id})")
