@@ -1,12 +1,13 @@
-"""User management endpoints."""
+"""User management endpoints - FastAPI version."""
 
 import logging
 import os
 from collections import defaultdict
+from typing import Any
 
-from flask import Blueprint, Response, jsonify, request, session
-from flask.views import MethodView
+from fastapi import APIRouter, Depends, HTTPException, Request
 from models import AgentPermission, PermissionGroup, User, UserGroup, get_db_session
+from pydantic import BaseModel, Field
 from utils.errors import error_response
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
 from utils.permissions import check_admin, require_admin
@@ -14,37 +15,53 @@ from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-users_bp = Blueprint("users", __name__, url_prefix="/api/users")
+# Create router
+router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-@users_bp.route("/me", methods=["GET"])
+# Pydantic models for request/response
+class UserAdminUpdate(BaseModel):
+    is_admin: bool
+
+
+class GrantPermissionRequest(BaseModel):
+    agent_name: str = Field(..., max_length=100)
+    granted_by: str = "admin"
+
+
+class SyncUsersRequest(BaseModel):
+    provider: str | None = None
+
+
+@router.get("/me")
 @rate_limit(max_requests=100, window_seconds=60)  # 100 requests per minute per IP
-def get_current_user() -> Response:
+async def get_current_user(request: Request) -> dict[str, Any]:
     """Get current authenticated user info.
 
     Rate limited to 100 requests per minute per IP address.
     """
     try:
-        user_email = session.get("user_email")
-        user_info = session.get("user_info", {})
+        user_email = request.session.get("user_email")
+        user_info = request.session.get("user_info", {})
 
         if not user_email:
-            return error_response("Not authenticated", 401, "NOT_AUTHENTICATED")
+            raise HTTPException(status_code=401, detail="Not authenticated")
 
-        return jsonify({
+        return {
             "email": user_email,
             "name": user_info.get("name", ""),
             "picture": user_info.get("picture", ""),
-        })
+        }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting current user: {e}", exc_info=True)
-        return error_response(str(e), 500, "INTERNAL_ERROR")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@users_bp.route("", methods=["GET"])
-def list_users() -> Response:
+@router.get("")
+async def list_users(request: Request) -> dict[str, Any]:
     """List all users from security database with their group memberships.
 
     Query Parameters:
@@ -101,223 +118,197 @@ def list_users() -> Response:
             # Build paginated response
             response = build_pagination_response(users_data, total_count, page, per_page)
             # Keep "users" key for backward compatibility
-            return jsonify({"users": response["items"], "pagination": response["pagination"]})
+            return {"users": response["items"], "pagination": response["pagination"]}
 
     except Exception as e:
         logger.error(f"Error listing users: {e}", exc_info=True)
-        return error_response(str(e), 500, "INTERNAL_ERROR")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@users_bp.route("/sync", methods=["POST"])
-@require_admin
-def sync_users() -> Response:
+@router.post("/sync")
+async def sync_users(request: Request, body: SyncUsersRequest | None = None) -> dict[str, Any]:
     """Sync users from configured identity provider to security database.
 
     Provider is configured via USER_MANAGEMENT_PROVIDER environment variable
     (defaults to 'slack'). Supports: slack, google.
     """
+    # Check admin permission
+    await require_admin(request)
+
     try:
         from services.user_sync import sync_users_from_provider
 
         # Get provider type from request body or use configured default
-        provider_type = request.json.get("provider") if request.json else None
+        provider_type = body.provider if body else None
 
         stats = sync_users_from_provider(provider_type=provider_type)
 
         provider_name = provider_type or os.getenv("USER_MANAGEMENT_PROVIDER", "slack")
-        return jsonify({
+        return {
             "status": "success",
             "message": f"User sync from {provider_name} completed",
             "stats": stats,
-        })
+        }
 
     except ValueError as e:
         # Configuration error
         logger.error(f"Configuration error during user sync: {e}")
-        return jsonify({
-            "status": "error",
-            "message": str(e),
-        }), 400
+        raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
         logger.error(f"Error syncing users: {e}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "message": f"Sync failed: {str(e)}",
-        }), 500
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
-class UserAdminAPI(MethodView):
-    """User admin status management using MethodView."""
+@router.put("/{user_id}/admin")
+async def update_user_admin_status(request: Request, user_id: int, body: UserAdminUpdate) -> dict[str, Any]:
+    """Update user admin status.
 
-    def put(self, user_id: int) -> Response:
-        """Update user admin status.
+    Special case: If no admins exist, anyone can promote the first admin.
+    Otherwise, only admins can change admin status.
+    """
+    try:
+        new_admin_status = body.is_admin
 
-        Special case: If no admins exist, anyone can promote the first admin.
-        Otherwise, only admins can change admin status.
-        """
-        try:
-            if not request.json or "is_admin" not in request.json:
-                return jsonify({"error": "Missing is_admin field"}), 400
+        with get_db_session() as db_session:
+            # Use explicit transaction with row-level locking to prevent race conditions
+            # This ensures only ONE request can bootstrap the first admin
+            with db_session.begin():
+                # Lock ALL admin records to prevent concurrent bootstrap
+                # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
+                existing_admins = db_session.query(User).filter(
+                    User.is_admin == True
+                ).with_for_update().all()
 
-            new_admin_status = request.json["is_admin"]
+                admin_count = len(existing_admins)
 
-            with get_db_session() as db_session:
-                # Use explicit transaction with row-level locking to prevent race conditions
-                # This ensures only ONE request can bootstrap the first admin
-                with db_session.begin():
-                    # Lock ALL admin records to prevent concurrent bootstrap
-                    # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
-                    existing_admins = db_session.query(User).filter(
-                        User.is_admin == True
-                    ).with_for_update().all()
+                # If no admins exist, allow bootstrap (first admin creation)
+                if admin_count == 0:
+                    logger.info("No admins exist - allowing bootstrap admin creation")
+                else:
+                    # Otherwise, require current user to be admin
+                    current_user_email = request.session.get("user_email")
+                    if not current_user_email:
+                        raise HTTPException(status_code=401, detail="Not authenticated")
 
-                    admin_count = len(existing_admins)
+                    current_user = db_session.query(User).filter(User.email == current_user_email).first()
+                    if not current_user or not current_user.is_admin:
+                        raise HTTPException(status_code=403, detail="Only admins can manage admin status")
 
-                    # If no admins exist, allow bootstrap (first admin creation)
-                    if admin_count == 0:
-                        logger.info("No admins exist - allowing bootstrap admin creation")
-                    else:
-                        # Otherwise, require current user to be admin
-                        current_user_email = session.get("user_email")
-                        if not current_user_email:
-                            return error_response("Not authenticated", 401, "NOT_AUTHENTICATED")
-
-                        current_user = db_session.query(User).filter(User.email == current_user_email).first()
-                        if not current_user or not current_user.is_admin:
-                            return error_response("Only admins can manage admin status", 403, "ADMIN_REQUIRED")
-
-                    # Update the target user (also with lock)
-                    user = db_session.query(User).filter(User.id == user_id).with_for_update().first()
-                    if not user:
-                        return error_response("User not found", 404, "USER_NOT_FOUND")
-
-                    user.is_admin = new_admin_status
-                    db_session.commit()
-
-                logger.info(f"User {user.email} admin status changed to {new_admin_status}")
-
-                return jsonify({
-                    "status": "success",
-                    "message": "User admin status updated",
-                    "user": {
-                        "id": user.id,
-                        "email": user.email,
-                        "is_admin": user.is_admin,
-                    }
-                })
-
-        except Exception as e:
-            logger.error(f"Error updating user admin status: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
-
-
-class UserPermissionsAPI(MethodView):
-    """User permission management using MethodView."""
-
-    def get(self, user_id: str) -> Response:
-        """Get user's direct agent permissions."""
-        try:
-            with get_db_session() as session:
-                # Get user's direct permissions
-                permissions = session.query(AgentPermission).filter(
-                    AgentPermission.slack_user_id == user_id
-                ).all()
-
-                agent_names = [p.agent_name for p in permissions]
-                return jsonify({"agent_names": agent_names})
-
-        except Exception as e:
-            logger.error(f"Error getting user permissions: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
-
-    @require_admin
-    def post(self, user_id: str) -> Response:
-        """Grant direct agent permission to user."""
-        try:
-            # Validate request body
-            data = request.json
-            if not data:
-                return error_response("Request body is required", 400, "INVALID_REQUEST")
-
-            agent_name = data.get("agent_name")
-            if not agent_name:
-                return error_response("agent_name is required", 400, "MISSING_FIELD")
-            if not isinstance(agent_name, str):
-                return error_response("agent_name must be a string", 400, "INVALID_TYPE")
-            if len(agent_name) > 100:
-                return error_response("agent_name too long (max 100 characters)", 400, "INVALID_LENGTH")
-
-            granted_by = data.get("granted_by", "admin")
-            if not isinstance(granted_by, str):
-                return error_response("granted_by must be a string", 400, "INVALID_TYPE")
-
-            with get_db_session() as session:
-                # Check if user exists
-                user = session.query(User).filter(
-                    User.slack_user_id == user_id
-                ).first()
+                # Update the target user (also with lock)
+                user = db_session.query(User).filter(User.id == user_id).with_for_update().first()
                 if not user:
-                    return jsonify({"error": "User not found"}), 404
+                    raise HTTPException(status_code=404, detail="User not found")
 
-                # Check if permission already exists
-                existing = session.query(AgentPermission).filter(
-                    AgentPermission.slack_user_id == user_id,
-                    AgentPermission.agent_name == agent_name
-                ).first()
-                if existing:
-                    return jsonify({"error": "Permission already granted"}), 400
+                user.is_admin = new_admin_status
+                db_session.commit()
 
-                # Grant permission
-                new_permission = AgentPermission(
-                    agent_name=agent_name,
-                    slack_user_id=user_id,
-                    granted_by=granted_by,
-                    permission_type="allow"
-                )
-                session.add(new_permission)
-                session.commit()
-                return jsonify({"status": "granted"})
+            logger.info(f"User {user.email} admin status changed to {new_admin_status}")
 
-        except Exception as e:
-            logger.error(f"Error granting user permission: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
+            return {
+                "status": "success",
+                "message": "User admin status updated",
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    "is_admin": user.is_admin,
+                }
+            }
 
-    @require_admin
-    def delete(self, user_id: str) -> Response:
-        """Revoke direct agent permission from user."""
-        try:
-            agent_name = request.args.get("agent_name")
-            if not agent_name:
-                return jsonify({"error": "agent_name is required"}), 400
-
-            with get_db_session() as session:
-                permission = session.query(AgentPermission).filter(
-                    AgentPermission.slack_user_id == user_id,
-                    AgentPermission.agent_name == agent_name
-                ).first()
-
-                if not permission:
-                    return jsonify({"error": "Permission not found"}), 404
-
-                session.delete(permission)
-                session.commit()
-                return jsonify({"status": "revoked"})
-
-        except Exception as e:
-            logger.error(f"Error revoking user permission: {e}", exc_info=True)
-            return jsonify({"error": str(e)}), 500
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating user admin status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-# Register MethodView routes
-users_bp.add_url_rule(
-    "/<int:user_id>/admin",
-    view_func=UserAdminAPI.as_view("user_admin"),
-    methods=["PUT"]
-)
+@router.get("/{user_id}/permissions")
+async def get_user_permissions(user_id: str) -> dict[str, list[str]]:
+    """Get user's direct agent permissions."""
+    try:
+        with get_db_session() as session:
+            # Get user's direct permissions
+            permissions = session.query(AgentPermission).filter(
+                AgentPermission.slack_user_id == user_id
+            ).all()
 
-users_bp.add_url_rule(
-    "/<string:user_id>/permissions",
-    view_func=UserPermissionsAPI.as_view("user_permissions"),
-    methods=["GET", "POST", "DELETE"]
-)
+            agent_names = [p.agent_name for p in permissions]
+            return {"agent_names": agent_names}
+
+    except Exception as e:
+        logger.error(f"Error getting user permissions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{user_id}/permissions")
+async def grant_user_permission(request: Request, user_id: str, body: GrantPermissionRequest) -> dict[str, str]:
+    """Grant direct agent permission to user."""
+    # Check admin permission
+    await require_admin(request)
+
+    try:
+        agent_name = body.agent_name
+        granted_by = body.granted_by
+
+        with get_db_session() as session:
+            # Check if user exists
+            user = session.query(User).filter(
+                User.slack_user_id == user_id
+            ).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            # Check if permission already exists
+            existing = session.query(AgentPermission).filter(
+                AgentPermission.slack_user_id == user_id,
+                AgentPermission.agent_name == agent_name
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail="Permission already granted")
+
+            # Grant permission
+            new_permission = AgentPermission(
+                agent_name=agent_name,
+                slack_user_id=user_id,
+                granted_by=granted_by,
+                permission_type="allow"
+            )
+            session.add(new_permission)
+            session.commit()
+            return {"status": "granted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error granting user permission: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{user_id}/permissions")
+async def revoke_user_permission(request: Request, user_id: str, agent_name: str | None = None) -> dict[str, str]:
+    """Revoke direct agent permission from user."""
+    # Check admin permission
+    await require_admin(request)
+
+    try:
+        if not agent_name:
+            raise HTTPException(status_code=400, detail="agent_name is required")
+
+        with get_db_session() as session:
+            permission = session.query(AgentPermission).filter(
+                AgentPermission.slack_user_id == user_id,
+                AgentPermission.agent_name == agent_name
+            ).first()
+
+            if not permission:
+                raise HTTPException(status_code=404, detail="Permission not found")
+
+            session.delete(permission)
+            session.commit()
+            return {"status": "revoked"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error revoking user permission: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

@@ -1,24 +1,27 @@
-"""Control Plane Flask application for agent and permission management.
+"""Control Plane FastAPI application for agent and permission management.
 
-Refactored architecture using Blueprints and MethodView for clean code organization.
+Migrated from Flask to FastAPI for consistency with other services.
 """
 
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+import uvicorn
 from dotenv import load_dotenv
-from flask import Flask, Response, redirect, request, send_from_directory, session
-from flask_cors import CORS
-from urllib.parse import urlparse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
 # Load environment from parent directory .env
 parent_env = Path(__file__).parent.parent / ".env"
 load_dotenv(parent_env)
 
 # CRITICAL: Ensure control_plane directory is first in sys.path
-# This prevents importing bot/models instead of control_plane/models
 control_plane_dir = str(Path(__file__).parent.absolute())
 if control_plane_dir not in sys.path:
     sys.path.insert(0, control_plane_dir)
@@ -44,49 +47,88 @@ root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
 
-# Global instances
-app = Flask(__name__, static_folder="ui/dist", static_url_path="")
 
-
-def create_app() -> Flask:
-    """Create and configure the Flask application."""
-    # Configure Flask
-    app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
-    app.config["ENV"] = os.getenv("FLASK_ENV", "development")
-    app.config["SESSION_COOKIE_SECURE"] = os.getenv("ENVIRONMENT") == "production"
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-    # Enable CORS
-    CORS(app)
-
-    # Register blueprints
-    register_blueprints()
-
-    # Ensure system data exists
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    # Startup
     ensure_all_users_group()
     ensure_help_agent_system()
+    logger.info("Control Plane application initialized")
 
-    logger.info("Control Plane application initialized on port 6001")
+    yield
+
+    # Shutdown
+    logger.info("Control Plane application shutting down")
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    # Create FastAPI app with lifespan management
+    app = FastAPI(
+        title="Control Plane",
+        description="Agent and permission management service",
+        version="1.0.0",
+        lifespan=lifespan,
+    )
+
+    # Add session middleware (required for OAuth)
+    secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=secret_key,
+        session_cookie="session",
+        max_age=3600 * 24 * 7,  # 7 days
+        same_site="lax",
+        https_only=(os.getenv("ENVIRONMENT") == "production"),
+    )
+
+    # Enable CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure based on needs
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Register routers
+    register_routers(app)
+
+    # Serve static files (React UI)
+    static_folder = Path(__file__).parent / "ui" / "dist"
+    if static_folder.exists():
+        app.mount("/static", StaticFiles(directory=str(static_folder)), name="static")
+
+        @app.get("/")
+        @app.get("/{path:path}")
+        async def serve_react_app(path: str = ""):
+            """Serve React app for all routes (SPA)."""
+            index_file = static_folder / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file)
+            return {"status": "UI not built"}
+
+    logger.info("Control Plane FastAPI application initialized on port 6001")
     return app
 
 
-def register_blueprints() -> None:
-    """Register all API blueprints."""
-    from api.agents import agents_bp
-    from api.auth import auth_bp
-    from api.groups import groups_bp
-    from api.health import health_bp
-    from api.users import users_bp
+def register_routers(app: FastAPI) -> None:
+    """Register all API routers."""
+    from api.agents import router as agents_router
+    from api.auth import router as auth_router
+    from api.groups import router as groups_router
+    from api.health import router as health_router
+    from api.users import router as users_router
 
-    # Register blueprints
-    app.register_blueprint(health_bp)
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(agents_bp)
-    app.register_blueprint(groups_bp)
-    app.register_blueprint(users_bp)
+    # Register routers
+    app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(agents_router)
+    app.include_router(groups_router)
+    app.include_router(users_router)
 
-    logger.info("Registered all API blueprints")
+    logger.info("Registered all API routers")
 
 
 def ensure_all_users_group() -> None:
@@ -132,166 +174,56 @@ def ensure_all_users_group() -> None:
 
             if new_members_added > 0:
                 session.commit()
-                logger.info(f"Added {new_members_added} users to 'all_users' group")
+                logger.info(f"Added {new_members_added} users to 'All Users' group")
 
     except Exception as e:
-        logger.error(f"Error ensuring 'all_users' group: {e}", exc_info=True)
+        logger.error(f"Error ensuring 'All Users' group: {e}")
 
 
 def ensure_help_agent_system() -> None:
-    """Ensure 'help' agent exists, is marked as system agent, and has all_users access."""
+    """Ensure the help agent system metadata exists."""
     try:
-        from models import AgentGroupPermission, AgentMetadata, get_db_session
+        from models import AgentMetadata, get_db_session
 
         with get_db_session() as session:
-            help_agent = session.query(AgentMetadata).filter(
+            existing_agent = session.query(AgentMetadata).filter(
                 AgentMetadata.agent_name == "help"
             ).first()
 
-            # Create help agent if it doesn't exist
-            if not help_agent:
+            if not existing_agent:
                 help_agent = AgentMetadata(
                     agent_name="help",
-                    display_name="Help Agent",
-                    description="System agent that provides help and guidance",
-                    is_public=True,
+                    display_name="Help",
+                    description="Built-in help command",
+                    prompt_template="",
+                    created_by="system",
                     is_system=True,
-                    requires_admin=False,
-                    is_deleted=False,
                 )
                 session.add(help_agent)
                 session.commit()
                 logger.info("Created 'help' system agent")
-            elif not help_agent.is_system:
-                # Mark existing agent as system
-                help_agent.is_system = True
-                help_agent.is_public = True
-                session.commit()
-                logger.info("Marked 'help' agent as system agent")
-
-            # Ensure help agent has all_users access
-            existing_permission = session.query(AgentGroupPermission).filter(
-                AgentGroupPermission.agent_name == "help",
-                AgentGroupPermission.group_name == "all_users"
-            ).first()
-
-            if not existing_permission:
-                permission = AgentGroupPermission(
-                    agent_name="help",
-                    group_name="all_users",
-                    granted_by="system",
-                    permission_type="allow"
-                )
-                session.add(permission)
-                session.commit()
-                logger.info("Granted 'all_users' access to 'help' agent")
 
     except Exception as e:
-        logger.error(f"Error ensuring help agent system status: {e}", exc_info=True)
+        logger.error(f"Error ensuring help agent: {e}")
 
 
-# Authentication middleware - protect all routes except health and auth
-@app.before_request
-def require_authentication():
-    """Require authentication for all routes except health checks and auth endpoints."""
-    from utils.auth import AuditLogger, get_flow, get_redirect_uri, verify_domain
+def main():
+    """Run the application."""
+    app = create_app()
+    port = int(os.getenv("CONTROL_PLANE_PORT", "6001"))
 
-    # Skip auth for health checks, auth endpoints, and static files
-    if (
-        request.path.startswith("/health")
-        or request.path.startswith("/api/health")
-        or request.path.startswith("/auth/")
-        or request.path.startswith("/assets/")
-        or request.path == "/"
-    ):
-        return None
+    logger.info(f"Starting Control Plane on port {port}")
+    logger.info(f"Dashboard available at: http://localhost:{port}/")
 
-    # Check if user is authenticated
-    if "user_email" in session and "user_info" in session:
-        email = session["user_email"]
-        # Verify domain on each request
-        if verify_domain(email):
-            return None
-        else:
-            # Domain changed or invalid
-            session.clear()
-            AuditLogger.log_auth_event(
-                "access_denied_domain",
-                email=email,
-                path=request.path,
-                success=False,
-                error=f"Email domain not allowed: {email}",
-            )
-
-    # Not authenticated - redirect to login
-    service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
-    redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
-    flow = get_flow(redirect_uri)
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="select_account",
+    # Run with uvicorn
+    uvicorn.run(
+        "app_fastapi:app",
+        host="0.0.0.0",
+        port=port,
+        reload=(os.getenv("FLASK_ENV") == "development"),
+        log_level="info",
     )
-    session["oauth_state"] = state
-
-    # Validate redirect URL to prevent open redirect attacks
-    # Allowlist of safe redirect path prefixes
-    ALLOWED_REDIRECT_PREFIXES = ["/", "/api/agents", "/api/groups", "/api/users"]
-
-    # Check for redirect_to query parameter (user-controlled)
-    redirect_to = request.args.get("redirect_to")
-    if redirect_to:
-        parsed_redirect = urlparse(redirect_to)
-
-        # Reject external redirects (different domain)
-        if parsed_redirect.netloc and parsed_redirect.netloc != request.host:
-            logger.warning(f"Blocked external redirect attempt: {redirect_to}")
-            redirect_url = "/"
-        # Check path against allowlist (prefix match)
-        elif parsed_redirect.path:
-            # Check if path starts with any allowed prefix
-            is_allowed = any(
-                parsed_redirect.path.startswith(prefix)
-                for prefix in ALLOWED_REDIRECT_PREFIXES
-            )
-            if is_allowed:
-                redirect_url = redirect_to
-            else:
-                logger.warning(f"Blocked redirect to non-allowlisted path: {parsed_redirect.path}")
-                redirect_url = "/"
-        else:
-            redirect_url = "/"
-    else:
-        # No explicit redirect_to, use referrer or default
-        redirect_url = request.referrer if request.referrer else "/"
-
-    session["oauth_redirect"] = redirect_url
-
-    AuditLogger.log_auth_event(
-        "login_initiated",
-        path=request.path,
-    )
-
-    return redirect(authorization_url)
-
-
-# Initialize app
-create_app()
-
-
-# Serve React UI (must be last to act as catch-all)
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_ui(path: str) -> Response:
-    """Serve React UI for all non-API routes."""
-    if path and Path(app.static_folder, path).exists():
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, "index.html")
 
 
 if __name__ == "__main__":
-    # For local development only - use gunicorn in production
-    if os.getenv("ENVIRONMENT") == "production":
-        logger.warning("Running Flask dev server in production! Use gunicorn instead.")
-    app.run(host="0.0.0.0", port=6001, debug=True)
+    main()

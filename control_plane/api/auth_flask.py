@@ -3,30 +3,29 @@
 import logging
 import os
 
-from fastapi import APIRouter, Request
-from fastapi.responses import Response
-from utils.auth import fastapi_auth_callback, fastapi_logout
+from flask import Blueprint, Response
+from utils.auth import flask_auth_callback, flask_logout
 from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/auth")
+# Create blueprint
+auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 
 
-@router.get("/callback")
+@auth_bp.route("/callback")
 @rate_limit(max_requests=10, window_seconds=60)  # 10 requests per minute per IP
-async def auth_callback(request: Request) -> Response:
+def auth_callback() -> Response:
     """Handle OAuth callback.
 
     Rate limited to prevent brute force attacks on OAuth flow.
     Limit: 10 requests per minute per IP address.
     """
     service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
-    return await fastapi_auth_callback(request, service_base_url, "/auth/callback")
+    return flask_auth_callback(service_base_url, "/auth/callback")
 
 
-@router.post("/logout")
-async def logout(request: Request) -> Response:
+@auth_bp.route("/logout", methods=["POST"])
+def logout() -> Response:
     """Handle logout."""
-    return await fastapi_logout(request)
+    return flask_logout()
