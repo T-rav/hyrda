@@ -9,16 +9,17 @@ agent changes without restart.
 
 import logging
 import time
-from typing import Any
+
+from bot_types import AgentInfo
 
 logger = logging.getLogger(__name__)
 
-_cached_agents: dict[str, dict[str, Any]] | None = None
+_cached_agents: dict[str, AgentInfo] | None = None
 _cache_timestamp: float = 0
 _cache_ttl_seconds: int = 300  # 5 minutes - agents refresh automatically
 
 
-def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]:
+def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
     """Get agent registry from agent-service API.
 
     Returns a dict mapping agent names/aliases to agent info.
@@ -99,7 +100,7 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
         return _cached_agents or {}
 
 
-def get_agent_info(agent_name: str) -> dict[str, Any] | None:
+def get_agent_info(agent_name: str) -> AgentInfo | None:
     """Get agent info by name or alias."""
     registry = get_agent_registry()
     return registry.get(agent_name.lower())
@@ -120,7 +121,7 @@ def clear_cache():
     _cache_timestamp = 0
 
 
-def route_command(text: str) -> tuple[dict[str, Any] | None, str, str | None]:
+def route_command(text: str) -> tuple[AgentInfo | None, str, str | None]:
     """Parse command and route to appropriate agent.
 
     Parses messages like:
