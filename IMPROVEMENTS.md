@@ -460,10 +460,40 @@ _engine = create_engine(
 
 ## 🟡 MEDIUM PRIORITY (Fix This Quarter)
 
-### 12. Inconsistent Error Response Formats
-**Files:** All services
-**Issue:** Different services return different error formats
-**Effort:** 6 hours
+### 12. ✅ Inconsistent Error Response Formats
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Unified error response format created
+**Files:** `shared/utils/error_responses.py`, `control_plane/api/agents.py` (example)
+
+**Original Issue:** Different services returned inconsistent error formats (plain strings, dicts with codes, dicts without codes)
+
+**Current Implementation:**
+Created standardized error response utility with:
+- `ErrorCode` class: Machine-readable error codes (UNAUTHORIZED, VALIDATION_ERROR, NOT_FOUND, INTERNAL_ERROR, etc.)
+- `error_response()`: Base function for all errors
+- Helper functions: `validation_error()`, `not_found_error()`, `unauthorized_error()`, `forbidden_error()`, `internal_error()`, `service_unavailable_error()`
+
+**Standard Format:**
+```json
+{
+  "error": "Human-readable message",
+  "error_code": "MACHINE_READABLE_CODE",
+  "details": {"field": "name"}  // Optional context
+}
+```
+
+**Applied To:**
+- control_plane/api/agents.py (demonstration)
+- Provides pattern for all other services to follow
+
+**Benefits:**
+- Consistent structure for client error handling
+- Machine-readable codes for automated processing
+- Optional details field for debugging context
+- Type-safe with Python type hints
+
+**Fixed:** 2025-12-02
+**Commit:** b155d80
 **Priority:** P2
 
 ### 13. ✅ Logging Leaks PII and Secrets
