@@ -1,10 +1,16 @@
 """Base class for all scheduled jobs."""
 
 import logging
+import sys
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
+
+# Add shared directory to path for imports
+sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
+
+from shared.utils.log_sanitizer import sanitize_dict
 
 from config.settings import TasksSettings
 from task_types import JobExecutionResult
@@ -76,22 +82,8 @@ class BaseJob(ABC):
             error_message = str(e)
             stack_trace = traceback.format_exc()
 
-            # Sanitize params (remove sensitive data like credentials)
-            safe_params = {
-                k: "***REDACTED***"
-                if any(
-                    sensitive in k.lower()
-                    for sensitive in [
-                        "password",
-                        "secret",
-                        "key",
-                        "token",
-                        "credential",
-                    ]
-                )
-                else v
-                for k, v in self.params.items()
-            }
+            # Sanitize params using shared utility (removes sensitive data)
+            safe_params = sanitize_dict(self.params)
 
             logger.error(
                 f"Job failed: {self.JOB_NAME} (ID: {self.job_id}, "
