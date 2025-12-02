@@ -171,6 +171,58 @@ class ContextQuality(TypedDict):
     warnings: list[str]  # List of quality warnings
 
 
+class TimeRange(TypedDict, total=False):
+    """Time range for query filtering.
+
+    Used in query intent classification and rewriting.
+    """
+
+    start: str | None  # Start date in YYYY-MM-DD format or None
+    end: str | None  # End date in YYYY-MM-DD format or None
+
+
+class QueryIntent(TypedDict):
+    """Query intent classification result.
+
+    Used by adaptive query rewriter to determine rewriting strategy.
+    """
+
+    type: str  # Intent type: "team_allocation", "project_info", "client_info", "document_search", "general"
+    entities: list[
+        str
+    ]  # Extracted entities (project names, client names, person names)
+    time_range: TimeRange  # Optional time range for filtering
+    confidence: float  # Confidence score (0.0-1.0)
+
+
+class QueryRewriteResult(TypedDict):
+    """Result from query rewriting operation.
+
+    Contains the rewritten query, filters, and strategy used.
+    """
+
+    query: str  # Rewritten query text
+    filters: dict[
+        str, Any
+    ]  # Filter criteria for vector search (record_type, dates, etc.)
+    strategy: (
+        str  # Rewriting strategy used: "hyde", "semantic", "expand", "lightweight"
+    )
+
+
+class QueryRewriterStats(TypedDict):
+    """Statistics from query rewriter operations.
+
+    Used for monitoring and debugging query rewriting performance.
+    """
+
+    total_queries: int  # Total number of queries rewritten
+    strategy_counts: dict[str, int]  # Count of each strategy used
+    avg_confidence: float  # Average confidence score
+    cache_hits: NotRequired[int]  # Optional cache hit count
+    cache_misses: NotRequired[int]  # Optional cache miss count
+
+
 # Export all types
 __all__ = [
     "ChunkMetadata",
@@ -181,4 +233,8 @@ __all__ = [
     "AgentInfo",
     "CircuitBreakerStatus",
     "ContextQuality",
+    "TimeRange",
+    "QueryIntent",
+    "QueryRewriteResult",
+    "QueryRewriterStats",
 ]
