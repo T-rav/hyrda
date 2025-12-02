@@ -46,7 +46,7 @@ jobs:
         pip install -e "tasks/[test]"
         pip install -e "control_plane/[test]"
 
-    - name: Run complete CI pipeline
+    - name: Run complete CI pipeline (parallel)
       env:
         SLACK_BOT_TOKEN: xoxb-test-token-for-ci
         SLACK_APP_TOKEN: xapp-test-token-for-ci
@@ -59,4 +59,4 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
-      run: make ci
+      run: make -j4 ci
