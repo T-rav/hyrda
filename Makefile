@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
+.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -68,7 +68,7 @@ help:
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
-	@echo "  ci              🚀 Run complete CI pipeline (linting + all tests + UI + Docker)"
+	@echo "  ci              🚀 Run complete CI pipeline (use -j4 for parallel: make -j4 ci)"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
 	@echo "  docker-build-bot Build single bot Docker image"
@@ -383,27 +383,35 @@ tasks-ui:
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
-ci: $(VENV) health-ui tasks-ui
-	@echo "$(GREEN)🚀 Running complete CI pipeline...$(RESET)"
-	@echo ""
-	@echo "$(BLUE)📝 Step 1/6: Linting bot code...$(RESET)"
+# CI sub-targets (can run in parallel with -j flag)
+ci-lint:
+	@echo "$(BLUE)📝 Linting bot code...$(RESET)"
 	@$(MAKE) lint-check
-	@echo ""
-	@echo "$(BLUE)🧪 Step 2/6: Running bot tests...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short || exit 1
-	@echo ""
-	@echo "$(BLUE)🎛️  Step 3/6: Running control plane tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
-	@echo ""
-	@echo "$(BLUE)⏰ Step 4/6: Running tasks service tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
-	@echo ""
-	@echo "$(BLUE)🎨 Step 5/6: Running React UI checks...$(RESET)"
+
+ci-test-bot: $(VENV)
+	@echo "$(BLUE)🧪 Running bot tests...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short
+
+ci-test-control-plane: $(VENV)
+	@echo "$(BLUE)🎛️  Running control plane tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
+
+ci-test-tasks: $(VENV)
+	@echo "$(BLUE)⏰ Running tasks service tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
+
+ci-ui: health-ui tasks-ui
+	@echo "$(BLUE)🎨 Running React UI checks...$(RESET)"
 	@cd $(BOT_DIR)/health_ui && npm run lint && npm run test:coverage
 	@cd $(PROJECT_ROOT_DIR)/tasks/ui && npm run lint && npm run test:coverage
-	@echo ""
-	@echo "$(BLUE)🐳 Step 6/6: Building Docker images...$(RESET)"
+
+ci-docker: health-ui tasks-ui
+	@echo "$(BLUE)🐳 Building Docker images...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
+
+# Main CI target - runs all checks
+# Use 'make ci' for sequential or 'make -j4 ci' for parallel execution
+ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker
 	@echo ""
 	@echo "$(GREEN)✅ ================================$(RESET)"
 	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"
