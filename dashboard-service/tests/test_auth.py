@@ -4,8 +4,9 @@ import os
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from fastapi import Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
+from itsdangerous import URLSafeTimedSerializer
 from starlette.middleware.sessions import SessionMiddleware
 
 from utils.auth import (
@@ -36,8 +37,6 @@ def mock_oauth_env():
 @pytest.fixture
 def app_with_auth(mock_oauth_env):
     """Create FastAPI app with auth middleware."""
-    from fastapi import FastAPI
-
     app = FastAPI()
     # Add auth middleware first, then session middleware
     # Middleware is executed in reverse order of addition
@@ -100,23 +99,23 @@ class TestFastAPIAuthMiddleware:
         self, client, mock_oauth_env
     ):
         """Test that protected endpoints redirect to OAuth when not authenticated."""
-        with patch(
-            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        with (
+            patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"),
+            patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"),
+            patch("utils.auth.get_flow") as mock_get_flow,
         ):
-            with patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"):
-                with patch("utils.auth.get_flow") as mock_get_flow:
-                    mock_flow = MagicMock()
-                    mock_flow.authorization_url.return_value = (
-                        "https://accounts.google.com/o/oauth2/auth?test",
-                        "test-state",
-                    )
-                    mock_get_flow.return_value = mock_flow
+            mock_flow = MagicMock()
+            mock_flow.authorization_url.return_value = (
+                "https://accounts.google.com/o/oauth2/auth?test",
+                "test-state",
+            )
+            mock_get_flow.return_value = mock_flow
 
-                    response = client.get("/test-protected", follow_redirects=False)
+            response = client.get("/test-protected", follow_redirects=False)
 
-                    # Should redirect to Google OAuth
-                    assert response.status_code == 302
-                    assert "accounts.google.com" in response.headers.get("location", "")
+            # Should redirect to Google OAuth
+            assert response.status_code == 302
+            assert "accounts.google.com" in response.headers.get("location", "")
 
     def test_protected_endpoint_allows_authenticated_user(self, client, mock_oauth_env):
         """Test that authenticated users can access protected endpoints."""
@@ -136,8 +135,6 @@ class TestFastAPIAuthMiddleware:
 
     def test_protected_endpoint_rejects_wrong_domain(self, client, mock_oauth_env):
         """Test that wrong domain users are rejected."""
-        from itsdangerous import URLSafeTimedSerializer
-
         # Create signed session cookie with wrong domain
         serializer = URLSafeTimedSerializer("test-secret-key")
         session_data = {
@@ -148,22 +145,22 @@ class TestFastAPIAuthMiddleware:
 
         client.cookies.set("session", session_cookie)
 
-        with patch(
-            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        with (
+            patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"),
+            patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"),
+            patch("utils.auth.get_flow") as mock_get_flow,
         ):
-            with patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"):
-                with patch("utils.auth.get_flow") as mock_get_flow:
-                    mock_flow = MagicMock()
-                    mock_flow.authorization_url.return_value = (
-                        "https://accounts.google.com/o/oauth2/auth?test",
-                        "test-state",
-                    )
-                    mock_get_flow.return_value = mock_flow
+            mock_flow = MagicMock()
+            mock_flow.authorization_url.return_value = (
+                "https://accounts.google.com/o/oauth2/auth?test",
+                "test-state",
+            )
+            mock_get_flow.return_value = mock_flow
 
-                    response = client.get("/test-protected", follow_redirects=False)
+            response = client.get("/test-protected", follow_redirects=False)
 
-                    # Should redirect to OAuth
-                    assert response.status_code == 302
+            # Should redirect to OAuth
+            assert response.status_code == 302
 
 
 class TestFastAPIAuthCallback:
@@ -219,7 +216,7 @@ class TestFastAPIAuthCallback:
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
 
-        with pytest.raises(Exception):  # Should raise HTTPException 403
+        with pytest.raises(HTTPException):  # Should raise HTTPException 403
             await fastapi_auth_callback(
                 mock_request, "http://localhost:8080", "/auth/callback"
             )
@@ -233,7 +230,7 @@ class TestFastAPIAuthCallback:
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
 
-        with pytest.raises(Exception):  # Should raise HTTPException
+        with pytest.raises(HTTPException):  # Should raise HTTPException
             await fastapi_auth_callback(
                 mock_request, "http://localhost:8080", "/auth/callback"
             )
@@ -269,7 +266,7 @@ class TestFastAPIAuthCallback:
         )
         mock_request.cookies = {}
 
-        with pytest.raises(Exception):  # Should raise HTTPException with 403
+        with pytest.raises(HTTPException):  # Should raise HTTPException with 403
             await fastapi_auth_callback(
                 mock_request, "http://localhost:8080", "/auth/callback"
             )

@@ -4,6 +4,7 @@ This module provides authentication middleware for FastAPI applications
 that require Google OAuth authentication restricted to specific email domains.
 """
 
+import json
 import logging
 import os
 import secrets
@@ -11,7 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
@@ -133,8 +134,7 @@ class FastAPIAuthMiddleware(BaseHTTPMiddleware):
             or path.startswith("/api/health")
             or path.startswith("/auth/")
             or path.startswith("/assets/")
-            or path == "/"
-            or path == "/ui"
+            or path in {"/", "/ui"}
         ):
             return await call_next(request)
 
@@ -299,10 +299,6 @@ async def fastapi_auth_callback(
             )
 
         # Store user info in session or cookies
-        import json
-
-        from fastapi.responses import RedirectResponse
-
         user_info = {
             "email": email,
             "name": idinfo.get("name"),
@@ -354,7 +350,7 @@ async def fastapi_auth_callback(
             error=str(e),
             path=request.url.path,
         )
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"OAuth callback error: {e}", exc_info=True)
         AuditLogger.log_auth_event(
@@ -363,13 +359,11 @@ async def fastapi_auth_callback(
             error=str(e),
             path=request.url.path,
         )
-        raise HTTPException(status_code=500, detail="Authentication failed")
+        raise HTTPException(status_code=500, detail="Authentication failed") from e
 
 
 async def fastapi_logout() -> dict[str, str]:
     """Handle logout for FastAPI."""
-    from fastapi.responses import JSONResponse
-
     response = JSONResponse({"message": "Logged out successfully"})
     response.delete_cookie("user_email")
     response.delete_cookie("user_info")
