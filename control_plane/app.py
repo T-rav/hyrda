@@ -181,11 +181,12 @@ def ensure_all_users_group() -> None:
 
 
 def ensure_help_agent_system() -> None:
-    """Ensure the help agent system metadata exists."""
+    """Ensure the help agent system metadata exists and has all_users group access."""
     try:
-        from models import AgentMetadata, get_db_session
+        from models import AgentGroupPermission, AgentMetadata, get_db_session
 
         with get_db_session() as session:
+            # Ensure help agent exists
             existing_agent = session.query(AgentMetadata).filter(
                 AgentMetadata.agent_name == "help"
             ).first()
@@ -195,13 +196,28 @@ def ensure_help_agent_system() -> None:
                     agent_name="help",
                     display_name="Help",
                     description="Built-in help command",
-                    prompt_template="",
-                    created_by="system",
                     is_system=True,
+                    is_public=True,
                 )
                 session.add(help_agent)
                 session.commit()
                 logger.info("Created 'help' system agent")
+
+            # Ensure help agent has all_users group permission
+            existing_permission = session.query(AgentGroupPermission).filter(
+                AgentGroupPermission.agent_name == "help",
+                AgentGroupPermission.group_name == "all_users"
+            ).first()
+
+            if not existing_permission:
+                permission = AgentGroupPermission(
+                    agent_name="help",
+                    group_name="all_users",
+                    granted_by="system"
+                )
+                session.add(permission)
+                session.commit()
+                logger.info("Granted 'help' agent to 'all_users' group")
 
     except Exception as e:
         logger.error(f"Error ensuring help agent: {e}")

@@ -1,13 +1,11 @@
 """Test suite for OAuth authentication."""
 
-import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from flask import Flask, session
 
 # Add control_plane to path BEFORE importing app
 control_plane_dir = Path(__file__).parent.parent
@@ -17,8 +15,6 @@ if str(control_plane_dir) not in sys.path:
 from utils.auth import (
     AuditLogger,
     AuthError,
-    flask_auth_callback,
-    flask_logout,
     get_flow,
     get_redirect_uri,
     verify_domain,
@@ -191,169 +187,3 @@ class TestTokenVerification:
         with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"):
             with pytest.raises(utils.auth.AuthError, match=r"Invalid token:.*"):
                 verify_token("invalid-token")
-
-
-class TestFlaskAuthCallback:
-    """Test Flask OAuth callback handler."""
-
-    @patch("utils.auth.get_flow")
-    @patch("utils.auth.verify_token")
-    def test_auth_callback_success(self, mock_verify_token, mock_get_flow, app, mock_oauth_env):
-        """Test successful OAuth callback."""
-        # Setup mocks
-        mock_flow = MagicMock()
-        mock_credentials = MagicMock()
-        mock_credentials.id_token = "test-id-token"
-        mock_flow.credentials = mock_credentials
-        mock_get_flow.return_value = mock_flow
-
-        mock_verify_token.return_value = {
-            "email": "test@8thlight.com",
-            "name": "Test User",
-            "picture": "https://example.com/pic.jpg",
-        }
-
-        with app.test_client() as client:
-            with client.session_transaction() as sess:
-                sess["oauth_state"] = "test-state"
-                sess["oauth_redirect"] = "/api/agents"
-
-            # Call within request context
-            with app.test_request_context("http://localhost:6001/auth/callback?code=test-code&state=test-state"):
-                # Set up session for the request context
-                session["oauth_state"] = "test-state"
-                session["oauth_redirect"] = "/api/agents"
-
-                response = flask_auth_callback("http://localhost:6001", "/auth/callback")
-
-                # Should redirect to original URL
-                assert response.status_code == 302
-                assert "/api/agents" in response.location
-
-    @patch("utils.auth.get_flow")
-    def test_auth_callback_missing_state(self, mock_get_flow, app, mock_oauth_env):
-        """Test callback with missing state."""
-        with app.test_request_context("http://localhost:6001/auth/callback?code=test-code&state=test-state"):
-            # No oauth_state in session
-            result = flask_auth_callback("http://localhost:6001", "/auth/callback")
-            # Result is a tuple (response, status_code) when called directly
-            if isinstance(result, tuple):
-                response, status_code = result
-                assert status_code == 400
-            else:
-                assert result.status_code == 400
-
-    @patch("utils.auth.get_flow")
-    @patch("utils.auth.verify_token")
-    def test_auth_callback_invalid_domain(self, mock_verify_token, mock_get_flow, app, mock_oauth_env):
-        """Test callback with invalid email domain."""
-        mock_flow = MagicMock()
-        mock_credentials = MagicMock()
-        mock_credentials.id_token = "test-id-token"
-        mock_flow.credentials = mock_credentials
-        mock_get_flow.return_value = mock_flow
-
-        mock_verify_token.return_value = {
-            "email": "test@example.com",  # Wrong domain
-            "name": "Test User",
-        }
-
-        with app.test_request_context("http://localhost:6001/auth/callback?code=test-code&state=test-state"):
-            # Set up session
-            session["oauth_state"] = "test-state"
-            session["oauth_redirect"] = "/api/agents"
-
-            result = flask_auth_callback("http://localhost:6001", "/auth/callback")
-
-            # Result is a tuple (response, status_code) when called directly
-            if isinstance(result, tuple):
-                response, status_code = result
-                assert status_code == 403
-                data = json.loads(response.data)
-            else:
-                assert result.status_code == 403
-                data = json.loads(result.data)
-            assert "restricted" in data["error"].lower()
-
-
-class TestFlaskLogout:
-    """Test Flask logout handler."""
-
-    def test_logout_clears_session(self, app, mock_oauth_env):
-        """Test that logout clears session."""
-        with app.test_request_context("/auth/logout"):
-            # Set up session
-            session["user_email"] = "test@8thlight.com"
-            session["user_info"] = {"email": "test@8thlight.com"}
-
-            response = flask_logout()
-
-            assert response.status_code == 200
-            data = json.loads(response.data)
-            assert data["message"] == "Logged out successfully"
-            # Session should be cleared
-            assert "user_email" not in session
-            assert "user_info" not in session
-
-
-class TestAuthMiddleware:
-    """Test authentication middleware."""
-
-    def test_health_endpoint_bypasses_auth(self, client, mock_oauth_env):
-        """Test that health endpoints bypass authentication."""
-        response = client.get("/health")
-        assert response.status_code == 200
-
-        response = client.get("/api/health")
-        assert response.status_code == 200
-
-    def test_auth_endpoints_bypass_auth(self, client, mock_oauth_env):
-        """Test that auth endpoints bypass authentication."""
-        response = client.get("/auth/callback")
-        # May return error but shouldn't redirect to OAuth
-        assert response.status_code != 302 or "/accounts.google.com" not in response.location
-
-    def test_protected_endpoint_redirects_when_not_authenticated(self, client, mock_oauth_env):
-        """Test that protected endpoints redirect to OAuth when not authenticated."""
-        with patch("utils.auth.get_flow") as mock_get_flow:
-            mock_flow = MagicMock()
-            mock_flow.authorization_url.return_value = (
-                "https://accounts.google.com/o/oauth2/auth?test",
-                "test-state",
-            )
-            mock_get_flow.return_value = mock_flow
-
-            response = client.get("/api/agents")
-
-            # Should redirect to Google OAuth
-            assert response.status_code == 302
-            assert "accounts.google.com" in response.location
-
-    def test_protected_endpoint_allows_authenticated_user(self, client, mock_oauth_env):
-        """Test that authenticated users can access protected endpoints."""
-        with client.session_transaction() as sess:
-            sess["user_email"] = "test@8thlight.com"
-            sess["user_info"] = {"email": "test@8thlight.com"}
-
-        response = client.get("/api/agents")
-        # Should succeed (may return 200 or other non-redirect status)
-        assert response.status_code != 302
-
-    def test_protected_endpoint_rejects_wrong_domain(self, client, mock_oauth_env):
-        """Test that wrong domain users are rejected."""
-        with client.session_transaction() as sess:
-            sess["user_email"] = "test@example.com"
-            sess["user_info"] = {"email": "test@example.com"}
-
-        with patch("utils.auth.get_flow") as mock_get_flow:
-            mock_flow = MagicMock()
-            mock_flow.authorization_url.return_value = (
-                "https://accounts.google.com/o/oauth2/auth?test",
-                "test-state",
-            )
-            mock_get_flow.return_value = mock_flow
-
-            response = client.get("/api/agents")
-
-            # Should redirect to OAuth (session cleared)
-            assert response.status_code == 302

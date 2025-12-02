@@ -2,17 +2,19 @@
 
 from typing import Any
 
-from flask import request
+from fastapi import Request
 from sqlalchemy.orm import Query
 
 
 def get_pagination_params(
+    request: Request,
     default_per_page: int = 50,
     max_per_page: int = 100
 ) -> tuple[int, int]:
     """Get pagination parameters from request query string.
 
     Args:
+        request: FastAPI Request object
         default_per_page: Default items per page (default: 50)
         max_per_page: Maximum items per page (default: 100)
 
@@ -23,22 +25,22 @@ def get_pagination_params(
 
     Examples:
         >>> # Request: /api/users?page=2&per_page=25
-        >>> get_pagination_params()
+        >>> get_pagination_params(request)
         (2, 25)
         >>> # Request: /api/users (no params)
-        >>> get_pagination_params()
+        >>> get_pagination_params(request)
         (1, 50)
         >>> # Request: /api/users?page=0&per_page=200
-        >>> get_pagination_params(max_per_page=100)
+        >>> get_pagination_params(request, max_per_page=100)
         (1, 100)  # page=0 becomes 1, per_page=200 capped to 100
     """
     try:
-        page = max(1, int(request.args.get("page", 1)))
+        page = max(1, int(request.query_params.get("page", 1)))
     except (ValueError, TypeError):
         page = 1
 
     try:
-        per_page = int(request.args.get("per_page", default_per_page))
+        per_page = int(request.query_params.get("per_page", default_per_page))
         per_page = max(1, min(per_page, max_per_page))
     except (ValueError, TypeError):
         per_page = default_per_page

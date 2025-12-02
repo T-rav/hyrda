@@ -73,32 +73,26 @@ def mock_oauth_env():
 def client(app, mock_oauth_env):
     """Create test client with OAuth env mocked."""
     from starlette.testclient import TestClient
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture
-def authenticated_client(client, app, db_session):
+def authenticated_client(client, app):
     """Create authenticated test client with valid session and admin user."""
     from utils.permissions import get_current_user, require_admin
 
-    # Create admin user in database if doesn't exist
-    admin_user = db_session.query(User).filter(
-        User.email == "admin@8thlight.com"
-    ).first()
-
-    if not admin_user:
-        admin_user = User(
-            email="admin@8thlight.com",
-            full_name="Test Admin",
-            slack_user_id="U_ADMIN_TEST",
-            is_admin=True
-        )
-        db_session.add(admin_user)
-        db_session.commit()
+    # Create mock admin user (no database needed with dependency overrides)
+    mock_admin = User(
+        email="admin@8thlight.com",
+        full_name="Test Admin",
+        slack_user_id="U_ADMIN_TEST",
+        is_admin=True
+    )
 
     # Mock authentication dependencies for FastAPI
     async def mock_get_current_user():
-        return admin_user
+        return mock_admin
 
     async def mock_require_admin():
         return None

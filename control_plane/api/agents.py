@@ -90,7 +90,8 @@ async def list_agents(request: Request) -> dict[str, Any]:
 
 
 @router.post("/register")
-@require_idempotency(ttl_hours=24)
+# TODO: Re-implement idempotency for FastAPI
+# @require_idempotency(ttl_hours=24)
 async def register_agent(request: Request) -> dict[str, Any]:
     """Register or update an agent in the database.
 
@@ -261,14 +262,14 @@ async def delete_agent(agent_name: str, admin_check: None = Depends(require_admi
             if not agent_metadata:
                 raise HTTPException(
                     status_code=404,
-                    detail={"error": f"Agent '{agent_name}' not found", "error_code": "AGENT_NOT_FOUND"}
+                    detail=f"Agent '{agent_name}' not found"
                 )
 
             # Prevent deleting system agents
             if agent_metadata.is_system:
                 raise HTTPException(
                     status_code=403,
-                    detail={"error": "Cannot delete system agents", "error_code": "SYSTEM_AGENT_PROTECTED"}
+                    detail="Cannot delete system agents"
                 )
 
             # Soft delete: mark as deleted
@@ -353,7 +354,7 @@ async def toggle_agent(agent_name: str, admin_check: None = Depends(require_admi
             if agent_metadata.is_system and agent_metadata.is_public:
                 raise HTTPException(
                     status_code=403,
-                    detail={"error": "Cannot disable system agents", "error_code": "SYSTEM_AGENT_PROTECTED"}
+                    detail="Cannot disable system agents"
                 )
 
             # Toggle the state
