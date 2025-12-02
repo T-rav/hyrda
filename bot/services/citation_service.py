@@ -5,14 +5,14 @@ Handles formatting and adding source citations to RAG responses.
 Provides clean separation of citation logic from core RAG functionality.
 """
 
-from typing import Any
+from bot_types import ContextChunk
 
 
 class CitationService:
     """Service for adding source citations to generated responses"""
 
     def add_source_citations(
-        self, response: str, context_chunks: list[dict[str, Any]]
+        self, response: str, context_chunks: list[ContextChunk]
     ) -> str:
         """
         Add source citations to a response based on retrieved context chunks.
@@ -131,7 +131,7 @@ class CitationService:
 
         return response
 
-    def format_context_for_llm(self, context_chunks: list[dict[str, Any]]) -> str:
+    def format_context_for_llm(self, context_chunks: list[ContextChunk]) -> str:
         """
         Format context chunks for inclusion in LLM prompt.
 

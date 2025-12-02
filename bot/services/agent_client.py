@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from bot_types import AgentContext, AgentInfo, AgentResponse, CircuitBreakerStatus
+
 logger = logging.getLogger(__name__)
 
 
@@ -158,8 +160,8 @@ class AgentClient:
             self._client = None
 
     async def invoke_agent(
-        self, agent_name: str, query: str, context: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, agent_name: str, query: str, context: AgentContext
+    ) -> AgentResponse:
         """Invoke an agent via HTTP with circuit breaker protection.
 
         Args:
@@ -179,8 +181,8 @@ class AgentClient:
         return await wrapped_func(agent_name, query, context)
 
     async def _invoke_agent_internal(
-        self, agent_name: str, query: str, context: dict[str, Any]
-    ) -> dict[str, Any]:
+        self, agent_name: str, query: str, context: AgentContext
+    ) -> AgentResponse:
         """Internal method that performs the actual agent invocation.
 
         Args:
@@ -254,7 +256,7 @@ class AgentClient:
         # not here. This ensures ALL invocations (Slack, LibreChat, direct API)
         # are counted at the source.
 
-    async def list_agents(self) -> list[dict[str, Any]]:
+    async def list_agents(self) -> list[AgentInfo]:
         """List available agents.
 
         Returns:
@@ -279,7 +281,7 @@ class AgentClient:
             logger.error(f"Error listing agents: {e}", exc_info=True)
             raise AgentClientError(f"Failed to list agents: {str(e)}") from e
 
-    def get_circuit_breaker_status(self) -> dict[str, Any]:
+    def get_circuit_breaker_status(self) -> CircuitBreakerStatus:
         """Get current circuit breaker status for monitoring.
 
         Returns:
@@ -293,7 +295,7 @@ class AgentClient:
             "is_open": self.circuit_breaker.state == CircuitState.OPEN,
         }
 
-    def _prepare_context(self, context: dict[str, Any]) -> dict[str, Any]:
+    def _prepare_context(self, context: AgentContext) -> dict[str, Any]:
         """Prepare context for serialization.
 
         Removes non-serializable objects like service instances.

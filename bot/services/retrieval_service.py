@@ -7,8 +7,8 @@ Includes adaptive query rewriting for improved retrieval accuracy.
 
 import logging
 import re
-from typing import Any
 
+from bot_types import ContextChunk
 from config.settings import Settings
 
 from .query_rewriter import AdaptiveQueryRewriter
@@ -36,7 +36,7 @@ class RetrievalService:
         embedding_service,
         conversation_history: list[dict] | None = None,
         user_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ContextChunk]:
         """
         Retrieve relevant context chunks for a query.
 
@@ -142,7 +142,7 @@ class RetrievalService:
         self,
         document_embedding: list[float],
         vector_service,
-    ) -> list[dict[str, Any]]:
+    ) -> list[ContextChunk]:
         """
         Retrieve relevant context chunks using a document's embedding for similarity search.
 
@@ -289,8 +289,8 @@ class RetrievalService:
         return entities
 
     def _apply_entity_boosting(
-        self, query: str, results: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+        self, query: str, results: list[ContextChunk]
+    ) -> list[ContextChunk]:
         """
         Apply entity boosting to search results.
 
@@ -354,8 +354,8 @@ class RetrievalService:
             return results
 
     def _apply_diversification_strategy(
-        self, results: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+        self, results: list[ContextChunk]
+    ) -> list[ContextChunk]:
         """
         Apply smart similarity-first diversification with automatic document chunk limiting.
 
@@ -378,8 +378,8 @@ class RetrievalService:
         return self._smart_similarity_diversify(results, max_results)
 
     def _smart_similarity_diversify(
-        self, results: list[dict[str, Any]], max_results: int
-    ) -> list[dict[str, Any]]:
+        self, results: list[ContextChunk], max_results: int
+    ) -> list[ContextChunk]:
         """
         Smart similarity-first diversification.
 

@@ -7,7 +7,8 @@ Manages prompt engineering and context formatting.
 
 import logging
 from datetime import datetime
-from typing import Any
+
+from bot_types import ContextChunk, ContextQuality
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class ContextBuilder:
     def build_rag_prompt(
         self,
         query: str,
-        context_chunks: list[dict[str, Any]],
+        context_chunks: list[ContextChunk],
         conversation_history: list[dict[str, str]],
         system_message: str | None = None,
     ) -> tuple[str | None, list[dict[str, str]]]:
@@ -120,7 +121,7 @@ class ContextBuilder:
 
         return final_system_message, messages
 
-    def format_context_summary(self, context_chunks: list[dict[str, Any]]) -> str:
+    def format_context_summary(self, context_chunks: list[ContextChunk]) -> str:
         """
         Create a summary of retrieved context for logging/debugging.
 
@@ -157,8 +158,8 @@ class ContextBuilder:
         return f"Retrieved from {len(sources)} documents: " + "; ".join(summary_parts)
 
     def validate_context_quality(
-        self, context_chunks: list[dict[str, Any]], min_similarity: float = 0.5
-    ) -> dict[str, Any]:
+        self, context_chunks: list[ContextChunk], min_similarity: float = 0.5
+    ) -> ContextQuality:
         """
         Validate the quality of retrieved context chunks.
 
