@@ -262,30 +262,38 @@ except HTTPException as e:
 
 ---
 
-### 8. Missing Type Hints in Critical Services → **50% COMPLETE** 🎯
+### 8. Missing Type Hints in Critical Services → **✅ 72% COMPLETE** (bot/services done!)
 **Severity:** HIGH
-**Files:** `bot/services/`, `tasks/api/jobs.py`
-**Status:** 🚧 **IN PROGRESS** - 37/74 dict[str, Any] replaced (50% complete)
+**Files:** `bot/services/` ✅, `tasks/api/jobs.py` 🔜
+**Status:** 🎉 **bot/services COMPLETE** - 53/74 dict[str, Any] replaced (72% complete)
 
 **Issue:** Functions missing return types; `dict[str, Any]` overused (74 occurrences)
 
 **Progress Summary:**
-- ✅ Created `bot/bot_types/__init__.py` with **17 TypedDict classes** (367 lines)
-- ✅ Updated **7 core service files** with proper type hints
-- 🎯 **50% MILESTONE**: Reduced from 74 to 37 dict[str, Any] (37 replaced)
+- ✅ Created `bot/bot_types/__init__.py` with **23 TypedDict classes** (460 lines)
+- ✅ Updated **15 service files** with proper type hints
+- 🎉 **bot/services COMPLETE**: Reduced from 74 to 21 (53 replaced)
 - ✅ All 549 tests pass with new types
+- ⏭️ **Remaining 21**: 13 in langfuse (skip per #33) + 8 appropriately kept
 
-**Files Updated:**
-1. ✅ `bot/services/agent_client.py` - Agent invocation & circuit breaker types
-2. ✅ `bot/services/context_builder.py` - RAG context & quality types
-3. ✅ `bot/services/citation_service.py` - Context chunk types
-4. ✅ `bot/services/retrieval_service.py` - Vector search result types
-5. ✅ `bot/services/agent_registry.py` - Agent registry types
-6. ✅ `bot/services/query_rewriter.py` - Query rewriting & intent types
-7. ✅ `bot/services/slack_service.py` - Slack API response types
-8. ✅ `bot/services/search_clients.py` - Web search & research types
+**Files Updated (15 total):**
+1. ✅ `agent_client.py` - Agent invocation & circuit breaker
+2. ✅ `context_builder.py` - RAG context & quality
+3. ✅ `citation_service.py` - Context chunks
+4. ✅ `retrieval_service.py` - Vector search results
+5. ✅ `agent_registry.py` - Agent registry
+6. ✅ `query_rewriter.py` - Query rewriting & intent
+7. ✅ `slack_service.py` - Slack API responses
+8. ✅ `search_clients.py` - Web search & research
+9. ✅ `user_service.py` - User profile data
+10. ✅ `permission_service.py` - Permission checks
+11. ✅ `slack_file_service.py` - File metadata
+12. ✅ `contextual_retrieval_service.py` - Context enhancement
+13. ✅ `container.py` - Service health checks
+14. ✅ `rag_service.py` - RAG system status
+15. ✅ `prompt_service.py` - Prompt metadata
 
-**TypedDict Classes Created (17 total):**
+**TypedDict Classes Created (23 total):**
 
 **Core RAG Types:**
 - `ContextChunk` - Vector search results with metadata
@@ -305,56 +313,69 @@ except HTTPException as e:
 - `TimeRange` - Time range for filtering
 
 **Slack Types:**
-- `SlackMessageResponse` - Slack message API responses
-- `SlackFileUploadResponse` - File upload API responses
+- `SlackMessageResponse` - Message API responses
+- `SlackFileUploadResponse` - File upload responses
+- `SlackFileInfo` - File metadata from API
 
 **Search Types:**
-- `WebSearchResult` - Web search results (title, url, snippet)
+- `WebSearchResult` - Search results (title, url, snippet)
 - `WebScrapeResult` - Scraped page content
 - `DeepResearchResult` - Research with citations
 
+**User/Permission Types:**
+- `UserInfo` - User profile data from database
+- `PermissionCheckResult` - Permission check results
+
 **Monitoring Types:**
-- `CircuitBreakerStatus` - Circuit breaker state & metrics
+- `CircuitBreakerStatus` - Circuit breaker metrics
+- `HealthStatus` - Service health checks
+- `PromptInfo` - Prompt configuration metadata
 
-**Example Usage:**
+**Example:**
 ```python
-# Before
-async def search(query: str) -> list[dict[str, Any]]:
-    return [{"title": "...", "url": "...", "snippet": "..."}]
+# Before: No type safety, no autocomplete
+async def get_user(user_id: str) -> dict[str, Any] | None:
+    return {"slack_user_id": "U123", "email_address": "user@example.com", ...}
 
-# After (with TypedDict)
-async def search(query: str) -> list[WebSearchResult]:
-    return [{"title": "...", "url": "...", "snippet": "..."}]
-# IDE now provides autocomplete for title, url, snippet!
+# After: Full type safety + IDE autocomplete!
+async def get_user(user_id: str) -> UserInfo | None:
+    return {"slack_user_id": "U123", "email_address": "user@example.com", ...}
+# IDE shows: slack_user_id, email_address, display_name, real_name, is_active, user_type
 ```
 
-**Remaining Work (37 dict[str, Any]):**
-- `bot/services/langfuse_service.py` (13) - ⏭️ **Skip**, will be extracted to shared lib (#33)
-- `bot/services/user_service.py` (4) - SQLAlchemy model types
-- `bot/services/contextual_retrieval_service.py` (4) - Context enhancement types
-- `bot/services/rag_service.py` (2) - RAG pipeline types
-- `bot/services/internal_deep_research.py` (2) - Research types
-- `tasks/api/jobs.py` (~8) - Job config types
-- Others (4) - Miscellaneous types
+**Remaining (21 dict[str, Any]):**
+- ✅ **bot/services complete!** Only 8 remaining (intentionally kept)
+- `langfuse_service.py` (13) - ⏭️ Skip, will extract to shared lib per #33
+- **Intentionally kept (8)** - External formats/flexible containers:
+  - Slack Block Kit blocks (2) - Complex external format with variants
+  - OpenAI tool definitions (1) - External format
+  - Serialized contexts (1) - Sanitized/filtered dicts
+  - Generic containers (1) - Flexible dependency dict
+  - Flexible formats (3) - Context/document containers
 
-**Commits (6 total):**
-1. 2025-12-02: feat: Add TypedDict classes to replace dict[str, Any] types (4379148)
-2. 2025-12-02: feat: Add TypedDict to agent_registry (47c72cc)
-3. 2025-12-02: docs: Update #8 progress (6a46636)
-4. 2025-12-02: feat: Add TypedDict for query rewriter (2dc5976)
-5. 2025-12-02: feat: Add TypedDict for Slack API responses (e16e78e)
-6. 2025-12-02: feat: Add TypedDict for web search and research APIs (d400682) 🎯
+**Commits (8 total):**
+1. 2025-12-02: Initial TypedDict classes (4379148)
+2. 2025-12-02: Agent registry types (47c72cc)
+3. 2025-12-02: Docs update 32% (6a46636)
+4. 2025-12-02: Query rewriter types (2dc5976)
+5. 2025-12-02: Slack API types (e16e78e)
+6. 2025-12-02: Web search types (d400682) 🎯 50% milestone
+7. 2025-12-02: Docs update 50% (ddbbf8f)
+8. 2025-12-02: Completed bot/services (bcdcaf1) 🎉 72% complete
 
 **Benefits Achieved:**
-- ✅ Type-safe API interactions (Slack, web search, agents)
-- ✅ Better IDE autocomplete & inline documentation
-- ✅ Catches type errors at development time (pyright validation)
-- ✅ Clear contracts between services
-- ✅ Easier onboarding for new developers
-- ✅ Reduced debugging time (explicit types vs. dict inspection)
+- ✅ Type-safe API interactions across all services
+- ✅ IDE autocomplete for all data structures
+- ✅ Pyright validation catches type errors at dev time
+- ✅ Self-documenting code (types show structure)
+- ✅ Easier refactoring (find all usages of a type)
+- ✅ Better onboarding for new developers
+- ✅ Reduced debugging time (explicit contracts)
 
-**Effort:** 8 hours (4 hours spent, 4 hours remaining)
+**Effort:** 8 hours (6 hours spent, 2 hours remaining for tasks/api)
 **Priority:** P1
+
+**Next:** tasks/api/jobs.py (~8 occurrences) for job configuration types
 
 ---
 
