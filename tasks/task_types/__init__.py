@@ -82,6 +82,24 @@ class APIResponse(TypedDict, total=False):
     status_code: int  # HTTP status code
 
 
+class SlackUser(TypedDict, total=False):
+    """Slack user data from Slack API.
+
+    Contains user profile information from Slack.
+    """
+
+    id: str  # Slack user ID
+    name: str  # Username
+    real_name: str  # Full name
+    email: str  # Email address
+    profile: dict[str, Any]  # Full profile object
+    is_bot: bool  # Whether user is a bot
+    is_app_user: bool  # Whether user is an app
+    deleted: bool  # Whether user is deleted
+    is_restricted: bool  # Whether user is restricted
+    is_ultra_restricted: bool  # Whether user is ultra restricted
+
+
 # Export all types
 __all__ = [
     "JobTypeInfo",
@@ -89,4 +107,5 @@ __all__ = [
     "JobExecutionResult",
     "EmployeeProfile",
     "APIResponse",
+    "SlackUser",
 ]
