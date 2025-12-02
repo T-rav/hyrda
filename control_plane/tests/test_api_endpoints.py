@@ -8,7 +8,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 import pytest
-from flask import Flask
+from fastapi import FastAPI
+from starlette.testclient import TestClient
 
 # Create temporary file-based SQLite databases for tests
 security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
@@ -38,13 +39,17 @@ with get_db_session() as session:
 
 @pytest.fixture(scope="module")
 def app():
-    """Get Flask app for testing."""
-    from app import app as flask_app
+    """Get FastAPI app for testing."""
+    from app import create_app
 
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
+    fastapi_app = create_app()
+    yield fastapi_app
 
-    yield flask_app
+
+@pytest.fixture(scope="module")
+def client(app):
+    """Get test client."""
+    return TestClient(app)
 
 
 @pytest.fixture

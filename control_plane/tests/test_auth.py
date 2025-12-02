@@ -28,20 +28,19 @@ from utils.auth import (
 
 @pytest.fixture
 def app():
-    """Get Flask app for testing."""
-    from app import app as flask_app
+    """Get FastAPI app for testing."""
+    from app import create_app
+    from starlette.testclient import TestClient
 
-    flask_app.config["TESTING"] = True
-    flask_app.config["WTF_CSRF_ENABLED"] = False
-    flask_app.config["SECRET_KEY"] = "test-secret-key"
-
-    yield flask_app
+    fastapi_app = create_app()
+    yield fastapi_app
 
 
 @pytest.fixture
 def client(app):
     """Create test client."""
-    return app.test_client()
+    from starlette.testclient import TestClient
+    return TestClient(app)
 
 
 @pytest.fixture
