@@ -7,8 +7,10 @@ identities to a single user account.
 
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict
+
+from sqlalchemy.orm import joinedload
 
 from models import User, UserIdentity, get_db_session
 from services.user_providers import get_user_provider
@@ -114,7 +116,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                         existing_identity.provider_email = email
                         existing_identity.display_name = full_name
                         existing_identity.is_active = True
-                        existing_identity.last_synced_at = datetime.utcnow()
+                        existing_identity.last_synced_at = datetime.now(UTC)
                         stats["identities_updated"] += 1
 
                         # Update parent user if this is the primary identity
@@ -123,7 +125,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                             user.email = email
                             user.full_name = full_name
                             user.is_active = True
-                            user.last_synced_at = datetime.utcnow()
+                            user.last_synced_at = datetime.now(UTC)
                             stats["updated"] += 1
                             logger.debug(f"Updated user: {email}")
 
@@ -153,7 +155,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                                 display_name=full_name,
                                 is_primary=False,  # Existing user keeps their primary
                                 is_active=True,
-                                last_synced_at=datetime.utcnow(),
+                                last_synced_at=datetime.now(UTC),
                             )
                             session.add(new_identity)
                             stats["identities_created"] += 1
@@ -168,7 +170,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                                 primary_provider=provider_name,
                                 is_active=True,
                                 is_admin=False,
-                                last_synced_at=datetime.utcnow(),
+                                last_synced_at=datetime.now(UTC),
                             )
                             session.add(new_user)
                             session.flush()  # Get user ID
@@ -182,7 +184,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                                 display_name=full_name,
                                 is_primary=True,
                                 is_active=True,
-                                last_synced_at=datetime.utcnow(),
+                                last_synced_at=datetime.now(UTC),
                             )
                             session.add(new_identity)
                             stats["created"] += 1
@@ -195,11 +197,13 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                     continue
 
             # Deactivate identities no longer in the provider
+            # Use joinedload to prevent N+1 query when accessing identity.user
             all_active_identities = (
                 session.query(UserIdentity)
+                .options(joinedload(UserIdentity.user))
                 .filter(
                     UserIdentity.provider_type == provider_name,
-                    UserIdentity.is_active == True,
+                    UserIdentity.is_active,
                 )
                 .all()
             )
@@ -210,12 +214,12 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                         f"Deactivating {provider_name} identity: {identity.provider_email}"
                     )
                     identity.is_active = False
-                    identity.last_synced_at = datetime.utcnow()
+                    identity.last_synced_at = datetime.now(UTC)
 
                     # If this was the primary identity, deactivate the user
                     if identity.is_primary:
                         identity.user.is_active = False
-                        identity.user.last_synced_at = datetime.utcnow()
+                        identity.user.last_synced_at = datetime.now(UTC)
                         stats["deactivated"] += 1
 
             # Commit all changes
@@ -253,7 +257,7 @@ def add_all_users_to_system_group() -> None:
                 return
 
             # Get all active users
-            active_users = session.query(User).filter(User.is_active == True).all()
+            active_users = session.query(User).filter(User.is_active).all()
 
             # Get existing memberships
             existing_memberships = session.query(UserGroup).filter(

@@ -76,7 +76,9 @@ async def list_credentials(request: Request, user: dict = Depends(get_current_us
 
 
 @router.delete("/{cred_id}")
-async def delete_credential(request: Request, cred_id: str):
+async def delete_credential(
+    request: Request, cred_id: str, user: dict = Depends(get_current_user)
+):
     """Delete a stored Google OAuth credential.
 
     Args:

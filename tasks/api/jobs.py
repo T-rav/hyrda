@@ -59,7 +59,9 @@ async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(request: Request, job_id: str):
+async def get_job(
+    request: Request, job_id: str, user: dict = Depends(get_current_user)
+):
     """Get specific job details.
 
     Args:

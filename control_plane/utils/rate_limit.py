@@ -6,7 +6,7 @@ from collections import OrderedDict
 from functools import wraps
 from typing import Any, Callable
 
-from flask import Response, jsonify, request
+from flask import jsonify, request
 
 logger = logging.getLogger(__name__)
 

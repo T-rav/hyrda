@@ -9,7 +9,7 @@ from flask.views import MethodView
 from models import AgentPermission, PermissionGroup, User, UserGroup, get_db_session
 from utils.errors import error_response
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
-from utils.permissions import check_admin, require_admin
+from utils.permissions import require_admin
 from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -169,7 +169,7 @@ class UserAdminAPI(MethodView):
                     # Lock ALL admin records to prevent concurrent bootstrap
                     # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
                     existing_admins = db_session.query(User).filter(
-                        User.is_admin == True
+                        User.is_admin
                     ).with_for_update().all()
 
                     admin_count = len(existing_admins)

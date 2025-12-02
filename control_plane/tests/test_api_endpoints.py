@@ -1,14 +1,11 @@
 """Test suite for Control Plane API endpoints."""
 
-import contextlib
-import json
 import os
 import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 import pytest
-from fastapi import FastAPI
 from starlette.testclient import TestClient
 
 # Create temporary file-based SQLite databases for tests
@@ -46,13 +43,6 @@ def app():
     yield fastapi_app
 
 
-@pytest.fixture(scope="module")
-def client(app):
-    """Get test client."""
-    with TestClient(app) as test_client:
-        yield test_client
-
-
 @pytest.fixture
 def mock_oauth_env():
     """Mock OAuth environment variables."""
@@ -72,7 +62,6 @@ def mock_oauth_env():
 @pytest.fixture
 def client(app, mock_oauth_env):
     """Create test client with OAuth env mocked."""
-    from starlette.testclient import TestClient
     with TestClient(app) as test_client:
         yield test_client
 

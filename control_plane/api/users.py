@@ -5,10 +5,9 @@ import os
 from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from models import AgentPermission, PermissionGroup, User, UserGroup, get_db_session
 from pydantic import BaseModel, Field
-from utils.errors import error_response
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
 from utils.permissions import require_admin
 from utils.rate_limit import rate_limit
@@ -177,7 +176,7 @@ async def update_user_admin_status(request: Request, user_id: int, body: UserAdm
                 # Lock ALL admin records to prevent concurrent bootstrap
                 # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
                 existing_admins = db_session.query(User).filter(
-                    User.is_admin == True
+                    User.is_admin
                 ).with_for_update().all()
 
                 admin_count = len(existing_admins)

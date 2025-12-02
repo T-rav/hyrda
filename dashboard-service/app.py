@@ -33,9 +33,22 @@ app = FastAPI(
 # Add session middleware for authentication
 from starlette.middleware.sessions import SessionMiddleware
 
-app.add_middleware(
-    SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "dev-secret-change-in-prod")
-)
+# Validate SECRET_KEY in production
+secret_key = os.getenv("SECRET_KEY", "dev-secret-change-in-prod")
+environment = os.getenv("ENVIRONMENT", "development")
+is_production = environment == "production"
+is_default_key = secret_key in [
+    "dev-secret-key-change-in-production",
+    "dev-secret-key-change-in-prod",
+    "dev-secret-change-in-prod",
+]
+if is_production and is_default_key:
+    raise ValueError(
+        "SECRET_KEY must be set to a secure value in production. "
+        "Current value is the default development key."
+    )
+
+app.add_middleware(SessionMiddleware, secret_key=secret_key)
 
 # Add authentication middleware
 service_base_url = os.getenv("DASHBOARD_BASE_URL", "http://localhost:8080")

@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
 from sqlalchemy import func
 from utils.audit import AuditAction, log_agent_action
-from utils.errors import error_response, success_response
 from utils.idempotency import require_idempotency
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
 from utils.permissions import require_admin
@@ -138,7 +137,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
                     # Before reactivating, double-check no active agent with same name exists
                     existing_active = session.query(AgentMetadata).filter(
                         AgentMetadata.agent_name == agent_name,
-                        AgentMetadata.is_deleted == False
+                        not AgentMetadata.is_deleted
                     ).first()
                     if existing_active:
                         raise HTTPException(

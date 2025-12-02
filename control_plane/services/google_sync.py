@@ -108,7 +108,7 @@ def sync_users_to_database() -> dict:
 
                 # Soft delete users no longer in slack_users or inactive
                 # Get all currently active users in security database
-                all_security_users = security_session.query(User).filter(User.is_active == True).all()
+                all_security_users = security_session.query(User).filter(User.is_active).all()
 
                 # Get all active slack user IDs from this sync
                 active_slack_ids = {user[0] for user in slack_users}

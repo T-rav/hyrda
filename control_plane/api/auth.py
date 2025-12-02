@@ -2,12 +2,9 @@
 
 import logging
 import os
-import secrets
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow
+from fastapi.responses import RedirectResponse
 from utils.auth import AuditLogger, get_flow, get_redirect_uri, verify_domain, verify_token
 from utils.rate_limit import rate_limit
 
@@ -67,7 +64,7 @@ async def auth_callback(request: Request):
                 success=False,
                 error=f"Email domain not allowed: {email}",
             )
-            raise HTTPException(status_code=403, detail=f"Access restricted")
+            raise HTTPException(status_code=403, detail="Access restricted")
 
         # Store user info in session
         request.session["user_email"] = email

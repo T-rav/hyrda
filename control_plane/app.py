@@ -74,19 +74,36 @@ def create_app() -> FastAPI:
 
     # Add session middleware (required for OAuth)
     secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
+
+    # Validate SECRET_KEY in production
+    environment = os.getenv("ENVIRONMENT", "development")
+    is_production = environment == "production"
+    is_default_key = secret_key in [
+        "dev-secret-key-change-in-production",
+        "dev-secret-key-change-in-prod",
+        "dev-secret-change-in-prod",
+    ]
+    if is_production and is_default_key:
+        raise ValueError(
+            "SECRET_KEY must be set to a secure value in production. "
+            "Current value is the default development key."
+        )
+
     app.add_middleware(
         SessionMiddleware,
         secret_key=secret_key,
         session_cookie="session",
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
-        https_only=(os.getenv("ENVIRONMENT") == "production"),
+        https_only=is_production,
     )
 
-    # Enable CORS
+    # Enable CORS - restrict to specific origins
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:6001,http://localhost:3000")
+    origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure based on needs
+        allow_origins=origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -225,7 +242,7 @@ def ensure_help_agent_system() -> None:
 
 def main():
     """Run the application."""
-    app = create_app()
+    create_app()
     port = int(os.getenv("CONTROL_PLANE_PORT", "6001"))
 
     logger.info(f"Starting Control Plane on port {port}")

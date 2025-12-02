@@ -14,8 +14,7 @@ from models import (
     get_db_session,
 )
 from utils.audit import AuditAction, log_permission_action
-from utils.errors import error_response
-from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
+from utils.pagination import build_pagination_response, paginate_query
 from utils.permissions import require_admin
 from utils.validation import validate_display_name, validate_group_name
 

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from flask import Response, has_request_context, jsonify, redirect, request, session, url_for
+from flask import Response, has_request_context, jsonify, redirect, request, session
 from google.auth.transport.requests import Request
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
@@ -283,7 +283,6 @@ class FastAPIAuthMiddleware:
     def _setup_routes(self) -> None:
         """Setup auth routes."""
         from fastapi import Request as FastAPIRequest
-        from fastapi.responses import RedirectResponse
 
         @self.app.get(self.callback_path)
         async def auth_callback(request: FastAPIRequest) -> Any:
@@ -301,7 +300,7 @@ class FastAPIAuthMiddleware:
                 return {"error": "Invalid session state"}
 
             try:
-                flow = get_flow(redirect_uri)
+                get_flow(redirect_uri)
                 # Note: FastAPI implementation would need async handling
                 # This is a simplified version
                 return {"message": "FastAPI auth callback - implementation needed"}

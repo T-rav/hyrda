@@ -536,6 +536,346 @@ Add the following to track improvement progress:
 
 ---
 
+## 🚨 NEW CRITICAL SECURITY ISSUES (Ultrathink Review - 2025-12-01)
+
+### 25. ✅ Open CORS Configuration (All Services)
+**Severity:** CRITICAL → **FIXED**
+**Status:** ✅ **RESOLVED** - CORS restricted to specific origins
+**Files:** `tasks/app.py:106`, `control_plane/app.py:87`, `agent-service/app.py:65`
+
+**Original Issue:** Wildcard CORS allowed any domain to make requests
+```python
+allow_origins=["*"],  # Allows ANY domain!
+```
+
+**Current Implementation:**
+```python
+# Enable CORS - restrict to specific origins
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5001,http://localhost:3000")
+origins_list = [origin.strip() for origin in allowed_origins.split(",")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins_list,  # Restricted to specific domains
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+**Security Note:** Defaults are only for local development. Production MUST set ALLOWED_ORIGINS env var.
+
+**Fixed:** 2025-12-01
+**Verified:** All services now use configurable origin list
+
+---
+
+### 26. ✅ OAUTHLIB_INSECURE_TRANSPORT Always Enabled
+**Severity:** CRITICAL → **FIXED**
+**Status:** ✅ **RESOLVED** - Only enabled in development
+
+**Original Issue:** Disabled HTTPS requirement for OAuth unconditionally
+```python
+os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # In production!
+```
+
+**Current Implementation:**
+```python
+# Allow OAuth over HTTP ONLY in local development (not production)
+if os.getenv("ENVIRONMENT") != "production":
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+```
+
+**Fixed:** 2025-12-01
+**Verified:** OAuth requires HTTPS in production
+
+---
+
+### 27. ✅ Default Secret Keys in Production
+**Severity:** CRITICAL → **FIXED**
+**Status:** ✅ **RESOLVED** - Production validation added
+
+**Original Issue:** Weak defaults used if SECRET_KEY env var not set
+
+**Current Implementation:**
+```python
+# Validate SECRET_KEY in production
+environment = os.getenv("ENVIRONMENT", "development")
+is_production = environment == "production"
+is_default_key = secret_key in [
+    "dev-secret-key-change-in-production",
+    "dev-secret-key-change-in-prod",
+    "dev-secret-change-in-prod",
+]
+if is_production and is_default_key:
+    raise ValueError(
+        "SECRET_KEY must be set to a secure value in production. "
+        "Current value is the default development key."
+    )
+```
+
+**Fixed:** 2025-12-01
+**Verified:** Applications fail-fast on startup if SECRET_KEY is not properly configured in production
+**Files:** `tasks/config/settings.py`, `control_plane/app.py`, `dashboard-service/app.py`
+
+---
+
+### 28. ✅ Missing Authentication on Critical Endpoints
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Authentication added to all critical endpoints
+
+**Original Issue:** No authentication on sensitive endpoints
+
+**Current Implementation:**
+```python
+# All critical endpoints now have authentication
+@router.get("/jobs/{job_id}")
+async def get_job(
+    request: Request, job_id: str, user: dict = Depends(get_current_user)  # ✅ Auth added
+):
+
+@router.get("/auth/status/{task_id}")
+async def check_gdrive_auth_status(
+    request: Request, task_id: str, user: dict = Depends(get_current_user)  # ✅ Auth added
+):
+
+@router.delete("/{cred_id}")
+async def delete_credential(
+    request: Request, cred_id: str, user: dict = Depends(get_current_user)  # ✅ Auth added
+):
+```
+
+**Fixed:** 2025-12-01
+**Verified:** All endpoints now require authentication
+**Files:** `tasks/api/jobs.py:62`, `tasks/api/gdrive.py:391`, `tasks/api/credentials.py:79`
+
+---
+
+### 29. XSS in Google Drive Auth HTML Response
+**Severity:** HIGH
+**Files:** `tasks/api/gdrive.py:283-310`
+**Issue:** Unsanitized credential_name in HTML
+```python
+content=f"<strong>Credential:</strong> {credential_name}<br>"  # Not escaped!
+```
+**Risk:** JavaScript injection via credential naming
+**Fix:** Use HTML escaping
+**Effort:** 30 minutes
+**Priority:** P1
+
+### 30. No Rate Limiting on Sensitive Endpoints
+**Severity:** HIGH
+**Files:** `tasks/api/jobs.py`, `tasks/api/task_runs.py`, `tasks/api/credentials.py`
+**Issue:** All job/credential endpoints lack rate limiting
+**Risk:** DoS attacks, credential enumeration
+**Fix:** Add @rate_limit decorator
+**Effort:** 3 hours
+**Priority:** P1
+
+### 31. No Input Validation on User-Supplied Names
+**Severity:** HIGH
+**Files:** `tasks/api/gdrive.py:42-48`
+**Issue:** No length/character validation on credential names
+**Risk:** Buffer overflow, storage DoS, XSS
+**Fix:** Validate input (max length, character whitelist)
+**Effort:** 2 hours
+**Priority:** P1
+
+---
+
+## ⚡ NEW PERFORMANCE & ARCHITECTURE ISSUES
+
+### 32. ✅ N+1 Query in User Sync Service
+**Severity:** CRITICAL → **FIXED**
+**Status:** ✅ **RESOLVED** - Using joinedload to prevent N+1 queries
+**Files:** `control_plane/services/user_sync.py:199-209`
+
+**Original Issue:** Queries users + memberships + loop checks = O(n) queries causing 1000 users = 1002 queries
+
+**Current Implementation:**
+```python
+# Deactivate identities no longer in the provider
+# Use joinedload to prevent N+1 query when accessing identity.user
+all_active_identities = (
+    session.query(UserIdentity)
+    .options(joinedload(UserIdentity.user))  # ✅ Eager load relationship
+    .filter(
+        UserIdentity.provider_type == provider_name,
+        UserIdentity.is_active == True,
+    )
+    .all()
+)
+
+for identity in all_active_identities:
+    if identity.provider_user_id not in active_provider_ids:
+        identity.is_active = False
+        identity.last_synced_at = datetime.utcnow()
+
+        # If this was the primary identity, deactivate the user
+        if identity.is_primary:
+            identity.user.is_active = False  # ✅ No additional query!
+            identity.user.last_synced_at = datetime.utcnow()
+```
+
+**Impact:** Reduced from O(n) to O(1) - now 1000 users = 1 query with JOIN instead of 1001 queries
+
+**Fixed:** 2025-12-01
+**Verified:** User sync now uses eager loading with joinedload
+
+### 33. Duplicate Service Code Across Microservices
+**Severity:** HIGH
+**Files:** `bot/services/langfuse_service.py` (754 lines), `agent-service/services/langfuse_service.py` (754 identical lines), plus RAG service, metrics service
+**Issue:** Identical code duplicated in 2+ services
+**Impact:** Maintenance nightmare, divergence risk, memory overhead
+**Fix:** Extract to shared library
+**Effort:** 16 hours
+**Priority:** P1
+
+### 34. Infinite Loop Without Cancellation Guard
+**Severity:** HIGH
+**Files:** `bot/app.py:79-89`
+**Issue:** `maintain_presence()` has while True without cancellation check
+```python
+while True:  # 5 min delay blocks graceful shutdown
+    await asyncio.sleep(300)
+```
+**Impact:** 5-minute shutdown delays
+**Fix:** Check for cancellation signal
+**Effort:** 30 minutes
+**Priority:** P1
+
+### 35. Long-Held Database Sessions (Memory Leak)
+**Severity:** HIGH
+**Files:** `control_plane/services/user_sync.py:70,245`, `control_plane/app.py:139,158,188`
+**Issue:** Session held open during entire sync (1000s of users)
+**Impact:** Connection pool exhaustion
+**Fix:** Batch processing with session close/reopen
+**Effort:** 4 hours
+**Priority:** P1
+
+### 36. God Object: Message Handler (929 lines)
+**Severity:** MEDIUM
+**Files:** `bot/handlers/message_handlers.py`
+**Issue:** Single file handles PDF extraction, routing, agents, permissions, responses (6+ responsibilities)
+**Impact:** High complexity, brittle changes
+**Fix:** Split into multiple focused handlers
+**Effort:** 12 hours
+**Priority:** P2
+
+### 37. Blocking PDF Extraction in Async Handler
+**Severity:** HIGH
+**Files:** `bot/handlers/message_handlers.py:52-97`
+**Issue:** Synchronous PDF processing in async function
+```python
+pdf_document = fitz.open(stream=pdf_content)  # BLOCKING!
+for page in pdf_document:  # Blocks event loop
+```
+**Impact:** Large PDFs freeze message handling
+**Fix:** Use run_in_executor for blocking IO
+**Effort:** 2 hours
+**Priority:** P1
+
+### 38. Missing Composite Indexes on Filtered Columns
+**Severity:** MEDIUM
+**Files:** `control_plane/models/user.py:31`
+**Issue:** Queries filter on (provider_type, provider_user_id) without composite index
+**Impact:** Slow user lookups during sync
+**Fix:** Add composite index
+**Effort:** 1 hour
+**Priority:** P2
+
+---
+
+## 🧪 CRITICAL TESTING GAPS
+
+### Control Plane - SEVERELY UNDER-TESTED ❌
+**Current:** 4 test files (only basic auth)
+**Missing:**
+- User sync integration tests
+- Permission validation tests
+- Agent registration tests
+- API contract tests
+- **Effort:** 20 hours
+- **Priority:** P0
+
+### Dashboard Service - VIRTUALLY UNTESTED ❌
+**Current:** 1 test file (auth only)
+**Missing:**
+- Health aggregation tests
+- Service discovery tests
+- Error handling for unavailable services
+- **Effort:** 12 hours
+- **Priority:** P0
+
+### Tasks Service - MISSING CRITICAL PATHS ⚠️
+**Current:** 13 tests, but gaps in:
+- Job execution failure recovery
+- OAuth credential rotation/expiration
+- Google Drive API failure scenarios
+- Concurrent job execution conflicts
+- **Effort:** 16 hours
+- **Priority:** P1
+
+### Integration Testing - SYSTEM-WIDE GAP ❌
+**Missing:**
+- Multi-service communication failures
+- End-to-end user flows
+- Circuit breaker activation tests
+- Service restart/recovery flows
+- **Effort:** 24 hours
+- **Priority:** P1
+
+### Load/Stress Testing - COMPLETELY ABSENT ❌
+**Missing:**
+- 100+ concurrent user simulations
+- Connection pool exhaustion scenarios
+- Message queue backlog handling
+- Vector DB query performance under load
+- **Effort:** 16 hours
+- **Priority:** P2
+
+---
+
+## 🏥 RELIABILITY & OBSERVABILITY GAPS
+
+### 39. Incomplete Health Checks
+**Severity:** MEDIUM
+**Files:** All services
+**Issue:** Health endpoints don't verify dependencies (DB, Redis, Vector DB, external APIs)
+```python
+@app.get("/health")
+async def health():
+    return {"service": "agent-service"}  # Doesn't check LLM, VectorDB!
+```
+**Fix:** Verify all critical dependencies
+**Effort:** 8 hours
+**Priority:** P1
+
+### 40. No Configuration Validation at Startup
+**Severity:** MEDIUM
+**Files:** All services
+**Issue:** Invalid env vars not detected until runtime failure
+**Impact:** Crashes hours after deployment
+**Fix:** Validate all required configs on startup
+**Effort:** 6 hours
+**Priority:** P1
+
+### 41. No Distributed Tracing
+**Severity:** MEDIUM
+**Issue:** No correlation IDs across service calls
+**Impact:** Impossible to trace requests through system
+**Fix:** Add correlation ID middleware
+**Effort:** 8 hours
+**Priority:** P2
+
+### 42. No Graceful Degradation Strategy
+**Severity:** MEDIUM
+**Issue:** Services crash when dependencies unavailable instead of degrading
+**Fix:** Implement fallback strategies
+**Effort:** 12 hours
+**Priority:** P2
+
+---
+
 ## 🎨 CONTROL PLANE UI ENHANCEMENTS
 
 ### Agent Registration & Management UI

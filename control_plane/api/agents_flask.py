@@ -132,7 +132,7 @@ def register_agent() -> Response:
                     # Before reactivating, double-check no active agent with same name exists
                     existing_active = session.query(AgentMetadata).filter(
                         AgentMetadata.agent_name == agent_name,
-                        AgentMetadata.is_deleted == False
+                        not AgentMetadata.is_deleted
                     ).first()
                     if existing_active:
                         return error_response(

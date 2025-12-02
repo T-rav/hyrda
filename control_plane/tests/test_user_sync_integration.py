@@ -8,7 +8,7 @@ Tests the complete sync flow including:
 """
 
 import pytest
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -110,7 +110,7 @@ class TestUserSyncIntegration:
             primary_provider="slack",
             is_active=True,
             is_admin=False,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(user)
         test_session.flush()
@@ -123,7 +123,7 @@ class TestUserSyncIntegration:
             display_name="Alice Smith",
             is_primary=True,
             is_active=True,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(slack_identity)
         test_session.commit()
@@ -174,7 +174,7 @@ class TestUserSyncIntegration:
             primary_provider="slack",
             is_active=True,
             is_admin=False,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(user)
         test_session.flush()
@@ -187,7 +187,7 @@ class TestUserSyncIntegration:
             display_name="Alice Old Name",
             is_primary=True,
             is_active=True,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(identity)
         test_session.commit()
@@ -260,7 +260,7 @@ class TestUserSyncIntegration:
             primary_provider="slack",
             is_active=True,
             is_admin=False,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(user)
         test_session.flush()
@@ -273,7 +273,7 @@ class TestUserSyncIntegration:
             display_name="Removed User",
             is_primary=True,
             is_active=True,
-            last_synced_at=datetime.utcnow(),
+            last_synced_at=datetime.now(UTC),
         )
         test_session.add(identity)
         test_session.commit()

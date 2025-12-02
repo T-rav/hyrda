@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +14,6 @@ if str(control_plane_dir) not in sys.path:
 
 from utils.auth import (
     AuditLogger,
-    AuthError,
     get_flow,
     get_redirect_uri,
     verify_domain,
@@ -26,7 +25,6 @@ from utils.auth import (
 def app():
     """Get FastAPI app for testing."""
     from app import create_app
-    from starlette.testclient import TestClient
 
     fastapi_app = create_app()
     yield fastapi_app

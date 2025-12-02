@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Callable
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)

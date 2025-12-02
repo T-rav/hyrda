@@ -7,12 +7,13 @@ import sys
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from config.settings import get_settings
+from dependencies.auth import get_current_user
 from models.base import get_db_session
 from models.oauth_credential import OAuthCredential
 from services.encryption_service import get_encryption_service
@@ -34,8 +35,9 @@ async def initiate_gdrive_auth(request: Request):
         Authorization URL and credential ID
     """
     try:
-        # Allow OAuth over HTTP for local development
-        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+        # Allow OAuth over HTTP ONLY in local development (not production)
+        if os.getenv("ENVIRONMENT") != "production":
+            os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
         data = await request.json()
         task_id = data.get("task_id")  # Unique identifier for this task
@@ -123,8 +125,9 @@ async def gdrive_auth_callback(request: Request):
         HTML success or error page
     """
     try:
-        # Allow OAuth over HTTP for local development
-        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+        # Allow OAuth over HTTP ONLY in local development (not production)
+        if os.getenv("ENVIRONMENT") != "production":
+            os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
         # Get state, task_id, credential_id, and credential_name from session
         state = request.session.get("oauth_state")
@@ -385,7 +388,9 @@ async def gdrive_auth_callback(request: Request):
 
 
 @router.get("/auth/status/{task_id}")
-async def check_gdrive_auth_status(request: Request, task_id: str):
+async def check_gdrive_auth_status(
+    request: Request, task_id: str, user: dict = Depends(get_current_user)
+):
     """Check if Google Drive authentication exists for a task.
 
     Args:
