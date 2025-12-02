@@ -537,5 +537,51 @@ Add the following to track improvement progress:
 
 ---
 
+## 🎨 CONTROL PLANE UI ENHANCEMENTS
+
+### Agent Registration & Management UI
+**Status:** 🟡 In Progress
+**Priority:** P1 - High
+
+**Goal:** Build UI for managing agent registration and aliases through the control plane.
+
+**Scope:**
+- **Registration UI**: View and manage registered agents
+- **Aliases Management**: Add/edit/delete agent aliases (alternative names)
+- **Access Control**: Group-based permissions (already implemented in backend)
+- **Agent Discovery**: Display agent metadata for routing
+
+**Out of Scope:**
+- Agent implementation (stays in agent-service code)
+- Prompt editing (prompts live in agent framework)
+- Tool configuration (tools defined in agent classes)
+
+**Architecture:**
+```
+Control Plane (UI) → Agent Registry + Access Control
+Agent Service (Code) → Agent Implementation + Prompts + Tools
+```
+
+**Tasks:**
+- [ ] Create agent list/grid view component
+- [ ] Build alias management interface
+- [ ] Add agent registration form
+- [ ] Display agent metadata (display_name, description, is_system, is_public)
+- [ ] Integrate with existing permission system
+- [ ] Add search/filter functionality
+- [ ] Show which groups have access to each agent
+
+**Dependencies:**
+- ✅ FastAPI backend complete (100% test coverage)
+- ✅ Agent registration endpoint working
+- ✅ Permission system implemented
+- ⏳ React UI components needed
+
+**Effort:** 16 hours
+**Owner:** Frontend Team
+**Priority:** P1
+
+---
+
 **Last Updated:** 2025-12-01
 **Next Review:** 2025-03-01 (Quarterly)
