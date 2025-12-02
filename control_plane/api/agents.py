@@ -90,8 +90,7 @@ async def list_agents(request: Request) -> dict[str, Any]:
 
 
 @router.post("/register")
-# TODO: Re-implement idempotency for FastAPI
-# @require_idempotency(ttl_hours=24)
+@require_idempotency(ttl_hours=24)
 async def register_agent(request: Request) -> dict[str, Any]:
     """Register or update an agent in the database.
 
