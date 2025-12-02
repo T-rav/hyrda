@@ -245,8 +245,9 @@ FastAPIAuthMiddleware(app, service_base_url="http://localhost:8000")
 ---
 
 ### 7. 5,282 Bare Exception Handlers
-**Severity:** HIGH
+**Severity:** HIGH → **DEPRIORITIZED**
 **Files:** Across entire codebase
+**Priority:** P3 (was P1)
 
 **Issue:** `except Exception:` and bare `except:` everywhere
 
@@ -255,26 +256,12 @@ FastAPIAuthMiddleware(app, service_base_url="http://localhost:8000")
 - Hides bugs in production
 - Cannot distinguish error types
 
-**Fix:**
-```python
-# BAD
-try:
-    process()
-except Exception as e:  # Too broad!
-    logger.error(e)
+**Mitigation:** All exceptions are currently logged, providing visibility into errors
 
-# GOOD
-try:
-    process()
-except ValueError as e:
-    logger.error(f"Invalid input: {e}")
-except HTTPException as e:
-    logger.error(f"API error: {e}")
-# Let other exceptions propagate
-```
+**Note:** While not ideal, the current implementation logs all exceptions which provides adequate observability. This can be improved incrementally as part of regular maintenance rather than requiring a 20-hour bulk refactor.
 
 **Effort:** 20 hours (bulk refactor)
-**Priority:** P1
+**Deferred:** 2025-12-02 - Adequate logging in place
 
 ---
 
@@ -786,13 +773,23 @@ async def delete_credential(
 **Fixed:** 2025-12-01
 
 ### 30. No Rate Limiting on Sensitive Endpoints
-**Severity:** HIGH
+**Severity:** HIGH → **DEPRIORITIZED**
 **Files:** `tasks/api/jobs.py`, `tasks/api/task_runs.py`, `tasks/api/credentials.py`
+**Priority:** P2 (was P1)
+
 **Issue:** All job/credential endpoints lack rate limiting
+
 **Risk:** DoS attacks, credential enumeration
-**Fix:** Add @rate_limit decorator
+
+**Mitigation:**
+- OAuth authentication required on all sensitive endpoints (prevents anonymous abuse)
+- Domain restriction limits to internal @8thlight.com users only
+- Audit logging tracks all access for monitoring
+
+**Note:** With OAuth authentication and domain restriction in place, the attack surface is significantly reduced. Rate limiting would be an additional layer of defense but is not critical for internal-only services.
+
 **Effort:** 3 hours
-**Priority:** P1
+**Deferred:** 2025-12-02 - OAuth provides primary protection
 
 ### 31. ✅ No Input Validation on User-Supplied Names
 **Severity:** HIGH → **FIXED**
