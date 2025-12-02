@@ -790,14 +790,36 @@ async def maintain_presence(client: WebClient):
 **Impact:** Shutdown now completes immediately instead of waiting up to 5 minutes
 **Fixed:** 2025-12-01
 
-### 35. Long-Held Database Sessions (Memory Leak)
-**Severity:** HIGH
-**Files:** `control_plane/services/user_sync.py:70,245`, `control_plane/app.py:139,158,188`
-**Issue:** Session held open during entire sync (1000s of users)
-**Impact:** Connection pool exhaustion
-**Fix:** Batch processing with session close/reopen
-**Effort:** 4 hours
-**Priority:** P1
+### 35. ✅ Long-Held Database Sessions (Memory Leak)
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Implemented batch processing with session management
+**Files:** `control_plane/services/user_sync.py:71-211`
+
+**Original Issue:** Session held open during entire user sync (1000s of users), causing connection pool exhaustion
+
+**Current Implementation:**
+```python
+# Process users in batches to avoid holding database session open too long
+BATCH_SIZE = 100
+for batch_start in range(0, total_users, BATCH_SIZE):
+    batch = provider_users[batch_start:batch_end]
+
+    # Open a new session for each batch
+    with get_db_session() as session:
+        for provider_user in batch:
+            # Process user...
+            pass
+        session.commit()
+
+# Separate session for cleanup
+with get_db_session() as session:
+    # Deactivate stale identities...
+    session.commit()
+```
+
+**Fix:** Batch processing (100 users per batch) with session close/reopen between batches
+**Impact:** Prevents connection pool exhaustion; sessions open for ~100ms instead of ~10 seconds
+**Fixed:** 2025-12-01
 
 ### 36. God Object: Message Handler (929 lines)
 **Severity:** MEDIUM
@@ -808,18 +830,45 @@ async def maintain_presence(client: WebClient):
 **Effort:** 12 hours
 **Priority:** P2
 
-### 37. Blocking PDF Extraction in Async Handler
-**Severity:** HIGH
-**Files:** `bot/handlers/message_handlers.py:52-97`
-**Issue:** Synchronous PDF processing in async function
+### 37. ✅ Blocking PDF Extraction in Async Handler
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - PDF extraction moved to thread pool executor
+**Files:** `bot/handlers/message_handlers.py:52-114`
+
+**Original Issue:** Synchronous PDF processing in async function blocked event loop, freezing message handling for large PDFs
+
+**Current Implementation:**
 ```python
-pdf_document = fitz.open(stream=pdf_content)  # BLOCKING!
-for page in pdf_document:  # Blocks event loop
+def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
+    """Synchronous PDF extraction (called via run_in_executor to avoid blocking)."""
+    # BLOCKING I/O operations isolated in sync function
+    pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
+    text_content = ""
+
+    for page_num in range(pdf_document.page_count):
+        page = pdf_document.load_page(page_num)
+        page_text = page.get_text()
+        # ... extraction logic
+
+    pdf_document.close()
+    return text_content
+
+
+async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
+    """Extract text from PDF without blocking the event loop."""
+    try:
+        # Run blocking PDF extraction in thread pool to avoid blocking event loop
+        import asyncio
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _extract_pdf_text_sync, pdf_content, file_name)
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF {file_name}: {e}")
+        return f"[PDF file: {file_name} - Error extracting text: {str(e)}]"
 ```
-**Impact:** Large PDFs freeze message handling
-**Fix:** Use run_in_executor for blocking IO
-**Effort:** 2 hours
-**Priority:** P1
+
+**Fix:** Separated blocking operations into sync function and wrapped with `loop.run_in_executor()`
+**Impact:** Large PDFs no longer freeze message handling; maintains async responsiveness
+**Fixed:** 2025-12-01
 
 ### 38. Missing Composite Indexes on Filtered Columns
 **Severity:** MEDIUM

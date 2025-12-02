@@ -68,135 +68,152 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
         # Track active provider IDs from this sync
         active_provider_ids = set()
 
-        # Sync to security database
-        with get_db_session() as session:
-            for provider_user in provider_users:
-                try:
-                    # Skip bots and deleted users
-                    if provider.is_bot(provider_user):
-                        stats["skipped"] += 1
-                        continue
+        # Process users in batches to avoid holding database session open too long
+        # This prevents connection pool exhaustion with large user counts
+        BATCH_SIZE = 100
+        total_users = len(provider_users)
 
-                    if provider.is_deleted(provider_user):
-                        stats["skipped"] += 1
-                        continue
+        for batch_start in range(0, total_users, BATCH_SIZE):
+            batch_end = min(batch_start + BATCH_SIZE, total_users)
+            batch = provider_users[batch_start:batch_end]
+            logger.info(f"Processing user batch {batch_start+1}-{batch_end} of {total_users}")
 
-                    # Extract user data
-                    provider_user_id = provider.get_user_id(provider_user)
-                    email = provider.get_user_email(provider_user)
-                    full_name = provider.get_user_name(provider_user)
+            # Open a new session for each batch
+            with get_db_session() as session:
+                for provider_user in batch:
+                    try:
+                        # Skip bots and deleted users
+                        if provider.is_bot(provider_user):
+                            stats["skipped"] += 1
+                            continue
 
-                    # Skip users without email
-                    if not email:
-                        logger.debug(f"Skipping user {provider_user_id} (no email)")
-                        stats["skipped"] += 1
-                        continue
+                        if provider.is_deleted(provider_user):
+                            stats["skipped"] += 1
+                            continue
 
-                    # Apply email domain filter if configured
-                    if allowed_domain and not email.endswith(allowed_domain):
-                        logger.debug(f"Skipping user {email} (doesn't match domain filter)")
-                        stats["skipped"] += 1
-                        continue
+                        # Extract user data
+                        provider_user_id = provider.get_user_id(provider_user)
+                        email = provider.get_user_email(provider_user)
+                        full_name = provider.get_user_name(provider_user)
 
-                    # Track this provider ID as active
-                    active_provider_ids.add(provider_user_id)
+                        # Skip users without email
+                        if not email:
+                            logger.debug(f"Skipping user {provider_user_id} (no email)")
+                            stats["skipped"] += 1
+                            continue
 
-                    # Check if identity already exists for this provider
-                    existing_identity = (
-                        session.query(UserIdentity)
-                        .filter(
-                            UserIdentity.provider_type == provider_name,
-                            UserIdentity.provider_user_id == provider_user_id,
-                        )
-                        .first()
-                    )
+                        # Apply email domain filter if configured
+                        if allowed_domain and not email.endswith(allowed_domain):
+                            logger.debug(f"Skipping user {email} (doesn't match domain filter)")
+                            stats["skipped"] += 1
+                            continue
 
-                    if existing_identity:
-                        # Update existing identity
-                        existing_identity.provider_email = email
-                        existing_identity.display_name = full_name
-                        existing_identity.is_active = True
-                        existing_identity.last_synced_at = datetime.now(UTC)
-                        stats["identities_updated"] += 1
+                        # Track this provider ID as active
+                        active_provider_ids.add(provider_user_id)
 
-                        # Update parent user if this is the primary identity
-                        if existing_identity.is_primary:
-                            user = existing_identity.user
-                            user.email = email
-                            user.full_name = full_name
-                            user.is_active = True
-                            user.last_synced_at = datetime.now(UTC)
-                            stats["updated"] += 1
-                            logger.debug(f"Updated user: {email}")
-
-                    else:
-                        # Check if user already exists (by email or legacy ID)
-                        existing_user = (
-                            session.query(User)
-                            .filter(User.email == email)
+                        # Check if identity already exists for this provider
+                        existing_identity = (
+                            session.query(UserIdentity)
+                            .filter(
+                                UserIdentity.provider_type == provider_name,
+                                UserIdentity.provider_user_id == provider_user_id,
+                            )
                             .first()
                         )
 
-                        if not existing_user and provider_name == "slack":
-                            # For backward compatibility, check slack_user_id
+                        if existing_identity:
+                            # Update existing identity
+                            existing_identity.provider_email = email
+                            existing_identity.display_name = full_name
+                            existing_identity.is_active = True
+                            existing_identity.last_synced_at = datetime.now(UTC)
+                            stats["identities_updated"] += 1
+
+                            # Update parent user if this is the primary identity
+                            if existing_identity.is_primary:
+                                user = existing_identity.user
+                                user.email = email
+                                user.full_name = full_name
+                                user.is_active = True
+                                user.last_synced_at = datetime.now(UTC)
+                                stats["updated"] += 1
+                                logger.debug(f"Updated user: {email}")
+
+                        else:
+                            # Check if user already exists (by email or legacy ID)
                             existing_user = (
                                 session.query(User)
-                                .filter(User.slack_user_id == provider_user_id)
+                                .filter(User.email == email)
                                 .first()
                             )
 
-                        if existing_user:
-                            # User exists, add new identity
-                            new_identity = UserIdentity(
-                                user_id=existing_user.id,
-                                provider_type=provider_name,
-                                provider_user_id=provider_user_id,
-                                provider_email=email,
-                                display_name=full_name,
-                                is_primary=False,  # Existing user keeps their primary
-                                is_active=True,
-                                last_synced_at=datetime.now(UTC),
-                            )
-                            session.add(new_identity)
-                            stats["identities_created"] += 1
-                            logger.debug(f"Linked {provider_name} identity to existing user: {email}")
+                            if not existing_user and provider_name == "slack":
+                                # For backward compatibility, check slack_user_id
+                                existing_user = (
+                                    session.query(User)
+                                    .filter(User.slack_user_id == provider_user_id)
+                                    .first()
+                                )
 
-                        else:
-                            # Create new user with identity
-                            new_user = User(
-                                slack_user_id=provider_user_id if provider_name == "slack" else "",
-                                email=email,
-                                full_name=full_name,
-                                primary_provider=provider_name,
-                                is_active=True,
-                                is_admin=False,
-                                last_synced_at=datetime.now(UTC),
-                            )
-                            session.add(new_user)
-                            session.flush()  # Get user ID
+                            if existing_user:
+                                # User exists, add new identity
+                                new_identity = UserIdentity(
+                                    user_id=existing_user.id,
+                                    provider_type=provider_name,
+                                    provider_user_id=provider_user_id,
+                                    provider_email=email,
+                                    display_name=full_name,
+                                    is_primary=False,  # Existing user keeps their primary
+                                    is_active=True,
+                                    last_synced_at=datetime.now(UTC),
+                                )
+                                session.add(new_identity)
+                                stats["identities_created"] += 1
+                                logger.debug(f"Linked {provider_name} identity to existing user: {email}")
 
-                            # Create primary identity
-                            new_identity = UserIdentity(
-                                user_id=new_user.id,
-                                provider_type=provider_name,
-                                provider_user_id=provider_user_id,
-                                provider_email=email,
-                                display_name=full_name,
-                                is_primary=True,
-                                is_active=True,
-                                last_synced_at=datetime.now(UTC),
-                            )
-                            session.add(new_identity)
-                            stats["created"] += 1
-                            stats["identities_created"] += 1
-                            logger.debug(f"Created user with {provider_name} identity: {email}")
+                            else:
+                                # Create new user with identity
+                                new_user = User(
+                                    slack_user_id=provider_user_id if provider_name == "slack" else "",
+                                    email=email,
+                                    full_name=full_name,
+                                    primary_provider=provider_name,
+                                    is_active=True,
+                                    is_admin=False,
+                                    last_synced_at=datetime.now(UTC),
+                                )
+                                session.add(new_user)
+                                session.flush()  # Get user ID
 
-                except Exception as e:
-                    logger.error(f"Error syncing user: {e}", exc_info=True)
-                    stats["errors"] += 1
-                    continue
+                                # Create primary identity
+                                new_identity = UserIdentity(
+                                    user_id=new_user.id,
+                                    provider_type=provider_name,
+                                    provider_user_id=provider_user_id,
+                                    provider_email=email,
+                                    display_name=full_name,
+                                    is_primary=True,
+                                    is_active=True,
+                                    last_synced_at=datetime.now(UTC),
+                                )
+                                session.add(new_identity)
+                                stats["created"] += 1
+                                stats["identities_created"] += 1
+                                logger.debug(f"Created user with {provider_name} identity: {email}")
 
-            # Deactivate identities no longer in the provider
+                    except Exception as e:
+                        logger.error(f"Error syncing user: {e}", exc_info=True)
+                        stats["errors"] += 1
+                        continue
+
+                # Commit batch changes
+                session.commit()
+                logger.info(f"Committed batch {batch_start+1}-{batch_end}")
+
+        # After all batches processed, deactivate identities no longer in the provider
+        # Use a separate session for this cleanup operation
+        logger.info(f"Deactivating identities no longer in {provider_name}")
+        with get_db_session() as session:
             # Use joinedload to prevent N+1 query when accessing identity.user
             all_active_identities = (
                 session.query(UserIdentity)
@@ -222,7 +239,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                         identity.user.last_synced_at = datetime.now(UTC)
                         stats["deactivated"] += 1
 
-            # Commit all changes
+            # Commit deactivation changes
             session.commit()
 
         # Add all active users to the "All Users" system group
