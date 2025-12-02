@@ -7,6 +7,7 @@ from typing import Any
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
+from bot_types import SlackFileUploadResponse, SlackMessageResponse
 from config.settings import SlackSettings
 from models import ThreadInfo
 from utils.errors import delete_message
@@ -29,7 +30,7 @@ class SlackService:
         thread_ts: str | None = None,
         blocks: list[dict[str, Any]] | None = None,
         mrkdwn: bool = True,
-    ) -> dict[str, Any] | None:
+    ) -> SlackMessageResponse | None:
         """Send a message to a Slack channel
 
         Returns:
@@ -54,7 +55,7 @@ class SlackService:
         ts: str,
         text: str,
         blocks: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any] | None:
+    ) -> SlackMessageResponse | None:
         """Update an existing Slack message
 
         Args:
@@ -172,7 +173,7 @@ class SlackService:
         title: str | None = None,
         initial_comment: str | None = None,
         thread_ts: str | None = None,
-    ) -> dict[str, Any] | None:
+    ) -> SlackFileUploadResponse | None:
         """Upload a file to a Slack channel or thread.
 
         Args:

@@ -223,6 +223,32 @@ class QueryRewriterStats(TypedDict):
     cache_misses: NotRequired[int]  # Optional cache miss count
 
 
+class SlackMessageResponse(TypedDict, total=False):
+    """Response from Slack API for message operations.
+
+    Contains common fields from chat.postMessage, chat.update, etc.
+    Not all fields are always present - use total=False for flexibility.
+    """
+
+    ok: bool  # Whether the API call succeeded
+    ts: str  # Message timestamp (used as unique identifier)
+    channel: str  # Channel ID where message was posted
+    message: dict[str, Any]  # Full message object with metadata
+    error: str  # Error message if ok=False
+    warning: str  # Warning message if present
+
+
+class SlackFileUploadResponse(TypedDict, total=False):
+    """Response from Slack API for file upload operations.
+
+    Contains common fields from files.upload API call.
+    """
+
+    ok: bool  # Whether the API call succeeded
+    file: dict[str, Any]  # File object with metadata (id, name, url, etc.)
+    error: str  # Error message if ok=False
+
+
 # Export all types
 __all__ = [
     "ChunkMetadata",
@@ -237,4 +263,6 @@ __all__ = [
     "QueryIntent",
     "QueryRewriteResult",
     "QueryRewriterStats",
+    "SlackMessageResponse",
+    "SlackFileUploadResponse",
 ]
