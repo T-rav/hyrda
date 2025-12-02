@@ -10,9 +10,15 @@ from pydantic import BaseModel, Field
 
 from services.agent_registry import (
     get as get_agent,
+)
+from services.agent_registry import (
     get_primary_name,
+)
+from services.agent_registry import (
     list_agents as list_agents_func,
 )
+from services.metrics_service import get_metrics_service
+from utils.validation import validate_agent_name
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +61,11 @@ async def list_agents():
             {
                 "name": agent["name"],
                 "aliases": agent.get("aliases", []),
-                "description": agent.get("description", "") or (
-                    getattr(agent.get("agent_class"), "description", "") if agent.get("agent_class") else ""
+                "description": agent.get("description", "")
+                or (
+                    getattr(agent.get("agent_class"), "description", "")
+                    if agent.get("agent_class")
+                    else ""
                 ),
             }
             for agent in agents
@@ -75,8 +84,13 @@ async def get_agent_info(agent_name: str):
         Agent metadata including schema information
 
     Raises:
-        HTTPException: If agent not found
+        HTTPException: If agent not found or invalid
     """
+    # Validate agent name to prevent injection
+    is_valid, error_msg = validate_agent_name(agent_name)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid agent name: {error_msg}")
+
     agent_info = get_agent(agent_name)
     if not agent_info:
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
@@ -87,9 +101,8 @@ async def get_agent_info(agent_name: str):
     return {
         "name": primary_name,
         "aliases": agent_info.get("aliases", []),
-        "description": agent_info.get("description", "") or (
-            getattr(agent_class, "description", "") if agent_class else ""
-        ),
+        "description": agent_info.get("description", "")
+        or (getattr(agent_class, "description", "") if agent_class else ""),
         "is_alias": agent_name.lower() != primary_name,
     }
 
@@ -106,9 +119,12 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
         Agent execution result
 
     Raises:
-        HTTPException: If agent not found or execution fails
+        HTTPException: If agent not found, invalid, or execution fails
     """
-    from services.metrics_service import get_metrics_service
+    # Validate agent name to prevent injection
+    is_valid, error_msg = validate_agent_name(agent_name)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid agent name: {error_msg}")
 
     logger.info(f"Invoking agent '{agent_name}' with query: {request.query[:100]}...")
 
@@ -122,7 +138,7 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
     if not agent_class:
         raise HTTPException(
             status_code=503,
-            detail=f"Agent '{agent_name}' is not available (class not loaded)"
+            detail=f"Agent '{agent_name}' is not available (class not loaded)",
         )
 
     # Track invocation timing
@@ -173,9 +189,7 @@ async def stream_agent(agent_name: str, request: AgentInvokeRequest):
     Raises:
         HTTPException: If agent not found or execution fails
     """
-    logger.info(
-        f"Streaming agent '{agent_name}' with query: {request.query[:100]}..."
-    )
+    logger.info(f"Streaming agent '{agent_name}' with query: {request.query[:100]}...")
 
     # Get agent from registry
     agent_info = get_agent(agent_name)
@@ -185,8 +199,10 @@ async def stream_agent(agent_name: str, request: AgentInvokeRequest):
     # Check if agent class is available
     agent_class = agent_info.get("agent_class")
     if not agent_class:
+
         async def error_generator():
             yield f"data: ERROR: Agent '{agent_name}' is not available (class not loaded)\n\n"
+
         return StreamingResponse(
             error_generator(),
             media_type="text/event-stream",
