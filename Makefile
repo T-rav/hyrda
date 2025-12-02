@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
+.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -57,8 +57,6 @@ help:
 	@echo "$(GREEN)Development:$(RESET)"
 	@echo "  run             Run the bot (standalone)"
 	@echo "  test            Run bot test suite"
-	@echo "  test-all        🧪 Run ALL tests across all services (620+ tests)"
-	@echo "  test-coverage   Run tests with coverage report"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-unit       Run unit tests only"
@@ -70,7 +68,7 @@ help:
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
-	@echo "  quality         Run all quality checks"
+	@echo "  ci              🚀 Run complete CI pipeline (linting + all tests + UI + Docker)"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
 	@echo "  docker-build-bot Build single bot Docker image"
@@ -84,7 +82,6 @@ help:
 	@echo "  setup-dev       Setup development environment with pre-commit"
 	@echo "  pre-commit      Run pre-commit hooks on all files"
 	@echo "  security        Run security scanning with bandit"
-	@echo "  ci              Run all CI checks locally"
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
 	@echo ""
@@ -157,10 +154,6 @@ test: $(VENV)
 	@echo "$(BLUE)Running test suite (excluding integration tests)...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
 
-test-coverage: $(VENV)
-	@echo "$(BLUE)Running tests with coverage (excluding integration tests)...$(RESET)"
-	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration" && $(PYTHON) -m coverage report
-
 test-file: $(VENV)
 	@echo "$(BLUE)Running specific test file: $(FILE)...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -v tests/$(FILE)
@@ -184,21 +177,6 @@ test-tasks: $(VENV)
 test-agent-service: $(VENV)
 	@echo "$(BLUE)Running agent service tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0 -k "not (test_agent_processes or test_profile_agent)" || echo "$(YELLOW)Some agent-service tests skipped due to import errors$(RESET)"
-
-test-all: $(VENV)
-	@echo "$(GREEN)🧪 Running ALL test suites across services...$(RESET)"
-	@echo ""
-	@echo "$(BLUE)📦 Bot tests (core service)...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short || exit 1
-	@echo ""
-	@echo "$(BLUE)🎛️  Control plane tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
-	@echo ""
-	@echo "$(BLUE)⏰ Tasks service tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
-	@echo ""
-	@echo "$(GREEN)✅ All test suites passed!$(RESET)"
-	@echo "$(YELLOW)Note: agent-service tests have collection errors and are skipped$(RESET)"
 
 lint-tasks: $(VENV)
 	@echo "$(BLUE)Running task service linting...$(RESET)"
@@ -277,8 +255,6 @@ lint-check:
 typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
 	cd $(BOT_DIR) && $(VENV)/bin/pyright || $(PYTHON) -m pyright
-
-quality: lint-check test
 
 docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
@@ -401,18 +377,37 @@ ui-dev:
 	@echo "$(YELLOW)Note: Dev server runs on port 5173 by default$(RESET)"
 	cd $(BOT_DIR)/health_ui && npm run dev
 
-# Combined quality check (Python + React)
-quality-all: quality ui-lint ui-test
-	@echo "$(GREEN)✅ All quality checks (Python + React) passed!$(RESET)"
-
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
-ci: quality test-all ui-lint ui-test docker-build
-	@echo "✅ All CI checks passed (Python + React + Docker + All Services)!"
+ci: $(VENV) health-ui tasks-ui
+	@echo "$(GREEN)🚀 Running complete CI pipeline...$(RESET)"
+	@echo ""
+	@echo "$(BLUE)📝 Step 1/6: Linting bot code...$(RESET)"
+	@$(MAKE) lint-check
+	@echo ""
+	@echo "$(BLUE)🧪 Step 2/6: Running bot tests...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short || exit 1
+	@echo ""
+	@echo "$(BLUE)🎛️  Step 3/6: Running control plane tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
+	@echo ""
+	@echo "$(BLUE)⏰ Step 4/6: Running tasks service tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0 || exit 1
+	@echo ""
+	@echo "$(BLUE)🎨 Step 5/6: Running React UI checks...$(RESET)"
+	@cd $(BOT_DIR)/health_ui && npm run lint && npm run test:coverage
+	@cd $(PROJECT_ROOT_DIR)/tasks/ui && npm run lint && npm run test:coverage
+	@echo ""
+	@echo "$(BLUE)🐳 Step 6/6: Building Docker images...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
+	@echo ""
+	@echo "$(GREEN)✅ ================================$(RESET)"
+	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"
+	@echo "$(GREEN)✅ ================================$(RESET)"
 
 pre-commit:
 	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files

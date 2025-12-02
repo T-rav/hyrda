@@ -42,22 +42,23 @@ class TestPromptManager:
             "email_address": "john@example.com",
         }
 
-        with patch(
-            "handlers.prompt_manager.get_prompt_service",
-            return_value=mock_prompt_service,
-        ):
-            # Patch the import inside the function
-            with patch(
+        with (
+            patch(
+                "handlers.prompt_manager.get_prompt_service",
+                return_value=mock_prompt_service,
+            ),
+            patch(
                 "services.user_service.get_user_service",
                 return_value=mock_user_service,
-            ):
-                result = get_user_system_prompt(user_id="U123")
+            ),
+        ):
+            result = get_user_system_prompt(user_id="U123")
 
-                # Should contain base prompt and user context
-                assert "Base prompt" in result
-                assert "John Doe" in result
-                assert "john@example.com" in result
-                assert "Current User Context" in result
+            # Should contain base prompt and user context
+            assert "Base prompt" in result
+            assert "John Doe" in result
+            assert "john@example.com" in result
+            assert "Current User Context" in result
 
     def test_get_user_system_prompt_user_info_error(self):
         """Test prompt when user info retrieval fails"""
@@ -67,12 +68,15 @@ class TestPromptManager:
         mock_user_service = Mock()
         mock_user_service.get_user_info.side_effect = Exception("Database error")
 
-        with patch(
-            "handlers.prompt_manager.get_prompt_service",
-            return_value=mock_prompt_service,
-        ), patch(
-            "services.user_service.get_user_service",
-            return_value=mock_user_service,
+        with (
+            patch(
+                "handlers.prompt_manager.get_prompt_service",
+                return_value=mock_prompt_service,
+            ),
+            patch(
+                "services.user_service.get_user_service",
+                return_value=mock_user_service,
+            ),
         ):
             result = get_user_system_prompt(user_id="U123")
 
@@ -87,12 +91,15 @@ class TestPromptManager:
         mock_user_service = Mock()
         mock_user_service.get_user_info.return_value = None
 
-        with patch(
-            "handlers.prompt_manager.get_prompt_service",
-            return_value=mock_prompt_service,
-        ), patch(
-            "services.user_service.get_user_service",
-            return_value=mock_user_service,
+        with (
+            patch(
+                "handlers.prompt_manager.get_prompt_service",
+                return_value=mock_prompt_service,
+            ),
+            patch(
+                "services.user_service.get_user_service",
+                return_value=mock_user_service,
+            ),
         ):
             result = get_user_system_prompt(user_id="U123")
 
@@ -110,12 +117,15 @@ class TestPromptManager:
             # Missing real_name and email_address
         }
 
-        with patch(
-            "handlers.prompt_manager.get_prompt_service",
-            return_value=mock_prompt_service,
-        ), patch(
-            "services.user_service.get_user_service",
-            return_value=mock_user_service,
+        with (
+            patch(
+                "handlers.prompt_manager.get_prompt_service",
+                return_value=mock_prompt_service,
+            ),
+            patch(
+                "services.user_service.get_user_service",
+                return_value=mock_user_service,
+            ),
         ):
             result = get_user_system_prompt(user_id="U123")
 

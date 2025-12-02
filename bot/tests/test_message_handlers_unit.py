@@ -24,19 +24,19 @@ class TestConversationIDLogic:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts="1234.5678",
-                    message_ts="9999.0000",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                message_ts="9999.0000",
+            )
 
         # Verify LLM was called with thread_ts as conversation_id
         mock_llm.get_response.assert_called_once()
@@ -54,19 +54,19 @@ class TestConversationIDLogic:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="D123ABC",  # DM channel
-                    thread_ts=None,
-                    message_ts="1234.5678",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="D123ABC",  # DM channel
+                thread_ts=None,
+                message_ts="1234.5678",
+            )
 
         # Verify LLM was called with channel as conversation_id for DMs
         call_kwargs = mock_llm.get_response.call_args[1]
@@ -83,19 +83,19 @@ class TestConversationIDLogic:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts=None,
-                    message_ts="1234.5678",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts=None,
+                message_ts="1234.5678",
+            )
 
         # Verify LLM was called with message_ts as conversation_id for channels
         call_kwargs = mock_llm.get_response.call_args[1]
@@ -136,20 +136,20 @@ class TestRAGControl:
         mock_cache.get_thread_type = AsyncMock(return_value="profile")
         mock_cache.get_document_content = AsyncMock(return_value=(None, None))
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts="1234.5678",
-                    conversation_cache=mock_cache,
-                    message_ts="1234.5678",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                conversation_cache=mock_cache,
+                message_ts="1234.5678",
+            )
 
         # Verify LLM was called with use_rag=False
         call_kwargs = mock_llm.get_response.call_args[1]
@@ -169,20 +169,20 @@ class TestRAGControl:
         mock_cache.get_thread_type = AsyncMock(return_value=None)
         mock_cache.get_document_content = AsyncMock(return_value=(None, None))
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts="1234.5678",
-                    conversation_cache=mock_cache,
-                    message_ts="1234.5678",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                conversation_cache=mock_cache,
+                message_ts="1234.5678",
+            )
 
         # Verify LLM was called with use_rag=True
         call_kwargs = mock_llm.get_response.call_args[1]
@@ -205,33 +205,31 @@ class TestFileAttachmentProcessing:
 
         files = [{"name": "test.txt", "url_private": "https://test.com/file"}]
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                with patch(
-                    "handlers.message_handlers.process_file_attachments"
-                ) as mock_process:
-                    mock_process.return_value = "file content"
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+            patch("handlers.message_handlers.process_file_attachments") as mock_process,
+        ):
+            mock_process.return_value = "file content"
 
-                    await handle_message(
-                        text="test",
-                        user_id="U123",
-                        slack_service=mock_slack,
-                        llm_service=mock_llm,
-                        channel="C123",
-                        thread_ts="1234.5678",
-                        files=files,
-                        message_ts="1234.5678",
-                    )
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                files=files,
+                message_ts="1234.5678",
+            )
 
-                    # Verify file processing was called
-                    mock_process.assert_called_once_with(files, mock_slack)
+            # Verify file processing was called
+            mock_process.assert_called_once_with(files, mock_slack)
 
-                    # Verify LLM received document content
-                    call_kwargs = mock_llm.get_response.call_args[1]
-                    assert call_kwargs["document_content"] == "file content"
-                    assert call_kwargs["document_filename"] == "test.txt"
+            # Verify LLM received document content
+            call_kwargs = mock_llm.get_response.call_args[1]
+            assert call_kwargs["document_content"] == "file content"
+            assert call_kwargs["document_filename"] == "test.txt"
 
 
 class TestBotCommandRouting:
@@ -300,21 +298,22 @@ class TestMetricsTracking:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch(
-            "handlers.message_handlers.get_metrics_service", return_value=mock_metrics
+        with (
+            patch(
+                "handlers.message_handlers.get_metrics_service",
+                return_value=mock_metrics,
+            ),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
         ):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts="1234.5678",
-                    message_ts="1234.5678",
-                )
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                message_ts="1234.5678",
+            )
 
         # Verify metrics were recorded
         mock_metrics.record_message_processed.assert_called_once_with(
@@ -334,21 +333,22 @@ class TestMetricsTracking:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch(
-            "handlers.message_handlers.get_metrics_service", return_value=mock_metrics
+        with (
+            patch(
+                "handlers.message_handlers.get_metrics_service",
+                return_value=mock_metrics,
+            ),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
         ):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="D123ABC",  # DM channel
-                    thread_ts=None,
-                    message_ts="1234.5678",
-                )
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="D123ABC",  # DM channel
+                thread_ts=None,
+                message_ts="1234.5678",
+            )
 
         # Verify DM channel type was recorded
         mock_metrics.record_message_processed.assert_called_once_with(
@@ -370,19 +370,19 @@ class TestErrorHandling:
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()
 
-        with patch("handlers.message_handlers.get_metrics_service", return_value=None):
-            with patch(
-                "handlers.message_handlers.get_langfuse_service", return_value=None
-            ):
-                await handle_message(
-                    text="test",
-                    user_id="U123",
-                    slack_service=mock_slack,
-                    llm_service=mock_llm,
-                    channel="C123",
-                    thread_ts="1234.5678",
-                    message_ts="1234.5678",
-                )
+        with (
+            patch("handlers.message_handlers.get_metrics_service", return_value=None),
+            patch("handlers.message_handlers.get_langfuse_service", return_value=None),
+        ):
+            await handle_message(
+                text="test",
+                user_id="U123",
+                slack_service=mock_slack,
+                llm_service=mock_llm,
+                channel="C123",
+                thread_ts="1234.5678",
+                message_ts="1234.5678",
+            )
 
         # Verify fallback message was sent
         calls = mock_slack.send_message.call_args_list
