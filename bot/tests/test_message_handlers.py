@@ -9,21 +9,23 @@ import pytest
 # Add the parent directory to sys.path to allow importing the module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from handlers.message_handlers import (
+# Import from refactored modules
+from handlers.file_processors import process_file_attachments
+from handlers.file_processors.office_processor import (
     OPENPYXL_AVAILABLE,
-    PYMUPDF_AVAILABLE,
     PYTHON_DOCX_AVAILABLE,
     PYTHON_PPTX_AVAILABLE,
     extract_excel_text,
     extract_office_text,
-    extract_pdf_text,
     extract_powerpoint_text,
     extract_word_text,
-    get_user_system_prompt,
-    handle_bot_command,
-    handle_message,
-    process_file_attachments,
 )
+from handlers.file_processors.pdf_processor import (
+    PYMUPDF_AVAILABLE,
+    extract_pdf_text,
+)
+from handlers.message_handlers import handle_bot_command, handle_message
+from handlers.prompt_manager import get_user_system_prompt
 
 
 # TDD Factory Patterns for Message Handler Testing

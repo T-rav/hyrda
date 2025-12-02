@@ -10,6 +10,7 @@ from shared.services.langfuse_service import (  # noqa: F401
     LangfuseService,
     _langfuse_available,
     get_langfuse_service,
+    initialize_langfuse_service,
     logger,
     observe,
 )
@@ -17,6 +18,7 @@ from shared.services.langfuse_service import (  # noqa: F401
 __all__ = [
     "LangfuseService",
     "get_langfuse_service",
+    "initialize_langfuse_service",
     "observe",
     "_langfuse_available",
     "logger",
