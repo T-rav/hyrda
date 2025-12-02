@@ -1,13 +1,13 @@
 """Base class for all scheduled jobs."""
 
 import logging
+import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
-from task_types import JobExecutionResult
-
 from config.settings import TasksSettings
+from task_types import JobExecutionResult
 
 logger = logging.getLogger(__name__)
 
@@ -71,9 +71,35 @@ class BaseJob(ABC):
         except Exception as e:
             execution_time = (datetime.utcnow() - start_time).total_seconds()
 
+            # Capture full error context for debugging
+            error_type = type(e).__name__
+            error_message = str(e)
+            stack_trace = traceback.format_exc()
+
+            # Sanitize params (remove sensitive data like credentials)
+            safe_params = {
+                k: "***REDACTED***"
+                if any(
+                    sensitive in k.lower()
+                    for sensitive in [
+                        "password",
+                        "secret",
+                        "key",
+                        "token",
+                        "credential",
+                    ]
+                )
+                else v
+                for k, v in self.params.items()
+            }
+
             logger.error(
                 f"Job failed: {self.JOB_NAME} (ID: {self.job_id}, "
-                f"Duration: {execution_time:.2f}s, Error: {str(e)})"
+                f"Duration: {execution_time:.2f}s)\n"
+                f"Error Type: {error_type}\n"
+                f"Error Message: {error_message}\n"
+                f"Parameters: {safe_params}\n"
+                f"Stack Trace:\n{stack_trace}"
             )
 
             return {
@@ -82,7 +108,12 @@ class BaseJob(ABC):
                 "job_name": self.JOB_NAME,
                 "start_time": start_time.isoformat(),
                 "execution_time_seconds": execution_time,
-                "error": str(e),
+                "error": error_message,
+                "error_type": error_type,
+                "error_context": {
+                    "params": safe_params,
+                    "stack_trace": stack_trace,
+                },
             }
 
     def validate_params(self) -> bool:
