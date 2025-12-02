@@ -395,9 +395,9 @@ class TestPDFProcessing:
     @pytest.mark.asyncio
     async def test_extract_pdf_text_library_unavailable(self):
         """Test PDF extraction when PyMuPDF is not available"""
-        with patch("handlers.message_handlers.PYMUPDF_AVAILABLE", False):
+        with patch("handlers.file_processors.pdf_processor.PYMUPDF_AVAILABLE", False):
             result = await extract_pdf_text(b"test", "test.pdf")
-            assert "[PDF file: test.pdf - PyMuPDF library not available]" in result
+            assert "[PDF file: test.pdf - PyMuPDF not installed]" in result
 
     @pytest.mark.asyncio
     async def test_extract_pdf_text_empty_content(self):
@@ -440,13 +440,12 @@ class TestWordProcessing:
     @pytest.mark.asyncio
     async def test_extract_word_text_library_unavailable(self):
         """Test Word extraction when python-docx is not available"""
-        with patch("handlers.message_handlers.PYTHON_DOCX_AVAILABLE", False):
+        with patch(
+            "handlers.file_processors.office_processor.PYTHON_DOCX_AVAILABLE", False
+        ):
             stream = io.BytesIO(b"test")
             result = await extract_word_text(stream, "test.docx")
-            assert (
-                "[Word document: test.docx - python-docx library not available]"
-                in result
-            )
+            assert "[Word document: test.docx - python-docx not installed]" in result
 
     @pytest.mark.asyncio
     async def test_extract_word_text_empty_stream(self):
@@ -477,10 +476,12 @@ class TestExcelProcessing:
     @pytest.mark.asyncio
     async def test_extract_excel_text_library_unavailable(self):
         """Test Excel extraction when openpyxl is not available"""
-        with patch("handlers.message_handlers.OPENPYXL_AVAILABLE", False):
+        with patch(
+            "handlers.file_processors.office_processor.OPENPYXL_AVAILABLE", False
+        ):
             stream = io.BytesIO(b"test")
             result = await extract_excel_text(stream, "test.xlsx")
-            assert "[Excel file: test.xlsx - openpyxl library not available]" in result
+            assert "[Excel file: test.xlsx - openpyxl not installed]" in result
 
     @pytest.mark.asyncio
     async def test_extract_excel_text_empty_stream(self):
@@ -511,13 +512,12 @@ class TestPowerPointProcessing:
     @pytest.mark.asyncio
     async def test_extract_powerpoint_text_library_unavailable(self):
         """Test PowerPoint extraction when python-pptx is not available"""
-        with patch("handlers.message_handlers.PYTHON_PPTX_AVAILABLE", False):
+        with patch(
+            "handlers.file_processors.office_processor.PYTHON_PPTX_AVAILABLE", False
+        ):
             stream = io.BytesIO(b"test")
             result = await extract_powerpoint_text(stream, "test.pptx")
-            assert (
-                "[PowerPoint file: test.pptx - python-pptx library not available]"
-                in result
-            )
+            assert "[PowerPoint file: test.pptx - python-pptx not installed]" in result
 
     @pytest.mark.asyncio
     async def test_extract_powerpoint_text_empty_stream(self):
