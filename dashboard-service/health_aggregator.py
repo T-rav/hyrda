@@ -5,7 +5,6 @@ from pathlib import Path
 
 from aiohttp import web
 from aiohttp.web_runner import AppRunner, TCPSite
-
 from config.settings import Settings
 from services.metrics_service import get_metrics_service
 

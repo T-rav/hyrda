@@ -13,7 +13,7 @@ from pathlib import Path
 
 import aiohttp
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from utils.auth import FastAPIAuthMiddleware, fastapi_auth_callback, fastapi_logout
@@ -33,11 +33,17 @@ app = FastAPI(
 # Add session middleware for authentication
 from starlette.middleware.sessions import SessionMiddleware
 
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "dev-secret-change-in-prod"))
+app.add_middleware(
+    SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "dev-secret-change-in-prod")
+)
 
 # Add authentication middleware
 service_base_url = os.getenv("DASHBOARD_BASE_URL", "http://localhost:8080")
-app.add_middleware(FastAPIAuthMiddleware, service_base_url=service_base_url, callback_path="/auth/callback")
+app.add_middleware(
+    FastAPIAuthMiddleware,
+    service_base_url=service_base_url,
+    callback_path="/auth/callback",
+)
 
 
 # Service URLs (Docker service names)
@@ -121,8 +127,12 @@ async def ready():
                     cache_data = bot_metrics.get("cache", {})
                     if cache_data:
                         checks["cache"] = {
-                            "status": "healthy" if cache_data.get("status") == "available" else "unhealthy",
-                            "cached_conversations": cache_data.get("cached_conversations", 0),
+                            "status": "healthy"
+                            if cache_data.get("status") == "available"
+                            else "unhealthy",
+                            "cached_conversations": cache_data.get(
+                                "cached_conversations", 0
+                            ),
                             "memory_used": cache_data.get("memory_used", "N/A"),
                         }
 
@@ -130,7 +140,10 @@ async def ready():
                     langfuse_data = bot_metrics.get("services", {}).get("langfuse", {})
                     if langfuse_data:
                         checks["langfuse"] = {
-                            "status": "healthy" if langfuse_data.get("enabled") and langfuse_data.get("available") else "disabled",
+                            "status": "healthy"
+                            if langfuse_data.get("enabled")
+                            and langfuse_data.get("available")
+                            else "disabled",
                             "host": "cloud.langfuse.com",
                         }
 
@@ -149,7 +162,9 @@ async def ready():
                             "model": "N/A",
                         }
         except Exception as e:
-            logger.error(f"Failed to fetch bot metrics: {type(e).__name__}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to fetch bot metrics: {type(e).__name__}: {e}", exc_info=True
+            )
 
     # Overall readiness - consider "enabled" status as healthy for optional features like RAG
     all_healthy = all(
@@ -242,9 +257,7 @@ async def get_services_health():
                     "details": {"error": str(e)},
                 }
 
-    overall_healthy = all(
-        s.get("status") == "healthy" for s in services.values()
-    )
+    overall_healthy = all(s.get("status") == "healthy" for s in services.values())
 
     return {
         "status": "healthy" if overall_healthy else "degraded",
