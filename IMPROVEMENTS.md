@@ -466,28 +466,83 @@ _engine = create_engine(
 **Effort:** 6 hours
 **Priority:** P2
 
-### 13. Logging Leaks PII and Secrets
-**Files:** All services
-**Issue:** Full request bodies logged, including API keys
-**Effort:** 4 hours
+### 13. ✅ Logging Leaks PII and Secrets
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Comprehensive log sanitization utility created
+**Files:** `shared/utils/log_sanitizer.py`, `tasks/jobs/base_job.py`
+
+**Original Issue:** Full request bodies logged, including API keys, passwords, PII
+
+**Current Implementation:**
+Created centralized sanitization utility with:
+- `sanitize_string()`: Removes API keys, tokens, emails, credit cards, SSNs via regex
+- `sanitize_dict()`: Redacts sensitive keys recursively (password, secret, token, etc.)
+- `sanitize_log_record()`: Cleans logging records before output
+- `safe_repr()`: Safe string representations with length limits
+
+**Patterns Detected & Redacted:**
+- API keys and tokens (20+ chars)
+- Bearer/Basic auth headers
+- AWS keys (AKIA...)
+- Private keys (PEM format)
+- Email addresses (PII)
+- Credit card numbers
+- Social Security Numbers
+
+**Fixed:** 2025-12-02
+**Commit:** f0debce
 **Priority:** P2
 
-### 14. No Input Validation on Agent Names
-**Files:** `control_plane/api/agents.py`, `agent-service/api/agents.py`
-**Issue:** Agent names accepted without validation
-**Effort:** 2 hours
+### 14. ✅ No Input Validation on Agent Names
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Validation added to all agent endpoints
+**Files:** `control_plane/api/agents.py`, `agent-service/api/agents.py`, `agent-service/utils/validation.py`
+
+**Original Issue:** Agent names accepted without validation, potential injection attacks
+
+**Current Implementation:**
+- Control plane: Already had validation on registration
+- Agent service: Added validation utility and applied to GET/POST endpoints
+- Validation rules: lowercase alphanumeric, hyphens, underscores, 1-50 chars, must start with letter
+
+**Fixed:** 2025-12-02
+**Commit:** 047884b
 **Priority:** P2
 
-### 15. Incomplete Error Context in Job Failures
+### 15. ✅ Incomplete Error Context in Job Failures
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Comprehensive error context added
 **Files:** `tasks/jobs/base_job.py`
-**Issue:** Generic error messages make debugging difficult
-**Effort:** 3 hours
+
+**Original Issue:** Generic error messages made debugging difficult
+
+**Current Implementation:**
+Error context now includes:
+- `error_type`: Exception class name
+- `error`: Exception message
+- `error_context.params`: Sanitized job parameters
+- `error_context.stack_trace`: Full traceback for debugging
+- Automatic redaction of sensitive parameter names
+
+**Fixed:** 2025-12-02
+**Commit:** 8a13f07
 **Priority:** P2
 
-### 16. Deprecated Langfuse Type Annotations
-**Files:** `bot/services/langfuse_service.py`, `agent-service/services/langfuse_service.py`
-**Issue:** `# type: ignore` everywhere due to missing stubs
-**Effort:** 2 hours
+### 16. ✅ Deprecated Langfuse Type Annotations
+**Severity:** LOW → **VERIFIED**
+**Status:** ✅ **RESOLVED** - Type annotations already specific (best practice)
+**Files:** `shared/services/langfuse_service.py`
+
+**Original Issue:** `# type: ignore` comments due to missing stubs
+
+**Current Status:**
+- All `# type: ignore` comments are **specific** (not generic)
+- Examples: `# type: ignore[reportMissingImports]`, `# type: ignore[import-untyped]`
+- This is best practice when third-party libraries lack type stubs
+- No changes needed
+
+**Verified:** 2025-12-02
+**Commit:** 8a13f07
 **Priority:** P2
 
 ---
