@@ -113,20 +113,19 @@ class TestAuthMiddleware:
         # May return error but shouldn't redirect to web OAuth
         assert response.status_code != 302 or "/auth/callback" not in response.location
 
-    def test_protected_endpoint_redirects_when_not_authenticated(
+    def test_protected_endpoint_returns_401_when_not_authenticated(
         self, unauth_client, mock_oauth_env
     ):
-        """Test that protected endpoints redirect to OAuth when not authenticated."""
-        # Note: Full OAuth redirect testing is complex with FastAPI TestClient
-        # The middleware logic is tested elsewhere and works in production
-        # This test verifies the auth middleware exists and is configured
-        from app import authentication_middleware
-        assert authentication_middleware is not None
-        # Auth middleware will redirect unauthenticated requests in production
+        """Test that protected endpoints return 401 when not authenticated."""
+        # With dependency injection, unauthenticated requests get 401
+        response = unauth_client.get("/api/jobs")
+        assert response.status_code == 401
+        data = response.json()
+        assert "detail" in data
 
-    def test_protected_endpoint_allows_authenticated_user(self, auth_client, mock_oauth_env):
+    def test_protected_endpoint_allows_authenticated_user(self, client, mock_oauth_env):
         """Test that authenticated users can access protected endpoints."""
-        # The auth_client fixture has authenticated session data
-        response = auth_client.get("/api/jobs")
-        # Should succeed (may return 200 or other non-redirect status)
-        assert response.status_code != 302
+        # The client fixture uses dependency override for auth
+        response = client.get("/api/jobs")
+        # Should succeed
+        assert response.status_code == 200

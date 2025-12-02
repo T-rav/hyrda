@@ -121,63 +121,14 @@ def create_app() -> FastAPI:
 
 
 async def authentication_middleware(request: Request, call_next):
-    """Require authentication for all routes except health checks and auth endpoints."""
-    from utils.auth import AuditLogger, get_flow, get_redirect_uri, verify_domain
+    """
+    Lightweight middleware for session setup.
 
-    # Skip auth for health checks, auth endpoints, and Google Drive OAuth endpoints
-    if (
-        request.url.path.startswith("/health")
-        or request.url.path.startswith("/api/health")
-        or request.url.path.startswith("/auth/")
-        or request.url.path.startswith("/api/gdrive/auth/")  # Google Drive OAuth
-    ):
-        return await call_next(request)
-
-    # Allow tests to bypass auth with a test header
-    if request.headers.get("X-Test-Auth") == "authenticated":
-        return await call_next(request)
-
-    # Check if user is authenticated
-    user_email = request.session.get("user_email")
-    user_info = request.session.get("user_info")
-
-    if user_email and user_info:
-        # Verify domain on each request
-        if verify_domain(user_email):
-            return await call_next(request)
-        else:
-            # Domain changed or invalid
-            request.session.clear()
-            AuditLogger.log_auth_event(
-                "access_denied_domain",
-                email=user_email,
-                path=request.url.path,
-                success=False,
-                error=f"Email domain not allowed: {user_email}",
-            )
-
-    # Not authenticated - redirect to login
-    service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
-    redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
-    flow = get_flow(redirect_uri)
-    authorization_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="select_account",
-    )
-
-    # Generate CSRF token for additional security
-    csrf_token = secrets.token_urlsafe(32)
-    request.session["oauth_state"] = state
-    request.session["oauth_csrf"] = csrf_token
-    request.session["oauth_redirect"] = str(request.url)
-
-    AuditLogger.log_auth_event(
-        "login_initiated",
-        path=request.url.path,
-    )
-
-    return RedirectResponse(url=authorization_url, status_code=302)
+    Authentication is now handled via dependency injection (get_current_user).
+    This middleware only ensures sessions are available.
+    """
+    # All routes can proceed - authentication is handled by dependencies
+    return await call_next(request)
 
 
 def register_routers(app: FastAPI) -> None:

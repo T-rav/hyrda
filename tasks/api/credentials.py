@@ -3,7 +3,8 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from dependencies.auth import get_current_user
 
 from models.base import get_db_session
 from models.oauth_credential import OAuthCredential
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/api/credentials")
 
 
 @router.get("")
-async def list_credentials(request: Request):
+async def list_credentials(request: Request, user: dict = Depends(get_current_user)):
     """List all stored Google OAuth credentials with status.
 
     Returns:

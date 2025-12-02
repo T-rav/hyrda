@@ -2,7 +2,8 @@
 
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
+from dependencies.auth import get_current_user
 
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
@@ -26,6 +27,7 @@ async def list_task_runs(
         ge=1,
         description=f"Items per page (max {MAX_PAGE_SIZE})",
     ),
+    user: dict = Depends(get_current_user),
 ):
     """List recent task runs with pagination.
 

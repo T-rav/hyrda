@@ -3,7 +3,8 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from dependencies.auth import get_current_user
 from fastapi.responses import JSONResponse
 
 from models.base import get_db_session
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/scheduler/info")
-async def scheduler_info(request: Request):
+async def scheduler_info(request: Request, user: dict = Depends(get_current_user)):
     """Get scheduler information.
 
     Returns:
@@ -28,7 +29,7 @@ async def scheduler_info(request: Request):
 
 
 @router.get("/jobs")
-async def list_jobs(request: Request):
+async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
     """List all jobs.
 
     Returns:
@@ -157,7 +158,7 @@ async def delete_job(request: Request, job_id: str):
 
 
 @router.post("/jobs")
-async def create_job(request: Request):
+async def create_job(request: Request, user: dict = Depends(get_current_user)):
     """Create a new job.
 
     Request Body:
@@ -389,7 +390,7 @@ async def get_job_history(request: Request, job_id: str):
 
 
 @router.get("/job-types")
-async def list_job_types(request: Request):
+async def list_job_types(request: Request, user: dict = Depends(get_current_user)):
     """List available job types.
 
     Returns:

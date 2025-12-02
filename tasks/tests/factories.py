@@ -178,26 +178,16 @@ class FlaskAppFactory:
         client = TestClient(test_app)
 
         if authenticated:
-            # Use test header to bypass auth
-            # Add the header to all requests
-            original_get = client.get
-            original_post = client.post
-            original_put = client.put
-            original_delete = client.delete
-            original_options = client.options
-            original_patch = client.patch
+            # FastAPI standard: Use dependency overrides for authenticated tests
+            from dependencies.auth import get_current_user
 
-            def add_auth_header(kwargs):
-                headers = kwargs.get("headers", {})
-                headers["X-Test-Auth"] = "authenticated"
-                kwargs["headers"] = headers
-                return kwargs
+            # Override the auth dependency to return a mock user
+            async def mock_get_current_user():
+                return {
+                    "email": "test@test.com",
+                    "name": "Test User",
+                }
 
-            client.get = lambda *args, **kwargs: original_get(*args, **add_auth_header(kwargs))
-            client.post = lambda *args, **kwargs: original_post(*args, **add_auth_header(kwargs))
-            client.put = lambda *args, **kwargs: original_put(*args, **add_auth_header(kwargs))
-            client.delete = lambda *args, **kwargs: original_delete(*args, **add_auth_header(kwargs))
-            client.options = lambda *args, **kwargs: original_options(*args, **add_auth_header(kwargs))
-            client.patch = lambda *args, **kwargs: original_patch(*args, **add_auth_header(kwargs))
+            test_app.dependency_overrides[get_current_user] = mock_get_current_user
 
         return client
