@@ -249,6 +249,42 @@ class SlackFileUploadResponse(TypedDict, total=False):
     error: str  # Error message if ok=False
 
 
+class WebSearchResult(TypedDict):
+    """Single web search result from Tavily API.
+
+    Contains title, URL, and snippet for each search result.
+    """
+
+    title: str  # Page title
+    url: str  # Page URL
+    snippet: str  # Content snippet/preview
+
+
+class WebScrapeResult(TypedDict, total=False):
+    """Result from URL scraping via Tavily Extract API.
+
+    Contains full page content in markdown format.
+    """
+
+    success: bool  # Whether scraping succeeded
+    url: str  # Scraped URL
+    title: str  # Page title
+    content: str  # Full page content in markdown format
+    error: str  # Error message if success=False
+
+
+class DeepResearchResult(TypedDict, total=False):
+    """Result from deep research via Perplexity API.
+
+    Contains comprehensive research answer with citations.
+    """
+
+    success: bool  # Whether research succeeded
+    answer: str  # Research answer/summary
+    citations: list[str]  # List of source URLs
+    error: str  # Error message if success=False
+
+
 # Export all types
 __all__ = [
     "ChunkMetadata",
@@ -265,4 +301,7 @@ __all__ = [
     "QueryRewriterStats",
     "SlackMessageResponse",
     "SlackFileUploadResponse",
+    "WebSearchResult",
+    "WebScrapeResult",
+    "DeepResearchResult",
 ]

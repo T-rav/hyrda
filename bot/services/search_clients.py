@@ -11,6 +11,8 @@ from typing import Any
 
 import aiohttp
 
+from bot_types import DeepResearchResult, WebScrapeResult, WebSearchResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +37,7 @@ class TavilyClient:
             await self.session.close()
             self.session = None
 
-    async def search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
+    async def search(self, query: str, max_results: int = 10) -> list[WebSearchResult]:
         """
         Search the web using Tavily API
 
@@ -85,7 +87,7 @@ class TavilyClient:
             logger.error(f"Tavily search failed: {e}")
             return []
 
-    async def scrape_url(self, url: str) -> dict[str, Any]:
+    async def scrape_url(self, url: str) -> WebScrapeResult:
         """
         Scrape full content from a URL using Tavily Extract API
 
@@ -154,7 +156,7 @@ class PerplexityClient:
             await self.session.close()
             self.session = None
 
-    async def deep_research(self, query: str) -> dict[str, Any]:
+    async def deep_research(self, query: str) -> DeepResearchResult:
         """
         Perform deep research using Perplexity API
 
