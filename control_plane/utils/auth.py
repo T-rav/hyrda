@@ -21,7 +21,11 @@ logger = logging.getLogger(__name__)
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 ALLOWED_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "@8thlight.com").lstrip("@")
-OAUTH_SCOPES = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"]
+OAUTH_SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+]
 
 
 class AuthError(Exception):
@@ -49,8 +53,10 @@ class AuditLogger:
             "event_type": event_type,
             "success": success,
             "email": email,
-            "ip_address": ip_address or (request.remote_addr if has_request_context() else None),
-            "user_agent": user_agent or (request.headers.get("User-Agent") if has_request_context() else None),
+            "ip_address": ip_address
+            or (request.remote_addr if has_request_context() else None),
+            "user_agent": user_agent
+            or (request.headers.get("User-Agent") if has_request_context() else None),
             "path": path or (request.path if has_request_context() else None),
         }
         if error:
@@ -62,7 +68,9 @@ class AuditLogger:
             logger.warning(f"AUTH_AUDIT: {event_type} FAILED", extra=log_data)
 
 
-def get_redirect_uri(service_base_url: str, callback_path: str = "/auth/callback") -> str:
+def get_redirect_uri(
+    service_base_url: str, callback_path: str = "/auth/callback"
+) -> str:
     """Get OAuth redirect URI for a service."""
     return f"{service_base_url.rstrip('/')}{callback_path}"
 
@@ -77,7 +85,9 @@ def verify_domain(email: str) -> bool:
 def get_flow(redirect_uri: str) -> Flow:
     """Create OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise AuthError("Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET")
+        raise AuthError(
+            "Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"
+        )
 
     return Flow.from_client_config(
         {
@@ -135,6 +145,7 @@ def flask_require_auth(service_base_url: str, callback_path: str = "/auth/callba
 
             # Not authenticated - redirect to login
             import secrets
+
             redirect_uri = get_redirect_uri(service_base_url, callback_path)
             flow = get_flow(redirect_uri)
             authorization_url, state = flow.authorization_url(
@@ -161,7 +172,9 @@ def flask_require_auth(service_base_url: str, callback_path: str = "/auth/callba
     return decorator
 
 
-def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callback") -> Response:
+def flask_auth_callback(
+    service_base_url: str, callback_path: str = "/auth/callback"
+) -> Response:
     """Handle OAuth callback for Flask."""
     redirect_uri = get_redirect_uri(service_base_url, callback_path)
     state = session.get("oauth_state")
@@ -211,7 +224,9 @@ def flask_auth_callback(service_base_url: str, callback_path: str = "/auth/callb
                 error=f"Email domain not allowed: {email}",
             )
             session.clear()
-            return jsonify({"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}), 403
+            return jsonify(
+                {"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}
+            ), 403
 
         # Regenerate session to prevent session fixation attacks
         # Store redirect URL before clearing
@@ -273,23 +288,71 @@ def flask_logout() -> Response:
 class FastAPIAuthMiddleware:
     """FastAPI middleware for Google OAuth authentication."""
 
-    def __init__(self, app: Any, service_base_url: str, callback_path: str = "/auth/callback"):
+    def __init__(
+        self, app: Any, service_base_url: str, callback_path: str = "/auth/callback"
+    ):
         """Initialize FastAPI auth middleware."""
         self.app = app
         self.service_base_url = service_base_url
         self.callback_path = callback_path
+        self.login_path = "/auth/login"
+        self.logout_path = "/auth/logout"
         self._setup_routes()
 
     def _setup_routes(self) -> None:
         """Setup auth routes."""
+        import secrets
+
         from fastapi import Request as FastAPIRequest
+        from fastapi.responses import JSONResponse, RedirectResponse
+
+        @self.app.get(self.login_path)
+        async def auth_login(request: FastAPIRequest) -> RedirectResponse:
+            """Initiate OAuth login."""
+            redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
+            flow = get_flow(redirect_uri)
+            authorization_url, state = flow.authorization_url(
+                access_type="offline",
+                include_granted_scopes="true",
+                prompt="select_account",
+            )
+
+            # Generate CSRF token for additional security
+            csrf_token = secrets.token_urlsafe(32)
+            request.session["oauth_state"] = state
+            request.session["oauth_csrf"] = csrf_token
+            request.session["oauth_redirect"] = str(
+                request.query_params.get("redirect", "/")
+            )
+
+            AuditLogger.log_auth_event(
+                "login_initiated",
+                path=str(request.url.path),
+            )
+
+            return RedirectResponse(url=authorization_url)
 
         @self.app.get(self.callback_path)
-        async def auth_callback(request: FastAPIRequest) -> Any:
+        async def auth_callback(
+            request: FastAPIRequest,
+        ) -> RedirectResponse | JSONResponse:
             """Handle OAuth callback."""
-            # FastAPI callback implementation
             redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
-            state = request.session.get("oauth_state") if hasattr(request, "session") else None
+            state = request.session.get("oauth_state")
+            csrf_token = request.session.get("oauth_csrf")
+
+            # Verify CSRF token
+            if not csrf_token:
+                AuditLogger.log_auth_event(
+                    "callback_failed",
+                    success=False,
+                    error="CSRF token missing - potential session fixation attack",
+                )
+                request.session.clear()
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "Invalid session - please try again"},
+                )
 
             if not state:
                 AuditLogger.log_auth_event(
@@ -297,21 +360,153 @@ class FastAPIAuthMiddleware:
                     success=False,
                     error="Missing OAuth state",
                 )
-                return {"error": "Invalid session state"}
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": "Invalid session state"},
+                )
 
             try:
-                get_flow(redirect_uri)
-                # Note: FastAPI implementation would need async handling
-                # This is a simplified version
-                return {"message": "FastAPI auth callback - implementation needed"}
+                flow = get_flow(redirect_uri)
+                flow.fetch_token(authorization_response=str(request.url))
 
+                credentials = flow.credentials
+                idinfo = verify_token(credentials.id_token)
+
+                email = idinfo.get("email")
+                if not email:
+                    AuditLogger.log_auth_event(
+                        "callback_failed",
+                        success=False,
+                        error="No email in token",
+                    )
+                    return JSONResponse(
+                        status_code=400,
+                        content={"error": "No email in token"},
+                    )
+
+                # Verify domain
+                if not verify_domain(email):
+                    AuditLogger.log_auth_event(
+                        "login_denied_domain",
+                        email=email,
+                        success=False,
+                        error=f"Email domain not allowed: {email}",
+                    )
+                    request.session.clear()
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "error": f"Access restricted to {ALLOWED_DOMAIN} domain"
+                        },
+                    )
+
+                # Regenerate session to prevent session fixation attacks
+                saved_redirect = request.session.get("oauth_redirect", "/")
+                request.session.clear()
+
+                # Store user info in new session
+                request.session["user_email"] = email
+                request.session["user_info"] = {
+                    "email": email,
+                    "name": idinfo.get("name"),
+                    "picture": idinfo.get("picture"),
+                }
+
+                AuditLogger.log_auth_event(
+                    "login_success",
+                    email=email,
+                    path=saved_redirect,
+                )
+
+                return RedirectResponse(url=saved_redirect)
+
+            except AuthError as e:
+                AuditLogger.log_auth_event(
+                    "callback_failed",
+                    success=False,
+                    error=str(e),
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={"error": str(e)},
+                )
             except Exception as e:
                 logger.error(f"OAuth callback error: {e}", exc_info=True)
-                return {"error": "Authentication failed"}
+                AuditLogger.log_auth_event(
+                    "callback_failed",
+                    success=False,
+                    error=str(e),
+                )
+                return JSONResponse(
+                    status_code=500,
+                    content={"error": "Authentication failed"},
+                )
+
+        @self.app.post(self.logout_path)
+        async def auth_logout(request: FastAPIRequest) -> JSONResponse:
+            """Handle logout."""
+            email = request.session.get("user_email")
+            request.session.clear()
+            AuditLogger.log_auth_event(
+                "logout",
+                email=email,
+            )
+            return JSONResponse(content={"message": "Logged out successfully"})
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        """ASGI middleware."""
-        # Middleware implementation
+        """ASGI middleware to check authentication on requests."""
+        from starlette.datastructures import URL
+        from starlette.requests import Request
+        from starlette.responses import RedirectResponse
+
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive)
+        path = request.url.path
+
+        # Skip auth for public endpoints
+        public_paths = [
+            self.callback_path,
+            self.login_path,
+            self.logout_path,
+            "/health",
+            "/ready",
+        ]
+        if path in public_paths or path.startswith("/static"):
+            await self.app(scope, receive, send)
+            return
+
+        # Check if user is authenticated
+        if "user_email" not in request.session:
+            # Redirect to login with current URL as redirect param
+            login_url = URL(self.login_path).include_query_params(
+                redirect=str(request.url)
+            )
+            response = RedirectResponse(url=str(login_url), status_code=302)
+            await response(scope, receive, send)
+            return
+
+        # Verify domain (in case session was tampered with)
+        email = request.session.get("user_email")
+        if not verify_domain(email):
+            AuditLogger.log_auth_event(
+                "access_denied_domain",
+                email=email,
+                path=path,
+                success=False,
+                error=f"Email domain not allowed: {email}",
+            )
+            request.session.clear()
+            login_url = URL(self.login_path).include_query_params(
+                redirect=str(request.url)
+            )
+            response = RedirectResponse(url=str(login_url), status_code=302)
+            await response(scope, receive, send)
+            return
+
+        # User is authenticated, continue
         await self.app(scope, receive, send)
 
 
@@ -328,7 +523,9 @@ def fastapi_require_auth(func: Callable) -> Callable:
 
         email = request.session["user_email"]
         if not verify_domain(email):
-            raise HTTPException(status_code=403, detail=f"Access restricted to {ALLOWED_DOMAIN} domain")
+            raise HTTPException(
+                status_code=403, detail=f"Access restricted to {ALLOWED_DOMAIN} domain"
+            )
 
         AuditLogger.log_auth_event(
             "access_granted",

@@ -178,30 +178,46 @@ metadata_records = session.query(TaskMetadata).filter(TaskMetadata.job_id.in_(jo
 
 ## 🟠 HIGH PRIORITY (Fix This Month)
 
-### 5. Incomplete FastAPI OAuth Implementation
-**Severity:** HIGH
-**Files:** `control_plane/utils/auth.py` (lines 257-301)
+### 5. ✅ Incomplete FastAPI OAuth Implementation
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Complete async OAuth flow implemented
+**Files:** `control_plane/utils/auth.py`
 
-**Issue:** FastAPI middleware stubbed out with "implementation needed" comment
+**Original Issue:** FastAPI middleware stubbed out with "implementation needed" comment
 
-**Impact:** FastAPI services cannot use OAuth authentication
+**Current Implementation:**
+Complete `FastAPIAuthMiddleware` class with:
+- **Login initiation** (`/auth/login`) - Redirects to Google OAuth with state and CSRF tokens
+- **OAuth callback** (`/auth/callback`) - Handles token exchange, domain verification, session management
+- **Logout** (`/auth/logout`) - Clears session and logs audit event
+- **ASGI middleware** (`__call__`) - Checks authentication on all requests, redirects unauthenticated users
+- **CSRF protection** - Prevents session fixation attacks
+- **Session regeneration** - Prevents session fixation after successful login
+- **Domain restriction** - Only allows @8thlight.com (configurable via ALLOWED_EMAIL_DOMAIN)
+- **Audit logging** - All auth events logged for security monitoring
 
-**Fix:** Complete async OAuth flow for FastAPI
+**Key Features:**
 ```python
-from starlette.middleware.sessions import SessionMiddleware
+# Auto-redirect unauthenticated users to login
+if "user_email" not in request.session:
+    login_url = URL(self.login_path).include_query_params(redirect=str(request.url))
+    return RedirectResponse(url=str(login_url), status_code=302)
 
-async def __call__(self, scope, receive, send):
-    if scope["type"] != "http":
-        return await self.app(scope, receive, send)
-
-    request = Request(scope, receive)
-
-    # Check session for user
-    if "user_email" not in request.session:
-        # Redirect to OAuth
-        ...
+# Public endpoints bypass auth
+public_paths = ["/auth/callback", "/auth/login", "/auth/logout", "/health", "/ready"]
 ```
 
+**Usage:**
+```python
+from starlette.middleware.sessions import SessionMiddleware
+from control_plane.utils.auth import FastAPIAuthMiddleware
+
+app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+FastAPIAuthMiddleware(app, service_base_url="http://localhost:8000")
+```
+
+**Fixed:** 2025-12-02
 **Effort:** 6 hours
 **Priority:** P1
 
