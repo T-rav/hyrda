@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Query, Request
+from flask import Blueprint, Response, jsonify, request
 
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
@@ -10,23 +10,16 @@ from models.task_run import TaskRun
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/task-runs")
+# Create blueprint
+task_runs_bp = Blueprint("task_runs", __name__, url_prefix="/api/task-runs")
 
 # Pagination constants
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 100  # Prevent DoS attacks by limiting max page size
 
 
-@router.get("")
-async def list_task_runs(
-    request: Request,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    per_page: int = Query(
-        DEFAULT_PAGE_SIZE,
-        ge=1,
-        description=f"Items per page (max {MAX_PAGE_SIZE})",
-    ),
-):
+@task_runs_bp.route("")
+def list_task_runs() -> Response | tuple[Response, int]:
     """List recent task runs with pagination.
 
     Query Parameters:
@@ -37,8 +30,18 @@ async def list_task_runs(
         JSON response with task runs and pagination metadata
     """
     try:
-        # Cap per_page at MAX_PAGE_SIZE (silent capping for better UX)
-        per_page = min(per_page, MAX_PAGE_SIZE)
+        # Get pagination parameters with limits
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+
+        try:
+            per_page = int(request.args.get("per_page", DEFAULT_PAGE_SIZE))
+            per_page = max(1, min(per_page, MAX_PAGE_SIZE))  # Cap at MAX_PAGE_SIZE
+        except (ValueError, TypeError):
+            per_page = DEFAULT_PAGE_SIZE
+
         with get_db_session() as session:
             # Build query
             query = session.query(TaskRun).order_by(TaskRun.started_at.desc())
@@ -65,7 +68,7 @@ async def list_task_runs(
                     if job_id:
                         job_ids.add(job_id)
 
-            # Load ONLY the metadata we need
+            # Load ONLY the metadata we need (not all metadata) using same session
             metadata_map = {}
             if job_ids:
                 try:
@@ -86,9 +89,7 @@ async def list_task_runs(
                 if run.task_config_snapshot:
                     job_type = run.task_config_snapshot.get("job_type")
                     # Try to get task_name from snapshot first (most reliable)
-                    task_name_from_snapshot = run.task_config_snapshot.get(
-                        "task_name"
-                    )
+                    task_name_from_snapshot = run.task_config_snapshot.get("task_name")
                     if task_name_from_snapshot:
                         job_name = task_name_from_snapshot
                     else:
@@ -100,11 +101,9 @@ async def list_task_runs(
                             # Final fallback to job type name
                             job_name = job_type_names.get(
                                 job_type,
-                                (
-                                    job_type.replace("_", " ").title()
-                                    if job_type
-                                    else "Unknown Job"
-                                ),
+                                job_type.replace("_", " ").title()
+                                if job_type
+                                else "Unknown Job",
                             )
 
                 runs_data.append(
@@ -114,12 +113,12 @@ async def list_task_runs(
                         "job_type": job_type,
                         "job_name": job_name,
                         "status": run.status,
-                        "started_at": (
-                            run.started_at.isoformat() if run.started_at else None
-                        ),
-                        "completed_at": (
-                            run.completed_at.isoformat() if run.completed_at else None
-                        ),
+                        "started_at": run.started_at.isoformat()
+                        if run.started_at
+                        else None,
+                        "completed_at": run.completed_at.isoformat()
+                        if run.completed_at
+                        else None,
                         "duration_seconds": run.duration_seconds,
                         "triggered_by": run.triggered_by,
                         "triggered_by_user": run.triggered_by_user,
@@ -133,18 +132,20 @@ async def list_task_runs(
             # Calculate pagination metadata
             total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
 
-            return {
-                "task_runs": runs_data,
-                "pagination": {
-                    "page": page,
-                    "per_page": per_page,
-                    "total": total_count,
-                    "total_pages": total_pages,
-                    "has_prev": page > 1,
-                    "has_next": page < total_pages,
-                },
-            }
+            return jsonify(
+                {
+                    "task_runs": runs_data,
+                    "pagination": {
+                        "page": page,
+                        "per_page": per_page,
+                        "total": total_count,
+                        "total_pages": total_pages,
+                        "has_prev": page > 1,
+                        "has_next": page < total_pages,
+                    },
+                }
+            )
 
     except Exception as e:
         logger.error(f"Error fetching task runs: {e}")
-        return {"error": str(e)}, 500
+        return jsonify({"error": str(e)}), 500

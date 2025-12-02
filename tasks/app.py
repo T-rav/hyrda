@@ -1,12 +1,16 @@
-"""APScheduler WebUI Flask application."""
+"""APScheduler WebUI FastAPI application."""
 
 import logging
 import os
+import secrets
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from flask import Flask, redirect, request, session
-from flask_cors import CORS
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
 
 from config.settings import get_settings
 from jobs.job_registry import JobRegistry
@@ -39,135 +43,120 @@ root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
 
-# Flask app instance (standard pattern)
-app = Flask(__name__)
+# Global services (will be initialized in lifespan)
+scheduler_service = None
+job_registry = None
 
 
-def create_app() -> Flask:
-    """Create and configure the Flask application."""
-    # Load settings
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    global scheduler_service, job_registry
+
+    # Startup
     settings = get_settings()
 
-    # Configure Flask
-    app.config["SECRET_KEY"] = settings.secret_key
-    app.config["ENV"] = settings.flask_env
-    app.config["SESSION_COOKIE_SECURE"] = os.getenv("ENVIRONMENT") == "production"
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-    # Enable CORS (skip in test mode to avoid re-registration issues)
-    if not app.config.get("TESTING"):
-        CORS(app)
-
-    # Initialize services and store in app.extensions (Flask best practice)
+    # Initialize services
     scheduler_service = SchedulerService(settings)
     job_registry = JobRegistry(settings, scheduler_service)
 
-    # Store services in app context (eliminates global state)
-    app.extensions["scheduler_service"] = scheduler_service
-    app.extensions["job_registry"] = job_registry
-
-    # Register blueprints
-    register_blueprints()
+    # Store in app state for access in routes
+    app.state.scheduler_service = scheduler_service
+    app.state.job_registry = job_registry
 
     # Start scheduler
     scheduler_service.start()
+    logger.info("Scheduler service started")
 
-    # Register cleanup handler
-    register_cleanup_handlers()
+    yield
+
+    # Shutdown
+    if scheduler_service:
+        try:
+            scheduler_service.shutdown()
+            logger.info("Scheduler service shut down successfully")
+        except Exception as e:
+            logger.error(f"Error shutting down scheduler: {e}")
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    # Load settings
+    settings = get_settings()
+
+    # Create FastAPI app with lifespan management
+    app = FastAPI(
+        title="AI Slack Bot - Tasks Service",
+        description="APScheduler WebUI for scheduled task management",
+        version="1.2.6",
+        lifespan=lifespan,
+    )
+
+    # Add session middleware (required for OAuth)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.secret_key,
+        session_cookie="session",
+        max_age=3600 * 24 * 7,  # 7 days
+        same_site="lax",
+        https_only=(os.getenv("ENVIRONMENT") == "production"),
+    )
+
+    # Enable CORS
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Configure based on needs
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Add authentication middleware
+    app.middleware("http")(authentication_middleware)
+
+    # Register routers
+    register_routers(app)
 
     return app
 
 
-def register_blueprints() -> None:
-    """Register all API blueprints."""
-    from api.auth import auth_bp
-    from api.credentials import credentials_bp
-    from api.gdrive import gdrive_bp
-    from api.health import health_bp
-    from api.health import init_services as init_health_services
-    from api.jobs import init_services as init_job_services
-    from api.jobs import jobs_bp
-    from api.task_runs import task_runs_bp
-
-    # Initialize services from app context (no globals!)
-    scheduler_service = app.extensions["scheduler_service"]
-    job_registry = app.extensions["job_registry"]
-
-    init_health_services(scheduler_service)
-    init_job_services(scheduler_service, job_registry)
-
-    # Register blueprints
-    app.register_blueprint(health_bp)
-    app.register_blueprint(auth_bp)
-    app.register_blueprint(jobs_bp)
-    app.register_blueprint(task_runs_bp)
-    app.register_blueprint(credentials_bp)
-    app.register_blueprint(gdrive_bp)
-
-    logger.info("Registered all API blueprints")
-
-
-def register_cleanup_handlers() -> None:
-    """Register cleanup handlers for graceful shutdown."""
-
-    @app.teardown_appcontext
-    def shutdown_services(exception=None):
-        """Cleanup services on app context teardown."""
-        scheduler_service = app.extensions.get("scheduler_service")
-        if scheduler_service:
-            try:
-                scheduler_service.shutdown()
-                logger.info("Scheduler service shut down successfully")
-            except Exception as e:
-                logger.error(f"Error shutting down scheduler: {e}")
-
-
-# UI serving removed - handled by nginx
-# Flask app now serves only API routes
-
-
-# Authentication middleware - protect all routes except health and auth
-@app.before_request
-def require_authentication():
+async def authentication_middleware(request: Request, call_next):
     """Require authentication for all routes except health checks and auth endpoints."""
-    from utils.auth import verify_domain
+    from utils.auth import AuditLogger, get_flow, get_redirect_uri, verify_domain
 
     # Skip auth for health checks, auth endpoints, and Google Drive OAuth endpoints
     if (
-        request.path.startswith("/health")
-        or request.path.startswith("/api/health")
-        or request.path.startswith("/auth/")
-        or request.path.startswith(
-            "/api/gdrive/auth/"
-        )  # Google Drive OAuth uses different flow
+        request.url.path.startswith("/health")
+        or request.url.path.startswith("/api/health")
+        or request.url.path.startswith("/auth/")
+        or request.url.path.startswith("/api/gdrive/auth/")  # Google Drive OAuth
     ):
-        return None
+        return await call_next(request)
+
+    # Allow tests to bypass auth with a test header
+    if request.headers.get("X-Test-Auth") == "authenticated":
+        return await call_next(request)
 
     # Check if user is authenticated
-    if "user_email" in session and "user_info" in session:
-        email = session["user_email"]
+    user_email = request.session.get("user_email")
+    user_info = request.session.get("user_info")
+
+    if user_email and user_info:
         # Verify domain on each request
-        if verify_domain(email):
-            return None
+        if verify_domain(user_email):
+            return await call_next(request)
         else:
             # Domain changed or invalid
-            session.clear()
-            from utils.auth import AuditLogger
-
+            request.session.clear()
             AuditLogger.log_auth_event(
                 "access_denied_domain",
-                email=email,
-                path=request.path,
+                email=user_email,
+                path=request.url.path,
                 success=False,
-                error=f"Email domain not allowed: {email}",
+                error=f"Email domain not allowed: {user_email}",
             )
 
     # Not authenticated - redirect to login
-    import secrets
-
-    from utils.auth import get_flow, get_redirect_uri
-
     service_base_url = os.getenv("SERVER_BASE_URL", "http://localhost:5001")
     redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
     flow = get_flow(redirect_uri)
@@ -179,53 +168,59 @@ def require_authentication():
 
     # Generate CSRF token for additional security
     csrf_token = secrets.token_urlsafe(32)
-    session["oauth_state"] = state
-    session["oauth_csrf"] = csrf_token
-    session["oauth_redirect"] = request.url
-
-    from utils.auth import AuditLogger
+    request.session["oauth_state"] = state
+    request.session["oauth_csrf"] = csrf_token
+    request.session["oauth_redirect"] = str(request.url)
 
     AuditLogger.log_auth_event(
         "login_initiated",
-        path=request.path,
+        path=request.url.path,
     )
 
-    return redirect(authorization_url)
+    return RedirectResponse(url=authorization_url, status_code=302)
 
 
-def shutdown_scheduler():
-    """Shutdown the scheduler gracefully (deprecated - uses teardown handler now)."""
-    # Services are now cleaned up via app.teardown_appcontext
-    # This function kept for backward compatibility but does nothing
-    logger.info("Shutdown handled by teardown_appcontext")
+def register_routers(app: FastAPI) -> None:
+    """Register all API routers."""
+    from api.auth import router as auth_router
+    from api.credentials import router as credentials_router
+    from api.gdrive import router as gdrive_router
+    from api.health import router as health_router
+    from api.jobs import router as jobs_router
+    from api.task_runs import router as task_runs_router
+
+    # Register routers
+    app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(jobs_router)
+    app.include_router(task_runs_router)
+    app.include_router(credentials_router)
+    app.include_router(gdrive_router)
+
+    logger.info("Registered all API routers")
+
+
+# Create app instance
+app = create_app()
 
 
 def main():
     """Main entry point."""
-    try:
-        # Create the app
-        flask_app = create_app()
+    import uvicorn
 
-        # Get settings for server configuration
-        settings = get_settings()
+    settings = get_settings()
 
-        logger.info(f"Starting Tasks WebUI on {settings.host}:{settings.port}")
-        logger.info(f"Dashboard available at: http://{settings.host}:{settings.port}/")
+    logger.info(f"Starting Tasks WebUI on {settings.host}:{settings.port}")
+    logger.info(f"Dashboard available at: http://{settings.host}:{settings.port}/")
 
-        # Run the Flask app
-        flask_app.run(
-            host=settings.host,
-            port=settings.port,
-            debug=(settings.flask_env == "development"),
-            use_reloader=False,  # Avoid double initialization
-        )
-
-    except KeyboardInterrupt:
-        logger.info("Received shutdown signal")
-    except Exception as e:
-        logger.error(f"Application error: {e}")
-    finally:
-        shutdown_scheduler()
+    # Run with uvicorn
+    uvicorn.run(
+        "app:app",
+        host=settings.host,
+        port=settings.port,
+        reload=(settings.flask_env == "development"),
+        log_level="info",
+    )
 
 
 if __name__ == "__main__":

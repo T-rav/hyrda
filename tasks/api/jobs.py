@@ -3,55 +3,42 @@
 import logging
 from datetime import UTC, datetime
 
-from flask import Blueprint, Response, g, jsonify, request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-jobs_bp = Blueprint("jobs", __name__, url_prefix="/api")
+router = APIRouter(prefix="/api")
 
 
-@jobs_bp.before_request
-def load_services():
-    """Load services into Flask's g object before each request.
+@router.get("/scheduler/info")
+async def scheduler_info(request: Request):
+    """Get scheduler information.
 
-    This eliminates the need for global variables while keeping route code clean.
-    Services are stored in current_app.extensions and made available via g.
+    Returns:
+        Scheduler status and configuration
     """
-    from flask import current_app, g
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+    return scheduler_service.get_scheduler_info()
 
-    g.scheduler_service = current_app.extensions.get("scheduler_service")
-    g.job_registry = current_app.extensions.get("job_registry")
 
+@router.get("/jobs")
+async def list_jobs(request: Request):
+    """List all jobs.
 
-def init_services(scheduler_svc, job_reg):
-    """Initialize service references (kept for compatibility).
-
-    Services are now stored in current_app.extensions and accessed via g.
-    This function is kept for backward compatibility but is no longer needed.
+    Returns:
+        Dictionary with list of all scheduled jobs
     """
-    # No-op: Services are accessed via g in routes (loaded by before_request hook)
-    pass
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
-
-@jobs_bp.route("/scheduler/info")
-def scheduler_info() -> Response | tuple[Response, int]:
-    """Get scheduler information."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
-    return jsonify(g.scheduler_service.get_scheduler_info())
-
-
-@jobs_bp.route("/jobs")
-def list_jobs() -> Response | tuple[Response, int]:
-    """List all jobs."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
-
-    jobs = g.scheduler_service.get_jobs()
+    jobs = scheduler_service.get_jobs()
     jobs_data = []
 
     # Load all task metadata
@@ -59,7 +46,7 @@ def list_jobs() -> Response | tuple[Response, int]:
         metadata_map = {m.job_id: m for m in db_session.query(TaskMetadata).all()}
 
     for job in jobs:
-        job_info = g.scheduler_service.get_job_info(job.id)
+        job_info = scheduler_service.get_job_info(job.id)
         if job_info:
             # Add custom task name if available
             metadata = metadata_map.get(job.id)
@@ -67,57 +54,89 @@ def list_jobs() -> Response | tuple[Response, int]:
                 job_info["name"] = metadata.task_name
             jobs_data.append(job_info)
 
-    return jsonify({"jobs": jobs_data})
+    return {"jobs": jobs_data}
 
 
-@jobs_bp.route("/jobs/<job_id>")
-def get_job(job_id: str) -> Response | tuple[Response, int]:
-    """Get specific job details."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.get("/jobs/{job_id}")
+async def get_job(request: Request, job_id: str):
+    """Get specific job details.
 
-    job_info = g.scheduler_service.get_job_info(job_id)
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Job details
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    job_info = scheduler_service.get_job_info(job_id)
     if not job_info:
-        return jsonify({"error": "Job not found"}), 404
+        raise HTTPException(status_code=404, detail="Job not found")
 
-    return jsonify(job_info)
-
-
-@jobs_bp.route("/jobs/<job_id>/pause", methods=["POST"])
-def pause_job(job_id: str) -> Response | tuple[Response, int]:
-    """Pause a job."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
-
-    try:
-        g.scheduler_service.pause_job(job_id)
-        return jsonify({"message": f"Job {job_id} paused successfully"})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    return job_info
 
 
-@jobs_bp.route("/jobs/<job_id>/resume", methods=["POST"])
-def resume_job(job_id: str) -> Response | tuple[Response, int]:
-    """Resume a job."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.post("/jobs/{job_id}/pause")
+async def pause_job(request: Request, job_id: str):
+    """Pause a job.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Success message
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
-        g.scheduler_service.resume_job(job_id)
-        return jsonify({"message": f"Job {job_id} resumed successfully"})
+        scheduler_service.pause_job(job_id)
+        return {"message": f"Job {job_id} paused successfully"}
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs/<job_id>", methods=["DELETE"])
-def delete_job(job_id: str) -> Response | tuple[Response, int]:
-    """Delete a job and its associated metadata."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.post("/jobs/{job_id}/resume")
+async def resume_job(request: Request, job_id: str):
+    """Resume a job.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Success message
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
+
+    try:
+        scheduler_service.resume_job(job_id)
+        return {"message": f"Job {job_id} resumed successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(request: Request, job_id: str):
+    """Delete a job and its associated metadata.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Success message
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
         # Remove the scheduled job from APScheduler
-        g.scheduler_service.remove_job(job_id)
+        scheduler_service.remove_job(job_id)
 
         # Clean up associated metadata from database
         with get_db_session() as db_session:
@@ -131,22 +150,36 @@ def delete_job(job_id: str) -> Response | tuple[Response, int]:
                 db_session.commit()
                 logger.info(f"Deleted metadata for job {job_id}")
 
-        return jsonify({"message": f"Job {job_id} deleted successfully"})
+        return {"message": f"Job {job_id} deleted successfully"}
     except Exception as e:
         logger.error(f"Error deleting job {job_id}: {e}")
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs", methods=["POST"])
-def create_job() -> Response | tuple[Response, int]:
-    """Create a new job."""
-    if not g.scheduler_service or not g.job_registry:
-        return jsonify({"error": "Services not initialized"}), 500
+@router.post("/jobs")
+async def create_job(request: Request):
+    """Create a new job.
+
+    Request Body:
+        - job_type: Type of job to create
+        - job_id: Optional job identifier
+        - schedule: Schedule configuration
+        - parameters: Job parameters
+        - task_name: Optional custom task name
+
+    Returns:
+        Success message with job ID
+    """
+    scheduler_service = request.app.state.scheduler_service
+    job_registry = request.app.state.job_registry
+
+    if not scheduler_service or not job_registry:
+        raise HTTPException(status_code=500, detail="Services not initialized")
 
     try:
-        data = request.get_json()
+        data = await request.json()
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            raise HTTPException(status_code=400, detail="No data provided")
 
         job_type = data.get("job_type")
         job_id = data.get("job_id")
@@ -159,10 +192,10 @@ def create_job() -> Response | tuple[Response, int]:
         )
 
         if not job_type:
-            return jsonify({"error": "job_type is required"}), 400
+            raise HTTPException(status_code=400, detail="job_type is required")
 
         # Create job using registry
-        job = g.job_registry.create_job(
+        job = job_registry.create_job(
             job_type=job_type, job_id=job_id, schedule=schedule, **job_params
         )
 
@@ -184,66 +217,97 @@ def create_job() -> Response | tuple[Response, int]:
                 f"No task_name provided for job {job.id}, skipping metadata save"
             )
 
-        return jsonify(
-            {"message": f"Job {job.id} created successfully", "job_id": job.id}
-        )
+        return {"message": f"Job {job.id} created successfully", "job_id": job.id}
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating job: {e}")
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs/<job_id>", methods=["PUT"])
-def update_job(job_id: str) -> Response | tuple[Response, int]:
-    """Update an existing job."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.put("/jobs/{job_id}")
+async def update_job(request: Request, job_id: str):
+    """Update an existing job.
+
+    Args:
+        job_id: Job identifier
+
+    Request Body:
+        Job configuration changes
+
+    Returns:
+        Success message
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
-        data = request.get_json()
+        data = await request.json()
         if not data:
-            return jsonify({"error": "No data provided"}), 400
+            raise HTTPException(status_code=400, detail="No data provided")
 
         # Remove job_id from changes if present
         changes = {k: v for k, v in data.items() if k != "job_id"}
 
-        g.scheduler_service.modify_job(job_id, **changes)
-        return jsonify({"message": f"Job {job_id} updated successfully"})
+        scheduler_service.modify_job(job_id, **changes)
+        return {"message": f"Job {job_id} updated successfully"}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs/<job_id>/retry", methods=["POST"])
-def retry_job(job_id: str) -> Response | tuple[Response, int]:
-    """Retry/re-queue a failed job immediately."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(request: Request, job_id: str):
+    """Retry/re-queue a failed job immediately.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Success message
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
-        job = g.scheduler_service.get_job(job_id)
+        job = scheduler_service.get_job(job_id)
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            raise HTTPException(status_code=404, detail="Job not found")
 
         # Force job to run immediately by modifying next run time
-        g.scheduler_service.modify_job(job_id, next_run_time=datetime.now(UTC))
+        scheduler_service.modify_job(job_id, next_run_time=datetime.now(UTC))
 
-        return jsonify({"message": f"Job {job_id} queued for immediate retry"})
+        return {"message": f"Job {job_id} queued for immediate retry"}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs/<job_id>/run-once", methods=["POST"])
-def run_job_once(job_id: str) -> Response | tuple[Response, int]:
-    """Run a job once immediately (ad-hoc execution)."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.post("/jobs/{job_id}/run-once")
+async def run_job_once(request: Request, job_id: str):
+    """Run a job once immediately (ad-hoc execution).
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Success message with one-time job ID
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
-        job = g.scheduler_service.get_job(job_id)
+        job = scheduler_service.get_job(job_id)
         if not job:
-            return jsonify({"error": "Job not found"}), 404
+            raise HTTPException(status_code=404, detail="Job not found")
 
         # Create a one-time copy of the job
         one_time_id = f"{job_id}_manual_{int(datetime.now().timestamp())}"
@@ -258,7 +322,7 @@ def run_job_once(job_id: str) -> Response | tuple[Response, int]:
             else:
                 manual_args.append("manual")  # Add triggered_by
 
-        g.scheduler_service.add_job(
+        scheduler_service.add_job(
             func=job.func,
             trigger="date",
             run_date=datetime.now(UTC),
@@ -267,61 +331,72 @@ def run_job_once(job_id: str) -> Response | tuple[Response, int]:
             args=manual_args,
         )
 
-        return jsonify(
-            {
-                "message": f"Created one-time job {one_time_id}",
-                "one_time_job_id": one_time_id,
-            }
-        )
+        return {
+            "message": f"Created one-time job {one_time_id}",
+            "one_time_job_id": one_time_id,
+        }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/jobs/<job_id>/history")
-def get_job_history(job_id: str) -> Response | tuple[Response, int]:
-    """Get job execution history."""
-    if not g.scheduler_service:
-        return jsonify({"error": "Scheduler not initialized"}), 500
+@router.get("/jobs/{job_id}/history")
+async def get_job_history(request: Request, job_id: str):
+    """Get job execution history.
+
+    Args:
+        job_id: Job identifier
+
+    Returns:
+        Job execution history with statistics
+    """
+    scheduler_service = request.app.state.scheduler_service
+    if not scheduler_service:
+        raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
         # This would need to be implemented with a custom job listener
         # For now, return mock data structure
-        return jsonify(
-            {
-                "job_id": job_id,
-                "executions": [
-                    {
-                        "id": f"{job_id}_exec_1",
-                        "start_time": "2024-01-20T10:00:00Z",
-                        "end_time": "2024-01-20T10:02:30Z",
-                        "status": "success",
-                        "duration_seconds": 150,
-                        "result": {"processed": 25},
-                    },
-                    {
-                        "id": f"{job_id}_exec_2",
-                        "start_time": "2024-01-20T11:00:00Z",
-                        "end_time": "2024-01-20T11:00:15Z",
-                        "status": "failed",
-                        "duration_seconds": 15,
-                        "error": "Connection timeout",
-                    },
-                ],
-                "total_executions": 2,
-                "success_rate": 50.0,
-                "avg_duration_seconds": 82.5,
-            }
-        )
+        return {
+            "job_id": job_id,
+            "executions": [
+                {
+                    "id": f"{job_id}_exec_1",
+                    "start_time": "2024-01-20T10:00:00Z",
+                    "end_time": "2024-01-20T10:02:30Z",
+                    "status": "success",
+                    "duration_seconds": 150,
+                    "result": {"processed": 25},
+                },
+                {
+                    "id": f"{job_id}_exec_2",
+                    "start_time": "2024-01-20T11:00:00Z",
+                    "end_time": "2024-01-20T11:00:15Z",
+                    "status": "failed",
+                    "duration_seconds": 15,
+                    "error": "Connection timeout",
+                },
+            ],
+            "total_executions": 2,
+            "success_rate": 50.0,
+            "avg_duration_seconds": 82.5,
+        }
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@jobs_bp.route("/job-types")
-def list_job_types() -> Response | tuple[Response, int]:
-    """List available job types."""
-    if not g.job_registry:
-        return jsonify({"error": "Job registry not initialized"}), 500
+@router.get("/job-types")
+async def list_job_types(request: Request):
+    """List available job types.
 
-    return jsonify({"job_types": g.job_registry.get_available_job_types()})
+    Returns:
+        Dictionary with list of available job types
+    """
+    job_registry = request.app.state.job_registry
+    if not job_registry:
+        raise HTTPException(status_code=500, detail="Job registry not initialized")
+
+    return {"job_types": job_registry.get_available_job_types()}

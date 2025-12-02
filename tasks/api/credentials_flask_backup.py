@@ -3,23 +3,20 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request
+from flask import Blueprint, Response, jsonify
 
 from models.base import get_db_session
 from models.oauth_credential import OAuthCredential
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/credentials")
+# Create blueprint
+credentials_bp = Blueprint("credentials", __name__, url_prefix="/api/credentials")
 
 
-@router.get("")
-async def list_credentials(request: Request):
-    """List all stored Google OAuth credentials with status.
-
-    Returns:
-        Dictionary with list of credentials and their status
-    """
+@credentials_bp.route("", methods=["GET"])
+def list_credentials() -> Response | tuple[Response, int]:
+    """List all stored Google OAuth credentials with status."""
     try:
         with get_db_session() as db_session:
             credentials = db_session.query(OAuthCredential).all()
@@ -67,23 +64,16 @@ async def list_credentials(request: Request):
 
                 creds_with_status.append(cred_dict)
 
-            return {"credentials": creds_with_status}
+            return jsonify({"credentials": creds_with_status})
 
     except Exception as e:
         logger.error(f"Error listing credentials: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return jsonify({"error": str(e)}), 500
 
 
-@router.delete("/{cred_id}")
-async def delete_credential(request: Request, cred_id: str):
-    """Delete a stored Google OAuth credential.
-
-    Args:
-        cred_id: Credential identifier
-
-    Returns:
-        Success message
-    """
+@credentials_bp.route("/<cred_id>", methods=["DELETE"])
+def delete_credential(cred_id: str) -> Response | tuple[Response, int]:
+    """Delete a stored Google OAuth credential."""
     try:
         with get_db_session() as db_session:
             credential = (
@@ -93,17 +83,15 @@ async def delete_credential(request: Request, cred_id: str):
             )
 
             if not credential:
-                raise HTTPException(status_code=404, detail="Credential not found")
+                return jsonify({"error": "Credential not found"}), 404
 
             db_session.delete(credential)
             db_session.commit()
 
             logger.info(f"Deleted credential: {credential.credential_name} ({cred_id})")
 
-            return {"message": "Credential deleted successfully"}
+            return jsonify({"message": "Credential deleted successfully"})
 
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error deleting credential: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        return jsonify({"error": str(e)}), 500

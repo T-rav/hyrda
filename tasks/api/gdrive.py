@@ -7,7 +7,8 @@ import sys
 import uuid
 from pathlib import Path
 
-from flask import Blueprint, Response, jsonify, render_template, request, session
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
@@ -18,26 +19,33 @@ from services.encryption_service import get_encryption_service
 
 logger = logging.getLogger(__name__)
 
-# Create blueprint
-gdrive_bp = Blueprint("gdrive", __name__, url_prefix="/api/gdrive")
+router = APIRouter(prefix="/api/gdrive")
 
 
-@gdrive_bp.route("/auth/initiate", methods=["POST"])
-def initiate_gdrive_auth() -> Response | tuple[Response, int]:
-    """Initiate Google Drive OAuth flow."""
+@router.post("/auth/initiate")
+async def initiate_gdrive_auth(request: Request):
+    """Initiate Google Drive OAuth flow.
+
+    Request Body:
+        - task_id: Unique identifier for this task
+        - credential_name: Name for this credential
+
+    Returns:
+        Authorization URL and credential ID
+    """
     try:
         # Allow OAuth over HTTP for local development
         os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
-        data = request.get_json()
+        data = await request.json()
         task_id = data.get("task_id")  # Unique identifier for this task
         credential_name = data.get("credential_name")  # Name for this credential
 
         if not task_id:
-            return jsonify({"error": "task_id is required"}), 400
+            raise HTTPException(status_code=400, detail="task_id is required")
 
         if not credential_name:
-            return jsonify({"error": "credential_name is required"}), 400
+            raise HTTPException(status_code=400, detail="credential_name is required")
 
         # Generate UUID for credential_id
         credential_id = str(uuid.uuid4())
@@ -58,14 +66,9 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
         client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 
         if not client_id or not client_secret:
-            return (
-                jsonify(
-                    {
-                        "error": "Google OAuth not configured",
-                        "details": "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables must be set",
-                    }
-                ),
-                500,
+            raise HTTPException(
+                status_code=500,
+                detail="Google OAuth not configured - GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET environment variables must be set",
             )
 
         # Build redirect URI from server base URL
@@ -94,39 +97,43 @@ def initiate_gdrive_auth() -> Response | tuple[Response, int]:
         )
 
         # Store state, task_id, credential_id, and credential_name in session
-        session["oauth_state"] = state
-        session["oauth_task_id"] = task_id
-        session["oauth_credential_id"] = credential_id
-        session["oauth_credential_name"] = credential_name
+        request.session["oauth_state"] = state
+        request.session["oauth_task_id"] = task_id
+        request.session["oauth_credential_id"] = credential_id
+        request.session["oauth_credential_name"] = credential_name
 
-        return jsonify(
-            {
-                "authorization_url": authorization_url,
-                "state": state,
-                "credential_id": credential_id,
-            }
-        )
+        return {
+            "authorization_url": authorization_url,
+            "state": state,
+            "credential_id": credential_id,
+        }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error initiating Google Drive auth: {e}")
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@gdrive_bp.route("/auth/callback")
-def gdrive_auth_callback() -> Response | tuple[Response, int]:
-    """Handle Google Drive OAuth callback."""
+@router.get("/auth/callback", response_class=HTMLResponse)
+async def gdrive_auth_callback(request: Request):
+    """Handle Google Drive OAuth callback.
+
+    Returns:
+        HTML success or error page
+    """
     try:
         # Allow OAuth over HTTP for local development
         os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
         # Get state, task_id, credential_id, and credential_name from session
-        state = session.get("oauth_state")
-        task_id = session.get("oauth_task_id")
-        credential_id = session.get("oauth_credential_id")
-        credential_name = session.get("oauth_credential_name")
+        state = request.session.get("oauth_state")
+        task_id = request.session.get("oauth_task_id")
+        credential_id = request.session.get("oauth_credential_id")
+        credential_name = request.session.get("oauth_credential_name")
 
         if not state or not task_id or not credential_id or not credential_name:
-            return jsonify({"error": "Invalid session state"}), 400
+            raise HTTPException(status_code=400, detail="Invalid session state")
 
         # Add ingest path to sys.path
         ingest_path = str(Path(__file__).parent.parent.parent / "ingest")
@@ -144,7 +151,9 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 
         if not client_id or not client_secret:
-            return jsonify({"error": "Google OAuth not configured"}), 500
+            raise HTTPException(
+                status_code=500, detail="Google OAuth not configured"
+            )
 
         # Build redirect URI from server base URL
         settings = get_settings()
@@ -166,7 +175,7 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         )
 
         # Fetch token using authorization response
-        authorization_response = request.url
+        authorization_response = str(request.url)
         flow.fetch_token(authorization_response=authorization_response)
 
         # Get credentials (token)
@@ -186,7 +195,7 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
         }
 
         # Check if this is a refresh or new credential
-        is_refresh = session.get("oauth_is_refresh", False)
+        is_refresh = request.session.get("oauth_is_refresh", False)
 
         # Save to database (create or update)
         with get_db_session() as db_session:
@@ -207,7 +216,7 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
                     logger.error(
                         f"Refresh failed: credential {credential_id} not found"
                     )
-                    return jsonify({"error": "Credential not found"}), 404
+                    raise HTTPException(status_code=404, detail="Credential not found")
             else:
                 # Create new credential
                 oauth_credential = OAuthCredential(
@@ -225,27 +234,166 @@ def gdrive_auth_callback() -> Response | tuple[Response, int]:
             db_session.commit()
 
         # Clear session
-        session.pop("oauth_state", None)
-        session.pop("oauth_task_id", None)
-        session.pop("oauth_credential_id", None)
-        session.pop("oauth_credential_name", None)
-        session.pop("oauth_is_refresh", None)
+        request.session.pop("oauth_state", None)
+        request.session.pop("oauth_task_id", None)
+        request.session.pop("oauth_credential_id", None)
+        request.session.pop("oauth_credential_name", None)
+        request.session.pop("oauth_is_refresh", None)
 
         # Render success page with auto-close
-        return render_template(
-            "oauth_success.html",
-            credential_name=credential_name,
-            credential_id=credential_id,
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Google Drive Authentication Successful</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 3rem;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+                        text-align: center;
+                        max-width: 500px;
+                    }}
+                    h1 {{
+                        color: #2d3748;
+                        margin-bottom: 1rem;
+                        font-size: 2rem;
+                    }}
+                    .success-icon {{
+                        font-size: 4rem;
+                        color: #48bb78;
+                        margin-bottom: 1rem;
+                    }}
+                    p {{
+                        color: #4a5568;
+                        line-height: 1.6;
+                        margin-bottom: 1rem;
+                    }}
+                    .credential-info {{
+                        background: #f7fafc;
+                        padding: 1rem;
+                        border-radius: 8px;
+                        margin: 1rem 0;
+                        font-family: monospace;
+                    }}
+                    .auto-close {{
+                        color: #718096;
+                        font-size: 0.875rem;
+                        margin-top: 1rem;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="success-icon">✓</div>
+                    <h1>Authentication Successful!</h1>
+                    <p>Your Google Drive credentials have been saved securely.</p>
+                    <div class="credential-info">
+                        <strong>Credential:</strong> {credential_name}<br>
+                        <strong>ID:</strong> {credential_id}
+                    </div>
+                    <p>You can now use this credential in your Google Drive ingestion tasks.</p>
+                    <p class="auto-close">This window will close automatically in 3 seconds...</p>
+                </div>
+                <script>
+                    setTimeout(function() {{
+                        window.close();
+                    }}, 3000);
+                </script>
+            </body>
+            </html>
+            """
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error handling Google Drive auth callback: {e}")
-        return render_template("oauth_error.html", error=str(e)), 500
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Error</title>
+                <style>
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                    }}
+                    .container {{
+                        background: white;
+                        padding: 3rem;
+                        border-radius: 12px;
+                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+                        text-align: center;
+                        max-width: 500px;
+                    }}
+                    h1 {{
+                        color: #742a2a;
+                        margin-bottom: 1rem;
+                        font-size: 2rem;
+                    }}
+                    .error-icon {{
+                        font-size: 4rem;
+                        color: #f56565;
+                        margin-bottom: 1rem;
+                    }}
+                    p {{
+                        color: #4a5568;
+                        line-height: 1.6;
+                    }}
+                    .error-details {{
+                        background: #fff5f5;
+                        padding: 1rem;
+                        border-radius: 8px;
+                        margin: 1rem 0;
+                        font-family: monospace;
+                        color: #742a2a;
+                        font-size: 0.875rem;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="error-icon">✗</div>
+                    <h1>Authentication Failed</h1>
+                    <p>There was an error during authentication.</p>
+                    <div class="error-details">{str(e)}</div>
+                    <p>Please try again or contact your administrator.</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=500,
+        )
 
 
-@gdrive_bp.route("/auth/status/<task_id>")
-def check_gdrive_auth_status(task_id: str) -> Response | tuple[Response, int]:
-    """Check if Google Drive authentication exists for a task."""
+@router.get("/auth/status/{task_id}")
+async def check_gdrive_auth_status(request: Request, task_id: str):
+    """Check if Google Drive authentication exists for a task.
+
+    Args:
+        task_id: Task identifier
+
+    Returns:
+        Authentication status
+    """
     try:
         token_file = (
             Path(__file__).parent.parent
@@ -264,17 +412,15 @@ def check_gdrive_auth_status(task_id: str) -> Response | tuple[Response, int]:
                 ],
             )
 
-            return jsonify(
-                {
-                    "authenticated": True,
-                    "token_file": str(token_file),
-                    "valid": creds.valid,
-                    "expired": creds.expired if hasattr(creds, "expired") else False,
-                }
-            )
+            return {
+                "authenticated": True,
+                "token_file": str(token_file),
+                "valid": creds.valid,
+                "expired": creds.expired if hasattr(creds, "expired") else False,
+            }
         else:
-            return jsonify({"authenticated": False})
+            return {"authenticated": False}
 
     except Exception as e:
         logger.error(f"Error checking Google Drive auth status: {e}")
-        return jsonify({"error": str(e)}), 500
+        raise HTTPException(status_code=500, detail=str(e)) from e

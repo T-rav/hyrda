@@ -15,7 +15,7 @@ class TestJobDeletionCleanup:
         job_id = "test-job-123"
 
         # Access the mock from app.extensions (no more global patching!)
-        mock_scheduler = client.application.extensions["scheduler_service"]
+        mock_scheduler = client.app.state.scheduler_service
 
         # Mock successful job removal from scheduler
         mock_scheduler.remove_job = MagicMock()
@@ -36,7 +36,7 @@ class TestJobDeletionCleanup:
 
         # Assert success
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert "message" in data
         assert job_id in data["message"]
 
@@ -48,7 +48,7 @@ class TestJobDeletionCleanup:
         job_id = "test-job-no-metadata"
 
         # Access the mock from app.extensions (no more global patching!)
-        mock_scheduler = client.application.extensions["scheduler_service"]
+        mock_scheduler = client.app.state.scheduler_service
 
         # Mock successful job removal from scheduler
         mock_scheduler.remove_job = MagicMock()
@@ -62,7 +62,7 @@ class TestJobDeletionCleanup:
 
         # Assert success even without metadata
         assert response.status_code == 200
-        data = response.get_json()
+        data = response.json()
         assert "message" in data
 
         # Verify scheduler was called
@@ -73,7 +73,7 @@ class TestJobDeletionCleanup:
         job_id = "test-job-db-error"
 
         # Access the mock from app.extensions (no more global patching!)
-        mock_scheduler = client.application.extensions["scheduler_service"]
+        mock_scheduler = client.app.state.scheduler_service
 
         # Mock successful job removal from scheduler
         mock_scheduler.remove_job = MagicMock()
@@ -83,7 +83,7 @@ class TestJobDeletionCleanup:
 
         # Should return success or error depending on implementation
         assert response.status_code in [200, 400]
-        data = response.get_json()
+        data = response.json()
         assert "message" in data or "error" in data
 
     def test_delete_job_rolls_back_on_scheduler_failure(self, client):
@@ -91,7 +91,7 @@ class TestJobDeletionCleanup:
         job_id = "test-job-scheduler-fail"
 
         # Access the mock from app.extensions (no more global patching!)
-        mock_scheduler = client.application.extensions["scheduler_service"]
+        mock_scheduler = client.app.state.scheduler_service
 
         # Mock scheduler failure
         mock_scheduler.remove_job.side_effect = Exception("Scheduler error")
@@ -101,5 +101,5 @@ class TestJobDeletionCleanup:
 
         # Should return error
         assert response.status_code == 400
-        data = response.get_json()
-        assert "error" in data
+        data = response.json()
+        assert "detail" in data

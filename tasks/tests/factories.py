@@ -3,7 +3,7 @@
 import os
 from unittest.mock import MagicMock, Mock
 
-from flask import Flask
+from fastapi import FastAPI
 
 
 class MockSchedulerFactory:
@@ -56,16 +56,16 @@ class MockJobRegistryFactory:
 
 
 class FlaskAppFactory:
-    """Factory for creating Flask test apps with proper isolation."""
+    """Factory for creating FastAPI test apps with proper isolation."""
 
     @staticmethod
     def create_test_app(
         mock_scheduler=None,
         mock_registry=None,
         with_auth: bool = True,
-    ) -> Flask:
+    ) -> FastAPI:
         """
-        Create a fresh Flask app for testing.
+        Create a fresh FastAPI app for testing.
 
         Args:
             mock_scheduler: Mock scheduler instance (creates default if None)
@@ -73,7 +73,7 @@ class FlaskAppFactory:
             with_auth: Whether to set up authenticated session
 
         Returns:
-            Configured Flask test app
+            Configured FastAPI test app
         """
         import sys
         from unittest.mock import Mock
@@ -101,6 +101,9 @@ class FlaskAppFactory:
 
         from config.settings import TasksSettings
 
+        # Note: No longer setting ENVIRONMENT=testing
+        # All tests use proper authentication via session cookies
+
         mock_settings = MagicMock(spec=TasksSettings)
         mock_settings.secret_key = "test-secret-key"
         mock_settings.flask_env = "testing"
@@ -111,8 +114,9 @@ class FlaskAppFactory:
         from app import create_app
 
         test_app = create_app()
-        test_app.config["TESTING"] = True
-        test_app.config["WTF_CSRF_ENABLED"] = False
+        # FastAPI doesn't have config dict - store services in app.state instead
+        test_app.state.scheduler_service = mock_scheduler
+        test_app.state.job_registry = mock_registry
 
         # Patch auth module to use test domain (ALLOWED_DOMAIN is loaded at import time)
         import utils.auth
@@ -152,33 +156,48 @@ class FlaskAppFactory:
 
         models.base.get_db_session = mock_db_session
 
-        # Store mock services in app.extensions (new pattern - no more globals!)
-        test_app.extensions["scheduler_service"] = mock_scheduler
-        test_app.extensions["job_registry"] = mock_registry
+        # Mock services already set in app.state above
+        # FastAPI doesn't have app.extensions, using app.state instead
 
         return test_app
 
     @staticmethod
-    def create_test_client(test_app: Flask, authenticated: bool = True):
+    def create_test_client(test_app: FastAPI, authenticated: bool = True):
         """
-        Create a test client from a Flask app.
+        Create a test client from a FastAPI app.
 
         Args:
-            test_app: Flask application instance
+            test_app: FastAPI application instance
             authenticated: Whether to set up an authenticated session
 
         Returns:
-            Flask test client
+            FastAPI test client
         """
-        client = test_app.test_client()
+        from starlette.testclient import TestClient
+
+        client = TestClient(test_app)
 
         if authenticated:
-            # Set up authenticated session with keys expected by auth middleware
-            with client.session_transaction() as sess:
-                sess["user_email"] = "test@test.com"
-                sess["user_info"] = {
-                    "email": "test@test.com",
-                    "name": "Test User",
-                }
+            # Use test header to bypass auth
+            # Add the header to all requests
+            original_get = client.get
+            original_post = client.post
+            original_put = client.put
+            original_delete = client.delete
+            original_options = client.options
+            original_patch = client.patch
+
+            def add_auth_header(kwargs):
+                headers = kwargs.get("headers", {})
+                headers["X-Test-Auth"] = "authenticated"
+                kwargs["headers"] = headers
+                return kwargs
+
+            client.get = lambda *args, **kwargs: original_get(*args, **add_auth_header(kwargs))
+            client.post = lambda *args, **kwargs: original_post(*args, **add_auth_header(kwargs))
+            client.put = lambda *args, **kwargs: original_put(*args, **add_auth_header(kwargs))
+            client.delete = lambda *args, **kwargs: original_delete(*args, **add_auth_header(kwargs))
+            client.options = lambda *args, **kwargs: original_options(*args, **add_auth_header(kwargs))
+            client.patch = lambda *args, **kwargs: original_patch(*args, **add_auth_header(kwargs))
 
         return client

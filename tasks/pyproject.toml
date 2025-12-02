@@ -16,10 +16,10 @@ dependencies = [
     # Core scheduling
     "apscheduler>=3.10.4",
 
-    # Web UI
-    "flask>=3.0.0",
-    "flask-cors>=4.0.0",
-    "gunicorn>=21.0.0",  # WSGI server for production
+    # Web UI (FastAPI)
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",  # ASGI server for production
+    "python-multipart>=0.0.6",  # For form data support
 
     # Time zones
     "tzlocal>=5.2",
