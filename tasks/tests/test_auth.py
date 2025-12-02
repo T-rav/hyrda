@@ -39,11 +39,9 @@ def auth_app(monkeypatch):
 
     # Create app with development environment to avoid SECRET_KEY validation
     old_env = os.environ.get("ENVIRONMENT")
-    old_flask_env = os.environ.get("FLASK_ENV")
 
     # Set development environment for tests
     os.environ["ENVIRONMENT"] = "development"
-    os.environ["FLASK_ENV"] = "development"
 
     try:
         test_app = FlaskAppFactory.create_test_app(
@@ -57,10 +55,6 @@ def auth_app(monkeypatch):
             os.environ["ENVIRONMENT"] = old_env
         else:
             os.environ.pop("ENVIRONMENT", None)
-        if old_flask_env:
-            os.environ["FLASK_ENV"] = old_flask_env
-        else:
-            os.environ.pop("FLASK_ENV", None)
 
 
 @pytest.fixture
@@ -84,7 +78,6 @@ def mock_oauth_env():
         "ALLOWED_EMAIL_DOMAIN": "8thlight.com",  # Without @ - verify_domain() adds it
         "SERVER_BASE_URL": "http://localhost:5001",
         "ENVIRONMENT": "development",  # Prevent SECRET_KEY production validation in tests
-        "FLASK_ENV": "development",
     }
 
     with (
