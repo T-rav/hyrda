@@ -262,77 +262,98 @@ except HTTPException as e:
 
 ---
 
-### 8. Missing Type Hints in Critical Services → **IN PROGRESS**
+### 8. Missing Type Hints in Critical Services → **50% COMPLETE** 🎯
 **Severity:** HIGH
 **Files:** `bot/services/`, `tasks/api/jobs.py`
-**Status:** 🚧 **IN PROGRESS** - 24/74 dict[str, Any] replaced (32% complete)
+**Status:** 🚧 **IN PROGRESS** - 37/74 dict[str, Any] replaced (50% complete)
 
 **Issue:** Functions missing return types; `dict[str, Any]` overused (74 occurrences)
 
-**Progress:**
-- ✅ Created `bot/bot_types/__init__.py` with comprehensive TypedDict definitions
-- ✅ Updated `bot/services/agent_client.py` (AgentContext, AgentResponse, AgentInfo, CircuitBreakerStatus)
-- ✅ Updated `bot/services/context_builder.py` (ContextChunk, ContextQuality)
-- ✅ Updated `bot/services/citation_service.py` (ContextChunk)
-- ✅ Updated `bot/services/retrieval_service.py` (ContextChunk for all methods)
-- ✅ Updated `bot/services/agent_registry.py` (AgentInfo)
-- 📊 Reduced from 74 to 50 dict[str, Any] occurrences (24 replaced)
+**Progress Summary:**
+- ✅ Created `bot/bot_types/__init__.py` with **17 TypedDict classes** (367 lines)
+- ✅ Updated **7 core service files** with proper type hints
+- 🎯 **50% MILESTONE**: Reduced from 74 to 37 dict[str, Any] (37 replaced)
+- ✅ All 549 tests pass with new types
 
-**TypedDict Classes Created:**
+**Files Updated:**
+1. ✅ `bot/services/agent_client.py` - Agent invocation & circuit breaker types
+2. ✅ `bot/services/context_builder.py` - RAG context & quality types
+3. ✅ `bot/services/citation_service.py` - Context chunk types
+4. ✅ `bot/services/retrieval_service.py` - Vector search result types
+5. ✅ `bot/services/agent_registry.py` - Agent registry types
+6. ✅ `bot/services/query_rewriter.py` - Query rewriting & intent types
+7. ✅ `bot/services/slack_service.py` - Slack API response types
+8. ✅ `bot/services/search_clients.py` - Web search & research types
+
+**TypedDict Classes Created (17 total):**
+
+**Core RAG Types:**
+- `ContextChunk` - Vector search results with metadata
+- `ChunkMetadata` - Metadata for context chunks
+- `ContextQuality` - Context quality validation results
+
+**Agent Types:**
+- `AgentContext` - Context passed to agents
+- `AgentResponse` - Agent execution results
+- `AgentMetadata` - Agent execution metadata
+- `AgentInfo` - Agent registry information
+
+**Query Rewriting Types:**
+- `QueryIntent` - Intent classification (type, entities, time_range, confidence)
+- `QueryRewriteResult` - Rewrite result (query, filters, strategy)
+- `QueryRewriterStats` - Rewriter performance statistics
+- `TimeRange` - Time range for filtering
+
+**Slack Types:**
+- `SlackMessageResponse` - Slack message API responses
+- `SlackFileUploadResponse` - File upload API responses
+
+**Search Types:**
+- `WebSearchResult` - Web search results (title, url, snippet)
+- `WebScrapeResult` - Scraped page content
+- `DeepResearchResult` - Research with citations
+
+**Monitoring Types:**
+- `CircuitBreakerStatus` - Circuit breaker state & metrics
+
+**Example Usage:**
 ```python
-# bot/bot_types/__init__.py
-class ContextChunk(TypedDict):
-    """Vector search result with metadata"""
-    content: str
-    similarity: float
-    metadata: ChunkMetadata
-    id: NotRequired[str | int]
-    namespace: NotRequired[str]
+# Before
+async def search(query: str) -> list[dict[str, Any]]:
+    return [{"title": "...", "url": "...", "snippet": "..."}]
 
-class AgentContext(TypedDict, total=False):
-    """Context passed to agents"""
-    user_id: str
-    channel: str
-    thread_ts: str
-    document_content: str
-    files: list[dict[str, Any]]
-
-class AgentResponse(TypedDict):
-    """Agent execution result"""
-    response: str
-    metadata: AgentMetadata
-
-class AgentInfo(TypedDict):
-    """Agent registry information"""
-    name: str
-    display_name: str
-    description: str
-    tags: NotRequired[list[str]]
-    enabled: NotRequired[bool]
-
-# + CircuitBreakerStatus, ContextQuality, ChunkMetadata, AgentMetadata
+# After (with TypedDict)
+async def search(query: str) -> list[WebSearchResult]:
+    return [{"title": "...", "url": "...", "snippet": "..."}]
+# IDE now provides autocomplete for title, url, snippet!
 ```
 
-**Remaining Work (50 dict[str, Any]):**
-- `bot/services/langfuse_service.py` (13) - Skip, will be extracted to shared lib (#33)
-- `bot/services/query_rewriter.py` (7) - TODO
-- `bot/services/slack_service.py` (5) - TODO
-- `bot/services/user_service.py` (4) - TODO
-- `bot/services/search_clients.py` (4) - TODO
-- `bot/services/contextual_retrieval_service.py` (4) - TODO
-- `tasks/api/jobs.py` - TODO
+**Remaining Work (37 dict[str, Any]):**
+- `bot/services/langfuse_service.py` (13) - ⏭️ **Skip**, will be extracted to shared lib (#33)
+- `bot/services/user_service.py` (4) - SQLAlchemy model types
+- `bot/services/contextual_retrieval_service.py` (4) - Context enhancement types
+- `bot/services/rag_service.py` (2) - RAG pipeline types
+- `bot/services/internal_deep_research.py` (2) - Research types
+- `tasks/api/jobs.py` (~8) - Job config types
+- Others (4) - Miscellaneous types
 
-**Commits:**
-- 2025-12-02: feat: Add TypedDict classes to replace dict[str, Any] types (4379148)
-- 2025-12-02: feat: Add TypedDict to agent_registry for improved type safety (47c72cc)
+**Commits (6 total):**
+1. 2025-12-02: feat: Add TypedDict classes to replace dict[str, Any] types (4379148)
+2. 2025-12-02: feat: Add TypedDict to agent_registry (47c72cc)
+3. 2025-12-02: docs: Update #8 progress (6a46636)
+4. 2025-12-02: feat: Add TypedDict for query rewriter (2dc5976)
+5. 2025-12-02: feat: Add TypedDict for Slack API responses (e16e78e)
+6. 2025-12-02: feat: Add TypedDict for web search and research APIs (d400682) 🎯
 
-**Benefits:**
-- Improved type safety and IDE autocomplete
-- Better documentation of data structures
-- Easier code maintenance and refactoring
-- Catches type errors at development time
+**Benefits Achieved:**
+- ✅ Type-safe API interactions (Slack, web search, agents)
+- ✅ Better IDE autocomplete & inline documentation
+- ✅ Catches type errors at development time (pyright validation)
+- ✅ Clear contracts between services
+- ✅ Easier onboarding for new developers
+- ✅ Reduced debugging time (explicit types vs. dict inspection)
 
-**Effort:** 8 hours (3 hours spent, 5 hours remaining)
+**Effort:** 8 hours (4 hours spent, 4 hours remaining)
 **Priority:** P1
 
 ---
