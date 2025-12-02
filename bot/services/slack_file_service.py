@@ -5,10 +5,11 @@ Handles downloading and processing files shared in Slack channels.
 """
 
 import logging
-from typing import Any
 
 import aiohttp
 from slack_sdk.web.async_client import AsyncWebClient
+
+from bot_types import SlackFileInfo
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class SlackFileService:
     def __init__(self, slack_client: AsyncWebClient):
         self.client = slack_client
 
-    async def download_file_content(self, file_info: dict[str, Any]) -> bytes | None:
+    async def download_file_content(self, file_info: SlackFileInfo) -> bytes | None:
         """
         Download file content from Slack using the private download URL.
 
@@ -64,7 +65,7 @@ class SlackFileService:
             logger.error(f"Error downloading file {file_info.get('id')}: {e}")
             return None
 
-    def extract_file_metadata(self, file_info: dict[str, Any]) -> dict[str, Any]:
+    def extract_file_metadata(self, file_info: SlackFileInfo) -> SlackFileInfo:
         """
         Extract relevant metadata from Slack file info.
 
@@ -86,7 +87,7 @@ class SlackFileService:
             "is_external": file_info.get("is_external", False),
         }
 
-    def is_processable_file(self, file_info: dict[str, Any]) -> bool:
+    def is_processable_file(self, file_info: SlackFileInfo) -> bool:
         """
         Check if file type is supported for text extraction.
 

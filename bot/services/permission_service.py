@@ -2,8 +2,8 @@
 
 import json
 import logging
-from typing import Any
 
+from bot_types import PermissionCheckResult
 from config.settings import Settings
 from models.agent_metadata import AgentMetadata
 from models.agent_permission import AgentPermission
@@ -40,7 +40,9 @@ class PermissionService:
         """
         return f"permission:{agent_name}:{user_id}"
 
-    def _get_from_cache(self, user_id: str, agent_name: str) -> dict[str, Any] | None:
+    def _get_from_cache(
+        self, user_id: str, agent_name: str
+    ) -> PermissionCheckResult | None:
         """Get permission from Redis cache.
 
         Args:
@@ -66,7 +68,7 @@ class PermissionService:
         return None
 
     def _write_to_cache(
-        self, user_id: str, agent_name: str, permission_data: dict[str, Any]
+        self, user_id: str, agent_name: str, permission_data: PermissionCheckResult
     ) -> None:
         """Write permission to Redis cache.
 

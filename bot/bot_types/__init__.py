@@ -285,6 +285,78 @@ class DeepResearchResult(TypedDict, total=False):
     error: str  # Error message if success=False
 
 
+class UserInfo(TypedDict, total=False):
+    """User information from database.
+
+    Contains user profile data from Slack users table.
+    """
+
+    slack_user_id: str  # Slack user ID
+    email_address: str  # User email address
+    display_name: str  # Display name
+    real_name: str  # Full/real name
+    is_active: bool  # Whether user is active
+    user_type: str  # User type (e.g., "member", "admin")
+
+
+class PermissionCheckResult(TypedDict):
+    """Result from permission check operation.
+
+    Indicates whether user can access a resource.
+    """
+
+    allowed: bool  # Whether access is allowed
+    reason: str  # Reason for allow/deny (for logging/display)
+
+
+class SlackFileInfo(TypedDict, total=False):
+    """Slack file information from Slack API.
+
+    Contains metadata about uploaded files.
+    All fields optional as Slack API returns varying fields.
+    """
+
+    id: str  # File ID
+    name: str  # File name
+    title: str  # File title
+    mimetype: str  # MIME type
+    filetype: str  # File type (e.g., "pdf", "docx")
+    size: int  # File size in bytes
+    url_private: str  # Private download URL
+    url_private_download: str  # Direct download URL
+    permalink: str  # Permanent link to file
+    user: str  # User ID who uploaded
+    timestamp: int  # Upload timestamp
+
+
+class HealthStatus(TypedDict, total=False):
+    """Health check status for services.
+
+    Used by health check endpoints to report service status.
+    """
+
+    status: str  # Overall status: "healthy", "unhealthy", "degraded"
+    container: str  # Container status
+    vector_db: str  # Vector database status
+    embedding_service: str  # Embedding service status
+    llm_service: str  # LLM service status
+    cache: str  # Cache status
+    details: dict[str, Any]  # Additional status details
+
+
+class PromptInfo(TypedDict, total=False):
+    """Prompt configuration information.
+
+    Contains metadata about prompts from Langfuse.
+    """
+
+    name: str  # Prompt name
+    version: int  # Prompt version number
+    content: str  # Prompt template content
+    config: dict[str, Any]  # Additional configuration
+    labels: list[str]  # Prompt labels/tags
+
+
 # Export all types
 __all__ = [
     "ChunkMetadata",
@@ -304,4 +376,9 @@ __all__ = [
     "WebSearchResult",
     "WebScrapeResult",
     "DeepResearchResult",
+    "UserInfo",
+    "PermissionCheckResult",
+    "SlackFileInfo",
+    "HealthStatus",
+    "PromptInfo",
 ]

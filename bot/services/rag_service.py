@@ -11,6 +11,7 @@ Clean, focused RAG orchestration service that coordinates between:
 import logging
 from typing import Any
 
+from bot_types import HealthStatus
 from config.settings import Settings
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
@@ -789,7 +790,7 @@ class RAGService:
             return final_response.get("content", "")
         return final_response or ""
 
-    async def get_system_status(self) -> dict[str, Any]:
+    async def get_system_status(self) -> HealthStatus:
         """Get system status information"""
         status = {
             "vector_enabled": self.vector_store is not None,
