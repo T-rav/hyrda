@@ -847,13 +847,23 @@ for identity in all_active_identities:
 **Fixed:** 2025-12-01
 **Verified:** User sync now uses eager loading with joinedload
 
-### 33. Duplicate Service Code Across Microservices
-**Severity:** HIGH
-**Files:** `bot/services/langfuse_service.py` (754 lines), `agent-service/services/langfuse_service.py` (754 identical lines), plus RAG service, metrics service
-**Issue:** Identical code duplicated in 2+ services
-**Impact:** Maintenance nightmare, divergence risk, memory overhead
-**Fix:** Extract to shared library
-**Effort:** 16 hours
+### 33. ✅ Duplicate Service Code Across Microservices
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Extracted to shared library
+**Files:** `bot/services/langfuse_service.py`, `agent-service/services/langfuse_service.py`
+
+**Original Issue:** 754 lines of identical code duplicated in bot and agent-service
+
+**Current Implementation:**
+- Created `shared/services/langfuse_service.py` (754 lines)
+- Created `shared/config/settings.py` (LangfuseSettings)
+- Both services now re-export from shared library
+- Backward-compatible imports maintained
+
+**Impact:** Eliminated 754 lines of duplicate code (50% reduction)
+
+**Fixed:** 2025-12-02
+**Commit:** d821e53
 **Priority:** P1
 
 ### 34. ✅ Infinite Loop Without Cancellation Guard
@@ -921,13 +931,33 @@ with get_db_session() as session:
 **Impact:** Prevents connection pool exhaustion; sessions open for ~100ms instead of ~10 seconds
 **Fixed:** 2025-12-01
 
-### 36. God Object: Message Handler (929 lines)
-**Severity:** MEDIUM
+### 36. ✅ God Object: Message Handler (929 lines)
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Refactored into focused modules
 **Files:** `bot/handlers/message_handlers.py`
-**Issue:** Single file handles PDF extraction, routing, agents, permissions, responses (6+ responsibilities)
-**Impact:** High complexity, brittle changes
-**Fix:** Split into multiple focused handlers
-**Effort:** 12 hours
+
+**Original Issue:** Single 949-line file with 6+ responsibilities (PDF extraction, routing, agents, permissions, responses)
+
+**Current Implementation:**
+- Extracted file processors → `bot/handlers/file_processors/` (PDF, Office docs, orchestrator)
+- Extracted prompt management → `bot/handlers/prompt_manager.py`
+- Reduced main handler from 949 → 622 lines (34% reduction)
+- Added 30 comprehensive unit tests
+- All 73 tests passing
+
+**Structure Created:**
+```
+bot/handlers/
+  file_processors/
+    __init__.py (orchestrator)
+    pdf_processor.py
+    office_processor.py
+  prompt_manager.py
+  message_handlers.py (core orchestration only)
+```
+
+**Fixed:** 2025-12-02
+**Commits:** f16a6ca, 3e01f9c, 1d7606d, aafee88
 **Priority:** P2
 
 ### 37. ✅ Blocking PDF Extraction in Async Handler
@@ -970,13 +1000,28 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
 **Impact:** Large PDFs no longer freeze message handling; maintains async responsiveness
 **Fixed:** 2025-12-01
 
-### 38. Missing Composite Indexes on Filtered Columns
-**Severity:** MEDIUM
-**Files:** `control_plane/models/user.py:31`
-**Issue:** Queries filter on (provider_type, provider_user_id) without composite index
-**Impact:** Slow user lookups during sync
-**Fix:** Add composite index
-**Effort:** 1 hour
+### 38. ✅ Missing Composite Indexes on Filtered Columns
+**Severity:** MEDIUM → **FIXED**
+**Status:** ✅ **RESOLVED** - Composite indexes added
+**Files:** `control_plane/models/user_identity.py`
+
+**Original Issue:** Queries filter on (provider_type, provider_user_id) and (provider_type, is_active) without composite indexes
+
+**Current Implementation:**
+```python
+__table_args__ = (
+    # Composite unique index for provider lookups
+    Index("uq_user_identities_provider_user", "provider_type", "provider_user_id", unique=True),
+    # Composite index for active identity queries
+    Index("ix_user_identities_provider_active", "provider_type", "is_active"),
+)
+```
+
+**Impact:** Query optimization from O(n) → O(1) for filtered user identity scans
+
+**Fixed:** 2025-12-02
+**Commit:** 01f44ff
+**Migration:** 20251202_1338-ae4e2812425c
 **Priority:** P2
 
 ---
