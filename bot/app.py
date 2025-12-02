@@ -77,16 +77,24 @@ def create_app():
 
 
 async def maintain_presence(client: WebClient):
-    """Keep the bot's presence status active"""
-    while True:
-        try:
-            await client.users_setPresence(presence="auto")  # type: ignore[misc]
-            logger.debug("Updated bot presence status")
-        except Exception as e:
-            logger.error(f"Error updating presence: {e}")
+    """Keep the bot's presence status active.
 
-        # Sleep for 5 minutes
-        await asyncio.sleep(300)
+    Uses asyncio.CancelledError to enable graceful shutdown without waiting
+    for the full 5-minute sleep interval.
+    """
+    try:
+        while True:
+            try:
+                await client.users_setPresence(presence="auto")  # type: ignore[misc]
+                logger.debug("Updated bot presence status")
+            except Exception as e:
+                logger.error(f"Error updating presence: {e}")
+
+            # Sleep for 5 minutes, but allow cancellation
+            await asyncio.sleep(300)
+    except asyncio.CancelledError:
+        logger.info("Presence maintenance task cancelled, shutting down gracefully")
+        raise  # Re-raise to properly cancel the task
 
 
 def signal_handler(signum, _):

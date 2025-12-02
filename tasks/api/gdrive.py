@@ -1,8 +1,10 @@
 """Google Drive OAuth and integration endpoints."""
 
+import html
 import json
 import logging
 import os
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -48,6 +50,21 @@ async def initiate_gdrive_auth(request: Request):
 
         if not credential_name:
             raise HTTPException(status_code=400, detail="credential_name is required")
+
+        # Validate credential_name (prevent buffer overflow, storage DoS, XSS)
+        if len(credential_name) > 255:
+            raise HTTPException(
+                status_code=400,
+                detail="credential_name must be 255 characters or less"
+            )
+
+        # Allow alphanumeric, spaces, hyphens, underscores, and dots
+        if not re.match(r'^[a-zA-Z0-9 _\-\.]+$', credential_name):
+            raise HTTPException(
+                status_code=400,
+                detail="credential_name contains invalid characters. "
+                       "Only alphanumeric characters, spaces, hyphens, underscores, and dots are allowed."
+            )
 
         # Generate UUID for credential_id
         credential_id = str(uuid.uuid4())
@@ -303,8 +320,8 @@ async def gdrive_auth_callback(request: Request):
                     <h1>Authentication Successful!</h1>
                     <p>Your Google Drive credentials have been saved securely.</p>
                     <div class="credential-info">
-                        <strong>Credential:</strong> {credential_name}<br>
-                        <strong>ID:</strong> {credential_id}
+                        <strong>Credential:</strong> {html.escape(credential_name)}<br>
+                        <strong>ID:</strong> {html.escape(credential_id)}
                     </div>
                     <p>You can now use this credential in your Google Drive ingestion tasks.</p>
                     <p class="auto-close">This window will close automatically in 3 seconds...</p>

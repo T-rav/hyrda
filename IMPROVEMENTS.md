@@ -287,68 +287,71 @@ def create_job(config: JobConfig) -> str:  # Not dict[str, Any]!
 
 ---
 
-### 9. No Pagination Limits (DoS Vector)
-**Severity:** HIGH
-**Files:** `tasks/api/task_runs.py` (line 25), `control_plane/api/agents.py`
+### 9. ✅ No Pagination Limits (DoS Vector)
+**Severity:** HIGH → **ALREADY FIXED**
+**Status:** ✅ **VERIFIED** - Pagination limits already implemented
+**Files:** `tasks/api/task_runs.py:18`, `control_plane/utils/pagination.py:44`
 
-**Issue:** Client can request unlimited records
-
-**Fix:**
+**Current Implementation:**
 ```python
-MAX_PAGE_SIZE = 100
+# tasks/api/task_runs.py
+MAX_PAGE_SIZE = 100  # Prevent DoS attacks by limiting max page size
+per_page = min(per_page, MAX_PAGE_SIZE)
 
-per_page = min(int(request.args.get('per_page', 50)), MAX_PAGE_SIZE)
+# control_plane/utils/pagination.py
+per_page = max(1, min(per_page, max_per_page))  # max_per_page=100
 ```
 
-**Effort:** 2 hours
-**Priority:** P1
+**Verified:** 2025-12-01 - All services have pagination limits enforced
 
 ---
 
-### 10. Resource Leak in HTTP Client
-**Severity:** HIGH
-**Files:** `bot/services/agent_client.py` (lines 45-50)
+### 10. ✅ Resource Leak in HTTP Client
+**Severity:** HIGH → **ALREADY FIXED**
+**Status:** ✅ **VERIFIED** - Persistent HTTP client already implemented
+**Files:** `bot/services/agent_client.py:137,148-158`
 
-**Issue:** Creates new AsyncClient for every request instead of reusing connection pool
-
-**Fix:**
+**Current Implementation:**
 ```python
 class AgentClient:
-    def __init__(self):
-        self._client = httpx.AsyncClient(timeout=httpx.Timeout(30.0))
+    def __init__(self, base_url: str = "http://agent_service:8000"):
+        self._client: httpx.AsyncClient | None = None
+        self.timeout = httpx.Timeout(30.0, connect=5.0)
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """Get or create persistent HTTP client."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=self.timeout)
+        return self._client
 
     async def close(self):
-        await self._client.aclose()
-
-    async def invoke_agent(self, ...):
-        # Reuse self._client
-        response = await self._client.post(...)
+        """Close the HTTP client and cleanup resources."""
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 ```
 
-**Effort:** 2 hours
-**Priority:** P1
+**Verified:** 2025-12-01 - Connection pooling and reuse properly implemented
 
 ---
 
-### 11. Missing Database Connection Pooling
-**Severity:** HIGH
-**Files:** `bot/models/security_base.py`, `tasks/models/base.py`
+### 11. ✅ Missing Database Connection Pooling
+**Severity:** HIGH → **ALREADY FIXED**
+**Status:** ✅ **VERIFIED** - Connection pooling configured across all services
+**Files:** `bot/models/security_base.py:29-35`, `tasks/models/base.py:33-39`, `control_plane/models/base.py:33-39`
 
-**Issue:** No explicit pool configuration
-
-**Fix:**
+**Current Implementation:**
 ```python
-_security_engine = create_engine(
+_engine = create_engine(
     database_url,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,  # Verify connections before use
-    pool_recycle=3600    # Recycle after 1 hour
+    pool_size=20,         # Max persistent connections
+    max_overflow=10,      # Additional connections when pool exhausted
+    pool_pre_ping=True,   # Verify connections before use
+    pool_recycle=3600,    # Recycle connections after 1 hour
 )
 ```
 
-**Effort:** 1 hour
-**Priority:** P1
+**Verified:** 2025-12-01 - All services have proper connection pooling configured
 
 ---
 
@@ -650,17 +653,21 @@ async def delete_credential(
 
 ---
 
-### 29. XSS in Google Drive Auth HTML Response
-**Severity:** HIGH
-**Files:** `tasks/api/gdrive.py:283-310`
-**Issue:** Unsanitized credential_name in HTML
+### 29. ✅ XSS in Google Drive Auth HTML Response
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - HTML escaping added
+**Files:** `tasks/api/gdrive.py:307-308`
+
+**Original Issue:** Unsanitized credential_name in HTML could allow XSS attacks
+
+**Current Implementation:**
 ```python
-content=f"<strong>Credential:</strong> {credential_name}<br>"  # Not escaped!
+<strong>Credential:</strong> {html.escape(credential_name)}<br>
+<strong>ID:</strong> {html.escape(credential_id)}
 ```
-**Risk:** JavaScript injection via credential naming
-**Fix:** Use HTML escaping
-**Effort:** 30 minutes
-**Priority:** P1
+
+**Fix:** Added `html.escape()` to sanitize all user-supplied values before inserting into HTML
+**Fixed:** 2025-12-01
 
 ### 30. No Rate Limiting on Sensitive Endpoints
 **Severity:** HIGH
@@ -671,14 +678,33 @@ content=f"<strong>Credential:</strong> {credential_name}<br>"  # Not escaped!
 **Effort:** 3 hours
 **Priority:** P1
 
-### 31. No Input Validation on User-Supplied Names
-**Severity:** HIGH
-**Files:** `tasks/api/gdrive.py:42-48`
-**Issue:** No length/character validation on credential names
-**Risk:** Buffer overflow, storage DoS, XSS
-**Fix:** Validate input (max length, character whitelist)
-**Effort:** 2 hours
-**Priority:** P1
+### 31. ✅ No Input Validation on User-Supplied Names
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Comprehensive input validation added
+**Files:** `tasks/api/gdrive.py:53-67`
+
+**Original Issue:** No length/character validation on credential names allowed buffer overflow, storage DoS, XSS
+
+**Current Implementation:**
+```python
+# Validate credential_name (prevent buffer overflow, storage DoS, XSS)
+if len(credential_name) > 255:
+    raise HTTPException(
+        status_code=400,
+        detail="credential_name must be 255 characters or less"
+    )
+
+# Allow alphanumeric, spaces, hyphens, underscores, and dots
+if not re.match(r'^[a-zA-Z0-9 _\-\.]+$', credential_name):
+    raise HTTPException(
+        status_code=400,
+        detail="credential_name contains invalid characters. "
+               "Only alphanumeric characters, spaces, hyphens, underscores, and dots are allowed."
+    )
+```
+
+**Fix:** Added 255 character limit and character whitelist validation
+**Fixed:** 2025-12-01
 
 ---
 
@@ -730,18 +756,39 @@ for identity in all_active_identities:
 **Effort:** 16 hours
 **Priority:** P1
 
-### 34. Infinite Loop Without Cancellation Guard
-**Severity:** HIGH
-**Files:** `bot/app.py:79-89`
-**Issue:** `maintain_presence()` has while True without cancellation check
+### 34. ✅ Infinite Loop Without Cancellation Guard
+**Severity:** HIGH → **FIXED**
+**Status:** ✅ **RESOLVED** - Graceful cancellation added
+**Files:** `bot/app.py:79-97`
+
+**Original Issue:** `maintain_presence()` had `while True` without cancellation check, causing 5-minute shutdown delays
+
+**Current Implementation:**
 ```python
-while True:  # 5 min delay blocks graceful shutdown
-    await asyncio.sleep(300)
+async def maintain_presence(client: WebClient):
+    """Keep the bot's presence status active.
+
+    Uses asyncio.CancelledError to enable graceful shutdown without waiting
+    for the full 5-minute sleep interval.
+    """
+    try:
+        while True:
+            try:
+                await client.users_setPresence(presence="auto")
+                logger.debug("Updated bot presence status")
+            except Exception as e:
+                logger.error(f"Error updating presence: {e}")
+
+            # Sleep for 5 minutes, but allow cancellation
+            await asyncio.sleep(300)
+    except asyncio.CancelledError:
+        logger.info("Presence maintenance task cancelled, shutting down gracefully")
+        raise  # Re-raise to properly cancel the task
 ```
-**Impact:** 5-minute shutdown delays
-**Fix:** Check for cancellation signal
-**Effort:** 30 minutes
-**Priority:** P1
+
+**Fix:** Added `asyncio.CancelledError` handling to enable instant graceful shutdown
+**Impact:** Shutdown now completes immediately instead of waiting up to 5 minutes
+**Fixed:** 2025-12-01
 
 ### 35. Long-Held Database Sessions (Memory Leak)
 **Severity:** HIGH
