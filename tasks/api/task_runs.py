@@ -2,7 +2,7 @@
 
 import logging
 
-from flask import Blueprint, Response, jsonify
+from flask import Blueprint, Response, jsonify, request
 
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
@@ -13,19 +13,45 @@ logger = logging.getLogger(__name__)
 # Create blueprint
 task_runs_bp = Blueprint("task_runs", __name__, url_prefix="/api/task-runs")
 
+# Pagination constants
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 100  # Prevent DoS attacks by limiting max page size
+
 
 @task_runs_bp.route("")
 def list_task_runs() -> Response | tuple[Response, int]:
-    """List recent task runs."""
+    """List recent task runs with pagination.
+
+    Query Parameters:
+        page: Page number (1-indexed, default: 1)
+        per_page: Items per page (default: 50, max: 100)
+
+    Returns:
+        JSON response with task runs and pagination metadata
+    """
     try:
+        # Get pagination parameters with limits
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+        except (ValueError, TypeError):
+            page = 1
+
+        try:
+            per_page = int(request.args.get("per_page", DEFAULT_PAGE_SIZE))
+            per_page = max(1, min(per_page, MAX_PAGE_SIZE))  # Cap at MAX_PAGE_SIZE
+        except (ValueError, TypeError):
+            per_page = DEFAULT_PAGE_SIZE
+
         with get_db_session() as session:
-            # Get recent task runs, ordered by most recent first
-            task_runs = (
-                session.query(TaskRun)
-                .order_by(TaskRun.started_at.desc())
-                .limit(50)  # Limit to last 50 runs
-                .all()
-            )
+            # Build query
+            query = session.query(TaskRun).order_by(TaskRun.started_at.desc())
+
+            # Get total count for pagination metadata
+            total_count = query.count()
+
+            # Calculate offset and get paginated results
+            offset = (page - 1) * per_page
+            task_runs = query.offset(offset).limit(per_page).all()
 
             # Job type to name mapping
             job_type_names = {
@@ -103,7 +129,22 @@ def list_task_runs() -> Response | tuple[Response, int]:
                     }
                 )
 
-            return jsonify({"task_runs": runs_data})
+            # Calculate pagination metadata
+            total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
+
+            return jsonify(
+                {
+                    "task_runs": runs_data,
+                    "pagination": {
+                        "page": page,
+                        "per_page": per_page,
+                        "total": total_count,
+                        "total_pages": total_pages,
+                        "has_prev": page > 1,
+                        "has_next": page < total_pages,
+                    },
+                }
+            )
 
     except Exception as e:
         logger.error(f"Error fetching task runs: {e}")

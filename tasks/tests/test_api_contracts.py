@@ -385,11 +385,11 @@ class TestTasksAPIContracts:
             assert field in data, f"Missing detailed field: {field}"
 
     def test_task_runs_contract(self, client):
-        """Test /api/task-runs returns expected structure for run history"""
+        """Test /api/task-runs returns expected structure for run history with pagination"""
         # Create proper mock objects with the required attributes
         mock_runs = TaskRunMockFactory.create_multiple_runs(2)
 
-        with patch("models.base.get_db_session") as mock_session:
+        with patch("api.task_runs.get_db_session") as mock_session:
             # Create a proper mock query that returns iterable results
             mock_query = DatabaseQueryMockFactory.create_query_mock_with_results(
                 mock_runs
@@ -404,9 +404,12 @@ class TestTasksAPIContracts:
 
             data = response.get_json()
 
-            # Verify API structure (no pagination implemented yet)
+            # Verify API structure with pagination
             assert "task_runs" in data
             assert isinstance(data["task_runs"], list)
+            assert "pagination" in data
+            assert data["pagination"]["page"] == 1
+            assert data["pagination"]["per_page"] == 50
 
             # Verify run structure if runs exist
             if data["task_runs"]:
@@ -582,7 +585,7 @@ class TestAPIPagination:
 
     def test_pagination_parameters(self, client):
         """Test pagination parameters work consistently"""
-        with patch("models.base.get_db_session") as mock_session:
+        with patch("api.task_runs.get_db_session") as mock_session:
             # Create a proper mock query that returns paginated results
             mock_query = DatabaseQueryMockFactory.create_empty_query_mock()
 
@@ -596,17 +599,36 @@ class TestAPIPagination:
 
             data = response.get_json()
 
-            # The API currently doesn't implement pagination, just returns task_runs
+            # Verify pagination is implemented
             assert "task_runs" in data
             assert isinstance(data["task_runs"], list)
+            assert "pagination" in data
+            assert data["pagination"]["page"] == 2
+            assert data["pagination"]["per_page"] == 25
+            assert "total" in data["pagination"]
+            assert "total_pages" in data["pagination"]
+            assert "has_prev" in data["pagination"]
+            assert "has_next" in data["pagination"]
 
     def test_pagination_limits(self, client):
         """Test pagination enforces reasonable limits"""
-        with patch("models.base.get_db_session"):
+        with patch("api.task_runs.get_db_session") as mock_session:
+            # Mock the database query
+            mock_db_session = Mock()
+            mock_query = Mock()
+            mock_query.order_by.return_value = mock_query
+            mock_query.count.return_value = 0
+            mock_query.offset.return_value = mock_query
+            mock_query.limit.return_value = mock_query
+            mock_query.all.return_value = []
+            mock_db_session.query.return_value = mock_query
+            mock_session.return_value.__enter__.return_value = mock_db_session
+
             # Test excessive per_page gets limited
             response = client.get("/api/task-runs?per_page=10000")
             assert response.status_code == 200
 
             data = response.get_json()
-            # Should be limited to reasonable max (e.g., 100)
-            assert data.get("per_page", 0) <= 100
+            # Should be limited to MAX_PAGE_SIZE (100)
+            assert "pagination" in data
+            assert data["pagination"]["per_page"] == 100
