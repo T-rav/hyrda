@@ -49,7 +49,8 @@ def app():
 @pytest.fixture(scope="module")
 def client(app):
     """Get test client."""
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 @pytest.fixture
@@ -71,12 +72,15 @@ def mock_oauth_env():
 @pytest.fixture
 def client(app, mock_oauth_env):
     """Create test client with OAuth env mocked."""
-    return app.test_client()
+    from starlette.testclient import TestClient
+    return TestClient(app)
 
 
 @pytest.fixture
-def authenticated_client(client, db_session):
+def authenticated_client(client, app, db_session):
     """Create authenticated test client with valid session and admin user."""
+    from utils.permissions import get_current_user, require_admin
+
     # Create admin user in database if doesn't exist
     admin_user = db_session.query(User).filter(
         User.email == "admin@8thlight.com"
@@ -92,14 +96,20 @@ def authenticated_client(client, db_session):
         db_session.add(admin_user)
         db_session.commit()
 
-    # Set up authenticated session
-    with client.session_transaction() as sess:
-        sess["user_email"] = "admin@8thlight.com"
-        sess["user_info"] = {
-            "email": "admin@8thlight.com",
-            "name": "Test Admin",
-        }
-    return client
+    # Mock authentication dependencies for FastAPI
+    async def mock_get_current_user():
+        return admin_user
+
+    async def mock_require_admin():
+        return None
+
+    app.dependency_overrides[get_current_user] = mock_get_current_user
+    app.dependency_overrides[require_admin] = mock_require_admin
+
+    yield client
+
+    # Clean up overrides
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -159,7 +169,7 @@ class TestGroupsAPI:
         """Test listing all groups."""
         response = authenticated_client.get("/api/groups")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert "groups" in data
         assert isinstance(data["groups"], list)
 
@@ -173,10 +183,9 @@ class TestGroupsAPI:
                 "description": "A test group",
                 "created_by": "test_user"
             },
-            content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "created"
         assert data["group_name"] == "test_group"
 
@@ -207,10 +216,9 @@ class TestGroupsAPI:
                 "display_name": "Updated Name",
                 "description": "Updated description"
             },
-            content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "updated"
         assert data["display_name"] == "Updated Name"
         assert data["description"] == "Updated description"
@@ -238,7 +246,7 @@ class TestGroupsAPI:
         # Delete group
         response = authenticated_client.delete("/api/groups/delete_test")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "deleted"
 
         # Verify deleted from database
@@ -252,8 +260,8 @@ class TestGroupsAPI:
         """Test that system groups cannot be deleted."""
         response = authenticated_client.delete("/api/groups/all_users")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "Cannot delete system group" in data["error"]
+        data = response.json()
+        assert "Cannot delete system group" in data["detail"]
 
 
 class TestGroupMembersAPI:
@@ -284,10 +292,9 @@ class TestGroupMembersAPI:
         response = authenticated_client.post(
             "/api/groups/member_test/users",
             json={"user_id": "U123TEST", "added_by": "test"},
-            content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "added"
 
         # Verify in database
@@ -325,7 +332,7 @@ class TestGroupMembersAPI:
         # Remove user from group
         response = authenticated_client.delete("/api/groups/remove_test/users?user_id=U456TEST")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "removed"
 
         # Verify removed from database
@@ -340,8 +347,8 @@ class TestGroupMembersAPI:
         """Test that users cannot be manually removed from system groups."""
         response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "Cannot manually remove" in data["error"]
+        data = response.json()
+        assert "Cannot manually remove" in data["detail"]
 
 
 class TestAgentPermissionsAPI:
@@ -362,10 +369,9 @@ class TestAgentPermissionsAPI:
         response = authenticated_client.post(
             "/api/groups/agent_test/agents",
             json={"agent_name": "test_agent", "granted_by": "admin"},
-            content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["status"] == "granted"
 
         # Verify in database
@@ -401,7 +407,7 @@ class TestAgentPermissionsAPI:
             # Revoke agent from group
             response = authenticated_client.delete("/api/groups/revoke_test/agents?agent_name=revoke_agent")
             assert response.status_code == 200
-            data = json.loads(response.data)
+            data = response.json()
             assert data["status"] == "revoked"
 
             # Verify removed from database
@@ -449,7 +455,7 @@ class TestAgentPermissionsAPI:
             # Get group agents
             response = authenticated_client.get("/api/groups/list_agents_test/agents")
             assert response.status_code == 200
-            data = json.loads(response.data)
+            data = response.json()
             assert "agent_names" in data
             assert len(data["agent_names"]) == 2
             assert "agent1" in data["agent_names"]
@@ -476,7 +482,7 @@ class TestAgentToggleAPI:
             # Toggle to enabled
             response = authenticated_client.post("/api/agents/toggle_test_enabled/toggle")
             assert response.status_code == 200
-            data = json.loads(response.data)
+            data = response.json()
             assert data["is_enabled"] is True
 
             # Verify in database
@@ -510,7 +516,7 @@ class TestAgentToggleAPI:
             # Toggle (should create and enable)
             response = authenticated_client.post(f"/api/agents/{test_agent_name}/toggle")
             assert response.status_code == 200
-            data = json.loads(response.data)
+            data = response.json()
             assert data["is_enabled"] is True
 
             # Verify created in database with fresh session
@@ -537,7 +543,7 @@ class TestSystemGroups:
         """Test that 'All Users' system group is created on startup."""
         response = authenticated_client.get("/api/groups")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
 
         all_users_group = next(
             (g for g in data["groups"] if g["group_name"] == "all_users"),
@@ -551,15 +557,15 @@ class TestSystemGroups:
         """Test that system groups cannot be deleted."""
         response = authenticated_client.delete("/api/groups/all_users")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "system group" in data["error"].lower()
+        data = response.json()
+        assert "system group" in data["detail"].lower()
 
     def test_system_group_protected_from_manual_membership(self, authenticated_client):
         """Test that users cannot be manually removed from system groups."""
         response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "system group" in data["error"].lower()
+        data = response.json()
+        assert "system group" in data["detail"].lower()
 
 
 class TestSystemAgents:
@@ -569,7 +575,7 @@ class TestSystemAgents:
         """Test that help agent is marked as system agent."""
         response = authenticated_client.get("/api/agents/help")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["is_system"] is True
         assert data["is_public"] is True
 
@@ -577,15 +583,15 @@ class TestSystemAgents:
         """Test that help agent has all_users group access."""
         response = authenticated_client.get("/api/agents/help")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert "all_users" in data["authorized_group_names"]
 
     def test_cannot_disable_system_agent(self, authenticated_client):
         """Test that system agents cannot be disabled."""
         response = authenticated_client.post("/api/agents/help/toggle")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "Cannot disable system agents" in data["error"]
+        data = response.json()
+        assert "Cannot disable system agents" in data["detail"]
 
     def test_cannot_grant_system_agent_to_non_all_users(self, authenticated_client, db_session):
         """Test that system agents can only be granted to all_users group."""
@@ -603,18 +609,17 @@ class TestSystemAgents:
         response = authenticated_client.post(
             "/api/groups/test_group_system/agents",
             json={"agent_name": "help", "granted_by": "admin"},
-            content_type="application/json"
         )
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "System agents can only be granted to 'all_users' group" in data["error"]
+        data = response.json()
+        assert "System agents can only be granted to 'all_users' group" in data["detail"]
 
     def test_cannot_revoke_system_agent_from_all_users(self, authenticated_client):
         """Test that system agents cannot be revoked from all_users."""
         response = authenticated_client.delete("/api/groups/all_users/agents?agent_name=help")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "Cannot revoke system agents from 'all_users' group" in data["error"]
+        data = response.json()
+        assert "Cannot revoke system agents from 'all_users' group" in data["detail"]
 
 
 class TestAgentDeletionAPI:
@@ -635,7 +640,7 @@ class TestAgentDeletionAPI:
         # Delete the agent
         response = authenticated_client.delete("/api/agents/delete_test_agent")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["success"] is True
         assert "deleted" in data["message"].lower()
 
@@ -652,15 +657,15 @@ class TestAgentDeletionAPI:
         """Test that deleting a non-existent agent returns 404."""
         response = authenticated_client.delete("/api/agents/nonexistent_agent")
         assert response.status_code == 404
-        data = json.loads(response.data)
-        assert "not found" in data["error"].lower()
+        data = response.json()
+        assert "not found" in data["detail"].lower()
 
     def test_cannot_delete_system_agent(self, authenticated_client):
         """Test that system agents cannot be deleted."""
         response = authenticated_client.delete("/api/agents/help")
         assert response.status_code == 403
-        data = json.loads(response.data)
-        assert "system" in data["error"].lower()
+        data = response.json()
+        assert "system" in data["detail"].lower()
 
     def test_deleted_agent_excluded_from_list(self, authenticated_client, db_session):
         """Test that deleted agents are excluded from the agent list."""
@@ -680,7 +685,7 @@ class TestAgentDeletionAPI:
         # List agents - deleted agent should not appear
         response = authenticated_client.get("/api/agents")
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         agent_names = [a["name"] for a in data["agents"]]
         assert "list_test_agent" not in agent_names
 
@@ -707,10 +712,9 @@ class TestAgentDeletionAPI:
                 "display_name": "Reregistered",
                 "description": "Reactivated agent"
             },
-            content_type="application/json"
         )
         assert response.status_code == 200
-        data = json.loads(response.data)
+        data = response.json()
         assert data["action"] == "reactivated"
 
         # Verify agent is active again

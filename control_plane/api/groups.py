@@ -16,7 +16,7 @@ from models import (
 from utils.audit import AuditAction, log_permission_action
 from utils.errors import error_response
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
-from utils.permissions import check_admin, require_admin
+from utils.permissions import require_admin
 from utils.validation import validate_display_name, validate_group_name
 
 logger = logging.getLogger(__name__)
@@ -81,14 +81,9 @@ async def list_groups(
 
 
 @router.post("")
-async def create_group(request: Request) -> dict[str, Any]:
+async def create_group(request: Request, admin_check: None = Depends(require_admin)) -> dict[str, Any]:
     """Create a new group."""
     try:
-        # Admin check for group creation
-        is_admin, error = check_admin()
-        if not is_admin:
-            raise HTTPException(status_code=error[1], detail=error[0].json)
-
         data = await request.json()
         group_name = data.get("group_name")
         display_name = data.get("display_name")

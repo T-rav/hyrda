@@ -10,7 +10,7 @@ from models import AgentPermission, PermissionGroup, User, UserGroup, get_db_ses
 from pydantic import BaseModel, Field
 from utils.errors import error_response
 from utils.pagination import build_pagination_response, get_pagination_params, paginate_query
-from utils.permissions import check_admin, require_admin
+from utils.permissions import require_admin
 from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)

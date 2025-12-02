@@ -20,7 +20,7 @@ from .pagination import (
     get_pagination_params,
     paginate_query,
 )
-from .permissions import check_admin, check_authenticated, get_current_user
+from .permissions import get_current_user, require_admin, require_permission
 from .rate_limit import check_rate_limit, get_rate_limit_key, rate_limit
 from .validation import (
     sanitize_text_input,
@@ -34,9 +34,9 @@ from .validation import (
 __all__ = [
     "error_response",
     "success_response",
-    "check_admin",
-    "check_authenticated",
     "get_current_user",
+    "require_admin",
+    "require_permission",
     "validate_agent_name",
     "validate_group_name",
     "validate_display_name",
