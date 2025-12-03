@@ -1,14 +1,52 @@
-# Forge Agent - Quality Audit Orchestrator
+# Forge Agent - Quality Audit Orchestrator & Auto-Fixer
 
-Meta-agent that orchestrates comprehensive quality audits by coordinating **Test Audit** and **Code Audit** agents to provide a complete codebase health assessment.
+Meta-agent that orchestrates comprehensive quality audits by coordinating **Test Audit** and **Code Audit** agents, then **automatically applies fixes** for violations.
 
 ## Agent Purpose
 
 Forge brings together multiple audit capabilities to provide:
 1. **Unified Quality Report** - Combined test + code quality metrics
 2. **Prioritized Action Plan** - Violations ranked by impact across all code
-3. **Trend Tracking** - Monitor improvements over time
-4. **Comprehensive Coverage** - Nothing falls through the cracks
+3. **Automated Fixes** - Apply fixes for auto-fixable violations
+4. **Trend Tracking** - Monitor improvements over time
+5. **Comprehensive Coverage** - Nothing falls through the cracks
+
+## Fix Capabilities
+
+### Auto-Fixable Violations
+
+**Forge can automatically fix:**
+
+#### From Code Audit:
+1. ✅ **Missing type hints** - Add type annotations
+2. ✅ **Missing docstrings** - Generate from function signature
+3. ✅ **Magic numbers** - Extract to constants
+4. ✅ **Import sorting** - Rearrange imports
+5. ✅ **Long lines** - Apply formatting
+6. ✅ **Unused imports** - Remove them
+
+#### From Test Audit:
+1. ✅ **Test file naming** - Rename files (git mv)
+2. ✅ **Missing 3As comments** - Add Arrange/Act/Assert markers
+3. ✅ **Import sorting** - Fix test imports
+4. ✅ **Generate factories** - Create skeleton code
+5. ✅ **Generate builders** - Create skeleton code
+
+### Requires Manual Intervention
+
+**Forge will flag for manual fix:**
+
+#### From Code Audit:
+1. ⚠️ **Mutable defaults** - Needs logic review
+2. ⚠️ **Function too large** - Needs refactoring strategy
+3. ⚠️ **Complex logic** - Needs simplification
+4. ⚠️ **SRP violations** - Needs architectural decision
+5. ⚠️ **Error handling** - Needs context-specific logic
+
+#### From Test Audit:
+1. ⚠️ **Multiple assertions** - Needs test splitting decision
+2. ⚠️ **Over-mocking** - Needs test strategy review
+3. ⚠️ **Incomplete mocks** - Needs test logic completion
 
 ## What Forge Does
 
@@ -502,3 +540,473 @@ Forge is your **quality command center** that:
 - 🚀 **Guides** team to excellence
 
 **Single command, complete visibility.**
+
+## Execution Modes with Fix Capability
+
+### Mode 1: Audit & Fix (Default)
+```
+Run forge quality audit with auto-fix
+```
+
+**What Happens:**
+1. Run test-audit + code-audit in parallel
+2. Collect all violations
+3. **Categorize by fixability:**
+   - Auto-fixable (green)
+   - Manual required (yellow)
+   - Complex refactoring (red)
+4. **Apply auto-fixes:**
+   - Add missing type hints
+   - Rename test files
+   - Generate factory skeletons
+   - Add 3As comments
+   - Remove unused imports
+   - Extract magic numbers to constants
+5. **Run linting** to verify fixes
+6. **Re-run audits** to confirm fixes worked
+7. **Generate report:**
+   - ✅ Fixed automatically: 45 violations
+   - ⚠️ Manual fixes needed: 12 violations
+   - ❌ Complex refactoring: 8 violations
+
+**Output:**
+- Modified files with fixes applied
+- Detailed changelog of what was fixed
+- Remaining violations requiring manual intervention
+
+### Mode 2: Audit Only (No Fixes)
+```
+Run forge quality audit (report only)
+```
+
+**What Happens:**
+1. Run audits
+2. Generate report
+3. **Do NOT apply fixes**
+4. List what COULD be auto-fixed
+
+**Use Case:**
+- Review before allowing changes
+- CI/CD reporting only
+- Understanding scope before fixing
+
+### Mode 3: Fix Only (No Audit)
+```
+Apply forge auto-fixes from last audit
+```
+
+**What Happens:**
+1. Load previous audit results
+2. Apply all auto-fixable violations
+3. Skip re-auditing
+4. Generate fix report
+
+**Use Case:**
+- Separate audit from fix phases
+- Review audit, then fix later
+- Incremental fixing
+
+### Mode 4: Interactive Fix
+```
+Run forge quality audit with interactive fix
+```
+
+**What Happens:**
+1. Run audits
+2. For each auto-fixable violation:
+   - Show proposed fix
+   - Ask: Apply? (y/n/skip-all)
+3. Apply approved fixes only
+4. Generate report
+
+**Use Case:**
+- Learning from fixes
+- Cautious approach
+- Reviewing AI-generated code
+
+### Mode 5: Selective Fix
+```
+Fix [critical|warning|suggestion] violations only
+```
+
+**What Happens:**
+1. Run audits
+2. Apply fixes for specified severity only
+3. Skip lower priority
+
+**Use Case:**
+- Incremental fixing (critical first)
+- Time-boxed improvements
+- Focus on specific issues
+
+## Fix Coordination
+
+### Agent Responsibilities
+
+#### Test Audit Agent:
+**Can Fix:**
+- Test file renaming (git mv)
+- Add 3As comments to tests
+- Generate factory/builder skeletons
+- Fix test imports
+
+**Reports for Manual:**
+- Test splitting for multiple assertions
+- Mock strategy improvements
+- Complex test refactoring
+
+#### Code Audit Agent:
+**Can Fix:**
+- Add type hints to functions
+- Generate basic docstrings
+- Extract magic numbers to constants
+- Remove unused imports
+- Fix import order
+
+**Reports for Manual:**
+- Mutable default arguments (logic change)
+- Function splitting (architectural)
+- Error handling improvements (context-specific)
+- SRP violations (design decision)
+
+#### Forge (Orchestrator):
+**Coordinates:**
+1. Runs both sub-agents
+2. Collects fixable violations from both
+3. **Deduplicates** (same file touched by both)
+4. **Orders fixes** (imports first, then types, then tests)
+5. **Applies all fixes** in one pass
+6. **Verifies** with linting + re-audit
+7. **Reports** what was fixed and what remains
+
+**Handles Conflicts:**
+- If both agents want to modify same file
+- Apply fixes in order: imports → types → tests
+- Re-run linting after each category
+- Rollback if something breaks
+
+## Fix Workflow
+
+### Phase 1: Audit
+```
+┌─────────────┐
+│   Forge     │
+└──────┬──────┘
+       │
+       ├────────────┬────────────┐
+       │            │            │
+┌──────▼──────┐ ┌──▼─────────┐ │
+│ Test Audit  │ │ Code Audit │ │
+│ (finds 67)  │ │ (finds 89) │ │
+└──────┬──────┘ └──┬─────────┘ │
+       │            │            │
+       └────────────┴────────────┘
+                    │
+             ┌──────▼──────┐
+             │  Collect    │
+             │  156 issues │
+             └─────────────┘
+```
+
+### Phase 2: Categorize
+```
+┌─────────────────┐
+│  156 issues     │
+└────────┬────────┘
+         │
+    ┌────┴────┬──────────┬─────────┐
+    │         │          │         │
+┌───▼───┐ ┌──▼────┐ ┌───▼────┐ ┌──▼──────┐
+│ Auto  │ │Manual │ │Complex │ │Duplicate│
+│  78   │ │  45   │ │   28   │ │    5    │
+└───────┘ └───────┘ └────────┘ └─────────┘
+```
+
+### Phase 3: Apply Fixes
+```
+┌──────────────┐
+│  78 Auto     │
+│  Fixable     │
+└──────┬───────┘
+       │
+  ┌────┴─────┬────────┬──────────┐
+  │          │        │          │
+┌─▼──────┐ ┌▼─────┐ ┌▼───────┐ ┌▼───────┐
+│Imports │ │Types │ │Docs    │ │Tests   │
+│  12    │ │  25  │ │   18   │ │   23   │
+└─┬──────┘ └┬─────┘ └┬───────┘ └┬───────┘
+  │         │        │          │
+  └─────────┴────────┴──────────┘
+                │
+         ┌──────▼──────┐
+         │   Apply     │
+         │   All 78    │
+         └──────┬──────┘
+                │
+         ┌──────▼──────┐
+         │  Run Lint   │
+         └──────┬──────┘
+                │
+         ┌──────▼──────┐
+         │  Re-Audit   │
+         │  (verify)   │
+         └─────────────┘
+```
+
+### Phase 4: Report
+```
+┌─────────────────────────┐
+│  Forge Fix Report       │
+├─────────────────────────┤
+│ ✅ Auto-fixed: 78       │
+│ ⚠️  Manual: 45          │
+│ ❌ Complex: 28          │
+│ 🔄 Remaining: 73/156    │
+│                         │
+│ Quality: 82 → 89 (+7)   │
+└─────────────────────────┘
+```
+
+## Example Fix Session
+
+### User runs:
+```bash
+Run forge quality audit with auto-fix
+```
+
+### Forge executes:
+
+**Step 1: Audit (30 seconds)**
+```
+🔍 Running test-audit... ✓ (67 issues)
+🔍 Running code-audit... ✓ (89 issues)
+📊 Total: 156 violations found
+```
+
+**Step 2: Categorize (5 seconds)**
+```
+✅ Auto-fixable: 78
+   - Missing type hints: 25
+   - Missing docstrings: 18
+   - Test file naming: 12
+   - Magic numbers: 8
+   - Unused imports: 12
+   - Test 3As comments: 3
+
+⚠️  Manual required: 45
+   - Mutable defaults: 5
+   - Functions >50 lines: 12
+   - Multiple assertions: 28
+
+❌ Complex refactoring: 28
+   - SRP violations: 15
+   - Complex async logic: 8
+   - Over-mocking: 5
+
+🗑️  Duplicates removed: 5
+```
+
+**Step 3: Apply Fixes (2 minutes)**
+```
+🔧 Fixing imports (12)...
+   ✓ bot/services/llm_service.py - Removed 3 unused imports
+   ✓ tasks/api/jobs.py - Sorted imports
+   ... (10 more)
+
+🔧 Adding type hints (25)...
+   ✓ bot/services/rag_service.py:45 - Added return type
+   ✓ tasks/jobs/base_job.py:67 - Added parameter types
+   ... (23 more)
+
+🔧 Generating docstrings (18)...
+   ✓ control_plane/api/auth.py:30 - Added docstring
+   ... (17 more)
+
+🔧 Renaming test files (12)...
+   ✓ git mv test_api_jobs_comprehensive.py → test_api_jobs.py
+   ... (11 more)
+
+🔧 Extracting constants (8)...
+   ✓ tasks/config/settings.py - Extracted TIMEOUT_SECONDS = 30
+   ... (7 more)
+
+🔧 Adding 3As comments (3)...
+   ✓ tasks/tests/test_jobs.py:45 - Added # Arrange/Act/Assert
+   ... (2 more)
+```
+
+**Step 4: Verify (15 seconds)**
+```
+✅ Linting... PASSED
+✅ Re-running audits...
+   - Code quality: 85 → 91 (+6)
+   - Test quality: 78 → 86 (+8)
+   - Overall: 82 → 89 (+7)
+```
+
+**Step 5: Report**
+```markdown
+# Forge Fix Report
+
+## Summary
+✅ Successfully fixed 78 violations automatically
+⚠️  45 violations require manual review
+❌ 28 violations need complex refactoring
+
+## Quality Improvement
+- Overall: 82 → 89 (+7 points) 🎉
+- Code: 85 → 91 (+6)
+- Test: 78 → 86 (+8)
+
+## Fixes Applied
+
+### Type Hints (25 fixes)
+- bot/services/llm_service.py:45 - Added `-> str` return type
+- bot/services/rag_service.py:67 - Added parameter types
+... (23 more)
+
+### Docstrings (18 fixes)
+- control_plane/api/auth.py:30 - Generated docstring from signature
+... (17 more)
+
+### Test File Naming (12 fixes)
+- test_api_jobs_comprehensive.py → test_api_jobs.py
+... (11 more)
+
+### Constants (8 fixes)
+- tasks/config/settings.py - TIMEOUT_SECONDS = 30
+... (7 more)
+
+### Imports (12 fixes)
+- Removed unused imports
+- Sorted import order
+
+### Test Structure (3 fixes)
+- Added 3As comments
+
+## Still Need Manual Attention
+
+### Critical (Fix Now)
+1. base_job.py:25 - Mutable default: REQUIRED_PARAMS: list = []
+2. auth_service.py:142 - Function too large (150 lines)
+3. test_agent_client.py:387 - 8 unrelated assertions
+
+### Warning (Fix This Sprint)
+... (42 more)
+
+## Files Modified
+23 files changed, 156 insertions(+), 89 deletions(-)
+
+## Next Steps
+1. Review changes: `git diff`
+2. Run tests: `make test`
+3. Address manual fixes (estimated 4-6 hours)
+4. Commit: `git commit -m "chore: Apply forge auto-fixes"`
+```
+
+## Safety & Rollback
+
+### Safety Measures
+
+**Before Applying Fixes:**
+1. Check git status (must be clean or ask user)
+2. Create backup branch: `forge-backup-TIMESTAMP`
+3. Run existing tests to ensure baseline
+4. Validate all fixes with AST parsing
+
+**After Applying Fixes:**
+1. Run linting (must pass)
+2. Re-run audits (verify improvements)
+3. Run test suite (must pass)
+4. If any failure → rollback to backup
+
+### Rollback Command
+```
+Rollback forge fixes
+```
+
+**What Happens:**
+1. Find most recent forge backup branch
+2. Reset to that state
+3. Report what was rolled back
+4. Preserve forge report for analysis
+
+### Incremental Mode (Safer)
+```
+Run forge fix with confirmation
+```
+
+**What Happens:**
+1. Fix one category at a time
+2. Run tests after each category
+3. Ask to continue or stop
+4. Allows catching issues early
+
+## Configuration
+
+### Fix Settings
+```yaml
+# .claude/forge-config.yml
+auto_fix:
+  enabled: true
+  categories:
+    type_hints: true
+    docstrings: true
+    imports: true
+    test_naming: true
+    constants: true
+    test_structure: true
+
+  safety:
+    require_clean_git: true
+    create_backup: true
+    run_tests_after: true
+    rollback_on_failure: true
+
+  thresholds:
+    max_files_changed: 50  # Safety limit
+    max_fixes_per_run: 100
+```
+
+## Integration
+
+### Pre-Commit Hook
+```bash
+# .git/hooks/pre-commit
+forge quick-check
+if [ $? -ne 0 ]; then
+    echo "❌ Critical violations found"
+    forge fix --critical-only
+    echo "✅ Applied fixes. Please review and commit."
+    exit 1
+fi
+```
+
+### CI/CD Pipeline
+```yaml
+# .github/workflows/quality.yml
+- name: Forge Audit & Fix
+  run: |
+    forge audit --fix --critical-only
+    if [ $? -eq 0 ]; then
+      git config user.name "Forge Bot"
+      git commit -am "chore: Auto-fix critical violations"
+      git push
+    fi
+```
+
+---
+
+## Summary: Forge as Auto-Fixer
+
+Forge is now a **complete quality solution**:
+
+1. 🔍 **Discovers** violations (test-audit + code-audit)
+2. 🎯 **Prioritizes** by severity and fixability
+3. 🔧 **Fixes** 60-80% automatically
+4. ⚠️  **Reports** what needs manual attention
+5. ✅ **Verifies** improvements with re-audit
+6. 🔄 **Tracks** progress over time
+7. 🛡️ **Protects** with rollback capability
+
+**From audit to fixed code in minutes, not hours.**
