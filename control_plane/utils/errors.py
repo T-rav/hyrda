@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from flask import Response, jsonify
+from fastapi.responses import JSONResponse
 
 
 def error_response(
@@ -10,7 +10,7 @@ def error_response(
     status_code: int = 400,
     error_code: str | None = None,
     details: dict[str, Any] | None = None
-) -> tuple[Response, int]:
+) -> JSONResponse:
     """Create a standardized error response.
 
     Args:
@@ -20,16 +20,22 @@ def error_response(
         details: Optional additional error details (e.g., validation errors)
 
     Returns:
-        Tuple of (JSON response, status code) for Flask to return
+        JSONResponse for FastAPI to return
 
     Examples:
-        >>> return error_response("Agent not found", 404, "AGENT_NOT_FOUND")
-        >>> return error_response(
-        ...     "Validation failed",
-        ...     400,
-        ...     "VALIDATION_ERROR",
-        ...     {"fields": {"name": "Too short"}}
-        ... )
+        # FastAPI JSONResponse pattern
+        return error_response("Agent not found", 404, "AGENT_NOT_FOUND")
+
+        # With additional details
+        return error_response(
+            "Validation failed",
+            400,
+            "VALIDATION_ERROR",
+            {"fields": {"name": "Too short"}}
+        )
+
+        # Alternative: Use HTTPException directly for FastAPI
+        # raise HTTPException(status_code=404, detail="Agent not found")
     """
     response_data: dict[str, Any] = {
         "error": message,
@@ -42,14 +48,14 @@ def error_response(
     if details:
         response_data["details"] = details
 
-    return jsonify(response_data), status_code
+    return JSONResponse(content=response_data, status_code=status_code)
 
 
 def success_response(
     data: dict[str, Any] | None = None,
     message: str | None = None,
     status_code: int = 200
-) -> tuple[Response, int]:
+) -> JSONResponse:
     """Create a standardized success response.
 
     Args:
@@ -58,11 +64,14 @@ def success_response(
         status_code: HTTP status code (default: 200)
 
     Returns:
-        Tuple of (JSON response, status code) for Flask to return
+        JSONResponse for FastAPI to return
 
     Examples:
-        >>> return success_response({"agent_name": "profile"})
-        >>> return success_response(message="Agent deleted successfully")
+        # FastAPI JSONResponse pattern with data
+        return success_response({"agent_name": "profile"})
+
+        # With success message
+        return success_response(message="Agent deleted successfully")
     """
     response_data: dict[str, Any] = {"success": True}
 
@@ -72,4 +81,4 @@ def success_response(
     if message:
         response_data["message"] = message
 
-    return jsonify(response_data), status_code
+    return JSONResponse(content=response_data, status_code=status_code)

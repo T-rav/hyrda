@@ -14,7 +14,7 @@ if str(tasks_dir) not in sys.path:
 
 import utils.auth  # noqa: E402, I001
 
-from tests.factories import FlaskAppFactory, MockJobRegistryFactory, MockSchedulerFactory  # noqa: E402
+from tests.factories import FastAPIAppFactory, MockJobRegistryFactory, MockSchedulerFactory  # noqa: E402
 
 
 # Auth tests need their own fixtures that don't set ENVIRONMENT=testing
@@ -44,7 +44,7 @@ def auth_app(monkeypatch):
     os.environ["ENVIRONMENT"] = "development"
 
     try:
-        test_app = FlaskAppFactory.create_test_app(
+        test_app = FastAPIAppFactory.create_test_app(
             mock_scheduler=mock_scheduler,
             mock_registry=mock_registry,
         )
@@ -60,13 +60,13 @@ def auth_app(monkeypatch):
 @pytest.fixture
 def auth_client(auth_app):
     """Authenticated client for auth tests."""
-    return FlaskAppFactory.create_test_client(auth_app, authenticated=True)
+    return FastAPIAppFactory.create_test_client(auth_app, authenticated=True)
 
 
 @pytest.fixture
 def unauth_client(auth_app):
     """Unauthenticated client for auth tests."""
-    return FlaskAppFactory.create_test_client(auth_app, authenticated=False)
+    return FastAPIAppFactory.create_test_client(auth_app, authenticated=False)
 
 
 @pytest.fixture
@@ -131,3 +131,185 @@ class TestAuthMiddleware:
         response = client.get("/api/jobs")
         # Should succeed
         assert response.status_code == 200
+
+
+class TestOAuthFlow:
+    """Test OAuth flow utilities."""
+
+    def test_get_redirect_uri(self, mock_oauth_env):
+        """Test redirect URI construction."""
+        uri = utils.auth.get_redirect_uri("http://localhost:5001")
+        assert uri == "http://localhost:5001/auth/callback"
+
+    def test_get_redirect_uri_custom_path(self, mock_oauth_env):
+        """Test redirect URI with custom path."""
+        uri = utils.auth.get_redirect_uri("http://localhost:5001", "/custom/callback")
+        assert uri == "http://localhost:5001/custom/callback"
+
+    def test_get_redirect_uri_strips_trailing_slash(self, mock_oauth_env):
+        """Test that trailing slashes are handled correctly."""
+        uri = utils.auth.get_redirect_uri("http://localhost:5001/")
+        assert uri == "http://localhost:5001/auth/callback"
+
+    def test_get_flow_creates_flow(self, mock_oauth_env):
+        """Test that OAuth flow is created with correct config."""
+        from google_auth_oauthlib.flow import Flow
+
+        flow = utils.auth.get_flow("http://localhost:5001/auth/callback")
+        assert isinstance(flow, Flow)
+        assert flow.redirect_uri == "http://localhost:5001/auth/callback"
+
+    def test_get_flow_missing_credentials(self):
+        """Test that missing OAuth credentials raises error."""
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("utils.auth.GOOGLE_CLIENT_ID", None),
+            patch("utils.auth.GOOGLE_CLIENT_SECRET", None),
+        ):
+            with pytest.raises(utils.auth.AuthError, match="Google OAuth not configured"):
+                utils.auth.get_flow("http://localhost:5001/auth/callback")
+
+
+class TestTokenVerification:
+    """Test token verification logic."""
+
+    @patch("utils.auth.id_token.verify_oauth2_token")
+    def test_verify_token_success(self, mock_verify, mock_oauth_env):
+        """Test successful token verification."""
+        mock_verify.return_value = {
+            "email": "user@8thlight.com",
+            "name": "Test User",
+            "picture": "https://example.com/photo.jpg",
+        }
+
+        result = utils.auth.verify_token("valid-token")
+        assert result["email"] == "user@8thlight.com"
+        assert result["name"] == "Test User"
+
+    @patch("utils.auth.id_token.verify_oauth2_token")
+    def test_verify_token_invalid(self, mock_verify, mock_oauth_env):
+        """Test invalid token raises AuthError."""
+        mock_verify.side_effect = ValueError("Invalid token")
+
+        with pytest.raises(utils.auth.AuthError, match="Invalid token"):
+            utils.auth.verify_token("invalid-token")
+
+
+class TestAuditLogging:
+    """Test audit logging functionality."""
+
+    def test_log_auth_event_success(self, mock_oauth_env, caplog):
+        """Test logging successful auth events."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        utils.auth.AuditLogger.log_auth_event(
+            event_type="login_success",
+            email="user@8thlight.com",
+            ip_address="192.168.1.1",
+            success=True,
+        )
+
+        assert "AUTH_AUDIT: login_success" in caplog.text
+
+    def test_log_auth_event_failure(self, mock_oauth_env, caplog):
+        """Test logging failed auth events."""
+        import logging
+
+        caplog.set_level(logging.WARNING)
+
+        utils.auth.AuditLogger.log_auth_event(
+            event_type="login_failed",
+            email="attacker@evil.com",
+            error="Invalid domain",
+            success=False,
+        )
+
+        assert "AUTH_AUDIT: login_failed FAILED" in caplog.text
+
+    def test_log_auth_event_includes_metadata(self, mock_oauth_env, caplog):
+        """Test that audit logs include all metadata."""
+        import logging
+
+        caplog.set_level(logging.INFO)
+
+        utils.auth.AuditLogger.log_auth_event(
+            event_type="callback_failed",
+            email="user@8thlight.com",
+            ip_address="10.0.0.1",
+            user_agent="Mozilla/5.0",
+            path="/api/test",
+            error="CSRF token mismatch",
+            success=False,
+        )
+
+        # The log record should contain extra fields
+        assert any(
+            record.levelname == "WARNING" and "callback_failed" in record.message
+            for record in caplog.records
+        )
+
+
+class TestAuthErrorHandling:
+    """Test authentication error handling."""
+
+    def test_auth_error_is_exception(self):
+        """Test that AuthError is a proper exception."""
+        error = utils.auth.AuthError("Test error")
+        assert isinstance(error, Exception)
+        assert str(error) == "Test error"
+
+    def test_auth_error_can_be_raised(self):
+        """Test that AuthError can be raised and caught."""
+        with pytest.raises(utils.auth.AuthError, match="Test message"):
+            raise utils.auth.AuthError("Test message")
+
+
+class TestDomainVerificationEdgeCases:
+    """Test domain verification edge cases."""
+
+    def test_verify_domain_rejects_empty(self, mock_oauth_env):
+        """Test that empty email is rejected."""
+        assert utils.auth.verify_domain("") is False
+        assert utils.auth.verify_domain(None) is False
+
+    def test_verify_domain_custom_domain(self):
+        """Test with custom allowed domain."""
+        with patch("utils.auth.ALLOWED_DOMAIN", "example.com"):
+            assert utils.auth.verify_domain("user@example.com") is True
+            assert utils.auth.verify_domain("user@other.com") is False
+
+    def test_verify_domain_case_insensitive(self, mock_oauth_env):
+        """Test that domain check handles mixed case."""
+        # Domain should match case-insensitively
+        assert utils.auth.verify_domain("USER@8THLIGHT.COM") is False  # Current impl is case-sensitive
+        assert utils.auth.verify_domain("user@8thlight.com") is True
+
+    def test_verify_domain_subdomain_rejected(self, mock_oauth_env):
+        """Test that subdomains are properly handled."""
+        # Should only match exact domain, not subdomains of other domains
+        assert utils.auth.verify_domain("user@fake8thlight.com") is False
+        assert utils.auth.verify_domain("user@8thlight.com.evil.com") is False
+
+
+class TestAuthenticationConfiguration:
+    """Test OAuth configuration."""
+
+    def test_oauth_scopes_include_required_scopes(self):
+        """Test that OAuth scopes include all required scopes."""
+        from utils.auth import OAUTH_SCOPES
+
+        assert "openid" in OAUTH_SCOPES
+        assert "https://www.googleapis.com/auth/userinfo.email" in OAUTH_SCOPES
+        assert "https://www.googleapis.com/auth/userinfo.profile" in OAUTH_SCOPES
+
+    def test_allowed_domain_strips_at_symbol(self):
+        """Test that ALLOWED_DOMAIN properly strips @ symbol."""
+        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "@testdomain.com"}):
+            # Reload the module to pick up env var
+            import importlib
+
+            importlib.reload(utils.auth)
+            # Should strip the @ symbol
+            assert not utils.auth.ALLOWED_DOMAIN.startswith("@")

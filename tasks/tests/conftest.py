@@ -9,7 +9,7 @@ import pytest
 
 from config.settings import TasksSettings
 from tests.factories import (
-    FlaskAppFactory,
+    FastAPIAppFactory,
     MockJobRegistryFactory,
     MockSchedulerFactory,
 )
@@ -124,7 +124,7 @@ def mock_job_registry():
 @pytest.fixture
 def app_factory():
     """Factory function for creating Flask test apps."""
-    return FlaskAppFactory.create_test_app
+    return FastAPIAppFactory.create_test_app
 
 
 @pytest.fixture
@@ -141,7 +141,7 @@ def app(monkeypatch, mock_scheduler, mock_job_registry):
     monkeypatch.setenv("DATA_DATABASE_URL", "sqlite:///:memory:")
 
     # Create app using factory
-    test_app = FlaskAppFactory.create_test_app(
+    test_app = FastAPIAppFactory.create_test_app(
         mock_scheduler=mock_scheduler,
         mock_registry=mock_job_registry,
     )
@@ -152,10 +152,10 @@ def app(monkeypatch, mock_scheduler, mock_job_registry):
 @pytest.fixture
 def client(app):
     """Create an authenticated test client."""
-    return FlaskAppFactory.create_test_client(app, authenticated=True)
+    return FastAPIAppFactory.create_test_client(app, authenticated=True)
 
 
 @pytest.fixture
 def unauthenticated_client(app):
     """Create an unauthenticated test client."""
-    return FlaskAppFactory.create_test_client(app, authenticated=False)
+    return FastAPIAppFactory.create_test_client(app, authenticated=False)

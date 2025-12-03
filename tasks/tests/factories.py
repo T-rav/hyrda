@@ -55,7 +55,7 @@ class MockJobRegistryFactory:
         return mock_registry
 
 
-class FlaskAppFactory:
+class FastAPIAppFactory:
     """Factory for creating FastAPI test apps with proper isolation."""
 
     @staticmethod

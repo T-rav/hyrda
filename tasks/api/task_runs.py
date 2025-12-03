@@ -2,9 +2,9 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
-from dependencies.auth import get_current_user
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from dependencies.auth import get_current_user
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
 from models.task_run import TaskRun
@@ -149,4 +149,4 @@ async def list_task_runs(
 
     except Exception as e:
         logger.error(f"Error fetching task runs: {e}")
-        return {"error": str(e)}, 500
+        raise HTTPException(status_code=500, detail=str(e)) from e
