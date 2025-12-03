@@ -4,8 +4,7 @@ import json
 import logging
 
 from sqlalchemy import Boolean, Column, Integer, String, create_engine, select
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from bot_types import UserInfo
 

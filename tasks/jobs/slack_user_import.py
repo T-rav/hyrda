@@ -3,8 +3,6 @@
 import logging
 from typing import Any
 
-from task_types import JobExecutionResult, SlackUser
-
 from slack_sdk import WebClient
 
 # Define SlackUser model locally since we're in a separate container
@@ -18,10 +16,10 @@ from sqlalchemy import (
     func,
     select,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config.settings import TasksSettings
+from task_types import JobExecutionResult
 
 from .base_job import BaseJob
 

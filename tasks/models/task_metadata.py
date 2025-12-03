@@ -1,7 +1,7 @@
 """Task metadata model for storing custom task names and descriptions."""
 
 from sqlalchemy import Column, DateTime, String, func
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 

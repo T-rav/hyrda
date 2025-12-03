@@ -5,8 +5,7 @@ import logging
 from typing import Any
 
 from sqlalchemy import Boolean, Column, Integer, String, create_engine, select
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 logger = logging.getLogger(__name__)
 
