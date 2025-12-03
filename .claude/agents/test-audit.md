@@ -1,3 +1,13 @@
+---
+name: test-audit
+description: >
+  Audits test code for quality, structure, and patterns. Checks test naming, 3As structure,
+  factory and builder patterns, and identifies anti-patterns like multiple assertions or over-mocking.
+  Based on real codebase with 63 factories and 12 builders.
+model: sonnet
+color: green
+---
+
 # Test Audit Agent
 
 Comprehensive test quality auditing agent that analyzes test files for adherence to established patterns, identifies anti-patterns, and suggests improvements based on the codebase's own testing standards.

@@ -1,3 +1,13 @@
+---
+name: forge
+description: >
+  Orchestrates comprehensive quality audits by coordinating test-audit and code-audit agents,
+  then automatically fixes 60-80% of violations. Use for weekly quality checks, pre-release audits,
+  or CI/CD quality gates. Generates unified reports with prioritized action plans.
+model: sonnet
+color: purple
+---
+
 # Forge Agent - Quality Audit Orchestrator & Auto-Fixer
 
 Meta-agent that orchestrates comprehensive quality audits by coordinating **Test Audit** and **Code Audit** agents, then **automatically applies fixes** for violations.

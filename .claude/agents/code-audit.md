@@ -1,3 +1,13 @@
+---
+name: code-audit
+description: >
+  Audits production code for quality, maintainability, and adherence to established patterns.
+  Analyzes naming conventions, SRP, type hints, docstrings, complexity, and error handling.
+  Based on real codebase standards (92% type coverage, 87% docstrings, avg 22 lines/function).
+model: sonnet
+color: blue
+---
+
 # Code Audit Agent
 
 Comprehensive production code quality auditing agent that analyzes code for adherence to established patterns, identifies anti-patterns, and ensures best practices based on the codebase's own standards.
