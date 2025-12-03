@@ -2,8 +2,9 @@
 name: forge
 description: >
   Orchestrates comprehensive quality audits by coordinating test-audit and code-audit agents,
-  then automatically fixes 60-80% of violations. Use for weekly quality checks, pre-release audits,
+  then automatically fixes the violations. Use for weekly quality checks, pre-release audits,
   or CI/CD quality gates. Generates unified reports with prioritized action plans.
+  It's default is to just report. You need to tell it to fix the issue as if finds them.
 model: sonnet
 color: purple
 ---
@@ -571,9 +572,9 @@ Forge is your **quality command center** that:
 
 ## Execution Modes with Fix Capability
 
-### Mode 1: Audit & Fix (Default)
+### Mode 1: Audit Only (Default - Report Only)
 ```
-Run forge quality audit with auto-fix
+Run forge quality audit
 ```
 
 **What Happens:**
@@ -583,16 +584,37 @@ Run forge quality audit with auto-fix
    - Auto-fixable (green)
    - Manual required (yellow)
    - Complex refactoring (red)
-4. **Apply auto-fixes:**
-   - Add missing type hints
+4. **Generate report** (NO fixes applied)
+5. List what COULD be auto-fixed
+
+**Use Case:**
+- **CI/CD quality gates** (report-only, no code changes)
+- Review violations before deciding on fixes
+- Understanding scope before fixing
+- Weekly quality checkups
+
+**This is the default mode** - safe for CI/CD and exploratory audits.
+
+### Mode 2: Audit & Fix (Explicit Request Required)
+```
+Run forge quality audit and fix all auto-fixable violations
+```
+
+**What Happens:**
+1. Run test-audit + code-audit in parallel
+2. Collect all violations
+3. **Categorize by fixability**
+4. **Apply ALL auto-fixes:**
+   - Add missing type hints (verify tests exist)
    - Rename test files
    - Generate factory skeletons
    - Add 3As comments
    - Remove unused imports
    - Extract magic numbers to constants
 5. **Run linting** to verify fixes
-6. **Re-run audits** to confirm fixes worked
-7. **Generate report:**
+6. **Verify tests pass** after each fix
+7. **Re-run audits** to confirm fixes worked
+8. **Generate report:**
    - ✅ Fixed automatically: 45 violations
    - ⚠️ Manual fixes needed: 12 violations
    - ❌ Complex refactoring: 8 violations
@@ -602,21 +624,13 @@ Run forge quality audit with auto-fix
 - Detailed changelog of what was fixed
 - Remaining violations requiring manual intervention
 
-### Mode 2: Audit Only (No Fixes)
-```
-Run forge quality audit (report only)
-```
-
-**What Happens:**
-1. Run audits
-2. Generate report
-3. **Do NOT apply fixes**
-4. List what COULD be auto-fixed
-
 **Use Case:**
-- Review before allowing changes
-- CI/CD reporting only
-- Understanding scope before fixing
+- **Local development cleanup**
+- Pre-release automated fixes
+- Weekly quality maintenance (local)
+- Fixing accumulated technical debt
+
+**Must be explicitly requested** - applies code changes.
 
 ### Mode 3: Fix Only (No Audit)
 ```
@@ -1105,10 +1119,13 @@ Forge is now a **complete quality solution**:
 
 1. 🔍 **Discovers** violations (test-audit + code-audit)
 2. 🎯 **Prioritizes** by severity and fixability
-3. 🔧 **Fixes** 60-80% automatically
+3. 🔧 **Fixes** all auto-fixable violations (when fix mode enabled)
 4. ⚠️  **Reports** what needs manual attention
 5. ✅ **Verifies** improvements with re-audit
 6. 🔄 **Tracks** progress over time
 7. 🛡️ **Protects** with rollback capability
+
+**Default Mode:** Report-only (audit without applying fixes)
+**Fix Mode:** Must be explicitly requested - applies all auto-fixable violations
 
 **From audit to fixed code in minutes, not hours.**
