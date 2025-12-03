@@ -21,7 +21,10 @@ import pytest
 handlers_path = Path(__file__).parent.parent / "handlers"
 sys.path.insert(0, str(handlers_path))
 
-from message_handlers import _extract_pdf_text_sync, extract_pdf_text
+from handlers.file_processors.pdf_processor import (
+    _extract_pdf_text_sync,
+    extract_pdf_text,
+)
 
 
 class TestAsyncPDFExtraction:
@@ -42,7 +45,8 @@ class TestAsyncPDFExtraction:
             return "Extracted text"
 
         with patch(
-            "message_handlers._extract_pdf_text_sync", side_effect=mock_sync_extract
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync",
+            side_effect=mock_sync_extract,
         ):
             result = await extract_pdf_text(b"fake pdf content", "test.pdf")
 
@@ -60,7 +64,8 @@ class TestAsyncPDFExtraction:
             return "Slow PDF text"
 
         with patch(
-            "message_handlers._extract_pdf_text_sync", side_effect=slow_pdf_extract
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync",
+            side_effect=slow_pdf_extract,
         ):
             # Start PDF extraction (should run in background)
             pdf_task = asyncio.create_task(
@@ -98,7 +103,8 @@ class TestAsyncPDFExtraction:
             return f"Text from {file_name}"
 
         with patch(
-            "message_handlers._extract_pdf_text_sync", side_effect=track_time_extract
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync",
+            side_effect=track_time_extract,
         ):
             # Start 3 PDF extractions concurrently
             tasks = [
@@ -129,7 +135,8 @@ class TestAsyncPDFExtraction:
             raise ValueError("PDF extraction failed")
 
         with patch(
-            "message_handlers._extract_pdf_text_sync", side_effect=failing_extract
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync",
+            side_effect=failing_extract,
         ):
             result = await extract_pdf_text(b"bad pdf", "error.pdf")
 
@@ -140,11 +147,14 @@ class TestAsyncPDFExtraction:
     @pytest.mark.asyncio
     async def test_pdf_extraction_with_pymupdf_unavailable(self):
         """Test graceful handling when PyMuPDF is not available."""
-        with patch("message_handlers.PYMUPDF_AVAILABLE", False):
+        with patch("handlers.file_processors.pdf_processor.PYMUPDF_AVAILABLE", False):
             result = await extract_pdf_text(b"pdf content", "test.pdf")
 
             # Verify graceful fallback
-            assert "PyMuPDF library not available" in result
+            assert (
+                "PyMuPDF library not available" in result
+                or "PyMuPDF not installed" in result
+            )
             assert "test.pdf" in result
 
 
@@ -164,7 +174,7 @@ class TestSyncPDFExtractionIsolation:
         mock_doc.page_count = 1
         mock_doc.load_page.return_value = mock_page
 
-        with patch("message_handlers.fitz") as mock_fitz:
+        with patch("handlers.file_processors.pdf_processor.fitz") as mock_fitz:
             mock_fitz.open.return_value = mock_doc
 
             # Call sync function directly
@@ -195,7 +205,8 @@ class TestPDFExtractionThreadPoolBehavior:
             return "Blocked and completed"
 
         with patch(
-            "message_handlers._extract_pdf_text_sync", side_effect=blocking_pdf_work
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync",
+            side_effect=blocking_pdf_work,
         ):
             # Event loop should not be blocked
             result = await extract_pdf_text(b"pdf", "test.pdf")
@@ -206,7 +217,9 @@ class TestPDFExtractionThreadPoolBehavior:
     @pytest.mark.asyncio
     async def test_executor_uses_default_thread_pool(self):
         """Test that we're using default thread pool executor (None)."""
-        with patch("message_handlers._extract_pdf_text_sync") as mock_sync:
+        with patch(
+            "handlers.file_processors.pdf_processor._extract_pdf_text_sync"
+        ) as mock_sync:
             mock_sync.return_value = "Test"
 
             with patch("asyncio.get_event_loop") as mock_get_loop:

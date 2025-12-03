@@ -276,7 +276,7 @@ class TestLangfuseAPIIntegration:
             debug=False,
         )
 
-        with patch("bot.services.langfuse_service.Langfuse") as mock_langfuse:
+        with patch("shared.services.langfuse_service.Langfuse") as mock_langfuse:
             mock_client = Mock()
             mock_langfuse.return_value = mock_client
 
@@ -302,7 +302,7 @@ class TestLangfuseAPIIntegration:
             host="https://cloud.langfuse.com",
         )
 
-        with patch("bot.services.langfuse_service.Langfuse") as mock_langfuse:
+        with patch("shared.services.langfuse_service.Langfuse") as mock_langfuse:
             mock_client = Mock()
 
             # Mock the methods we use

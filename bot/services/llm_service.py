@@ -90,7 +90,7 @@ class LLMService:
 
         try:
             # Get system prompt with user context injected
-            from handlers.message_handlers import get_user_system_prompt
+            from handlers.prompt_manager import get_user_system_prompt
 
             system_message = get_user_system_prompt(user_id)
 

@@ -15,11 +15,27 @@ from shared.services.langfuse_service import (  # noqa: F401
     observe,
 )
 
-__all__ = [
-    "LangfuseService",
-    "get_langfuse_service",
-    "initialize_langfuse_service",
-    "observe",
-    "_langfuse_available",
-    "logger",
-]
+# Conditionally re-export Langfuse client class if available
+if _langfuse_available:
+    from shared.services.langfuse_service import (
+        Langfuse,  # noqa: F401  # type: ignore[reportUnusedImport]
+    )
+
+    __all__ = [
+        "LangfuseService",
+        "get_langfuse_service",
+        "initialize_langfuse_service",
+        "observe",
+        "_langfuse_available",
+        "logger",
+        "Langfuse",
+    ]
+else:
+    __all__ = [
+        "LangfuseService",
+        "get_langfuse_service",
+        "initialize_langfuse_service",
+        "observe",
+        "_langfuse_available",
+        "logger",
+    ]
