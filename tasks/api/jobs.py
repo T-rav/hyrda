@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from dependencies.auth import get_current_user
-from fastapi.responses import JSONResponse
 
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata

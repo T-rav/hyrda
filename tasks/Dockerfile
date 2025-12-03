@@ -21,7 +21,10 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
-# Copy tasks application code first (needed for pyproject.toml to work)
+# Copy shared library first
+COPY --chown=appuser:appuser shared/ /app/shared/
+
+# Copy tasks application code (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
 
 # Install Python dependencies

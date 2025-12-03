@@ -4,7 +4,7 @@ This module provides TypedDict classes to replace dict[str, Any] types
 throughout the tasks codebase, improving type safety and IDE support.
 """
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, TypedDict
 
 
 class JobTypeInfo(TypedDict):

@@ -2,14 +2,12 @@
 
 import logging
 import os
-import secrets
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from config.settings import get_settings

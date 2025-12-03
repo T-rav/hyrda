@@ -31,8 +31,11 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Copy application code first (needed for pyproject.toml to work)
-COPY --chown=appuser:appuser . .
+# Copy shared library first
+COPY --chown=appuser:appuser ./shared /app/shared
+
+# Copy application code (needed for pyproject.toml to work)
+COPY --chown=appuser:appuser ./bot /app
 
 # Verify Python version and upgrade pip
 RUN set -eux \

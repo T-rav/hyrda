@@ -33,6 +33,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy shared library first
+COPY shared/ /app/shared/
+
 # Copy control plane Python dependencies
 COPY control_plane/pyproject.toml ./
 
@@ -55,5 +58,5 @@ EXPOSE 6001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:6001/api/health')"
 
-# Run Flask app with Gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:6001", "--workers", "4", "--worker-class", "sync", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+# Run FastAPI app with Uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "6001", "--workers", "4"]

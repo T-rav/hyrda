@@ -216,8 +216,8 @@ services:
   # AI Slack Bot Service
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./bot/Dockerfile
     image: insightmesh-bot:latest
     container_name: insightmesh-bot
     restart: unless-stopped
@@ -288,8 +288,8 @@ services:
       sh -c "
         echo '=== Running security database migrations ===' &&
         alembic upgrade head &&
-        echo '=== Starting Gunicorn ===' &&
-        exec gunicorn --bind 0.0.0.0:6001 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - app:app
+        echo '=== Starting Uvicorn ===' &&
+        exec uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4
       "
     logging:
       driver: "json-file"
@@ -306,8 +306,8 @@ services:
   # Agent Service - LangGraph agent execution
   agent_service:
     build:
-      context: ./agent-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./agent-service/Dockerfile
     image: insightmesh-agent-service:latest
     container_name: insightmesh-agent-service
     restart: unless-stopped
@@ -355,6 +355,7 @@ services:
     image: grafana/loki:latest
     container_name: insightmesh-loki
     restart: unless-stopped
+    user: "0"  # Run as root to avoid permission issues with /loki volume
     ports:
       - "3100:3100"
     volumes:

@@ -23,11 +23,6 @@ def sync_agents_to_control_plane() -> None:
         import requests
 
         # Get local agent implementations
-        from agents import (
-            HelpAgent,
-            MeddicAgent,
-            ProfileAgent,
-        )
 
         agents_to_register = [
             {

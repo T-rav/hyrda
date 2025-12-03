@@ -240,9 +240,12 @@ def ensure_help_agent_system() -> None:
         logger.error(f"Error ensuring help agent: {e}")
 
 
+# Create the app instance at module level for uvicorn
+app = create_app()
+
+
 def main():
-    """Run the application."""
-    create_app()
+    """Run the application directly (not used in Docker, kept for local dev)."""
     port = int(os.getenv("CONTROL_PLANE_PORT", "6001"))
 
     logger.info(f"Starting Control Plane on port {port}")
@@ -250,7 +253,7 @@ def main():
 
     # Run with uvicorn
     uvicorn.run(
-        "app_fastapi:app",
+        app,
         host="0.0.0.0",
         port=port,
         reload=(os.getenv("FLASK_ENV") == "development"),

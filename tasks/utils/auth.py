@@ -1,7 +1,6 @@
 """Google OAuth authentication with domain restriction and audit logging.
 
-This module provides authentication middleware for Flask and FastAPI applications
-that require Google OAuth authentication restricted to specific email domains.
+FastAPI-only version - all Flask code removed.
 """
 
 import logging
@@ -9,7 +8,6 @@ import os
 from datetime import UTC, datetime
 from typing import Any
 
-from flask import Response, jsonify, redirect, request, session
 from google.auth.transport.requests import Request
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
@@ -52,16 +50,9 @@ class AuditLogger:
             "event_type": event_type,
             "success": success,
             "email": email,
-            "ip_address": ip_address or request.remote_addr
-            if hasattr(request, "remote_addr")
-            else None,
-            "user_agent": user_agent
-            or (
-                request.headers.get("User-Agent")
-                if hasattr(request, "headers")
-                else None
-            ),
-            "path": path or (request.path if hasattr(request, "path") else None),
+            "ip_address": ip_address,
+            "user_agent": user_agent,
+            "path": path,
         }
         if error:
             log_data["error"] = error
@@ -114,105 +105,3 @@ def verify_token(token: str) -> dict[str, Any]:
         return idinfo
     except ValueError as e:
         raise AuthError(f"Invalid token: {e}") from e
-
-
-def flask_auth_callback(  # noqa: PLR0911
-    service_base_url: str, callback_path: str = "/auth/callback"
-) -> Response:
-    """Handle OAuth callback for Flask."""
-    redirect_uri = get_redirect_uri(service_base_url, callback_path)
-    state = session.get("oauth_state")
-    csrf_token = session.get("oauth_csrf")
-    redirect_url = session.get("oauth_redirect", "/")
-
-    # Verify CSRF token
-    if not csrf_token:
-        AuditLogger.log_auth_event(
-            "callback_failed",
-            success=False,
-            error="CSRF token missing - potential session fixation attack",
-        )
-        session.clear()
-        return jsonify({"error": "Invalid session - please try again"}), 403
-
-    if not state:
-        AuditLogger.log_auth_event(
-            "callback_failed",
-            success=False,
-            error="Missing OAuth state",
-        )
-        return jsonify({"error": "Invalid session state"}), 400
-
-    try:
-        flow = get_flow(redirect_uri)
-        flow.fetch_token(authorization_response=request.url)
-
-        credentials = flow.credentials
-        idinfo = verify_token(credentials.id_token)
-
-        email = idinfo.get("email")
-        if not email:
-            AuditLogger.log_auth_event(
-                "callback_failed",
-                success=False,
-                error="No email in token",
-            )
-            return jsonify({"error": "No email in token"}), 400
-
-        # Verify domain
-        if not verify_domain(email):
-            AuditLogger.log_auth_event(
-                "login_denied_domain",
-                email=email,
-                success=False,
-                error=f"Email domain not allowed: {email}",
-            )
-            session.clear()
-            return jsonify(
-                {"error": f"Access restricted to {ALLOWED_DOMAIN} domain"}
-            ), 403
-
-        # Store user info in session
-        session["user_email"] = email
-        session["user_info"] = {
-            "email": email,
-            "name": idinfo.get("name"),
-            "picture": idinfo.get("picture"),
-        }
-        session.pop("oauth_state", None)
-        session.pop("oauth_redirect", None)
-
-        AuditLogger.log_auth_event(
-            "login_success",
-            email=email,
-            path=redirect_url,
-        )
-
-        return redirect(redirect_url)
-
-    except AuthError as e:
-        AuditLogger.log_auth_event(
-            "callback_failed",
-            success=False,
-            error=str(e),
-        )
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        logger.error(f"OAuth callback error: {e}", exc_info=True)
-        AuditLogger.log_auth_event(
-            "callback_failed",
-            success=False,
-            error=str(e),
-        )
-        return jsonify({"error": "Authentication failed"}), 500
-
-
-def flask_logout() -> Response:
-    """Handle logout for Flask."""
-    email = session.get("user_email")
-    session.clear()
-    AuditLogger.log_auth_event(
-        "logout",
-        email=email,
-    )
-    return jsonify({"message": "Logged out successfully"})

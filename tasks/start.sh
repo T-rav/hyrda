@@ -18,6 +18,6 @@ alembic -c alembic_data.ini upgrade head
 
 echo "✅ Migrations completed successfully"
 
-# Start the Flask application with Gunicorn
-echo "🌐 Starting Gunicorn..."
-exec gunicorn --bind 0.0.0.0:8081 --workers 4 --worker-class sync --timeout 120 --access-logfile - --error-logfile - "app:create_app()"
+# Start the FastAPI application with Uvicorn
+echo "🌐 Starting Uvicorn..."
+exec uvicorn app:app --host 0.0.0.0 --port 8081 --workers 4

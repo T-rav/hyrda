@@ -8,12 +8,11 @@ Tests verify that batch processing correctly handles:
 """
 
 import pytest
-from datetime import datetime, UTC
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from unittest.mock import MagicMock, patch
 
-from models import Base, User, UserIdentity
+from models import Base, User
 from services.user_sync import sync_users_from_provider
 
 

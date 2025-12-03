@@ -20,6 +20,7 @@ dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",  # ASGI server for production
     "python-multipart>=0.0.6",  # For form data support
+    "itsdangerous>=2.1.0",  # For session middleware
 
     # Time zones
     "tzlocal>=5.2",
@@ -127,7 +128,7 @@ ignore = [
     "PLR0912", # too many branches
     "PLR0915", # too many statements
     "PLR2004", # magic value used in comparison
-    "PLW0603", # Using the global statement is discouraged (needed for Flask app factory)
+    "PLW0603", # Using the global statement is discouraged (needed for singleton pattern - DB engines, services)
     "PLC0415", # Allow imports inside functions for optional dependencies
 ]
 
