@@ -194,7 +194,7 @@ class MetricsService:
 
         logger.info("Metrics service initialized with Prometheus client")
 
-    def record_message_processed(self, user_id: str, channel_type: str = "dm"):
+    def record_message_processed(self, user_id: str, channel_type: str = "dm") -> None:
         """Record a processed Slack message"""
         if not self.enabled:
             return
@@ -212,7 +212,7 @@ class MetricsService:
         entity_filter: str = "none",
         chunks_found: int = 0,
         avg_similarity: float = 0.0,
-    ):
+    ) -> None:
         """Record a RAG retrieval operation"""
         if not self.enabled:
             return
@@ -238,7 +238,7 @@ class MetricsService:
         status: str = "success",
         duration: float = 0.0,
         tokens: int = 0,
-    ):
+    ) -> None:
         """Record an LLM API request"""
         if not self.enabled:
             return
@@ -261,7 +261,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording LLM request metric: {e}")
 
-    def record_cache_operation(self, operation: str, status: str = "success"):
+    def record_cache_operation(self, operation: str, status: str = "success") -> None:
         """Record a cache operation (hit, miss, set, etc.)"""
         if not self.enabled:
             return
@@ -271,7 +271,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording cache metric: {e}")
 
-    def update_cache_hit_rate(self, hit_rate: float):
+    def update_cache_hit_rate(self, hit_rate: float) -> None:
         """Update current cache hit rate percentage"""
         if not self.enabled:
             return
@@ -289,7 +289,7 @@ class MetricsService:
         unique_documents: int = 0,
         context_length: int = 0,
         avg_similarity: float = 0.0,
-    ):
+    ) -> None:
         """Record RAG query results and quality metrics"""
         try:
             # Update dashboard stats (always track, even if Prometheus disabled)
@@ -328,7 +328,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording RAG query result: {e}")
 
-    def record_document_usage(self, document_type: str, source: str):
+    def record_document_usage(self, document_type: str, source: str) -> None:
         """Record when a document is retrieved and used"""
         if not self.enabled:
             return
@@ -340,7 +340,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording document usage: {e}")
 
-    def record_query_type(self, query_category: str, has_context: bool):
+    def record_query_type(self, query_category: str, has_context: bool) -> None:
         """Record the type of query being processed"""
         if not self.enabled:
             return
@@ -355,7 +355,7 @@ class MetricsService:
 
     def record_user_interaction(
         self, interaction_type: str, user_type: str = "regular"
-    ):
+    ) -> None:
         """Record user interaction patterns for satisfaction tracking"""
         if not self.enabled:
             return
@@ -367,7 +367,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording user interaction: {e}")
 
-    def record_conversation_activity(self, conversation_id: str):
+    def record_conversation_activity(self, conversation_id: str) -> None:
         """Record activity in a conversation"""
         if not self.enabled:
             return
@@ -387,7 +387,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording conversation activity: {e}")
 
-    def _cleanup_inactive_conversations(self):
+    def _cleanup_inactive_conversations(self) -> None:
         """Remove inactive conversations and update the metric"""
         if not self.enabled:
             return
@@ -420,7 +420,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error cleaning up conversations: {e}")
 
-    def update_active_conversations(self, count: int):
+    def update_active_conversations(self, count: int) -> None:
         """Update the number of active conversations (legacy method)"""
         if not self.enabled:
             return
@@ -458,7 +458,7 @@ class MetricsService:
 
         return stats
 
-    def reset_rag_stats(self):
+    def reset_rag_stats(self) -> None:
         """Reset RAG statistics (useful for daily/weekly resets)"""
         self._rag_stats = {
             "total_queries": 0,
@@ -471,7 +471,7 @@ class MetricsService:
 
     def record_agent_invocation(
         self, agent_name: str, status: str = "success", duration: float = 0.0
-    ):
+    ) -> None:
         """Record an agent invocation (persisted to database)."""
         # Persist to database for survival across restarts
         try:
