@@ -641,14 +641,14 @@ class TestAgentDeletionAPI:
         response = authenticated_client.delete("/api/agents/nonexistent_agent")
         assert response.status_code == 404
         data = response.json()
-        assert "not found" in data["detail"].lower()
+        assert "not found" in data["detail"]["error"].lower()
 
     def test_cannot_delete_system_agent(self, authenticated_client):
         """Test that system agents cannot be deleted."""
         response = authenticated_client.delete("/api/agents/help")
         assert response.status_code == 403
         data = response.json()
-        assert "system" in data["detail"].lower()
+        assert "system" in data["detail"]["error"].lower()
 
     def test_deleted_agent_excluded_from_list(self, authenticated_client, db_session):
         """Test that deleted agents are excluded from the agent list."""

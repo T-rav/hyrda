@@ -157,7 +157,7 @@ test: $(VENV)
 	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short
 	@echo ""
 	@echo "$(YELLOW)🎛️  Control plane unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
 	@echo ""
 	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
@@ -408,7 +408,7 @@ ci-test-bot: $(VENV)
 
 ci-test-control-plane: $(VENV)
 	@echo "$(BLUE)🎛️  Running control plane tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
 
 ci-test-tasks: $(VENV)
 	@echo "$(BLUE)⏰ Running tasks service tests...$(RESET)"
@@ -654,4 +654,4 @@ control-plane-ui:
 
 test-control-plane: $(VENV)
 	@echo "$(BLUE)🧪 Running control plane tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)No tests yet$(RESET)"
+	cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)No tests yet$(RESET)"
