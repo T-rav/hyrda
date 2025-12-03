@@ -423,13 +423,14 @@ ci-docker: health-ui tasks-ui
 	@echo "$(BLUE)🐳 Building Docker images...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 
-# Main CI target - runs all checks
+# Main CI target - runs all checks (Docker builds excluded - use separate deployment pipeline)
 # Use 'make ci' for sequential or 'make -j4 ci' for parallel execution
-ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker
+ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui
 	@echo ""
 	@echo "$(GREEN)✅ ================================$(RESET)"
 	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"
 	@echo "$(GREEN)✅ ================================$(RESET)"
+	@echo "$(YELLOW)💡 For Docker builds: make ci-docker$(RESET)"
 
 pre-commit:
 	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files

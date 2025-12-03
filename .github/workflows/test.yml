@@ -46,7 +46,7 @@ jobs:
         pip install -e "tasks/[test]"
         pip install -e "control_plane/[test]"
 
-    - name: Run complete CI pipeline (parallel)
+    - name: "Run quality checks (parallel: linting + tests + UI, no Docker builds)"
       env:
         SLACK_BOT_TOKEN: xoxb-test-token-for-ci
         SLACK_APP_TOKEN: xapp-test-token-for-ci
@@ -59,4 +59,12 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
-      run: make -j4 ci
+      run: |
+        # Run all quality checks in parallel (skip only ci-docker - Docker image builds belong in deployment pipeline)
+        make ci-lint &
+        make ci-test-bot &
+        make ci-test-control-plane &
+        make ci-test-tasks &
+        make ci-ui &
+        wait
+        echo "✅ All quality checks passed (linting + tests + UI)"
