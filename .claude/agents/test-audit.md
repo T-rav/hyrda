@@ -326,6 +326,39 @@ Create structured report:
 1. test_slack_service.py - Could benefit from builder pattern
 2. test_event_handlers.py - Consider splitting large test file
 
+## Priority Mapping for Action Planning
+
+**IMPORTANT: Warnings are P1 priority issues and must be treated with the same urgency as Critical violations.**
+
+### P1 - High Priority (Fix ASAP)
+- **Critical violations** - Tests that don't work correctly, brittle tests, false positives/negatives
+- **Warning violations** - Test quality issues that impact maintainability, readability, and developer productivity
+- **Impact:** Blocks effective testing, slows TDD workflow, reduces confidence in test suite
+- **Timeline:** Address immediately in current sprint/iteration
+
+**Examples:**
+- Multiple unrelated assertions (tests break for wrong reasons)
+- Over-mocking internal logic (tests too coupled to implementation)
+- Unclear test names (team can't understand what's being tested)
+- Missing 3As structure (hard to debug failing tests)
+- Repetitive setup code (slows test writing, inconsistent)
+- Incomplete mock setup (flaky tests, false passes)
+
+### P2 - Medium Priority (Fix When Convenient)
+- **Suggestion violations** - Test improvements, consistency, patterns
+- **Impact:** Minor productivity improvements, code organization
+- **Timeline:** Address in next sprint or refactoring cycle
+
+**Examples:**
+- Could benefit from builder pattern (nice-to-have)
+- Consider splitting large test file (organizational)
+- Test file naming improvements (consistency)
+
+### P3 - Low Priority (Optional)
+- **Polish items** - Style preferences, minor optimizations
+- **Impact:** Minimal
+- **Timeline:** Address during major test refactoring or if time permits
+
 ## Opportunities for Improvement
 
 ### Missing Factories

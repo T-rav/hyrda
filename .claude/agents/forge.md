@@ -117,11 +117,15 @@ Forge brings together multiple audit capabilities to provide:
 
 | Severity | Code Impact | Test Impact | Priority |
 |----------|-------------|-------------|----------|
-| Critical | Production bugs | Test reliability | P0 - Fix now |
-| Warning | Maintainability | Test clarity | P1 - Fix this sprint |
-| Suggestion | Best practice | Optimization | P2 - Consider |
+| Critical | Production bugs | Test reliability | P1 - High (Fix ASAP) |
+| Warning | Maintainability | Test clarity | P1 - High (Fix ASAP) |
+| Suggestion | Best practice | Optimization | P2 - Medium (Fix when convenient) |
 
-**Cross-Cutting Issues (Highest Priority):**
+**IMPORTANT: Both Critical and Warning violations are P1 priority.**
+
+Warnings impact developer productivity, code maintainability, and team velocity just as much as critical issues. Missing type hints, unclear test names, and missing docstrings slow down the entire team and accumulate technical debt rapidly.
+
+**Cross-Cutting Issues (Highest Priority within P1):**
 - Same pattern violation in both code and tests
 - Violations that make testing harder (complexity, poor SRP)
 - Issues that block new development
@@ -317,20 +321,28 @@ Output: Single agent report.
 ```markdown
 ## Action Plan - Prioritized
 
-### P0 - Fix Immediately (Est: 2-4 hours)
+### P1 - High Priority (Fix ASAP)
+
+**Critical Violations (Est: 2-4 hours):**
 1. ❌ base_job.py:25 - CRITICAL: Mutable default (list = [])
 2. ❌ test_agent_client.py:387 - CRITICAL: 8 unrelated assertions
 3. ❌ auth_service.py:142 - CRITICAL: Function too large (150 lines)
 
-### P1 - Fix This Sprint (Est: 1-2 days)
+**Warning Violations (Est: 1-2 days):**
 4. ⚠️ 45 functions missing type hints
 5. ⚠️ 23 test setups need factories
 6. ⚠️ 12 tests missing 3As structure
+7. ⚠️ 8 functions with broad exception handling
+8. ⚠️ 15 functions missing docstrings
 
-### P2 - Consider (Est: 3-5 days)
-7. 💡 Magic numbers in 15 files
-8. 💡 Could split 8 large functions
-9. 💡 Builder pattern opportunities in tests
+### P2 - Medium Priority (Fix When Convenient, Est: 3-5 days)
+9. 💡 Magic numbers in 15 files
+10. 💡 Could split 8 large functions (30-50 lines)
+11. 💡 Builder pattern opportunities in tests
+
+### P3 - Low Priority (Optional)
+12. 💡 Style consistency improvements
+13. 💡 Minor refactoring opportunities
 ```
 
 ### Detailed Findings

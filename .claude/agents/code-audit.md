@@ -613,6 +613,37 @@ For each file:
 1. utils/helpers.py:45 - Magic number 3600 (use named constant)
 2. services/rag.py:120 - Function could be split (55 lines)
 
+## Priority Mapping for Action Planning
+
+**IMPORTANT: Warnings are P1 priority issues and must be treated with the same urgency as Critical violations.**
+
+### P1 - High Priority (Fix ASAP)
+- **Critical violations** - Correctness issues, bugs, security risks
+- **Warning violations** - Quality issues that impact maintainability, readability, and team velocity
+- **Impact:** Blocks code quality goals, slows development, creates technical debt
+- **Timeline:** Address immediately in current sprint/iteration
+
+**Examples:**
+- Missing type hints (hinders IDE support, static analysis)
+- Missing docstrings (blocks team understanding)
+- Functions > 50 lines (violates SRP, hard to test)
+- Broad exception handling (masks bugs, silent failures)
+- Deep nesting > 3 levels (cognitive complexity)
+
+### P2 - Medium Priority (Fix When Convenient)
+- **Suggestion violations** - Nice-to-haves, polish items
+- **Impact:** Minor quality improvements, consistency
+- **Timeline:** Address in next sprint or refactoring cycle
+
+**Examples:**
+- Magic numbers (could use constants)
+- Functions 30-50 lines (could be split but not urgent)
+
+### P3 - Low Priority (Optional)
+- **Polish items** - Style preferences, minor optimizations
+- **Impact:** Minimal
+- **Timeline:** Address during major refactoring or if time permits
+
 ## Quality Metrics
 
 | Metric | Score | Target |
