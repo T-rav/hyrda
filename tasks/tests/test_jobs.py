@@ -11,115 +11,12 @@ from jobs.base_job import BaseJob
 # from jobs.metrics_collection import MetricsCollectionJob
 from jobs.slack_user_import import SlackUserImportJob
 
-
-# TDD Factory Patterns for Tasks Test Suite
-class SlackClientMockFactory:
-    """Factory for creating Slack client mocks"""
-
-    @staticmethod
-    def create_basic_client() -> Mock:
-        """Create basic Slack client mock"""
-        mock_client = Mock()
-        mock_client.users_list.return_value = {
-            "ok": True,
-            "members": [],
-            "response_metadata": {},
-        }
-        return mock_client
-
-    @staticmethod
-    def create_client_with_users(users: list) -> Mock:
-        """Create Slack client mock with specific users"""
-        mock_client = SlackClientMockFactory.create_basic_client()
-        mock_client.users_list.return_value["members"] = users
-        return mock_client
-
-    @staticmethod
-    def create_failing_client(error: str = "API Error") -> Mock:
-        """Create Slack client mock that fails"""
-        mock_client = Mock()
-        mock_client.users_list.side_effect = Exception(error)
-        return mock_client
-
-
-class HTTPResponseMockFactory:
-    """Factory for creating HTTP response mocks"""
-
-    @staticmethod
-    def create_success_response(data: dict = None) -> Mock:
-        """Create successful HTTP response mock"""
-        if data is None:
-            data = {"processed_count": 2}
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = data
-        return mock_response
-
-    @staticmethod
-    def create_metrics_response(metrics_data: list = None) -> Mock:
-        """Create HTTP response mock for metrics data"""
-        if metrics_data is None:
-            metrics_data = [{"metric": "value"}]
-
-        return HTTPResponseMockFactory.create_success_response({"data": metrics_data})
-
-    @staticmethod
-    def create_error_response(
-        status_code: int = 500, error: str = "Server Error"
-    ) -> Mock:
-        """Create error HTTP response mock"""
-        mock_response = Mock()
-        mock_response.status_code = status_code
-        mock_response.json.return_value = {"error": error}
-        return mock_response
-
-
-class JobTestDataFactory:
-    """Factory for creating job test data"""
-
-    @staticmethod
-    def create_sample_slack_users() -> list:
-        """Create sample Slack users data"""
-        return [
-            {
-                "id": "U1234567",
-                "name": "test.user",
-                "is_admin": False,
-                "is_owner": False,
-                "profile": {"email": "test.user@example.com"},
-            },
-            {
-                "id": "U2345678",
-                "name": "admin.user",
-                "is_admin": True,
-                "is_owner": False,
-                "profile": {"email": "admin.user@example.com"},
-            },
-        ]
-
-    @staticmethod
-    def create_metrics_data(metric_type: str = "usage", values: list = None) -> dict:
-        """Create sample metrics data"""
-        if values is None:
-            values = [1, 2, 3]
-
-        return {metric_type: {"data": values}}
-
-    @staticmethod
-    def create_job_execution_result(
-        status: str = "success", job_name: str = "Test Job", result_data: dict = None
-    ) -> dict:
-        """Create job execution result"""
-        if result_data is None:
-            result_data = {"result": "success"}
-
-        return {
-            "status": status,
-            "job_name": job_name,
-            "result": result_data,
-            "execution_time_seconds": 0.1,
-        }
+# Import test utilities from centralized location
+from tests.utils import (
+    HTTPResponseMockFactory,
+    JobTestDataFactory,
+    SlackClientMockFactory,
+)
 
 
 class TestBaseJob:
