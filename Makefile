@@ -56,10 +56,11 @@ help:
 	@echo ""
 	@echo "$(GREEN)Development:$(RESET)"
 	@echo "  run             Run the bot (standalone)"
-	@echo "  test            Run bot test suite"
+	@echo "  test            🧪 Run ALL unit tests across all services (no integration)"
+	@echo "  test-bot-only   Run bot unit tests only (faster)"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
 	@echo "  test-integration Run integration tests only"
-	@echo "  test-unit       Run unit tests only"
+	@echo "  test-unit       Run unit tests only (alias for test)"
 	@echo "  test-tasks      Run tasks service tests"
 	@echo "  test-control-plane Run control plane tests"
 	@echo "  test-agent-service Run agent service tests"
@@ -151,7 +152,20 @@ run: check-env start-redis
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
 test: $(VENV)
-	@echo "$(BLUE)Running test suite (excluding integration tests)...$(RESET)"
+	@echo "$(BLUE)Running full unit test suite across all services (excluding integration)...$(RESET)"
+	@echo "$(YELLOW)🧪 Bot unit tests...$(RESET)"
+	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short
+	@echo ""
+	@echo "$(YELLOW)🎛️  Control plane unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
+	@echo ""
+	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
+	@echo ""
+	@echo "$(GREEN)✅ All unit test suites completed!$(RESET)"
+
+test-bot-only: $(VENV)
+	@echo "$(BLUE)Running bot test suite only (excluding integration tests)...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
 
 test-file: $(VENV)
