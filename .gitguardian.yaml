@@ -1,0 +1,7 @@
+# GitGuardian configuration
+# Ignore false positives
+
+paths-ignore:
+  - shared/utils/log_sanitizer.py  # Contains test patterns, not real secrets
+
+version: 2
