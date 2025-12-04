@@ -25,9 +25,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
         run: |
-          pip install anthropic python-dotenv pyyaml
+          npm install -g @anthropic-ai/claude-code
 
       - name: Run Forge Quality Gate
         id: audit
@@ -42,38 +47,19 @@ jobs:
             exit 0
           fi
 
-          # Run Forge agent (report-only mode for CI)
-          python -c "
-          from anthropic import Anthropic
-          import os
-          import json
+          # Run Forge agent via Claude Code in non-interactive mode
+          claude-code --non-interactive << 'EOF'
+          Run Forge quality audit in report-only mode.
 
-          client = Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
+          Requirements:
+          - Generate quality report
+          - Check if quality score >= 85
+          - Check if critical violations == 0
+          - Save report to .claude/audit-reports/ci-report.md
 
-          # Simple prompt to run Forge audit
-          response = client.messages.create(
-              model='claude-sonnet-4-5-20250929',
-              max_tokens=8192,
-              messages=[{
-                  'role': 'user',
-                  'content': '''Run Forge quality audit in report-only mode.
-
-          Analyze the codebase and report:
-          - Quality score (0-100)
-          - Critical violations (P0)
-          - Warning violations (P1)
-
-          Exit rules:
-          - PASS if score >= 85 and no critical violations
-          - FAIL if score < 85 or critical violations > 0
-
-          Generate .claude/audit-reports/ci-report.md with results.
-          '''
-              }]
-          )
-
-          print(response.content[0].text)
-          " || echo "❌ Forge audit failed"
+          Exit with code 0 if PASS (score >= 85, no critical violations)
+          Exit with code 1 if FAIL (score < 85 or critical violations found)
+          EOF
 
       - name: Post audit results as comment
         if: github.event_name == 'pull_request'
