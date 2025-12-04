@@ -79,7 +79,11 @@ class OpenAIEmbeddingProvider:
         Returns:
             List of embedding vectors
         """
-        response = await self.client.embeddings.create(input=texts, model=self.model)
+        response = await self.client.embeddings.create(
+            input=texts,
+            model=self.model,
+            dimensions=3072  # Use full 3072 dimensions for text-embedding-3-large
+        )
         return [item.embedding for item in response.data]
 
     async def embed_query(self, text: str) -> list[float]:

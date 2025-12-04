@@ -8,15 +8,12 @@ Main service that coordinates the ingestion process by:
 - Managing the overall ingestion workflow
 """
 
-import logging
 import uuid
 from datetime import datetime
-from typing import Any
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
-
-logger = logging.getLogger(__name__)
+from .google_metadata_parser import GoogleMetadataParser
 
 
 class IngestionOrchestrator:
@@ -51,11 +48,11 @@ class IngestionOrchestrator:
 
     def set_services(
         self,
-        vector_service: Any,
-        embedding_service: Any = None,
-        llm_service: Any = None,
-        enable_contextual_retrieval: bool = False,
-    ) -> None:
+        vector_service,
+        embedding_service=None,
+        llm_service=None,
+        enable_contextual_retrieval=False,
+    ):
         """
         Set the vector database and embedding services.
 
@@ -108,14 +105,14 @@ class IngestionOrchestrator:
                 if file_info["mimeType"] == "application/vnd.google-apps.folder":
                     continue
 
-                logger.info(f"Processing: {file_info['name']}")
+                print(f"Processing: {file_info['name']}")
 
                 # Download file content
                 content = self.google_drive_client.download_file_content(
                     file_info["id"], file_info["mimeType"]
                 )
                 if not content:
-                    logger.error(f"Failed to download: {file_info['name']}")
+                    print(f"Failed to download: {file_info['name']}")
                     error_count += 1
                     continue
 
@@ -127,12 +124,20 @@ class IngestionOrchestrator:
                 )
 
                 if not needs_reindex:
-                    logger.info(f"⏭️  Skipping (unchanged): {file_info['name']}")
-                    skipped_count += 1
+                    # Content unchanged, but check if metadata needs updating
+                    # (e.g., owner/permissions changed)
+                    if existing_uuid and await self._update_metadata_if_changed(
+                        file_info, existing_uuid
+                    ):
+                        print(f"🔄 Updated metadata: {file_info['name']}")
+                        success_count += 1
+                    else:
+                        print(f"⏭️  Skipping (unchanged): {file_info['name']}")
+                        skipped_count += 1
                     continue
 
                 if existing_uuid:
-                    logger.info(f"🔄 Content changed, reindexing: {file_info['name']}")
+                    print(f"🔄 Content changed, reindexing: {file_info['name']}")
 
                 # Generate or reuse UUID for this document
                 base_uuid = existing_uuid or self.document_tracker.generate_base_uuid(
@@ -151,10 +156,10 @@ class IngestionOrchestrator:
                     "created_time": file_info.get("createdTime"),
                     "size": file_info.get("size"),
                     "web_view_link": file_info.get("webViewLink"),
-                    "owner_emails": GoogleDriveClient.get_owner_emails(
+                    "owner_emails": GoogleMetadataParser.get_owner_emails(
                         file_info.get("owners", [])
                     ),
-                    "permissions_summary": GoogleDriveClient.get_permissions_summary(
+                    "permissions_summary": GoogleMetadataParser.get_permissions_summary(
                         file_info.get("detailed_permissions", [])
                     ),
                     "ingested_at": datetime.utcnow().isoformat(),
@@ -174,9 +179,7 @@ class IngestionOrchestrator:
 
                 # Add contextual descriptions if enabled
                 if self.enable_contextual_retrieval and self.llm_service:
-                    logger.info(
-                        f"Adding contextual descriptions to {len(chunks)} chunks..."
-                    )
+                    print(f"Adding contextual descriptions to {len(chunks)} chunks...")
                     enhanced_chunks = []
                     for chunk in chunks_with_title:
                         context = await self.llm_service.generate_chunk_context(
@@ -219,7 +222,7 @@ class IngestionOrchestrator:
                     metadatas=chunk_metadata,
                     texts=chunks_with_title,
                 )
-                logger.info(f"   📊 Ingested {len(chunks)} chunks")
+                print(f"   📊 Ingested {len(chunks)} chunks")
 
                 # Record successful ingestion in tracking table
                 try:
@@ -238,10 +241,10 @@ class IngestionOrchestrator:
                         if file_info.get("size")
                         else None,
                         metadata={
-                            "owner_emails": GoogleDriveClient.get_owner_emails(
+                            "owner_emails": GoogleMetadataParser.get_owner_emails(
                                 file_info.get("owners", [])
                             ),
-                            "permissions_summary": GoogleDriveClient.get_permissions_summary(
+                            "permissions_summary": GoogleMetadataParser.get_permissions_summary(
                                 file_info.get("detailed_permissions", [])
                             ),
                             "web_view_link": file_info.get("webViewLink"),
@@ -249,17 +252,17 @@ class IngestionOrchestrator:
                         status="success",
                     )
                 except Exception as tracking_error:
-                    logger.warning(
-                        f"⚠️  Failed to record ingestion tracking: {tracking_error}"
-                    )
+                    print(f"⚠️  Failed to record ingestion tracking: {tracking_error}")
 
-                logger.info(f"✅ Successfully ingested: {file_info['name']}")
+                print(f"✅ Successfully ingested: {file_info['name']}")
                 success_count += 1
 
             except Exception as e:
-                logger.error(
-                    f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
-                )
+                import logging
+                logger = logging.getLogger(__name__)
+                error_msg = f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
+                print(error_msg)
+                logger.error(error_msg, exc_info=True)  # Include full traceback
                 error_count += 1
 
                 # Record failed ingestion
@@ -300,14 +303,14 @@ class IngestionOrchestrator:
         Returns:
             Tuple of (success_count, error_count, skipped_count)
         """
-        logger.info(f"Scanning folder: {folder_id} (recursive: {recursive})")
+        print(f"Scanning folder: {folder_id} (recursive: {recursive})")
         files = self.google_drive_client.list_folder_contents(
             folder_id, recursive, folder_path=""
         )
 
         # Debug output
         if not files:
-            logger.warning("Found 0 items - folder appears to be empty or inaccessible")
+            print("Found 0 items - folder appears to be empty or inaccessible")
         else:
             folders = [
                 f
@@ -320,22 +323,111 @@ class IngestionOrchestrator:
                 if f["mimeType"] != "application/vnd.google-apps.folder"
             ]
 
-            logger.info(f"Found {len(files)} total items:")
-            logger.info(f"  📁 {len(folders)} folders")
-            logger.info(f"  📄 {len(documents)} documents")
+            print(f"Found {len(files)} total items:")
+            print(f"  📁 {len(folders)} folders")
+            print(f"  📄 {len(documents)} documents")
 
             if folders:
-                logger.debug("  Folders found:")
+                print("  Folders found:")
                 for folder in folders[:5]:  # Show first 5 folders
-                    logger.debug(f"    - {folder['full_path']}")
+                    print(f"    - {folder['full_path']}")
                 if len(folders) > 5:
-                    logger.debug(f"    ... and {len(folders) - 5} more folders")
+                    print(f"    ... and {len(folders) - 5} more folders")
 
             if documents:
-                logger.debug("  Documents found:")
+                print("  Documents found:")
                 for doc in documents[:5]:  # Show first 5 documents
-                    logger.debug(f"    - {doc['full_path']} ({doc['mimeType']})")
+                    print(f"    - {doc['full_path']} ({doc['mimeType']})")
                 if len(documents) > 5:
-                    logger.debug(f"    ... and {len(documents) - 5} more documents")
+                    print(f"    ... and {len(documents) - 5} more documents")
 
         return await self.ingest_files(files, metadata)
+
+    async def _update_metadata_if_changed(
+        self, file_info: dict, base_uuid: str
+    ) -> bool:
+        """
+        Update metadata in Qdrant for existing document if metadata changed.
+
+        Args:
+            file_info: File metadata from Google Drive
+            base_uuid: Base UUID for the document
+
+        Returns:
+            True if metadata was updated, False otherwise
+        """
+        try:
+            # Get stored document info
+            doc_info = self.document_tracker.get_document_info(file_info["id"])
+            if not doc_info:
+                return False
+
+            # Extract current metadata from file_info
+            current_owner_emails = GoogleMetadataParser.get_owner_emails(
+                file_info.get("owners", [])
+            )
+            current_permissions = GoogleMetadataParser.get_permissions_summary(
+                file_info.get("detailed_permissions", [])
+            )
+
+            # Get stored metadata
+            stored_metadata = doc_info.get("metadata", {})
+            stored_owner_emails = stored_metadata.get("owner_emails", "unknown")
+            stored_permissions = stored_metadata.get("permissions_summary", "no_permissions")
+
+            # Check if metadata changed
+            metadata_changed = (
+                current_owner_emails != stored_owner_emails
+                or current_permissions != stored_permissions
+            )
+
+            if not metadata_changed:
+                return False  # No changes needed
+
+            # Metadata changed - update all chunks in Qdrant
+            chunk_count = doc_info.get("chunk_count", 0)
+
+            # Prepare updated metadata fields
+            metadata_updates = {
+                "owner_emails": current_owner_emails,
+                "permissions_summary": current_permissions,
+            }
+
+            # Update each chunk's metadata in Qdrant
+            import uuid
+            for chunk_idx in range(chunk_count):
+                chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{chunk_idx}"))
+
+                # Update payload for this point
+                await self.vector_service.update_payload(
+                    point_id=chunk_uuid,
+                    payload=metadata_updates
+                )
+
+            # Update tracking database with new metadata
+            self.document_tracker.record_document_ingestion(
+                google_drive_id=file_info["id"],
+                file_path=file_info.get("full_path", file_info["name"]),
+                document_name=file_info["name"],
+                content="",  # Don't need to rehash
+                vector_uuid=base_uuid,
+                chunk_count=chunk_count,
+                mime_type=file_info["mimeType"],
+                file_size=int(file_info.get("size", 0))
+                if file_info.get("size")
+                else None,
+                metadata={
+                    "owner_emails": current_owner_emails,
+                    "permissions_summary": current_permissions,
+                    "web_view_link": file_info.get("webViewLink"),
+                },
+                status="success",
+            )
+
+            return True
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to update metadata for {file_info.get('name')}: {e}")
+            return False

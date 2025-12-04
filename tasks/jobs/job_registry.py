@@ -134,6 +134,14 @@ def execute_job_by_type(
                         task_run.records_success = job_result.get("records_success")
                         task_run.records_failed = job_result.get("records_failed")
 
+                        # Check if job should be marked as failed despite completing
+                        # Only mark as failed if there were actual errors (not just skipped records)
+                        if (task_run.records_processed and task_run.records_processed > 0
+                            and task_run.records_success == 0
+                            and task_run.records_failed and task_run.records_failed > 0):
+                            task_run.status = "failed"
+                            task_run.error_message = f"All {task_run.records_processed} records failed to process"
+
                 session.commit()
 
         return result

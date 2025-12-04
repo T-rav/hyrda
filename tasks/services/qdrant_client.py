@@ -137,6 +137,26 @@ class QdrantClient:
             f"✅ Added {len(texts)} documents to Qdrant namespace '{namespace}'"
         )
 
+    async def update_payload(self, point_id: str, payload: dict[str, Any]):
+        """
+        Update payload (metadata) for an existing point without changing the vector.
+
+        Args:
+            point_id: UUID of the point to update
+            payload: Dictionary of metadata fields to update
+        """
+        if not self.client:
+            raise RuntimeError("Qdrant not initialized")
+
+        def update():
+            return self.client.set_payload(
+                collection_name=self.collection_name,
+                points=[point_id],
+                payload=payload,
+            )
+
+        await asyncio.get_event_loop().run_in_executor(None, update)
+
     async def close(self):
         """Close connection."""
         if self.client:

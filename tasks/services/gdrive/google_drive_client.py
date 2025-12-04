@@ -125,11 +125,19 @@ class GoogleDriveClient:
         """
         # Enrich metadata
         item["folder_id"] = folder_id
-        enriched_item = self.metadata_parser.enrich_file_metadata(item, folder_path)
 
-        # Get detailed permissions
+        # Get detailed permissions BEFORE enrichment
         detailed_permissions = self.api_service.get_detailed_permissions(item["id"])
-        enriched_item["detailed_permissions"] = detailed_permissions
+        item["detailed_permissions"] = detailed_permissions
+
+        # DEBUG logging
+        logger.info(f"🔍 File: {item['name']}")
+        logger.info(f"   owners field: {item.get('owners', [])}")
+        logger.info(f"   detailed_permissions count: {len(detailed_permissions)}")
+        if detailed_permissions:
+            logger.info(f"   detailed_permissions sample: {detailed_permissions[:2]}")
+
+        enriched_item = self.metadata_parser.enrich_file_metadata(item, folder_path)
 
         files = [enriched_item]
 

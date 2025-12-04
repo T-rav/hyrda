@@ -134,7 +134,11 @@ class OpenAIEmbeddings:
                     f"Generating embeddings for batch {batch_idx}/{len(batches)} "
                     f"({len(batch)} texts, ~{estimated_tokens:,} tokens)"
                 )
-                response = client.embeddings.create(input=batch, model=self.model)
+                response = client.embeddings.create(
+                    input=batch,
+                    model=self.model,
+                    dimensions=3072  # Use full 3072 dimensions for text-embedding-3-large
+                )
                 batch_embeddings = [data.embedding for data in response.data]
                 all_embeddings.extend(batch_embeddings)
 

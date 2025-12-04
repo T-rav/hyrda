@@ -113,3 +113,17 @@ class QdrantVectorStore:
             ids: List of IDs to delete
         """
         self.client.delete(collection_name=self.collection_name, points_selector=ids)
+
+    async def update_payload(self, point_id: str, payload: dict[str, Any]) -> None:
+        """
+        Update payload (metadata) for an existing point without changing the vector.
+
+        Args:
+            point_id: UUID of the point to update
+            payload: Dictionary of metadata fields to update
+        """
+        self.client.set_payload(
+            collection_name=self.collection_name,
+            points=[point_id],
+            payload=payload,
+        )

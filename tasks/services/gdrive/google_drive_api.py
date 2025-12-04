@@ -152,6 +152,9 @@ class GoogleDriveAPI:
         """
         Get detailed permissions for a specific file.
 
+        Uses permissions().list() API since files().get() doesn't include permissions
+        for Shared Drive files even when requested with fields="permissions(*)".
+
         Args:
             file_id: Google Drive file ID
 
@@ -159,14 +162,27 @@ class GoogleDriveAPI:
             List of permission dictionaries
         """
         try:
-            file_permissions = (
-                self.service.files()
-                .get(fileId=file_id, fields="permissions", supportsAllDrives=True)
+            # Use permissions.list() API - files.get() doesn't return permissions
+            # for Shared Drive files even with fields="permissions(*)"
+            logger.info(f"🔍 Fetching permissions for file: {file_id}")
+            permissions_response = (
+                self.service.permissions()
+                .list(
+                    fileId=file_id,
+                    fields="permissions(*)",
+                    supportsAllDrives=True,
+                )
                 .execute()
             )
-            return file_permissions.get("permissions", [])
+            perms = permissions_response.get("permissions", [])
+            logger.info(f"✅ permissions().list() returned {len(perms)} permissions for {file_id}")
+            if perms:
+                logger.info(f"   Sample permission: {perms[0]}")
+            else:
+                logger.warning(f"   ⚠️ EMPTY permissions list returned by API for {file_id}")
+            return perms
         except HttpError as e:
-            logger.warning(f"Could not fetch detailed permissions for {file_id}: {e}")
+            logger.error(f"❌ Could not fetch detailed permissions for {file_id}: {e}")
             return []
 
     def download_file_content(self, file_id: str, mime_type: str) -> bytes | None:
