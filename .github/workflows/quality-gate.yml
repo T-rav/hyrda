@@ -52,13 +52,15 @@ jobs:
           Run Forge quality audit in report-only mode.
 
           Requirements:
-          - Generate quality report
-          - Check if quality score >= 85
-          - Check if critical violations == 0
+          - Generate quality report with violation counts
+          - Count Critical (P0) and Warning (P1) violations
           - Save report to .claude/audit-reports/ci-report.md
 
-          Exit with code 0 if PASS (score >= 85, no critical violations)
-          Exit with code 1 if FAIL (score < 85 or critical violations found)
+          Quality Gate Rules:
+          - Exit 0 (PASS) if Critical violations == 0 AND Warning violations == 0
+          - Exit 1 (FAIL) if any violations found (Critical > 0 OR Warning > 0)
+
+          Focus on number of issues to fix, not quality score.
           EOF
 
       - name: Post audit results as comment
