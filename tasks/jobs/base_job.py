@@ -10,7 +10,10 @@ from typing import Any
 # Add shared directory to path for imports
 sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
 
-from shared.utils.log_sanitizer import sanitize_dict
+try:
+    import scrubadub
+except ImportError:
+    scrubadub = None
 
 from config.settings import TasksSettings
 from task_types import JobExecutionResult
@@ -82,8 +85,11 @@ class BaseJob(ABC):
             error_message = str(e)
             stack_trace = traceback.format_exc()
 
-            # Sanitize params using shared utility (removes sensitive data)
-            safe_params = sanitize_dict(self.params)
+            # Sanitize params (removes sensitive data)
+            if scrubadub:
+                safe_params = scrubadub.clean(str(self.params), replace_with='identifier')
+            else:
+                safe_params = str(self.params)  # Fallback if scrubadub not available
 
             logger.error(
                 f"Job failed: {self.JOB_NAME} (ID: {self.job_id}, "
