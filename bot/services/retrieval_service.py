@@ -32,8 +32,8 @@ class RetrievalService:
     async def retrieve_context(
         self,
         query: str,
-        vector_service,
-        embedding_service,
+        vector_service: object,
+        embedding_service: object,
         conversation_history: list[dict] | None = None,
         user_id: str | None = None,
     ) -> list[ContextChunk]:

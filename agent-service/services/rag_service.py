@@ -211,7 +211,7 @@ class RAGService:
         user_id: str | None = None,
         document_content: str | None = None,
         document_filename: str | None = None,
-        conversation_cache=None,
+        conversation_cache: object | None = None,
     ) -> str:
         """
         Generate a response using RAG or direct LLM.

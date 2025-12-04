@@ -99,7 +99,7 @@ class HealthChecker:
             }
         )
 
-    async def readiness_check(self, request):
+    async def readiness_check(self, request: web.Request) -> web.Response:
         """Readiness check - can the service handle requests?"""
         checks = {}
         all_healthy = True
@@ -293,7 +293,7 @@ class HealthChecker:
         status_code = 200 if all_healthy else 503
         return web.json_response(response_data, status=status_code)
 
-    async def metrics(self, request):
+    async def metrics(self, request: web.Request) -> web.Response:
         """Basic metrics endpoint (JSON format)"""
         uptime = datetime.now(UTC) - self.start_time
 
@@ -626,7 +626,7 @@ class HealthChecker:
             logger.error(f"Error getting error metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def services_health(self, request):
+    async def services_health(self, request: web.Request) -> web.Response:
         """Get health status of all services."""
         import aiohttp
 

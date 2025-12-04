@@ -9,7 +9,12 @@ from utils.errors import handle_error
 logger = logging.getLogger(__name__)
 
 
-async def register_handlers(app, slack_service, llm_service, conversation_cache=None):
+async def register_handlers(
+    app: object,
+    slack_service: SlackService,
+    llm_service: LLMService,
+    conversation_cache: object | None = None,
+) -> None:
     """Register all event handlers with the Slack app"""
 
     @app.event("assistant_thread_started")
