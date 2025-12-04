@@ -1,15 +1,16 @@
 """
-Comprehensive Behavior Test Suite - Thorough validation of all system behaviors.
+Behavior Test Suite - Validation of all system behaviors.
 
-This is NOT a quick test - it's comprehensive and covers all major functionality.
-Run this to replace manual testing before releases.
+Tests real integrations with Slack, vector DB, LLM, agents, etc.
+Covers all major functionality to replace manual testing.
 
 Usage:
-    pytest tests/smoke/test_comprehensive_behaviors.py -v -s --tb=short
-    pytest tests/smoke/test_comprehensive_behaviors.py -v -s -k "slack"  # Only Slack tests
+    make test-behaviors
+    pytest tests/smoke/test_behaviors.py -v -s --tb=short
+    pytest tests/smoke/test_behaviors.py -v -s -k "slack"  # Only Slack tests
 
     # With real Slack:
-    E2E_USE_REAL_SLACK=true E2E_SLACK_CHANNEL=C123 pytest tests/smoke/test_comprehensive_behaviors.py -v -s
+    E2E_USE_REAL_SLACK=true E2E_SLACK_CHANNEL=C123 pytest tests/smoke/test_behaviors.py -v -s
 """
 import asyncio
 import os
@@ -35,7 +36,7 @@ sys.path.insert(0, str(ROOT_DIR / "agent-service"))
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_all_agents_discoverable():
     """Verify all agents are discoverable and have proper metadata."""
@@ -65,7 +66,7 @@ async def test_all_agents_discoverable():
             pytest.skip(f"Agent service not running at {agent_url}")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "agent_name,test_query,expected_keywords",
@@ -117,7 +118,7 @@ async def test_agent_execution(agent_name, test_query, expected_keywords):
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_slack_auth_and_bot_info():
     """Test Slack authentication and bot info retrieval."""
@@ -138,7 +139,7 @@ async def test_slack_auth_and_bot_info():
     print(f"   Team: {auth['team']}")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_slack_list_channels():
     """Test listing Slack channels bot has access to."""
@@ -158,7 +159,7 @@ async def test_slack_list_channels():
         print(f"   - {ch['name']} ({ch['id']})")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_slack_send_and_delete_message():
     """Test sending and deleting messages (real Slack if configured)."""
@@ -193,7 +194,7 @@ async def test_slack_send_and_delete_message():
     print(f"   Deleted message successfully")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_slack_thread_creation():
     """Test creating threaded messages."""
@@ -228,7 +229,7 @@ async def test_slack_thread_creation():
     print(f"   Cleaned up thread")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_slack_reactions():
     """Test adding reactions to messages."""
@@ -262,7 +263,7 @@ async def test_slack_reactions():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_vector_db_create_temp_collection():
     """Test creating and deleting a temporary collection."""
@@ -318,7 +319,7 @@ async def test_vector_db_create_temp_collection():
         await client.close()
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_vector_db_bulk_operations():
     """Test bulk insert and search operations."""
@@ -369,7 +370,7 @@ async def test_vector_db_bulk_operations():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_llm_different_models():
     """Test LLM with different model configurations."""
@@ -398,7 +399,7 @@ async def test_llm_different_models():
         print(f"   Response: {response.choices[0].message.content}")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_llm_streaming():
     """Test LLM streaming responses."""
@@ -429,7 +430,7 @@ async def test_llm_streaming():
     print(f"   Full response: {full_response[:100]}")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_llm_function_calling():
     """Test LLM function/tool calling."""
@@ -476,7 +477,7 @@ async def test_llm_function_calling():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_rag_full_pipeline():
     """Test complete RAG pipeline: query → retrieve → generate."""
@@ -515,7 +516,7 @@ async def test_rag_full_pipeline():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_cache_operations():
     """Test Redis cache operations."""
@@ -550,7 +551,7 @@ async def test_cache_operations():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_error_handling_invalid_agent():
     """Test error handling for invalid agent invocation."""
@@ -573,7 +574,7 @@ async def test_error_handling_invalid_agent():
             pytest.skip(f"Agent service not running at {agent_url}")
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_error_handling_llm_failure():
     """Test error handling when LLM fails."""
@@ -605,7 +606,7 @@ async def test_error_handling_llm_failure():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 @pytest.mark.asyncio
 async def test_performance_simple_query():
     """Test response time for simple query."""
@@ -637,7 +638,7 @@ async def test_performance_simple_query():
 # ============================================================================
 
 
-@pytest.mark.comprehensive
+@pytest.mark.behavior
 def test_comprehensive_suite_summary():
     """Display comprehensive test summary."""
     print("\n" + "=" * 80)

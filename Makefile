@@ -657,25 +657,12 @@ test-control-plane: $(VENV)
 	@echo "$(BLUE)🧪 Running control plane tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)No tests yet$(RESET)"
 
-# Smoke and comprehensive test targets
-test-smoke: $(VENV)
-	@echo "$(BLUE)🧪 Running smoke test suite (quick validation)...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/smoke/test_smoke_suite.py -v -s --tb=short
-	@echo "$(GREEN)✅ Smoke tests complete!$(RESET)"
-
-test-e2e: $(VENV)
-	@echo "$(BLUE)🎯 Running end-to-end test suite...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/smoke/test_end_to_end.py -v -s --tb=short -m e2e
-	@echo "$(GREEN)✅ E2E tests complete!$(RESET)"
-
-test-comprehensive: $(VENV)
-	@echo "$(BLUE)🔬 Running comprehensive behavior test suite...$(RESET)"
+# Behavior test suite
+test-behaviors: $(VENV)
+	@echo "$(BLUE)🔬 Running behavior test suite...$(RESET)"
 	@echo "$(YELLOW)⚠️  This will take several minutes and tests real integrations$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/smoke/test_comprehensive_behaviors.py -v -s --tb=short -m comprehensive
-	@echo "$(GREEN)✅ Comprehensive tests complete!$(RESET)"
-
-test-all-smoke: test-smoke test-e2e test-comprehensive
-	@echo "$(GREEN)🎉 All smoke and E2E tests passed!$(RESET)"
+	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/smoke/test_behaviors.py -v -s --tb=short
+	@echo "$(GREEN)✅ Behavior tests complete!$(RESET)"
 
 # Help for test targets
-.PHONY: test-smoke test-e2e test-comprehensive test-all-smoke
+.PHONY: test-behaviors
