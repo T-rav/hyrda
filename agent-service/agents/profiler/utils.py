@@ -243,137 +243,110 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig) -> str | None
     return None
 
 
-async def format_research_context(
-    research_brief: str,
-    notes: list[str],
-    profile_type: str,
-    max_sources: int = 25,
-) -> str:
-    """Format research context for final report generation.
-
-    Extracts all sources from individual research notes and creates a consolidated
-    global source list, renumbering citations throughout. Limits sources to top N
-    to fit within token budgets.
+def _extract_sources_from_note(
+    note: str,
+    global_sources: list[tuple[str, str]],
+    source_url_to_global_num: dict[str, int],
+) -> tuple[str, dict[int, int]]:
+    """Extract sources from a single note and map to global citations.
 
     Args:
-        research_brief: Original research plan
-        notes: List of compressed research findings
-        profile_type: Type of profile (company, employee, project)
-        max_sources: Maximum number of sources to include (default 25)
+        note: Research note text
+        global_sources: Global list of (url, description) tuples (modified in place)
+        source_url_to_global_num: Mapping of URL to global citation number (modified in place)
 
     Returns:
-        Formatted context string with global source numbering
+        Tuple of (note_content, local_to_global_mapping)
     """
     import re
 
-    # Extract all sources from all notes
-    global_sources = []  # List of (url, description) tuples
-    source_url_to_global_num = {}  # Map URL -> global citation number
-    renumbered_notes = []
+    sources_match = re.search(
+        r"### Sources\s*\n(.*?)(?=\n###|\n##|$)", note, re.DOTALL
+    )
 
-    for note in notes:
-        # Find ### Sources section in this note
-        sources_match = re.search(
-            r"### Sources\s*\n(.*?)(?=\n###|\n##|$)", note, re.DOTALL
-        )
+    if not sources_match:
+        return note, {}
 
-        if sources_match:
-            sources_section = sources_match.group(1).strip()
-            # Split sources into main content and sources
-            note_content = note[: sources_match.start()].strip()
+    sources_section = sources_match.group(1).strip()
+    note_content = note[: sources_match.start()].strip()
 
-            # Parse individual sources from this note
-            # Format: "1. URL - description" or "1. URL"
-            source_lines = []
-            for line in sources_section.split("\n"):
-                match = re.match(r"^\d+\.\s+(.+?)(?:\s+-\s+(.+))?$", line.strip())
-                if match:
-                    url = match.group(1).strip()
-                    desc = match.group(2).strip() if match.group(2) else ""
-                    source_lines.append((url, desc))
+    # Parse individual sources: "1. URL - description" or "1. URL"
+    source_lines = []
+    for line in sources_section.split("\n"):
+        match = re.match(r"^\d+\.\s+(.+?)(?:\s+-\s+(.+))?$", line.strip())
+        if match:
+            url = match.group(1).strip()
+            desc = match.group(2).strip() if match.group(2) else ""
+            source_lines.append((url, desc))
 
-            # Map local citation numbers to global numbers
-            local_to_global = {}
-            for local_num, (url, desc) in enumerate(source_lines, 1):
-                # Check if we've seen this URL before
-                if url not in source_url_to_global_num:
-                    global_sources.append((url, desc))
-                    source_url_to_global_num[url] = len(global_sources)
+    # Map local citation numbers to global numbers
+    local_to_global = {}
+    for local_num, (url, desc) in enumerate(source_lines, 1):
+        if url not in source_url_to_global_num:
+            global_sources.append((url, desc))
+            source_url_to_global_num[url] = len(global_sources)
+        local_to_global[local_num] = source_url_to_global_num[url]
 
-                local_to_global[local_num] = source_url_to_global_num[url]
+    return note_content, local_to_global
 
-            # Renumber citations in note content
-            # Replace [1], [2], etc. with global numbers
-            # Use lambda to avoid loop variable binding issues
-            renumbered_content = re.sub(
-                r"\[(\d+)\]",
-                lambda m,
-                mapping=local_to_global: f"[{mapping.get(int(m.group(1)), int(m.group(1)))}]",
-                note_content,
-            )
-            renumbered_notes.append(renumbered_content)
+
+def _renumber_citations(note_content: str, local_to_global: dict[int, int]) -> str:
+    """Renumber citations in note content from local to global numbers."""
+    import re
+
+    return re.sub(
+        r"\[(\d+)\]",
+        lambda m: f"[{local_to_global.get(int(m.group(1)), int(m.group(1)))}]",
+        note_content,
+    )
+
+
+def _categorize_sources(
+    global_sources: list[tuple[str, str]]
+) -> tuple[list[int], list[int], list[int]]:
+    """Categorize sources into deep research, internal KB, and regular.
+
+    Returns:
+        Tuple of (deep_research_indices, internal_search_indices, regular_sources_indices)
+    """
+    deep_research_indices = []
+    internal_search_indices = []
+    regular_sources_indices = []
+
+    for i, (url, desc) in enumerate(global_sources, 1):
+        if "Deep Research Results" in desc or "perplexity" in url.lower():
+            deep_research_indices.append(i)
+        elif "Internal search" in desc or "internal knowledge" in desc.lower():
+            internal_search_indices.append(i)
         else:
-            # No sources section found, keep note as-is
-            renumbered_notes.append(note)
+            regular_sources_indices.append(i)
 
-    # Prune sources to max_sources if needed (use LLM to select top N)
-    original_source_count = len(global_sources)
-    if len(global_sources) > max_sources:
-        logger.info(
-            f"Pruning sources from {len(global_sources)} to {max_sources} using LLM selection"
-        )
+    return deep_research_indices, internal_search_indices, regular_sources_indices
 
-        # Use LLM to intelligently select top N most relevant sources
-        import json
 
-        from langchain_openai import ChatOpenAI
+def _build_source_selection_prompt(
+    global_sources: list[tuple[str, str]],
+    max_sources: int,
+    deep_research_indices: list[int],
+    internal_search_indices: list[int],
+    min_deep_research: int,
+    min_internal: int,
+) -> str:
+    """Build prompt for LLM to select top N sources."""
+    sources_text = "\n".join(
+        [
+            f"{i}. {url} - {desc} [DEEP_RESEARCH]"
+            if i in deep_research_indices
+            else (
+                f"{i}. {url} - {desc} [INTERNAL_KB]"
+                if i in internal_search_indices
+                else (f"{i}. {url} - {desc}" if desc else f"{i}. {url}")
+            )
+            for i, (url, desc) in enumerate(global_sources, 1)
+        ]
+    )
 
-        from config.settings import Settings
-
-        settings = Settings()
-
-        # Identify premium sources (deep research from Perplexity, internal knowledge base)
-        deep_research_indices = []
-        internal_search_indices = []
-        regular_sources_indices = []
-
-        for i, (url, desc) in enumerate(global_sources, 1):
-            # Check if this source came from deep_research tool (comprehensive Perplexity analysis)
-            if "Deep Research Results" in desc or "perplexity" in url.lower():
-                deep_research_indices.append(i)
-            # Check if this source came from internal_search_tool (internal knowledge base)
-            elif "Internal search" in desc or "internal knowledge" in desc.lower():
-                internal_search_indices.append(i)
-            else:
-                regular_sources_indices.append(i)
-
-        logger.info(
-            f"Source breakdown: {len(deep_research_indices)} deep research, "
-            f"{len(internal_search_indices)} internal knowledge, "
-            f"{len(regular_sources_indices)} regular"
-        )
-
-        # Build source list for LLM with markers
-        sources_text = "\n".join(
-            [
-                f"{i}. {url} - {desc} [DEEP_RESEARCH]"
-                if i in deep_research_indices
-                else (
-                    f"{i}. {url} - {desc} [INTERNAL_KB]"
-                    if i in internal_search_indices
-                    else (f"{i}. {url} - {desc}" if desc else f"{i}. {url}")
-                )
-                for i, (url, desc) in enumerate(global_sources, 1)
-            ]
-        )
-
-        # Calculate minimum premium sources to include
-        # IMPORTANT: Require at least 5 deep research, 2 internal (or all available if less)
-        # Don't let LLM skip expensive Perplexity sources
-        min_deep_research = min(5, len(deep_research_indices))
-        min_internal = min(2, len(internal_search_indices))
-
-        selection_prompt = f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
+    return f"""You are selecting the top {max_sources} most relevant and important sources from a list of {len(global_sources)} sources for a company profile report.
 
 **All Available Sources:**
 {sources_text}
@@ -406,136 +379,295 @@ Example response format:
 
 Return ONLY the JSON array, no explanation."""
 
-        try:
-            llm = ChatOpenAI(
-                model="gpt-4o-mini",
-                api_key=settings.llm.api_key,
-                temperature=0.0,
-                max_completion_tokens=200,
+
+def _enforce_minimum_premium_sources(
+    selected_indices: list[int],
+    deep_research_indices: list[int],
+    internal_search_indices: list[int],
+    min_deep_research: int,
+    min_internal: int,
+) -> list[int]:
+    """Enforce minimum premium source requirements by adding missing sources."""
+    selected = selected_indices.copy()
+
+    # Check deep research sources
+    deep_research_selected = [idx for idx in selected if idx in deep_research_indices]
+    if len(deep_research_selected) < min_deep_research:
+        logger.warning(
+            f"LLM only selected {len(deep_research_selected)}/{min_deep_research} deep research sources - forcing missing ones"
+        )
+        missing_count = min_deep_research - len(deep_research_selected)
+        unselected_deep_research = [
+            idx for idx in deep_research_indices if idx not in selected
+        ]
+        for idx in unselected_deep_research[:missing_count]:
+            selected.append(idx)
+            logger.info(f"Forced inclusion of deep research source {idx}")
+
+    # Check internal sources
+    internal_selected = [idx for idx in selected if idx in internal_search_indices]
+    if len(internal_selected) < min_internal:
+        logger.warning(
+            f"LLM only selected {len(internal_selected)}/{min_internal} internal sources - forcing missing ones"
+        )
+        missing_count = min_internal - len(internal_selected)
+        unselected_internal = [
+            idx for idx in internal_search_indices if idx not in selected
+        ]
+        for idx in unselected_internal[:missing_count]:
+            selected.append(idx)
+            logger.info(f"Forced inclusion of internal source {idx}")
+
+    return selected
+
+
+def _trim_excess_sources(
+    selected_indices: list[int],
+    max_sources: int,
+    deep_research_indices: list[int],
+    internal_search_indices: list[int],
+) -> list[int]:
+    """Trim excess sources to max_sources limit, keeping premium sources."""
+    if len(selected_indices) <= max_sources:
+        return selected_indices
+
+    logger.warning(
+        f"After forcing premium sources, have {len(selected_indices)} sources - trimming to {max_sources}"
+    )
+
+    premium_indices = set(deep_research_indices + internal_search_indices)
+    regular_selected = [idx for idx in selected_indices if idx not in premium_indices]
+    premium_selected = [idx for idx in selected_indices if idx in premium_indices]
+
+    trim_count = len(selected_indices) - max_sources
+    return premium_selected + regular_selected[: -trim_count if trim_count > 0 else None]
+
+
+async def _select_top_sources_with_llm(
+    global_sources: list[tuple[str, str]],
+    max_sources: int,
+) -> list[int]:
+    """Use LLM to intelligently select top N most relevant sources.
+
+    Returns:
+        List of selected source indices (1-indexed)
+    """
+    import json
+    import re
+
+    from langchain_openai import ChatOpenAI
+
+    from config.settings import Settings
+
+    settings = Settings()
+
+    # Categorize sources
+    deep_research_indices, internal_search_indices, regular_sources_indices = (
+        _categorize_sources(global_sources)
+    )
+
+    logger.info(
+        f"Source breakdown: {len(deep_research_indices)} deep research, "
+        f"{len(internal_search_indices)} internal knowledge, "
+        f"{len(regular_sources_indices)} regular"
+    )
+
+    # Calculate minimums
+    min_deep_research = min(5, len(deep_research_indices))
+    min_internal = min(2, len(internal_search_indices))
+
+    # Build selection prompt
+    selection_prompt = _build_source_selection_prompt(
+        global_sources,
+        max_sources,
+        deep_research_indices,
+        internal_search_indices,
+        min_deep_research,
+        min_internal,
+    )
+
+    # Get LLM selection
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        api_key=settings.llm.api_key,
+        temperature=0.0,
+        max_completion_tokens=200,
+    )
+
+    response = await llm.ainvoke(selection_prompt)
+    response_text = response.content.strip()
+
+    # Parse JSON response
+    json_match = re.search(r"```json\s*(\[.*?\])\s*```", response_text, re.DOTALL)
+    if json_match:
+        selected_indices = json.loads(json_match.group(1))
+    else:
+        selected_indices = json.loads(response_text)
+
+    logger.info(f"LLM selected {len(selected_indices)} sources: {selected_indices[:5]}...")
+
+    # Enforce minimum premium sources
+    selected_indices = _enforce_minimum_premium_sources(
+        selected_indices,
+        deep_research_indices,
+        internal_search_indices,
+        min_deep_research,
+        min_internal,
+    )
+
+    # Trim if needed
+    selected_indices = _trim_excess_sources(
+        selected_indices,
+        max_sources,
+        deep_research_indices,
+        internal_search_indices,
+    )
+
+    logger.info(f"Final selection: {len(selected_indices)} sources")
+    return selected_indices
+
+
+def _prune_sources_to_max(
+    global_sources: list[tuple[str, str]],
+    renumbered_notes: list[str],
+    max_sources: int,
+) -> tuple[list[tuple[str, str]], list[str]]:
+    """Prune sources to max_sources limit using LLM or fallback."""
+    import re
+
+    original_count = len(global_sources)
+    if len(global_sources) <= max_sources:
+        return global_sources, renumbered_notes
+
+    logger.info(
+        f"Pruning sources from {len(global_sources)} to {max_sources} using LLM selection"
+    )
+
+    try:
+        import asyncio
+
+        # Use LLM selection
+        selected_indices = asyncio.run(_select_top_sources_with_llm(global_sources, max_sources))
+
+        # Build mapping: old index -> new index
+        old_to_new = {}
+        new_sources = []
+        for new_idx, old_idx in enumerate(selected_indices, 1):
+            if 1 <= old_idx <= len(global_sources):
+                old_to_new[old_idx] = new_idx
+                new_sources.append(global_sources[old_idx - 1])
+
+        # Renumber citations in notes
+        remapped_notes = []
+        for note in renumbered_notes:
+            remapped_note = re.sub(
+                r"\[(\d+)\]",
+                lambda m: f"[{old_to_new[int(m.group(1))]}]"
+                if int(m.group(1)) in old_to_new
+                else "",
+                note,
             )
+            remapped_notes.append(remapped_note)
 
-            response = await llm.ainvoke(selection_prompt)
-            response_text = response.content.strip()
+        return new_sources, remapped_notes
 
-            # Parse JSON response
-            json_match = re.search(
-                r"```json\s*(\[.*?\])\s*```", response_text, re.DOTALL
+    except Exception as e:
+        logger.error(f"LLM source selection failed: {e}, falling back to first {max_sources}")
+
+        # Fallback: keep first N
+        pruned_sources = global_sources[:max_sources]
+        pruned_notes = []
+        for note in renumbered_notes:
+            pruned_note = re.sub(
+                r"\[(\d+)\]",
+                lambda m: (m.group(0) if int(m.group(1)) <= max_sources else ""),
+                note,
             )
-            if json_match:
-                selected_indices = json.loads(json_match.group(1))
-            else:
-                # Try to parse directly
-                selected_indices = json.loads(response_text)
+            pruned_notes.append(pruned_note)
 
-            logger.info(
-                f"LLM selected {len(selected_indices)} sources: {selected_indices[:5]}..."
-            )
+        return pruned_sources, pruned_notes
 
-            # Validate premium source inclusion
-            deep_research_selected = [
-                idx for idx in selected_indices if idx in deep_research_indices
-            ]
-            internal_selected = [
-                idx for idx in selected_indices if idx in internal_search_indices
-            ]
-            logger.info(
-                f"Premium sources selected: {len(deep_research_selected)}/{min_deep_research} deep research, "
-                f"{len(internal_selected)}/{min_internal} internal KB"
-            )
 
-            # ENFORCE MINIMUM: If LLM didn't include enough deep research sources, force them in
-            if len(deep_research_selected) < min_deep_research:
-                logger.warning(
-                    f"LLM only selected {len(deep_research_selected)}/{min_deep_research} deep research sources - forcing missing ones"
-                )
-                # Add missing deep research sources
-                missing_count = min_deep_research - len(deep_research_selected)
-                unselected_deep_research = [
-                    idx for idx in deep_research_indices if idx not in selected_indices
-                ]
-                for idx in unselected_deep_research[:missing_count]:
-                    selected_indices.append(idx)
-                    logger.info(f"Forced inclusion of deep research source {idx}")
+def _truncate_context_if_needed(context: str, max_context_chars: int) -> str:
+    """Truncate context to fit within token budget if needed."""
+    if len(context) <= max_context_chars:
+        return context
 
-            # ENFORCE MINIMUM: If LLM didn't include enough internal sources, force them in
-            if len(internal_selected) < min_internal:
-                logger.warning(
-                    f"LLM only selected {len(internal_selected)}/{min_internal} internal sources - forcing missing ones"
-                )
-                # Add missing internal sources
-                missing_count = min_internal - len(internal_selected)
-                unselected_internal = [
-                    idx
-                    for idx in internal_search_indices
-                    if idx not in selected_indices
-                ]
-                for idx in unselected_internal[:missing_count]:
-                    selected_indices.append(idx)
-                    logger.info(f"Forced inclusion of internal source {idx}")
+    logger.warning(
+        f"Context too large ({len(context)} chars ≈ {len(context) // 4} tokens). "
+        f"Truncating to fit within {max_context_chars // 4}K token budget."
+    )
 
-            # If we now have too many sources (after forcing), trim lowest priority non-premium sources
-            if len(selected_indices) > max_sources:
-                logger.warning(
-                    f"After forcing premium sources, have {len(selected_indices)} sources - trimming to {max_sources}"
-                )
-                # Keep all forced premium sources, trim regular ones
-                premium_indices = set(deep_research_indices + internal_search_indices)
-                regular_selected = [
-                    idx for idx in selected_indices if idx not in premium_indices
-                ]
-                premium_selected = [
-                    idx for idx in selected_indices if idx in premium_indices
-                ]
-                # Trim regular sources to fit
-                trim_count = len(selected_indices) - max_sources
-                selected_indices = (
-                    premium_selected
-                    + regular_selected[: -trim_count if trim_count > 0 else None]
-                )
+    # Keep header and sources, truncate notes proportionally
+    header_end = context.find("## Finding 1")
+    sources_start = context.find("\n\n---\n\n# CONSOLIDATED SOURCE LIST")
 
-            logger.info(f"Final selection: {len(selected_indices)} sources")
+    if header_end > 0 and sources_start > 0:
+        header = context[:header_end]
+        sources = context[sources_start:]
+        notes_text = context[header_end:sources_start]
 
-            # Build mapping: old index -> new index (or None if pruned)
-            old_to_new = {}
-            new_sources = []
-            for new_idx, old_idx in enumerate(selected_indices, 1):
-                if 1 <= old_idx <= len(global_sources):
-                    old_to_new[old_idx] = new_idx
-                    new_sources.append(global_sources[old_idx - 1])  # 0-indexed
+        # Calculate available space for notes
+        available_for_notes = max_context_chars - len(header) - len(sources)
 
-            global_sources = new_sources
+        if len(notes_text) > available_for_notes:
+            notes_text = notes_text[:available_for_notes]
+            # Cut at last complete sentence
+            last_period = notes_text.rfind(".\n")
+            if last_period > available_for_notes * 0.9:
+                notes_text = notes_text[: last_period + 2]
 
-            # Renumber citations in notes based on new mapping
-            remapped_notes = []
-            for note in renumbered_notes:
-                # Replace citations with new numbers or remove if pruned
-                remapped_note = re.sub(
-                    r"\[(\d+)\]",
-                    lambda m: f"[{old_to_new[int(m.group(1))]}]"
-                    if int(m.group(1)) in old_to_new
-                    else "",
-                    note,
-                )
-                remapped_notes.append(remapped_note)
-            renumbered_notes = remapped_notes
+            notes_text += "\n\n[... additional research notes truncated to fit context window ...]\n\n"
+            logger.info(f"Truncated notes to {len(notes_text)} chars")
 
-        except Exception as e:
-            logger.error(
-                f"LLM source selection failed: {e}, falling back to first {max_sources}"
-            )
-            # Fallback: keep first N
-            global_sources = global_sources[:max_sources]
+        return header + notes_text + sources
 
-            # Remove citations beyond max_sources
-            pruned_notes = []
-            for note in renumbered_notes:
-                pruned_note = re.sub(
-                    r"\[(\d+)\]",
-                    lambda m: (m.group(0) if int(m.group(1)) <= max_sources else ""),
-                    note,
-                )
-                pruned_notes.append(pruned_note)
-            renumbered_notes = pruned_notes
+    return context
+
+
+async def format_research_context(
+    research_brief: str,
+    notes: list[str],
+    profile_type: str,
+    max_sources: int = 25,
+) -> str:
+    """Format research context for final report generation.
+
+    Extracts all sources from individual research notes and creates a consolidated
+    global source list, renumbering citations throughout. Limits sources to top N
+    to fit within token budgets.
+
+    Args:
+        research_brief: Original research plan
+        notes: List of compressed research findings
+        profile_type: Type of profile (company, employee, project)
+        max_sources: Maximum number of sources to include (default 25)
+
+    Returns:
+        Formatted context string with global source numbering
+    """
+
+    # Extract all sources from all notes
+    global_sources: list[tuple[str, str]] = []
+    source_url_to_global_num: dict[str, int] = {}
+    renumbered_notes = []
+
+    for note in notes:
+        note_content, local_to_global = _extract_sources_from_note(
+            note, global_sources, source_url_to_global_num
+        )
+
+        if local_to_global:
+            renumbered_content = _renumber_citations(note_content, local_to_global)
+            renumbered_notes.append(renumbered_content)
+        else:
+            renumbered_notes.append(note)
+
+    # Prune sources to max_sources if needed
+    original_source_count = len(global_sources)
+    global_sources, renumbered_notes = _prune_sources_to_max(
+        global_sources, renumbered_notes, max_sources
+    )
 
     # Build context with renumbered notes
     context = "# Profile Research Context\n\n"
@@ -569,45 +701,9 @@ Return ONLY the JSON array, no explanation."""
             f"Formatted context: {len(renumbered_notes)} notes, {len(global_sources)} unique sources"
         )
 
-    # Check context size and truncate if needed
-    # Gemini 2.5 Pro: 1M input + 64K output = use ~900K for context (100K buffer)
-    # Rough estimate: 1 token ≈ 4 characters
-    max_context_chars = 900000 * 4  # ~3.6M characters for 900K tokens
-
-    if len(context) > max_context_chars:
-        logger.warning(
-            f"Context too large ({len(context)} chars ≈ {len(context) // 4} tokens). "
-            f"Truncating to fit within {max_context_chars // 4}K token budget."
-        )
-
-        # Keep header and sources, truncate notes proportionally
-        header_end = context.find("## Finding 1")
-        sources_start = context.find("\n\n---\n\n# CONSOLIDATED SOURCE LIST")
-
-        if header_end > 0 and sources_start > 0:
-            header = context[:header_end]
-            sources = context[sources_start:]
-            notes_text = context[header_end:sources_start]
-
-            # Calculate how much space we have for notes
-            available_for_notes = max_context_chars - len(header) - len(sources)
-
-            if len(notes_text) > available_for_notes:
-                # Truncate notes_text
-                notes_text = notes_text[:available_for_notes]
-                # Cut at last complete sentence
-                last_period = notes_text.rfind(".\n")
-                if (
-                    last_period > available_for_notes * 0.9
-                ):  # Only cut if we find a period in last 10%
-                    notes_text = notes_text[: last_period + 2]
-
-                notes_text += "\n\n[... additional research notes truncated to fit context window ...]\n\n"
-                logger.info(
-                    f"Truncated notes from {context[header_end:sources_start].__len__()} to {len(notes_text)} chars"
-                )
-
-            context = header + notes_text + sources
+    # Truncate context if needed to fit within token budget
+    max_context_chars = 900000 * 4  # ~3.6M chars for 900K tokens
+    context = _truncate_context_if_needed(context, max_context_chars)
 
     logger.info(
         f"Final context size: {len(context)} chars ≈ {len(context) // 4} tokens"
