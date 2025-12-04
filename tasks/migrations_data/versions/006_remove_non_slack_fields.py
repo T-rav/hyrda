@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Remove name, title, department, email fields from slack_users."""
     # Drop indexes first
     op.drop_index("ix_slack_users_name", table_name="slack_users")
@@ -28,7 +28,7 @@ def upgrade():
     op.drop_column("slack_users", "email")
 
 
-def downgrade():
+def downgrade() -> None:
     """Restore name, title, department, email fields."""
     import sqlalchemy as sa
 

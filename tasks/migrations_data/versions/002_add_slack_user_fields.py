@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Add name, title, department, is_admin, is_bot fields to slack_users."""
     # Add missing columns
     op.add_column("slack_users", sa.Column("name", sa.String(255), nullable=True))
@@ -37,7 +37,7 @@ def upgrade():
     op.create_index("ix_slack_users_name", "slack_users", ["name"])
 
 
-def downgrade():
+def downgrade() -> None:
     """Remove added fields."""
     op.drop_index("ix_slack_users_name", table_name="slack_users")
     op.drop_index("ix_slack_users_email", table_name="slack_users")

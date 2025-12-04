@@ -157,7 +157,7 @@ def register_routers(app: FastAPI) -> None:
 app = create_app()
 
 
-def main():
+def main() -> None:
     """Main entry point."""
     import uvicorn
 

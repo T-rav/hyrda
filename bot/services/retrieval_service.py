@@ -15,6 +15,92 @@ from .query_rewriter import AdaptiveQueryRewriter
 
 logger = logging.getLogger(__name__)
 
+# Common stop words to filter out from entity extraction
+STOP_WORDS = {
+    # Articles, prepositions, conjunctions
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    # Common verbs
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    # Question words
+    "what",
+    "when",
+    "where",
+    "why",
+    "how",
+    "who",
+    "which",
+    "whose",
+    # Pronouns
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "them",
+    "this",
+    "that",
+    "these",
+    "those",
+    # Common adjectives/adverbs
+    "any",
+    "some",
+    "all",
+    "many",
+    "much",
+    "more",
+    "most",
+    "very",
+    "really",
+    "quite",
+    # Modal verbs
+    "can",
+    "could",
+    "will",
+    "would",
+    "should",
+    "shall",
+    "may",
+    "might",
+    "must",
+    # Other common filler words
+    "there",
+    "here",
+    "then",
+    "than",
+    "so",
+    "just",
+    "only",
+    "also",
+    "even",
+    "still",
+}
+
 
 class RetrievalService:
     """Service for retrieving and processing context from Qdrant vector store"""
@@ -193,97 +279,11 @@ class RetrievalService:
         Returns:
             Set of entity terms (all significant words from query)
         """
-        # Define comprehensive stop words to filter out
-        stop_words = {
-            # Articles, prepositions, conjunctions
-            "a",
-            "an",
-            "the",
-            "and",
-            "or",
-            "but",
-            "in",
-            "on",
-            "at",
-            "to",
-            "for",
-            "of",
-            "with",
-            "by",
-            # Common verbs
-            "is",
-            "are",
-            "was",
-            "were",
-            "be",
-            "been",
-            "have",
-            "has",
-            "had",
-            "do",
-            "does",
-            "did",
-            # Question words
-            "what",
-            "when",
-            "where",
-            "why",
-            "how",
-            "who",
-            "which",
-            "whose",
-            # Pronouns
-            "i",
-            "you",
-            "he",
-            "she",
-            "it",
-            "we",
-            "they",
-            "them",
-            "this",
-            "that",
-            "these",
-            "those",
-            # Common adjectives/adverbs
-            "any",
-            "some",
-            "all",
-            "many",
-            "much",
-            "more",
-            "most",
-            "very",
-            "really",
-            "quite",
-            # Modal verbs
-            "can",
-            "could",
-            "will",
-            "would",
-            "should",
-            "shall",
-            "may",
-            "might",
-            "must",
-            # Other common filler words
-            "there",
-            "here",
-            "then",
-            "than",
-            "so",
-            "just",
-            "only",
-            "also",
-            "even",
-            "still",
-        }
-
         # Extract all words (2+ characters, alphanumeric)
         words = re.findall(r"\b[a-zA-Z0-9]{2,}\b", query.lower())
 
         # Filter out stop words and keep everything else as entities
-        entities = {word for word in words if word not in stop_words}
+        entities = {word for word in words if word not in STOP_WORDS}
 
         logger.debug(f"Extracted entities from '{query}': {entities}")
         return entities

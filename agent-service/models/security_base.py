@@ -23,7 +23,7 @@ _security_engine = None
 _SecuritySessionLocal = None
 
 
-def init_security_db(database_url: str):
+def init_security_db(database_url: str) -> None:
     """Initialize security database connection with connection pooling."""
     global _security_engine, _SecuritySessionLocal  # noqa: PLW0603
     _security_engine = create_engine(

@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Create portal_records table."""
     op.create_table(
         "portal_records",
@@ -85,7 +85,7 @@ def upgrade():
     op.create_index("idx_portal_pinecone_id", "portal_records", ["pinecone_id"])
 
 
-def downgrade():
+def downgrade() -> None:
     """Drop portal_records table."""
     op.drop_index("idx_portal_pinecone_id", table_name="portal_records")
     op.drop_index("idx_portal_data_type", table_name="portal_records")

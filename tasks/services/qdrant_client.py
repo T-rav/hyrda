@@ -124,7 +124,7 @@ class QdrantClient:
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
 
-            def upsert_batch(b=batch):
+            def upsert_batch(b: Any = batch) -> Any:
                 """Upsert Batch."""
                 return self.client.upsert(
                     collection_name=self.collection_name,

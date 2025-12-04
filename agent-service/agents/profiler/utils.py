@@ -52,7 +52,7 @@ class _InternalSearchToolSingleton:
             return None
 
 
-def internal_search_tool():
+def internal_search_tool() -> Any:
     """Get internal search tool singleton instance.
 
     The tool searches the internal knowledge base (vector database) for existing information.
@@ -92,7 +92,7 @@ class _SECQueryToolSingleton:
         return cls._instance
 
 
-def sec_query_tool():
+def sec_query_tool() -> Any:
     """Get SEC query tool singleton instance.
 
     The tool fetches and searches SEC filings on-demand (10-K annual reports, 8-K events):

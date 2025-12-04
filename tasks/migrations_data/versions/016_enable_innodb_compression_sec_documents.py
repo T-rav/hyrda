@@ -18,7 +18,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Enable InnoDB compression on sec_documents_data table."""
     # Enable compression with 8KB block size (good balance for text data)
     op.execute(
@@ -30,7 +30,7 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     """Disable InnoDB compression on sec_documents_data table."""
     # Revert to dynamic row format (InnoDB default)
     op.execute(

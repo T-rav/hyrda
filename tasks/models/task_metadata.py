@@ -1,5 +1,7 @@
 """Task metadata model for storing custom task names and descriptions."""
 
+from typing import Any
+
 from sqlalchemy import Column, DateTime, String, func
 from sqlalchemy.orm import declarative_base
 
@@ -16,7 +18,7 @@ class TaskMetadata(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "job_id": self.job_id,

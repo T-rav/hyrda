@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Create google_drive_documents_data table for tracking ingested documents."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
@@ -159,7 +159,7 @@ def upgrade():
         print("✅ Created google_drive_documents_data table with indexes")
 
 
-def downgrade():
+def downgrade() -> None:
     """Drop google_drive_documents_data table."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)

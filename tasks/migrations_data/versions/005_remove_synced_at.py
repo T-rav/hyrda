@@ -15,12 +15,12 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Remove synced_at column."""
     op.drop_column("metric_records", "synced_at")
 
 
-def downgrade():
+def downgrade() -> None:
     """Restore synced_at column."""
     import sqlalchemy as sa
 

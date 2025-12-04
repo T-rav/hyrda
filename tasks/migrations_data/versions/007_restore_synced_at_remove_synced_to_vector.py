@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Restore synced_at column and remove synced_to_vector."""
     # Remove synced_to_vector flag
     op.drop_column("metric_records", "synced_to_vector")
@@ -34,7 +34,7 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     """Remove synced_at and restore synced_to_vector."""
     # Remove synced_at
     op.drop_column("metric_records", "synced_at")

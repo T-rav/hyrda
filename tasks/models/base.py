@@ -26,7 +26,7 @@ _data_engine = None
 _DataSessionLocal = None
 
 
-def init_db(database_url: str):
+def init_db(database_url: str) -> None:
     """Initialize database connection with connection pooling."""
     global _engine, _SessionLocal
     _engine = create_engine(
@@ -39,7 +39,7 @@ def init_db(database_url: str):
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
-def init_data_db(database_url: str):
+def init_data_db(database_url: str) -> None:
     """Initialize data database connection with connection pooling."""
     global _data_engine, _DataSessionLocal
     _data_engine = create_engine(

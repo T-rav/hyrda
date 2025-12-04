@@ -55,7 +55,7 @@ class MetricSyncJob(BaseJob):
         # Get data database URL from settings (uses sync driver for database writes)
         self.data_db_url = self.settings.data_database_url
 
-    def _get_data_session(self):
+    def _get_data_session(self) -> Any:
         """Create database session for insightmesh_data database."""
         data_engine = create_engine(self.data_db_url)
         DataSession = sessionmaker(bind=data_engine)

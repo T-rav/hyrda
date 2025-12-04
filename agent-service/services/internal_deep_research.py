@@ -390,7 +390,10 @@ async def get_internal_deep_research_service() -> InternalDeepResearchService | 
 
 # Factory function
 def create_internal_deep_research_service(
-    llm_service, retrieval_service, vector_service, embedding_service
+    llm_service: Any,
+    retrieval_service: Any,
+    vector_service: Any,
+    embedding_service: Any,
 ) -> InternalDeepResearchService:
     """
     Create internal deep research service instance.

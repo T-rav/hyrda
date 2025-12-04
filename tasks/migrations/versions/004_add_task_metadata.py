@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     """Add task_metadata table for storing custom task names."""
     op.create_table(
         "task_metadata",
@@ -36,6 +36,6 @@ def upgrade():
     )
 
 
-def downgrade():
+def downgrade() -> None:
     """Remove task_metadata table."""
     op.drop_table("task_metadata")

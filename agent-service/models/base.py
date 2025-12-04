@@ -23,7 +23,7 @@ _engine = None
 _SessionLocal = None
 
 
-def init_db(database_url: str):
+def init_db(database_url: str) -> None:
     """Initialize database connection with connection pooling."""
     global _engine, _SessionLocal
     _engine = create_engine(

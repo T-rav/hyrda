@@ -11,6 +11,7 @@ Main service that coordinates the ingestion process by:
 import logging
 import uuid
 from datetime import datetime
+from typing import Any
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
@@ -50,11 +51,11 @@ class IngestionOrchestrator:
 
     def set_services(
         self,
-        vector_service,
-        embedding_service=None,
-        llm_service=None,
-        enable_contextual_retrieval=False,
-    ):
+        vector_service: Any,
+        embedding_service: Any = None,
+        llm_service: Any = None,
+        enable_contextual_retrieval: bool = False,
+    ) -> None:
         """
         Set the vector database and embedding services.
 
