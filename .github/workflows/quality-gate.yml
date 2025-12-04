@@ -48,7 +48,21 @@ jobs:
           fi
 
           # Use npx to run claude-code in non-interactive mode (--print)
-          npx @anthropic-ai/claude-code --print "Run Forge quality audit in report-only mode. Generate quality report with violation counts (Critical P0 and Warning P1). Save report to .claude/audit-reports/ci-report.md. Exit 0 if Critical violations == 0 AND Warning violations == 0. Exit 1 if any violations found. Focus on number of issues to fix, not quality score."
+          if ! npx @anthropic-ai/claude-code --print "Run Forge quality audit in report-only mode. Generate quality report with violation counts (Critical P0 and Warning P1). Save report to .claude/audit-reports/ci-report.md. Exit 0 if Critical violations == 0 AND Warning violations == 0. Exit 1 if any violations found. Focus on number of issues to fix, not quality score."; then
+            EXIT_CODE=$?
+            # Check if it's an environment error or quality failure
+            if [ ! -f ".claude/audit-reports/ci-report.md" ]; then
+              echo "❌ ERROR: Claude Code failed to run - likely environment issue"
+              echo "Exit code: $EXIT_CODE"
+              echo "This is NOT a quality issue - check CI logs for setup errors"
+              exit 2  # Different exit code for environment errors
+            else
+              echo "❌ Quality gate failed - violations found"
+              echo "See .claude/audit-reports/ci-report.md for details"
+              exit 1  # Quality failure
+            fi
+          fi
+          echo "✅ Quality gate passed - no violations found"
 
       - name: Post audit results as comment
         if: github.event_name == 'pull_request'
