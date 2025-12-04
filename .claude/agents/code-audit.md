@@ -563,10 +563,9 @@ MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5MB
 
 ### Phase 1: Discovery
 1. Find all production Python files:
-   - `bot/**/*.py` (exclude tests/)
-   - `tasks/**/*.py` (exclude tests/)
-   - `control_plane/**/*.py` (exclude tests/)
-   - `agent-service/**/*.py` (exclude tests/)
+   - `**/*.py` (exclude tests/ directories)
+   - Focus on services, models, APIs, utilities
+   - Skip test files, migrations, generated code
 
 2. Categorize files:
    - Services (services/*.py)
@@ -601,17 +600,17 @@ For each file:
 ## Violations by Severity
 
 ### Critical (Fix Immediately)
-1. base_job.py:25 - Mutable default argument (REQUIRED_PARAMS: list = [])
-2. auth_service.py:142 - Function too large (150 lines)
+1. module.py:line - Mutable default argument (PARAM: list = [])
+2. service.py:line - Function too large (>100 lines)
 
 ### Warning (Fix Soon)
-1. api/jobs.py:75 - Missing type hints
-2. models/task.py:20 - Missing docstring
-3. services/llm.py:200 - Broad exception handling without logging
+1. module.py:line - Missing type hints
+2. model.py:line - Missing docstring
+3. service.py:line - Broad exception handling without logging
 
 ### Suggestion (Consider)
-1. utils/helpers.py:45 - Magic number 3600 (use named constant)
-2. services/rag.py:120 - Function could be split (55 lines)
+1. module.py:line - Magic number (use named constant)
+2. service.py:line - Function could be split (30-50 lines)
 
 ## Priority Mapping for Action Planning
 
@@ -681,7 +680,7 @@ Generate detailed report with severity levels and metrics.
 
 ### Quick Audit (Specific Service)
 ```
-Audit [bot|tasks|control_plane|agent-service] production code only.
+Audit [service_name] production code only.
 Focus on critical violations.
 ```
 
@@ -728,9 +727,9 @@ After running the agent and applying recommendations:
 - Type hint checker integration
 - Pattern matching for anti-patterns
 
-**Exemplar Files** (Learn from these):
-- `bot/config/settings.py` - Type hints & Pydantic
-- `tasks/services/encryption_service.py` - Error handling & docstrings
-- `tasks/services/gdrive/google_drive_client.py` - SRP & delegation
-- `bot/utils/logging.py` - Structured logging
-- `agent-service/services/container.py` - DI patterns
+**Exemplar Files** (Find and learn from these):
+- Config/settings modules - Type hints & validation
+- Service modules with good error handling - Error handling & docstrings
+- Well-structured API clients - SRP & delegation
+- Logging utilities - Structured logging
+- Dependency injection containers - DI patterns

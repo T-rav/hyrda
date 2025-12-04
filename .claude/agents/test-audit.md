@@ -313,18 +313,18 @@ Create structured report:
 ## Violations by Severity
 
 ### Critical (Fix Now)
-1. test_agent_client.py:387 - Multiple unrelated assertions (8 assertions)
-2. test_profile_agent.py:76 - Over-mocking internal logic
-3. test_api_jobs.py:142 - Incomplete mock setup
+1. test_file.py:line - Multiple unrelated assertions (N assertions)
+2. test_file.py:line - Over-mocking internal logic
+3. test_file.py:line - Incomplete mock setup
 
 ### Warning (Fix Soon)
-1. test_user_sync.py:45 - Unclear test name "test_1"
-2. test_llm_service.py:120 - Missing 3As structure
-3. test_auth.py:200 - Repetitive object creation (suggest factory)
+1. test_file.py:line - Unclear test name "test_1"
+2. test_file.py:line - Missing 3As structure
+3. test_file.py:line - Repetitive object creation (suggest factory)
 
 ### Suggestion (Consider)
-1. test_slack_service.py - Could benefit from builder pattern
-2. test_event_handlers.py - Consider splitting large test file
+1. test_file.py - Could benefit from builder pattern
+2. test_file.py - Consider splitting large test file
 
 ## Priority Mapping for Action Planning
 
@@ -362,12 +362,12 @@ Create structured report:
 ## Opportunities for Improvement
 
 ### Missing Factories
-1. UserFactory - Used in 15 tests with identical setup
-2. PermissionGroupFactory - Repeated in 8 tests
+1. EntityFactory - Used in N tests with identical setup
+2. ModelFactory - Repeated in N tests
 
 ### Missing Builders
-1. RequestBuilder - Complex HTTP request setup in 10 tests
-2. ContextBuilder - Context dict creation in 20 tests
+1. RequestBuilder - Complex request setup in N tests
+2. ContextBuilder - Context dict creation in N tests
 
 ## Detailed Findings
 
@@ -466,8 +466,8 @@ For programmatic analysis:
   },
   "violations": [
     {
-      "file": "test_agent_client.py",
-      "line": 387,
+      "file": "test_file.py",
+      "line": 123,
       "severity": "critical",
       "type": "multiple_assertions",
       "count": 8,
