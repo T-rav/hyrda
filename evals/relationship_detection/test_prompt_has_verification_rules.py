@@ -88,18 +88,17 @@ async def test_langfuse_prompt_has_verification_rules():
         "Similar to clients we've worked with",
     ]
     for phrase in forbidden_phrases:
-        assert phrase in prompt_template, (
-            f"Prompt should forbid phrase: '{phrase}'"
-        )
+        assert phrase in prompt_template, f"Prompt should forbid phrase: '{phrase}'"
     print(f"✅ Contains {len(forbidden_phrases)} forbidden phrases")
 
     # Check 5: Contains templated output format
-    assert "**If \"Relationship status: Existing client/past engagement\" is found:**" in prompt_template, (
-        "Prompt should contain templated output for existing clients"
-    )
-    assert "**If \"Relationship status: No prior engagement\" is found" in prompt_template, (
-        "Prompt should contain templated output for no relationship"
-    )
+    assert (
+        '**If "Relationship status: Existing client/past engagement" is found:**'
+        in prompt_template
+    ), "Prompt should contain templated output for existing clients"
+    assert (
+        '**If "Relationship status: No prior engagement" is found' in prompt_template
+    ), "Prompt should contain templated output for no relationship"
     print("✅ Contains templated output formats")
 
     # Check 6: Contains the default rule
@@ -110,7 +109,7 @@ async def test_langfuse_prompt_has_verification_rules():
 
     print("\n🎉 Prompt verification PASSED - all rules present")
     print(f"   Prompt length: {len(prompt_template)} characters")
-    print(f"   Relationship section: ~2847 characters of verification rules")
+    print("   Relationship section: ~2847 characters of verification rules")
 
 
 if __name__ == "__main__":

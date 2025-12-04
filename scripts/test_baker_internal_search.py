@@ -2,7 +2,6 @@
 """Test internal search tool for Baker College to debug false positive."""
 
 import asyncio
-import os
 import sys
 from pathlib import Path
 

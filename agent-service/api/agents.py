@@ -201,6 +201,7 @@ async def stream_agent(agent_name: str, request: AgentInvokeRequest):
     if not agent_class:
 
         async def error_generator():
+            """Error Generator."""
             yield f"data: ERROR: Agent '{agent_name}' is not available (class not loaded)\n\n"
 
         return StreamingResponse(

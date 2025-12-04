@@ -4,8 +4,9 @@ Tests the refactored helper methods extracted from the giant run() method.
 Ensures each helper method works correctly in isolation.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from agents.profile_agent import ProfileAgent
 
@@ -75,7 +76,6 @@ class TestProfileAgentHelpers:
         query = "Tell me about Tesla's AI capabilities"
 
         # Mock the detection functions
-        from agents.profiler.utils import detect_profile_type, extract_focus_area
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(
@@ -368,9 +368,7 @@ class TestProfileAgentHelpers:
         node_order = agent._get_node_order()
 
         # Act
-        next_node = agent._determine_next_node(
-            "quality_control", False, {}, node_order
-        )
+        next_node = agent._determine_next_node("quality_control", False, {}, node_order)
 
         # Assert
         assert next_node is None

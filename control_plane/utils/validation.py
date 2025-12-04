@@ -49,7 +49,10 @@ def validate_agent_name(name: str | None) -> tuple[bool, str | None]:
 
     # Only lowercase alphanumeric, hyphens, underscores
     if not re.match(r"^[a-z][a-z0-9_-]*$", name):
-        return False, "Agent name must be lowercase alphanumeric with hyphens or underscores only"
+        return (
+            False,
+            "Agent name must be lowercase alphanumeric with hyphens or underscores only",
+        )
 
     # No consecutive special characters
     if "--" in name or "__" in name or "-_" in name or "_-" in name:
@@ -100,7 +103,10 @@ def validate_group_name(name: str | None) -> tuple[bool, str | None]:
 
     # Only lowercase alphanumeric, hyphens, underscores
     if not re.match(r"^[a-z][a-z0-9_-]*$", name):
-        return False, "Group name must be lowercase alphanumeric with hyphens or underscores only"
+        return (
+            False,
+            "Group name must be lowercase alphanumeric with hyphens or underscores only",
+        )
 
     # No consecutive special characters
     if "--" in name or "__" in name or "-_" in name or "_-" in name:
@@ -109,7 +115,9 @@ def validate_group_name(name: str | None) -> tuple[bool, str | None]:
     return True, None
 
 
-def validate_display_name(name: str | None, max_length: int = 100) -> tuple[bool, str | None]:
+def validate_display_name(
+    name: str | None, max_length: int = 100
+) -> tuple[bool, str | None]:
     """Validate display name format and constraints.
 
     Rules:
@@ -268,6 +276,8 @@ def sanitize_text_input(text: str | None, max_length: int = 1000) -> str:
     sanitized = sanitized[:max_length]
 
     # Remove any remaining control characters
-    sanitized = "".join(char for char in sanitized if ord(char) >= 32 or char in "\n\r\t")
+    sanitized = "".join(
+        char for char in sanitized if ord(char) >= 32 or char in "\n\r\t"
+    )
 
     return sanitized.strip()

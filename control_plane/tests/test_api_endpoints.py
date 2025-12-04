@@ -27,7 +27,14 @@ if str(control_plane_dir) not in sys.path:
 
 # Now import from control_plane - but create tables first
 from models.base import Base
-from models import PermissionGroup, UserGroup, AgentGroupPermission, AgentMetadata, User, get_db_session
+from models import (
+    PermissionGroup,
+    UserGroup,
+    AgentGroupPermission,
+    AgentMetadata,
+    User,
+    get_db_session,
+)
 
 # Create tables in SQLite BEFORE app initialization
 with get_db_session() as session:
@@ -76,7 +83,7 @@ def authenticated_client(client, app):
         email="admin@8thlight.com",
         full_name="Test Admin",
         slack_user_id="U_ADMIN_TEST",
-        is_admin=True
+        is_admin=True,
     )
 
     # Mock authentication dependencies for FastAPI
@@ -112,11 +119,9 @@ def db_session():
                 PermissionGroup.group_name != "all_users"
             ).delete()
             session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name.like('%test%')
+                AgentMetadata.agent_name.like("%test%")
             ).delete()
-            session.query(User).filter(
-                User.slack_user_id.like('%TEST%')
-            ).delete()
+            session.query(User).filter(User.slack_user_id.like("%TEST%")).delete()
             session.commit()
         except Exception:
             session.rollback()
@@ -135,11 +140,9 @@ def db_session():
                 PermissionGroup.group_name != "all_users"
             ).delete()
             session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name.like('%test%')
+                AgentMetadata.agent_name.like("%test%")
             ).delete()
-            session.query(User).filter(
-                User.slack_user_id.like('%TEST%')
-            ).delete()
+            session.query(User).filter(User.slack_user_id.like("%TEST%")).delete()
             session.commit()
         except Exception:
             session.rollback()
@@ -164,7 +167,7 @@ class TestGroupsAPI:
                 "group_name": "test_group",
                 "display_name": "Test Group",
                 "description": "A test group",
-                "created_by": "test_user"
+                "created_by": "test_user",
             },
         )
         assert response.status_code == 200
@@ -173,9 +176,11 @@ class TestGroupsAPI:
         assert data["group_name"] == "test_group"
 
         # Verify in database
-        group = db_session.query(PermissionGroup).filter(
-            PermissionGroup.group_name == "test_group"
-        ).first()
+        group = (
+            db_session.query(PermissionGroup)
+            .filter(PermissionGroup.group_name == "test_group")
+            .first()
+        )
         assert group is not None
         assert group.display_name == "Test Group"
         assert group.description == "A test group"
@@ -187,7 +192,7 @@ class TestGroupsAPI:
             group_name="update_test",
             display_name="Original Name",
             description="Original description",
-            created_by="test"
+            created_by="test",
         )
         db_session.add(group)
         db_session.commit()
@@ -195,10 +200,7 @@ class TestGroupsAPI:
         # Update group
         response = authenticated_client.put(
             "/api/groups/update_test",
-            json={
-                "display_name": "Updated Name",
-                "description": "Updated description"
-            },
+            json={"display_name": "Updated Name", "description": "Updated description"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -208,9 +210,11 @@ class TestGroupsAPI:
 
         # Verify in database
         db_session.expire_all()
-        updated_group = db_session.query(PermissionGroup).filter(
-            PermissionGroup.group_name == "update_test"
-        ).first()
+        updated_group = (
+            db_session.query(PermissionGroup)
+            .filter(PermissionGroup.group_name == "update_test")
+            .first()
+        )
         assert updated_group.display_name == "Updated Name"
         assert updated_group.description == "Updated description"
 
@@ -221,7 +225,7 @@ class TestGroupsAPI:
             group_name="delete_test",
             display_name="Delete Test",
             description="To be deleted",
-            created_by="test"
+            created_by="test",
         )
         db_session.add(group)
         db_session.commit()
@@ -234,9 +238,11 @@ class TestGroupsAPI:
 
         # Verify deleted from database
         db_session.expire_all()
-        deleted_group = db_session.query(PermissionGroup).filter(
-            PermissionGroup.group_name == "delete_test"
-        ).first()
+        deleted_group = (
+            db_session.query(PermissionGroup)
+            .filter(PermissionGroup.group_name == "delete_test")
+            .first()
+        )
         assert deleted_group is None
 
     def test_cannot_delete_system_group(self, authenticated_client):
@@ -254,9 +260,7 @@ class TestGroupMembersAPI:
         """Test adding a user to a group."""
         # Create test group
         group = PermissionGroup(
-            group_name="member_test",
-            display_name="Member Test",
-            created_by="test"
+            group_name="member_test", display_name="Member Test", created_by="test"
         )
         db_session.add(group)
         db_session.commit()
@@ -266,7 +270,7 @@ class TestGroupMembersAPI:
             slack_user_id="U123TEST",
             full_name="Test User",
             email="test_member@example.com",
-            is_active=True
+            is_active=True,
         )
         db_session.add(user)
         db_session.commit()
@@ -282,30 +286,30 @@ class TestGroupMembersAPI:
 
         # Verify in database
         db_session.expire_all()
-        membership = db_session.query(UserGroup).filter(
-            UserGroup.group_name == "member_test",
-            UserGroup.slack_user_id == "U123TEST"
-        ).first()
+        membership = (
+            db_session.query(UserGroup)
+            .filter(
+                UserGroup.group_name == "member_test",
+                UserGroup.slack_user_id == "U123TEST",
+            )
+            .first()
+        )
         assert membership is not None
 
     def test_remove_user_from_group(self, authenticated_client, db_session):
         """Test removing a user from a group."""
         # Create test group, user, and membership
         group = PermissionGroup(
-            group_name="remove_test",
-            display_name="Remove Test",
-            created_by="test"
+            group_name="remove_test", display_name="Remove Test", created_by="test"
         )
         user = User(
             slack_user_id="U456TEST",
             full_name="Test User 2",
             email="test_remove@example.com",
-            is_active=True
+            is_active=True,
         )
         membership = UserGroup(
-            group_name="remove_test",
-            slack_user_id="U456TEST",
-            added_by="test"
+            group_name="remove_test", slack_user_id="U456TEST", added_by="test"
         )
         db_session.add(group)
         db_session.add(user)
@@ -313,22 +317,30 @@ class TestGroupMembersAPI:
         db_session.commit()
 
         # Remove user from group
-        response = authenticated_client.delete("/api/groups/remove_test/users?user_id=U456TEST")
+        response = authenticated_client.delete(
+            "/api/groups/remove_test/users?user_id=U456TEST"
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "removed"
 
         # Verify removed from database
         db_session.expire_all()
-        removed_membership = db_session.query(UserGroup).filter(
-            UserGroup.group_name == "remove_test",
-            UserGroup.slack_user_id == "U456TEST"
-        ).first()
+        removed_membership = (
+            db_session.query(UserGroup)
+            .filter(
+                UserGroup.group_name == "remove_test",
+                UserGroup.slack_user_id == "U456TEST",
+            )
+            .first()
+        )
         assert removed_membership is None
 
     def test_cannot_remove_from_system_group(self, authenticated_client, db_session):
         """Test that users cannot be manually removed from system groups."""
-        response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
+        response = authenticated_client.delete(
+            "/api/groups/all_users/users?user_id=U123"
+        )
         assert response.status_code == 403
         data = response.json()
         assert "Cannot manually remove" in data["detail"]
@@ -341,9 +353,7 @@ class TestAgentPermissionsAPI:
         """Test granting agent access to a group."""
         # Create test group
         group = PermissionGroup(
-            group_name="agent_test",
-            display_name="Agent Test",
-            created_by="test"
+            group_name="agent_test", display_name="Agent Test", created_by="test"
         )
         db_session.add(group)
         db_session.commit()
@@ -358,10 +368,14 @@ class TestAgentPermissionsAPI:
         assert data["status"] == "granted"
 
         # Verify in database
-        permission = db_session.query(AgentGroupPermission).filter(
-            AgentGroupPermission.group_name == "agent_test",
-            AgentGroupPermission.agent_name == "test_agent"
-        ).first()
+        permission = (
+            db_session.query(AgentGroupPermission)
+            .filter(
+                AgentGroupPermission.group_name == "agent_test",
+                AgentGroupPermission.agent_name == "test_agent",
+            )
+            .first()
+        )
         assert permission is not None
         assert permission.permission_type == "allow"
 
@@ -370,9 +384,7 @@ class TestAgentPermissionsAPI:
         try:
             # Create test group
             group = PermissionGroup(
-                group_name="revoke_test",
-                display_name="Revoke Test",
-                created_by="test"
+                group_name="revoke_test", display_name="Revoke Test", created_by="test"
             )
             db_session.add(group)
             db_session.commit()
@@ -382,23 +394,29 @@ class TestAgentPermissionsAPI:
                 group_name="revoke_test",
                 agent_name="revoke_agent",
                 permission_type="allow",
-                granted_by="admin"
+                granted_by="admin",
             )
             db_session.add(permission)
             db_session.commit()
 
             # Revoke agent from group
-            response = authenticated_client.delete("/api/groups/revoke_test/agents?agent_name=revoke_agent")
+            response = authenticated_client.delete(
+                "/api/groups/revoke_test/agents?agent_name=revoke_agent"
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "revoked"
 
             # Verify removed from database
             db_session.expire_all()
-            removed_permission = db_session.query(AgentGroupPermission).filter(
-                AgentGroupPermission.group_name == "revoke_test",
-                AgentGroupPermission.agent_name == "revoke_agent"
-            ).first()
+            removed_permission = (
+                db_session.query(AgentGroupPermission)
+                .filter(
+                    AgentGroupPermission.group_name == "revoke_test",
+                    AgentGroupPermission.agent_name == "revoke_agent",
+                )
+                .first()
+            )
             assert removed_permission is None
         except Exception:
             db_session.rollback()
@@ -411,7 +429,7 @@ class TestAgentPermissionsAPI:
             group = PermissionGroup(
                 group_name="list_agents_test",
                 display_name="List Agents Test",
-                created_by="test"
+                created_by="test",
             )
             db_session.add(group)
             db_session.commit()
@@ -421,7 +439,7 @@ class TestAgentPermissionsAPI:
                 group_name="list_agents_test",
                 agent_name="agent1",
                 permission_type="allow",
-                granted_by="admin"
+                granted_by="admin",
             )
             db_session.add(perm1)
             db_session.commit()
@@ -430,7 +448,7 @@ class TestAgentPermissionsAPI:
                 group_name="list_agents_test",
                 agent_name="agent2",
                 permission_type="allow",
-                granted_by="admin"
+                granted_by="admin",
             )
             db_session.add(perm2)
             db_session.commit()
@@ -455,24 +473,25 @@ class TestAgentToggleAPI:
         """Test toggling agent from disabled to enabled."""
         try:
             # Create disabled agent
-            agent = AgentMetadata(
-                agent_name="toggle_test_enabled",
-                is_public=False
-            )
+            agent = AgentMetadata(agent_name="toggle_test_enabled", is_public=False)
             db_session.add(agent)
             db_session.commit()
 
             # Toggle to enabled
-            response = authenticated_client.post("/api/agents/toggle_test_enabled/toggle")
+            response = authenticated_client.post(
+                "/api/agents/toggle_test_enabled/toggle"
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["is_enabled"] is True
 
             # Verify in database
             db_session.expire_all()
-            updated_agent = db_session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == "toggle_test_enabled"
-            ).first()
+            updated_agent = (
+                db_session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == "toggle_test_enabled")
+                .first()
+            )
             assert updated_agent.is_public is True
 
             # Clean up
@@ -489,25 +508,32 @@ class TestAgentToggleAPI:
             test_agent_name = "new_agent_test_create"
 
             # Ensure no metadata exists
-            existing = db_session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == test_agent_name
-            ).first()
+            existing = (
+                db_session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == test_agent_name)
+                .first()
+            )
             if existing:
                 db_session.delete(existing)
                 db_session.commit()
 
             # Toggle (should create and enable)
-            response = authenticated_client.post(f"/api/agents/{test_agent_name}/toggle")
+            response = authenticated_client.post(
+                f"/api/agents/{test_agent_name}/toggle"
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["is_enabled"] is True
 
             # Verify created in database with fresh session
             from models import get_db_session
+
             with get_db_session() as fresh_session:
-                new_agent = fresh_session.query(AgentMetadata).filter(
-                    AgentMetadata.agent_name == test_agent_name
-                ).first()
+                new_agent = (
+                    fresh_session.query(AgentMetadata)
+                    .filter(AgentMetadata.agent_name == test_agent_name)
+                    .first()
+                )
                 assert new_agent is not None
                 assert new_agent.is_public is True
 
@@ -529,8 +555,7 @@ class TestSystemGroups:
         data = response.json()
 
         all_users_group = next(
-            (g for g in data["groups"] if g["group_name"] == "all_users"),
-            None
+            (g for g in data["groups"] if g["group_name"] == "all_users"), None
         )
         assert all_users_group is not None
         assert all_users_group["display_name"] == "All Users"
@@ -545,7 +570,9 @@ class TestSystemGroups:
 
     def test_system_group_protected_from_manual_membership(self, authenticated_client):
         """Test that users cannot be manually removed from system groups."""
-        response = authenticated_client.delete("/api/groups/all_users/users?user_id=U123")
+        response = authenticated_client.delete(
+            "/api/groups/all_users/users?user_id=U123"
+        )
         assert response.status_code == 403
         data = response.json()
         assert "system group" in data["detail"].lower()
@@ -576,14 +603,15 @@ class TestSystemAgents:
         data = response.json()
         assert "Cannot disable system agents" in data["detail"]
 
-    def test_cannot_grant_system_agent_to_non_all_users(self, authenticated_client, db_session):
+    def test_cannot_grant_system_agent_to_non_all_users(
+        self, authenticated_client, db_session
+    ):
         """Test that system agents can only be granted to all_users group."""
         # Create a test group
         from models import PermissionGroup
+
         group = PermissionGroup(
-            group_name="test_group_system",
-            display_name="Test Group",
-            created_by="test"
+            group_name="test_group_system", display_name="Test Group", created_by="test"
         )
         db_session.add(group)
         db_session.commit()
@@ -595,11 +623,15 @@ class TestSystemAgents:
         )
         assert response.status_code == 403
         data = response.json()
-        assert "System agents can only be granted to 'all_users' group" in data["detail"]
+        assert (
+            "System agents can only be granted to 'all_users' group" in data["detail"]
+        )
 
     def test_cannot_revoke_system_agent_from_all_users(self, authenticated_client):
         """Test that system agents cannot be revoked from all_users."""
-        response = authenticated_client.delete("/api/groups/all_users/agents?agent_name=help")
+        response = authenticated_client.delete(
+            "/api/groups/all_users/agents?agent_name=help"
+        )
         assert response.status_code == 403
         data = response.json()
         assert "Cannot revoke system agents from 'all_users' group" in data["detail"]
@@ -615,7 +647,7 @@ class TestAgentDeletionAPI:
             agent_name="delete_test_agent",
             display_name="Delete Test",
             is_public=True,
-            is_deleted=False
+            is_deleted=False,
         )
         db_session.add(agent)
         db_session.commit()
@@ -629,9 +661,11 @@ class TestAgentDeletionAPI:
 
         # Verify agent is marked as deleted in database
         db_session.expire_all()
-        deleted_agent = db_session.query(AgentMetadata).filter(
-            AgentMetadata.agent_name == "delete_test_agent"
-        ).first()
+        deleted_agent = (
+            db_session.query(AgentMetadata)
+            .filter(AgentMetadata.agent_name == "delete_test_agent")
+            .first()
+        )
         assert deleted_agent is not None
         assert deleted_agent.is_deleted is True
         assert deleted_agent.is_public is False
@@ -657,7 +691,7 @@ class TestAgentDeletionAPI:
             agent_name="list_test_agent",
             display_name="List Test",
             is_public=True,
-            is_deleted=False
+            is_deleted=False,
         )
         db_session.add(agent)
         db_session.commit()
@@ -679,7 +713,7 @@ class TestAgentDeletionAPI:
             agent_name="reregister_test",
             display_name="Reregister Test",
             is_public=True,
-            is_deleted=False
+            is_deleted=False,
         )
         db_session.add(agent)
         db_session.commit()
@@ -693,7 +727,7 @@ class TestAgentDeletionAPI:
             json={
                 "name": "reregister_test",
                 "display_name": "Reregistered",
-                "description": "Reactivated agent"
+                "description": "Reactivated agent",
             },
         )
         assert response.status_code == 200
@@ -702,9 +736,11 @@ class TestAgentDeletionAPI:
 
         # Verify agent is active again
         db_session.expire_all()
-        reactivated_agent = db_session.query(AgentMetadata).filter(
-            AgentMetadata.agent_name == "reregister_test"
-        ).first()
+        reactivated_agent = (
+            db_session.query(AgentMetadata)
+            .filter(AgentMetadata.agent_name == "reregister_test")
+            .first()
+        )
         assert reactivated_agent is not None
         assert reactivated_agent.is_deleted is False
         assert reactivated_agent.is_public is True

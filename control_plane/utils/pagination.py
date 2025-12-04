@@ -7,9 +7,7 @@ from sqlalchemy.orm import Query
 
 
 def get_pagination_params(
-    request: Request,
-    default_per_page: int = 50,
-    max_per_page: int = 100
+    request: Request, default_per_page: int = 50, max_per_page: int = 100
 ) -> tuple[int, int]:
     """Get pagination parameters from request query string.
 
@@ -48,11 +46,7 @@ def get_pagination_params(
     return page, per_page
 
 
-def paginate_query(
-    query: Query,
-    page: int,
-    per_page: int
-) -> tuple[list[Any], int]:
+def paginate_query(query: Query, page: int, per_page: int) -> tuple[list[Any], int]:
     """Paginate a SQLAlchemy query.
 
     Args:
@@ -82,10 +76,7 @@ def paginate_query(
 
 
 def build_pagination_response(
-    items: list[Any],
-    total_count: int,
-    page: int,
-    per_page: int
+    items: list[Any], total_count: int, page: int, per_page: int
 ) -> dict[str, Any]:
     """Build a standardized pagination response.
 
@@ -125,6 +116,6 @@ def build_pagination_response(
             "total": total_count,
             "total_pages": total_pages,
             "has_prev": page > 1,
-            "has_next": page < total_pages
-        }
+            "has_next": page < total_pages,
+        },
     }

@@ -2,9 +2,8 @@ import os
 from pathlib import Path
 
 import pytest
-from dotenv import load_dotenv
-
 from agents.profiler.tools.internal_search import internal_search_tool
+from dotenv import load_dotenv
 
 # Load root-level .env so VECTOR_* and LLM keys are available
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -62,9 +61,9 @@ async def test_costco_no_relationship_integration():
             for source in result.split("Internal search result:")
             if source.strip()
         )
-        assert (
-            has_costco_source
-        ), f"If showing 'Existing client', sources should include Costco case study, got: {result[:1000]}"
+        assert has_costco_source, (
+            f"If showing 'Existing client', sources should include Costco case study, got: {result[:1000]}"
+        )
     else:
         # Should be "No prior engagement" - this is the expected result for Costco
         assert "Relationship status: No prior engagement" in result

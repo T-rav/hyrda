@@ -4,8 +4,9 @@ Tests the refactored helper methods extracted from the giant run() method.
 """
 
 import os
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 # Set required environment variables for tests
 os.environ.setdefault("SLACK_BOT_TOKEN", "xoxb-test-token")
@@ -195,7 +196,9 @@ class TestMeddicAgentHelpers:
         }
 
         # Act
-        response = agent._format_final_response(result, "query", "thread123", mock_context)
+        response = agent._format_final_response(
+            result, "query", "thread123", mock_context
+        )
 
         # Assert
         assert response["response"].endswith(
@@ -213,7 +216,9 @@ class TestMeddicAgentHelpers:
         }
 
         # Act
-        response = agent._format_final_response(result, "query", "thread123", mock_context)
+        response = agent._format_final_response(
+            result, "query", "thread123", mock_context
+        )
 
         # Assert
         assert response["response"].endswith("_✅ Feel free to ask me anything!_")
@@ -225,7 +230,9 @@ class TestMeddicAgentHelpers:
         result = {"sources": []}
 
         # Act
-        response = agent._format_final_response(result, "query", "thread123", mock_context)
+        response = agent._format_final_response(
+            result, "query", "thread123", mock_context
+        )
 
         # Assert
         assert "Unable to generate" in response["response"]

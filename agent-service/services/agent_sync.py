@@ -58,7 +58,9 @@ def sync_agents_to_control_plane() -> None:
                     timeout=5,
                 )
                 if response.status_code == 200:
-                    logger.info(f"✓ Registered agent '{agent_data['name']}' with control plane")
+                    logger.info(
+                        f"✓ Registered agent '{agent_data['name']}' with control plane"
+                    )
                 else:
                     logger.warning(
                         f"Failed to register agent '{agent_data['name']}': HTTP {response.status_code}"
@@ -66,7 +68,9 @@ def sync_agents_to_control_plane() -> None:
             except Exception as e:
                 logger.warning(f"Failed to register agent '{agent_data['name']}': {e}")
 
-        logger.info(f"Agent sync complete - registered {len(agents_to_register)} agents")
+        logger.info(
+            f"Agent sync complete - registered {len(agents_to_register)} agents"
+        )
 
     except Exception as e:
         logger.error(f"Error syncing agents to control plane: {e}")

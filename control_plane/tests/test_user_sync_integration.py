@@ -88,7 +88,9 @@ class TestUserSyncIntegration:
         assert len(identities) == 2
 
         # Verify identity linking
-        alice_user = test_session.query(User).filter(User.email == "alice@example.com").first()
+        alice_user = (
+            test_session.query(User).filter(User.email == "alice@example.com").first()
+        )
         assert alice_user is not None
         assert alice_user.primary_provider == "slack"
         assert len(alice_user.identities) == 1
@@ -153,7 +155,9 @@ class TestUserSyncIntegration:
         assert stats["updated"] == 0
 
         # Verify identity was linked
-        user = test_session.query(User).filter(User.email == "alice@example.com").first()
+        user = (
+            test_session.query(User).filter(User.email == "alice@example.com").first()
+        )
         assert len(user.identities) == 2
 
         google_identity = [i for i in user.identities if i.provider_type == "google"][0]
@@ -286,12 +290,16 @@ class TestUserSyncIntegration:
         assert stats["deactivated"] == 1
 
         # Verify identity and user deactivated
-        identity = test_session.query(UserIdentity).filter(
-            UserIdentity.provider_user_id == "U999"
-        ).first()
+        identity = (
+            test_session.query(UserIdentity)
+            .filter(UserIdentity.provider_user_id == "U999")
+            .first()
+        )
         assert identity.is_active is False
 
-        user = test_session.query(User).filter(User.email == "removed@example.com").first()
+        user = (
+            test_session.query(User).filter(User.email == "removed@example.com").first()
+        )
         assert user.is_active is False
 
 
@@ -327,7 +335,9 @@ class TestMigrationScenarios:
         assert stats1["created"] == 1
 
         # Verify Slack identity is primary
-        user = test_session.query(User).filter(User.email == "alice@example.com").first()
+        user = (
+            test_session.query(User).filter(User.email == "alice@example.com").first()
+        )
         assert user.primary_provider == "slack"
         assert len(user.identities) == 1
 

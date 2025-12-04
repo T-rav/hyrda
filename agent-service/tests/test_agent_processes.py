@@ -8,7 +8,6 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
-
 from bot.handlers.agent_processes import (
     AGENT_PROCESSES,
     get_agent_blocks,

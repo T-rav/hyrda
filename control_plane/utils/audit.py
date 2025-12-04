@@ -85,7 +85,9 @@ def log_agent_action(
         request: Optional FastAPI Request object
         user_email: Optional user email
     """
-    log_admin_action(action, "agent", agent_name, details, request=request, user_email=user_email)
+    log_admin_action(
+        action, "agent", agent_name, details, request=request, user_email=user_email
+    )
 
 
 def log_permission_action(
@@ -106,7 +108,14 @@ def log_permission_action(
         request: Optional FastAPI Request object
         user_email: Optional user email
     """
-    log_admin_action(action, resource_type, resource_id, details, request=request, user_email=user_email)
+    log_admin_action(
+        action,
+        resource_type,
+        resource_id,
+        details,
+        request=request,
+        user_email=user_email,
+    )
 
 
 def log_user_action(
@@ -125,7 +134,14 @@ def log_user_action(
         request: Optional FastAPI Request object
         user_email: Optional email of the user performing the action
     """
-    log_admin_action(action, "user", user_email_param, details, request=request, user_email=user_email)
+    log_admin_action(
+        action,
+        "user",
+        user_email_param,
+        details,
+        request=request,
+        user_email=user_email,
+    )
 
 
 def log_group_action(
@@ -144,7 +160,9 @@ def log_group_action(
         request: Optional FastAPI Request object
         user_email: Optional user email
     """
-    log_admin_action(action, "group", group_name, details, request=request, user_email=user_email)
+    log_admin_action(
+        action, "group", group_name, details, request=request, user_email=user_email
+    )
 
 
 # Audit action constants for consistency

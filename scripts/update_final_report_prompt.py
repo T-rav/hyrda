@@ -133,19 +133,29 @@ def update_langfuse_prompt(dry_run: bool = False) -> None:
         relationship_marker = "## Relationships via 8th Light Network"
 
         if relationship_marker not in current_content:
-            print(f"\n❌ Error: Could not find relationship section marker in prompt")
+            print("\n❌ Error: Could not find relationship section marker in prompt")
             print(f"   Expected to find: '{relationship_marker}'")
             sys.exit(1)
 
         # Find the end of the relationship section (next ## heading or end of prompt)
         import re
+
         relationship_start = current_content.index(relationship_marker)
         # Find the next section (starts with ##)
-        next_section_match = re.search(r'\n## [^R]', current_content[relationship_start + len(relationship_marker):])
+        next_section_match = re.search(
+            r"\n## [^R]",
+            current_content[relationship_start + len(relationship_marker) :],
+        )
 
         if next_section_match:
-            relationship_end = relationship_start + len(relationship_marker) + next_section_match.start()
-            old_relationship_section = current_content[relationship_start:relationship_end]
+            relationship_end = (
+                relationship_start
+                + len(relationship_marker)
+                + next_section_match.start()
+            )
+            old_relationship_section = current_content[
+                relationship_start:relationship_end
+            ]
         else:
             # Relationship section is at the end
             old_relationship_section = current_content[relationship_start:]
@@ -156,18 +166,24 @@ def update_langfuse_prompt(dry_run: bool = False) -> None:
 
         # Replace the old section with the new one
         updated_content = (
-            current_content[:relationship_start] +
-            new_relationship_section +
-            current_content[relationship_end:]
+            current_content[:relationship_start]
+            + new_relationship_section
+            + current_content[relationship_end:]
         )
 
-        print(f"\n📝 Changes to be made:")
-        print(f"   - Old relationship section: {len(old_relationship_section)} characters")
-        print(f"   - New relationship section: {len(new_relationship_section)} characters")
-        print(f"   - Total prompt length: {len(current_content)} → {len(updated_content)} characters")
+        print("\n📝 Changes to be made:")
+        print(
+            f"   - Old relationship section: {len(old_relationship_section)} characters"
+        )
+        print(
+            f"   - New relationship section: {len(new_relationship_section)} characters"
+        )
+        print(
+            f"   - Total prompt length: {len(current_content)} → {len(updated_content)} characters"
+        )
 
         if dry_run:
-            print(f"\n🔍 DRY RUN MODE - Showing new relationship section:")
+            print("\n🔍 DRY RUN MODE - Showing new relationship section:")
             print("=" * 80)
             print(new_relationship_section)
             print("=" * 80)
@@ -176,7 +192,7 @@ def update_langfuse_prompt(dry_run: bool = False) -> None:
 
         # Create a new version of the prompt using create_prompt
         # This creates a new version while preserving the prompt name
-        print(f"\n📤 Uploading new prompt version...")
+        print("\n📤 Uploading new prompt version...")
 
         langfuse.create_prompt(
             name=prompt_name,
@@ -184,18 +200,23 @@ def update_langfuse_prompt(dry_run: bool = False) -> None:
             labels=["relationship-verification-fix"],
         )
 
-        print(f"✅ Successfully created new prompt version with relationship verification rules")
+        print(
+            "✅ Successfully created new prompt version with relationship verification rules"
+        )
         print(f"   Prompt: {prompt_name}")
-        print(f"   New version will be created in Langfuse")
-        print(f"\n⚠️  IMPORTANT:")
+        print("   New version will be created in Langfuse")
+        print("\n⚠️  IMPORTANT:")
         print(f"   1. Go to Langfuse UI → Prompts → {prompt_name}")
-        print(f"   2. Find the newest version (just created)")
-        print(f"   3. Click 'Promote to production' or 'Set as active' to make it live")
-        print(f"   4. The bot will automatically pick up the new version on next profile generation")
+        print("   2. Find the newest version (just created)")
+        print("   3. Click 'Promote to production' or 'Set as active' to make it live")
+        print(
+            "   4. The bot will automatically pick up the new version on next profile generation"
+        )
 
     except Exception as e:
         print(f"\n❌ Error updating prompt: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

@@ -1,6 +1,5 @@
 """UserIdentity model for tracking multiple provider identities per user."""
 
-
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -30,7 +29,9 @@ class UserIdentity(Base):
     provider_user_id = Column(
         String(255), nullable=False, index=True
     )  # ID from provider
-    provider_email = Column(String(255), nullable=False, index=True)  # Email from provider
+    provider_email = Column(
+        String(255), nullable=False, index=True
+    )  # Email from provider
 
     # Identity metadata
     is_primary = Column(
@@ -65,9 +66,7 @@ class UserIdentity(Base):
         ),
         # Composite index for active identity queries (provider_type + is_active)
         # Used by user_sync.py:221-223 to find all active identities for a provider
-        Index(
-            "ix_user_identities_provider_active", "provider_type", "is_active"
-        ),
+        Index("ix_user_identities_provider_active", "provider_type", "is_active"),
     )
 
     def __repr__(self) -> str:

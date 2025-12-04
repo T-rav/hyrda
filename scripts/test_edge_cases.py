@@ -11,7 +11,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "bot"))
 
-from agents.company_profile.tools.internal_search import InternalSearchTool
 
 
 async def test_extraction_logic():
@@ -84,7 +83,7 @@ async def test_extraction_logic():
         ("existing client relationship projects", ""),
         # Edge case: Punctuation
         ("J.P. Morgan case studies", "j.p. morgan"),
-        ('Baker College (Baker.edu) projects', 'baker college'),
+        ("Baker College (Baker.edu) projects", "baker college"),
     ]
 
     print("=" * 80)
@@ -112,9 +111,9 @@ async def test_extraction_logic():
             print(f"\nQuery: {query}")
             print(f"  Expected: '{expected}' but got '{extracted}'")
             if not extracted and expected:
-                print(f"  Issue: Company name contains stop word - gets truncated")
+                print("  Issue: Company name contains stop word - gets truncated")
             elif extracted != expected:
-                print(f"  Issue: Extraction logic doesn't handle this format")
+                print("  Issue: Extraction logic doesn't handle this format")
 
     return bugs_found
 

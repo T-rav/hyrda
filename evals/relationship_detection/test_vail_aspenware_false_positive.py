@@ -98,9 +98,11 @@ async def test_vail_resorts_with_aspenware_context():
     # Extract relationship section
     relationship_section = extract_relationship_section(final_report)
 
-    assert relationship_section is not None, "Report should have a Relationships section"
+    assert relationship_section is not None, (
+        "Report should have a Relationships section"
+    )
 
-    print(f"\n🔍 Relationship Section:")
+    print("\n🔍 Relationship Section:")
     print("=" * 80)
     print(relationship_section)
     print("=" * 80)
@@ -122,8 +124,14 @@ async def test_vail_resorts_with_aspenware_context():
         if matches:
             # Check if it's in a negative context (e.g., "no case study for Vail")
             for match in matches:
-                context = section_lower[max(0, section_lower.find(match) - 50):section_lower.find(match) + len(match) + 50]
-                if not any(neg in context for neg in ["no ", "not ", "without ", "never "]):
+                context = section_lower[
+                    max(0, section_lower.find(match) - 50) : section_lower.find(match)
+                    + len(match)
+                    + 50
+                ]
+                if not any(
+                    neg in context for neg in ["no ", "not ", "without ", "never "]
+                ):
                     found_false_positives.append(match)
 
     assert len(found_false_positives) == 0, (
@@ -134,12 +142,14 @@ async def test_vail_resorts_with_aspenware_context():
     print("✅ No false positive claims about Vail Resorts relationship")
 
     # CRITICAL CHECK 2: Should explicitly state "No prior engagement"
-    has_no_engagement = any([
-        "no prior engagement" in section_lower,
-        "no relationship" in section_lower,
-        "no documented" in section_lower and "collaboration" in section_lower,
-        "not identified any past projects" in section_lower,
-    ])
+    has_no_engagement = any(
+        [
+            "no prior engagement" in section_lower,
+            "no relationship" in section_lower,
+            "no documented" in section_lower and "collaboration" in section_lower,
+            "not identified any past projects" in section_lower,
+        ]
+    )
 
     assert has_no_engagement, (
         f"❌ AMBIGUOUS STATUS: Relationship section should explicitly state 'No prior engagement' for Vail\n"
@@ -165,7 +175,9 @@ async def test_vail_resorts_with_aspenware_context():
                 "such as",
                 "including",
             ]
-            has_comparison_context = any(ind in section_lower for ind in comparison_indicators)
+            has_comparison_context = any(
+                ind in section_lower for ind in comparison_indicators
+            )
 
             if not has_comparison_context:
                 # Mentioned Aspenware without comparison context - potential confusion
@@ -186,7 +198,9 @@ async def test_vail_resorts_with_aspenware_context():
         "possibly engaged",
     ]
 
-    found_speculative = [phrase for phrase in speculative_phrases if phrase in section_lower]
+    found_speculative = [
+        phrase for phrase in speculative_phrases if phrase in section_lower
+    ]
 
     assert len(found_speculative) == 0, (
         f"❌ SPECULATIVE LANGUAGE: Found forbidden speculative phrases: {found_speculative}\n"

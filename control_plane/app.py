@@ -99,7 +99,9 @@ def create_app() -> FastAPI:
     )
 
     # Enable CORS - restrict to specific origins
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:6001,http://localhost:3000")
+    allowed_origins = os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:6001,http://localhost:3000"
+    )
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(
         CORSMiddleware,
@@ -155,9 +157,11 @@ def ensure_all_users_group() -> None:
 
         with get_db_session() as session:
             # Check if "all_users" group exists
-            existing_group = session.query(PermissionGroup).filter(
-                PermissionGroup.group_name == "all_users"
-            ).first()
+            existing_group = (
+                session.query(PermissionGroup)
+                .filter(PermissionGroup.group_name == "all_users")
+                .first()
+            )
 
             if not existing_group:
                 # Create the system group
@@ -173,9 +177,11 @@ def ensure_all_users_group() -> None:
 
             # Add all active users to the group
             active_users = session.query(User).filter(User.is_active).all()
-            existing_memberships = session.query(UserGroup).filter(
-                UserGroup.group_name == "all_users"
-            ).all()
+            existing_memberships = (
+                session.query(UserGroup)
+                .filter(UserGroup.group_name == "all_users")
+                .all()
+            )
             existing_user_ids = {m.slack_user_id for m in existing_memberships}
 
             new_members_added = 0
@@ -204,9 +210,11 @@ def ensure_help_agent_system() -> None:
 
         with get_db_session() as session:
             # Ensure help agent exists
-            existing_agent = session.query(AgentMetadata).filter(
-                AgentMetadata.agent_name == "help"
-            ).first()
+            existing_agent = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == "help")
+                .first()
+            )
 
             if not existing_agent:
                 help_agent = AgentMetadata(
@@ -221,16 +229,18 @@ def ensure_help_agent_system() -> None:
                 logger.info("Created 'help' system agent")
 
             # Ensure help agent has all_users group permission
-            existing_permission = session.query(AgentGroupPermission).filter(
-                AgentGroupPermission.agent_name == "help",
-                AgentGroupPermission.group_name == "all_users"
-            ).first()
+            existing_permission = (
+                session.query(AgentGroupPermission)
+                .filter(
+                    AgentGroupPermission.agent_name == "help",
+                    AgentGroupPermission.group_name == "all_users",
+                )
+                .first()
+            )
 
             if not existing_permission:
                 permission = AgentGroupPermission(
-                    agent_name="help",
-                    group_name="all_users",
-                    granted_by="system"
+                    agent_name="help", group_name="all_users", granted_by="system"
                 )
                 session.add(permission)
                 session.commit()

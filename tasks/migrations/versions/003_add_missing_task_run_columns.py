@@ -19,6 +19,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Upgrade."""
     # Add the missing triggered_by_user column to task_runs table safely
     # MySQL doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN
     # So we use a try/except approach via SQLAlchemy
@@ -36,6 +37,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Downgrade."""
     # Remove the columns if rolling back
     op.drop_column("task_runs", "triggered_by_user")
     op.drop_column("task_runs", "environment_info")

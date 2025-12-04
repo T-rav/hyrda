@@ -61,6 +61,7 @@ class InternalSearchTool(BaseTool):
     vector_collection: str  # Qdrant collection name (REQUIRED)
 
     class Config:
+        """Config class."""
         arbitrary_types_allowed = True
 
     def __init__(
@@ -193,6 +194,7 @@ class InternalSearchTool(BaseTool):
         # Simple doc class to match LangChain's Document interface
         @dataclass
         class SimpleDoc:
+            """SimpleDoc class."""
             page_content: str
             metadata: dict
 

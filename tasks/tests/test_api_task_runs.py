@@ -18,6 +18,7 @@ def app():
     os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
 
     from app import app as fastapi_app
+
     return fastapi_app
 
 
@@ -30,7 +31,7 @@ def authenticated_client(app):
         return {
             "email": "user@8thlight.com",
             "name": "Test User",
-            "picture": "https://example.com/photo.jpg"
+            "picture": "https://example.com/photo.jpg",
         }
 
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -39,8 +40,13 @@ def authenticated_client(app):
     app.dependency_overrides.clear()
 
 
-def create_mock_task_run(run_id, job_type="slack_user_import", status="completed",
-                         job_id=None, task_name=None):
+def create_mock_task_run(
+    run_id,
+    job_type="slack_user_import",
+    status="completed",
+    job_id=None,
+    task_name=None,
+):
     """Helper to create mock task run."""
     mock_run = Mock()
     mock_run.id = run_id
@@ -119,7 +125,9 @@ class TestListTaskRunsEndpoint:
         assert data["pagination"]["total_pages"] == 0
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_pagination(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_pagination(
+        self, mock_db_session, authenticated_client
+    ):
         """Test pagination parameters."""
         # Mock 150 total runs
         mock_query = MagicMock()
@@ -144,7 +152,9 @@ class TestListTaskRunsEndpoint:
         assert data["pagination"]["has_next"] is True
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_max_page_size_cap(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_max_page_size_cap(
+        self, mock_db_session, authenticated_client
+    ):
         """Test that per_page is capped at MAX_PAGE_SIZE."""
         mock_query = MagicMock()
         mock_query.order_by().count.return_value = 200
@@ -163,11 +173,14 @@ class TestListTaskRunsEndpoint:
         assert data["pagination"]["per_page"] == 100
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_custom_task_name(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_custom_task_name(
+        self, mock_db_session, authenticated_client
+    ):
         """Test task runs with custom task names."""
         # Create run with task_name in snapshot
-        mock_run = create_mock_task_run(1, job_type="slack_user_import",
-                                       job_id="job-1", task_name="Daily User Sync")
+        mock_run = create_mock_task_run(
+            1, job_type="slack_user_import", job_id="job-1", task_name="Daily User Sync"
+        )
 
         mock_query = MagicMock()
         mock_query.order_by().count.return_value = 1
@@ -184,7 +197,9 @@ class TestListTaskRunsEndpoint:
         assert data["task_runs"][0]["job_name"] == "Daily User Sync"
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_metadata_fallback(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_metadata_fallback(
+        self, mock_db_session, authenticated_client
+    ):
         """Test task runs fall back to metadata for job name."""
         from models.task_metadata import TaskMetadata
 
@@ -216,7 +231,9 @@ class TestListTaskRunsEndpoint:
         assert data["task_runs"][0]["job_name"] == "Metadata Task Name"
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_job_type_fallback(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_job_type_fallback(
+        self, mock_db_session, authenticated_client
+    ):
         """Test task runs fall back to job type names."""
         # Create run without task_name or metadata
         mock_run = create_mock_task_run(1, job_type="slack_user_import")
@@ -241,7 +258,9 @@ class TestListTaskRunsEndpoint:
         assert data["task_runs"][0]["job_name"] == "Slack User Import"
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_unknown_job_type(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_unknown_job_type(
+        self, mock_db_session, authenticated_client
+    ):
         """Test task runs with unknown job type."""
         # Create run with unknown job type
         mock_run = create_mock_task_run(1, job_type="unknown_job_type")
@@ -265,7 +284,9 @@ class TestListTaskRunsEndpoint:
         assert data["task_runs"][0]["job_name"] == "Unknown Job Type"
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_with_failed_status(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_with_failed_status(
+        self, mock_db_session, authenticated_client
+    ):
         """Test task runs with failed status."""
         mock_run = create_mock_task_run(1, status="failed")
         mock_run.error_message = "Database connection timeout"
@@ -286,7 +307,9 @@ class TestListTaskRunsEndpoint:
         assert data["task_runs"][0]["error_message"] == "Database connection timeout"
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_pagination_edge_cases(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_pagination_edge_cases(
+        self, mock_db_session, authenticated_client
+    ):
         """Test pagination edge cases."""
         mock_query = MagicMock()
         mock_query.order_by().count.return_value = 55  # Not evenly divisible
@@ -304,7 +327,9 @@ class TestListTaskRunsEndpoint:
         assert data["pagination"]["total_pages"] == 6
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_metadata_error_handling(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_metadata_error_handling(
+        self, mock_db_session, authenticated_client
+    ):
         """Test graceful handling of metadata loading errors."""
         mock_run = create_mock_task_run(1, job_id="job-1")
 
@@ -341,7 +366,9 @@ class TestListTaskRunsEndpoint:
         assert "Database connection failed" in data["detail"]
 
     @patch("api.task_runs.get_db_session")
-    def test_list_task_runs_all_fields_present(self, mock_db_session, authenticated_client):
+    def test_list_task_runs_all_fields_present(
+        self, mock_db_session, authenticated_client
+    ):
         """Test that all expected fields are present in response."""
         mock_run = create_mock_task_run(1)
         mock_run.triggered_by_user = "user@example.com"

@@ -5,12 +5,13 @@ Revises: 890aaa22b407
 Create Date: 2025-12-02 13:38:42.450831
 
 """
+
 from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = 'ae4e2812425c'
-down_revision = '890aaa22b407'
+revision = "ae4e2812425c"
+down_revision = "890aaa22b407"
 branch_labels = None
 depends_on = None
 

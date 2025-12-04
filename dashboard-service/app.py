@@ -286,16 +286,15 @@ async def get_agent_metrics():
     ALL invocations regardless of client (Slack, LibreChat, direct API).
     """
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{SERVICES['agent_service']}/api/metrics",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data.get("agent_invocations", {})
-                else:
-                    return {"error": f"HTTP {response.status}"}
+        async with aiohttp.ClientSession() as session, session.get(
+            f"{SERVICES['agent_service']}/api/metrics",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                return data.get("agent_invocations", {})
+            else:
+                return {"error": f"HTTP {response.status}"}
     except Exception as e:
         return {"error": str(e)}
 

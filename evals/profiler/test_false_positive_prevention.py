@@ -55,7 +55,10 @@ class TestFalsePositivePrevention:
         )
 
         # Verify it doesn't conflate different "Baker" companies
-        assert "baker college" not in result.lower() or "no prior engagement" in result.lower()
+        assert (
+            "baker college" not in result.lower()
+            or "no prior engagement" in result.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_partial_name_match(self, search_tool):
@@ -144,7 +147,6 @@ class TestFalsePositivePrevention:
 
 def main():
     """Run tests manually for debugging."""
-    import asyncio
 
     tool = InternalSearchTool()
 
@@ -159,10 +161,10 @@ def main():
     ]
 
     for company_name, query in test_cases:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Test: {company_name}")
         print(f"Query: {query}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         result = asyncio.run(tool._arun(query=query, effort="medium"))
 
@@ -173,7 +175,7 @@ def main():
         else:
             print(f"⚠️  Unclear relationship status for {company_name}")
 
-        print(f"\nFirst 500 chars of result:")
+        print("\nFirst 500 chars of result:")
         print(result[:500])
 
 

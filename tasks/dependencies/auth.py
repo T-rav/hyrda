@@ -1,6 +1,7 @@
 """Authentication dependencies for FastAPI dependency injection."""
 
 from fastapi import HTTPException, Request
+
 from utils.auth import verify_domain
 
 
@@ -22,17 +23,13 @@ async def get_current_user(request: Request) -> dict:
     user_info = request.session.get("user_info")
 
     if not user_email or not user_info:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated - please login"
-        )
+        raise HTTPException(status_code=401, detail="Not authenticated - please login")
 
     # Verify domain
     if not verify_domain(user_email):
         request.session.clear()
         raise HTTPException(
-            status_code=403,
-            detail=f"Email domain not allowed: {user_email}"
+            status_code=403, detail=f"Email domain not allowed: {user_email}"
         )
 
     return user_info

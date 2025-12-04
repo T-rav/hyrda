@@ -5,6 +5,7 @@ Clear only google_drive documents from Qdrant collection.
 Keeps metric documents intact.
 This prepares the vector DB for fresh ingestion from Google Drive without losing metric data.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -21,13 +22,13 @@ from qdrant_client import QdrantClient
 def clear_google_drive_docs():
     """Clear only google_drive documents, keep metric docs."""
     client = QdrantClient(
-        host=os.getenv('VECTOR_HOST', 'localhost'),
-        port=int(os.getenv('VECTOR_PORT', 6333)),
-        api_key=os.getenv('VECTOR_API_KEY'),
-        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
+        host=os.getenv("VECTOR_HOST", "localhost"),
+        port=int(os.getenv("VECTOR_PORT", 6333)),
+        api_key=os.getenv("VECTOR_API_KEY"),
+        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
     )
 
-    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
 
     print("=" * 100)
     print("CLEAR GOOGLE DRIVE DOCUMENTS (KEEP METRIC DOCS)")
@@ -52,20 +53,17 @@ def clear_google_drive_docs():
 
     while True:
         points, offset = client.scroll(
-            collection,
-            limit=batch_size,
-            offset=offset,
-            with_payload=True
+            collection, limit=batch_size, offset=offset, with_payload=True
         )
 
         if not points:
             break
 
         for point in points:
-            source = point.payload.get('source', 'MISSING')
-            if source == 'google_drive':
+            source = point.payload.get("source", "MISSING")
+            if source == "google_drive":
                 google_drive_ids.append(point.id)
-            elif source == 'metric':
+            elif source == "metric":
                 metric_count += 1
             else:
                 other_count += 1
@@ -73,7 +71,7 @@ def clear_google_drive_docs():
         if offset is None:
             break
 
-    print(f"\n✅ Scan complete:")
+    print("\n✅ Scan complete:")
     print(f"  google_drive documents to DELETE: {len(google_drive_ids)}")
     print(f"  metric documents to KEEP: {metric_count}")
     print(f"  other documents: {other_count}")
@@ -86,8 +84,10 @@ def clear_google_drive_docs():
     print("Metric documents will remain intact.")
     print("You will need to re-ingest from Google Drive after this.")
 
-    response = input(f"\nDelete {len(google_drive_ids)} google_drive documents? (yes/no): ")
-    if response.lower() != 'yes':
+    response = input(
+        f"\nDelete {len(google_drive_ids)} google_drive documents? (yes/no): "
+    )
+    if response.lower() != "yes":
         print("Aborted.")
         return 1
 
@@ -95,27 +95,26 @@ def clear_google_drive_docs():
     print(f"\nDeleting {len(google_drive_ids)} google_drive documents...")
     batch_size = 100
     for i in range(0, len(google_drive_ids), batch_size):
-        batch = google_drive_ids[i:i + batch_size]
-        client.delete(
-            collection_name=collection,
-            points_selector=batch
+        batch = google_drive_ids[i : i + batch_size]
+        client.delete(collection_name=collection, points_selector=batch)
+        print(
+            f"  Deleted batch {i // batch_size + 1}/{(len(google_drive_ids) + batch_size - 1) // batch_size}"
         )
-        print(f"  Deleted batch {i // batch_size + 1}/{(len(google_drive_ids) + batch_size - 1) // batch_size}")
 
     # Get updated count
     info = client.get_collection(collection)
-    print(f"\n✅ Deletion complete!")
+    print("\n✅ Deletion complete!")
     print(f"Total documents remaining: {info.points_count}")
     print(f"  (should be ~{metric_count} metric docs + {other_count} other docs)")
 
     print("\nNext steps:")
     print("1. Run ingestion to repopulate google_drive documents:")
-    print(f"   cd ingest && python main.py --folder-id YOUR_FOLDER_ID")
+    print("   cd ingest && python main.py --folder-id YOUR_FOLDER_ID")
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(clear_google_drive_docs())
     except KeyboardInterrupt:

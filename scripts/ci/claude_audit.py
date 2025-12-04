@@ -160,7 +160,9 @@ Analyze the codebase and return ONLY the JSON (no markdown fences, no explanatio
 Analyze the codebase and return ONLY the JSON."""
 
         response = self.client.messages.create(
-            model=self.model, max_tokens=8192, messages=[{"role": "user", "content": prompt}]
+            model=self.model,
+            max_tokens=8192,
+            messages=[{"role": "user", "content": prompt}],
         )
 
         result_text = response.content[0].text
@@ -231,10 +233,10 @@ The code meets quality standards for merging.
 """
                 for v in [v for v in violations if v.get("severity") == "critical"]:
                     report += f"""
-**{v.get('file', 'unknown')}:{v.get('line', '?')}**
-- **Issue:** {v.get('issue', 'No description')}
-- **Fix:** {v.get('fix', 'No fix provided')}
-- **Estimate:** {v.get('estimate', 'Unknown')}
+**{v.get("file", "unknown")}:{v.get("line", "?")}**
+- **Issue:** {v.get("issue", "No description")}
+- **Fix:** {v.get("fix", "No fix provided")}
+- **Estimate:** {v.get("estimate", "Unknown")}
 
 """
 
@@ -245,10 +247,10 @@ The code meets quality standards for merging.
 """
                 for v in [v for v in violations if v.get("severity") == "warning"]:
                     report += f"""
-**{v.get('file', 'unknown')}:{v.get('line', '?')}**
-- **Issue:** {v.get('issue', 'No description')}
-- **Fix:** {v.get('fix', 'No fix provided')}
-- **Estimate:** {v.get('estimate', 'Unknown')}
+**{v.get("file", "unknown")}:{v.get("line", "?")}**
+- **Issue:** {v.get("issue", "No description")}
+- **Fix:** {v.get("fix", "No fix provided")}
+- **Estimate:** {v.get("estimate", "Unknown")}
 
 """
 
@@ -276,9 +278,9 @@ The code meets quality standards for merging.
         violations = result.get("violations", [])
 
         report = f"""
-{'='*60}
+{"=" * 60}
 Claude Code Quality Audit Report
-{'='*60}
+{"=" * 60}
 
 Status: {status}
 Critical (P0): {critical_count}
@@ -294,10 +296,10 @@ Total Violations: {len(violations)}
                 report += "\n❌ CRITICAL ISSUES (P0):\n" + "-" * 60 + "\n"
                 for v in [v for v in violations if v.get("severity") == "critical"]:
                     report += f"""
-File: {v.get('file', 'unknown')}:{v.get('line', '?')}
-Issue: {v.get('issue', 'No description')}
-Fix: {v.get('fix', 'No fix provided')}
-Estimate: {v.get('estimate', 'Unknown')}
+File: {v.get("file", "unknown")}:{v.get("line", "?")}
+Issue: {v.get("issue", "No description")}
+Fix: {v.get("fix", "No fix provided")}
+Estimate: {v.get("estimate", "Unknown")}
 
 """
 
@@ -305,9 +307,9 @@ Estimate: {v.get('estimate', 'Unknown')}
                 report += "\n⚠️  WARNING ISSUES (P1):\n" + "-" * 60 + "\n"
                 for v in [v for v in violations if v.get("severity") == "warning"]:
                     report += f"""
-File: {v.get('file', 'unknown')}:{v.get('line', '?')}
-Issue: {v.get('issue', 'No description')}
-Fix: {v.get('fix', 'No fix provided')}
+File: {v.get("file", "unknown")}:{v.get("line", "?")}
+Issue: {v.get("issue", "No description")}
+Fix: {v.get("fix", "No fix provided")}
 
 """
 
@@ -359,7 +361,9 @@ def main():
         help="Exit with code 1 if critical issues found",
     )
     parser.add_argument(
-        "--exit-on-warning", action="store_true", help="Exit with code 1 if any issues found"
+        "--exit-on-warning",
+        action="store_true",
+        help="Exit with code 1 if any issues found",
     )
 
     args = parser.parse_args()
@@ -367,7 +371,9 @@ def main():
     # Get API key
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        print("❌ Error: ANTHROPIC_API_KEY environment variable not set", file=sys.stderr)
+        print(
+            "❌ Error: ANTHROPIC_API_KEY environment variable not set", file=sys.stderr
+        )
         sys.exit(1)
 
     # Run audit
@@ -390,7 +396,10 @@ def main():
         warning_count = result.get("warning_count", 0)
 
         if args.exit_on_critical and critical_count > 0:
-            print(f"\n❌ BLOCKING: {critical_count} critical issues found", file=sys.stderr)
+            print(
+                f"\n❌ BLOCKING: {critical_count} critical issues found",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
         if args.exit_on_warning and (critical_count > 0 or warning_count > 0):

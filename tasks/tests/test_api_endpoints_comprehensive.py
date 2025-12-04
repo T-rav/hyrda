@@ -8,7 +8,6 @@ import pytest
 from fastapi import HTTPException
 
 
-
 # Re-use the factories but get the FastAPI app directly
 @pytest.fixture
 def app():
@@ -21,6 +20,7 @@ def app():
     os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
 
     from app import app as fastapi_app
+
     return fastapi_app
 
 
@@ -28,6 +28,7 @@ def app():
 def client(app):
     """Create test client for FastAPI app."""
     from fastapi.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -35,6 +36,7 @@ def client(app):
 def authenticated_client(app):
     """Create authenticated test client with dependency override."""
     from fastapi.testclient import TestClient
+
     from dependencies.auth import get_current_user
 
     # Override the get_current_user dependency to return a mock user
@@ -42,7 +44,7 @@ def authenticated_client(app):
         return {
             "email": "user@8thlight.com",
             "name": "Test User",
-            "picture": "https://example.com/photo.jpg"
+            "picture": "https://example.com/photo.jpg",
         }
 
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -58,7 +60,9 @@ def authenticated_client(app):
 @pytest.fixture
 def mock_oauth_env(monkeypatch):
     """Mock OAuth environment variables."""
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv(
+        "GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+    )
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
     monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
@@ -86,7 +90,14 @@ class TestAuthCallbackEndpoint:
     @patch("utils.auth.get_flow")
     @patch("utils.auth.verify_token")
     @patch("utils.auth.verify_domain")
-    def test_callback_success(self, mock_verify_domain, mock_verify_token, mock_get_flow, client, mock_oauth_env):
+    def test_callback_success(
+        self,
+        mock_verify_domain,
+        mock_verify_token,
+        mock_get_flow,
+        client,
+        mock_oauth_env,
+    ):
         """Test successful OAuth callback."""
         # Mock OAuth flow
         mock_flow = Mock()
@@ -99,7 +110,7 @@ class TestAuthCallbackEndpoint:
         mock_verify_token.return_value = {
             "email": "user@8thlight.com",
             "name": "Test User",
-            "picture": "https://example.com/photo.jpg"
+            "picture": "https://example.com/photo.jpg",
         }
 
         # Mock domain verification
@@ -112,7 +123,9 @@ class TestAuthCallbackEndpoint:
 
     @patch("utils.auth.get_flow")
     @patch("utils.auth.verify_token")
-    def test_callback_no_email_in_token(self, mock_verify_token, mock_get_flow, client, mock_oauth_env):
+    def test_callback_no_email_in_token(
+        self, mock_verify_token, mock_get_flow, client, mock_oauth_env
+    ):
         """Test callback fails when token has no email."""
         mock_flow = Mock()
         mock_credentials = Mock()
@@ -130,7 +143,14 @@ class TestAuthCallbackEndpoint:
     @patch("utils.auth.get_flow")
     @patch("utils.auth.verify_token")
     @patch("utils.auth.verify_domain")
-    def test_callback_domain_not_allowed(self, mock_verify_domain, mock_verify_token, mock_get_flow, client, mock_oauth_env):
+    def test_callback_domain_not_allowed(
+        self,
+        mock_verify_domain,
+        mock_verify_token,
+        mock_get_flow,
+        client,
+        mock_oauth_env,
+    ):
         """Test callback fails when email domain is not allowed."""
         mock_flow = Mock()
         mock_credentials = Mock()
@@ -187,7 +207,9 @@ class TestCredentialsListEndpoint:
         assert response.json() == {"credentials": []}
 
     @patch("api.credentials.get_db_session")
-    def test_list_credentials_with_active_credential(self, mock_db_session, authenticated_client):
+    def test_list_credentials_with_active_credential(
+        self, mock_db_session, authenticated_client
+    ):
         """Test listing credentials with active token."""
 
         # Mock credential with future expiry
@@ -198,7 +220,7 @@ class TestCredentialsListEndpoint:
         mock_cred.token_metadata = {"expiry": future_expiry.isoformat()}
         mock_cred.to_dict.return_value = {
             "credential_id": "test-cred-1",
-            "credential_name": "Production GDrive"
+            "credential_name": "Production GDrive",
         }
 
         mock_session = MagicMock()
@@ -212,9 +234,11 @@ class TestCredentialsListEndpoint:
         assert data["credentials"][0]["status"] == "active"
 
     @patch("api.credentials.get_db_session")
-    def test_list_credentials_with_expired_token(self, mock_db_session, authenticated_client):
+    def test_list_credentials_with_expired_token(
+        self, mock_db_session, authenticated_client
+    ):
         """Test listing credentials with expired token."""
-# Mock credential with past expiry
+        # Mock credential with past expiry
         mock_cred = Mock()
         mock_cred.credential_id = "test-cred-expired"
         mock_cred.credential_name = "Expired GDrive"
@@ -222,7 +246,7 @@ class TestCredentialsListEndpoint:
         mock_cred.token_metadata = {"expiry": past_expiry.isoformat()}
         mock_cred.to_dict.return_value = {
             "credential_id": "test-cred-expired",
-            "credential_name": "Expired GDrive"
+            "credential_name": "Expired GDrive",
         }
 
         mock_session = MagicMock()
@@ -235,9 +259,11 @@ class TestCredentialsListEndpoint:
         assert data["credentials"][0]["status"] == "expired"
 
     @patch("api.credentials.get_db_session")
-    def test_list_credentials_expiring_soon(self, mock_db_session, authenticated_client):
+    def test_list_credentials_expiring_soon(
+        self, mock_db_session, authenticated_client
+    ):
         """Test listing credentials with token expiring soon."""
-# Mock credential expiring in 12 hours
+        # Mock credential expiring in 12 hours
         mock_cred = Mock()
         mock_cred.credential_id = "test-cred-expiring"
         mock_cred.credential_name = "Expiring Soon GDrive"
@@ -245,7 +271,7 @@ class TestCredentialsListEndpoint:
         mock_cred.token_metadata = {"expiry": soon_expiry.isoformat()}
         mock_cred.to_dict.return_value = {
             "credential_id": "test-cred-expiring",
-            "credential_name": "Expiring Soon GDrive"
+            "credential_name": "Expiring Soon GDrive",
         }
 
         mock_session = MagicMock()
@@ -258,7 +284,9 @@ class TestCredentialsListEndpoint:
         assert data["credentials"][0]["status"] == "expiring_soon"
 
     @patch("api.credentials.get_db_session")
-    def test_list_credentials_no_expiry_info(self, mock_db_session, authenticated_client):
+    def test_list_credentials_no_expiry_info(
+        self, mock_db_session, authenticated_client
+    ):
         """Test listing credentials without expiry metadata."""
         mock_cred = Mock()
         mock_cred.credential_id = "test-cred-no-expiry"
@@ -266,7 +294,7 @@ class TestCredentialsListEndpoint:
         mock_cred.token_metadata = None  # No metadata
         mock_cred.to_dict.return_value = {
             "credential_id": "test-cred-no-expiry",
-            "credential_name": "No Expiry Info"
+            "credential_name": "No Expiry Info",
         }
 
         mock_session = MagicMock()
@@ -279,7 +307,9 @@ class TestCredentialsListEndpoint:
         assert data["credentials"][0]["status"] == "unknown"
 
     @patch("api.credentials.get_db_session")
-    def test_list_credentials_database_error(self, mock_db_session, authenticated_client):
+    def test_list_credentials_database_error(
+        self, mock_db_session, authenticated_client
+    ):
         """Test listing credentials handles database errors."""
         mock_db_session.side_effect = Exception("Database connection failed")
 
@@ -317,7 +347,9 @@ class TestCredentialsDeleteEndpoint:
         assert "not found" in response.json()["detail"]
 
     @patch("api.credentials.get_db_session")
-    def test_delete_credential_database_error(self, mock_db_session, authenticated_client):
+    def test_delete_credential_database_error(
+        self, mock_db_session, authenticated_client
+    ):
         """Test credential deletion handles database errors."""
         mock_db_session.side_effect = Exception("Database error")
 
@@ -336,10 +368,7 @@ class TestAuthDependencies:
         mock_request = Mock()
         mock_request.session = {
             "user_email": "user@8thlight.com",
-            "user_info": {
-                "email": "user@8thlight.com",
-                "name": "Test User"
-            }
+            "user_info": {"email": "user@8thlight.com", "name": "Test User"},
         }
 
         with patch("dependencies.auth.verify_domain", return_value=True):
@@ -368,7 +397,7 @@ class TestAuthDependencies:
         mock_request = Mock()
         mock_request.session = {
             "user_email": "attacker@evil.com",
-            "user_info": {"email": "attacker@evil.com"}
+            "user_info": {"email": "attacker@evil.com"},
         }
 
         with patch("dependencies.auth.verify_domain", return_value=False):
@@ -386,10 +415,7 @@ class TestAuthDependencies:
         mock_request = Mock()
         mock_request.session = {
             "user_email": "user@8thlight.com",
-            "user_info": {
-                "email": "user@8thlight.com",
-                "name": "Test User"
-            }
+            "user_info": {"email": "user@8thlight.com", "name": "Test User"},
         }
 
         with patch("dependencies.auth.verify_domain", return_value=True):
@@ -416,7 +442,7 @@ class TestAuthDependencies:
         mock_request = Mock()
         mock_request.session = {
             "user_email": "attacker@evil.com",
-            "user_info": {"email": "attacker@evil.com"}
+            "user_info": {"email": "attacker@evil.com"},
         }
 
         with patch("dependencies.auth.verify_domain", return_value=False):
@@ -437,7 +463,7 @@ class TestCredentialsEndpointIntegration:
         mock_cred1.token_metadata = None
         mock_cred1.to_dict.return_value = {
             "credential_id": "cred-1",
-            "credential_name": "Credential 1"
+            "credential_name": "Credential 1",
         }
 
         mock_cred2 = Mock()
@@ -446,7 +472,7 @@ class TestCredentialsEndpointIntegration:
         mock_cred2.token_metadata = None
         mock_cred2.to_dict.return_value = {
             "credential_id": "cred-2",
-            "credential_name": "Credential 2"
+            "credential_name": "Credential 2",
         }
 
         mock_session = MagicMock()

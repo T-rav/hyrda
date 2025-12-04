@@ -52,11 +52,13 @@ def sync_users_to_database() -> dict:
                     AND email_address LIKE :domain_pattern
                     ORDER BY email_address
                 """),
-                {"domain_pattern": f"%{allowed_domain}"}
+                {"domain_pattern": f"%{allowed_domain}"},
             )
 
             slack_users = result.fetchall()
-            logger.info(f"Found {len(slack_users)} users matching {allowed_domain} in slack_users table")
+            logger.info(
+                f"Found {len(slack_users)} users matching {allowed_domain} in slack_users table"
+            )
 
             # Sync to security database
             with get_db_session() as security_session:
@@ -108,7 +110,9 @@ def sync_users_to_database() -> dict:
 
                 # Soft delete users no longer in slack_users or inactive
                 # Get all currently active users in security database
-                all_security_users = security_session.query(User).filter(User.is_active).all()
+                all_security_users = (
+                    security_session.query(User).filter(User.is_active).all()
+                )
 
                 # Get all active slack user IDs from this sync
                 active_slack_ids = {user[0] for user in slack_users}
@@ -116,7 +120,9 @@ def sync_users_to_database() -> dict:
                 # Mark users as inactive if they're not in the current active sync
                 for security_user in all_security_users:
                     if security_user.slack_user_id not in active_slack_ids:
-                        logger.info(f"Soft deleting user: {security_user.email} (no longer active in Slack)")
+                        logger.info(
+                            f"Soft deleting user: {security_user.email} (no longer active in Slack)"
+                        )
                         security_user.is_active = False
                         security_user.last_synced_at = datetime.utcnow()
                         stats["deactivated"] += 1

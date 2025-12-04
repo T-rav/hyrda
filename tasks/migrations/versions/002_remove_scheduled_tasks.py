@@ -17,11 +17,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Upgrade."""
     # Drop the scheduled_tasks table if it exists
     op.execute("DROP TABLE IF EXISTS scheduled_tasks")
 
 
 def downgrade() -> None:
+    """Downgrade."""
     # Recreate the scheduled_tasks table if needed to rollback
     op.create_table(
         "scheduled_tasks",

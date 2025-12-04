@@ -2,6 +2,7 @@
 """
 Count documents by source type in Qdrant.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -19,13 +20,13 @@ from qdrant_client import QdrantClient
 def count_sources():
     """Count documents by source."""
     client = QdrantClient(
-        host=os.getenv('VECTOR_HOST', 'localhost'),
-        port=int(os.getenv('VECTOR_PORT', 6333)),
-        api_key=os.getenv('VECTOR_API_KEY'),
-        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
+        host=os.getenv("VECTOR_HOST", "localhost"),
+        port=int(os.getenv("VECTOR_PORT", 6333)),
+        api_key=os.getenv("VECTOR_API_KEY"),
+        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
     )
 
-    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
 
     print("=" * 100)
     print("DOCUMENT SOURCE ANALYSIS")
@@ -45,17 +46,14 @@ def count_sources():
 
     while True:
         points, offset = client.scroll(
-            collection,
-            limit=batch_size,
-            offset=offset,
-            with_payload=True
+            collection, limit=batch_size, offset=offset, with_payload=True
         )
 
         if not points:
             break
 
         for point in points:
-            source = point.payload.get('source', 'MISSING')
+            source = point.payload.get("source", "MISSING")
             sources[source] += 1
             scanned += 1
 
@@ -81,10 +79,7 @@ def count_sources():
 
     while True:
         points, offset = client.scroll(
-            collection,
-            limit=batch_size,
-            offset=offset,
-            with_payload=True
+            collection, limit=batch_size, offset=offset, with_payload=True
         )
 
         if not points:
@@ -94,11 +89,9 @@ def count_sources():
             keys = list(point.payload.keys())
             # Check if document has suspiciously few metadata keys
             if len(keys) <= 2:  # Only _id and _collection_name, or similar
-                malformed.append({
-                    'id': point.id,
-                    'keys': keys,
-                    'payload': point.payload
-                })
+                malformed.append(
+                    {"id": point.id, "keys": keys, "payload": point.payload}
+                )
 
         if offset is None:
             break
@@ -116,7 +109,7 @@ def count_sources():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(count_sources())
     except KeyboardInterrupt:

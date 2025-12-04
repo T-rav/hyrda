@@ -137,10 +137,14 @@ class TestBatchProcessing:
         def mock_context_manager():
             nonlocal session_enter_count
             session_enter_count += 1
-            return MagicMock(__enter__=lambda self: db_session, __exit__=lambda *args: None)()
+            return MagicMock(
+                __enter__=lambda self: db_session, __exit__=lambda *args: None
+            )()
 
         with patch("services.user_sync.get_user_provider", return_value=mock_provider):
-            with patch("services.user_sync.get_db_session", side_effect=mock_context_manager):
+            with patch(
+                "services.user_sync.get_db_session", side_effect=mock_context_manager
+            ):
                 sync_users_from_provider()
 
                 # Verify session context manager was entered multiple times

@@ -54,6 +54,7 @@ class CircuitBreaker:
         """Decorator to wrap function with circuit breaker."""
 
         async def wrapper(*args, **kwargs):
+            """Wrapper."""
             # Check if circuit is open
             if self.state == CircuitState.OPEN:
                 # Check if recovery timeout has passed

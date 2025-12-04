@@ -9,7 +9,7 @@ def error_response(
     message: str,
     status_code: int = 400,
     error_code: str | None = None,
-    details: dict[str, Any] | None = None
+    details: dict[str, Any] | None = None,
 ) -> JSONResponse:
     """Create a standardized error response.
 
@@ -54,7 +54,7 @@ def error_response(
 def success_response(
     data: dict[str, Any] | None = None,
     message: str | None = None,
-    status_code: int = 200
+    status_code: int = 200,
 ) -> JSONResponse:
     """Create a standardized success response.
 

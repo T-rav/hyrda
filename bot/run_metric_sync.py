@@ -322,6 +322,7 @@ class MetricSyncRunner:
             batch = vectors[i : i + batch_size]
 
             def upsert_batch(b=batch):
+                """Upsert Batch."""
                 return vector_store.index.upsert(vectors=b, namespace="metric")
 
             await asyncio.get_event_loop().run_in_executor(None, upsert_batch)

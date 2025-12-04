@@ -20,11 +20,20 @@ async def test_real_world():
 
     edge_cases = [
         # Punctuation edge case
-        ("J.P. Morgan case studies", "j.p. morgan or j.p morgan - should work either way"),
+        (
+            "J.P. Morgan case studies",
+            "j.p. morgan or j.p morgan - should work either way",
+        ),
         # URL in parentheses (after Slack URL cleaning)
-        ("Baker College (baker.edu) existing client", "baker.edu included but shouldn't cause issue"),
+        (
+            "Baker College (baker.edu) existing client",
+            "baker.edu included but shouldn't cause issue",
+        ),
         # Company with stop word in name (rare but possible)
-        ("Past Perfect Software projects", "Will extract nothing - but unlikely real company"),
+        (
+            "Past Perfect Software projects",
+            "Will extract nothing - but unlikely real company",
+        ),
     ]
 
     print("=" * 80)
@@ -34,10 +43,10 @@ async def test_real_world():
     issues = []
 
     for query, explanation in edge_cases:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"Query: {query}")
         print(f"Note: {explanation}")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         try:
             result = await tool._arun(query=query, effort="low")
@@ -50,7 +59,7 @@ async def test_real_world():
             else:
                 print("⚠️  Unclear relationship status")
 
-            print(f"\nFirst 300 chars:")
+            print("\nFirst 300 chars:")
             print(result[:300])
 
         except Exception as e:

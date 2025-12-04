@@ -21,7 +21,9 @@ MAX_RATE_LIMIT_KEYS = 10000
 _rate_limit_storage: OrderedDict[str, list[float]] = OrderedDict()
 
 
-def get_rate_limit_key(identifier: str | None = None, request_ip: str | None = None) -> str:
+def get_rate_limit_key(
+    identifier: str | None = None, request_ip: str | None = None
+) -> str:
     """Generate rate limit key for the current request.
 
     Args:
@@ -41,9 +43,7 @@ def get_rate_limit_key(identifier: str | None = None, request_ip: str | None = N
 
 
 def check_rate_limit(
-    key: str,
-    max_requests: int,
-    window_seconds: int
+    key: str, max_requests: int, window_seconds: int
 ) -> tuple[bool, dict[str, Any]]:
     """Check if request is within rate limit.
 
@@ -120,7 +120,7 @@ def check_rate_limit(
 def rate_limit(
     max_requests: int = 100,
     window_seconds: int = 3600,
-    identifier_func: Callable[[],  str] | None = None
+    identifier_func: Callable[[], str] | None = None,
 ):
     """Decorator to add rate limiting to an endpoint.
 
@@ -135,14 +135,19 @@ def rate_limit(
     Returns:
         No-op decorator (rate limiting disabled during FastAPI migration)
     """
+
     def decorator(f: Callable) -> Callable:
         @wraps(f)
         def wrapper(*args, **kwargs):
             # TODO: Implement FastAPI-compatible rate limiting
             # For now, just pass through
-            logger.debug(f"Rate limiting disabled for {f.__name__} during FastAPI migration")
+            logger.debug(
+                f"Rate limiting disabled for {f.__name__} during FastAPI migration"
+            )
             return f(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 

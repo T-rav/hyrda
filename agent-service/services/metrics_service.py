@@ -524,7 +524,9 @@ class MetricsService:
         # Prometheus metrics (if enabled)
         if self.enabled:
             try:
-                self.agent_invocations.labels(agent_name=agent_name, status=status).inc()
+                self.agent_invocations.labels(
+                    agent_name=agent_name, status=status
+                ).inc()
                 if duration > 0:
                     self.agent_duration.labels(agent_name=agent_name).observe(duration)
             except Exception as e:
@@ -556,7 +558,9 @@ class MetricsService:
                     "success_rate": round((successful / total) * 100, 1)
                     if total > 0
                     else 0.0,
-                    "error_rate": round((failed / total) * 100, 1) if total > 0 else 0.0,
+                    "error_rate": round((failed / total) * 100, 1)
+                    if total > 0
+                    else 0.0,
                     "by_agent": by_agent,
                     "last_reset": self._agent_stats["last_reset"],
                 }

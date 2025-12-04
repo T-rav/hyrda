@@ -10,6 +10,7 @@ class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging in production"""
 
     def format(self, record):
+        """Format."""
         log_entry = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,

@@ -2,9 +2,8 @@ import os
 from pathlib import Path
 
 import pytest
-from dotenv import load_dotenv
-
 from agents.profiler.tools.internal_search import internal_search_tool
+from dotenv import load_dotenv
 
 # Load root-level .env so VECTOR_* and LLM keys are available
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -58,7 +57,9 @@ async def test_sanmar_false_positive_investigation():
     # The test expects "No prior engagement" as the correct result
     if "Relationship status: No prior engagement" in result:
         print("\n✅ PASS: Correctly identified SanMar as having no prior engagement")
-        print("   The fix prevents Samaritan Ministries CRM records from causing false positives")
+        print(
+            "   The fix prevents Samaritan Ministries CRM records from causing false positives"
+        )
     elif "Relationship status: Existing client" in result:
         print("\n🚨 FALSE POSITIVE DETECTED (BUG REGRESSION)!")
         print("-" * 80)

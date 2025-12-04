@@ -75,15 +75,15 @@ class HybridSystemTester:
                 "[FILENAME] ML Introduction [/FILENAME]\nMachine learning is powerful."
             )
 
-            assert (
-                enhanced[0] == expected
-            ), f"Expected '{expected}', got '{enhanced[0]}'"
+            assert enhanced[0] == expected, (
+                f"Expected '{expected}', got '{enhanced[0]}'"
+            )
 
             # Test title extraction
             extracted = self.title_service.extract_title_from_enhanced_text(enhanced[0])
-            assert (
-                extracted == "ML Introduction"
-            ), f"Title extraction failed: {extracted}"
+            assert extracted == "ML Introduction", (
+                f"Title extraction failed: {extracted}"
+            )
 
             # Test dual indexing preparation
             documents = [{"content": texts[0], "metadata": metadata[0]}]
@@ -91,12 +91,12 @@ class HybridSystemTester:
 
             assert "dense" in dual_docs, "Missing dense documents"
             assert "sparse" in dual_docs, "Missing sparse documents"
-            assert (
-                dual_docs["dense"][0]["content"] == expected
-            ), "Dense content incorrect"
-            assert (
-                dual_docs["sparse"][0]["title"] == "ML Introduction"
-            ), "Sparse title missing"
+            assert dual_docs["dense"][0]["content"] == expected, (
+                "Dense content incorrect"
+            )
+            assert dual_docs["sparse"][0]["title"] == "ML Introduction", (
+                "Sparse title missing"
+            )
 
             duration = time.time() - start
             self.add_result(
@@ -149,17 +149,17 @@ class HybridSystemTester:
             # RRF score for C: 1/(60+2) = 1/62 ≈ 0.0161
 
             assert fused[0].id == "B", f"Expected B to rank first, got {fused[0].id}"
-            assert (
-                fused[0].source == "hybrid"
-            ), "Fused results should be marked as hybrid"
+            assert fused[0].source == "hybrid", (
+                "Fused results should be marked as hybrid"
+            )
             assert fused[0].rank == 1, "First result should have rank 1"
 
             # Verify mathematical correctness
             expected_score_b = 1.0 / 62 + 1.0 / 61
             actual_score_b = fused[0].similarity
-            assert (
-                abs(actual_score_b - expected_score_b) < 0.001
-            ), f"RRF score incorrect: {actual_score_b}"
+            assert abs(actual_score_b - expected_score_b) < 0.001, (
+                f"RRF score incorrect: {actual_score_b}"
+            )
 
             duration = time.time() - start
             self.add_result(
@@ -230,27 +230,27 @@ class HybridSystemTester:
 
             # Verify dual ingestion
             assert len(dense_store.ingested_docs) == 2, "Dense store should have 2 docs"
-            assert (
-                len(sparse_store.ingested_docs) == 2
-            ), "Sparse store should have 2 docs"
+            assert len(sparse_store.ingested_docs) == 2, (
+                "Sparse store should have 2 docs"
+            )
 
             # Verify title injection in dense store
             dense_doc = dense_store.ingested_docs[0]
-            assert (
-                "[FILENAME] AI Revolution [/FILENAME]" in dense_doc["content"]
-            ), "Title injection missing in dense store"
-            assert (
-                "Artificial intelligence is transforming" in dense_doc["content"]
-            ), "Original content missing"
+            assert "[FILENAME] AI Revolution [/FILENAME]" in dense_doc["content"], (
+                "Title injection missing in dense store"
+            )
+            assert "Artificial intelligence is transforming" in dense_doc["content"], (
+                "Original content missing"
+            )
 
             # Verify separate title in sparse store
             sparse_doc = sparse_store.ingested_docs[0]
-            assert (
-                sparse_doc["content"] == original_texts[0]
-            ), "Sparse store should have original content"
-            assert (
-                sparse_doc["metadata"]["title"] == "AI Revolution"
-            ), "Sparse store missing title field"
+            assert sparse_doc["content"] == original_texts[0], (
+                "Sparse store should have original content"
+            )
+            assert sparse_doc["metadata"]["title"] == "AI Revolution", (
+                "Sparse store missing title field"
+            )
 
             duration = time.time() - start
             self.add_result(
@@ -274,12 +274,12 @@ class HybridSystemTester:
             vector_settings = VectorSettings(
                 provider="pinecone", api_key="test-key", collection_name="test-index"
             )
-            assert (
-                vector_settings.provider == "pinecone"
-            ), "Vector settings provider incorrect"
-            assert (
-                vector_settings.api_key.get_secret_value() == "test-key"
-            ), "API key not working"
+            assert vector_settings.provider == "pinecone", (
+                "Vector settings provider incorrect"
+            )
+            assert vector_settings.api_key.get_secret_value() == "test-key", (
+                "API key not working"
+            )
 
             # Test HybridSettings
             hybrid_settings = HybridSettings(
@@ -340,9 +340,9 @@ class HybridSystemTester:
             enhanced_embedding = embedding_service.embed_texts(enhanced_texts)[0]
 
             # Embeddings should be different (title affects the text)
-            assert (
-                original_embedding != enhanced_embedding
-            ), "Title injection should change embeddings"
+            assert original_embedding != enhanced_embedding, (
+                "Title injection should change embeddings"
+            )
 
             # Enhanced text should contain title
             assert (

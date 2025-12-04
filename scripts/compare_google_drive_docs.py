@@ -2,6 +2,7 @@
 """
 Analyze google_drive documents to understand the difference between environments.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -19,13 +20,13 @@ from qdrant_client import QdrantClient
 def analyze_google_drive_docs():
     """Analyze google_drive documents."""
     client = QdrantClient(
-        host=os.getenv('VECTOR_HOST', 'localhost'),
-        port=int(os.getenv('VECTOR_PORT', 6333)),
-        api_key=os.getenv('VECTOR_API_KEY'),
-        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
+        host=os.getenv("VECTOR_HOST", "localhost"),
+        port=int(os.getenv("VECTOR_PORT", 6333)),
+        api_key=os.getenv("VECTOR_API_KEY"),
+        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
     )
 
-    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
 
     print("=" * 100)
     print("GOOGLE DRIVE DOCUMENT ANALYSIS")
@@ -44,20 +45,17 @@ def analyze_google_drive_docs():
 
     while True:
         points, offset = client.scroll(
-            collection,
-            limit=batch_size,
-            offset=offset,
-            with_payload=True
+            collection, limit=batch_size, offset=offset, with_payload=True
         )
 
         if not points:
             break
 
         for point in points:
-            source = point.payload.get('source', 'MISSING')
+            source = point.payload.get("source", "MISSING")
 
-            if source == 'google_drive':
-                file_name = point.payload.get('file_name')
+            if source == "google_drive":
+                file_name = point.payload.get("file_name")
 
                 if not file_name:
                     missing_file_name += 1
@@ -97,7 +95,7 @@ def analyze_google_drive_docs():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(analyze_google_drive_docs())
     except KeyboardInterrupt:

@@ -8,6 +8,7 @@ Keeps only:
 
 Deletes everything else (SEC filings, unknown sources, malformed docs, etc.)
 """
+
 import os
 import sys
 from pathlib import Path
@@ -24,13 +25,13 @@ from qdrant_client import QdrantClient
 def prune_vector_db():
     """Delete all documents except google_drive and metric sources."""
     client = QdrantClient(
-        host=os.getenv('VECTOR_HOST', 'localhost'),
-        port=int(os.getenv('VECTOR_PORT', 6333)),
-        api_key=os.getenv('VECTOR_API_KEY'),
-        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
+        host=os.getenv("VECTOR_HOST", "localhost"),
+        port=int(os.getenv("VECTOR_PORT", 6333)),
+        api_key=os.getenv("VECTOR_API_KEY"),
+        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
     )
 
-    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
 
     print("=" * 100)
     print("PRUNE VECTOR DATABASE - KEEP ONLY GOOGLE DRIVE AND METRIC")
@@ -43,7 +44,7 @@ def prune_vector_db():
     # Find documents to delete (NOT google_drive or metric, OR malformed)
     print("\nScanning for documents to delete...")
 
-    allowed_sources = {'google_drive', 'metric'}
+    allowed_sources = {"google_drive", "metric"}
     to_delete = []
     to_keep_by_source = {}
     malformed_count = 0
@@ -53,23 +54,20 @@ def prune_vector_db():
 
     while True:
         points, offset = client.scroll(
-            collection,
-            limit=batch_size,
-            offset=offset,
-            with_payload=True
+            collection, limit=batch_size, offset=offset, with_payload=True
         )
 
         if not points:
             break
 
         for point in points:
-            source = point.payload.get('source', 'MISSING')
+            source = point.payload.get("source", "MISSING")
             payload_keys = list(point.payload.keys())
 
             # Check if document is malformed (only has _id and _collection_name)
             # These documents have no actual content and cause false positives
             is_malformed = len(payload_keys) <= 2 and all(
-                key.startswith('_') for key in payload_keys
+                key.startswith("_") for key in payload_keys
             )
 
             if is_malformed:
@@ -91,7 +89,9 @@ def prune_vector_db():
             break
 
         if scanned % 10000 == 0:
-            print(f"  Scanned {scanned} documents... (found {len(to_delete)} to delete)")
+            print(
+                f"  Scanned {scanned} documents... (found {len(to_delete)} to delete)"
+            )
 
     print(f"\n✅ Scanned {scanned} total documents")
 
@@ -101,7 +101,9 @@ def prune_vector_db():
 
     print(f"\nDocuments to DELETE: {len(to_delete)}")
     if malformed_count > 0:
-        print(f"  - {malformed_count} malformed documents (only _id and _collection_name)")
+        print(
+            f"  - {malformed_count} malformed documents (only _id and _collection_name)"
+        )
         print(f"  - {len(to_delete) - malformed_count} wrong source documents")
     print(f"  ({len(to_delete) / scanned * 100:.1f}% of total)")
 
@@ -110,7 +112,7 @@ def prune_vector_db():
         return 0
 
     response = input(f"\nDelete {len(to_delete)} documents? (yes/no): ")
-    if response.lower() != 'yes':
+    if response.lower() != "yes":
         print("Aborted.")
         return 1
 
@@ -118,16 +120,15 @@ def prune_vector_db():
     print(f"\nDeleting {len(to_delete)} documents...")
     batch_size = 100
     for i in range(0, len(to_delete), batch_size):
-        batch = to_delete[i:i + batch_size]
-        client.delete(
-            collection_name=collection,
-            points_selector=batch
+        batch = to_delete[i : i + batch_size]
+        client.delete(collection_name=collection, points_selector=batch)
+        print(
+            f"  Deleted batch {i // batch_size + 1}/{(len(to_delete) + batch_size - 1) // batch_size}"
         )
-        print(f"  Deleted batch {i // batch_size + 1}/{(len(to_delete) + batch_size - 1) // batch_size}")
 
     # Get updated count
     info = client.get_collection(collection)
-    print(f"\n✅ Pruning complete!")
+    print("\n✅ Pruning complete!")
     print(f"Total documents AFTER pruning: {info.points_count}")
     print(f"Deleted: {len(to_delete)} documents")
     print(f"Kept: {info.points_count} documents (google_drive + metric only)")
@@ -135,7 +136,7 @@ def prune_vector_db():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(prune_vector_db())
     except KeyboardInterrupt:

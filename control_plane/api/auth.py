@@ -5,7 +5,13 @@ import os
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from utils.auth import AuditLogger, get_flow, get_redirect_uri, verify_domain, verify_token
+from utils.auth import (
+    AuditLogger,
+    get_flow,
+    get_redirect_uri,
+    verify_domain,
+    verify_token,
+)
 from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
@@ -44,7 +50,9 @@ async def auth_callback(request: Request):
             error="CSRF token missing - potential session fixation attack",
         )
         request.session.clear()
-        raise HTTPException(status_code=403, detail="Invalid session - please try again")
+        raise HTTPException(
+            status_code=403, detail="Invalid session - please try again"
+        )
 
     try:
         # Create OAuth flow

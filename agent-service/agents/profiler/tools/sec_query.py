@@ -67,6 +67,7 @@ class SECQueryTool(BaseTool):
     openai_api_key: str | None = None
 
     class Config:
+        """Config class."""
         arbitrary_types_allowed = True
 
     def __init__(self, llm: Any = None, openai_api_key: str | None = None, **kwargs):
@@ -182,7 +183,7 @@ class SECQueryTool(BaseTool):
                     # Process all chunks from the same filing together
                     filing_groups: dict[tuple, list[tuple[str, dict]]] = {}
                     for chunk, metadata in zip(
-                        cached_data["chunks"], cached_data["chunk_metadata"]
+                        cached_data["chunks"], cached_data["chunk_metadata"], strict=False
                     ):
                         # Create a key from filing-level metadata (excluding chunk_index)
                         filing_key = (
@@ -249,7 +250,9 @@ class SECQueryTool(BaseTool):
 
                     # Track for caching
                     all_chunks.extend(chunks)
-                    all_chunk_metadata.extend([filing_metadata.copy() for _ in range(len(chunks))])
+                    all_chunk_metadata.extend(
+                        [filing_metadata.copy() for _ in range(len(chunks))]
+                    )
 
                 # Cache the results
                 embeddings_array = vector_search.get_embeddings_array()

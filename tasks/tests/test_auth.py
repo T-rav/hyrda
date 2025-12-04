@@ -14,7 +14,11 @@ if str(tasks_dir) not in sys.path:
 
 import utils.auth  # noqa: E402, I001
 
-from tests.factories import FastAPIAppFactory, MockJobRegistryFactory, MockSchedulerFactory  # noqa: E402
+from tests.factories import (
+    FastAPIAppFactory,
+    MockJobRegistryFactory,
+    MockSchedulerFactory,
+)  # noqa: E402
 
 
 # Auth tests need their own fixtures that don't set ENVIRONMENT=testing
@@ -164,10 +168,11 @@ class TestOAuthFlow:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("utils.auth.GOOGLE_CLIENT_ID", None),
-            patch("utils.auth.GOOGLE_CLIENT_SECRET", None),
+            patch("utils.auth.GOOGLE_CLIENT_SECRET", None),pytest.raises(
+            utils.auth.AuthError, match="Google OAuth not configured"
+        )
         ):
-            with pytest.raises(utils.auth.AuthError, match="Google OAuth not configured"):
-                utils.auth.get_flow("http://localhost:5001/auth/callback")
+            utils.auth.get_flow("http://localhost:5001/auth/callback")
 
 
 class TestTokenVerification:
@@ -283,7 +288,9 @@ class TestDomainVerificationEdgeCases:
     def test_verify_domain_case_insensitive(self, mock_oauth_env):
         """Test that domain check handles mixed case."""
         # Domain should match case-insensitively
-        assert utils.auth.verify_domain("USER@8THLIGHT.COM") is False  # Current impl is case-sensitive
+        assert (
+            utils.auth.verify_domain("USER@8THLIGHT.COM") is False
+        )  # Current impl is case-sensitive
         assert utils.auth.verify_domain("user@8thlight.com") is True
 
     def test_verify_domain_subdomain_rejected(self, mock_oauth_env):

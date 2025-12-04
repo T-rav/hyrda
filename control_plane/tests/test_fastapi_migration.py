@@ -250,8 +250,9 @@ class TestFastAPIMigrationCompatibility:
                 "GOOGLE_OAUTH_CLIENT_SECRET": "test-secret",
             },
         ):
-            with patch("utils.auth.GOOGLE_CLIENT_ID", "test-id"), patch(
-                "utils.auth.GOOGLE_CLIENT_SECRET", "test-secret"
+            with (
+                patch("utils.auth.GOOGLE_CLIENT_ID", "test-id"),
+                patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-secret"),
             ):
                 flow = get_flow("http://localhost:6001/callback")
                 assert flow is not None

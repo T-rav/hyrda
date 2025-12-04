@@ -1,6 +1,5 @@
 """User model for security database - supports multiple identity providers."""
 
-
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -55,4 +54,6 @@ class User(Base):
 
     def __repr__(self) -> str:
         """Return string representation of user."""
-        return f"<User(email='{self.email}', primary_provider='{self.primary_provider}')>"
+        return (
+            f"<User(email='{self.email}', primary_provider='{self.primary_provider}')>"
+        )

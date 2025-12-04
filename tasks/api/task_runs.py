@@ -88,9 +88,7 @@ async def list_task_runs(
                 if run.task_config_snapshot:
                     job_type = run.task_config_snapshot.get("job_type")
                     # Try to get task_name from snapshot first (most reliable)
-                    task_name_from_snapshot = run.task_config_snapshot.get(
-                        "task_name"
-                    )
+                    task_name_from_snapshot = run.task_config_snapshot.get("task_name")
                     if task_name_from_snapshot:
                         job_name = task_name_from_snapshot
                     else:

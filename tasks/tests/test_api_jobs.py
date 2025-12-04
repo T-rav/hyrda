@@ -17,6 +17,7 @@ def app():
     os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
 
     from app import app as fastapi_app
+
     return fastapi_app
 
 
@@ -29,7 +30,7 @@ def authenticated_client(app):
         return {
             "email": "user@8thlight.com",
             "name": "Test User",
-            "picture": "https://example.com/photo.jpg"
+            "picture": "https://example.com/photo.jpg",
         }
 
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -42,10 +43,7 @@ def authenticated_client(app):
 def mock_scheduler():
     """Create mock scheduler service."""
     scheduler = MagicMock()
-    scheduler.get_scheduler_info.return_value = {
-        "state": "running",
-        "jobs_count": 5
-    }
+    scheduler.get_scheduler_info.return_value = {"state": "running", "jobs_count": 5}
     return scheduler
 
 
@@ -55,7 +53,7 @@ def mock_job_registry():
     registry = MagicMock()
     registry.get_available_job_types.return_value = [
         {"type": "slack_user_import", "name": "Slack User Import"},
-        {"type": "gdrive_ingest", "name": "Google Drive Ingestion"}
+        {"type": "gdrive_ingest", "name": "Google Drive Ingestion"},
     ]
     return registry
 
@@ -100,7 +98,9 @@ class TestListJobsEndpoint:
     """Test GET /api/jobs endpoint."""
 
     @patch("api.jobs.get_db_session")
-    def test_list_jobs_success(self, mock_db_session, client_with_services, mock_scheduler):
+    def test_list_jobs_success(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
         """Test listing jobs successfully."""
         mock_job1 = Mock()
         mock_job1.id = "job-1"
@@ -110,7 +110,7 @@ class TestListJobsEndpoint:
         mock_scheduler.get_jobs.return_value = [mock_job1, mock_job2]
         mock_scheduler.get_job_info.side_effect = [
             {"id": "job-1", "name": "Job 1", "next_run_time": "2024-01-20T10:00:00Z"},
-            {"id": "job-2", "name": "Job 2", "next_run_time": "2024-01-20T11:00:00Z"}
+            {"id": "job-2", "name": "Job 2", "next_run_time": "2024-01-20T11:00:00Z"},
         ]
 
         # Mock empty metadata
@@ -126,7 +126,9 @@ class TestListJobsEndpoint:
         assert data["jobs"][1]["id"] == "job-2"
 
     @patch("api.jobs.get_db_session")
-    def test_list_jobs_with_custom_names(self, mock_db_session, client_with_services, mock_scheduler):
+    def test_list_jobs_with_custom_names(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
         """Test listing jobs with custom task names from metadata."""
         from models.task_metadata import TaskMetadata
 
@@ -135,7 +137,7 @@ class TestListJobsEndpoint:
         mock_scheduler.get_jobs.return_value = [mock_job]
         mock_scheduler.get_job_info.return_value = {
             "id": "job-1",
-            "name": "Default Name"
+            "name": "Default Name",
         }
 
         # Mock metadata with custom name
@@ -167,7 +169,7 @@ class TestGetJobEndpoint:
         mock_scheduler.get_job_info.return_value = {
             "id": "job-1",
             "name": "Test Job",
-            "next_run_time": "2024-01-20T10:00:00Z"
+            "next_run_time": "2024-01-20T10:00:00Z",
         }
 
         response = client_with_services.get("/api/jobs/job-1")
@@ -195,7 +197,9 @@ class TestCreateJobEndpoint:
     """Test POST /api/jobs endpoint."""
 
     @patch("api.jobs.get_db_session")
-    def test_create_job_success(self, mock_db_session, client_with_services, mock_job_registry):
+    def test_create_job_success(
+        self, mock_db_session, client_with_services, mock_job_registry
+    ):
         """Test creating job successfully."""
         mock_job = Mock()
         mock_job.id = "new-job-1"
@@ -204,12 +208,15 @@ class TestCreateJobEndpoint:
         mock_session = MagicMock()
         mock_db_session.return_value.__enter__.return_value = mock_session
 
-        response = client_with_services.post("/api/jobs", json={
-            "job_type": "slack_user_import",
-            "schedule": {"type": "cron", "cron": "0 0 * * *"},
-            "parameters": {},
-            "task_name": "Daily User Import"
-        })
+        response = client_with_services.post(
+            "/api/jobs",
+            json={
+                "job_type": "slack_user_import",
+                "schedule": {"type": "cron", "cron": "0 0 * * *"},
+                "parameters": {},
+                "task_name": "Daily User Import",
+            },
+        )
 
         assert response.status_code == 200
         data = response.json()
@@ -218,10 +225,9 @@ class TestCreateJobEndpoint:
 
     def test_create_job_missing_job_type(self, client_with_services):
         """Test creating job without job_type returns 400."""
-        response = client_with_services.post("/api/jobs", json={
-            "schedule": {"type": "cron"},
-            "parameters": {}
-        })
+        response = client_with_services.post(
+            "/api/jobs", json={"schedule": {"type": "cron"}, "parameters": {}}
+        )
 
         assert response.status_code == 400
         assert "job_type is required" in response.json()["detail"]
@@ -229,30 +235,33 @@ class TestCreateJobEndpoint:
     def test_create_job_no_data(self, client_with_services):
         """Test creating job without data returns 400."""
         response = client_with_services.post("/api/jobs", json=None)
-        assert response.status_code in [400, 422]  # FastAPI may return 422 for invalid JSON
+        assert response.status_code in [
+            400,
+            422,
+        ]  # FastAPI may return 422 for invalid JSON
 
     def test_create_job_services_not_initialized(self, authenticated_client, app):
         """Test creating job when services not initialized."""
         app.state.scheduler_service = None
         app.state.job_registry = None
 
-        response = authenticated_client.post("/api/jobs", json={
-            "job_type": "test_job",
-            "schedule": {}
-        })
+        response = authenticated_client.post(
+            "/api/jobs", json={"job_type": "test_job", "schedule": {}}
+        )
 
         assert response.status_code == 500
         assert "not initialized" in response.json()["detail"]
 
     @patch("api.jobs.get_db_session")
-    def test_create_job_registry_error(self, mock_db_session, client_with_services, mock_job_registry):
+    def test_create_job_registry_error(
+        self, mock_db_session, client_with_services, mock_job_registry
+    ):
         """Test creating job handles registry errors."""
         mock_job_registry.create_job.side_effect = Exception("Invalid job type")
 
-        response = client_with_services.post("/api/jobs", json={
-            "job_type": "invalid_type",
-            "schedule": {}
-        })
+        response = client_with_services.post(
+            "/api/jobs", json={"job_type": "invalid_type", "schedule": {}}
+        )
 
         assert response.status_code == 400
 
@@ -303,7 +312,9 @@ class TestDeleteJobEndpoint:
     """Test DELETE /api/jobs/{job_id} endpoint."""
 
     @patch("api.jobs.get_db_session")
-    def test_delete_job_success(self, mock_db_session, client_with_services, mock_scheduler):
+    def test_delete_job_success(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
         """Test deleting job successfully."""
         from models.task_metadata import TaskMetadata
 
@@ -320,7 +331,9 @@ class TestDeleteJobEndpoint:
         mock_scheduler.remove_job.assert_called_once_with("job-1")
 
     @patch("api.jobs.get_db_session")
-    def test_delete_job_no_metadata(self, mock_db_session, client_with_services, mock_scheduler):
+    def test_delete_job_no_metadata(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
         """Test deleting job without metadata."""
         mock_session = MagicMock()
         mock_session.query().filter().first.return_value = None
@@ -343,10 +356,9 @@ class TestUpdateJobEndpoint:
 
     def test_update_job_success(self, client_with_services, mock_scheduler):
         """Test updating job successfully."""
-        response = client_with_services.put("/api/jobs/job-1", json={
-            "name": "Updated Job Name",
-            "paused": False
-        })
+        response = client_with_services.put(
+            "/api/jobs/job-1", json={"name": "Updated Job Name", "paused": False}
+        )
 
         assert response.status_code == 200
         assert "updated successfully" in response.json()["message"]
@@ -361,9 +373,9 @@ class TestUpdateJobEndpoint:
         """Test updating job handles errors."""
         mock_scheduler.modify_job.side_effect = Exception("Job not found")
 
-        response = client_with_services.put("/api/jobs/invalid-id", json={
-            "name": "New Name"
-        })
+        response = client_with_services.put(
+            "/api/jobs/invalid-id", json={"name": "New Name"}
+        )
 
         assert response.status_code == 400
 

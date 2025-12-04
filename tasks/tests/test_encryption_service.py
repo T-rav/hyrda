@@ -13,7 +13,10 @@ tasks_dir = Path(__file__).parent.parent
 if str(tasks_dir) not in sys.path:
     sys.path.insert(0, str(tasks_dir))
 
-from services.encryption_service import EncryptionService, get_encryption_service  # noqa: E402
+from services.encryption_service import (  # noqa: E402
+    EncryptionService,
+    get_encryption_service,
+)
 
 
 class TestEncryptionServiceInitialization:

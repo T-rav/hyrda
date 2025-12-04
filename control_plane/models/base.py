@@ -50,7 +50,9 @@ def init_data_db(database_url: str):
         pool_pre_ping=True,
         pool_recycle=3600,
     )
-    _DataSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_data_engine)
+    _DataSessionLocal = sessionmaker(
+        autocommit=False, autoflush=False, bind=_data_engine
+    )
 
 
 @contextmanager

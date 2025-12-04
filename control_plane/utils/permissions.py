@@ -84,6 +84,7 @@ async def require_permission(permission_type: str, request: Request) -> None:
 # Permission tier constants for future use
 class PermissionTier:
     """Permission tier definitions."""
+
     ADMIN = "admin"
     POWER_USER = "power_user"
     READ_ONLY = "read_only"
@@ -95,7 +96,15 @@ PERMISSION_TIERS = {
     "manage_groups": [PermissionTier.ADMIN],
     "manage_agents": [PermissionTier.ADMIN],
     "manage_users": [PermissionTier.ADMIN],
-    "view_groups": [PermissionTier.ADMIN, PermissionTier.POWER_USER, PermissionTier.READ_ONLY],
-    "view_agents": [PermissionTier.ADMIN, PermissionTier.POWER_USER, PermissionTier.READ_ONLY],
+    "view_groups": [
+        PermissionTier.ADMIN,
+        PermissionTier.POWER_USER,
+        PermissionTier.READ_ONLY,
+    ],
+    "view_agents": [
+        PermissionTier.ADMIN,
+        PermissionTier.POWER_USER,
+        PermissionTier.READ_ONLY,
+    ],
     # Add more as needed
 }

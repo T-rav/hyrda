@@ -34,6 +34,7 @@ def app():
 def client(app):
     """Create test client."""
     from starlette.testclient import TestClient
+
     return TestClient(app)
 
 
@@ -73,7 +74,9 @@ class TestDomainVerification:
 
     def test_verify_domain_custom_domain(self):
         """Test custom domain configuration."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "@example.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "@example.com"}, clear=False
+        ):
             # Reload module to pick up new env var
             import importlib
             import utils.auth
@@ -133,7 +136,9 @@ class TestOAuthFlow:
 
     def test_get_flow_creates_flow(self, mock_oauth_env):
         """Test that get_flow creates a Flow object."""
-        with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"):
+        with patch(
+            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        ):
             with patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"):
                 redirect_uri = "http://localhost:6001/auth/callback"
                 flow = get_flow(redirect_uri)
@@ -149,7 +154,9 @@ class TestOAuthFlow:
 
             importlib.reload(utils.auth)
             # After reload, use the AuthError from the reloaded module
-            with pytest.raises(utils.auth.AuthError, match="Google OAuth not configured"):
+            with pytest.raises(
+                utils.auth.AuthError, match="Google OAuth not configured"
+            ):
                 utils.auth.get_flow("http://localhost:6001/auth/callback")
             # Restore
             importlib.reload(utils.auth)
@@ -182,6 +189,8 @@ class TestTokenVerification:
 
         mock_verify.side_effect = ValueError("Invalid token")
 
-        with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"):
+        with patch(
+            "utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
+        ):
             with pytest.raises(utils.auth.AuthError, match=r"Invalid token:.*"):
                 verify_token("invalid-token")

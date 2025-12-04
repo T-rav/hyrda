@@ -100,7 +100,10 @@ class TestFastAPIAuthMiddleware:
     ):
         """Test that protected endpoints redirect to OAuth when not authenticated."""
         with (
-            patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"),
+            patch(
+                "utils.auth.GOOGLE_CLIENT_ID",
+                "test-client-id.apps.googleusercontent.com",
+            ),
             patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"),
             patch("utils.auth.get_flow") as mock_get_flow,
         ):
@@ -146,7 +149,10 @@ class TestFastAPIAuthMiddleware:
         client.cookies.set("session", session_cookie)
 
         with (
-            patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id.apps.googleusercontent.com"),
+            patch(
+                "utils.auth.GOOGLE_CLIENT_ID",
+                "test-client-id.apps.googleusercontent.com",
+            ),
             patch("utils.auth.GOOGLE_CLIENT_SECRET", "test-client-secret"),
             patch("utils.auth.get_flow") as mock_get_flow,
         ):

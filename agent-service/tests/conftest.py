@@ -4,8 +4,9 @@ This file provides common fixtures and test utilities available to all test file
 Following the pattern established in bot/tests/conftest.py
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, Mock
 
 from tests.agent_test_utils import (
     AgentContextBuilder,
@@ -13,7 +14,6 @@ from tests.agent_test_utils import (
     SlackServiceMockFactory,
     TestAgentFactory,
 )
-
 
 # ===========================
 # Agent Context Fixtures

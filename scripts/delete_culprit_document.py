@@ -2,6 +2,7 @@
 """
 Delete the specific culprit document causing false positives.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -18,13 +19,13 @@ from qdrant_client import QdrantClient
 def delete_culprit():
     """Delete the culprit document by ID."""
     client = QdrantClient(
-        host=os.getenv('VECTOR_HOST', 'localhost'),
-        port=int(os.getenv('VECTOR_PORT', 6333)),
-        api_key=os.getenv('VECTOR_API_KEY'),
-        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
+        host=os.getenv("VECTOR_HOST", "localhost"),
+        port=int(os.getenv("VECTOR_PORT", 6333)),
+        api_key=os.getenv("VECTOR_API_KEY"),
+        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
     )
 
-    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
+    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
     culprit_id = "f74b4986-194a-53b9-8b96-827577675866"
 
     print("=" * 100)
@@ -39,7 +40,7 @@ def delete_culprit():
             return 0
 
         doc = docs[0]
-        print(f"\nFound document:")
+        print("\nFound document:")
         print(f"  ID: {doc.id}")
         print(f"  Metadata: {doc.payload}")
 
@@ -48,8 +49,8 @@ def delete_culprit():
         return 1
 
     # Delete it
-    response = input(f"\nDelete this document? (yes/no): ")
-    if response.lower() != 'yes':
+    response = input("\nDelete this document? (yes/no): ")
+    if response.lower() != "yes":
         print("Aborted.")
         return 1
 
@@ -62,7 +63,7 @@ def delete_culprit():
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         sys.exit(delete_culprit())
     except KeyboardInterrupt:

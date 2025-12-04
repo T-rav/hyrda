@@ -98,8 +98,7 @@ async def check_idempotency(request: Request) -> tuple[bool, JSONResponse | None
 
         # Return cached response as JSONResponse
         return True, JSONResponse(
-            content=cached_response["body"],
-            status_code=cached_response["status"]
+            content=cached_response["body"], status_code=cached_response["status"]
         )
 
     return False, None
@@ -109,7 +108,7 @@ async def store_idempotency(
     request: Request,
     response_body: dict[str, Any],
     status_code: int,
-    ttl_hours: int = DEFAULT_TTL_HOURS
+    ttl_hours: int = DEFAULT_TTL_HOURS,
 ) -> None:
     """Store response for future idempotency checks.
 
@@ -146,7 +145,9 @@ async def store_idempotency(
     if len(_idempotency_cache) > MAX_IDEMPOTENCY_KEYS:
         # Remove least recently used key
         _idempotency_cache.popitem(last=False)
-        logger.debug(f"Evicted LRU idempotency key (cache size: {MAX_IDEMPOTENCY_KEYS})")
+        logger.debug(
+            f"Evicted LRU idempotency key (cache size: {MAX_IDEMPOTENCY_KEYS})"
+        )
 
     logger.info(f"Stored idempotency key: {idempotency_key}, expires: {expires_at}")
 
@@ -155,8 +156,7 @@ def _cleanup_expired_keys() -> None:
     """Remove expired idempotency keys from cache."""
     now = datetime.now(timezone.utc)
     expired_keys = [
-        key for key, (_, expires_at) in _idempotency_cache.items()
-        if expires_at < now
+        key for key, (_, expires_at) in _idempotency_cache.items() if expires_at < now
     ]
 
     for key in expired_keys:
@@ -183,6 +183,7 @@ def require_idempotency(ttl_hours: int = DEFAULT_TTL_HOURS):
         The decorated function must be async and accept a Request parameter.
         The function should return a dict that will be cached.
     """
+
     def decorator(f: Callable) -> Callable:
         @wraps(f)
         async def wrapper(*args, **kwargs):
@@ -193,11 +194,13 @@ def require_idempotency(ttl_hours: int = DEFAULT_TTL_HOURS):
                     request = arg
                     break
             if not request:
-                request = kwargs.get('request')
+                request = kwargs.get("request")
 
             if not request:
                 # No request found, proceed without idempotency
-                logger.warning(f"No Request object found in {f.__name__}, skipping idempotency")
+                logger.warning(
+                    f"No Request object found in {f.__name__}, skipping idempotency"
+                )
                 return await f(*args, **kwargs)
 
             # Check if this is a duplicate request
@@ -213,14 +216,17 @@ def require_idempotency(ttl_hours: int = DEFAULT_TTL_HOURS):
                 await store_idempotency(request, result, 200, ttl_hours)
             elif isinstance(result, JSONResponse):
                 # Extract body from JSONResponse
-                if hasattr(result, 'body'):
+                if hasattr(result, "body"):
                     try:
                         body_dict = json.loads(result.body)
-                        await store_idempotency(request, body_dict, result.status_code, ttl_hours)
+                        await store_idempotency(
+                            request, body_dict, result.status_code, ttl_hours
+                        )
                     except (json.JSONDecodeError, AttributeError):
                         pass
 
             return result
 
         return wrapper
+
     return decorator

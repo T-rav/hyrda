@@ -29,7 +29,9 @@ class JobTestDataFactory:
         ]
 
     @staticmethod
-    def create_metrics_data(metric_type: str = "usage", values: list | None = None) -> dict:
+    def create_metrics_data(
+        metric_type: str = "usage", values: list | None = None
+    ) -> dict:
         """Create sample metrics data for testing.
 
         Args:
@@ -46,7 +48,9 @@ class JobTestDataFactory:
 
     @staticmethod
     def create_job_execution_result(
-        status: str = "success", job_name: str = "Test Job", result_data: dict | None = None
+        status: str = "success",
+        job_name: str = "Test Job",
+        result_data: dict | None = None,
     ) -> dict:
         """Create job execution result for testing.
 

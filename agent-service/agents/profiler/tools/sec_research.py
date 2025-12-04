@@ -77,7 +77,7 @@ async def research_sec_filings(
             # Process all chunks from the same filing together
             filing_groups: dict[tuple, list[tuple[str, dict]]] = {}
             for chunk, metadata in zip(
-                cached_data["chunks"], cached_data["chunk_metadata"]
+                cached_data["chunks"], cached_data["chunk_metadata"], strict=False
             ):
                 # Create a key from filing-level metadata (excluding chunk_index)
                 filing_key = (
@@ -152,7 +152,9 @@ async def research_sec_filings(
 
             # Track for caching
             all_chunks.extend(chunks)
-            all_chunk_metadata.extend([filing_metadata.copy() for _ in range(len(chunks))])
+            all_chunk_metadata.extend(
+                [filing_metadata.copy() for _ in range(len(chunks))]
+            )
 
         index_stats = vector_search.get_stats()
         logger.info(

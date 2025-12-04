@@ -54,16 +54,15 @@ async def initiate_gdrive_auth(request: Request):
         # Validate credential_name (prevent buffer overflow, storage DoS, XSS)
         if len(credential_name) > 255:
             raise HTTPException(
-                status_code=400,
-                detail="credential_name must be 255 characters or less"
+                status_code=400, detail="credential_name must be 255 characters or less"
             )
 
         # Allow alphanumeric, spaces, hyphens, underscores, and dots
-        if not re.match(r'^[a-zA-Z0-9 _\-\.]+$', credential_name):
+        if not re.match(r"^[a-zA-Z0-9 _\-\.]+$", credential_name):
             raise HTTPException(
                 status_code=400,
                 detail="credential_name contains invalid characters. "
-                       "Only alphanumeric characters, spaces, hyphens, underscores, and dots are allowed."
+                "Only alphanumeric characters, spaces, hyphens, underscores, and dots are allowed.",
             )
 
         # Generate UUID for credential_id
@@ -171,9 +170,7 @@ async def gdrive_auth_callback(request: Request):
         client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 
         if not client_id or not client_secret:
-            raise HTTPException(
-                status_code=500, detail="Google OAuth not configured"
-            )
+            raise HTTPException(status_code=500, detail="Google OAuth not configured")
 
         # Build redirect URI from server base URL
         settings = get_settings()

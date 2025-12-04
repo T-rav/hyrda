@@ -38,8 +38,11 @@ def handle_service_errors(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T | Any]:
+        """Decorator."""
+
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
+            """Async Wrapper."""
             try:
                 return await func(self, *args, **kwargs)
             except Exception as e:
@@ -68,6 +71,7 @@ def handle_service_errors(
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
+            """Sync Wrapper."""
             try:
                 return func(self, *args, **kwargs)
             except Exception as e:
@@ -123,8 +127,11 @@ def retry_on_failure(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Decorator."""
+
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
+            """Async Wrapper."""
             last_exception = None
             current_delay = delay
 
@@ -157,6 +164,7 @@ def retry_on_failure(
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
+            """Sync Wrapper."""
             last_exception = None
             current_delay = delay
 
@@ -208,10 +216,12 @@ def measure_performance(operation_name: str | None = None):
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Decorator."""
         op_name = operation_name or func.__name__
 
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
+            """Async Wrapper."""
             start_time = time.time()
             success = True
             result = None
@@ -239,6 +249,7 @@ def measure_performance(operation_name: str | None = None):
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
+            """Sync Wrapper."""
             start_time = time.time()
             success = True
             result = None
@@ -291,6 +302,7 @@ def circuit_breaker(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        """Decorator."""
         # Circuit breaker state (shared across all instances)
         state = {
             "failures": 0,
@@ -300,6 +312,7 @@ def circuit_breaker(
 
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
+            """Async Wrapper."""
             current_time = time.time()
 
             # Check if circuit should be half-open
@@ -343,6 +356,7 @@ def circuit_breaker(
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
+            """Sync Wrapper."""
             current_time = time.time()
 
             # Check if circuit should be half-open

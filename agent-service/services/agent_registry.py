@@ -44,6 +44,7 @@ def _load_agent_classes() -> dict[str, type]:
         logger.error(f"Error loading agent classes: {e}", exc_info=True)
         return {}
 
+
 # Cache with TTL
 _cached_agents: dict[str, dict[str, Any]] | None = None
 _cache_timestamp: float = 0

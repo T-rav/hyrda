@@ -38,10 +38,12 @@ async def main():
     print("=" * 100)
     print("SANMAR RELATIONSHIP FALSE POSITIVE DIAGNOSTIC")
     print("=" * 100)
-    print(f"\nEnvironment:")
+    print("\nEnvironment:")
     print(f"  VECTOR_HOST: {os.getenv('VECTOR_HOST')}")
     print(f"  VECTOR_PORT: {os.getenv('VECTOR_PORT')}")
-    print(f"  VECTOR_COLLECTION: {os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')}")
+    print(
+        f"  VECTOR_COLLECTION: {os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')}"
+    )
     print(f"  LLM_MODEL: {os.getenv('LLM_MODEL', 'gpt-4o-mini')}")
     print("=" * 100)
 
@@ -55,7 +57,7 @@ async def main():
         print("\n❌ ERROR: internal_search_tool failed to initialize")
         return
 
-    print(f"\nTool initialized:")
+    print("\nTool initialized:")
     print(f"  Has qdrant_client: {tool.qdrant_client is not None}")
     print(f"  Has llm: {tool.llm is not None}")
     print(f"  Has embeddings: {tool.embeddings is not None}")
@@ -65,7 +67,7 @@ async def main():
     # The problematic query
     query = "profile SanMar and opportunities to help support their growth"
 
-    print(f"\n\nRUNNING QUERY:")
+    print("\n\nRUNNING QUERY:")
     print(f"  '{query}'")
     print("=" * 100)
     print("\nSTARTING SEARCH... (this may take 10-30 seconds)\n")

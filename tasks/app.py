@@ -101,7 +101,9 @@ def create_app() -> FastAPI:
     )
 
     # Enable CORS - restrict to specific origins
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5001,http://localhost:3000")
+    allowed_origins = os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:5001,http://localhost:3000"
+    )
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(
         CORSMiddleware,

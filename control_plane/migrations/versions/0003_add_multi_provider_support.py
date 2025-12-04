@@ -5,6 +5,7 @@ Revises: 0002
 Create Date: 2025-11-17 21:20:00.000000
 
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -44,8 +45,12 @@ def upgrade() -> None:
         sa.Column("family_name", sa.String(255), nullable=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="1"),
         sa.Column("last_synced_at", sa.DateTime(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("NOW()")),
-        sa.Column("updated_at", sa.DateTime(), nullable=False, server_default=sa.text("NOW()")),
+        sa.Column(
+            "created_at", sa.DateTime(), nullable=False, server_default=sa.text("NOW()")
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=False, server_default=sa.text("NOW()")
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(
             ["user_id"],
@@ -57,9 +62,15 @@ def upgrade() -> None:
 
     # Create indexes for user_identities
     op.create_index("ix_user_identities_user_id", "user_identities", ["user_id"])
-    op.create_index("ix_user_identities_provider_type", "user_identities", ["provider_type"])
-    op.create_index("ix_user_identities_provider_user_id", "user_identities", ["provider_user_id"])
-    op.create_index("ix_user_identities_provider_email", "user_identities", ["provider_email"])
+    op.create_index(
+        "ix_user_identities_provider_type", "user_identities", ["provider_type"]
+    )
+    op.create_index(
+        "ix_user_identities_provider_user_id", "user_identities", ["provider_user_id"]
+    )
+    op.create_index(
+        "ix_user_identities_provider_email", "user_identities", ["provider_email"]
+    )
 
     # Create unique constraint on provider_type + provider_user_id
     op.create_index(

@@ -16,6 +16,7 @@ from langfuse import Langfuse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 async def run_evaluations():
     """Run system prompt evaluations in Langfuse"""
     load_dotenv()
@@ -37,6 +38,7 @@ async def run_evaluations():
 
     logger.info(f"✅ Evaluations queued for dataset: {dataset_name}")
     logger.info("Go to your Langfuse dashboard to view results!")
+
 
 if __name__ == "__main__":
     asyncio.run(run_evaluations())

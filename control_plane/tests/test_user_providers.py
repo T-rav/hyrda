@@ -159,7 +159,9 @@ class TestGoogleWorkspaceProvider:
 
     def test_not_implemented(self):
         """Test that GoogleWorkspaceProvider raises NotImplementedError."""
-        with pytest.raises(NotImplementedError, match="Google Workspace provider not yet implemented"):
+        with pytest.raises(
+            NotImplementedError, match="Google Workspace provider not yet implemented"
+        ):
             GoogleWorkspaceProvider(credentials=None)
 
 
@@ -183,7 +185,10 @@ class TestProviderFactory:
 
         assert isinstance(provider, SlackUserProvider)
 
-    @patch.dict("os.environ", {"SLACK_BOT_TOKEN": "xoxb-test-token", "USER_MANAGEMENT_PROVIDER": "slack"})
+    @patch.dict(
+        "os.environ",
+        {"SLACK_BOT_TOKEN": "xoxb-test-token", "USER_MANAGEMENT_PROVIDER": "slack"},
+    )
     @patch("services.user_providers.WebClient")
     def test_get_slack_provider_from_env(self, mock_client):
         """Test getting Slack provider from environment variable."""
@@ -194,7 +199,9 @@ class TestProviderFactory:
     @patch.dict("os.environ", {}, clear=True)
     def test_get_slack_provider_missing_token(self):
         """Test error when SLACK_BOT_TOKEN is missing."""
-        with pytest.raises(ValueError, match="SLACK_BOT_TOKEN environment variable required"):
+        with pytest.raises(
+            ValueError, match="SLACK_BOT_TOKEN environment variable required"
+        ):
             get_user_provider("slack")
 
     def test_get_google_provider_not_implemented(self):

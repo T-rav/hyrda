@@ -76,7 +76,9 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
         for batch_start in range(0, total_users, BATCH_SIZE):
             batch_end = min(batch_start + BATCH_SIZE, total_users)
             batch = provider_users[batch_start:batch_end]
-            logger.info(f"Processing user batch {batch_start+1}-{batch_end} of {total_users}")
+            logger.info(
+                f"Processing user batch {batch_start + 1}-{batch_end} of {total_users}"
+            )
 
             # Open a new session for each batch
             with get_db_session() as session:
@@ -104,7 +106,9 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
 
                         # Apply email domain filter if configured
                         if allowed_domain and not email.endswith(allowed_domain):
-                            logger.debug(f"Skipping user {email} (doesn't match domain filter)")
+                            logger.debug(
+                                f"Skipping user {email} (doesn't match domain filter)"
+                            )
                             stats["skipped"] += 1
                             continue
 
@@ -142,9 +146,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                         else:
                             # Check if user already exists (by email or legacy ID)
                             existing_user = (
-                                session.query(User)
-                                .filter(User.email == email)
-                                .first()
+                                session.query(User).filter(User.email == email).first()
                             )
 
                             if not existing_user and provider_name == "slack":
@@ -169,12 +171,16 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                                 )
                                 session.add(new_identity)
                                 stats["identities_created"] += 1
-                                logger.debug(f"Linked {provider_name} identity to existing user: {email}")
+                                logger.debug(
+                                    f"Linked {provider_name} identity to existing user: {email}"
+                                )
 
                             else:
                                 # Create new user with identity
                                 new_user = User(
-                                    slack_user_id=provider_user_id if provider_name == "slack" else "",
+                                    slack_user_id=provider_user_id
+                                    if provider_name == "slack"
+                                    else "",
                                     email=email,
                                     full_name=full_name,
                                     primary_provider=provider_name,
@@ -199,7 +205,9 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
                                 session.add(new_identity)
                                 stats["created"] += 1
                                 stats["identities_created"] += 1
-                                logger.debug(f"Created user with {provider_name} identity: {email}")
+                                logger.debug(
+                                    f"Created user with {provider_name} identity: {email}"
+                                )
 
                     except Exception as e:
                         logger.error(f"Error syncing user: {e}", exc_info=True)
@@ -208,7 +216,7 @@ def sync_users_from_provider(provider_type: str | None = None) -> Dict[str, int]
 
                 # Commit batch changes
                 session.commit()
-                logger.info(f"Committed batch {batch_start+1}-{batch_end}")
+                logger.info(f"Committed batch {batch_start + 1}-{batch_end}")
 
         # After all batches processed, deactivate identities no longer in the provider
         # Use a separate session for this cleanup operation
@@ -265,21 +273,27 @@ def add_all_users_to_system_group() -> None:
 
         with get_db_session() as session:
             # Get the "all_users" group
-            all_users_group = session.query(PermissionGroup).filter(
-                PermissionGroup.group_name == "all_users"
-            ).first()
+            all_users_group = (
+                session.query(PermissionGroup)
+                .filter(PermissionGroup.group_name == "all_users")
+                .first()
+            )
 
             if not all_users_group:
-                logger.warning("'All Users' system group not found, skipping auto-assignment")
+                logger.warning(
+                    "'All Users' system group not found, skipping auto-assignment"
+                )
                 return
 
             # Get all active users
             active_users = session.query(User).filter(User.is_active).all()
 
             # Get existing memberships
-            existing_memberships = session.query(UserGroup).filter(
-                UserGroup.group_name == "all_users"
-            ).all()
+            existing_memberships = (
+                session.query(UserGroup)
+                .filter(UserGroup.group_name == "all_users")
+                .all()
+            )
             existing_user_ids = {m.slack_user_id for m in existing_memberships}
 
             # Add missing users to the group
@@ -289,7 +303,7 @@ def add_all_users_to_system_group() -> None:
                     new_membership = UserGroup(
                         slack_user_id=user.slack_user_id,
                         group_name="all_users",
-                        added_by="system"
+                        added_by="system",
                     )
                     session.add(new_membership)
                     added_count += 1

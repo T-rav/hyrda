@@ -127,9 +127,7 @@ class SlackUserImportJob(BaseJob):
             logger.error(f"Error in Slack user import: {str(e)}")
             raise
 
-    async def _fetch_slack_users(
-        self, include_deactivated: bool
-    ) -> list[SlackUser]:
+    async def _fetch_slack_users(self, include_deactivated: bool) -> list[SlackUser]:
         """Fetch users from Slack API."""
         users = []
         cursor = None

@@ -1,7 +1,7 @@
 """Tests for job implementations."""
 
 import asyncio
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -14,7 +14,6 @@ from jobs.slack_user_import import SlackUserImportJob
 # Import test utilities from centralized location
 from tests.utils import (
     HTTPResponseMockFactory,
-    JobTestDataFactory,
     SlackClientMockFactory,
 )
 

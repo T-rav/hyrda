@@ -229,6 +229,8 @@ async def create_llm_service(llm_settings) -> LLMService:
     except Exception:
         # Fallback: create minimal settings structure
         class MinimalSettings:
+            """MinimalSettings class."""
+
             def __init__(self):
                 self.llm = llm_settings
                 # Add minimal required attributes
