@@ -36,90 +36,107 @@ class ContextBuilder:
             Tuple of (final_system_message, messages_for_llm)
             final_system_message can be None if no system message or context provided
         """
-        final_system_message = system_message
-
-        # Add current date to system message so LLM knows the correct year
-        current_date = datetime.now().strftime("%B %d, %Y")
-        current_year = datetime.now().year
-        date_context = f"**IMPORTANT - Current Date Information:**\n- Today's date: {current_date}\n- Current year: {current_year}\n- When using web_search tool, do NOT add years to search queries unless the user explicitly mentions a specific year. Use the current year ({current_year}) only if the user asks about 'this year' or 'current year'."
-
-        if final_system_message:
-            final_system_message = f"{final_system_message}\n\n{date_context}"
-        else:
-            final_system_message = date_context
+        final_system_message = self._add_date_context(system_message)
 
         if context_chunks:
-            # Separate uploaded documents from RAG-retrieved chunks
-            uploaded_docs = []
-            retrieved_chunks = []
-
-            for chunk in context_chunks:
-                metadata = chunk.get("metadata", {})
-                source = metadata.get("source", "")
-                if source == "uploaded_document":
-                    uploaded_docs.append(chunk)
-                else:
-                    retrieved_chunks.append(chunk)
-
-            # Build context sections
-            context_parts = []
-
-            # Add uploaded document section first (user's primary content)
-            if uploaded_docs:
-                uploaded_texts = []
-                for chunk in uploaded_docs:
-                    content = chunk["content"]
-                    metadata = chunk.get("metadata", {})
-                    doc_name = metadata.get("file_name", "uploaded_document")
-                    uploaded_texts.append(f"[Uploaded File: {doc_name}]\n{content}")
-
-                uploaded_section = "\n\n".join(uploaded_texts)
-                context_parts.append(
-                    f"=== UPLOADED DOCUMENT (Primary user content for analysis) ===\n\n{uploaded_section}"
-                )
-
-            # Add retrieved knowledge section
-            if retrieved_chunks:
-                retrieved_texts = []
-                for chunk in retrieved_chunks:
-                    content = chunk["content"]
-                    similarity = chunk.get("similarity", 0)
-                    metadata = chunk.get("metadata", {})
-                    source_doc = metadata.get("file_name", "Unknown")
-                    retrieved_texts.append(
-                        f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}"
-                    )
-
-                retrieved_section = "\n\n".join(retrieved_texts)
-                context_parts.append(
-                    f"=== KNOWLEDGE BASE (Retrieved relevant information) ===\n\n{retrieved_section}"
-                )
-
-            # Combine context with clear separation
-            context_section = "\n\n---\n\n".join(context_parts)
-
-            # RAG instruction for retrieved context
-            rag_instruction = (
-                "You have access to relevant information from the knowledge base below. "
-                "Use this context to answer the user's question directly and naturally. "
-                "The context may include structured data, document content, or other information. "
-                "Reference specific details when relevant and answer naturally based on what's provided. "
-                "Do not add inline source citations like '[Source: ...]' since "
-                "complete source citations will be automatically added at the end of your response.\n\n"
-                f"Context:\n{context_section}\n\n"
-            )
-
+            context_section = self._build_context_sections(context_chunks)
+            rag_instruction = self._build_rag_instruction(context_section)
             final_system_message = f"{final_system_message}\n\n{rag_instruction}"
-
             logger.info(f"🔍 Using RAG with {len(context_chunks)} context chunks")
         else:
             logger.info("🤖 No relevant context found, using LLM knowledge only")
 
-        # Prepare messages for LLM
         messages = conversation_history.copy()
         messages.append({"role": "user", "content": query})
 
         return final_system_message, messages
+
+    def _add_date_context(self, system_message: str | None) -> str:
+        """Add current date context to system message."""
+        current_date = datetime.now().strftime("%B %d, %Y")
+        current_year = datetime.now().year
+        date_context = (
+            f"**IMPORTANT - Current Date Information:**\n"
+            f"- Today's date: {current_date}\n"
+            f"- Current year: {current_year}\n"
+            f"- When using web_search tool, do NOT add years to search queries unless the user explicitly mentions a specific year. "
+            f"Use the current year ({current_year}) only if the user asks about 'this year' or 'current year'."
+        )
+
+        if system_message:
+            return f"{system_message}\n\n{date_context}"
+        return date_context
+
+    def _build_context_sections(self, context_chunks: list[ContextChunk]) -> str:
+        """Build formatted context sections from chunks."""
+        uploaded_docs, retrieved_chunks = self._separate_chunks(context_chunks)
+        context_parts = []
+
+        if uploaded_docs:
+            uploaded_section = self._format_uploaded_docs(uploaded_docs)
+            context_parts.append(
+                f"=== UPLOADED DOCUMENT (Primary user content for analysis) ===\n\n{uploaded_section}"
+            )
+
+        if retrieved_chunks:
+            retrieved_section = self._format_retrieved_chunks(retrieved_chunks)
+            context_parts.append(
+                f"=== KNOWLEDGE BASE (Retrieved relevant information) ===\n\n{retrieved_section}"
+            )
+
+        return "\n\n---\n\n".join(context_parts)
+
+    def _separate_chunks(
+        self, context_chunks: list[ContextChunk]
+    ) -> tuple[list[ContextChunk], list[ContextChunk]]:
+        """Separate uploaded documents from RAG-retrieved chunks."""
+        uploaded_docs = []
+        retrieved_chunks = []
+
+        for chunk in context_chunks:
+            metadata = chunk.get("metadata", {})
+            source = metadata.get("source", "")
+            if source == "uploaded_document":
+                uploaded_docs.append(chunk)
+            else:
+                retrieved_chunks.append(chunk)
+
+        return uploaded_docs, retrieved_chunks
+
+    def _format_uploaded_docs(self, uploaded_docs: list[ContextChunk]) -> str:
+        """Format uploaded document chunks."""
+        uploaded_texts = []
+        for chunk in uploaded_docs:
+            content = chunk["content"]
+            metadata = chunk.get("metadata", {})
+            doc_name = metadata.get("file_name", "uploaded_document")
+            uploaded_texts.append(f"[Uploaded File: {doc_name}]\n{content}")
+        return "\n\n".join(uploaded_texts)
+
+    def _format_retrieved_chunks(self, retrieved_chunks: list[ContextChunk]) -> str:
+        """Format RAG-retrieved chunks."""
+        retrieved_texts = []
+        for chunk in retrieved_chunks:
+            content = chunk["content"]
+            similarity = chunk.get("similarity", 0)
+            metadata = chunk.get("metadata", {})
+            source_doc = metadata.get("file_name", "Unknown")
+            retrieved_texts.append(
+                f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}"
+            )
+        return "\n\n".join(retrieved_texts)
+
+    def _build_rag_instruction(self, context_section: str) -> str:
+        """Build RAG instruction with context."""
+        return (
+            "You have access to relevant information from the knowledge base below. "
+            "Use this context to answer the user's question directly and naturally. "
+            "The context may include structured data, document content, or other information. "
+            "Reference specific details when relevant and answer naturally based on what's provided. "
+            "Do not add inline source citations like '[Source: ...]' since "
+            "complete source citations will be automatically added at the end of your response.\n\n"
+            f"Context:\n{context_section}\n\n"
+        )
 
     def format_context_summary(self, context_chunks: list[ContextChunk]) -> str:
         """
