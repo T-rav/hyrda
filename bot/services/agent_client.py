@@ -12,6 +12,17 @@ from bot_types import AgentContext, AgentInfo, AgentResponse, CircuitBreakerStat
 
 logger = logging.getLogger(__name__)
 
+# Circuit breaker configuration constants
+DEFAULT_FAILURE_THRESHOLD = 5  # Open circuit after this many failures
+DEFAULT_RECOVERY_TIMEOUT = 60.0  # Wait this many seconds before retry
+DEFAULT_SUCCESS_THRESHOLD = 2  # Successes needed to close circuit
+
+# HTTP client configuration constants
+DEFAULT_REQUEST_TIMEOUT = 30.0  # Total request timeout in seconds
+DEFAULT_CONNECT_TIMEOUT = 5.0  # Connection timeout in seconds
+DEFAULT_MAX_RETRIES = 3  # Maximum retry attempts
+DEFAULT_RETRY_DELAY = 1.0  # Initial retry delay in seconds
+
 
 class CircuitState(Enum):
     """Circuit breaker states."""
@@ -36,9 +47,9 @@ class CircuitBreaker:
 
     def __init__(
         self,
-        failure_threshold: int = 5,
-        recovery_timeout: float = 60.0,
-        success_threshold: int = 2,
+        failure_threshold: int = DEFAULT_FAILURE_THRESHOLD,
+        recovery_timeout: float = DEFAULT_RECOVERY_TIMEOUT,
+        success_threshold: int = DEFAULT_SUCCESS_THRESHOLD,
     ):
         """Initialize circuit breaker."""
         self.failure_threshold = failure_threshold
@@ -135,17 +146,19 @@ class AgentClient:
         """
         self.base_url = base_url.rstrip("/")
         # Reduced timeout from 5min to 30s to fail fast
-        self.timeout = httpx.Timeout(30.0, connect=5.0)
+        self.timeout = httpx.Timeout(
+            DEFAULT_REQUEST_TIMEOUT, connect=DEFAULT_CONNECT_TIMEOUT
+        )
         # Persistent HTTP client to reuse connections (fixes resource leak)
         self._client: httpx.AsyncClient | None = None
-        self.max_retries = 3
-        self.retry_delay = 1.0  # Start with 1 second
+        self.max_retries = DEFAULT_MAX_RETRIES
+        self.retry_delay = DEFAULT_RETRY_DELAY  # Start with 1 second
 
         # Circuit breaker to prevent cascading failures
         self.circuit_breaker = CircuitBreaker(
-            failure_threshold=5,  # Open circuit after 5 failures
-            recovery_timeout=60.0,  # Wait 60s before trying again
-            success_threshold=2,  # Need 2 successes to close circuit
+            failure_threshold=DEFAULT_FAILURE_THRESHOLD,  # Open circuit after N failures
+            recovery_timeout=DEFAULT_RECOVERY_TIMEOUT,  # Wait before trying again
+            success_threshold=DEFAULT_SUCCESS_THRESHOLD,  # Need N successes to close circuit
         )
 
     async def _get_client(self) -> httpx.AsyncClient:

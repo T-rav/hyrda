@@ -14,6 +14,9 @@ from utils.errors import delete_message
 
 logger = logging.getLogger(__name__)
 
+# Slack API configuration constants
+DEFAULT_THREAD_MESSAGE_LIMIT = 100  # Default limit for retrieving thread messages
+
 
 class SlackService:
     """Service for interacting with the Slack API"""
@@ -234,7 +237,7 @@ class SlackService:
             history_response = await self.client.conversations_replies(  # type: ignore[misc]
                 channel=channel,
                 ts=thread_ts,
-                limit=100,  # Get a good sample of the thread
+                limit=DEFAULT_THREAD_MESSAGE_LIMIT,  # Get a good sample of the thread
             )
 
             if history_response and history_response.get("messages"):

@@ -14,9 +14,13 @@ from bot_types import AgentInfo
 
 logger = logging.getLogger(__name__)
 
+# Agent registry configuration constants
+CACHE_TTL_SECONDS = 300  # 5 minutes - agents refresh automatically
+AGENT_SERVICE_TIMEOUT = 5  # Timeout for agent service API calls in seconds
+
 _cached_agents: dict[str, AgentInfo] | None = None
 _cache_timestamp: float = 0
-_cache_ttl_seconds: int = 300  # 5 minutes - agents refresh automatically
+_cache_ttl_seconds: int = CACHE_TTL_SECONDS
 
 
 def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
@@ -49,7 +53,9 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
         settings = Settings()
         agent_service_url = settings.agent_service_url or "http://agent_service:8000"
 
-        response = requests.get(f"{agent_service_url}/api/agents", timeout=5)
+        response = requests.get(
+            f"{agent_service_url}/api/agents", timeout=AGENT_SERVICE_TIMEOUT
+        )
         if response.status_code == 200:
             data = response.json()
             agents = data.get("agents", [])

@@ -38,6 +38,9 @@ except ImportError:
 
         return decorator
 
+# Langfuse API configuration constants
+LANGFUSE_API_TIMEOUT = 10  # Timeout for Langfuse API calls in seconds
+
 
 class LangfuseService:
     """
@@ -662,7 +665,7 @@ class LangfuseService:
 
                 # Get total user messages (conversation_turn observations)
                 async with session.get(
-                    observations_url, auth=auth, params=user_messages_params, timeout=10
+                    observations_url, auth=auth, params=user_messages_params, timeout=LANGFUSE_API_TIMEOUT
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -677,7 +680,7 @@ class LangfuseService:
 
                 # Get total observations (all AI operations)
                 async with session.get(
-                    observations_url, auth=auth, params=observations_params, timeout=10
+                    observations_url, auth=auth, params=observations_params, timeout=LANGFUSE_API_TIMEOUT
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -697,7 +700,7 @@ class LangfuseService:
                 # Query sessions endpoint for unique sessions
                 sessions_url = f"{api_base}/api/public/sessions"
                 async with session.get(
-                    sessions_url, auth=auth, params=sessions_params, timeout=10
+                    sessions_url, auth=auth, params=sessions_params, timeout=LANGFUSE_API_TIMEOUT
                 ) as response:
                     if response.status != 200:
                         logger.warning(f"Could not fetch sessions: {response.status}")

@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 HTTP_OK = 200
+FILE_DOWNLOAD_TIMEOUT = 30  # Timeout for downloading files in seconds
 
 # Re-export for backward compatibility
 __all__ = ["process_file_attachments", "extract_pdf_text", "extract_office_text"]
@@ -58,7 +59,9 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
 
             # Use Slack service to download with proper auth
             headers = {"Authorization": f"Bearer {slack_service.bot_token}"}
-            response = requests.get(file_url, headers=headers, timeout=30)
+            response = requests.get(
+                file_url, headers=headers, timeout=FILE_DOWNLOAD_TIMEOUT
+            )
 
             if response.status_code != HTTP_OK:
                 logger.error(

@@ -15,6 +15,10 @@ from bot_types import DeepResearchResult, WebScrapeResult, WebSearchResult
 
 logger = logging.getLogger(__name__)
 
+# Search client configuration constants
+DEFAULT_SEARCH_TIMEOUT = 60  # HTTP request timeout in seconds
+DEFAULT_MAX_SEARCH_RESULTS = 10  # Default maximum search results
+
 
 class TavilyClient:
     """Direct Tavily API client for web search and scraping"""
@@ -27,7 +31,7 @@ class TavilyClient:
     async def initialize(self):
         """Initialize the HTTP session"""
         if not self.session:
-            timeout = aiohttp.ClientTimeout(total=60)
+            timeout = aiohttp.ClientTimeout(total=DEFAULT_SEARCH_TIMEOUT)
             self.session = aiohttp.ClientSession(timeout=timeout)
             logger.info("Tavily client initialized")
 
@@ -37,7 +41,9 @@ class TavilyClient:
             await self.session.close()
             self.session = None
 
-    async def search(self, query: str, max_results: int = 10) -> list[WebSearchResult]:
+    async def search(
+        self, query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS
+    ) -> list[WebSearchResult]:
         """
         Search the web using Tavily API
 
