@@ -25,9 +25,14 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Claude Code CLI
         run: |
-          pip install anthropic
+          npm install -g @anthropic-ai/claude-code
 
       - name: Run Forge Quality Gate
         id: audit
@@ -42,8 +47,21 @@ jobs:
             exit 0
           fi
 
-          # Run Forge agent via Python script
-          python scripts/ci/run_forge.py
+          # Use npx to run claude-code (doesn't require PATH setup)
+          npx @anthropic-ai/claude-code --non-interactive << 'EOF'
+          Run Forge quality audit in report-only mode.
+
+          Requirements:
+          - Generate quality report with violation counts
+          - Count Critical (P0) and Warning (P1) violations
+          - Save report to .claude/audit-reports/ci-report.md
+
+          Quality Gate Rules:
+          - Exit 0 (PASS) if Critical violations == 0 AND Warning violations == 0
+          - Exit 1 (FAIL) if any violations found (Critical > 0 OR Warning > 0)
+
+          Focus on number of issues to fix, not quality score.
+          EOF
 
       - name: Post audit results as comment
         if: github.event_name == 'pull_request'
