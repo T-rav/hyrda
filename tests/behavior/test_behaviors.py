@@ -6,11 +6,11 @@ Covers all major functionality to replace manual testing.
 
 Usage:
     make test-behaviors
-    pytest tests/smoke/test_behaviors.py -v -s --tb=short
-    pytest tests/smoke/test_behaviors.py -v -s -k "slack"  # Only Slack tests
+    pytest tests/behavior/test_behaviors.py -v -s --tb=short
+    pytest tests/behavior/test_behaviors.py -v -s -k "slack"  # Only Slack tests
 
     # With real Slack:
-    E2E_USE_REAL_SLACK=true E2E_SLACK_CHANNEL=C123 pytest tests/smoke/test_behaviors.py -v -s
+    E2E_USE_REAL_SLACK=true E2E_SLACK_CHANNEL=C123 pytest tests/behavior/test_behaviors.py -v -s
 """
 import asyncio
 import os

@@ -661,7 +661,7 @@ test-control-plane: $(VENV)
 test-behaviors: $(VENV)
 	@echo "$(BLUE)🔬 Running behavior test suite...$(RESET)"
 	@echo "$(YELLOW)⚠️  This will take several minutes and tests real integrations$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/smoke/test_behaviors.py -v -s --tb=short
+	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/behavior/test_behaviors.py -v -s --tb=short
 	@echo "$(GREEN)✅ Behavior tests complete!$(RESET)"
 
 # Help for test targets

@@ -11,10 +11,10 @@ Automated tests covering all system behaviors. Tests real integrations (Slack, V
 make test-behaviors
 
 # Run specific behaviors
-pytest tests/smoke/test_behaviors.py -v -s -k "slack"
-pytest tests/smoke/test_behaviors.py -v -s -k "agent"
-pytest tests/smoke/test_behaviors.py -v -s -k "vector"
-pytest tests/smoke/test_behaviors.py -v -s -k "llm"
+pytest tests/behavior/test_behaviors.py -v -s -k "slack"
+pytest tests/behavior/test_behaviors.py -v -s -k "agent"
+pytest tests/behavior/test_behaviors.py -v -s -k "vector"
+pytest tests/behavior/test_behaviors.py -v -s -k "llm"
 
 # Run with real Slack
 E2E_USE_REAL_SLACK=true E2E_SLACK_CHANNEL=C123456 make test-behaviors
@@ -106,7 +106,7 @@ TAVILY_API_KEY=tvly-...
 Mocks external APIs (Slack) to avoid rate limits.
 
 ```bash
-pytest tests/smoke/test_behaviors.py -v -s
+pytest tests/behavior/test_behaviors.py -v -s
 ```
 
 ### Real Slack Mode
@@ -247,13 +247,13 @@ make test-behaviors
 ### Debug Specific Behaviors
 ```bash
 # Only test Slack functionality
-pytest tests/smoke/test_behaviors.py::test_slack_auth_and_bot_info -v -s
+pytest tests/behavior/test_behaviors.py::test_slack_auth_and_bot_info -v -s
 
 # Only test agents
-pytest tests/smoke/test_behaviors.py -v -s -k "agent"
+pytest tests/behavior/test_behaviors.py -v -s -k "agent"
 
 # Only test vector DB
-pytest tests/smoke/test_behaviors.py -v -s -k "vector"
+pytest tests/behavior/test_behaviors.py -v -s -k "vector"
 ```
 
 ---
