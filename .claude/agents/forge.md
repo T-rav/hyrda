@@ -94,10 +94,10 @@ Forge brings together multiple audit capabilities to provide:
   - Suggestion: 63
 
 ## Highest Priority Issues (Cross-Cutting)
-1. [CRITICAL] Mutable default arguments in 5 production classes
-2. [CRITICAL] 12 tests with 5+ unrelated assertions
-3. [WARNING] 45 functions missing type hints
-4. [WARNING] 23 repetitive test setups need factories
+1. [CRITICAL] Mutable default arguments in N production classes
+2. [CRITICAL] Tests with multiple unrelated assertions
+3. [WARNING] Functions missing type hints
+4. [WARNING] Repetitive test setups need factories
 
 ## Code Quality Findings
 [Results from code-audit agent]
@@ -313,9 +313,9 @@ Output: Single agent report.
 - Reduced avg function size from 35 to 22 lines ✅
 
 ### Remaining Concerns
-- 12 tests still have multiple assertions
-- 45 functions missing type hints
-- 23 test setups need factories
+- N tests still have multiple assertions
+- N functions missing type hints
+- N test setups need factories
 ```
 
 ### Priority Matrix
@@ -325,20 +325,20 @@ Output: Single agent report.
 ### P1 - High Priority (Fix ASAP)
 
 **Critical Violations (Est: 2-4 hours):**
-1. ❌ base_job.py:25 - CRITICAL: Mutable default (list = [])
-2. ❌ test_agent_client.py:387 - CRITICAL: 8 unrelated assertions
-3. ❌ auth_service.py:142 - CRITICAL: Function too large (150 lines)
+1. ❌ file.py:line - CRITICAL: Mutable default (list = [])
+2. ❌ test_file.py:line - CRITICAL: N unrelated assertions
+3. ❌ service.py:line - CRITICAL: Function too large (>100 lines)
 
 **Warning Violations (Est: 1-2 days):**
-4. ⚠️ 45 functions missing type hints
-5. ⚠️ 23 test setups need factories
-6. ⚠️ 12 tests missing 3As structure
-7. ⚠️ 8 functions with broad exception handling
-8. ⚠️ 15 functions missing docstrings
+4. ⚠️ N functions missing type hints
+5. ⚠️ N test setups need factories
+6. ⚠️ N tests missing 3As structure
+7. ⚠️ N functions with broad exception handling
+8. ⚠️ N functions missing docstrings
 
 ### P2 - Medium Priority (Fix When Convenient, Est: 3-5 days)
-9. 💡 Magic numbers in 15 files
-10. 💡 Could split 8 large functions (30-50 lines)
+9. 💡 Magic numbers in N files
+10. 💡 Could split N large functions (30-50 lines)
 11. 💡 Builder pattern opportunities in tests
 
 ### P3 - Low Priority (Optional)
@@ -850,31 +850,31 @@ Run forge quality audit with auto-fix
 
 **Step 3: Apply Fixes (2 minutes)**
 ```
-🔧 Fixing imports (12)...
-   ✓ bot/services/llm_service.py - Removed 3 unused imports
-   ✓ tasks/api/jobs.py - Sorted imports
-   ... (10 more)
+🔧 Fixing imports (N)...
+   ✓ service.py - Removed unused imports
+   ✓ module.py - Sorted imports
+   ... (N more)
 
-🔧 Adding type hints (25)...
-   ✓ bot/services/rag_service.py:45 - Added return type
-   ✓ tasks/jobs/base_job.py:67 - Added parameter types
-   ... (23 more)
+🔧 Adding type hints (N)...
+   ✓ service.py:line - Added return type
+   ✓ module.py:line - Added parameter types
+   ... (N more)
 
-🔧 Generating docstrings (18)...
-   ✓ control_plane/api/auth.py:30 - Added docstring
-   ... (17 more)
+🔧 Generating docstrings (N)...
+   ✓ module.py:line - Added docstring
+   ... (N more)
 
-🔧 Renaming test files (12)...
-   ✓ git mv test_api_jobs_comprehensive.py → test_api_jobs.py
-   ... (11 more)
+🔧 Renaming test files (N)...
+   ✓ git mv test_old_name.py → test_new_name.py
+   ... (N more)
 
-🔧 Extracting constants (8)...
-   ✓ tasks/config/settings.py - Extracted TIMEOUT_SECONDS = 30
-   ... (7 more)
+🔧 Extracting constants (N)...
+   ✓ module.py - Extracted CONSTANT_NAME = value
+   ... (N more)
 
-🔧 Adding 3As comments (3)...
-   ✓ tasks/tests/test_jobs.py:45 - Added # Arrange/Act/Assert
-   ... (2 more)
+🔧 Adding 3As comments (N)...
+   ✓ test_file.py:line - Added # Arrange/Act/Assert
+   ... (N more)
 ```
 
 **Step 4: Verify (15 seconds)**
@@ -929,9 +929,9 @@ Run forge quality audit with auto-fix
 ## Still Need Manual Attention
 
 ### Critical (Fix Now)
-1. base_job.py:25 - Mutable default: REQUIRED_PARAMS: list = []
-2. auth_service.py:142 - Function too large (150 lines)
-3. test_agent_client.py:387 - 8 unrelated assertions
+1. file.py:line - Mutable default: PARAM: list = []
+2. service.py:line - Function too large (>100 lines)
+3. test_file.py:line - N unrelated assertions
 
 ### Warning (Fix This Sprint)
 ... (42 more)
