@@ -49,21 +49,23 @@ Forge brings together multiple audit capabilities to provide:
 - If tests exist → Verify they pass after fix
 - Never apply fixes without verifying tests
 
-### Requires Manual Intervention
+### Iterative Automatic Fixes
 
-**Forge will flag for manual fix:**
+**Forge will attempt automatic fixes for complex issues through iterative approaches:**
 
 #### From Code Audit:
-1. ⚠️ **Mutable defaults** - Needs logic review
-2. ⚠️ **Function too large** - Needs refactoring strategy
-3. ⚠️ **Complex logic** - Needs simplification
-4. ⚠️ **SRP violations** - Needs architectural decision
-5. ⚠️ **Error handling** - Needs context-specific logic
+1. ✅ **Mutable defaults** - Replace with None + initialization pattern
+2. ✅ **Function too large** - Extract helper methods based on logical sections
+3. ✅ **Complex logic** - Simplify conditionals, extract named functions
+4. ✅ **SRP violations** - Split into focused functions/classes
+5. ✅ **Error handling** - Add proper try/except with specific exceptions
 
 #### From Test Audit:
-1. ⚠️ **Multiple assertions** - Needs test splitting decision
-2. ⚠️ **Over-mocking** - Needs test strategy review
-3. ⚠️ **Incomplete mocks** - Needs test logic completion
+1. ✅ **Multiple assertions** - Split into separate test methods automatically
+2. ✅ **Over-mocking** - Replace with fixtures and factories
+3. ✅ **Incomplete mocks** - Complete mock setup based on usage patterns
+
+**Philosophy:** If Forge can understand the pattern, it can fix it. No manual intervention required.
 
 ## What Forge Does
 
@@ -615,14 +617,14 @@ Run forge quality audit and fix all auto-fixable violations
 6. **Verify tests pass** after each fix
 7. **Re-run audits** to confirm fixes worked
 8. **Generate report:**
-   - ✅ Fixed automatically: 45 violations
-   - ⚠️ Manual fixes needed: 12 violations
-   - ❌ Complex refactoring: 8 violations
+   - ✅ Fixed this iteration: 45 violations
+   - 🔄 Ready for next iteration: 12 violations
+   - 📋 Queued for future iterations: 8 violations
 
 **Output:**
 - Modified files with fixes applied
 - Detailed changelog of what was fixed
-- Remaining violations requiring manual intervention
+- Remaining violations for next iteration (if any)
 
 **Use Case:**
 - **Local development cleanup**
@@ -686,30 +688,26 @@ Fix [critical|warning|suggestion] violations only
 ### Agent Responsibilities
 
 #### Test Audit Agent:
-**Can Fix:**
+**Fixes Automatically:**
 - Test file renaming (git mv)
 - Add 3As comments to tests
 - Generate factory/builder skeletons
 - Fix test imports
-
-**Reports for Manual:**
-- Test splitting for multiple assertions
-- Mock strategy improvements
-- Complex test refactoring
+- **Split tests with multiple assertions** - Creates separate test methods
+- **Improve mock strategy** - Replaces over-mocking with fixtures
+- **Complete test refactoring** - Applies patterns from existing good tests
 
 #### Code Audit Agent:
-**Can Fix:**
+**Fixes Automatically:**
 - Add type hints to functions
 - Generate basic docstrings
 - Extract magic numbers to constants
 - Remove unused imports
 - Fix import order
-
-**Reports for Manual:**
-- Mutable default arguments (logic change)
-- Function splitting (architectural)
-- Error handling improvements (context-specific)
-- SRP violations (design decision)
+- **Mutable default arguments** - Replaces with None + initialization
+- **Function splitting** - Extracts helper methods for large functions
+- **Error handling** - Adds appropriate try/except blocks
+- **SRP violations** - Splits into focused units
 
 #### Forge (Orchestrator):
 **Coordinates:**
@@ -759,9 +757,13 @@ Fix [critical|warning|suggestion] violations only
     ┌────┴────┬──────────┬─────────┐
     │         │          │         │
 ┌───▼───┐ ┌──▼────┐ ┌───▼────┐ ┌──▼──────┐
-│ Auto  │ │Manual │ │Complex │ │Duplicate│
+│Simple │ │Iterate│ │Complex │ │Duplicate│
 │  78   │ │  45   │ │   28   │ │    5    │
 └───────┘ └───────┘ └────────┘ └─────────┘
+   │         │          │
+   │         │          └─► Next iteration
+   │         └─► Next iteration
+   └─► Fix now
 ```
 
 ### Phase 3: Apply Fixes
@@ -800,12 +802,13 @@ Fix [critical|warning|suggestion] violations only
 ┌─────────────────────────┐
 │  Forge Fix Report       │
 ├─────────────────────────┤
-│ ✅ Auto-fixed: 78       │
-│ ⚠️  Manual: 45          │
-│ ❌ Complex: 28          │
-│ 🔄 Remaining: 73/156    │
+│ ✅ Fixed: 78            │
+│ 🔄 Next iteration: 45   │
+│ 📋 Future: 28           │
+│ 🗑️  Removed: 5          │
 │                         │
 │ Quality: 82 → 89 (+7)   │
+│ Run again to fix more   │
 └─────────────────────────┘
 ```
 
@@ -835,15 +838,15 @@ Run forge quality audit with auto-fix
    - Unused imports: 12
    - Test 3As comments: 3
 
-⚠️  Manual required: 45
-   - Mutable defaults: 5
-   - Functions >50 lines: 12
-   - Multiple assertions: 28
+🔄 Requires iterative fixing: 45
+   - Mutable defaults: 5 (will fix with None pattern)
+   - Functions >50 lines: 12 (will extract helpers)
+   - Multiple assertions: 28 (will split tests)
 
-❌ Complex refactoring: 28
-   - SRP violations: 15
-   - Complex async logic: 8
-   - Over-mocking: 5
+🔄 Complex refactoring (next iteration): 28
+   - SRP violations: 15 (will split into focused units)
+   - Complex async logic: 8 (will simplify patterns)
+   - Over-mocking: 5 (will replace with fixtures)
 
 🗑️  Duplicates removed: 5
 ```
@@ -926,15 +929,15 @@ Run forge quality audit with auto-fix
 ### Test Structure (3 fixes)
 - Added 3As comments
 
-## Still Need Manual Attention
+## Next Iteration Targets
 
-### Critical (Fix Now)
-1. file.py:line - Mutable default: PARAM: list = []
-2. service.py:line - Function too large (>100 lines)
-3. test_file.py:line - N unrelated assertions
+### High Priority (Next Run)
+1. file.py:line - Mutable default: PARAM: list = [] → Will apply None pattern
+2. service.py:line - Function too large (>100 lines) → Will extract helpers
+3. test_file.py:line - N unrelated assertions → Will split into separate tests
 
-### Warning (Fix This Sprint)
-... (42 more)
+### Medium Priority (Subsequent Runs)
+... (42 more - will be addressed in batches)
 
 ## Files Modified
 23 files changed, 156 insertions(+), 89 deletions(-)
@@ -942,7 +945,7 @@ Run forge quality audit with auto-fix
 ## Next Steps
 1. Review changes: `git diff`
 2. Run tests: `make test`
-3. Address manual fixes (estimated 4-6 hours)
+3. Run Forge again to fix remaining issues (iterative improvement)
 4. Commit: `git commit -m "chore: Apply forge auto-fixes"`
 ```
 
@@ -1113,19 +1116,21 @@ fi
 
 ---
 
-## Summary: Forge as Auto-Fixer
+## Summary: Forge as Iterative Auto-Fixer
 
-Forge is now a **complete quality solution**:
+Forge is a **complete quality solution with zero manual intervention**:
 
 1. 🔍 **Discovers** violations (test-audit + code-audit)
-2. 🎯 **Prioritizes** by severity and fixability
-3. 🔧 **Fixes** all auto-fixable violations (when fix mode enabled)
-4. ⚠️  **Reports** what needs manual attention
-5. ✅ **Verifies** improvements with re-audit
-6. 🔄 **Tracks** progress over time
+2. 🎯 **Prioritizes** by complexity (simple → iterative → complex)
+3. 🔧 **Fixes** everything it can automatically
+4. 🔄 **Iterates** - Run multiple times to tackle progressively harder issues
+5. ✅ **Verifies** improvements with re-audit after each iteration
+6. 📊 **Tracks** progress over time across iterations
 7. 🛡️ **Protects** with rollback capability
 
-**Default Mode:** Report-only (audit without applying fixes)
-**Fix Mode:** Must be explicitly requested - applies all auto-fixable violations
+**Philosophy:** No manual intervention required. If Forge can understand the pattern, it can fix it.
 
-**From audit to fixed code in minutes, not hours.**
+**Default Mode:** Report-only (audit without applying fixes)
+**Fix Mode:** Must be explicitly requested - applies all fixable violations iteratively
+
+**From audit to fully fixed code through automated iterations.**
