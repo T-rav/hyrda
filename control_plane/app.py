@@ -21,6 +21,7 @@ from starlette.middleware.sessions import SessionMiddleware
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
 from shared.middleware.redis_session import RedisSessionMiddleware
 from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+from shared.middleware.tracing import TracingMiddleware
 
 # Load environment from parent directory .env
 parent_env = Path(__file__).parent.parent / ".env"
@@ -104,7 +105,10 @@ def create_app() -> FastAPI:
         https_only=is_production,
     )
 
-    # Add security middleware (must be first)
+    # Add tracing middleware (must be first for complete request tracking)
+    app.add_middleware(TracingMiddleware, service_name="control-plane")
+
+    # Add security middleware
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(HTTPSRedirectMiddleware)
 

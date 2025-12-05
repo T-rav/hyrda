@@ -50,11 +50,21 @@ def sync_agents_to_control_plane() -> None:
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
 
+        # Get service token for authentication
+        service_token = os.getenv("BOT_SERVICE_TOKEN", "")
+        if not service_token:
+            logger.warning("No BOT_SERVICE_TOKEN configured - agent registration will fail")
+
         for agent_data in agents_to_register:
             try:
+                headers = {}
+                if service_token:
+                    headers["Authorization"] = f"Bearer {service_token}"
+
                 response = requests.post(
                     f"{control_plane_url}/api/agents/register",
                     json=agent_data,
+                    headers=headers,
                     timeout=5,
                 )
                 if response.status_code == 200:

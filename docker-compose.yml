@@ -232,6 +232,8 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - AGENT_SERVICE_URL=http://agent_service:8000
+      - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
+      - CONTROL_PLANE_SERVICE_TOKEN=${CONTROL_PLANE_SERVICE_TOKEN}
       - ENABLE_HEALTH_SERVER=true  # Internal metrics only, no external port
     # No external ports - dashboard service aggregates metrics
     depends_on:
@@ -274,6 +276,10 @@ services:
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:${MYSQL_DATA_PASSWORD:-changeme_data_password}@mysql:3306/insightmesh_data
       - SYSTEM_DATABASE_URL=mysql+pymysql://insightmesh_system:${MYSQL_SYSTEM_PASSWORD:-changeme_system_password}@mysql:3306/insightmesh_system
       - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - CACHE_REDIS_URL=redis://redis:6379
+      - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
+      - CONTROL_PLANE_SERVICE_TOKEN=${CONTROL_PLANE_SERVICE_TOKEN}
       - FLASK_ENV=production
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
@@ -323,6 +329,9 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - PORT=8000
+      - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
+      - CONTROL_PLANE_SERVICE_TOKEN=${CONTROL_PLANE_SERVICE_TOKEN}
+      - CONTROL_PLANE_URL=http://control_plane:6001
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}

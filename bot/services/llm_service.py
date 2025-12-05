@@ -72,6 +72,16 @@ class LLMService:
         """
         Get response from LLM with optional RAG enhancement
 
+        # Link Langfuse observation with distributed trace
+        try:
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+            from shared.utils.langfuse_tracing import add_trace_to_langfuse_context
+            add_trace_to_langfuse_context()
+        except Exception:
+            pass  # Silently ignore if tracing not available
+
         Args:
             messages: Conversation history
             user_id: User ID for custom system prompts

@@ -18,6 +18,7 @@ from services.scheduler_service import SchedulerService
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
 from shared.middleware.redis_session import RedisSessionMiddleware
 from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+from shared.middleware.tracing import TracingMiddleware
 
 # Environment variables loaded by Pydantic from docker-compose.yml
 
@@ -105,7 +106,10 @@ def create_app() -> FastAPI:
         https_only=(os.getenv("ENVIRONMENT") == "production"),
     )
 
-    # Add security middleware (must be early in the chain)
+    # Add tracing middleware (must be first for complete request tracking)
+    app.add_middleware(TracingMiddleware, service_name="tasks")
+
+    # Add security middleware
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(HTTPSRedirectMiddleware)
 

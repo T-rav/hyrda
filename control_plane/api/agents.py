@@ -10,6 +10,7 @@ sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from dependencies.auth import get_current_user
+from dependencies.service_auth import verify_service_auth
 from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
 from shared.utils.error_responses import (
     ErrorCode,
@@ -30,15 +31,14 @@ from utils.validation import validate_agent_name, validate_display_name
 
 logger = logging.getLogger(__name__)
 
-# Create router with authentication required for all endpoints
+# Create router with authentication required for user endpoints
 router = APIRouter(
     prefix="/api/agents",
     tags=["agents"],
-    dependencies=[Depends(get_current_user)]  # Require auth for all endpoints
 )
 
 
-@router.get("")
+@router.get("", dependencies=[Depends(get_current_user)])
 async def list_agents(request: Request) -> dict[str, Any]:
     """List all registered agents from database.
 
@@ -117,7 +117,7 @@ async def list_agents(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=internal_error(str(e)))
 
 
-@router.post("/register")
+@router.post("/register", dependencies=[Depends(verify_service_auth)])
 @require_idempotency(ttl_hours=24)
 async def register_agent(request: Request) -> dict[str, Any]:
     """Register or update an agent in the database.
@@ -125,7 +125,10 @@ async def register_agent(request: Request) -> dict[str, Any]:
     Called by agent-service on startup to sync available agents.
     Upserts agent metadata - creates if doesn't exist, updates if it does.
 
+    This endpoint uses service-to-service authentication (service token in Authorization header).
+
     Headers:
+        Authorization: Bearer <service_token>
         Idempotency-Key: Optional unique key to prevent duplicate registrations
     """
     try:

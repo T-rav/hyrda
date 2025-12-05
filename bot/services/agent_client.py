@@ -14,9 +14,10 @@ import httpx
 
 from bot_types import AgentContext, AgentInfo, AgentResponse, CircuitBreakerStatus
 
-# Import request signing utilities from shared directory
+# Import request signing and tracing utilities from shared directory
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Add project root to path
 from shared.utils.request_signing import add_signature_headers
+from shared.utils.tracing import add_trace_id_to_headers, get_or_create_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,11 @@ class AgentClient:
                     self.service_token,
                     request_body_str,
                 )
+
+                # Add trace ID for request tracing across services
+                headers = add_trace_id_to_headers(headers)
+                trace_id = get_or_create_trace_id()
+                logger.info(f"[{trace_id}] Calling agent-service: {agent_name} | {url}")
 
                 client = await self._get_client()
                 response = await client.post(

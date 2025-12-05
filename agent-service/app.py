@@ -9,11 +9,16 @@ This service exposes agents as REST APIs that can be called from:
 
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+# Import tracing middleware from shared
+sys.path.insert(0, "/app")
+from shared.middleware.tracing import TracingMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -60,6 +65,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Add tracing middleware (must be first for complete request tracking)
+app.add_middleware(TracingMiddleware, service_name="agent-service")
 
 # Add CORS middleware - restrict to specific origins
 allowed_origins = os.getenv(
