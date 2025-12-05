@@ -22,6 +22,10 @@ class AgentMetadata(Base):
     description = Column(Text, nullable=True)
     aliases = Column(Text, nullable=True)  # JSON array of aliases
 
+    # Cloud mode deployment info (only used if AGENT_EXECUTION_MODE=cloud)
+    langgraph_assistant_id = Column(String(255), nullable=True)  # LangGraph Cloud assistant ID
+    langgraph_url = Column(String(512), nullable=True)  # LangGraph Cloud deployment URL
+
     # Permission settings
     is_public = Column(
         Boolean, nullable=False, default=True
@@ -69,6 +73,8 @@ class AgentMetadata(Base):
             "display_name": self.display_name,
             "description": self.description,
             "aliases": self.get_aliases(),
+            "langgraph_assistant_id": self.langgraph_assistant_id,
+            "langgraph_url": self.langgraph_url,
             "is_public": self.is_public,
             "requires_admin": self.requires_admin,
             "is_system": self.is_system,

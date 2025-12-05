@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from dependencies.auth import require_service_auth
+from services.agent_executor import get_agent_executor
 from services.agent_registry import (
     get as get_agent,
 )
@@ -134,30 +135,19 @@ async def invoke_agent(agent_name: str, request: AgentInvokeRequest):
 
     logger.info(f"Invoking agent '{agent_name}' with query: {request.query[:100]}...")
 
-    # Get agent from registry
-    agent_info = get_agent(agent_name)
-    if not agent_info:
-        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
-
-    # Check if agent class is available
-    agent_class = agent_info.get("agent_class")
-    if not agent_class:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Agent '{agent_name}' is not available (class not loaded)",
-        )
+    # Get primary agent name
+    primary_name = get_primary_name(agent_name) or agent_name.lower()
 
     # Track invocation timing
     start_time = time.time()
     status = "error"
-    primary_name = get_primary_name(agent_name) or agent_name.lower()
 
     try:
-        # Instantiate and run agent
-        agent_instance = agent_class()
-
-        # Execute agent
-        result = await agent_instance.run(request.query, request.context)
+        # Execute agent via AgentExecutor (handles embedded/cloud routing)
+        agent_executor = get_agent_executor()
+        result = await agent_executor.invoke_agent(
+            agent_name=primary_name, query=request.query, context=request.context
+        )
 
         status = "success"
         return AgentInvokeResponse(
