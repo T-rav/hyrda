@@ -16,8 +16,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Import tracing middleware from shared
+# Import observability middleware from shared
 sys.path.insert(0, "/app")
+from shared.middleware.prometheus_metrics import (
+    PrometheusMetricsMiddleware,
+    create_metrics_endpoint,
+)
 from shared.middleware.tracing import TracingMiddleware
 
 # Configure logging
@@ -69,6 +73,9 @@ app = FastAPI(
 # Add tracing middleware (must be first for complete request tracking)
 app.add_middleware(TracingMiddleware, service_name="agent-service")
 
+# Add Prometheus metrics middleware
+app.add_middleware(PrometheusMetricsMiddleware, service_name="agent-service")
+
 # Add CORS middleware - restrict to specific origins
 allowed_origins = os.getenv(
     "ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000"
@@ -93,7 +100,7 @@ async def health():
 
 
 @app.get("/api/metrics")
-async def metrics():
+async def agent_metrics():
     """Agent service metrics including invocation stats."""
     from services.metrics_service import get_metrics_service
 
@@ -115,6 +122,10 @@ async def metrics():
             "description": f"Agent invocations across all clients (since {agent_stats['last_reset'].strftime('%H:%M')})",
         },
     }
+
+
+# Prometheus metrics endpoint
+app.get("/metrics")(create_metrics_endpoint())
 
 
 @app.get("/")

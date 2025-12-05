@@ -62,29 +62,32 @@ LANGFUSE_HOST=https://us.cloud.langfuse.com
 - `bot/services/llm_service.py` - Links LLM calls with trace_id
 
 ### 3. Application Metrics (Prometheus + Grafana)
-**Status**: ⚠️ Partially Implemented
+**Status**: ✅ Fully Implemented
 **Purpose**: Time-series metrics for monitoring and alerting
 
 **What's Available**:
 - Prometheus server running (port 9090)
 - Grafana running (port 3000)
-- Basic metrics service in agent-service
+- HTTP metrics middleware integrated in all services
+- `/metrics` endpoints on all services
 
-**What's Missing** (TODO):
-- HTTP metrics middleware not yet integrated
-- Need to add prometheus_client to dependencies
-- Grafana dashboards not configured
+**Collected Metrics**:
+- `{service}_http_requests_total` - HTTP request counter (by method, endpoint, status_code)
+- `{service}_http_request_duration_seconds` - HTTP request duration histogram (p50, p95, p99)
+- `{service}_http_requests_in_progress` - Currently in-flight requests gauge
+- `{service}_http_errors_total` - HTTP errors counter (by method, endpoint)
 
-**Planned Metrics**:
-- HTTP request rate (requests/sec by endpoint)
-- HTTP request duration (p50, p95, p99 latency)
-- Error rate (errors/sec by status code)
-- Agent invocations (by agent name)
-- LLM token usage (by model)
+**Metrics Endpoints**:
+- Agent-Service: `http://localhost:8000/metrics`
+- Control-Plane: `http://localhost:6001/metrics`
+- Tasks Service: `http://localhost:5001/metrics`
 
-**Files Created**:
-- `shared/middleware/prometheus_metrics.py` - Metrics middleware (ready to use)
-- `agent-service/services/metrics_service.py` - Existing metrics service
+**Files**:
+- `shared/middleware/prometheus_metrics.py` - Metrics middleware (integrated)
+- `agent-service/services/metrics_service.py` - Agent-specific metrics
+- `agent-service/app.py` - Integrated PrometheusMetricsMiddleware
+- `control_plane/app.py` - Integrated PrometheusMetricsMiddleware
+- `tasks/app.py` - Integrated PrometheusMetricsMiddleware
 
 ## 🔄 Complete Request Flow with Tracing
 
@@ -146,19 +149,33 @@ echo "=== AGENT-SERVICE ===" && docker logs insightmesh-agent-service 2>&1 | gre
 
 ### Monitor System Health
 
-1. **Check Prometheus metrics**:
+1. **Check service metrics endpoints**:
 ```bash
-open http://localhost:9090
-# Query: rate(http_requests_total[5m])
+# Agent-service HTTP metrics
+curl http://localhost:8000/metrics
+
+# Control-plane HTTP metrics
+curl http://localhost:6001/metrics
+
+# Tasks service HTTP metrics
+curl http://localhost:5001/metrics
 ```
 
-2. **View Grafana dashboards**:
+2. **Check Prometheus metrics**:
+```bash
+open http://localhost:9090
+# Query examples:
+#   rate(agent_service_http_requests_total[5m])
+#   histogram_quantile(0.95, rate(control_plane_http_request_duration_seconds_bucket[5m]))
+```
+
+3. **View Grafana dashboards**:
 ```bash
 open http://localhost:3000
 # Default: admin/admin (change on first login)
 ```
 
-3. **Query Loki logs**:
+4. **Query Loki logs**:
 ```bash
 open http://localhost:3000/explore
 # LogQL: {container="insightmesh-bot"} |= "error"
@@ -176,8 +193,8 @@ open http://localhost:3000/explore
 ## 🚀 Next Steps (Future Enhancements)
 
 ### High Priority
-1. **Add prometheus_client dependency** to all services
-2. **Integrate PrometheusMetricsMiddleware** in all FastAPI apps
+1. ✅ ~~Add prometheus_client dependency~~ **DONE**
+2. ✅ ~~Integrate PrometheusMetricsMiddleware~~ **DONE**
 3. **Create Grafana dashboards**:
    - HTTP request rates and latency
    - Error rates by endpoint

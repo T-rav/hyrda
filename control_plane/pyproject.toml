@@ -23,6 +23,7 @@ dependencies = [
     "google-auth-oauthlib>=1.0.0",
     "PyJWT>=2.8.0",  # JWT token generation and validation
     "redis>=5.0.0",  # Redis for session storage and token revocation
+    "prometheus-client>=0.20.0",  # Prometheus metrics
 ]
 
 [project.optional-dependencies]

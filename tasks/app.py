@@ -16,6 +16,10 @@ from services.scheduler_service import SchedulerService
 
 # Import security middleware from shared directory
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
+from shared.middleware.prometheus_metrics import (
+    PrometheusMetricsMiddleware,
+    create_metrics_endpoint,
+)
 from shared.middleware.redis_session import RedisSessionMiddleware
 from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
 from shared.middleware.tracing import TracingMiddleware
@@ -109,6 +113,9 @@ def create_app() -> FastAPI:
     # Add tracing middleware (must be first for complete request tracking)
     app.add_middleware(TracingMiddleware, service_name="tasks")
 
+    # Add Prometheus metrics middleware
+    app.add_middleware(PrometheusMetricsMiddleware, service_name="tasks")
+
     # Add security middleware
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(HTTPSRedirectMiddleware)
@@ -131,6 +138,9 @@ def create_app() -> FastAPI:
 
     # Register routers
     register_routers(app)
+
+    # Prometheus metrics endpoint
+    app.get("/metrics")(create_metrics_endpoint())
 
     return app
 
