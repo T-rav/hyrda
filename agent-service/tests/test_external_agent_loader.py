@@ -1,4 +1,8 @@
-"""Unit tests for ExternalAgentLoader (external agent loading system)."""
+"""Unit tests for ExternalAgentLoader (external agent loading system).
+
+All tests are pure unit tests using mocking and temporary directories.
+No integration with real external agents or databases.
+"""
 
 import os
 from pathlib import Path

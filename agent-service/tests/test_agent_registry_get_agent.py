@@ -1,4 +1,8 @@
-"""Unit tests for agent_registry.get_agent() function."""
+"""Unit tests for agent_registry.get_agent() function.
+
+All tests in this file are pure unit tests with full mocking.
+Integration tests are marked with @pytest.mark.integration.
+"""
 
 from unittest.mock import MagicMock, patch
 
@@ -119,9 +123,11 @@ class TestGetAgent:
             assert mock_agent_class.call_count == 2
 
 
+@pytest.mark.integration
 class TestGetAgentIntegration:
     """Integration tests for get_agent with real registry."""
 
+    @pytest.mark.integration
     def test_get_agent_with_external_loader(self, tmp_path):
         """Test get_agent with external agent loader integration."""
         # Create temporary agent
@@ -185,6 +191,7 @@ class Agent:
                 assert hasattr(agent, "invoke")
                 assert agent.name == "test"
 
+    @pytest.mark.integration
     def test_get_agent_embedded_cloud_consistency(self):
         """Test that get_agent works consistently for both modes."""
         # Mock agent with both embedded class and cloud assistant_id
