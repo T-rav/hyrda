@@ -122,10 +122,10 @@ def rate_limit(
     window_seconds: int = 3600,
     identifier_func: Callable[[], str] | None = None,
 ):
-    """Decorator to add rate limiting to an endpoint.
+    """Decorator to add rate limiting to FastAPI endpoints.
 
-    NOTE: Currently a no-op stub during FastAPI migration.
-    For production use, implement FastAPI dependencies or middleware for rate limiting.
+    Uses in-memory sliding window rate limiting.
+    Identifies requests by IP address or custom identifier.
 
     Args:
         max_requests: Maximum requests allowed in window (default: 100)
@@ -133,18 +133,64 @@ def rate_limit(
         identifier_func: Optional function to generate custom identifier
 
     Returns:
-        No-op decorator (rate limiting disabled during FastAPI migration)
+        FastAPI-compatible decorator that checks rate limits
+
+    Example:
+        @router.post("/auth/login")
+        @rate_limit(max_requests=10, window_seconds=60)
+        async def login(request: Request):
+            pass
     """
+    from fastapi import HTTPException, Request
 
     def decorator(f: Callable) -> Callable:
         @wraps(f)
-        def wrapper(*args, **kwargs):
-            # TODO: Implement FastAPI-compatible rate limiting
-            # For now, just pass through
-            logger.debug(
-                f"Rate limiting disabled for {f.__name__} during FastAPI migration"
-            )
-            return f(*args, **kwargs)
+        async def wrapper(*args, **kwargs):
+            # Extract request from args/kwargs
+            request = None
+            for arg in args:
+                if isinstance(arg, Request):
+                    request = arg
+                    break
+            if not request:
+                request = kwargs.get("request")
+
+            if not request:
+                logger.warning(f"Rate limit decorator on {f.__name__}: No Request found")
+                return await f(*args, **kwargs)
+
+            # Generate rate limit key
+            if identifier_func:
+                identifier = identifier_func()
+                key = get_rate_limit_key(identifier=identifier)
+            else:
+                # Use IP address from request
+                client_host = request.client.host if request.client else "unknown"
+                key = get_rate_limit_key(request_ip=client_host)
+
+            # Check rate limit
+            is_allowed, headers = check_rate_limit(key, max_requests, window_seconds)
+
+            if not is_allowed:
+                logger.warning(
+                    f"Rate limit exceeded for {key} on {f.__name__} "
+                    f"(limit: {max_requests}/{window_seconds}s)"
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded. Try again in {headers.get('X-RateLimit-Reset', 'later')}",
+                    headers=headers,
+                )
+
+            # Call the endpoint
+            response = await f(*args, **kwargs)
+
+            # Add rate limit headers to response if it has a headers attribute
+            if hasattr(response, "headers"):
+                for header_name, header_value in headers.items():
+                    response.headers[header_name] = header_value
+
+            return response
 
         return wrapper
 

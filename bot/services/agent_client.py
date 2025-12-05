@@ -1,15 +1,22 @@
 """HTTP client for calling agent-service."""
 
 import asyncio
+import json
 import logging
 import os
+import sys
 import time
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 from bot_types import AgentContext, AgentInfo, AgentResponse, CircuitBreakerStatus
+
+# Import request signing utilities from shared directory
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Add project root to path
+from shared.utils.request_signing import add_signature_headers
 
 logger = logging.getLogger(__name__)
 
@@ -222,14 +229,33 @@ class AgentClient:
         # Serialize context - remove non-serializable objects
         serializable_context = self._prepare_context(context)
 
+        # Prepare request body
+        request_body = {"query": query, "context": serializable_context}
+        request_body_str = json.dumps(
+            request_body, separators=(",", ":"), sort_keys=True
+        )
+
         # Retry with exponential backoff for transient failures
         for attempt in range(self.max_retries):
             try:
+                # Prepare headers with service token
+                headers = {"X-Service-Token": self.service_token}
+
+                # Add HMAC signature for request integrity and replay attack prevention
+                headers = add_signature_headers(
+                    headers,
+                    self.service_token,
+                    request_body_str,
+                )
+
                 client = await self._get_client()
                 response = await client.post(
                     url,
-                    json={"query": query, "context": serializable_context},
-                    headers={"X-Service-Token": self.service_token},
+                    content=request_body_str,
+                    headers={
+                        **headers,
+                        "Content-Type": "application/json",
+                    },
                 )
 
                 if response.status_code == 404:

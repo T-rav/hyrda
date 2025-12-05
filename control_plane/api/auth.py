@@ -18,7 +18,7 @@ from utils.rate_limit import rate_limit
 
 # Import JWT utilities from shared directory
 sys.path.insert(0, "/app")  # Add app root to path for shared imports
-from shared.utils.jwt_auth import create_access_token
+from shared.utils.jwt_auth import create_access_token, extract_token_from_request, revoke_token
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,11 @@ router = APIRouter(prefix="/auth")
 
 
 @router.get("/login")
+@rate_limit(max_requests=10, window_seconds=60)
 async def auth_login(request: Request, redirect: str | None = None):
     """Initiate OAuth login flow.
+
+    Rate limited to 10 requests per 60 seconds per IP to prevent abuse.
 
     Args:
         redirect: URL to redirect to after successful login
@@ -219,8 +222,29 @@ async def get_token(request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
-    """Handle logout."""
+    """Handle logout and revoke JWT token.
+
+    Extracts JWT token from cookie or Authorization header,
+    revokes it (adds to Redis blacklist), clears session, and removes cookie.
+
+    Returns:
+        JSON response with logout status and token revocation status
+    """
     email = request.session.get("user_email")
+
+    # Try to extract and revoke JWT token
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        token = extract_token_from_request(auth_header)
+
+    revoked = False
+    if token:
+        revoked = revoke_token(token)
+        if revoked:
+            logger.info(f"Revoked JWT token for {email}")
+        else:
+            logger.warning(f"Token revocation failed for {email} (Redis unavailable?)")
 
     # Clear session
     request.session.clear()
@@ -231,7 +255,10 @@ async def logout(request: Request):
     )
 
     # Create response and clear cookie
-    response = JSONResponse({"message": "Logged out successfully"})
+    response = JSONResponse({
+        "message": "Logged out successfully",
+        "token_revoked": revoked
+    })
     response.delete_cookie("access_token")
 
     return response

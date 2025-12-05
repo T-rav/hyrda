@@ -15,6 +15,23 @@ from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
 logger = logging.getLogger(__name__)
 
+# Redis connection for token revocation (optional)
+_redis_client = None
+
+
+def _get_redis():
+    """Get Redis client for token revocation."""
+    global _redis_client
+    if _redis_client is None:
+        try:
+            import redis
+            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+            _redis_client = redis.from_url(redis_url, decode_responses=True)
+        except Exception as e:
+            logger.warning(f"Redis not available for token revocation: {e}")
+            _redis_client = False  # Mark as unavailable
+    return _redis_client if _redis_client is not False else None
+
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-production")
 JWT_ALGORITHM = "HS256"
@@ -78,6 +95,57 @@ def create_access_token(
     return token
 
 
+def revoke_token(token: str) -> bool:
+    """Revoke a JWT token by adding it to the blacklist.
+
+    Args:
+        token: JWT token string to revoke
+
+    Returns:
+        True if revoked successfully, False if Redis unavailable
+    """
+    redis = _get_redis()
+    if not redis:
+        logger.warning("Token revocation skipped - Redis not available")
+        return False
+
+    try:
+        # Decode without verification to get expiration
+        payload = jwt.decode(token, options={"verify_signature": False})
+        exp = payload.get("exp")
+
+        if exp:
+            # Store in Redis with TTL matching token expiration
+            ttl = max(0, exp - int(datetime.now(UTC).timestamp()))
+            redis.setex(f"revoked_token:{token}", ttl, "1")
+            logger.info(f"Revoked token for {payload.get('email')}")
+            return True
+    except Exception as e:
+        logger.error(f"Failed to revoke token: {e}")
+
+    return False
+
+
+def is_token_revoked(token: str) -> bool:
+    """Check if a token has been revoked.
+
+    Args:
+        token: JWT token string
+
+    Returns:
+        True if revoked, False otherwise
+    """
+    redis = _get_redis()
+    if not redis:
+        return False  # If Redis unavailable, can't check revocation
+
+    try:
+        return redis.exists(f"revoked_token:{token}") > 0
+    except Exception as e:
+        logger.error(f"Failed to check token revocation: {e}")
+        return False
+
+
 def verify_token(token: str) -> dict[str, Any]:
     """Verify and decode a JWT token.
 
@@ -88,7 +156,7 @@ def verify_token(token: str) -> dict[str, Any]:
         Decoded token payload with user information
 
     Raises:
-        JWTAuthError: If token is invalid or expired
+        JWTAuthError: If token is invalid, expired, or revoked
 
     Example:
         try:
@@ -99,6 +167,10 @@ def verify_token(token: str) -> dict[str, Any]:
             pass
     """
     try:
+        # Check if token is revoked (if Redis available)
+        if is_token_revoked(token):
+            raise JWTAuthError("Token has been revoked")
+
         payload = jwt.decode(
             token,
             JWT_SECRET_KEY,

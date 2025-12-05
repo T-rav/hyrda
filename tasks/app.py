@@ -14,6 +14,11 @@ from config.settings import get_settings
 from jobs.job_registry import JobRegistry
 from services.scheduler_service import SchedulerService
 
+# Import security middleware from shared directory
+sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
+from shared.middleware.redis_session import RedisSessionMiddleware
+from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+
 # Environment variables loaded by Pydantic from docker-compose.yml
 
 # Configure logging with both console and file handlers
@@ -90,15 +95,19 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add session middleware (required for OAuth)
+    # Add session middleware with Redis backend (required for OAuth)
     app.add_middleware(
-        SessionMiddleware,
+        RedisSessionMiddleware,
         secret_key=settings.secret_key,
-        session_cookie="session",
+        session_cookie="session_id",
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
         https_only=(os.getenv("ENVIRONMENT") == "production"),
     )
+
+    # Add security middleware (must be early in the chain)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(HTTPSRedirectMiddleware)
 
     # Enable CORS - restrict to specific origins
     allowed_origins = os.getenv(

@@ -2,9 +2,14 @@
 
 import logging
 import os
+import sys
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
+
+# Import JWT utilities from shared directory
+sys.path.insert(0, "/app")  # Add app root to path for shared imports
+from shared.utils.jwt_auth import extract_token_from_request, revoke_token
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +114,33 @@ async def auth_callback(request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
-    """Handle logout.
+    """Handle logout and revoke JWT token.
+
+    Extracts JWT token from cookie or Authorization header,
+    revokes it (adds to Redis blacklist), clears session, and removes cookie.
 
     Returns:
-        Success message
+        JSON response with logout status and token revocation status
     """
     from utils.auth import AuditLogger
 
     email = request.session.get("user_email")
+
+    # Try to extract and revoke JWT token
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        token = extract_token_from_request(auth_header)
+
+    revoked = False
+    if token:
+        revoked = revoke_token(token)
+        if revoked:
+            logger.info(f"Revoked JWT token for {email}")
+        else:
+            logger.warning(f"Token revocation failed for {email} (Redis unavailable?)")
+
+    # Clear session
     request.session.clear()
 
     AuditLogger.log_auth_event(
@@ -124,4 +148,11 @@ async def logout(request: Request):
         email=email,
     )
 
-    return {"message": "Logged out successfully"}
+    # Create response and clear cookie
+    response = JSONResponse({
+        "message": "Logged out successfully",
+        "token_revoked": revoked
+    })
+    response.delete_cookie("access_token")
+
+    return response

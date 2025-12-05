@@ -17,6 +17,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+# Import security middleware from shared directory
+sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
+from shared.middleware.redis_session import RedisSessionMiddleware
+from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+
 # Load environment from parent directory .env
 parent_env = Path(__file__).parent.parent / ".env"
 load_dotenv(parent_env)
@@ -72,7 +77,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Add session middleware (required for OAuth)
+    # Add session middleware with Redis backend (required for OAuth)
     secret_key = os.getenv("SECRET_KEY", "dev-secret-key-change-in-prod")
 
     # Validate SECRET_KEY in production
@@ -89,14 +94,19 @@ def create_app() -> FastAPI:
             "Current value is the default development key."
         )
 
+    # Use Redis session middleware for persistent sessions
     app.add_middleware(
-        SessionMiddleware,
+        RedisSessionMiddleware,
         secret_key=secret_key,
-        session_cookie="session",
+        session_cookie="session_id",
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
         https_only=is_production,
     )
+
+    # Add security middleware (must be first)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(HTTPSRedirectMiddleware)
 
     # Enable CORS - restrict to specific origins
     allowed_origins = os.getenv(
