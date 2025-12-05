@@ -21,6 +21,7 @@ dependencies = [
     "slack-sdk>=3.0.0",
     "google-auth>=2.0.0",
     "google-auth-oauthlib>=1.0.0",
+    "PyJWT>=2.8.0",  # JWT token generation and validation
 ]
 
 [project.optional-dependencies]
