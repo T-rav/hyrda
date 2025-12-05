@@ -1,7 +1,9 @@
 import logging
 import re
+import sys
 import traceback
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from slack_sdk import WebClient
@@ -11,6 +13,14 @@ from bot_types import SlackFileUploadResponse, SlackMessageResponse
 from config.settings import SlackSettings
 from models import ThreadInfo
 from utils.errors import delete_message
+
+# Import OpenTelemetry utilities
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from shared.utils.otel_http_client import (
+    SPAN_KIND_CLIENT,
+    create_span,
+    record_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,18 +49,27 @@ class SlackService:
         Returns:
             Response dict with 'ts' key for the message timestamp, or None on error
         """
-        try:
-            response = await self.client.chat_postMessage(  # type: ignore[misc]
-                channel=channel,
-                text=text,
-                thread_ts=thread_ts,
-                blocks=blocks,
-                mrkdwn=mrkdwn,
-            )
-            return response  # type: ignore[no-any-return]
-        except SlackApiError as e:
-            logger.error(f"Error sending message: {e}")
-            return None
+        with create_span(
+            "slack.api.chat_postMessage",
+            attributes={
+                "slack.channel": channel,
+                "slack.thread_ts": thread_ts or "none",
+            },
+            span_kind=SPAN_KIND_CLIENT,
+        ):
+            try:
+                response = await self.client.chat_postMessage(  # type: ignore[misc]
+                    channel=channel,
+                    text=text,
+                    thread_ts=thread_ts,
+                    blocks=blocks,
+                    mrkdwn=mrkdwn,
+                )
+                return response  # type: ignore[no-any-return]
+            except SlackApiError as e:
+                record_exception(e)
+                logger.error(f"Error sending message: {e}")
+                return None
 
     async def update_message(
         self,

@@ -3,16 +3,25 @@ import contextlib
 import logging
 import os
 import signal
+import sys
 import traceback
+from pathlib import Path
 
 from dotenv import load_dotenv
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
 
+# Initialize OpenTelemetry for distributed tracing
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared.utils.otel_tracing import get_tracer
+
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
+
+# Initialize OTel tracer for bot service
+get_tracer("bot")
 from services import agent_registry
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service

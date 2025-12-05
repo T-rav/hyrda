@@ -6,10 +6,20 @@ Separated for better organization and testability.
 """
 
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+
+# Import OpenTelemetry utilities
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+from shared.utils.otel_http_client import (
+    SPAN_KIND_CLIENT,
+    create_span,
+    record_exception,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,21 +46,27 @@ class GoogleDriveAPI:
         Returns:
             Folder information dictionary or None if error
         """
-        try:
-            # Try regular access first
-            folder_info = (
-                self.service.files()
-                .get(
-                    fileId=folder_id,
-                    fields="id,name,mimeType,permissions",
-                    supportsAllDrives=True,
+        with create_span(
+            "gdrive.api.get_folder_info",
+            attributes={"gdrive.folder_id": folder_id},
+            span_kind=SPAN_KIND_CLIENT,
+        ):
+            try:
+                # Try regular access first
+                folder_info = (
+                    self.service.files()
+                    .get(
+                        fileId=folder_id,
+                        fields="id,name,mimeType,permissions",
+                        supportsAllDrives=True,
+                    )
+                    .execute()
                 )
-                .execute()
-            )
-            return folder_info
-        except HttpError as e:
-            logger.error(f"Cannot access folder {folder_id}: {e}")
-            return None
+                return folder_info
+            except HttpError as e:
+                record_exception(e)
+                logger.error(f"Cannot access folder {folder_id}: {e}")
+                return None
 
     def list_files_in_folder(self, folder_id: str, folder_path: str = "") -> list[dict]:
         """
@@ -63,13 +79,22 @@ class GoogleDriveAPI:
         Returns:
             List of file items
         """
-        try:
-            # Always use specific query - it works better for Shared Drives
-            # The broad query doesn't reliably return parents field
-            return self._list_files_specific_query(folder_id)
-        except HttpError as e:
-            logger.error(f"Error listing folder contents: {e}")
-            return []
+        with create_span(
+            "gdrive.api.list_files",
+            attributes={
+                "gdrive.folder_id": folder_id,
+                "gdrive.folder_path": folder_path,
+            },
+            span_kind=SPAN_KIND_CLIENT,
+        ):
+            try:
+                # Always use specific query - it works better for Shared Drives
+                # The broad query doesn't reliably return parents field
+                return self._list_files_specific_query(folder_id)
+            except HttpError as e:
+                record_exception(e)
+                logger.error(f"Error listing folder contents: {e}")
+                return []
 
     def _list_files_broad_query(self, folder_id: str) -> list[dict]:
         """Use broad query for root folder access"""
