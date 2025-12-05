@@ -15,7 +15,10 @@ _agent_classes: dict[str, type] = {}
 
 
 def _load_agent_classes() -> dict[str, type]:
-    """Load agent classes from the local registry.
+    """Load agent classes from external agents directory only.
+
+    All agents (including profile, meddic) are now external and client-customizable.
+    The Docker image ships with NO bundled agents - clients mount their agents directory.
 
     Returns:
         Dict mapping agent names to agent classes
@@ -25,24 +28,30 @@ def _load_agent_classes() -> dict[str, type]:
     if _agent_classes:
         return _agent_classes
 
+    all_agents = {}
+
+    # Load external agents (client-provided) - this is the ONLY source now
     try:
-        # Import the local registry which has agent classes registered
-        from agents.registry import agent_registry as local_registry
+        from services.external_agent_loader import get_external_loader
 
-        # Build mapping from agent names to classes
-        _agent_classes = {}
-        for name, info in local_registry._agents.items():
-            if "agent_class" in info:
-                _agent_classes[info["name"]] = info["agent_class"]
-                # Also map aliases
-                for alias in info.get("aliases", []):
-                    _agent_classes[alias.lower()] = info["agent_class"]
+        external_loader = get_external_loader()
+        external_agents = external_loader.discover_agents()
 
-        logger.info(f"Loaded {len(_agent_classes)} agent class mappings")
-        return _agent_classes
+        for name, agent_class in external_agents.items():
+            all_agents[name.lower()] = agent_class
+
+        if external_agents:
+            logger.info(f"✅ Loaded {len(external_agents)} agent(s) from external directory")
+        else:
+            logger.warning(
+                "⚠️ No agents loaded! Ensure EXTERNAL_AGENTS_PATH is set and agents directory is mounted"
+            )
     except Exception as e:
-        logger.error(f"Error loading agent classes: {e}", exc_info=True)
-        return {}
+        logger.error(f"❌ Error loading external agents: {e}", exc_info=True)
+
+    _agent_classes = all_agents
+    logger.info(f"📦 Total agents available: {len(_agent_classes)}")
+    return _agent_classes
 
 
 # Cache with TTL

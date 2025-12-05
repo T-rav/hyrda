@@ -338,6 +338,10 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_HOST:-}
       - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - EXTERNAL_AGENTS_PATH=/app/external_agents  # Path where agents are mounted
+    volumes:
+      # Mount external agents directory (client-customizable)
+      - ./external_agents:/app/external_agents:ro
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     depends_on:

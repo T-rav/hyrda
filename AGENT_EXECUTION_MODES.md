@@ -2,6 +2,17 @@
 
 InsightMesh supports two execution modes for agents: **Embedded** (local) and **Cloud** (LangGraph Platform).
 
+## 🔌 External Agents Architecture
+
+**All agents are externally loaded** - the Docker image ships with NO bundled agents. Agents are mounted from the `external_agents/` directory at runtime, giving clients full control:
+
+- ✅ Remove agents you don't want
+- ✅ Replace agents with your own versions
+- ✅ Add new custom agents
+- ✅ Update agents without rebuilding Docker image
+
+See [`external_agents/README.md`](./external_agents/README.md) for complete agent customization guide.
+
 ## 🎯 Quick Reference
 
 | Mode | Where Agents Run | Best For | Setup Complexity |
@@ -255,6 +266,76 @@ docker compose build agent_service
 - **LangSmith**: https://smith.langchain.com/
 - **Control-Plane UI**: http://localhost:6001 (agent registry)
 - **Agent-Service Logs**: `docker logs insightmesh-agent-service`
+
+---
+
+## 🎨 Agent Deployment Patterns
+
+### Pattern 1: Use Provided Agents (Default)
+```yaml
+# docker-compose.yml (unchanged)
+volumes:
+  - ./external_agents:/app/external_agents:ro  # Mount provided agents
+```
+
+Agents available: `profile`, `meddic`
+
+### Pattern 2: Custom Agent Selection
+```bash
+# Remove agents you don't want
+rm -rf external_agents/meddic
+
+# Add your own
+mkdir external_agents/my_agent
+# ... create agent.py ...
+
+# Restart
+docker compose restart agent_service
+```
+
+### Pattern 3: Completely Custom Agents
+```bash
+# Remove all provided agents
+rm -rf external_agents/profile external_agents/meddic
+
+# Add only your agents
+mkdir external_agents/agent1
+mkdir external_agents/agent2
+
+# Restart
+docker compose restart agent_service
+```
+
+### Pattern 4: Git-Based Agent Repository
+```bash
+# Client maintains agents in separate repo
+git clone https://github.com/client/custom-agents.git external_agents
+
+# docker-compose.yml
+volumes:
+  - ./external_agents:/app/external_agents:ro
+```
+
+**Benefits:**
+- Version control for agents
+- Easy rollback
+- Team collaboration
+- CI/CD integration
+
+### Pattern 5: Hot-Reload Development
+```yaml
+# docker-compose.dev.yml
+volumes:
+  - ./external_agents:/app/external_agents:rw  # Read-write for development
+```
+
+```bash
+# Edit agents without restarting
+vim external_agents/profile/prompts.py
+
+# Reload specific agent
+curl -X POST http://localhost:8000/api/agents/profile/reload
+```
 
 ---
 
