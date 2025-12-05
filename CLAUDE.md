@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 CRITICAL: Testing is Mandatory
+
+**ALWAYS write unit tests for code changes before committing.** Every new function, class, or feature modification MUST include comprehensive tests.
+
+**Testing Requirements:**
+- ✅ **New features**: Write tests BEFORE committing
+- ✅ **Bug fixes**: Add regression tests that reproduce the bug
+- ✅ **Refactoring**: Ensure existing tests pass, add tests for new paths
+- ✅ **API changes**: Test all endpoints and error cases
+- ❌ **Never commit untested code** - tests are non-negotiable
+
+If you create code without tests, you MUST create tests before the commit.
+
 ## 🚨 CRITICAL: Never Skip Commit Hooks
 
 **NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
@@ -419,14 +432,33 @@ make test-file FILE=test_your_service.py
 - Include docstrings for new functions
 - Import sorting will be handled automatically
 
-#### 4. **Run Linter Immediately After Changes**
+#### 4. **Write Tests IMMEDIATELY**
+```bash
+# MANDATORY: Write tests for your changes BEFORE committing
+# Create test file if it doesn't exist
+touch tests/test_your_new_feature.py
+
+# Write comprehensive tests covering:
+# - Happy path (expected behavior)
+# - Edge cases (boundary conditions)
+# - Error cases (invalid input, exceptions)
+# - Integration (how it works with other components)
+```
+
+**Test Coverage Requirements:**
+- New functions: At least 3 tests (happy path, edge case, error case)
+- New classes: Test all public methods
+- Bug fixes: Regression test that would catch the bug
+- API changes: Test all endpoints and status codes
+
+#### 5. **Run Linter Immediately After Changes**
 ```bash
 # CRITICAL: Run linter after every significant change
 make lint              # Auto-fix formatting, imports, and common issues
 make lint-check        # Verify everything passes (what pre-commit uses)
 ```
 
-#### 5. **Run Related Tests**
+#### 6. **Run Related Tests**
 ```bash
 # Test the specific functionality you changed
 make test-file FILE=test_your_modified_service.py
@@ -435,7 +467,7 @@ make test-file FILE=test_your_modified_service.py
 make test              # Must show 100% pass rate
 ```
 
-#### 6. **Verify Complete Quality Pipeline**
+#### 7. **Verify Complete Quality Pipeline**
 ```bash
 # Run the complete quality pipeline before committing
 make quality           # Combines: linting + type checking + all tests
@@ -448,17 +480,18 @@ make quality           # Combines: linting + type checking + all tests
 # 1. Read the service file
 cat bot/services/your_service.py
 
-# 2. Check existing tests  
+# 2. Check existing tests
 cat bot/tests/test_your_service.py
 
 # 3. Make changes with proper typing
-# 4. Auto-fix code quality
+# 4. IMMEDIATELY write tests for your changes
+# 5. Auto-fix code quality
 make lint
 
-# 5. Run specific tests
+# 6. Run specific tests
 make test-file FILE=test_your_service.py
 
-# 6. Run full test suite
+# 7. Run full test suite
 make test
 ```
 
@@ -480,19 +513,20 @@ make test
 
 #### When Adding New Features
 ```bash
-# 1. Create tests first (TDD approach)
+# 1. Create tests first (TDD approach - MANDATORY)
 touch bot/tests/test_new_feature.py
 
-# 2. Write failing tests
-# 3. Implement feature to make tests pass
-# 4. Run linter
+# 2. Write failing tests (RED)
+# 3. Implement feature to make tests pass (GREEN)
+# 4. Refactor if needed (REFACTOR)
+# 5. Run linter
 make lint
 
-# 5. Verify tests pass
+# 6. Verify tests pass
 make test-file FILE=test_new_feature.py
 make test
 
-# 6. Full quality check
+# 7. Full quality check
 make quality
 ```
 
@@ -502,16 +536,20 @@ make quality
 |-----------|-----------------|---------|
 | **Before any changes** | `make test` | Establish baseline |
 | **After editing any `.py` file** | `make lint` | Auto-fix formatting/imports |
+| **After adding new code** | Write tests IMMEDIATELY | Ensure code is tested |
+| **After writing tests** | `make test-file FILE=test_*.py` | Verify tests pass |
 | **After significant changes** | `make lint-check` | Verify code quality |
 | **After modifying a service** | `make test-file FILE=test_service.py` | Test specific functionality |
 | **Before committing** | `make quality` | Complete pipeline |
 | **If pre-commit fails** | `make lint` → fix issues → try commit again | Fix quality issues |
 
 ### **Remember**
+- 🚨 **ALWAYS write tests before committing** - untested code is unacceptable
 - 🚨 **100% test pass rate required** - never commit with failing tests
 - 🔧 **Always run `make lint` after code changes** - fixes most issues automatically
 - ✅ **Use `make quality` before commits** - runs everything (linting + tests)
 - 🚫 **Never use `git commit --no-verify`** - quality gates exist for good reason
+- 📝 **Tests are documentation** - they show how code should be used
 
 ### Development Workflow (MANDATORY)
 
