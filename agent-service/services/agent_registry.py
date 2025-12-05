@@ -215,6 +215,43 @@ def list_agents() -> list[dict[str, Any]]:
     return [info for info in registry.values() if info.get("is_primary", False)]
 
 
+def get_agent(agent_name: str):
+    """Get agent instance by name or alias.
+
+    Args:
+        agent_name: Agent name or alias (case-insensitive)
+
+    Returns:
+        Agent instance ready for invocation
+
+    Raises:
+        ValueError: If agent not found or not available
+
+    Example:
+        agent = get_agent("profile")
+        result = await agent.invoke("Research Acme Corp", {})
+    """
+    agent_info = get_agent_info(agent_name)
+
+    if not agent_info:
+        raise ValueError(
+            f"Agent '{agent_name}' not found. "
+            f"Check control-plane registry or external_agents/ directory."
+        )
+
+    # Get agent class
+    agent_class = agent_info.get("agent_class")
+
+    if not agent_class:
+        raise ValueError(
+            f"Agent '{agent_name}' found in control-plane but no implementation available. "
+            f"Ensure agent exists in external_agents/{agent_name}/agent.py"
+        )
+
+    # Instantiate and return
+    return agent_class()
+
+
 def clear_cache():
     """Clear the cached agent registry (for testing or manual refresh)."""
     global _cached_agents, _cache_timestamp  # noqa: PLW0603
