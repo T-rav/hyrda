@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/scheduler/info")
-async def scheduler_info(request: Request):
+async def scheduler_info(request: Request, user: dict = Depends(get_current_user)):
     """Get scheduler information.
 
     Returns:
@@ -28,7 +28,7 @@ async def scheduler_info(request: Request):
 
 
 @router.get("/jobs")
-async def list_jobs(request: Request):
+async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
     """List all jobs.
 
     Returns:
@@ -58,7 +58,9 @@ async def list_jobs(request: Request):
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(request: Request, job_id: str):
+async def get_job(
+    request: Request, job_id: str, user: dict = Depends(get_current_user)
+):
     """Get specific job details.
 
     Args:
@@ -157,7 +159,7 @@ async def delete_job(request: Request, job_id: str):
 
 
 @router.post("/jobs")
-async def create_job(request: Request):
+async def create_job(request: Request, user: dict = Depends(get_current_user)):
     """Create a new job.
 
     Request Body:
@@ -389,7 +391,7 @@ async def get_job_history(request: Request, job_id: str):
 
 
 @router.get("/job-types")
-async def list_job_types(request: Request):
+async def list_job_types(request: Request, user: dict = Depends(get_current_user)):
     """List available job types.
 
     Returns:

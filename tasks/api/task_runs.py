@@ -27,6 +27,7 @@ async def list_task_runs(
         ge=1,
         description=f"Items per page (max {MAX_PAGE_SIZE})",
     ),
+    user: dict = Depends(get_current_user),
 ):
     """List recent task runs with pagination.
 

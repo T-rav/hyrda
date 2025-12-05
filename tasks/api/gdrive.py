@@ -403,7 +403,7 @@ async def gdrive_auth_callback(request: Request):
 
 @router.get("/auth/status/{task_id}")
 async def check_gdrive_auth_status(
-    request: Request, task_id: str
+    request: Request, task_id: str, user: dict = Depends(get_current_user)
 ):
     """Check if Google Drive authentication exists for a task.
 
