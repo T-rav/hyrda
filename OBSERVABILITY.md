@@ -4,15 +4,62 @@ Complete guide to monitoring, tracing, and debugging the InsightMesh system.
 
 ## 📊 Three Pillars of Observability
 
-### 1. Distributed Tracing (Request Flow)
-**Status**: ✅ Implemented
-**Purpose**: Follow requests across services (Slack → Bot → Agent-Service)
+### 1. Distributed Tracing (OpenTelemetry + Jaeger)
+**Status**: ✅ Fully Implemented
+**Purpose**: Follow requests across services with full span visibility
 
 **How it Works**:
-- Every request gets a unique `trace_id` (format: `trace_12345678`)
-- Trace IDs propagate via `X-Trace-Id` HTTP header
-- All logs include `[trace_id]` prefix
-- Middleware automatically adds trace IDs to all endpoints
+- **OpenTelemetry**: Industry-standard distributed tracing framework
+- **Jaeger**: Local trace visualization (swappable to Datadog, New Relic)
+- **Trace Context**: W3C-compliant propagation across all services
+- **Spans**: Captures HTTP calls, external APIs (Slack, Google Drive), agent execution
+- **Backend Agnostic**: Change backend via env vars (no code changes)
+
+**View Traces**:
+```bash
+# Jaeger UI (local development)
+open http://localhost:16686
+
+# Search by service: bot, agent-service, control-plane, tasks
+# Filter by operation: http.client.agent_service.invoke, slack.api.chat_postMessage
+# Filter by tags: agent.name, slack.channel, gdrive.folder_id
+```
+
+**Trace Flow Example**:
+```
+[bot] Slack message received
+  ↓ [bot] http.client.agent_service.invoke (span)
+    ↓ [agent-service] POST /api/agents/profile/invoke (FastAPI auto-span)
+      ↓ [agent-service] Agent execution (Langfuse traces LLM)
+    ↑ Response
+  ↑ [bot] slack.api.chat_postMessage (span)
+Slack message sent
+
+All spans connected in single trace! Click through in Jaeger UI.
+```
+
+**Backend Swapping** (no code changes):
+```bash
+# Datadog
+OTEL_EXPORTER_OTLP_ENDPOINT=https://trace-agent.datadoghq.com:4317
+DD_API_KEY=your_key
+
+# New Relic
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317
+OTEL_EXPORTER_OTLP_HEADERS=api-key=your_key
+
+# Disable tracing
+OTEL_TRACES_ENABLED=false
+```
+
+**What's Traced**:
+- ✅ HTTP requests (FastAPI auto-instrumentation)
+- ✅ Cross-service calls (bot→agent→Slack)
+- ✅ External APIs (Slack API, Google Drive API)
+- ✅ Exception tracking with stack traces
+- ⚠️ LLM calls (use Langfuse - better for agent reasoning)
+
+**Legacy Trace IDs**: Still available via `X-Trace-Id` header for log correlation
 
 **Usage**:
 ```bash
@@ -119,6 +166,7 @@ LANGFUSE_HOST=https://us.cloud.langfuse.com
 
 | Component | Port | Status | Purpose |
 |-----------|------|--------|---------|
+| **Jaeger** | 16686 | ✅ Running | Distributed tracing UI |
 | **Prometheus** | 9090 | ✅ Running | Metrics collection |
 | **Grafana** | 3000 | ✅ Running | Metrics visualization |
 | **Loki** | 3100 | ✅ Running | Log aggregation |
@@ -253,4 +301,4 @@ open http://localhost:3000/explore
 ---
 
 **Last Updated**: 2025-12-05
-**Status**: Distributed Tracing ✅ | Langfuse ✅ | Prometheus ⚠️ (partial)
+**Status**: OpenTelemetry ✅ | Jaeger ✅ | Langfuse ✅ | Prometheus ✅ | Grafana ✅
