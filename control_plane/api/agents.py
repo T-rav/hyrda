@@ -9,6 +9,7 @@ from typing import Any
 sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from dependencies.auth import get_current_user
 from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
 from shared.utils.error_responses import (
     ErrorCode,
@@ -29,8 +30,12 @@ from utils.validation import validate_agent_name, validate_display_name
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+# Create router with authentication required for all endpoints
+router = APIRouter(
+    prefix="/api/agents",
+    tags=["agents"],
+    dependencies=[Depends(get_current_user)]  # Require auth for all endpoints
+)
 
 
 @router.get("")

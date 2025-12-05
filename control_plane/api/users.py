@@ -5,7 +5,8 @@ import os
 from collections import defaultdict
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from dependencies.auth import get_current_user
 from models import AgentPermission, PermissionGroup, User, UserGroup, get_db_session
 from pydantic import BaseModel, Field
 from utils.pagination import (
@@ -18,8 +19,12 @@ from utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/users", tags=["users"])
+# Create router with authentication required for all endpoints
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 # Pydantic models for request/response

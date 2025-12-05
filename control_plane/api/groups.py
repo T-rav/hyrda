@@ -5,6 +5,7 @@ from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from dependencies.auth import get_current_user
 from models import (
     AgentGroupPermission,
     AgentMetadata,
@@ -20,8 +21,12 @@ from utils.validation import validate_display_name, validate_group_name
 
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/groups", tags=["groups"])
+# Create router with authentication required for all endpoints
+router = APIRouter(
+    prefix="/api/groups",
+    tags=["groups"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("")
