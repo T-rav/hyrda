@@ -16,6 +16,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth")
 
 
+@router.get("/me")
+async def get_current_user(request: Request):
+    """Check if user is authenticated and return user info.
+
+    Returns:
+        User info if authenticated, 401 if not
+    """
+    user_email = request.session.get("user_email")
+    user_info = request.session.get("user_info")
+
+    if not user_email:
+        return JSONResponse(
+            {"authenticated": False, "error": "Not authenticated"},
+            status_code=401
+        )
+
+    return JSONResponse({
+        "authenticated": True,
+        "email": user_email,
+        "user": user_info
+    })
+
+
 @router.get("/callback")
 async def auth_callback(request: Request):
     """Handle OAuth callback.
