@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/credentials")
 
 
 @router.get("")
-async def list_credentials(request: Request, user: dict = Depends(get_current_user)):
+async def list_credentials(request: Request):
     """List all stored Google OAuth credentials with status.
 
     Returns:
@@ -77,7 +77,7 @@ async def list_credentials(request: Request, user: dict = Depends(get_current_us
 
 @router.delete("/{cred_id}")
 async def delete_credential(
-    request: Request, cred_id: str, user: dict = Depends(get_current_user)
+    request: Request, cred_id: str
 ):
     """Delete a stored Google OAuth credential.
 
