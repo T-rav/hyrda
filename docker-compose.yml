@@ -389,6 +389,21 @@ services:
     networks:
       - insightmesh
 
+  # Jaeger - Distributed Tracing (OpenTelemetry backend)
+  # Swappable: Can replace with Datadog, New Relic, etc. via OTEL_EXPORTER_OTLP_ENDPOINT
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: insightmesh-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4317:4317"    # OTLP gRPC receiver (for traces)
+      - "4318:4318"    # OTLP HTTP receiver
+    networks:
+      - insightmesh
+
 volumes:
   mysql_data:
     driver: local

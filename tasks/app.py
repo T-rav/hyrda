@@ -23,6 +23,7 @@ from shared.middleware.prometheus_metrics import (
 from shared.middleware.redis_session import RedisSessionMiddleware
 from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
 from shared.middleware.tracing import TracingMiddleware
+from shared.utils.otel_tracing import instrument_fastapi
 
 # Environment variables loaded by Pydantic from docker-compose.yml
 
@@ -112,6 +113,9 @@ def create_app() -> FastAPI:
 
     # Add tracing middleware (must be first for complete request tracking)
     app.add_middleware(TracingMiddleware, service_name="tasks")
+
+    # Add OpenTelemetry instrumentation
+    instrument_fastapi(app, "tasks")
 
     # Add Prometheus metrics middleware
     app.add_middleware(PrometheusMetricsMiddleware, service_name="tasks")

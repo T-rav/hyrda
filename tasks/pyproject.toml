@@ -77,6 +77,12 @@ dependencies = [
 
     # JWT for Portal API authentication
     "PyJWT>=2.8.0",
+
+    # OpenTelemetry
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-exporter-otlp>=1.20.0",
 ]
 
 [project.optional-dependencies]

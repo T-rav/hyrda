@@ -23,6 +23,7 @@ from shared.middleware.prometheus_metrics import (
     create_metrics_endpoint,
 )
 from shared.middleware.tracing import TracingMiddleware
+from shared.utils.otel_tracing import instrument_fastapi
 
 # Configure logging
 logging.basicConfig(
@@ -70,8 +71,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add tracing middleware (must be first for complete request tracking)
+# Add custom trace ID middleware (must be first for complete request tracking)
 app.add_middleware(TracingMiddleware, service_name="agent-service")
+
+# Add OpenTelemetry instrumentation (automatic span creation)
+instrument_fastapi(app, "agent-service")
 
 # Add Prometheus metrics middleware
 app.add_middleware(PrometheusMetricsMiddleware, service_name="agent-service")

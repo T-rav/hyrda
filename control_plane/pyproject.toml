@@ -24,6 +24,10 @@ dependencies = [
     "PyJWT>=2.8.0",  # JWT token generation and validation
     "redis>=5.0.0",  # Redis for session storage and token revocation
     "prometheus-client>=0.20.0",  # Prometheus metrics
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-exporter-otlp>=1.20.0",
 ]
 
 [project.optional-dependencies]

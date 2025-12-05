@@ -44,8 +44,12 @@ dependencies = [
     # JWT authentication
     "PyJWT>=2.8.0",
 
-    # Prometheus metrics
+    # Observability
     "prometheus-client>=0.20.0",
+    "opentelemetry-api>=1.20.0",
+    "opentelemetry-sdk>=1.20.0",
+    "opentelemetry-instrumentation-fastapi>=0.41b0",
+    "opentelemetry-exporter-otlp>=1.20.0",
 
     # RAG and LLM dependencies
     "openai>=1.35.0",
