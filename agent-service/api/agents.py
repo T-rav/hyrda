@@ -4,10 +4,11 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from dependencies.auth import require_service_auth
 from services.agent_registry import (
     get as get_agent,
 )
@@ -22,7 +23,12 @@ from utils.validation import validate_agent_name
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/agents", tags=["agents"])
+# Router with service-to-service authentication required for all endpoints
+router = APIRouter(
+    prefix="/agents",
+    tags=["agents"],
+    dependencies=[Depends(require_service_auth)]
+)
 
 
 class AgentInvokeRequest(BaseModel):

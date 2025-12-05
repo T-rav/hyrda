@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 from enum import Enum
 from typing import Any
@@ -154,6 +155,11 @@ class AgentClient:
         self.max_retries = DEFAULT_MAX_RETRIES
         self.retry_delay = DEFAULT_RETRY_DELAY  # Start with 1 second
 
+        # Service authentication token for agent-service
+        self.service_token = os.getenv("BOT_SERVICE_TOKEN", "")
+        if not self.service_token:
+            logger.warning("BOT_SERVICE_TOKEN not set - agent-service calls will fail!")
+
         # Circuit breaker to prevent cascading failures
         self.circuit_breaker = CircuitBreaker(
             failure_threshold=DEFAULT_FAILURE_THRESHOLD,  # Open circuit after N failures
@@ -223,6 +229,7 @@ class AgentClient:
                 response = await client.post(
                     url,
                     json={"query": query, "context": serializable_context},
+                    headers={"X-Service-Token": self.service_token},
                 )
 
                 if response.status_code == 404:

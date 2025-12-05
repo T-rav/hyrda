@@ -21,6 +21,13 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 JWT_ISSUER = "insightmesh"
 
+# Service-to-service authentication tokens
+# These are pre-shared keys for internal service communication
+SERVICE_TOKENS = {
+    "bot": os.getenv("BOT_SERVICE_TOKEN", "bot-service-token-change-in-production"),
+    "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", "control-plane-token-change-in-production"),
+}
+
 
 class JWTAuthError(Exception):
     """JWT authentication error."""
@@ -157,3 +164,30 @@ def get_user_from_token(token: str) -> dict[str, Any]:
         "name": payload.get("name"),
         "picture": payload.get("picture"),
     }
+
+
+def verify_service_token(token: str) -> dict[str, str] | None:
+    """Verify a service-to-service authentication token.
+
+    Args:
+        token: Service token string (from X-Service-Token header)
+
+    Returns:
+        Dictionary with service info {"service": "bot"} if valid, None otherwise
+
+    Example:
+        service_info = verify_service_token(request.headers.get("X-Service-Token"))
+        if service_info:
+            print(f"Request from service: {service_info['service']}")
+    """
+    if not token:
+        return None
+
+    # Check if token matches any known service
+    for service_name, service_token in SERVICE_TOKENS.items():
+        if token == service_token:
+            logger.debug(f"Valid service token for: {service_name}")
+            return {"service": service_name}
+
+    logger.warning(f"Invalid service token attempted")
+    return None
