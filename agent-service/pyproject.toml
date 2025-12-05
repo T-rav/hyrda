@@ -41,6 +41,9 @@ dependencies = [
     # Caching
     "redis>=5.0.0",
 
+    # JWT authentication
+    "PyJWT>=2.8.0",
+
     # RAG and LLM dependencies
     "openai>=1.35.0",
     "anthropic>=0.25.0",
