@@ -1,14 +1,19 @@
 """Authentication dependencies for FastAPI dependency injection."""
 
+import os
 import sys
 from pathlib import Path
 
 from fastapi import HTTPException, Request
+from fastapi.responses import RedirectResponse
 
 # Import JWT utilities from shared directory
 sys.path.insert(0, "/app")  # Add app root to path for shared imports
 from shared.utils.jwt_auth import JWTAuthError, extract_token_from_request, verify_token
 from utils.auth import verify_domain
+
+# Control plane base URL for redirects
+CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
 
 
 async def get_current_user(request: Request) -> dict:
@@ -58,10 +63,26 @@ async def get_current_user(request: Request) -> dict:
     user_info = request.session.get("user_info")
 
     if not user_email or not user_info:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated - please login at control-plane (port 6001)",
-        )
+        # Check if request is from a browser (wants HTML)
+        accept_header = request.headers.get("accept", "")
+        is_browser = "text/html" in accept_header
+
+        if is_browser:
+            # Redirect browser to control-plane OAuth login
+            # Save the original URL to redirect back after login
+            redirect_after_login = str(request.url)
+            login_url = f"{CONTROL_PLANE_URL}/auth/login?redirect={redirect_after_login}"
+            raise HTTPException(
+                status_code=307,  # Temporary redirect (preserves method)
+                detail="Redirecting to login",
+                headers={"Location": login_url}
+            )
+        else:
+            # API clients get 401 with instructions
+            raise HTTPException(
+                status_code=401,
+                detail=f"Not authenticated. Get token from {CONTROL_PLANE_URL}/auth/token",
+            )
 
     # Verify domain
     if not verify_domain(user_email):

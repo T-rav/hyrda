@@ -26,6 +26,49 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth")
 
 
+@router.get("/login")
+async def auth_login(request: Request, redirect: str | None = None):
+    """Initiate OAuth login flow.
+
+    Args:
+        redirect: URL to redirect to after successful login
+
+    Returns:
+        Redirect to Google OAuth consent screen
+    """
+    import secrets
+
+    service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
+    redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
+
+    # Generate OAuth state and CSRF token for security
+    oauth_state = secrets.token_urlsafe(32)
+    csrf_token = secrets.token_urlsafe(32)
+
+    # Store state in session
+    request.session["oauth_state"] = oauth_state
+    request.session["oauth_csrf"] = csrf_token
+    request.session["oauth_redirect"] = redirect or "/"
+
+    # Create OAuth flow
+    flow = get_flow(redirect_uri)
+    flow.state = oauth_state
+
+    # Get authorization URL
+    authorization_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+    )
+
+    AuditLogger.log_auth_event(
+        "login_initiated",
+        path=str(request.url),
+    )
+
+    return RedirectResponse(url=authorization_url, status_code=302)
+
+
 @router.get("/callback")
 @rate_limit(max_requests=10, window_seconds=60)
 async def auth_callback(request: Request):
