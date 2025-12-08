@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
         https_only=is_production,
+        domain="localhost",  # Share session cookie across all localhost ports
     )
 
     # Add tracing middleware (must be first for complete request tracking)
@@ -125,7 +126,7 @@ def create_app() -> FastAPI:
 
     # Enable CORS - restrict to specific origins
     allowed_origins = os.getenv(
-        "ALLOWED_ORIGINS", "http://localhost:6001,http://localhost:3000"
+        "ALLOWED_ORIGINS", "https://localhost:6001,https://localhost:5001,https://localhost:3000"
     )
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(

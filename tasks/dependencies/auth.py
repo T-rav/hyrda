@@ -20,7 +20,7 @@ async def get_current_user(request: Request) -> dict:
     """
     Dependency to get the current authenticated user.
 
-    Supports both JWT tokens (preferred) and session-based auth (fallback).
+    Proxies auth check to control-plane for centralized session management.
     Use with: Depends(get_current_user)
 
     Returns:
@@ -29,69 +29,32 @@ async def get_current_user(request: Request) -> dict:
     Raises:
         HTTPException: 401 if not authenticated or invalid domain
     """
-    # Try JWT token first (from Authorization header or cookie)
-    auth_header = request.headers.get("Authorization")
-    token = extract_token_from_request(auth_header)
+    import httpx
 
-    # Fallback to cookie if no Authorization header
-    if not token:
-        token = request.cookies.get("access_token")
+    # Proxy auth check to control-plane
+    control_plane_url = os.getenv("CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001")
 
-    if token:
-        try:
-            payload = verify_token(token)
-            user_email = payload.get("email")
-            user_info = {
-                "email": user_email,
-                "name": payload.get("name"),
-                "picture": payload.get("picture"),
-            }
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(
+                f"{control_plane_url}/api/users/me",
+                cookies=request.cookies,
+                timeout=5.0
+            )
 
-            # Verify domain
-            if not verify_domain(user_email):
+            if response.status_code == 200:
+                user_data = response.json()
+                return user_data
+            else:
                 raise HTTPException(
-                    status_code=403, detail=f"Email domain not allowed: {user_email}"
+                    status_code=401,
+                    detail="Not authenticated",
                 )
-
-            return user_info
-
-        except JWTAuthError as e:
-            raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
-
-    # Fallback to session-based auth (for backward compatibility)
-    user_email = request.session.get("user_email")
-    user_info = request.session.get("user_info")
-
-    if not user_email or not user_info:
-        # Check if request is from a browser (wants HTML)
-        accept_header = request.headers.get("accept", "")
-        is_browser = "text/html" in accept_header
-
-        if is_browser:
-            # Redirect browser to control-plane OAuth login
-            # Save the original URL to redirect back after login
-            redirect_after_login = str(request.url)
-            login_url = f"{CONTROL_PLANE_URL}/auth/login?redirect={redirect_after_login}"
-            raise HTTPException(
-                status_code=307,  # Temporary redirect (preserves method)
-                detail="Redirecting to login",
-                headers={"Location": login_url}
-            )
-        else:
-            # API clients get 401 with instructions
-            raise HTTPException(
-                status_code=401,
-                detail=f"Not authenticated. Get token from {CONTROL_PLANE_URL}/auth/token",
-            )
-
-    # Verify domain
-    if not verify_domain(user_email):
-        request.session.clear()
+    except httpx.RequestError as e:
         raise HTTPException(
-            status_code=403, detail=f"Email domain not allowed: {user_email}"
+            status_code=503,
+            detail=f"Auth service unavailable: {e}",
         )
-
-    return user_info
 
 
 async def get_optional_user(request: Request) -> dict | None:

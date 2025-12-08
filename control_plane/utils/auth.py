@@ -76,6 +76,9 @@ def verify_domain(email: str) -> bool:
     """Verify that email belongs to allowed domain."""
     if not email:
         return False
+    # Allow all domains if wildcard is configured
+    if ALLOWED_DOMAIN == "*":
+        return True
     return email.endswith(f"@{ALLOWED_DOMAIN}")
 
 
@@ -140,7 +143,6 @@ class FastAPIAuthMiddleware:
             flow = get_flow(redirect_uri)
             authorization_url, state = flow.authorization_url(
                 access_type="offline",
-                include_granted_scopes="true",
                 prompt="select_account",
             )
 

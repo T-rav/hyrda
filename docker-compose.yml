@@ -114,9 +114,13 @@ services:
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
-      - SERVER_BASE_URL=${SERVER_BASE_URL:-http://localhost:5001}
+      - SERVER_BASE_URL=${SERVER_BASE_URL:-https://localhost:5001}
     ports:
+      - "80:80"
       - "${TASKS_PORT:-5001}:5001"
+    volumes:
+      # Mount SSL certificates for HTTPS
+      - ./tasks/ssl:/etc/nginx/ssl:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -284,9 +288,12 @@ services:
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
       - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
-      - CONTROL_PLANE_BASE_URL=${CONTROL_PLANE_BASE_URL:-http://localhost:6001}
+      - CONTROL_PLANE_BASE_URL=${CONTROL_PLANE_BASE_URL:-https://localhost:6001}
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
+    volumes:
+      # Mount SSL certificates for HTTPS
+      - ./control_plane/ssl:/app/ssl:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -294,8 +301,8 @@ services:
       sh -c "
         echo '=== Running security database migrations ===' &&
         alembic upgrade head &&
-        echo '=== Starting Uvicorn ===' &&
-        exec uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4
+        echo '=== Starting Uvicorn with SSL ===' &&
+        exec uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4 --ssl-keyfile /app/ssl/localhost.key --ssl-certfile /app/ssl/localhost.crt
       "
     logging:
       driver: "json-file"

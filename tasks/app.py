@@ -109,6 +109,7 @@ def create_app() -> FastAPI:
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
         https_only=(os.getenv("ENVIRONMENT") == "production"),
+        domain="localhost",  # Share session cookie across all localhost ports
     )
 
     # Add tracing middleware (must be first for complete request tracking)

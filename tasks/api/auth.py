@@ -18,25 +18,45 @@ router = APIRouter(prefix="/auth")
 
 @router.get("/me")
 async def get_current_user(request: Request):
-    """Check if user is authenticated and return user info.
+    """Check if user is authenticated by proxying to control-plane.
 
     Returns:
         User info if authenticated, 401 if not
     """
-    user_email = request.session.get("user_email")
-    user_info = request.session.get("user_info")
+    import httpx
 
-    if not user_email:
+    # Get control-plane URL (use Docker service name for internal communication)
+    control_plane_url = os.getenv("CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001")
+
+    # Forward the request to control-plane with all cookies
+    cookies = request.cookies
+
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.get(
+                f"{control_plane_url}/api/users/me",
+                cookies=cookies,
+                timeout=5.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return JSONResponse({
+                    "authenticated": True,
+                    "email": data.get("email"),
+                    "user": data
+                })
+            else:
+                return JSONResponse(
+                    {"authenticated": False, "error": "Not authenticated"},
+                    status_code=401
+                )
+    except Exception as e:
+        logger.error(f"Error checking auth with control-plane: {e}")
         return JSONResponse(
-            {"authenticated": False, "error": "Not authenticated"},
-            status_code=401
+            {"authenticated": False, "error": "Auth service unavailable"},
+            status_code=503
         )
-
-    return JSONResponse({
-        "authenticated": True,
-        "email": user_email,
-        "user": user_info
-    })
 
 
 @router.get("/callback")

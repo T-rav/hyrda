@@ -37,6 +37,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
         max_age: int = SESSION_TTL_SECONDS,
         same_site: str = "lax",
         https_only: bool = False,
+        domain: str | None = None,
     ):
         """Initialize Redis session middleware.
 
@@ -47,6 +48,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
             max_age: Session TTL in seconds (default: 7 days)
             same_site: SameSite cookie attribute (default: "lax")
             https_only: Only send cookie over HTTPS (default: False)
+            domain: Cookie domain (default: None, uses current domain only)
         """
         super().__init__(app)
         self.secret_key = secret_key
@@ -54,6 +56,7 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
         self.max_age = max_age
         self.same_site = same_site
         self.https_only = https_only
+        self.domain = domain
 
         # Initialize Redis client
         self._redis = self._get_redis()
@@ -212,14 +215,17 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
             self._save_session(session._session_id, dict(session))
 
             # Set session cookie
-            response.headers.append(
-                "Set-Cookie",
+            cookie_value = (
                 f"{self.session_cookie}={session._session_id}; "
                 f"Max-Age={self.max_age}; "
                 f"Path=/; "
-                f"SameSite={self.same_site}; "
-                f"HttpOnly; "
-                + ("Secure; " if self.https_only else ""),
             )
+            if self.domain:
+                cookie_value += f"Domain={self.domain}; "
+            cookie_value += f"SameSite={self.same_site}; HttpOnly; "
+            if self.https_only:
+                cookie_value += "Secure; "
+
+            response.headers.append("Set-Cookie", cookie_value)
 
         return response
