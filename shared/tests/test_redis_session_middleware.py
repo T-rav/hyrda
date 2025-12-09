@@ -79,20 +79,17 @@ class TestDomainCookieSupport:
 
         assert middleware.domain is None
 
-    @patch("shared.middleware.redis_session.get_redis_client")
-    def test_set_cookie_includes_domain_when_specified(self, mock_get_redis, mock_redis):
+    @patch("shared.middleware.redis_session.RedisSessionMiddleware._get_redis")
+    def test_set_cookie_includes_domain_when_specified(self, mock_get_redis):
         """Test that Set-Cookie header includes Domain when specified."""
-        mock_get_redis.return_value = mock_redis
+        mock_get_redis.return_value = None  # No Redis connection
+
+        async def set_handler(request: Request):
+            request.session["test"] = "value"
+            return Response("OK")
 
         app = Starlette(
-            routes=[
-                Route(
-                    "/set",
-                    lambda request: Response(
-                        "OK", headers={"Set-Cookie": "test_session=abc123"}
-                    ),
-                )
-            ],
+            routes=[Route("/set", set_handler)],
             middleware=[
                 Middleware(
                     RedisSessionMiddleware,
@@ -113,22 +110,17 @@ class TestDomainCookieSupport:
         # Should include Domain=localhost
         assert "Domain=localhost" in set_cookie
 
-    @patch("shared.middleware.redis_session.get_redis_client")
-    def test_set_cookie_excludes_domain_when_not_specified(
-        self, mock_get_redis, mock_redis
-    ):
+    @patch("shared.middleware.redis_session.RedisSessionMiddleware._get_redis")
+    def test_set_cookie_excludes_domain_when_not_specified(self, mock_get_redis):
         """Test that Set-Cookie header excludes Domain when not specified."""
-        mock_get_redis.return_value = mock_redis
+        mock_get_redis.return_value = None  # No Redis connection
+
+        async def set_handler(request: Request):
+            request.session["test"] = "value"
+            return Response("OK")
 
         app = Starlette(
-            routes=[
-                Route(
-                    "/set",
-                    lambda request: Response(
-                        "OK", headers={"Set-Cookie": "test_session=abc123"}
-                    ),
-                )
-            ],
+            routes=[Route("/set", set_handler)],
             middleware=[
                 Middleware(
                     RedisSessionMiddleware,
@@ -149,20 +141,17 @@ class TestDomainCookieSupport:
         # Should NOT include Domain
         assert "Domain=" not in set_cookie
 
-    @patch("shared.middleware.redis_session.get_redis_client")
-    def test_cookie_includes_expected_attributes(self, mock_get_redis, mock_redis):
+    @patch("shared.middleware.redis_session.RedisSessionMiddleware._get_redis")
+    def test_cookie_includes_expected_attributes(self, mock_get_redis):
         """Test that cookie includes all expected attributes."""
-        mock_get_redis.return_value = mock_redis
+        mock_get_redis.return_value = None  # No Redis connection
+
+        async def set_handler(request: Request):
+            request.session["test"] = "value"
+            return Response("OK")
 
         app = Starlette(
-            routes=[
-                Route(
-                    "/set",
-                    lambda request: Response(
-                        "OK", headers={"Set-Cookie": "test_session=abc123"}
-                    ),
-                )
-            ],
+            routes=[Route("/set", set_handler)],
             middleware=[
                 Middleware(
                     RedisSessionMiddleware,
@@ -192,20 +181,17 @@ class TestDomainCookieSupport:
         # Should NOT include Secure when https_only=False
         assert "Secure" not in set_cookie
 
-    @patch("shared.middleware.redis_session.get_redis_client")
-    def test_cookie_includes_secure_when_https_only(self, mock_get_redis, mock_redis):
+    @patch("shared.middleware.redis_session.RedisSessionMiddleware._get_redis")
+    def test_cookie_includes_secure_when_https_only(self, mock_get_redis):
         """Test that cookie includes Secure flag when https_only=True."""
-        mock_get_redis.return_value = mock_redis
+        mock_get_redis.return_value = None  # No Redis connection
+
+        async def set_handler(request: Request):
+            request.session["test"] = "value"
+            return Response("OK")
 
         app = Starlette(
-            routes=[
-                Route(
-                    "/set",
-                    lambda request: Response(
-                        "OK", headers={"Set-Cookie": "test_session=abc123"}
-                    ),
-                )
-            ],
+            routes=[Route("/set", set_handler)],
             middleware=[
                 Middleware(
                     RedisSessionMiddleware,
