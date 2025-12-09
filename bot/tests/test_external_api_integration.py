@@ -6,10 +6,34 @@ These tests can be run against staging/sandbox environments to validate
 API contracts before deploying.
 """
 
-from unittest.mock import AsyncMock, Mock, patch
+from contextlib import contextmanager
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from pydantic import SecretStr
+
+
+# Mock OpenTelemetry before importing services
+@contextmanager
+def mock_create_span(*args, **kwargs):
+    """Mock create_span as a proper context manager."""
+    yield MagicMock()
+
+
+def mock_record_exception(*args, **kwargs):
+    """Mock record_exception as a no-op."""
+    pass
+
+
+# Apply mocks before importing
+_create_span_patcher = patch(
+    "shared.utils.otel_http_client.create_span", side_effect=mock_create_span
+)
+_record_exception_patcher = patch(
+    "shared.utils.otel_http_client.record_exception", side_effect=mock_record_exception
+)
+_create_span_patcher.start()
+_record_exception_patcher.start()
 
 from config.settings import LangfuseSettings, LLMSettings, VectorSettings
 

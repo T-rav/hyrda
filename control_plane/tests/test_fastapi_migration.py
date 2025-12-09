@@ -141,25 +141,27 @@ class TestFastAPIAuthUtilities:
 class TestFastAPIRateLimitStub:
     """Test rate limiting stub (disabled during migration)."""
 
-    def test_rate_limit_decorator_is_noop(self):
+    @pytest.mark.asyncio
+    async def test_rate_limit_decorator_is_noop(self):
         """Test that rate limit decorator doesn't block requests during migration."""
         from utils.rate_limit import rate_limit
 
-        # Rate limit should be a no-op decorator
+        # Rate limit should be a no-op decorator (wraps async functions)
         @rate_limit(max_requests=1, window_seconds=60)
-        def test_function():
+        async def test_function():
             return "success"
 
         # Should execute without errors
-        result = test_function()
+        result = await test_function()
         assert result == "success"
 
-    def test_rate_limit_decorator_preserves_function_name(self):
+    @pytest.mark.asyncio
+    async def test_rate_limit_decorator_preserves_function_name(self):
         """Test that rate limit decorator preserves function metadata."""
         from utils.rate_limit import rate_limit
 
         @rate_limit(max_requests=10, window_seconds=60)
-        def my_endpoint():
+        async def my_endpoint():
             """Test endpoint."""
             return "ok"
 

@@ -6,6 +6,7 @@ import tempfile
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from prometheus_client import REGISTRY
 
 from config.settings import TasksSettings
 from tests.factories import (
@@ -13,6 +14,19 @@ from tests.factories import (
     MockJobRegistryFactory,
     MockSchedulerFactory,
 )
+
+
+# Clear Prometheus collectors before each test to avoid duplication
+@pytest.fixture(scope="function", autouse=True)
+def clear_prometheus_registry():
+    """Clear Prometheus registry before each test."""
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        try:
+            REGISTRY.unregister(collector)
+        except Exception:
+            pass
+    yield
 
 
 @pytest.fixture

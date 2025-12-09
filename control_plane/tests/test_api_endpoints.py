@@ -76,7 +76,9 @@ def client(app, mock_oauth_env):
 @pytest.fixture
 def authenticated_client(client, app):
     """Create authenticated test client with valid session and admin user."""
-    from utils.permissions import get_current_user, require_admin
+    from dependencies.auth import get_current_user
+    from dependencies.service_auth import verify_service_auth
+    from utils.permissions import require_admin
 
     # Create mock admin user (no database needed with dependency overrides)
     mock_admin = User(
@@ -93,8 +95,12 @@ def authenticated_client(client, app):
     async def mock_require_admin():
         return None
 
+    async def mock_verify_service_auth():
+        return None
+
     app.dependency_overrides[get_current_user] = mock_get_current_user
     app.dependency_overrides[require_admin] = mock_require_admin
+    app.dependency_overrides[verify_service_auth] = mock_verify_service_auth
 
     yield client
 
@@ -730,6 +736,8 @@ class TestAgentDeletionAPI:
                 "description": "Reactivated agent",
             },
         )
+        if response.status_code != 200:
+            print(f"Error response: {response.json()}")
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "reactivated"

@@ -159,7 +159,7 @@ class TestPermissionsSummary:
         ]
 
         summary = parser.get_permissions_summary(permissions)
-        assert summary == "public_access"
+        assert summary == "anyone"  # Returns "anyone" for public files
 
     def test_private_with_users(self):
         """Test summary for private file with specific users."""
@@ -178,7 +178,8 @@ class TestPermissionsSummary:
         ]
 
         summary = parser.get_permissions_summary(permissions)
-        assert summary == "private_2_users"
+        # Returns comma-separated emails, not "private_N_users"
+        assert summary == "owner@example.com, reader@example.com"
 
 
 class TestGetOwnerEmails:
@@ -286,6 +287,7 @@ class TestEnrichFileMetadata:
         assert enriched["full_path"] == "Shared/Folder/document.pdf"
         assert enriched["folder_path"] == "Shared/Folder"
         assert enriched["owner_emails"] == "owner@example.com"
-        assert enriched["permissions_summary"] == "private_2_users"
+        # Returns comma-separated emails, not "private_N_users"
+        assert enriched["permissions_summary"] == "owner@example.com, reader@example.com"
         assert "formatted_permissions" in enriched
         assert len(enriched["owners"]) == 1

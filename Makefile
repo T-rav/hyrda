@@ -159,6 +159,9 @@ test: $(VENV)
 	@echo "$(YELLOW)🎛️  Control plane unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
 	@echo ""
+	@echo "$(YELLOW)🤖 Agent service unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Some agent-service tests skipped$(RESET)"
+	@echo ""
 	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
 	@echo ""

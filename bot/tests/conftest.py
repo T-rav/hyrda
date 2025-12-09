@@ -13,6 +13,33 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 logging.basicConfig(level=logging.WARNING)
 
 
+# Mock OpenTelemetry to prevent import errors and context manager issues
+@pytest.fixture(scope="session", autouse=True)
+def mock_opentelemetry():
+    """Mock OpenTelemetry imports for all tests."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def mock_create_span(*args, **kwargs):
+        """Mock create_span as a proper context manager."""
+        yield MagicMock()
+
+    def mock_record_exception(*args, **kwargs):
+        """Mock record_exception as a no-op."""
+        pass
+
+    with (
+        patch(
+            "shared.utils.otel_http_client.create_span", side_effect=mock_create_span
+        ),
+        patch(
+            "shared.utils.otel_http_client.record_exception",
+            side_effect=mock_record_exception,
+        ),
+    ):
+        yield
+
+
 # Mock Langfuse to prevent import errors and external calls in tests
 @pytest.fixture(scope="session", autouse=True)
 def mock_langfuse():
