@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from bot_types import PermissionCheckResult
 from config.settings import Settings
@@ -9,6 +10,9 @@ from models.agent_metadata import AgentMetadata
 from models.agent_permission import AgentPermission
 from models.permission_group import AgentGroupPermission, PermissionGroup, UserGroup
 from models.security_base import get_security_db_session
+
+if TYPE_CHECKING:
+    import redis.asyncio as redis
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +22,9 @@ class PermissionService:
 
     CACHE_TTL = 900  # 15 minutes in seconds
 
-    def __init__(self, redis_client=None, database_url: str | None = None):
+    def __init__(
+        self, redis_client: "redis.Redis | None" = None, database_url: str | None = None
+    ):
         """Initialize permission service.
 
         Args:
@@ -663,7 +669,7 @@ _permission_service: PermissionService | None = None
 
 
 def get_permission_service(
-    redis_client=None, database_url: str | None = None
+    redis_client: "redis.Redis | None" = None, database_url: str | None = None
 ) -> PermissionService:
     """Get or create the global permission service instance.
 

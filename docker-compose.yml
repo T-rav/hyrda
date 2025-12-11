@@ -115,12 +115,15 @@ services:
       - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
       - ALLOWED_EMAIL_DOMAIN=${ALLOWED_EMAIL_DOMAIN:-@8thlight.com}
       - SERVER_BASE_URL=${SERVER_BASE_URL:-https://localhost:5001}
+      - EXTERNAL_TASKS_PATH=/app/external_tasks  # Path where tasks are mounted
     ports:
       - "80:80"
       - "${TASKS_PORT:-5001}:5001"
     volumes:
       # Mount SSL certificates for HTTPS
       - ./tasks/ssl:/etc/nginx/ssl:ro
+      # Mount external tasks directory (client-customizable)
+      - ./external_tasks:/app/external_tasks:ro
     depends_on:
       mysql:
         condition: service_healthy

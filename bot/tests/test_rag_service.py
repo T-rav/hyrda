@@ -244,27 +244,33 @@ class TestRAGService:
     @pytest.mark.asyncio
     async def test_initialization_success(self, rag_service):
         """Test successful initialization"""
+        # Arrange
         # The RAG service initialize method only calls vector_store.initialize() if vector_store exists
         rag_service.vector_store.initialize = AsyncMock()
 
+        # Act
         await rag_service.initialize()
 
+        # Assert
         # The actual initialize method calls vector_store.initialize(), not retrieval_service
         rag_service.vector_store.initialize.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_initialization_failure(self, rag_service):
         """Test initialization failure"""
+        # Arrange
         rag_service.vector_store.initialize = AsyncMock(
             side_effect=Exception("Init failed")
         )
 
+        # Act & Assert
         with pytest.raises(Exception, match="Init failed"):
             await rag_service.initialize()
 
     @pytest.mark.asyncio
     async def test_ingest_documents_success(self, rag_service):
         """Test successful document ingestion"""
+        # Arrange
         # Set up embedding provider and vector store mocks
         rag_service.embedding_provider.get_embedding = AsyncMock(
             return_value=[0.1, 0.2, 0.3]

@@ -52,7 +52,14 @@ class ContextBuilder:
         return final_system_message, messages
 
     def _add_date_context(self, system_message: str | None) -> str:
-        """Add current date context to system message."""
+        """Add current date context to system message.
+
+        Args:
+            system_message: Existing system message or None
+
+        Returns:
+            System message with date context appended
+        """
         current_date = datetime.now().strftime("%B %d, %Y")
         current_year = datetime.now().year
         date_context = (
@@ -68,7 +75,14 @@ class ContextBuilder:
         return date_context
 
     def _build_context_sections(self, context_chunks: list[ContextChunk]) -> str:
-        """Build formatted context sections from chunks."""
+        """Build formatted context sections from chunks.
+
+        Args:
+            context_chunks: List of context chunks to format
+
+        Returns:
+            Formatted context sections as a string
+        """
         uploaded_docs, retrieved_chunks = self._separate_chunks(context_chunks)
         context_parts = []
 
@@ -89,7 +103,14 @@ class ContextBuilder:
     def _separate_chunks(
         self, context_chunks: list[ContextChunk]
     ) -> tuple[list[ContextChunk], list[ContextChunk]]:
-        """Separate uploaded documents from RAG-retrieved chunks."""
+        """Separate uploaded documents from RAG-retrieved chunks.
+
+        Args:
+            context_chunks: List of all context chunks
+
+        Returns:
+            Tuple of (uploaded_docs, retrieved_chunks)
+        """
         uploaded_docs = []
         retrieved_chunks = []
 

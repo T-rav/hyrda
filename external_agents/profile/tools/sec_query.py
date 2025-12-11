@@ -11,9 +11,9 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from agents.profiler.services.sec_cache import SECFilingsCache
-from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
-from agents.profiler.services.sec_vector_search import SECInMemoryVectorSearch
+from services.sec_cache import SECFilingsCache
+from services.sec_on_demand import SECOnDemandFetcher
+from services.sec_vector_search import SECInMemoryVectorSearch
 
 logger = logging.getLogger(__name__)
 

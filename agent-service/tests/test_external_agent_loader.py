@@ -2,6 +2,9 @@
 
 All tests are pure unit tests using mocking and temporary directories.
 No integration with real external agents or databases.
+
+UPDATED: Tests now create proper Python packages with __init__.py for compatibility
+with importlib.import_module-based loading.
 """
 
 import os
@@ -17,12 +20,41 @@ from services.external_agent_loader import (
 )
 
 
+def create_agent_package(base_dir: Path, agent_name: str, agent_code: str):
+    """Helper to create a proper Python package for an agent."""
+    agent_dir = base_dir / agent_name
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    # Make it a proper package
+    (agent_dir / "__init__.py").write_text("")
+    (agent_dir / "agent.py").write_text(agent_code)
+    return agent_dir
+
+
 @pytest.fixture
 def temp_agents_dir(tmp_path):
     """Create temporary agents directory for testing."""
-    agents_dir = tmp_path / "agents"
-    agents_dir.mkdir()
-    return agents_dir
+    import sys
+
+    # Create external_agents structure compatible with importlib.import_module
+    external_agents = tmp_path / "external_agents"
+    external_agents.mkdir()
+    (external_agents / "__init__.py").write_text("")
+
+    # Save original sys.path
+    original_sys_path = sys.path.copy()
+
+    yield external_agents
+
+    # Cleanup: Remove any modules from sys.modules that were loaded from this temp dir
+    modules_to_remove = [
+        key for key in list(sys.modules.keys())
+        if key.startswith("external_agents")
+    ]
+    for module_key in modules_to_remove:
+        sys.modules.pop(module_key, None)
+
+    # Restore original sys.path
+    sys.path[:] = original_sys_path
 
 
 @pytest.fixture
@@ -78,11 +110,7 @@ class TestAgentDiscovery:
 
     def test_discover_single_agent(self, temp_agents_dir, simple_agent_code):
         """Test discovering a single valid agent."""
-        # Create agent directory and file
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        agent_file = agent_dir / "agent.py"
-        agent_file.write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -94,10 +122,7 @@ class TestAgentDiscovery:
         """Test discovering multiple agents."""
         # Create two agents
         for agent_name in ["agent1", "agent2"]:
-            agent_dir = temp_agents_dir / agent_name
-            agent_dir.mkdir()
-            agent_file = agent_dir / "agent.py"
-            agent_file.write_text(simple_agent_code)
+            create_agent_package(temp_agents_dir, agent_name, simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -111,6 +136,7 @@ class TestAgentDiscovery:
         # Create directory without agent.py
         invalid_dir = temp_agents_dir / "invalid_agent"
         invalid_dir.mkdir()
+        (invalid_dir / "__init__.py").write_text("")
         (invalid_dir / "other.py").write_text("# Not agent.py")
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
@@ -120,10 +146,7 @@ class TestAgentDiscovery:
 
     def test_skip_underscore_directories(self, temp_agents_dir, simple_agent_code):
         """Test skipping directories starting with underscore."""
-        # Create _private directory
-        private_dir = temp_agents_dir / "_private"
-        private_dir.mkdir()
-        (private_dir / "agent.py").write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "_private", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -134,8 +157,8 @@ class TestAgentDiscovery:
         """Test handling of invalid Python code in agent.py."""
         agent_dir = temp_agents_dir / "broken_agent"
         agent_dir.mkdir()
-        agent_file = agent_dir / "agent.py"
-        agent_file.write_text("this is not valid python {{{")
+        (agent_dir / "__init__.py").write_text("")
+        (agent_dir / "agent.py").write_text("this is not valid python {{{")
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -145,10 +168,8 @@ class TestAgentDiscovery:
 
     def test_handle_missing_agent_class(self, temp_agents_dir):
         """Test handling of agent.py without Agent class."""
-        agent_dir = temp_agents_dir / "no_class_agent"
-        agent_dir.mkdir()
-        agent_file = agent_dir / "agent.py"
-        agent_file.write_text("# Valid Python but no Agent class\nclass Other: pass")
+        agent_code = "# Valid Python but no Agent class\nclass Other: pass"
+        create_agent_package(temp_agents_dir, "no_class_agent", agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -163,13 +184,14 @@ class TestAgentLoading:
         """Test loading agent with relative imports."""
         agent_dir = temp_agents_dir / "complex_agent"
         agent_dir.mkdir()
+        (agent_dir / "__init__.py").write_text("")
 
         # Create helper module
         (agent_dir / "helper.py").write_text("def helper(): return 'helped'")
 
         # Create agent that imports helper
         agent_code = '''
-from helper import helper
+from .helper import helper
 
 class Agent:
     def __init__(self):
@@ -188,9 +210,7 @@ class Agent:
 
     def test_get_agent_class(self, temp_agents_dir, simple_agent_code):
         """Test getting agent class by name."""
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         loader.discover_agents()
@@ -211,9 +231,7 @@ class Agent:
         """Test listing all loaded agent names."""
         # Create two agents
         for agent_name in ["agent1", "agent2"]:
-            agent_dir = temp_agents_dir / agent_name
-            agent_dir.mkdir()
-            (agent_dir / "agent.py").write_text(simple_agent_code)
+            create_agent_package(temp_agents_dir, agent_name, simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         loader.discover_agents()
@@ -227,17 +245,14 @@ class TestAgentReload:
 
     def test_reload_agent_success(self, temp_agents_dir, simple_agent_code):
         """Test successfully reloading an agent."""
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        agent_file = agent_dir / "agent.py"
-        agent_file.write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         loader.discover_agents()
 
         # Modify agent code
         modified_code = simple_agent_code.replace('"test"', '"modified"')
-        agent_file.write_text(modified_code)
+        (temp_agents_dir / "test_agent" / "agent.py").write_text(modified_code)
 
         # Reload
         reloaded_class = loader.reload_agent("test_agent")
@@ -259,9 +274,7 @@ class TestAgentReload:
 
     def test_reload_removes_from_cache(self, temp_agents_dir, simple_agent_code):
         """Test that reload removes agent from cache."""
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         loader.discover_agents()
@@ -294,9 +307,7 @@ class TestGlobalLoader:
     def test_reload_external_agent_function(self, temp_agents_dir, simple_agent_code):
         """Test global reload_external_agent function."""
         # Create agent
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text(simple_agent_code)
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         # Reset global and set path
         import services.external_agent_loader as loader_module
@@ -323,9 +334,7 @@ class TestEdgeCases:
 
     def test_empty_agent_file(self, temp_agents_dir):
         """Test handling of empty agent.py file."""
-        agent_dir = temp_agents_dir / "empty_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text("")
+        create_agent_package(temp_agents_dir, "empty_agent", "")
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -334,9 +343,8 @@ class TestEdgeCases:
 
     def test_agent_with_syntax_errors(self, temp_agents_dir):
         """Test handling of agent with syntax errors."""
-        agent_dir = temp_agents_dir / "syntax_error_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text("class Agent:\n    def __init__(self")  # Missing closing
+        agent_code = "class Agent:\n    def __init__(self"  # Missing closing
+        create_agent_package(temp_agents_dir, "syntax_error_agent", agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -345,15 +353,13 @@ class TestEdgeCases:
 
     def test_agent_with_import_errors(self, temp_agents_dir):
         """Test handling of agent with import errors."""
-        agent_dir = temp_agents_dir / "import_error_agent"
-        agent_dir.mkdir()
         agent_code = '''
 import nonexistent_module
 
 class Agent:
     pass
 '''
-        (agent_dir / "agent.py").write_text(agent_code)
+        create_agent_package(temp_agents_dir, "import_error_agent", agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
         agents = loader.discover_agents()
@@ -362,17 +368,19 @@ class Agent:
         assert "import_error_agent" not in agents
 
     def test_discover_agents_caches_results(self, temp_agents_dir, simple_agent_code):
-        """Test that multiple discoveries don't reload agents unnecessarily."""
-        agent_dir = temp_agents_dir / "test_agent"
-        agent_dir.mkdir()
-        (agent_dir / "agent.py").write_text(simple_agent_code)
+        """Test that discover_agents returns cached agents on subsequent calls."""
+        create_agent_package(temp_agents_dir, "test_agent", simple_agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
 
         # First discovery
         agents1 = loader.discover_agents()
 
-        # Second discovery - should return same classes
+        # Second discovery - should use cache and return same dict
         agents2 = loader.discover_agents()
 
+        # The agents should be from cache (same dict reference since we check cache)
+        assert "test_agent" in agents1
+        assert "test_agent" in agents2
+        # Classes should be the same object
         assert agents1["test_agent"] is agents2["test_agent"]

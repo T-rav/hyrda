@@ -27,6 +27,38 @@ OAUTH_SCOPES = [
 ]
 
 
+def validate_oauth_config() -> None:
+    """Validate required OAuth environment variables at startup.
+
+    Raises:
+        ValueError: If required OAuth configuration is missing in production
+    """
+    environment = os.getenv("ENVIRONMENT", "development")
+
+    # In production, require all OAuth settings to be explicitly configured
+    if environment == "production":
+        if not GOOGLE_CLIENT_ID:
+            raise ValueError(
+                "GOOGLE_OAUTH_CLIENT_ID is required in production but not set"
+            )
+        if not GOOGLE_CLIENT_SECRET:
+            raise ValueError(
+                "GOOGLE_OAUTH_CLIENT_SECRET is required in production but not set"
+            )
+        if not os.getenv("ALLOWED_EMAIL_DOMAIN"):
+            logger.warning(
+                "ALLOWED_EMAIL_DOMAIN not set in production - using default: @8thlight.com"
+            )
+
+        logger.info("OAuth configuration validated for production")
+    else:
+        # In non-production, just log warnings for missing values
+        if not GOOGLE_CLIENT_ID:
+            logger.warning("GOOGLE_OAUTH_CLIENT_ID not set (optional in development)")
+        if not GOOGLE_CLIENT_SECRET:
+            logger.warning("GOOGLE_OAUTH_CLIENT_SECRET not set (optional in development)")
+
+
 class AuthError(Exception):
     """Authentication error."""
 

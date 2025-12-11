@@ -42,6 +42,79 @@ This eliminates the "works locally but fails in CI" problem!
 
 **Code quality is non-negotiable.** Broken code should never be committed.
 
+## 🔒 Security Standards
+
+InsightMesh follows the 8th Light Host Hardening Policy for all infrastructure. All developers must adhere to the baseline security standards.
+
+**Security Documentation:**
+- 📘 **[Host Hardening Policy](docs/HOST_HARDENING_POLICY.md):** SOC2-aligned VM and container security baseline
+
+**Key Security Requirements:**
+- ✅ **Secrets Management:** Never commit secrets to version control (`.env` in `.gitignore`)
+- ✅ **Container Security:** All containers run as non-root user (UID 1000)
+- ✅ **Vulnerability Scanning:** Automated Bandit scans via `make security` (runs with `make lint`)
+- ✅ **Dependency Security:** Regular updates and CVE monitoring (see below)
+- ✅ **Code Scanning:** Bandit configured to detect security issues (SQL injection, hardcoded passwords, insecure crypto)
+- ✅ **OAuth Validation:** Production startup validates required OAuth environment variables
+
+**Security Commands:**
+```bash
+make security      # Run Bandit security scanner
+make lint          # Includes security checks (Ruff + Pyright + Bandit)
+make quality       # Full quality pipeline including security scans
+```
+
+**Dependency Vulnerability Scanning:**
+
+To add automated dependency vulnerability scanning to your CI/CD pipeline:
+
+1. **Install pip-audit** (recommended) or **safety**:
+```bash
+# Add to requirements-dev.txt
+pip-audit>=2.6.0
+
+# Or use safety
+safety>=3.0.0
+```
+
+2. **Add to CI pipeline** (`.github/workflows/ci.yml`):
+```yaml
+- name: Scan dependencies for vulnerabilities
+  run: |
+    pip install pip-audit
+    pip-audit --desc --format json --output security-report.json
+    # Or with safety:
+    # pip install safety
+    # safety check --json --output security-report.json
+```
+
+3. **Local scanning**:
+```bash
+# Scan all dependencies
+pip-audit
+
+# Scan with detailed descriptions
+pip-audit --desc
+
+# Ignore specific vulnerabilities (with justification)
+pip-audit --ignore-vuln VULN-ID-HERE
+```
+
+4. **Docker vulnerability scanning**:
+```bash
+# Scan Docker images for CVEs
+docker scan insightmesh-bot:latest
+
+# Use Trivy for comprehensive scanning
+trivy image insightmesh-bot:latest
+```
+
+**Before Committing:**
+1. Ensure no secrets in code (passwords, API keys, tokens)
+2. Run `make lint` to catch security issues automatically
+3. Verify Bandit security scan passes (included in pre-commit hooks)
+4. Review [Host Hardening Policy](docs/HOST_HARDENING_POLICY.md) for baseline requirements
+
 ## Development Commands
 
 ### Setup and Installation

@@ -63,6 +63,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown."""
     # Startup
+    # Validate OAuth configuration at startup
+    from utils.auth import validate_oauth_config
+
+    validate_oauth_config()
+
     ensure_all_users_group()
     ensure_help_agent_system()
     logger.info("Control Plane application initialized")

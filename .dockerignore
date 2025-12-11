@@ -1,0 +1,48 @@
+# External business logic (mounted at runtime, not baked into image)
+external_agents/
+external_tasks/
+
+# Development files
+.git/
+.github/
+.vscode/
+*.md
+!README.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+.coverage
+htmlcov/
+
+# Build
+dist/
+build/

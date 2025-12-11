@@ -5,17 +5,17 @@ research system, organized by responsibility. All nodes include comprehensive
 Langfuse tracing for observability.
 """
 
-from agents.profiler.nodes.clarification import clarify_with_user
-from agents.profiler.nodes.compression import compress_research
-from agents.profiler.nodes.final_report import final_report_generation
-from agents.profiler.nodes.graph_builder import (
+from .clarification import clarify_with_user
+from .compression import compress_research
+from .final_report import final_report_generation
+from .graph_builder import (
     build_profile_researcher,
     build_researcher_subgraph,
     build_supervisor_subgraph,
 )
-from agents.profiler.nodes.research_brief import write_research_brief
-from agents.profiler.nodes.researcher import researcher, researcher_tools
-from agents.profiler.nodes.supervisor import (
+from .research_brief import write_research_brief
+from .researcher import researcher, researcher_tools
+from .supervisor import (
     execute_researcher,
     supervisor,
     supervisor_tools,

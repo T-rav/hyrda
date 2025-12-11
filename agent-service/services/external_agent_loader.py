@@ -97,26 +97,29 @@ class ExternalAgentLoader:
         Returns:
             Agent class if found, None otherwise
         """
-        module_name = f"external_agents.{agent_name}"
+        # Import as proper package: external_agents.agent_name.agent
+        package_name = f"external_agents.{agent_name}"
+        module_name = f"{package_name}.agent"
 
         try:
-            # Load module from file
-            spec = importlib.util.spec_from_file_location(module_name, agent_file)
-            if not spec or not spec.loader:
-                raise ImportError(f"Cannot load module spec from {agent_file}")
+            # Add external_agents parent to sys.path (not the agent's dir)
+            external_parent = str(Path(self.external_path).parent)
+            path_added = False
+            if external_parent not in sys.path:
+                sys.path.insert(0, external_parent)
+                path_added = True
 
-            module = importlib.util.module_from_spec(spec)
+            try:
+                # Import as proper package
+                # This will use __init__.py and maintain package namespace
+                module = importlib.import_module(module_name)
 
-            # Add parent directory to sys.path for relative imports
-            parent_dir = str(agent_file.parent)
-            if parent_dir not in sys.path:
-                sys.path.insert(0, parent_dir)
-
-            # Execute module
-            spec.loader.exec_module(module)
-
-            # Store module for hot-reload
-            self._agent_modules[agent_name] = module
+                # Store module for hot-reload
+                self._agent_modules[agent_name] = module
+            finally:
+                # Clean up sys.path
+                if path_added and external_parent in sys.path:
+                    sys.path.remove(external_parent)
 
             # Find Agent class
             if not hasattr(module, "Agent"):

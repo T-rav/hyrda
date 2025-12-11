@@ -7,7 +7,7 @@ import logging
 
 from langchain_core.runnables import RunnableConfig
 
-from agents.meddpicc_coach.state import MeddpiccAgentState
+from ..state import MeddpiccAgentState
 
 logger = logging.getLogger(__name__)
 

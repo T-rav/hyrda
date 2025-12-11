@@ -214,3 +214,4 @@ tasks/supervisord.pid
 /data/
 bot/data/
 .langgraph_api/
+security-report.json

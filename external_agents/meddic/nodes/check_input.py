@@ -14,7 +14,7 @@ import re
 from langchain_openai import ChatOpenAI
 from langgraph.graph.state import RunnableConfig
 
-from agents.meddpicc_coach.state import MeddpiccAgentState
+from ..state import MeddpiccAgentState
 from config.settings import LLMSettings
 
 logger = logging.getLogger(__name__)

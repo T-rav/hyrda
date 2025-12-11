@@ -14,10 +14,10 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.types import Command
 
-from agents.profiler import prompts
-from agents.profiler.configuration import ProfileConfiguration
-from agents.profiler.state import ResearcherState
-from agents.profiler.utils import (
+from .. import prompts
+from ..configuration import ProfileConfiguration
+from ..state import ResearcherState
+from ..utils import (
     create_system_message,
     internal_search_tool,
     search_tool,

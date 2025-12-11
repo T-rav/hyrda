@@ -35,7 +35,7 @@ class ConversationCache:
                 await self.redis_client.ping()
                 self._redis_available = True
                 logger.info(f"Connected to Redis at {self.redis_url}")
-            except Exception as e:
+            except (redis.ConnectionError, redis.TimeoutError, OSError) as e:
                 logger.warning(
                     f"Redis connection failed: {e}. Will use Slack API only."
                 )

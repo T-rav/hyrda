@@ -710,6 +710,56 @@ Minimum for 100 users:
 - **Bot instances**: Can run multiple replicas with shared Redis cache
 - **MySQL**: Use read replicas for high read workloads
 
+## 🔒 Security
+
+InsightMesh follows the **8th Light Host Hardening Policy** for all infrastructure, aligned with SOC2 Security and Confidentiality criteria.
+
+### Security Documentation
+
+- 📘 **[Host Hardening Policy](docs/HOST_HARDENING_POLICY.md)** - Baseline security standards for VMs and containers covering:
+  - Operating system hardening
+  - Container runtime security
+  - Secrets management
+  - Identity and access management
+  - Logging and monitoring
+  - Patch management
+
+### Key Security Features
+
+- ✅ **Non-Root Containers**: All services run as non-root user (UID 1000)
+- ✅ **Automated Security Scanning**: Bandit security linter in pre-commit hooks
+- ✅ **Secrets Management**: AWS Secrets Manager integration, no plaintext secrets
+- ✅ **Vulnerability Monitoring**: Regular dependency updates and CVE tracking
+- ✅ **Encrypted Communications**: TLS 1.2+ for all external endpoints
+- ✅ **Resource Limits**: CPU and memory limits prevent resource exhaustion
+- ✅ **Audit Logging**: Centralized logs with Loki for security auditing
+
+### Security Commands
+
+```bash
+# Run security scan
+make security
+
+# Full quality check (includes security)
+make quality
+
+# Scan Docker images for vulnerabilities
+trivy image insightmesh-bot:latest
+```
+
+### Production Security Checklist
+
+Before deploying to production:
+
+- [ ] Change all default passwords in `.env` (use `openssl rand -base64 32`)
+- [ ] Migrate secrets to AWS Secrets Manager or Vault
+- [ ] Enable automatic security updates on host OS
+- [ ] Disable SSH root login and password authentication
+- [ ] Implement TLS certificates from trusted CA (Let's Encrypt)
+- [ ] Set up centralized logging and alerting
+- [ ] Configure backup and disaster recovery procedures
+- [ ] Review [Host Hardening Policy](docs/HOST_HARDENING_POLICY.md) compliance
+
 ## 📝 License
 
 MIT License - See LICENSE file for details.

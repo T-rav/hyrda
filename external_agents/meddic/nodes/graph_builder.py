@@ -9,13 +9,13 @@ import logging
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.meddpicc_coach.nodes.check_input import check_input_completeness
-from agents.meddpicc_coach.nodes.coaching_insights import coaching_insights
-from agents.meddpicc_coach.nodes.followup_handler import followup_handler
-from agents.meddpicc_coach.nodes.meddpicc_analysis import meddpicc_analysis
-from agents.meddpicc_coach.nodes.parse_notes import parse_notes
-from agents.meddpicc_coach.nodes.qa_collector import qa_collector
-from agents.meddpicc_coach.state import (
+from .check_input import check_input_completeness
+from .coaching_insights import coaching_insights
+from .followup_handler import followup_handler
+from .meddpicc_analysis import meddpicc_analysis
+from .parse_notes import parse_notes
+from .qa_collector import qa_collector
+from ..state import (
     MeddpiccAgentInputState,
     MeddpiccAgentOutputState,
     MeddpiccAgentState,

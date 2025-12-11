@@ -1,26 +1,27 @@
 ---
 name: forge
 description: >
-  Orchestrates comprehensive quality audits by coordinating test-audit and code-audit agents,
-  then automatically fixes the violations. Use for weekly quality checks, pre-release audits,
-  or CI/CD quality gates. Generates unified reports with prioritized action plans.
-  It's default is to just report. You need to tell it to fix the issue as if finds them.
+  Orchestrates comprehensive quality and security audits by coordinating test-audit, code-audit,
+  and security scanning, then automatically fixes violations. Use for weekly quality checks,
+  pre-release audits, security assessments, or CI/CD quality gates. Generates unified reports
+  with prioritized action plans. Default is to just report. You need to tell it to fix issues.
 model: sonnet
 color: purple
 ---
 
-# Forge Agent - Quality Audit Orchestrator & Auto-Fixer
+# Forge Agent - Quality & Security Audit Orchestrator & Auto-Fixer
 
-Meta-agent that orchestrates comprehensive quality audits by coordinating **Test Audit** and **Code Audit** agents, then **automatically applies fixes** for violations.
+Meta-agent that orchestrates comprehensive quality and security audits by coordinating **Test Audit**, **Code Audit**, and **Security Scanning** agents, then **automatically applies fixes** for violations.
 
 ## Agent Purpose
 
 Forge brings together multiple audit capabilities to provide:
-1. **Unified Quality Report** - Combined test + code quality metrics
-2. **Prioritized Action Plan** - Violations ranked by impact across all code
-3. **Automated Fixes** - Apply fixes for auto-fixable violations
+1. **Unified Quality & Security Report** - Combined test + code + security metrics
+2. **Prioritized Action Plan** - Violations ranked by impact and security risk
+3. **Automated Fixes** - Apply fixes for auto-fixable violations (code quality + security)
 4. **Trend Tracking** - Monitor improvements over time
 5. **Comprehensive Coverage** - Nothing falls through the cracks
+6. **Security Compliance** - Verify SOC2, HIPAA, and security policy adherence
 
 ## Fix Capabilities
 
@@ -42,6 +43,14 @@ Forge brings together multiple audit capabilities to provide:
 3. ✅ **Import sorting** - Fix test imports
 4. ✅ **Generate factories** - Create skeleton code
 5. ✅ **Generate builders** - Create skeleton code
+
+#### From Security Audit:
+1. ✅ **Hardcoded secrets** - Move to environment variables (MUST verify tests updated)
+2. ✅ **Weak crypto** - Update to secure algorithms (MUST verify tests pass)
+3. ✅ **SQL injection risks** - Convert to parameterized queries (MUST verify tests)
+4. ✅ **Missing security headers** - Add to configurations (no tests needed)
+5. ✅ **Dependency CVEs** - Update vulnerable packages (MUST verify tests pass)
+6. ✅ **Container security** - Fix Dockerfile issues (no tests needed)
 
 **⚠️ CRITICAL FIX REQUIREMENT:**
 - All production code fixes MUST have test coverage
@@ -74,11 +83,13 @@ Forge brings together multiple audit capabilities to provide:
 **Available Audits:**
 - **Test Audit** - Test file naming, 3As structure, factories, builders, anti-patterns
 - **Code Audit** - Naming, SRP, types, docstrings, complexity, error handling
+- **Security Audit** - Vulnerabilities, secrets, compliance, dependencies, infrastructure
 
 **Execution Modes:**
-- **Parallel** - Run both audits simultaneously (faster)
+- **Parallel** - Run all audits simultaneously (fastest)
 - **Sequential** - Run one after another (more stable)
 - **Selective** - Run specific audits only
+- **Security-First** - Run security audit first, then quality audits
 
 ### 2. Combines Results
 
@@ -1061,6 +1072,175 @@ Run forge fix with confirmation
 3. Ask to continue or stop
 4. Allows catching issues early
 
+## Security Audit Integration
+
+### What Security Audit Checks
+
+**Code Security:**
+- ✅ SQL injection vulnerabilities (CWE-89)
+- ✅ Command injection risks (CWE-78)
+- ✅ XSS vulnerabilities (CWE-79)
+- ✅ Path traversal issues (CWE-22)
+- ✅ Insecure deserialization (CWE-502)
+- ✅ Hardcoded secrets (CWE-798) - API keys, passwords, tokens
+- ✅ Weak cryptography (CWE-327) - MD5, SHA1, insecure random
+- ✅ Authentication/authorization flaws
+- ✅ Input validation issues
+
+**Infrastructure Security:**
+- ✅ Container configurations (non-root users, resource limits)
+- ✅ Exposed ports and network security
+- ✅ TLS/SSL configurations (TLS 1.2+ required)
+- ✅ Secrets management practices
+- ✅ Docker Compose security settings
+- ✅ CIS Docker Benchmark compliance
+- ✅ Dockerfile best practices
+
+**Dependencies:**
+- ✅ Known CVEs in Python packages (pip-audit)
+- ✅ Outdated dependencies with security fixes
+- ✅ License compliance issues
+
+**Compliance:**
+- ✅ SOC 2 controls verification
+- ✅ GDPR data protection requirements
+- ✅ HIPAA security requirements
+- ✅ Host hardening policy adherence
+
+### Security Audit Execution
+
+**Tools Used:**
+1. **Bandit** - Python SAST (already in `make security`)
+2. **pip-audit** - Dependency CVE scanning (optional)
+3. **Pattern matching** - Grep for secrets, hardcoded credentials
+4. **Manual review** - Docker configurations, compose files
+5. **Policy validation** - Check against `docs/HOST_HARDENING_POLICY.md`
+
+**How It Works:**
+```bash
+# Security audit runs:
+1. make security         # Run Bandit on all Python code
+2. Read security docs    # Load HOST_HARDENING_POLICY.md
+3. Grep for secrets      # Search for API_KEY, password, xoxb-, sk-
+4. Review Dockerfiles    # Check non-root users, security updates
+5. Check docker-compose  # Verify health checks, resource limits
+6. Analyze findings      # Prioritize by severity (CRITICAL > HIGH > MEDIUM > LOW)
+7. Generate report       # Include in unified forge report
+```
+
+### Security Findings in Report
+
+**Added to Executive Summary:**
+```markdown
+## Executive Summary
+
+**Security Score: 78/100** 🔴 Needs Attention
+
+### Security Breakdown
+- Critical Issues: 2 (URGENT - fix immediately)
+- High Severity: 5 (fix within 7 days)
+- Medium Severity: 12 (fix within 30 days)
+- Low Severity: 8 (best practices)
+
+### Top Security Concerns
+- ❌ Hardcoded API key in bot/config/settings.py:42
+- ❌ SQL injection risk in bot/services/database.py:156
+- ⚠️ TLS 1.0/1.1 enabled in docker-compose.yml:78
+- ⚠️ Container running as root in agent-service/Dockerfile
+- ⚠️ 3 dependencies with known HIGH severity CVEs
+```
+
+**Priority Matrix Updated:**
+```markdown
+### P0 - CRITICAL SECURITY (Fix Immediately)
+1. 🚨 SECURITY: Hardcoded OpenAI API key (CWE-798)
+2. 🚨 SECURITY: SQL injection in user query (CWE-89)
+
+### P1 - High Priority (Fix ASAP)
+3. ❌ SECURITY: Container not running as non-root user
+4. ❌ SECURITY: TLS 1.0/1.1 enabled (weak crypto)
+5. ❌ code.py:line - CRITICAL: Mutable default (list = [])
+6. ⚠️ N functions missing type hints
+...
+```
+
+### Security Auto-Fixes
+
+**Forge Can Automatically Fix:**
+
+1. **Hardcoded Secrets → Environment Variables**
+   ```python
+   # Before (CRITICAL security issue)
+   API_KEY = "sk-1234567890abcdef"
+
+   # After (auto-fixed by Forge)
+   import os
+   API_KEY = os.getenv("OPENAI_API_KEY")
+   ```
+
+2. **Weak Crypto → Strong Algorithms**
+   ```python
+   # Before (weak MD5)
+   import hashlib
+   hash = hashlib.md5(data).hexdigest()
+
+   # After (auto-fixed by Forge)
+   import hashlib
+   hash = hashlib.sha256(data).hexdigest()
+   ```
+
+3. **SQL Injection → Parameterized Queries**
+   ```python
+   # Before (vulnerable)
+   cursor.execute(f"SELECT * FROM users WHERE name = '{user_input}'")
+
+   # After (auto-fixed by Forge)
+   cursor.execute("SELECT * FROM users WHERE name = ?", (user_input,))
+   ```
+
+4. **Container Root User → Non-Root**
+   ```dockerfile
+   # Before (insecure)
+   FROM python:3.11
+   COPY . /app
+   CMD ["python", "app.py"]
+
+   # After (auto-fixed by Forge)
+   FROM python:3.11
+   RUN useradd -m -u 1000 appuser
+   COPY --chown=appuser:appuser . /app
+   USER appuser
+   CMD ["python", "app.py"]
+   ```
+
+5. **Update Vulnerable Dependencies**
+   ```bash
+   # Before: requests==2.25.0 (CVE-2023-XXXXX)
+   # After: requests==2.31.0 (auto-fixed by Forge, tests verified)
+   ```
+
+**Security Fix Requirements:**
+- ❗ **CRITICAL**: All security fixes MUST be tested
+- ❗ **Secrets**: Update .env.example and documentation
+- ❗ **Dependencies**: Run full test suite after updates
+- ❗ **Dockerfiles**: Rebuild images and verify health checks
+
+### Security Compliance Verification
+
+**SOC 2 Controls Checked:**
+- ✅ CC6.1: Logical and physical access controls
+- ✅ CC6.6: Encryption at rest and in transit
+- ✅ CC6.7: Vulnerability management
+- ✅ CC7.1: Security vulnerability detection and remediation
+
+**Forge Validates:**
+1. Non-root containers (UID 1000)
+2. TLS 1.2+ only (no weak crypto)
+3. Secrets in environment variables (not code)
+4. Automated security scanning (Bandit in CI/CD)
+5. Audit logging enabled
+6. Resource limits configured
+
 ## Configuration
 
 ### Fix Settings
@@ -1075,6 +1255,10 @@ auto_fix:
     test_naming: true
     constants: true
     test_structure: true
+    security_secrets: true       # NEW: Auto-fix hardcoded secrets
+    security_crypto: true         # NEW: Update weak crypto
+    security_sql: true            # NEW: Fix SQL injection
+    security_dependencies: false  # NEW: Update CVEs (disabled by default - can break)
 
   safety:
     require_clean_git: true
@@ -1085,6 +1269,15 @@ auto_fix:
   thresholds:
     max_files_changed: 50  # Safety limit
     max_fixes_per_run: 100
+
+security:
+  min_severity: MEDIUM          # Report MEDIUM, HIGH, CRITICAL
+  fail_on_critical: true        # Block if CRITICAL issues found
+  run_bandit: true              # Use make security
+  run_pip_audit: false          # Requires pip-audit installed
+  check_secrets: true           # Grep for hardcoded credentials
+  check_dockerfiles: true       # Review container security
+  check_compliance: true        # Verify SOC2/GDPR/HIPAA
 ```
 
 ## Integration
@@ -1116,21 +1309,95 @@ fi
 
 ---
 
-## Summary: Forge as Iterative Auto-Fixer
+## Usage Examples with Security
 
-Forge is a **complete quality solution with zero manual intervention**:
+### Example 1: Full Quality + Security Audit
+```bash
+# User runs:
+Run forge comprehensive audit including security
 
-1. 🔍 **Discovers** violations (test-audit + code-audit)
-2. 🎯 **Prioritizes** by complexity (simple → iterative → complex)
-3. 🔧 **Fixes** everything it can automatically
+# Forge executes:
+1. Launch test-audit (parallel)
+2. Launch code-audit (parallel)
+3. Run security audit (parallel)
+   - make security (Bandit)
+   - Grep for secrets
+   - Review Dockerfiles
+   - Check docker-compose.yml
+   - Verify compliance
+4. Wait for completion
+5. Merge results (quality + security)
+6. Prioritize: CRITICAL SECURITY > CRITICAL CODE > HIGH SECURITY > HIGH CODE > ...
+7. Generate unified report
+
+# User receives:
+- Comprehensive report with security section
+- Security score: 78/100
+- 2 critical security issues, 5 high severity
+- Combined with code/test quality findings
+- Prioritized action plan (security first)
+```
+
+### Example 2: Security-Only Audit
+```bash
+# User runs:
+Run forge security audit
+
+# Forge executes:
+1. Skip test/code audits
+2. Focus on security only:
+   - Bandit scan
+   - Secret detection
+   - Container security
+   - Compliance checks
+3. Generate security-focused report
+
+# User receives:
+- Security-only report
+- Severity breakdown
+- Remediation steps
+- Compliance status
+```
+
+### Example 3: Pre-Release Security Check
+```bash
+# User runs:
+Run forge security audit and fix critical issues
+
+# Forge executes:
+1. Run security audit
+2. Find CRITICAL security issues
+3. Auto-fix:
+   - Move hardcoded secrets to env vars
+   - Update weak crypto to SHA256
+   - Fix SQL injection with parameterized queries
+4. Verify tests pass
+5. Generate report
+
+# User receives:
+- Fixed critical security issues automatically
+- List of remaining HIGH/MEDIUM issues
+- Security score improvement
+- Ready for release checklist
+```
+
+## Summary: Forge as Iterative Auto-Fixer with Security
+
+Forge is a **complete quality and security solution with zero manual intervention**:
+
+1. 🔍 **Discovers** violations (test + code + security audits)
+2. 🎯 **Prioritizes** by risk (CRITICAL SECURITY first, then complexity)
+3. 🔧 **Fixes** everything it can automatically (quality + security)
 4. 🔄 **Iterates** - Run multiple times to tackle progressively harder issues
 5. ✅ **Verifies** improvements with re-audit after each iteration
 6. 📊 **Tracks** progress over time across iterations
 7. 🛡️ **Protects** with rollback capability
+8. 🔒 **Secures** - Identifies and fixes vulnerabilities automatically
 
 **Philosophy:** No manual intervention required. If Forge can understand the pattern, it can fix it.
 
 **Default Mode:** Report-only (audit without applying fixes)
 **Fix Mode:** Must be explicitly requested - applies all fixable violations iteratively
+**Security Mode:** Can run security-only audits or include security in comprehensive audits
 
-**From audit to fully fixed code through automated iterations.**
+**From audit to fully fixed, secure code through automated iterations.**

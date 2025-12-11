@@ -7,9 +7,9 @@ Includes optional Redis caching to avoid re-fetching and re-embedding.
 import logging
 from typing import Any
 
-from agents.profiler.services.sec_cache import SECFilingsCache
-from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
-from agents.profiler.services.sec_vector_search import SECInMemoryVectorSearch
+from services.sec_cache import SECFilingsCache
+from services.sec_on_demand import SECOnDemandFetcher
+from services.sec_vector_search import SECInMemoryVectorSearch
 
 logger = logging.getLogger(__name__)
 

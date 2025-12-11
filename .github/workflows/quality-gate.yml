@@ -1,4 +1,4 @@
-name: Quality Gate - Claude Code Audit
+name: Quality & Security Gate - Claude Code Audit
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ on:
 
 jobs:
   claude-quality-audit:
-    name: Claude Code Quality Audit
+    name: Claude Code Quality & Security Audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -35,7 +35,7 @@ jobs:
         run: |
           npm install -g @anthropic-ai/claude-code
 
-      - name: Run Forge Quality Gate
+      - name: Run Forge Quality & Security Gate
         id: audit
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -48,8 +48,8 @@ jobs:
             exit 0
           fi
 
-          # Use npx to run claude-code in non-interactive mode (--print)
-          if ! npx @anthropic-ai/claude-code --print "Run Forge quality audit in report-only mode. Generate quality report with violation counts (Critical P0 and Warning P1). Save report to .claude/audit-reports/ci-report.md. Exit 0 if Critical violations == 0 AND Warning violations == 0. Exit 1 if any violations found. Focus on number of issues to fix, not quality score."; then
+          # Use npx to run claude-code with forge agent (test-audit + code-audit + security-audit)
+          if ! npx @anthropic-ai/claude-code --print "Run Forge comprehensive audit including security in report-only mode. Execute all 3 sub-agents in parallel: test-audit, code-audit, and security-audit. Generate unified report with violation counts prioritized by severity (CRITICAL SECURITY > CRITICAL CODE > HIGH SECURITY > HIGH CODE > MEDIUM > LOW). Save report to .claude/audit-reports/ci-report.md. Exit 0 if no CRITICAL violations found. Exit 1 if any CRITICAL violations (security or code). Focus on actionable findings with file paths and line numbers."; then
             EXIT_CODE=$?
             # Check if it's an environment error or quality failure
             if [ ! -f ".claude/audit-reports/ci-report.md" ]; then
@@ -118,6 +118,11 @@ jobs:
       - name: Check audit status
         if: failure()
         run: |
-          echo "❌ Claude audit found critical issues that must be fixed before merging"
+          echo "❌ Claude audit found CRITICAL issues (security or code quality) that must be fixed before merging"
           echo "📄 See audit report artifact for details"
+          echo ""
+          echo "Audit Coverage:"
+          echo "  - Test Quality (test-audit agent)"
+          echo "  - Code Quality (code-audit agent)"
+          echo "  - Security (security-audit agent)"
           exit 1

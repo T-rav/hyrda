@@ -10,7 +10,7 @@ import re
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agents.profiler.state import ProfileAgentState
+from ..state import ProfileAgentState
 from config.settings import Settings
 
 logger = logging.getLogger(__name__)

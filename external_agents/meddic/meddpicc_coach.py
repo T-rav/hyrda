@@ -11,7 +11,7 @@ For bot code: Use MeddicAgent which creates the graph WITH MemorySaver.
 
 import logging
 
-from agents.meddpicc_coach.nodes.graph_builder import build_meddpicc_coach
+from .nodes.graph_builder import build_meddpicc_coach
 
 logger = logging.getLogger(__name__)
 

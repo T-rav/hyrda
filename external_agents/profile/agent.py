@@ -4,7 +4,7 @@ This is the main entry point for the external agent loader.
 The Agent class is imported and exposed for dynamic loading.
 """
 
-from profile_researcher import ProfileResearcher
+from .profile_researcher import profile_researcher
 
-# Export Agent class for external loader
-Agent = ProfileResearcher
+# Export Agent (graph instance) for external loader
+Agent = profile_researcher

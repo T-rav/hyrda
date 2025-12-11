@@ -10,9 +10,13 @@ to improve RAG retrieval accuracy. Supports:
 
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from bot_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
 from services.langfuse_service import observe
+
+if TYPE_CHECKING:
+    from services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +44,7 @@ class AdaptiveQueryRewriter:
         ],
     }
 
-    def __init__(self, llm_service, enable_rewriting: bool = True):
+    def __init__(self, llm_service: "LLMService", enable_rewriting: bool = True):
         """
         Initialize query rewriter.
 

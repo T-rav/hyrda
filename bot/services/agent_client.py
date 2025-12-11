@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -76,7 +77,7 @@ class CircuitBreaker:
         self.success_count = 0
         self.last_failure_time: float | None = None
 
-    def call(self, func):
+    def call(self, func: Callable):
         """Decorator to wrap function with circuit breaker."""
 
         async def wrapper(*args, **kwargs):
