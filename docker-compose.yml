@@ -372,6 +372,8 @@ services:
       service: "agent_service"
       component: "agents"
     networks:
+      - insightmesh
+
   # RAG Service - Chat completion proxy with agent routing
   rag_service:
     build:
@@ -415,7 +417,6 @@ services:
       service: "rag_service"
       component: "rag"
     networks:
-      - insightmesh
       - insightmesh
 
   # Loki - Log Aggregation Server

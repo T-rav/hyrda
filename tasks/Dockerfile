@@ -4,10 +4,16 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 # Install security updates and dependencies including nginx
 RUN apt-get update && apt-get install -y \
     gcc \
+    g++ \
     curl \
     default-mysql-client \
     nginx \
     supervisor \
+    build-essential \
+    libfreetype6-dev \
+    libjpeg-dev \
+    libpng-dev \
+    zlib1g-dev \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 

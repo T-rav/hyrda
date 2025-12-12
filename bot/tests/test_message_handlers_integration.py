@@ -24,7 +24,11 @@ from handlers.file_processors.pdf_processor import (
     PYMUPDF_AVAILABLE,
     extract_pdf_text,
 )
-from handlers.message_handlers import handle_bot_command, handle_message
+from handlers.message_handlers import handle_message
+
+# Note: handle_bot_command removed in microservices refactor
+# Agent routing now handled by rag-service via rag_client.generate_response()
+# See rag-service and agent-service for agent routing tests
 from handlers.prompt_manager import get_user_system_prompt
 
 
@@ -716,8 +720,18 @@ class TestFileProcessingErrorHandling:
                 assert isinstance(result, str)  # Should always return a string
 
 
+@pytest.mark.skip(
+    reason="Tests removed - handle_bot_command no longer exists. "
+    "Agent routing moved to rag-service in microservices refactor. "
+    "See rag-service and agent-service tests for agent routing."
+)
 class TestBotCommandHandling:
-    """Tests for bot agent command routing (/profile, "-meddic", "-medic")"""
+    """Tests for bot agent command routing (/profile, "-meddic", "-medic")
+
+    NOTE: These tests are for OLD ARCHITECTURE (pre-microservices).
+    Agent routing now handled by rag-service via HTTP API.
+    Bot is now a thin Slack adapter that calls rag_client.generate_response()
+    """
 
     @pytest.mark.asyncio
     async def test_handle_bot_command_profile(self):
@@ -756,7 +770,10 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            result = await handle_bot_command(
+            # Note: handle_bot_command removed - test skipped
+            result = True  # noqa: F841 - old architecture test
+            return  # Skip test body
+            result = await handle_bot_command(  # noqa: F821
                 text="-profile tell me about Charlotte",
                 user_id="U123",
                 slack_service=slack_service,
@@ -809,7 +826,10 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            result = await handle_bot_command(
+            # Note: handle_bot_command removed - test skipped
+            result = True  # noqa: F841 - old architecture test
+            return  # Skip test body
+            result = await handle_bot_command(  # noqa: F821
                 text="-meddic analyze this opportunity",
                 user_id="U123",
                 slack_service=slack_service,
@@ -860,7 +880,10 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            result = await handle_bot_command(
+            # Note: handle_bot_command removed - test skipped
+            result = True  # noqa: F841 - old architecture test
+            return  # Skip test body
+            result = await handle_bot_command(  # noqa: F821
                 text="-medic what's the decision process",
                 user_id="U123",
                 slack_service=slack_service,
@@ -889,13 +912,9 @@ class TestBotCommandHandling:
         slack_service.send_message = AsyncMock()
         slack_service.get_thread_history = AsyncMock(return_value=([], True))
 
-        result = await handle_bot_command(
-            text="/unknown some query",
-            user_id="U123",
-            slack_service=slack_service,
-            channel="C123",
-            thread_ts=None,
-        )
+        # Note: handle_bot_command removed - test skipped
+        result = False  # Old test expected False for unknown commands
+        return  # Skip test body
 
         assert result is False
         # Should not send any messages for unknown bot types
@@ -927,7 +946,10 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            result = await handle_bot_command(
+            # Note: handle_bot_command removed - test skipped
+            result = True  # noqa: F841 - old architecture test
+            return  # Skip test body
+            result = await handle_bot_command(  # noqa: F821
                 text="-profile ",
                 user_id="U123",  # Empty query
                 slack_service=slack_service,
@@ -970,7 +992,10 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            result = await handle_bot_command(
+            # Note: handle_bot_command removed - test skipped
+            result = True  # noqa: F841 - old architecture test
+            return  # Skip test body
+            result = await handle_bot_command(  # noqa: F821
                 text="-profile test query",
                 user_id="U123",
                 slack_service=slack_service,
@@ -1014,13 +1039,8 @@ class TestBotCommandHandling:
                 return_value=AgentClientMockFactory.create_mock_client(success=True),
             ),
         ):
-            await handle_bot_command(
-                text="-profile test",
-                user_id="U123",
-                slack_service=slack_service,
-                channel="C123",
-                thread_ts=None,
-            )
+            # Note: handle_bot_command removed - test skipped
+            return  # Skip test body
 
         # Thinking indicator should be deleted
         slack_service.delete_thinking_indicator.assert_called_once_with(
