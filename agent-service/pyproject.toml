@@ -100,7 +100,7 @@ dev = [
     "pyright==1.1.390",
     "bandit[toml]==1.8.0",
     "pre-commit==4.0.1",
-    "langgraph-cli[inmem]>=0.1.50",
+    "langgraph-cli[inmem]>=0.1.60",  # Upgraded to latest (includes langgraph-api 0.5.x)
 ]
 
 [project.scripts]
