@@ -371,6 +371,75 @@ class TestGlobalLoader:
         assert result is False
 
 
+class TestSystemTaskProtection:
+    """Test system task override protection."""
+
+    def test_external_cannot_override_system(self, temp_tasks_dir, simple_job_code):
+        """Test that external tasks cannot override system tasks."""
+        # Create mock system tasks directory
+        system_dir = temp_tasks_dir / "system"
+        system_dir.mkdir()
+
+        # Create system task
+        system_task_dir = system_dir / "slack_user_import"
+        system_task_dir.mkdir()
+        (system_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "SystemJob"))
+
+        # Create external tasks directory
+        external_dir = temp_tasks_dir / "external"
+        external_dir.mkdir()
+
+        # Create external task with SAME name (conflict)
+        external_task_dir = external_dir / "slack_user_import"
+        external_task_dir.mkdir()
+        (external_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "ExternalJob"))
+
+        # Initialize loader with both paths
+        loader = ExternalTaskLoader(str(external_dir))
+        loader.system_path = system_dir  # Override system path for testing
+
+        # Discover tasks
+        tasks = loader.discover_tasks()
+
+        # Verify system task loaded, external task rejected
+        assert "slack_user_import" in tasks
+        assert tasks["slack_user_import"].__name__ == "SystemJob"  # System wins!
+        # External task should be rejected (not loaded)
+
+    def test_external_loads_when_no_conflict(self, temp_tasks_dir, simple_job_code):
+        """Test that external tasks load normally when no conflict."""
+        # Create mock system tasks directory
+        system_dir = temp_tasks_dir / "system"
+        system_dir.mkdir()
+
+        # Create system task
+        system_task_dir = system_dir / "slack_user_import"
+        system_task_dir.mkdir()
+        (system_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "SystemJob"))
+
+        # Create external tasks directory
+        external_dir = temp_tasks_dir / "external"
+        external_dir.mkdir()
+
+        # Create external task with DIFFERENT name (no conflict)
+        external_task_dir = external_dir / "metric_sync"
+        external_task_dir.mkdir()
+        (external_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "ExternalJob"))
+
+        # Initialize loader
+        loader = ExternalTaskLoader(str(external_dir))
+        loader.system_path = system_dir  # Override system path for testing
+
+        # Discover tasks
+        tasks = loader.discover_tasks()
+
+        # Verify both loaded
+        assert "slack_user_import" in tasks
+        assert "metric_sync" in tasks
+        assert tasks["slack_user_import"].__name__ == "SystemJob"
+        assert tasks["metric_sync"].__name__ == "ExternalJob"
+
+
 class TestEdgeCases:
     """Test edge cases and error handling."""
 

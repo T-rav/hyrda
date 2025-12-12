@@ -298,3 +298,68 @@ class TestServicesAgentRegistry:
 
         assert agent_registry._cached_agents is None
         assert agent_registry._cache_timestamp == 0
+
+    @patch("services.agent_registry.get_system_loader")
+    @patch("services.agent_registry.get_external_loader")
+    def test_external_cannot_override_system_agent(
+        self, mock_external_loader, mock_system_loader
+    ):
+        """Test that external agents cannot override system agents."""
+        # Mock system agent
+        system_agent_class = Mock()
+        system_agent_class.__name__ = "SystemResearchAgent"
+        mock_system_loader.return_value.discover_agents.return_value = {
+            "research": system_agent_class
+        }
+
+        # Mock external agent with SAME name (conflict)
+        external_agent_class = Mock()
+        external_agent_class.__name__ = "ExternalResearchAgent"
+        mock_external_loader.return_value.discover_agents.return_value = {
+            "research": external_agent_class
+        }
+
+        # Clear cache to force reload
+        agent_registry._agent_classes = {}
+
+        # Load agents
+        with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "true"}):
+            classes = agent_registry._load_agent_classes()
+
+        # Verify system agent wins, external rejected
+        assert "research" in classes
+        assert classes["research"] == system_agent_class  # System wins!
+        assert classes["research"] != external_agent_class  # External rejected
+
+    @patch("services.agent_registry.get_system_loader")
+    @patch("services.agent_registry.get_external_loader")
+    def test_external_loads_when_no_conflict(
+        self, mock_external_loader, mock_system_loader
+    ):
+        """Test that external agents load normally when no conflict."""
+        # Mock system agent
+        system_agent_class = Mock()
+        system_agent_class.__name__ = "ResearchAgent"
+        mock_system_loader.return_value.discover_agents.return_value = {
+            "research": system_agent_class
+        }
+
+        # Mock external agent with DIFFERENT name (no conflict)
+        external_agent_class = Mock()
+        external_agent_class.__name__ = "ProfileAgent"
+        mock_external_loader.return_value.discover_agents.return_value = {
+            "profile": external_agent_class
+        }
+
+        # Clear cache to force reload
+        agent_registry._agent_classes = {}
+
+        # Load agents
+        with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "true"}):
+            classes = agent_registry._load_agent_classes()
+
+        # Verify both loaded
+        assert "research" in classes
+        assert "profile" in classes
+        assert classes["research"] == system_agent_class
+        assert classes["profile"] == external_agent_class
