@@ -81,57 +81,110 @@ async def get_job(
 
 
 @router.post("/jobs/{job_id}/pause")
-async def pause_job(request: Request, job_id: str):
+async def pause_job(
+    request: Request,
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Pause a job.
+
+    Security: Requires admin authentication (JWT token).
 
     Args:
         job_id: Job identifier
+        user: Current authenticated user (from JWT)
 
     Returns:
         Success message
+
+    Raises:
+        HTTPException: 403 if user is not admin
     """
+    # Verify admin access
+    if not user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required to pause jobs"
+        )
+
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
         scheduler_service.pause_job(job_id)
+        logger.info(f"Job {job_id} paused by {user.get('email')}")
         return {"message": f"Job {job_id} paused successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/jobs/{job_id}/resume")
-async def resume_job(request: Request, job_id: str):
+async def resume_job(
+    request: Request,
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Resume a job.
+
+    Security: Requires admin authentication (JWT token).
 
     Args:
         job_id: Job identifier
+        user: Current authenticated user (from JWT)
 
     Returns:
         Success message
+
+    Raises:
+        HTTPException: 403 if user is not admin
     """
+    # Verify admin access
+    if not user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required to resume jobs"
+        )
+
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
 
     try:
         scheduler_service.resume_job(job_id)
+        logger.info(f"Job {job_id} resumed by {user.get('email')}")
         return {"message": f"Job {job_id} resumed successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/jobs/{job_id}")
-async def delete_job(request: Request, job_id: str):
+async def delete_job(
+    request: Request,
+    job_id: str,
+    user: dict = Depends(get_current_user)
+):
     """Delete a job and its associated metadata.
+
+    Security: Requires admin authentication (JWT token).
 
     Args:
         job_id: Job identifier
+        user: Current authenticated user (from JWT)
 
     Returns:
         Success message
+
+    Raises:
+        HTTPException: 403 if user is not admin
     """
+    # Verify admin access
+    if not user.get("is_admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required to delete jobs"
+        )
+
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -150,7 +203,7 @@ async def delete_job(request: Request, job_id: str):
             if metadata:
                 db_session.delete(metadata)
                 db_session.commit()
-                logger.info(f"Deleted metadata for job {job_id}")
+                logger.info(f"Deleted metadata for job {job_id} by {user.get('email')}")
 
         return {"message": f"Job {job_id} deleted successfully"}
     except Exception as e:
@@ -196,9 +249,20 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
         if not job_type:
             raise HTTPException(status_code=400, detail="job_type is required")
 
-        # Create job using registry
+        # Validate job parameters using Pydantic schemas
+        from api.job_schemas import validate_job_params
+
+        try:
+            validated_params = validate_job_params(job_type, job_params)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid job parameters: {str(e)}"
+            )
+
+        # Create job using registry (with validated parameters)
         job = job_registry.create_job(
-            job_type=job_type, job_id=job_id, schedule=schedule, **job_params
+            job_type=job_type, job_id=job_id, schedule=schedule, **validated_params
         )
 
         # Save task metadata (custom name)

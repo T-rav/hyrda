@@ -344,3 +344,45 @@ def mock_external_apis():
         mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
 
         yield mock_session
+
+
+# ==============================================================================
+# Helper Functions for Integration Tests
+# ==============================================================================
+
+
+def assert_valid_http_response(response, expected_codes=None):
+    """Assert that HTTP response has a valid status code.
+
+    Args:
+        response: HTTP response object
+        expected_codes: List of expected status codes (default: 2xx)
+    """
+    if expected_codes is None:
+        expected_codes = range(200, 300)
+
+    assert response.status_code in expected_codes, (
+        f"Unexpected status code: {response.status_code}\n"
+        f"Expected: {expected_codes}\n"
+        f"Response: {response.text[:200] if hasattr(response, 'text') else 'N/A'}"
+    )
+
+
+def assert_json_contains_keys(data, required_keys):
+    """Assert that JSON data contains required keys.
+
+    Args:
+        data: Dictionary or JSON response
+        required_keys: List of required key names
+    """
+    if not isinstance(data, dict):
+        try:
+            data = data.json() if hasattr(data, "json") else data
+        except Exception:
+            raise AssertionError(f"Response is not JSON: {type(data)}") from None
+
+    missing_keys = [key for key in required_keys if key not in data]
+
+    assert not missing_keys, (
+        f"Missing required keys: {missing_keys}\nAvailable keys: {list(data.keys())}"
+    )

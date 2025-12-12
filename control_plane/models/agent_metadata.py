@@ -25,6 +25,7 @@ class AgentMetadata(Base):
     # Cloud mode deployment info (only used if AGENT_EXECUTION_MODE=cloud)
     langgraph_assistant_id = Column(String(255), nullable=True)  # LangGraph Cloud assistant ID
     langgraph_url = Column(String(512), nullable=True)  # LangGraph Cloud deployment URL
+    endpoint_url = Column(String(512), nullable=True)  # HTTP endpoint for agent invocation (embedded or cloud)
 
     # Permission settings
     is_public = Column(
@@ -73,6 +74,7 @@ class AgentMetadata(Base):
             "display_name": self.display_name,
             "description": self.description,
             "aliases": self.get_aliases(),
+            "endpoint_url": self.endpoint_url,
             "langgraph_assistant_id": self.langgraph_assistant_id,
             "langgraph_url": self.langgraph_url,
             "is_public": self.is_public,

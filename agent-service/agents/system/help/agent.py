@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 from agents.base_agent import BaseAgent
-from agents.registry import agent_registry
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +19,8 @@ class HelpAgent(BaseAgent):
     - "-help" - Show help information
     """
 
-    name = "agents"
-    aliases = ["help"]
+    name = "help"
+    aliases = ["agents"]
     description = "List available bot agents and their aliases"
 
     def __init__(self):
@@ -46,8 +45,9 @@ class HelpAgent(BaseAgent):
 
         logger.info("HelpAgent listing all available agents")
 
-        # Get all registered agents
-        agents = agent_registry.list_agents()
+        # Get all registered agents from control-plane
+        from services.agent_registry import list_agents
+        agents = list_agents()
 
         # Build response
         response_lines = [
@@ -94,11 +94,5 @@ class HelpAgent(BaseAgent):
         }
 
 
-# Register agent with registry
-agent_registry.register(
-    name=HelpAgent.name,
-    agent_class=HelpAgent,
-    aliases=HelpAgent.aliases,
-)
-
-logger.info(f"HelpAgent registered: -{HelpAgent.name} (aliases: {HelpAgent.aliases})")
+# Export Agent class for system loader
+Agent = HelpAgent

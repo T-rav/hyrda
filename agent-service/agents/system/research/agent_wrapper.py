@@ -60,6 +60,18 @@ class ResearchAgentWrapper:
             },
         }
 
+    async def invoke(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Invoke agent (alias for run() for compatibility).
+
+        Args:
+            query: Research query
+            context: Agent context
+
+        Returns:
+            Dict with response and metadata
+        """
+        return await self.run(query, context)
+
     async def stream(
         self, query: str, context: dict[str, Any]
     ) -> AsyncGenerator[str, None]:

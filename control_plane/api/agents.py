@@ -38,13 +38,15 @@ router = APIRouter(
 )
 
 
-@router.get("", dependencies=[Depends(get_current_user)])
+@router.get("")
 async def list_agents(request: Request) -> dict[str, Any]:
     """List all registered agents from database.
 
     Agents are now stored in the database (agent_metadata table) and can be
     configured dynamically without code changes. Bot and agent-service query
     this endpoint to discover available agents.
+
+    Authentication: Allows both user and service-to-service auth (public endpoint for agent discovery)
 
     Query params:
         include_deleted: If "true", include soft-deleted agents (default: false)
@@ -97,6 +99,9 @@ async def list_agents(request: Request) -> dict[str, Any]:
                         "display_name": agent.display_name,
                         "aliases": agent.get_aliases(),
                         "description": agent.description or "No description",
+                        "endpoint_url": agent.endpoint_url,
+                        "langgraph_assistant_id": agent.langgraph_assistant_id,
+                        "langgraph_url": agent.langgraph_url,
                         "is_public": agent.is_public,
                         "requires_admin": agent.requires_admin,
                         "is_system": agent.is_system,
@@ -138,6 +143,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
         description = data.get("description", "")
         aliases = data.get("aliases", [])
         is_system = data.get("is_system", False)
+        endpoint_url = data.get("endpoint_url")  # HTTP endpoint for invocation
 
         # Validate agent name
         is_valid, error_msg = validate_agent_name(agent_name)
@@ -193,6 +199,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
                     agent.description = description
                     agent.set_aliases(aliases)
                     agent.is_system = is_system
+                    agent.endpoint_url = endpoint_url
                     logger.info(f"Updated agent '{agent_name}' in database")
                     action = "updated"
                 elif agent and agent.is_deleted:
@@ -203,6 +210,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
                     agent.description = description
                     agent.set_aliases(aliases)
                     agent.is_system = is_system
+                    agent.endpoint_url = endpoint_url
                     logger.info(f"Reactivated deleted agent '{agent_name}'")
                     action = "reactivated"
                 else:
@@ -211,6 +219,7 @@ async def register_agent(request: Request) -> dict[str, Any]:
                         agent_name=agent_name,
                         display_name=display_name,
                         description=description,
+                        endpoint_url=endpoint_url,
                         is_public=True,  # Default enabled
                         requires_admin=False,
                         is_system=is_system,

@@ -33,16 +33,49 @@ def _get_redis():
     return _redis_client if _redis_client is not False else None
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-in-production")
+# SECURITY: Fail fast if JWT_SECRET_KEY not set in production
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    env = os.getenv("ENVIRONMENT", "development")
+    if env.lower() in ("production", "prod", "staging"):
+        raise ValueError(
+            "CRITICAL SECURITY: JWT_SECRET_KEY must be set in production! "
+            "Generate with: openssl rand -hex 32"
+        )
+    # Development only - use insecure default
+    import secrets
+    JWT_SECRET_KEY = secrets.token_urlsafe(32)
+    logger.warning(
+        f"⚠️  Using randomly generated JWT secret for development: {JWT_SECRET_KEY[:10]}... "
+        "Set JWT_SECRET_KEY in .env for persistence"
+    )
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
 JWT_ISSUER = "insightmesh"
 
 # Service-to-service authentication tokens
-# These are pre-shared keys for internal service communication
+# SECURITY: Fail fast if SERVICE_TOKEN not set in production
+SERVICE_TOKEN = os.getenv("SERVICE_TOKEN")
+if not SERVICE_TOKEN:
+    env = os.getenv("ENVIRONMENT", "development")
+    if env.lower() in ("production", "prod", "staging"):
+        raise ValueError(
+            "CRITICAL SECURITY: SERVICE_TOKEN must be set in production! "
+            "Generate with: openssl rand -hex 32"
+        )
+    # Development only - use random token
+    import secrets
+    SERVICE_TOKEN = f"dev-{secrets.token_urlsafe(32)}"
+    logger.warning(
+        f"⚠️  Using randomly generated service token for development: {SERVICE_TOKEN[:15]}... "
+        "Set SERVICE_TOKEN in .env for persistence"
+    )
+
+# Legacy service tokens (deprecated - use SERVICE_TOKEN instead)
 SERVICE_TOKENS = {
-    "bot": os.getenv("BOT_SERVICE_TOKEN", "bot-service-token-change-in-production"),
-    "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", "control-plane-token-change-in-production"),
+    "bot": os.getenv("BOT_SERVICE_TOKEN", SERVICE_TOKEN),
+    "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", SERVICE_TOKEN),
 }
 
 

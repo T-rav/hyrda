@@ -21,6 +21,7 @@ async def get_current_user(request: Request) -> dict:
     Dependency to get the current authenticated user.
 
     Proxies auth check to control-plane for centralized session management.
+    Supports both JWT (Authorization header) and session (cookies) auth.
     Use with: Depends(get_current_user)
 
     Returns:
@@ -35,9 +36,16 @@ async def get_current_user(request: Request) -> dict:
     control_plane_url = os.getenv("CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001")
 
     try:
+        # Forward both Authorization header (JWT) and cookies (session)
+        headers = {}
+        auth_header = request.headers.get("Authorization")
+        if auth_header:
+            headers["Authorization"] = auth_header
+
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.get(
                 f"{control_plane_url}/api/users/me",
+                headers=headers,
                 cookies=request.cookies,
                 timeout=5.0
             )

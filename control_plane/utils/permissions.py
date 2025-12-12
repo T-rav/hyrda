@@ -12,7 +12,7 @@ from fastapi import HTTPException, Request
 async def get_current_user(request: Request) -> Any:
     """Get current user from database.
 
-    FastAPI dependency that retrieves the authenticated user from session.
+    FastAPI dependency that retrieves the authenticated user from JWT or session.
 
     Args:
         request: FastAPI Request object
@@ -24,8 +24,12 @@ async def get_current_user(request: Request) -> Any:
         HTTPException: If user is not authenticated or not found
     """
     from models import User, get_db_session
+    from dependencies.auth import get_current_user as get_current_user_auth
 
-    user_email = request.session.get("user_email")
+    # Get user info from JWT or session using auth dependency
+    user_info = await get_current_user_auth(request)
+    user_email = user_info.get("email")
+
     if not user_email:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
@@ -55,9 +59,13 @@ async def require_admin(request: Request) -> None:
     Raises:
         HTTPException: If user is not authenticated or not an admin
     """
-    user = await get_current_user(request)
+    from dependencies.auth import get_current_user as get_current_user_auth
 
-    if not user.is_admin:
+    # Get user info from JWT or session
+    user_info = await get_current_user_auth(request)
+
+    # Check is_admin flag from JWT/session
+    if not user_info.get("is_admin", False):
         raise HTTPException(status_code=403, detail="Admin privileges required")
 
     return None

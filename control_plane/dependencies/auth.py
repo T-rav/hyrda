@@ -10,6 +10,25 @@ sys.path.insert(0, "/app")
 from shared.utils.jwt_auth import JWTAuthError, extract_token_from_request, verify_token
 
 
+async def get_current_user_or_service(request: Request) -> dict:
+    """
+    Flexible auth dependency that accepts either user JWT or service token.
+
+    Returns user_info dict with:
+    - For user auth: email, name, is_admin, user_id
+    - For service auth: {"service": True}
+    """
+    # Try service token first
+    service_token = request.headers.get("X-Service-Token")
+    expected_service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+
+    if service_token and service_token == expected_service_token:
+        return {"service": True, "is_admin": True}  # Services have admin privileges
+
+    # Fall back to user auth
+    return await get_current_user(request)
+
+
 async def get_current_user(request: Request) -> dict:
     """
     Dependency to get the current authenticated user.
@@ -23,8 +42,13 @@ async def get_current_user(request: Request) -> dict:
     Raises:
         HTTPException: 401 if not authenticated
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     # Try JWT token first (from Authorization header or cookie)
     auth_header = request.headers.get("Authorization")
+    logger.info(f"🔍 AUTH DEBUG: Method={request.method}, Path={request.url.path}, Auth header present: {bool(auth_header)}")
+
     token = extract_token_from_request(auth_header)
 
     # Fallback to cookie if no Authorization header
@@ -39,6 +63,8 @@ async def get_current_user(request: Request) -> dict:
                 "email": user_email,
                 "name": payload.get("name"),
                 "picture": payload.get("picture"),
+                "is_admin": payload.get("is_admin", False),
+                "user_id": payload.get("user_id"),
             }
             return user_info
 

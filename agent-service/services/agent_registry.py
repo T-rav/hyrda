@@ -117,10 +117,12 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
         import os
 
         import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
 
-        response = requests.get(f"{control_plane_url}/api/agents", timeout=5)
+        response = requests.get(f"{control_plane_url}/api/agents", timeout=5, verify=False)
         if response.status_code == 200:
             data = response.json()
             agents = data.get("agents", [])

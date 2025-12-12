@@ -50,6 +50,18 @@ class BaseAgent(ABC):
         """
         pass
 
+    async def invoke(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
+        """Invoke agent (alias for run() for compatibility).
+
+        Args:
+            query: User query text
+            context: Context dict
+
+        Returns:
+            Result dict with response and metadata
+        """
+        return await self.run(query, context)
+
     def validate_context(self, context: dict[str, Any]) -> bool:
         """Validate required context fields.
 
