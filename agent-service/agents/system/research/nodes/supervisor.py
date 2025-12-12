@@ -49,6 +49,40 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
 
     logger.info(f"Supervisor iteration {research_iterations}, {len(completed_tasks)}/{len(research_tasks)} tasks complete")
 
+    # Safety limits to prevent infinite loops
+    MAX_ITERATIONS = 30  # Hard limit to prevent runaway execution
+    HIGH_PRIORITY_THRESHOLD = 0.8  # If 80% of HIGH tasks done, can complete
+
+    # Check iteration limit
+    if research_iterations >= MAX_ITERATIONS:
+        logger.warning(f"Reached maximum iterations ({MAX_ITERATIONS}), forcing completion")
+        return Command(
+            goto=END,
+            update={"supervisor_messages": state.get("supervisor_messages", [])},
+        )
+
+    # Auto-complete if sufficient research done
+    high_priority_tasks = [t for t in research_tasks if t.priority == "HIGH"]
+    high_priority_completed = [t for t in completed_tasks if t.priority == "HIGH"]
+
+    if high_priority_tasks:
+        completion_rate = len(high_priority_completed) / len(high_priority_tasks)
+        if completion_rate >= HIGH_PRIORITY_THRESHOLD and len(completed_tasks) >= 10:
+            logger.info(f"Auto-completing: {completion_rate:.0%} of HIGH priority tasks done, {len(completed_tasks)} total completed")
+            return Command(
+                goto=END,
+                update={"supervisor_messages": state.get("supervisor_messages", [])},
+            )
+
+    # Check if all pending tasks are done
+    pending_tasks = [t for t in research_tasks if t.status == "pending"]
+    if not pending_tasks and research_iterations > 0:
+        logger.info("All tasks completed, ending supervision")
+        return Command(
+            goto=END,
+            update={"supervisor_messages": state.get("supervisor_messages", [])},
+        )
+
     # Get LLM configuration
     settings = await asyncio.to_thread(Settings)
 

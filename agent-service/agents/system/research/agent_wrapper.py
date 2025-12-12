@@ -85,20 +85,27 @@ class ResearchAgentWrapper:
         if context.get("thread_ts"):
             config["configurable"] = {"thread_id": context["thread_ts"]}
 
-        # Stream graph execution
+        # Stream graph execution and track final state
+        final_state = {}
         try:
             async for event in self.graph.astream(initial_state, config):
                 # event is a dict: {node_name: output_state}
                 for node_name, output in event.items():
+                    # Track final state
+                    final_state = output
+
                     # Format update based on node
                     update = self._format_node_update(node_name, output)
                     if update:
                         yield update
 
-            # Final summary with PDF link
-            # Get final state
-            final_state = await self.graph.ainvoke(initial_state, config)
+            # Final summary with PDF link (extracted from last state)
             pdf_url = final_state.get("pdf_url", "")
+            executive_summary = final_state.get("executive_summary", "")
+
+            if executive_summary:
+                yield f"\n\n## Executive Summary\n\n{executive_summary}"
+
             if pdf_url:
                 yield f"\n\n📎 **Download Full Report:** {pdf_url}"
 
