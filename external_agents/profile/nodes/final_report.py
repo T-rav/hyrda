@@ -19,7 +19,7 @@ from ..utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
-from services.prompt_service import get_prompt_service
+from .services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 

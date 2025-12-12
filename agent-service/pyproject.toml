@@ -40,6 +40,7 @@ dependencies = [
 
     # Caching
     "redis>=5.0.0",
+    "boto3>=1.34.0",  # S3/MinIO client for file caching
 
     # JWT authentication
     "PyJWT>=2.8.0",

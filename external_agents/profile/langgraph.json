@@ -1,7 +1,0 @@
-{
-  "dependencies": ["."],
-  "graphs": {
-    "profile_researcher": "./profile_researcher.py:profile_researcher"
-  },
-  "env": ".env"
-}

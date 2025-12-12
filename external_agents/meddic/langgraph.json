@@ -1,7 +1,0 @@
-{
-  "dependencies": ["."],
-  "graphs": {
-    "meddpicc_coach": "./meddpicc_coach.py:meddpicc_coach"
-  },
-  "env": ".env"
-}

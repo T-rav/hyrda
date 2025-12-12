@@ -15,13 +15,13 @@ _agent_classes: dict[str, type] = {}
 
 
 def _load_agent_classes() -> dict[str, type]:
-    """Load agent classes from external agents directory only.
+    """Load agent classes from both system and external directories.
 
-    All agents (including profile, meddic) are now external and client-customizable.
-    The Docker image ships with NO bundled agents - clients mount their agents directory.
+    System agents: LangGraph workflows baked into image (agents/system/)
+    External agents: Client-customizable workflows from volume mounts
 
     Returns:
-        Dict mapping agent names to agent classes
+        Dict mapping agent names to agent classes/instances
     """
     global _agent_classes
 
@@ -30,27 +30,49 @@ def _load_agent_classes() -> dict[str, type]:
 
     all_agents = {}
 
-    # Load external agents (client-provided) - this is the ONLY source now
+    # Load system agents first (shipped with framework)
     try:
-        from services.external_agent_loader import get_external_loader
+        from services.system_agent_loader import get_system_loader
 
-        external_loader = get_external_loader()
-        external_agents = external_loader.discover_agents()
+        system_loader = get_system_loader()
+        system_agents = system_loader.discover_agents()
 
-        for name, agent_class in external_agents.items():
+        for name, agent_class in system_agents.items():
             all_agents[name.lower()] = agent_class
 
-        if external_agents:
-            logger.info(f"✅ Loaded {len(external_agents)} agent(s) from external directory")
-        else:
-            logger.warning(
-                "⚠️ No agents loaded! Ensure EXTERNAL_AGENTS_PATH is set and agents directory is mounted"
-            )
+        if system_agents:
+            logger.info(f"✅ Loaded {len(system_agents)} system agent(s) from agents/system/")
     except Exception as e:
-        logger.error(f"❌ Error loading external agents: {e}", exc_info=True)
+        logger.error(f"❌ Error loading system agents: {e}", exc_info=True)
+
+    # Load external agents (client-provided, can override system agents)
+    # Skip if EXTERNAL_AGENTS_IN_CLOUD=true (agents deployed to LangGraph Cloud)
+    import os
+    load_external = os.getenv("LOAD_EXTERNAL_AGENTS", "true").lower() == "true"
+
+    if load_external:
+        try:
+            from services.external_agent_loader import get_external_loader
+
+            external_loader = get_external_loader()
+            external_agents = external_loader.discover_agents()
+
+            for name, agent_class in external_agents.items():
+                all_agents[name.lower()] = agent_class
+
+            if external_agents:
+                logger.info(f"✅ Loaded {len(external_agents)} external agent(s) from volume mount")
+            else:
+                logger.warning(
+                    "⚠️ No external agents loaded (EXTERNAL_AGENTS_PATH not set or empty)"
+                )
+        except Exception as e:
+            logger.error(f"❌ Error loading external agents: {e}", exc_info=True)
+    else:
+        logger.info("⏭️ Skipping external agents (LOAD_EXTERNAL_AGENTS=false - deployed to cloud)")
 
     _agent_classes = all_agents
-    logger.info(f"📦 Total agents available: {len(_agent_classes)}")
+    logger.info(f"📦 Total agents available: {len(_agent_classes)} (system + external)")
     return _agent_classes
 
 

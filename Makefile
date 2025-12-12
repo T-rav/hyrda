@@ -669,3 +669,8 @@ test-behaviors: $(VENV)
 
 # Help for test targets
 .PHONY: test-behaviors
+
+# LangGraph Studio - Automatic agent discovery and launch
+langgraph-studio:
+	@echo "$(BLUE)🔍 Discovering agents and starting LangGraph Studio...$(RESET)"
+	@./start_langgraph_studio.sh

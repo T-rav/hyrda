@@ -40,7 +40,7 @@ async def scrape_urls(urls: list[str]) -> tuple[str, list[str]]:
     Returns:
         Tuple of (scraped_content, successful_sources)
     """
-    from services.search_clients import get_tavily_client
+    from .services.search_clients import get_tavily_client
 
     tavily_client = get_tavily_client()
 

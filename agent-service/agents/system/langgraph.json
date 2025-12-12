@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "../../",
+    "../../../"
+  ],
+  "graphs": {
+    "research": "agents.system.research.research_agent:research_agent"
+  },
+  "env": "../../../.env"
+}

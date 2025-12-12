@@ -11,9 +11,9 @@ from typing import Any
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
-from .services.sec_cache import SECFilingsCache
-from .services.sec_on_demand import SECOnDemandFetcher
-from .services.sec_vector_search import SECInMemoryVectorSearch
+from ..services.sec_cache import SECFilingsCache
+from ..services.sec_on_demand import SECOnDemandFetcher
+from ..services.sec_vector_search import SECInMemoryVectorSearch
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +197,7 @@ class SECQueryTool(BaseTool):
                         filing_groups[filing_key].append((chunk, metadata))
 
                     # Process each filing group together
-                    for filing_key, chunk_list in filing_groups.items():
+                    for _filing_key, chunk_list in filing_groups.items():
                         chunks = [chunk for chunk, _ in chunk_list]
                         # Use first chunk's metadata as base (chunk_index will be recalculated)
                         base_metadata = chunk_list[0][1].copy()

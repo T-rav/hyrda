@@ -576,44 +576,104 @@ async def handle_bot_command(
         from services.agent_client import get_agent_client
 
         agent_client = get_agent_client()
-        result = await agent_client.invoke_agent(primary_name, query, context)
-        response = result.get("response", "No response from agent")
-        metadata = result.get("metadata", {})
 
-        # Track this thread for future continuity (if we have a thread_ts)
-        # Agent tracking and LangGraph checkpointing use SAME thread_id (thread_ts)
-        # But allow agents to opt-out of tracking via metadata
-        if thread_ts and primary_name:
-            # Check if agent wants to auto-clear after completion
-            if metadata.get("clear_thread_tracking", False):
-                await _thread_tracking.clear_thread(thread_ts)
-                logger.info(
-                    f"🔓 Cleared both agent tracking AND LangGraph checkpoint for thread {thread_ts}"
+        # Use streaming for research agent to show real-time progress
+        if primary_name == "research":
+            logger.info("Using streaming execution for research agent")
+
+            # Clean up thinking message before streaming starts
+            if thinking_message_ts:
+                try:
+                    await slack_service.delete_thinking_indicator(
+                        channel, thinking_message_ts
+                    )
+                except Exception as e:
+                    logger.warning(f"Error deleting thinking message: {e}")
+
+            # Stream updates to Slack in real-time
+            full_response = ""
+            message_ts = None
+
+            try:
+                async for chunk in agent_client.stream_agent(
+                    primary_name, query, context
+                ):
+                    full_response += chunk + "\n"
+
+                    # Post or update message in Slack
+                    if message_ts:
+                        # Update existing message
+                        await slack_service.update_message(
+                            channel=channel,
+                            ts=message_ts,
+                            text=full_response,
+                        )
+                    else:
+                        # Post initial message
+                        result = await slack_service.send_message(
+                            channel=channel,
+                            text=full_response,
+                            thread_ts=thread_ts,
+                        )
+                        message_ts = result.get("ts") if result else None
+
+            except Exception as stream_error:
+                logger.error(f"Streaming error: {stream_error}")
+                await slack_service.send_message(
+                    channel=channel,
+                    text=f"❌ Research agent error: {str(stream_error)}",
+                    thread_ts=thread_ts,
+                )
+
+            # Track thread
+            if thread_ts and primary_name:
+                await _thread_tracking.track_thread(thread_ts, primary_name)
+
+            response = full_response
+            metadata = {}
+
+        else:
+            # Non-streaming execution for other agents
+            result = await agent_client.invoke_agent(primary_name, query, context)
+            response = result.get("response", "No response from agent")
+            metadata = result.get("metadata", {})
+
+            # Track this thread for future continuity (if we have a thread_ts)
+            # Agent tracking and LangGraph checkpointing use SAME thread_id (thread_ts)
+            # But allow agents to opt-out of tracking via metadata
+            if thread_ts and primary_name:
+                # Check if agent wants to auto-clear after completion
+                if metadata.get("clear_thread_tracking", False):
+                    await _thread_tracking.clear_thread(thread_ts)
+                    logger.info(
+                        f"🔓 Cleared both agent tracking AND LangGraph checkpoint for thread {thread_ts}"
+                    )
+                else:
+                    await _thread_tracking.track_thread(thread_ts, primary_name)
+                    logger.info(
+                        f"📌 Thread {thread_ts} tracked for agent '{primary_name}' (both Redis + LangGraph checkpoint)"
+                    )
+
+            # Clean up thinking message
+            if thinking_message_ts:
+                try:
+                    await slack_service.delete_thinking_indicator(
+                        channel, thinking_message_ts
+                    )
+                except Exception as e:
+                    logger.warning(f"Error deleting thinking message: {e}")
+
+            # Format and send response (only if non-empty)
+            # Agent may return empty response if it already posted the message (e.g., PDF upload with summary)
+            if response:
+                formatted_response = await MessageFormatter.format_message(response)
+                await slack_service.send_message(
+                    channel=channel, text=formatted_response, thread_ts=thread_ts
                 )
             else:
-                await _thread_tracking.track_thread(thread_ts, primary_name)
                 logger.info(
-                    f"📌 Thread {thread_ts} tracked for agent '{primary_name}' (both Redis + LangGraph checkpoint)"
+                    "Agent returned empty response (likely already posted message)"
                 )
-
-        # Clean up thinking message
-        if thinking_message_ts:
-            try:
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-            except Exception as e:
-                logger.warning(f"Error deleting thinking message: {e}")
-
-        # Format and send response (only if non-empty)
-        # Agent may return empty response if it already posted the message (e.g., PDF upload with summary)
-        if response:
-            formatted_response = await MessageFormatter.format_message(response)
-            await slack_service.send_message(
-                channel=channel, text=formatted_response, thread_ts=thread_ts
-            )
-        else:
-            logger.info("Agent returned empty response (likely already posted message)")
 
         # Record agent conversation turn in Langfuse for lifetime stats
         langfuse_service = get_langfuse_service()

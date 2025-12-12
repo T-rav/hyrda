@@ -358,6 +358,62 @@ class AgentClient:
             logger.error(f"Error listing agents: {e}", exc_info=True)
             raise AgentClientError(f"Failed to list agents: {str(e)}") from e
 
+    async def stream_agent(self, agent_name: str, query: str, context: AgentContext):
+        """Stream agent execution with real-time updates.
+
+        Args:
+            agent_name: Name of agent to invoke
+            query: User query
+            context: Context dictionary for agent
+
+        Yields:
+            String updates from agent execution
+
+        Raises:
+            AgentClientError: If agent execution fails
+        """
+        url = f"{self.base_url}/api/agents/{agent_name}/stream"
+        logger.info(f"Streaming agent-service: {url}")
+
+        # Serialize context
+        serializable_context = self._prepare_context(context)
+
+        # Prepare request body
+        request_body = {"query": query, "context": serializable_context}
+
+        try:
+            # Prepare headers
+            headers = {"X-Service-Token": self.service_token}
+            headers = add_trace_id_to_headers(headers)
+            headers = add_otel_headers(headers)
+
+            client = await self._get_client()
+
+            # Stream response using Server-Sent Events
+            async with client.stream(
+                "POST",
+                url,
+                json=request_body,
+                headers=headers,
+                timeout=300.0,  # 5 minute timeout for streaming
+            ) as response:
+                if response.status_code != 200:
+                    error_text = await response.aread()
+                    raise AgentClientError(
+                        f"Agent stream failed: {response.status_code} - {error_text.decode()}"
+                    )
+
+                # Read SSE stream
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        chunk = line[6:]  # Strip "data: " prefix
+                        if chunk and not chunk.startswith("ERROR"):
+                            yield chunk
+
+        except Exception as e:
+            logger.error(f"Error streaming agent '{agent_name}': {e}", exc_info=True)
+            raise AgentClientError(f"Failed to stream agent: {str(e)}") from e
+
     def get_circuit_breaker_status(self) -> CircuitBreakerStatus:
         """Get current circuit breaker status for monitoring.
 

@@ -1,8 +1,11 @@
 {
-  "dependencies": ["."],
+  "dependencies": [
+    "../",
+    "../bot"
+  ],
   "graphs": {
-    "meddic": "./meddic/meddpicc_coach.py:meddpicc_coach",
-    "profile": "./profile/profile_researcher.py:profile_researcher"
+    "meddic": "external_agents.meddic.meddpicc_coach:meddpicc_coach",
+    "profile": "external_agents.profile.profile_researcher:profile_researcher"
   },
-  "env": ".env"
+  "env": "../.env"
 }
