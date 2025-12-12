@@ -129,12 +129,23 @@ class AppFactory:
 @pytest.mark.skip(
     reason="Integration tests for OLD ARCHITECTURE (pre-microservices). "
     "These test app.py with LLMService directly, but new architecture uses rag-service via HTTP. "
-    "TODO: Rewrite integration tests for microservices architecture."
+    "\n\n"
+    "✅ NEW MICROSERVICES INTEGRATION TESTS: See test_integration_microservices.py\n"
+    "   Tests cover:\n"
+    "   - Bot → RAG Service HTTP communication\n"
+    "   - Bot → Agent Service HTTP communication\n"
+    "   - Service health checks\n"
+    "   - End-to-end message flows\n"
+    "   - Error handling across services\n"
+    "   - Cross-service authentication\n"
+    "\n"
+    "Run with: pytest -v -m integration tests/test_integration_microservices.py"
 )
-class TestIntegration:
-    """Integration tests for the complete system
+class TestIntegrationLegacy:
+    """Integration tests for the OLD pre-microservices architecture.
 
-    NOTE: These tests are for OLD ARCHITECTURE and need to be rewritten for microservices.
+    DEPRECATED: These tests are kept for reference only.
+    Use test_integration_microservices.py for current architecture testing.
     """
 
     @pytest.mark.asyncio
