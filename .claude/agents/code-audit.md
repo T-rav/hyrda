@@ -475,6 +475,647 @@ logger.info(
 )
 ```
 
+---
+
+### 11. Performance Patterns (NEW)
+
+**Critical - N+1 Query Problem:**
+```python
+# ❌ CRITICAL - N+1 query (fetches user for each post)
+def get_user_posts(user_id: int) -> list[dict]:
+    posts = Post.query.filter_by(user_id=user_id).all()
+    for post in posts:
+        post.author = User.query.get(post.author_id)  # N queries!
+    return posts
+
+# ✅ GOOD - Eager loading (1 query with join)
+def get_user_posts(user_id: int) -> list[dict]:
+    posts = Post.query.filter_by(user_id=user_id).options(
+        joinedload(Post.author)  # Load author in same query
+    ).all()
+    return posts
+
+# ✅ BETTER - Explicit join for complex queries
+def get_user_posts(user_id: int) -> list[dict]:
+    posts = session.query(Post).join(User).filter(
+        Post.user_id == user_id
+    ).all()
+    return posts
+```
+
+**Critical - Inefficient Algorithms:**
+```python
+# ❌ CRITICAL - O(n²) list concatenation
+def process_items(items: list[str]) -> list[str]:
+    result = []
+    for item in items:
+        result = result + [item]  # Creates new list each time!
+    return result
+
+# ✅ GOOD - O(n) append
+def process_items(items: list[str]) -> list[str]:
+    result = []
+    for item in items:
+        result.append(item)  # In-place modification
+    return result
+
+# ✅ BETTER - List comprehension (fastest)
+def process_items(items: list[str]) -> list[str]:
+    return [process(item) for item in items]
+
+# ❌ CRITICAL - Repeated expensive operations
+def find_users(user_ids: list[int]) -> list[User]:
+    users = []
+    for user_id in user_ids:
+        user = User.query.get(user_id)  # N queries!
+        users.append(user)
+    return users
+
+# ✅ GOOD - Single query with IN clause
+def find_users(user_ids: list[int]) -> list[User]:
+    return User.query.filter(User.id.in_(user_ids)).all()
+```
+
+**High - Inefficient String Operations:**
+```python
+# ❌ HIGH - String concatenation in loop
+def build_report(items: list[str]) -> str:
+    report = ""
+    for item in items:
+        report += f"- {item}\n"  # Creates new string each iteration
+    return report
+
+# ✅ GOOD - Join (O(n) instead of O(n²))
+def build_report(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items)
+
+# ✅ GOOD - StringIO for large outputs
+from io import StringIO
+
+def build_large_report(items: list[str]) -> str:
+    buffer = StringIO()
+    for item in items:
+        buffer.write(f"- {item}\n")
+    return buffer.getvalue()
+```
+
+**Medium - Missing Database Indexes:**
+```python
+# ❌ MEDIUM - Full table scan on frequently queried column
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255))  # No index, but frequently queried!
+
+# Query is slow:
+user = User.query.filter_by(email=email).first()  # Table scan!
+
+# ✅ GOOD - Add index on frequently queried columns
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), index=True)  # Index for fast lookups
+
+# ✅ BETTER - Unique index if appropriate
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True, index=True)
+```
+
+**Detection Patterns:**
+```python
+# CRITICAL severity
+- ORM queries inside loops (User.query.get in for loop)
+- result = result + [item] pattern (list concatenation in loop)
+- Nested loops with O(n²) or worse complexity
+
+# HIGH severity
+- String concatenation in loops (str += str)
+- Multiple separate queries that could be joined
+- Missing .options(joinedload()) on relationships
+
+# MEDIUM severity
+- No index on frequently filtered columns
+- Inefficient sorting (manual sort vs database ORDER BY)
+- Loading entire table when only subset needed (.all() without filter)
+
+# Detection Commands:
+grep -r "\.query\.get\|\.query\.filter" --include="*.py" -A5 -B5 | grep "for "
+grep -r "result.*=.*result.*+" --include="*.py"
+grep -r "Column(" --include="*.py" | grep -v "index=True"
+```
+
+---
+
+### 12. Concurrency Safety (NEW)
+
+**Critical - Race Conditions:**
+```python
+# ❌ CRITICAL - Race condition (shared state without lock)
+class Counter:
+    def __init__(self):
+        self.count = 0
+
+    async def increment(self):
+        # Multiple coroutines can read same value
+        self.count += 1  # Not atomic!
+
+# ✅ GOOD - asyncio.Lock for shared state
+class Counter:
+    def __init__(self):
+        self.count = 0
+        self._lock = asyncio.Lock()
+
+    async def increment(self):
+        async with self._lock:
+            self.count += 1  # Protected by lock
+
+# ✅ BETTER - Thread-safe primitives
+from threading import Lock
+
+class Counter:
+    def __init__(self):
+        self.count = 0
+        self._lock = Lock()
+
+    def increment(self):
+        with self._lock:
+            self.count += 1
+```
+
+**Critical - Async/Await Misuse:**
+```python
+# ❌ CRITICAL - Blocking call in async function
+async def process_data():
+    data = requests.get("https://api.example.com/data")  # Blocks event loop!
+    return data.json()
+
+# ✅ GOOD - Use async HTTP client
+import httpx
+
+async def process_data():
+    async with httpx.AsyncClient() as client:
+        response = await client.get("https://api.example.com/data")
+        return response.json()
+
+# ❌ CRITICAL - Missing await
+async def save_user(user):
+    update_database(user)  # Should be: await update_database(user)
+    # Continues without waiting for database write!
+
+# ✅ GOOD - Always await async calls
+async def save_user(user):
+    await update_database(user)  # Wait for completion
+```
+
+**High - Deadlock Risk:**
+```python
+# ❌ HIGH - Potential deadlock (inconsistent lock ordering)
+class BankAccount:
+    def __init__(self):
+        self._lock = asyncio.Lock()
+        self.balance = 0
+
+async def transfer(from_account, to_account, amount):
+    async with from_account._lock:  # Lock A
+        async with to_account._lock:  # Lock B
+            from_account.balance -= amount
+            to_account.balance += amount
+
+# If two transfers happen simultaneously in opposite directions:
+# Transfer 1: A → B (locks A, then tries B)
+# Transfer 2: B → A (locks B, then tries A)
+# Deadlock!
+
+# ✅ GOOD - Consistent lock ordering
+async def transfer(from_account, to_account, amount):
+    # Always lock in same order (by ID)
+    accounts = sorted([from_account, to_account], key=lambda a: a.id)
+    async with accounts[0]._lock:
+        async with accounts[1]._lock:
+            from_account.balance -= amount
+            to_account.balance += amount
+```
+
+**Medium - Event Loop Blocking:**
+```python
+# ❌ MEDIUM - CPU-intensive work in async function
+async def process_large_file():
+    with open("large.csv") as f:
+        data = f.read()  # Blocks!
+        # CPU-intensive parsing
+        for line in data.split('\n'):
+            process_line(line)  # Blocks event loop!
+
+# ✅ GOOD - Use run_in_executor for blocking I/O
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+async def process_large_file():
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as executor:
+        data = await loop.run_in_executor(executor, read_file, "large.csv")
+        # Or use ProcessPoolExecutor for CPU-intensive work
+        result = await loop.run_in_executor(executor, process_data, data)
+    return result
+
+# ✅ BETTER - Use aiofiles for async file I/O
+import aiofiles
+
+async def process_large_file():
+    async with aiofiles.open("large.csv", mode='r') as f:
+        data = await f.read()
+    # Process in chunks to avoid blocking
+    return process_data(data)
+```
+
+**Detection Patterns:**
+```python
+# CRITICAL severity
+- Shared mutable state (class attributes, instance vars) modified in async methods without locks
+- Blocking calls in async functions (requests.get, time.sleep, open() without executor)
+- Missing await on async function calls
+
+# HIGH severity
+- Multiple locks acquired in inconsistent order
+- No timeout on lock acquisition (can hang forever)
+- Using threading.Lock in asyncio code (use asyncio.Lock)
+
+# MEDIUM severity
+- CPU-intensive work in async functions without run_in_executor
+- Synchronous file I/O in async functions
+- Large in-memory operations blocking event loop
+
+# Detection Commands:
+grep -r "async def" --include="*.py" -A10 | grep "requests\.\|time\.sleep\|open("
+grep -r "self\.[a-z_]*\s*=" --include="*.py" | grep "async def" -B5
+grep -r "async def.*:$" --include="*.py" -A10 | grep -v "await "
+```
+
+---
+
+### 13. Resource Management (NEW)
+
+**Critical - Memory Leaks:**
+```python
+# ❌ CRITICAL - Unbounded cache (memory leak)
+class CacheService:
+    def __init__(self):
+        self.cache = {}  # Grows forever!
+
+    def set(self, key, value):
+        self.cache[key] = value  # Never evicts old entries
+
+# ✅ GOOD - Size-limited cache with LRU eviction
+from functools import lru_cache
+from cachetools import LRUCache
+
+class CacheService:
+    def __init__(self, max_size=1000):
+        self.cache = LRUCache(maxsize=max_size)  # Evicts LRU when full
+
+    def set(self, key, value):
+        self.cache[key] = value
+
+# ✅ BETTER - TTL + size limits
+from cachetools import TTLCache
+
+class CacheService:
+    def __init__(self):
+        self.cache = TTLCache(maxsize=1000, ttl=3600)  # 1 hour TTL
+```
+
+**Critical - Unclosed Resources:**
+```python
+# ❌ CRITICAL - File never closed (resource leak)
+def read_config():
+    f = open("config.json")
+    data = json.load(f)
+    return data  # File handle leaks if exception occurs
+
+# ✅ GOOD - Context manager ensures cleanup
+def read_config():
+    with open("config.json") as f:
+        data = json.load(f)
+    return data
+
+# ❌ CRITICAL - Database connection not closed
+def get_users():
+    conn = psycopg2.connect(DATABASE_URL)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users")
+    return cursor.fetchall()  # Connection leaks!
+
+# ✅ GOOD - Use context manager
+def get_users():
+    with psycopg2.connect(DATABASE_URL) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users")
+            return cursor.fetchall()
+
+# ✅ BETTER - Use connection pool
+from sqlalchemy import create_engine
+
+engine = create_engine(DATABASE_URL, pool_size=10)
+
+def get_users():
+    with engine.connect() as conn:
+        result = conn.execute("SELECT * FROM users")
+        return result.fetchall()
+```
+
+**High - Circular References:**
+```python
+# ❌ HIGH - Circular reference (prevents garbage collection)
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.parent = None
+        self.children = []
+
+    def add_child(self, child):
+        self.children.append(child)
+        child.parent = self  # Circular reference!
+
+# Memory isn't freed even when tree is no longer referenced
+
+# ✅ GOOD - Use weakref to break cycle
+import weakref
+
+class Node:
+    def __init__(self, value):
+        self.value = value
+        self.parent = None  # Will be weak reference
+        self.children = []
+
+    def add_child(self, child):
+        self.children.append(child)
+        child.parent = weakref.ref(self)  # Weak reference
+
+    def get_parent(self):
+        return self.parent() if self.parent else None
+```
+
+**Medium - Large Object Retention:**
+```python
+# ❌ MEDIUM - Retaining large objects unnecessarily
+class DataProcessor:
+    def __init__(self):
+        self.raw_data = None  # Retained after processing!
+
+    def process_file(self, filename):
+        with open(filename) as f:
+            self.raw_data = f.read()  # 100MB file
+
+        result = self._process(self.raw_data)
+        return result  # raw_data still in memory!
+
+# ✅ GOOD - Release large objects when done
+class DataProcessor:
+    def process_file(self, filename):
+        with open(filename) as f:
+            raw_data = f.read()
+
+        result = self._process(raw_data)
+        del raw_data  # Explicit cleanup
+        return result
+
+# ✅ BETTER - Process in chunks
+class DataProcessor:
+    def process_file(self, filename):
+        result = []
+        with open(filename) as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), ''):  # 1MB chunks
+                result.append(self._process_chunk(chunk))
+        return result
+```
+
+**Medium - Resource Pool Exhaustion:**
+```python
+# ❌ MEDIUM - Connection pool exhaustion
+from sqlalchemy import create_engine
+
+# Default pool_size=5, max_overflow=10
+engine = create_engine(DATABASE_URL)
+
+def get_all_users():
+    connections = []
+    for i in range(20):  # Opens 20 connections!
+        conn = engine.connect()
+        connections.append(conn)
+    # Pool exhausted, other requests block
+
+# ✅ GOOD - Proper connection management
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=10,
+    max_overflow=5,
+    pool_timeout=30,
+    pool_recycle=3600
+)
+
+def get_all_users():
+    with engine.connect() as conn:  # Returns to pool when done
+        return conn.execute("SELECT * FROM users").fetchall()
+```
+
+**Detection Patterns:**
+```python
+# CRITICAL severity
+- open() without context manager or .close()
+- Database connections without context manager
+- Unbounded dict/list used as cache (no size limit)
+- HTTP clients created but never closed
+
+# HIGH severity
+- Circular references without weakref
+- Large objects stored as instance attributes
+- Missing __del__ or cleanup methods for resources
+
+# MEDIUM severity
+- Connection pool exhaustion (many connections opened)
+- Files read entirely into memory (no streaming)
+- Response objects not closed after use
+
+# Detection Commands:
+grep -r "open(" --include="*.py" | grep -v "with "
+grep -r "\.connect(" --include="*.py" | grep -v "with "
+grep -r "self\.[a-z_]*\s*=\s*{}" --include="*.py"
+grep -r "self\.[a-z_]*\s*=\s*\[\]" --include="*.py" | grep -v "__init__"
+```
+
+---
+
+### 14. Code Duplication (NEW)
+
+**High - Repeated Logic:**
+```python
+# ❌ HIGH - Same validation logic repeated
+def create_user(email: str, name: str) -> User:
+    if not email or '@' not in email:
+        raise ValueError("Invalid email")
+    if not name or len(name) < 2:
+        raise ValueError("Invalid name")
+    return User(email=email, name=name)
+
+def update_user(user_id: int, email: str, name: str) -> User:
+    if not email or '@' not in email:  # Duplicated!
+        raise ValueError("Invalid email")
+    if not name or len(name) < 2:  # Duplicated!
+        raise ValueError("Invalid name")
+    user = User.query.get(user_id)
+    user.email = email
+    user.name = name
+    return user
+
+# ✅ GOOD - Extract validation
+def validate_email(email: str) -> None:
+    if not email or '@' not in email:
+        raise ValueError("Invalid email")
+
+def validate_name(name: str) -> None:
+    if not name or len(name) < 2:
+        raise ValueError("Invalid name")
+
+def create_user(email: str, name: str) -> User:
+    validate_email(email)
+    validate_name(name)
+    return User(email=email, name=name)
+
+def update_user(user_id: int, email: str, name: str) -> User:
+    validate_email(email)
+    validate_name(name)
+    user = User.query.get(user_id)
+    user.email = email
+    user.name = name
+    return user
+
+# ✅ BETTER - Use Pydantic for validation
+from pydantic import BaseModel, EmailStr, constr
+
+class UserInput(BaseModel):
+    email: EmailStr  # Built-in email validation
+    name: constr(min_length=2)  # Name validation
+
+def create_user(data: UserInput) -> User:
+    return User(email=data.email, name=data.name)
+```
+
+**High - Similar Functions:**
+```python
+# ❌ HIGH - Nearly identical functions (copy-paste)
+def get_user_by_id(user_id: int) -> User | None:
+    user = User.query.filter_by(id=user_id).first()
+    if not user:
+        logger.warning(f"User not found: {user_id}")
+        return None
+    return user
+
+def get_post_by_id(post_id: int) -> Post | None:
+    post = Post.query.filter_by(id=post_id).first()
+    if not post:
+        logger.warning(f"Post not found: {post_id}")
+        return None
+    return post
+
+def get_comment_by_id(comment_id: int) -> Comment | None:
+    comment = Comment.query.filter_by(id=comment_id).first()
+    if not comment:
+        logger.warning(f"Comment not found: {comment_id}")
+        return None
+    return comment
+
+# ✅ GOOD - Generic function with type parameter
+from typing import TypeVar, Type
+
+T = TypeVar('T')
+
+def get_by_id(model: Type[T], id: int) -> T | None:
+    instance = model.query.filter_by(id=id).first()
+    if not instance:
+        logger.warning(f"{model.__name__} not found: {id}")
+        return None
+    return instance
+
+# Usage:
+user = get_by_id(User, user_id)
+post = get_by_id(Post, post_id)
+comment = get_by_id(Comment, comment_id)
+```
+
+**Medium - Repeated Patterns:**
+```python
+# ❌ MEDIUM - Same error handling repeated
+def process_user_data(user_id: int):
+    try:
+        user = get_user(user_id)
+        result = process(user)
+        return {"status": "success", "data": result}
+    except Exception as e:
+        logger.error(f"Error processing user: {e}")
+        return {"status": "error", "message": str(e)}
+
+def process_post_data(post_id: int):
+    try:
+        post = get_post(post_id)
+        result = process(post)
+        return {"status": "success", "data": result}
+    except Exception as e:  # Same pattern!
+        logger.error(f"Error processing post: {e}")
+        return {"status": "error", "message": str(e)}
+
+# ✅ GOOD - Decorator for error handling
+from functools import wraps
+
+def handle_errors(entity_name: str):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                return {"status": "success", "data": result}
+            except Exception as e:
+                logger.error(f"Error processing {entity_name}: {e}")
+                return {"status": "error", "message": str(e)}
+        return wrapper
+    return decorator
+
+@handle_errors("user")
+def process_user_data(user_id: int):
+    user = get_user(user_id)
+    return process(user)
+
+@handle_errors("post")
+def process_post_data(post_id: int):
+    post = get_post(post_id)
+    return process(post)
+```
+
+**Detection Patterns:**
+```python
+# HIGH severity
+- Functions with >70% similar code (structural similarity)
+- Validation logic repeated across multiple functions
+- Same try/except pattern in multiple functions
+
+# MEDIUM severity
+- Similar function names with incremental numbers (func1, func2, func3)
+- Repeated conditional patterns
+- Copy-paste errors (wrong variable names in duplicated code)
+
+# LOW severity
+- Similar but intentionally different logic
+- Domain-specific duplicates (different business rules)
+
+# Detection Commands:
+# Use tools like pylint with duplicate-code checker
+pylint --disable=all --enable=duplicate-code **/*.py
+
+# Or simjava/simian for similarity detection
+# Or manual inspection of similar-looking functions
+```
+
 ## Anti-Patterns to Detect
 
 ### 1. Mutable Default Arguments

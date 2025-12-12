@@ -183,6 +183,617 @@ def mock_settings():
 - Tests can call factory directly if they need customization
 - Session-scoped fixtures for expensive setup
 
+---
+
+### 7. Test Coverage Analysis (NEW)
+
+**Critical - Untested Code Paths:**
+```python
+# ❌ CRITICAL - Critical function with no tests
+# File: bot/services/payment_processor.py
+def process_payment(user_id: int, amount: float, card_token: str) -> dict:
+    """Process payment for user."""
+    charge = stripe.Charge.create(
+        amount=int(amount * 100),
+        currency="usd",
+        source=card_token
+    )
+
+    user = User.query.get(user_id)
+    user.balance += amount
+    user.save()
+
+    send_receipt_email(user.email, charge.id)
+    return {"status": "success", "charge_id": charge.id}
+
+# No tests found for this function!
+# Missing tests for:
+# - Happy path (successful payment)
+# - Error cases (invalid card, insufficient funds, stripe API error)
+# - Edge cases (negative amount, non-existent user, amount = 0)
+# - Side effects (user balance updated, email sent)
+```
+
+**How to detect:**
+```bash
+# Generate coverage report
+pytest --cov=bot --cov-report=term-missing
+
+# Find functions/files with <70% coverage
+pytest --cov=bot --cov-report=html
+# Open htmlcov/index.html and find files in red
+
+# Analyze specific module
+pytest --cov=bot.services.payment_processor --cov-report=term-missing
+```
+
+**High - Missing Edge Case Tests:**
+```python
+# ✅ GOOD - Has happy path test
+def test_divide_positive_numbers():
+    assert divide(10, 2) == 5
+
+# ❌ MISSING - No edge case tests
+# Missing tests for:
+# - divide(10, 0) → Should raise ValueError
+# - divide(0, 10) → Should return 0
+# - divide(-10, 2) → Should return -5
+# - divide(10, -2) → Should return -5
+# - divide(1, 3) → Should handle float precision
+```
+
+**Medium - Untested Error Paths:**
+```python
+# Production code
+def get_user(user_id: int) -> User:
+    user = User.query.get(user_id)
+    if not user:
+        raise UserNotFoundError(f"User {user_id} not found")
+    return user
+
+# ✅ Test exists for happy path
+def test_get_user_success():
+    user = get_user(123)
+    assert user.id == 123
+
+# ❌ MISSING - No error path test
+# Missing test:
+def test_get_user_not_found():
+    with pytest.raises(UserNotFoundError, match="User 999 not found"):
+        get_user(999)
+```
+
+**Detection Patterns:**
+```python
+# CRITICAL severity
+- Functions in critical modules (payment, auth, security) with 0% coverage
+- Error handling code (try/except blocks) never executed in tests
+- Database operations (create, update, delete) with no tests
+
+# HIGH severity
+- Functions with <50% coverage
+- Missing tests for all error paths
+- No tests for input validation
+
+# MEDIUM severity
+- Functions with 50-70% coverage
+- Missing tests for edge cases (null, empty, boundary values)
+- Integration paths not covered
+
+# Detection Commands:
+pytest --cov=bot --cov-report=term-missing | grep "0%"
+grep -r "def " --include="*.py" bot/services/ | wc -l  # Count functions
+grep -r "def test_" --include="*.py" bot/tests/ | wc -l  # Count tests
+# Compare ratio: should be at least 3 tests per function
+```
+
+---
+
+### 8. Test Performance & Reliability (NEW)
+
+**Critical - Flaky Tests:**
+```python
+# ❌ CRITICAL - Time-dependent test (flaky)
+def test_async_processing():
+    start_processing(task_id=123)
+    time.sleep(0.5)  # Flaky! Sometimes 0.5s isn't enough
+    result = get_result(task_id=123)
+    assert result.status == "complete"
+
+# ✅ GOOD - Wait with timeout
+import pytest
+
+@pytest.mark.asyncio
+async def test_async_processing():
+    await start_processing(task_id=123)
+
+    # Poll with timeout
+    for _ in range(10):  # Max 5 seconds
+        result = await get_result(task_id=123)
+        if result.status == "complete":
+            break
+        await asyncio.sleep(0.5)
+    else:
+        pytest.fail("Processing did not complete in 5 seconds")
+
+    assert result.status == "complete"
+
+# ✅ BETTER - Use async/await properly
+@pytest.mark.asyncio
+async def test_async_processing():
+    result = await start_processing(task_id=123)
+    # Awaits completion, no sleep needed
+    assert result.status == "complete"
+
+# ❌ CRITICAL - Random behavior (non-deterministic)
+def test_random_selection():
+    items = [1, 2, 3, 4, 5]
+    selected = random.choice(items)
+    assert selected > 3  # Fails 40% of the time!
+
+# ✅ GOOD - Seed random or mock it
+def test_random_selection():
+    items = [1, 2, 3, 4, 5]
+    random.seed(42)  # Deterministic
+    selected = random.choice(items)
+    assert selected == 5  # Always same result
+
+# ✅ BETTER - Mock random
+from unittest.mock import patch
+
+def test_random_selection():
+    items = [1, 2, 3, 4, 5]
+    with patch('random.choice', return_value=4):
+        selected = random.choice(items)
+        assert selected == 4
+```
+
+**High - Slow Tests:**
+```python
+# ❌ HIGH - Test takes 5 seconds (too slow)
+def test_user_creation():
+    # Creates full user with profile, permissions, settings
+    user = create_full_user_profile()  # 3 seconds
+    time.sleep(2)  # Unnecessary wait
+    assert user.created
+
+# ✅ GOOD - Fast test with minimal setup
+def test_user_creation():
+    # Only create what's needed
+    user = User(name="Test", email="test@example.com")
+    user.save()  # < 0.1 seconds
+    assert user.id is not None
+
+# ❌ HIGH - Real API calls in tests
+def test_fetch_weather():
+    weather = weather_api.get_current("London")  # Real HTTP call!
+    assert weather.temperature > 0
+
+# ✅ GOOD - Mock external services
+from unittest.mock import patch
+
+def test_fetch_weather():
+    with patch('weather_api.get_current') as mock_get:
+        mock_get.return_value = {"temperature": 20}
+        weather = weather_api.get_current("London")
+        assert weather["temperature"] == 20
+```
+
+**Medium - Test Isolation Issues:**
+```python
+# ❌ MEDIUM - Tests depend on execution order
+def test_create_user():
+    user = User.create(name="Alice")
+    assert user.id == 1  # Assumes no other users exist!
+
+def test_get_user():
+    user = User.get(1)  # Depends on test_create_user running first!
+    assert user.name == "Alice"
+
+# ✅ GOOD - Each test independent
+def test_create_user():
+    user = User.create(name="Alice")
+    assert user.id is not None  # Don't assume specific ID
+
+def test_get_user():
+    # Setup own data
+    user = User.create(name="Bob")
+    fetched = User.get(user.id)
+    assert fetched.name == "Bob"
+
+# ❌ MEDIUM - Shared state between tests
+class TestUserService:
+    cache = {}  # Shared across all tests!
+
+    def test_cache_user(self):
+        self.cache[1] = User(id=1, name="Alice")
+        assert len(self.cache) == 1
+
+    def test_get_from_cache(self):
+        # Depends on test_cache_user!
+        assert 1 in self.cache
+
+# ✅ GOOD - Each test has own state
+class TestUserService:
+    def setup_method(self):
+        self.cache = {}  # Fresh cache per test
+
+    def test_cache_user(self):
+        self.cache[1] = User(id=1, name="Alice")
+        assert len(self.cache) == 1
+
+    def test_get_from_cache(self):
+        # Setup own data
+        self.cache[1] = User(id=1, name="Alice")
+        assert 1 in self.cache
+```
+
+**Detection Patterns:**
+```python
+# CRITICAL severity
+- time.sleep() in tests (flaky timing)
+- random.choice/randint without seeding (non-deterministic)
+- Tests that fail intermittently (flaky)
+- Tests depending on external services (network calls)
+
+# HIGH severity
+- Tests taking > 2 seconds
+- Real database operations without transactions
+- Shared state between tests (class attributes)
+- Tests that must run in specific order
+
+# MEDIUM severity
+- Tests taking 0.5-2 seconds
+- Missing setup/teardown for cleanup
+- Tests modifying global state
+
+# Detection Commands:
+pytest --durations=10  # Show 10 slowest tests
+pytest -v | grep "FLAKY"  # If using pytest-flaky
+pytest --lf  # Rerun only failed tests (detect flaky tests)
+pytest -x  # Stop on first failure (detect order dependency)
+```
+
+---
+
+### 9. Assertion Quality (NEW)
+
+**High - Weak Assertions:**
+```python
+# ❌ HIGH - Very weak assertion
+def test_user_creation():
+    user = create_user()
+    assert user  # Only checks user is not None!
+
+# ✅ GOOD - Specific assertions
+def test_user_creation():
+    user = create_user()
+    assert user.id is not None
+    assert user.name == "Test User"
+    assert user.email == "test@example.com"
+    assert user.is_active is True
+
+# ❌ HIGH - Generic assertion
+def test_api_response():
+    response = api.get_user(123)
+    assert response is not None  # Too generic!
+    assert response.get("status") == "success"  # Could be wrong key
+
+# ✅ GOOD - Explicit structure validation
+def test_api_response():
+    response = api.get_user(123)
+    assert response["status"] == "success"  # Will fail if key missing
+    assert response["user"]["id"] == 123
+    assert response["user"]["name"] == "John Doe"
+    assert "created_at" in response["user"]
+
+# ❌ HIGH - Assert True (meaningless)
+def test_validation():
+    result = validate_email("test@example.com")
+    assert True  # Always passes!
+
+# ✅ GOOD - Assert actual value
+def test_validation():
+    result = validate_email("test@example.com")
+    assert result is True  # Or: assert result
+```
+
+**Medium - Missing Edge Case Assertions:**
+```python
+# ✅ Has basic test
+def test_parse_date():
+    date = parse_date("2023-12-25")
+    assert date.year == 2023
+
+# ❌ MISSING - No edge case tests
+# Missing assertions for:
+# - Empty string: parse_date("") → Should raise ValueError
+# - Invalid format: parse_date("25-12-2023") → Should raise ValueError
+# - Leap year: parse_date("2024-02-29") → Should parse correctly
+# - Invalid date: parse_date("2023-02-30") → Should raise ValueError
+# - Null input: parse_date(None) → Should raise TypeError
+
+# ✅ COMPREHENSIVE - All edge cases covered
+def test_parse_date_valid():
+    date = parse_date("2023-12-25")
+    assert date.year == 2023
+    assert date.month == 12
+    assert date.day == 25
+
+def test_parse_date_empty():
+    with pytest.raises(ValueError, match="Empty date string"):
+        parse_date("")
+
+def test_parse_date_invalid_format():
+    with pytest.raises(ValueError, match="Invalid date format"):
+        parse_date("25-12-2023")
+
+def test_parse_date_leap_year():
+    date = parse_date("2024-02-29")
+    assert date.day == 29
+
+def test_parse_date_invalid_date():
+    with pytest.raises(ValueError, match="day is out of range"):
+        parse_date("2023-02-30")
+
+def test_parse_date_null():
+    with pytest.raises(TypeError):
+        parse_date(None)
+```
+
+**Medium - Missing Negative Tests:**
+```python
+# ✅ Has positive test
+def test_authenticate_success():
+    token = authenticate("user", "correct_password")
+    assert token is not None
+
+# ❌ MISSING - No negative tests
+# Missing tests for:
+# - Wrong password
+# - Non-existent user
+# - Empty credentials
+# - SQL injection attempts
+# - Account locked
+# - Expired password
+
+# ✅ COMPREHENSIVE - Positive and negative cases
+def test_authenticate_success():
+    token = authenticate("user", "correct_password")
+    assert token is not None
+    assert len(token) == 32
+
+def test_authenticate_wrong_password():
+    with pytest.raises(AuthenticationError, match="Invalid credentials"):
+        authenticate("user", "wrong_password")
+
+def test_authenticate_nonexistent_user():
+    with pytest.raises(AuthenticationError, match="User not found"):
+        authenticate("nonexistent", "password")
+
+def test_authenticate_empty_credentials():
+    with pytest.raises(ValidationError, match="Username required"):
+        authenticate("", "password")
+
+def test_authenticate_sql_injection():
+    with pytest.raises(AuthenticationError):
+        authenticate("admin' OR '1'='1", "password")
+```
+
+**Detection Patterns:**
+```python
+# HIGH severity
+- assert user (checks only truthiness)
+- assert response is not None (too generic)
+- assert True / assert result (meaningless)
+- No assertions in test (test does nothing)
+
+# MEDIUM severity
+- Single assertion for complex object
+- No edge case tests (boundary values)
+- No negative tests (error cases)
+- Generic assertions (assert len(x) > 0 instead of specific)
+
+# LOW severity
+- Could add more specific assertions
+- Could test more attributes
+
+# Detection Commands:
+grep -r "assert True" --include="*.py" tests/
+grep -r "assert.*is not None" --include="*.py" tests/
+grep -r "def test_" --include="*.py" tests/ -A10 | grep -v "assert"
+```
+
+---
+
+### 10. Test Maintainability (NEW)
+
+**High - Parameterization Opportunities:**
+```python
+# ❌ HIGH - Repeated test structure (DRY violation)
+def test_validate_email_valid_gmail():
+    assert validate_email("user@gmail.com") is True
+
+def test_validate_email_valid_yahoo():
+    assert validate_email("user@yahoo.com") is True
+
+def test_validate_email_valid_custom():
+    assert validate_email("user@custom-domain.com") is True
+
+def test_validate_email_invalid_no_at():
+    assert validate_email("usergmail.com") is False
+
+def test_validate_email_invalid_no_domain():
+    assert validate_email("user@") is False
+
+# ✅ GOOD - Parameterized test
+import pytest
+
+@pytest.mark.parametrize("email,expected", [
+    ("user@gmail.com", True),
+    ("user@yahoo.com", True),
+    ("user@custom-domain.com", True),
+    ("usergmail.com", False),  # No @
+    ("user@", False),  # No domain
+    ("@gmail.com", False),  # No user
+    ("", False),  # Empty
+    ("user @gmail.com", False),  # Space
+])
+def test_validate_email(email, expected):
+    assert validate_email(email) == expected
+
+# ❌ HIGH - Multiple similar tests
+def test_calculate_discount_10_percent():
+    assert calculate_discount(100, 0.1) == 90
+
+def test_calculate_discount_25_percent():
+    assert calculate_discount(100, 0.25) == 75
+
+def test_calculate_discount_50_percent():
+    assert calculate_discount(200, 0.5) == 100
+
+# ✅ GOOD - Single parameterized test
+@pytest.mark.parametrize("price,discount,expected", [
+    (100, 0.1, 90),
+    (100, 0.25, 75),
+    (200, 0.5, 100),
+    (50, 0.0, 50),  # No discount
+    (100, 1.0, 0),  # 100% discount
+])
+def test_calculate_discount(price, discount, expected):
+    assert calculate_discount(price, discount) == expected
+```
+
+**Medium - Test Brittleness:**
+```python
+# ❌ MEDIUM - Brittle test (coupled to implementation)
+def test_process_order():
+    order = Order(items=[Item(id=1), Item(id=2)])
+
+    # Brittle: Assumes specific internal method calls
+    with patch.object(order, '_validate_items') as mock_validate:
+        with patch.object(order, '_calculate_total') as mock_calc:
+            with patch.object(order, '_apply_discount') as mock_discount:
+                order.process()
+                mock_validate.assert_called_once()
+                mock_calc.assert_called_once()
+                mock_discount.assert_called_once()
+
+# ✅ GOOD - Test behavior, not implementation
+def test_process_order():
+    order = Order(items=[Item(price=100), Item(price=50)])
+    result = order.process()
+
+    # Test outcomes, not how it's done
+    assert result.total == 150
+    assert result.status == "processed"
+    assert len(result.items) == 2
+
+# ❌ MEDIUM - Hardcoded values (brittle)
+def test_get_users():
+    users = get_users()
+    assert len(users) == 5  # Breaks if users change
+    assert users[0].name == "Alice"  # Breaks if order changes
+
+# ✅ GOOD - Test properties, not exact values
+def test_get_users():
+    users = get_users()
+    assert len(users) > 0
+    assert all(user.name for user in users)  # All have names
+    assert all(user.email for user in users)  # All have emails
+```
+
+**Medium - Test Data Management:**
+```python
+# ❌ MEDIUM - Hardcoded test data scattered across tests
+def test_create_order():
+    user = {
+        "id": 123,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "address": "123 Main St",
+        "city": "Springfield",
+        "zip": "12345"
+    }
+    order = create_order(user)
+    assert order.user_id == 123
+
+def test_update_profile():
+    user = {
+        "id": 123,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "address": "456 Oak Ave",  # Different address!
+        "city": "Springfield",
+        "zip": "12345"
+    }
+    update_profile(user)
+
+# ✅ GOOD - Centralized test data with builder
+class UserBuilder:
+    def __init__(self):
+        self._id = 123
+        self._name = "John Doe"
+        self._email = "john@example.com"
+        self._address = "123 Main St"
+        self._city = "Springfield"
+        self._zip = "12345"
+
+    def with_id(self, id: int):
+        self._id = id
+        return self
+
+    def with_address(self, address: str):
+        self._address = address
+        return self
+
+    def build(self) -> dict:
+        return {
+            "id": self._id,
+            "name": self._name,
+            "email": self._email,
+            "address": self._address,
+            "city": self._city,
+            "zip": self._zip
+        }
+
+def test_create_order():
+    user = UserBuilder().build()
+    order = create_order(user)
+    assert order.user_id == 123
+
+def test_update_profile():
+    user = UserBuilder().with_address("456 Oak Ave").build()
+    update_profile(user)
+```
+
+**Detection Patterns:**
+```python
+# HIGH severity
+- 3+ tests with identical structure (parameterization opportunity)
+- Tests with >5 mock assertions on internal methods
+- Tests that break when refactoring without behavior change
+
+# MEDIUM severity
+- Hardcoded test data repeated across tests
+- Tests coupled to implementation details
+- Tests with magic numbers/strings
+
+# LOW severity
+- Tests that could be more readable
+- Opportunities for test utilities
+
+# Detection Commands:
+# Find similar test names (parameterization candidates)
+grep -r "def test_" tests/ | awk -F'_' '{print $1"_"$2"_"$3}' | sort | uniq -c | sort -rn
+
+# Find tests with many mocks (brittleness)
+grep -r "assert_called" tests/ | cut -d: -f1 | uniq -c | sort -rn
+
+# Find hardcoded test data
+grep -r "= {$" tests/ -A10 | grep "\"id\":\|\"name\":\|\"email\":"
+```
+
 ## Anti-Patterns to Detect
 
 ### 1. Multiple Unrelated Assertions
