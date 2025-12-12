@@ -1,42 +1,30 @@
-"""Core message handlers for bot - orchestrates message processing.
+"""Simplified message handlers - thin Slack adapter to rag-service.
 
-This module has been refactored to separate concerns:
-- File processing → handlers/file_processors/
-- Prompt management → handlers/prompt_manager.py
-- Agent processes → handlers/agent_processes.py (existing)
-
-Main responsibilities:
-- Conversation ID management
-- Message routing (agents vs LLM)
-- Document caching
-- RAG control
-- Response formatting
+All business logic (routing, RAG, LLM) is now in rag-service.
+This module only handles Slack-specific operations:
+- File processing
+- Message formatting
+- Thinking indicators
+- Thread management
 """
 
 import contextlib
 import logging
 import time
 
-from handlers.agent_processes import get_agent_blocks, run_agent_process
 from handlers.file_processors import process_file_attachments
-from services.agent_registry import get_agent_info, route_command
+from handlers.prompt_manager import get_user_system_prompt
 from services.formatting import MessageFormatter
 from services.langfuse_service import get_langfuse_service
-from services.llm_service import LLMService
 from services.metrics_service import get_metrics_service
+from services.rag_client import get_rag_client
 from services.slack_service import SlackService
 from utils.errors import handle_error
 
 logger = logging.getLogger(__name__)
 
 
-# Thread tracking service (Redis-backed with in-memory fallback)
-from services.thread_tracking import get_thread_tracking
-
-_thread_tracking = get_thread_tracking()
-
-
-# Helper functions for handle_message
+# Helper functions
 
 
 def _determine_conversation_id(
@@ -157,36 +145,6 @@ async def _process_and_cache_files(
     return document_content, document_filename
 
 
-async def _add_document_reference_to_cache(
-    document_content: str,
-    conversation_cache: object | None,
-    thread_ts: str | None,
-    files: list[dict] | None,
-) -> None:
-    """Add document reference to conversation cache.
-
-    Args:
-        document_content: Document content string
-        conversation_cache: Conversation cache instance
-        thread_ts: Thread timestamp
-        files: List of file attachments
-    """
-    if not (document_content and conversation_cache and thread_ts):
-        return
-
-    # Create concise summary instead of full content
-    file_names = [f.get("name", "unknown") for f in files] if files else ["document"]
-    file_summary = f"[User shared {len(file_names)} file(s): {', '.join(file_names)} - content processed and analyzed]"
-
-    document_message = {"role": "user", "content": file_summary}
-    await conversation_cache.update_conversation(
-        thread_ts, document_message, is_bot_message=False
-    )
-    logger.info(
-        f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
-    )
-
-
 async def _determine_rag_setting(
     thread_ts: str | None,
     conversation_cache: object | None,
@@ -230,502 +188,34 @@ async def _determine_rag_setting(
     return use_rag
 
 
-async def _handle_agent_process_command(
-    text: str,
-    slack_service: SlackService,
-    channel: str,
-    thread_ts: str | None,
-    user_id: str,
-    conversation_id: str,
-) -> bool:
-    """Handle 'start <process>' commands.
-
-    Args:
-        text: Message text
-        slack_service: Slack service instance
-        channel: Slack channel ID
-        thread_ts: Thread timestamp
-        user_id: Slack user ID
-        conversation_id: Unique conversation identifier
-
-    Returns:
-        True if command was handled, False otherwise
-    """
-    if not text.strip().lower().startswith("start "):
-        return False
-
-    agent_process_name = text.strip().lower()[6:]
-    if not agent_process_name:
-        return False
-
-    logger.info(f"Starting agent process: {agent_process_name}")
-    thinking_message_ts = None
-
-    try:
-        # Send thinking indicator
-        thinking_message_ts = await slack_service.send_thinking_indicator(
-            channel, thread_ts
-        )
-
-        # Run agent process
-        result = await run_agent_process(process_id=agent_process_name)
-
-        # Clean up thinking message
-        if thinking_message_ts:
-            try:
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-                thinking_message_ts = None
-            except Exception as e:
-                logger.warning(f"Error deleting thinking message: {e}")
-
-        # Send response
-        response_text = result.data or "Process started"
-        formatted_response = await MessageFormatter.format_message(response_text)
-        agent_blocks = get_agent_blocks(result=result, user_id=user_id)
-
-        await slack_service.send_message(
-            channel=channel,
-            text=formatted_response,
-            blocks=agent_blocks,
-            thread_ts=thread_ts,
-        )
-
-        # Trace to Langfuse
-        langfuse_service = get_langfuse_service()
-        if langfuse_service:
-            try:
-                langfuse_service.trace_conversation(
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    user_message=text,
-                    bot_response=response_text,
-                )
-            except Exception as e:
-                logger.warning(f"Error tracing agent process turn to Langfuse: {e}")
-
-        return True
-
-    except Exception as e:
-        # Clean up thinking message on error
-        if thinking_message_ts:
-            with contextlib.suppress(Exception):
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-
-        logger.error(f"Agent process failed: {e}")
-        error_response = f"❌ Agent process '{agent_process_name}' failed: {str(e)}"
-        await slack_service.send_message(
-            channel=channel, text=error_response, thread_ts=thread_ts
-        )
-        return True
-
-
-async def _generate_and_send_llm_response(
-    text: str,
-    user_id: str,
-    channel: str,
-    thread_ts: str | None,
-    slack_service: SlackService,
-    llm_service: LLMService,
-    conversation_id: str,
-    conversation_cache: object | None,
-    document_content: str,
-    document_filename: str | None,
-    use_rag: bool,
-) -> str:
-    """Generate LLM response and send to Slack.
-
-    Args:
-        text: User message text
-        user_id: Slack user ID
-        channel: Slack channel ID
-        thread_ts: Thread timestamp
-        slack_service: Slack service instance
-        llm_service: LLM service instance
-        conversation_id: Unique conversation identifier
-        conversation_cache: Conversation cache instance
-        document_content: Document content (if any)
-        document_filename: Document filename (if any)
-        use_rag: Whether to use RAG
-
-    Returns:
-        Generated response text
-    """
-    thinking_message_ts = None
-
-    try:
-        # Send thinking indicator
-        thinking_message_ts = await slack_service.send_thinking_indicator(
-            channel, thread_ts
-        )
-    except Exception as e:
-        logger.error(f"Error posting thinking message: {e}")
-
-    # Get thread history
-    history, should_use_thread_context = await slack_service.get_thread_history(
-        channel, thread_ts
-    )
-
-    if should_use_thread_context:
-        logger.info(
-            f"Using thread context with {len(history)} messages for response generation"
-        )
-
-    # Generate response
-    response = await llm_service.get_response(
-        messages=history,
-        user_id=user_id,
-        current_query=text,
-        document_content=document_content if document_content else None,
-        document_filename=document_filename,
-        conversation_id=conversation_id,
-        conversation_cache=conversation_cache,
-        use_rag=use_rag,
-    )
-
-    # Clean up thinking message
-    if thinking_message_ts:
-        try:
-            await slack_service.delete_thinking_indicator(channel, thinking_message_ts)
-        except Exception as e:
-            logger.warning(f"Error deleting thinking message: {e}")
-
-    # Send response
-    if response:
-        formatted_response = await MessageFormatter.format_message(response)
-        await slack_service.send_message(
-            channel=channel, text=formatted_response, thread_ts=thread_ts
-        )
-    else:
-        response = "I apologize, but I couldn't generate a response. Please try again."
-        await slack_service.send_message(
-            channel=channel, text=response, thread_ts=thread_ts
-        )
-
-    return response or ""
-
-
-async def handle_bot_command(
-    text: str,
-    user_id: str,
-    slack_service: SlackService,
-    channel: str,
-    thread_ts: str | None = None,
-    files: list[dict] | None = None,
-    document_content: str | None = None,
-    llm_service: LLMService | None = None,
-    check_thread_context: bool = False,
-    conversation_cache: object | None = None,
-    conversation_id: str | None = None,
-) -> bool:
-    """
-    Handle bot agent commands using router pattern.
-
-    Routes commands like /profile and /meddic to registered agents.
-    Supports thread continuity - once an agent starts a thread, subsequent
-    messages in that thread automatically route to the same agent.
-
-    Args:
-        text: Full message text (e.g., "/profile tell me about Charlotte")
-        user_id: Slack user ID
-        slack_service: Slack service for sending messages
-        channel: Channel ID
-        thread_ts: Thread timestamp if in a thread
-        files: Optional list of file attachments
-        document_content: Optional processed file content
-        llm_service: Optional LLM service for agent use
-        check_thread_context: If True, check if thread belongs to an agent
-
-    Returns:
-        True if bot command was handled, False otherwise
-    """
-    # Debug: Log what text we're receiving
-    logger.info(
-        f"handle_bot_command called with text: '{text}', check_thread_context: {check_thread_context}"
-    )
-
-    # Check for exit commands to clear thread tracking
-    exit_commands = ["exit", "stop", "done", "end", "clear"]
-    if thread_ts and any(text.strip().lower() == cmd for cmd in exit_commands):
-        if await _thread_tracking.clear_thread(thread_ts):
-            # Send confirmation
-            try:
-                await slack_service.send_message(
-                    channel=channel,
-                    text="✅ Exited agent mode. I'm back to general mode!",
-                    thread_ts=thread_ts,
-                )
-            except Exception as e:
-                logger.warning(f"Failed to send exit confirmation: {e}")
-            return True
-        # Not tracked, but return False to let it fall through
-        return False
-
-    # Check if this thread already belongs to an agent
-    agent_name = (
-        await _thread_tracking.get_thread_agent(thread_ts)
-        if check_thread_context and thread_ts
-        else None
-    )
-    if agent_name:
-        logger.info(
-            f"🔗 Thread {thread_ts} belongs to agent '{agent_name}' - routing automatically"
-        )
-
-        # Get agent info from registry
-        agent_info = get_agent_info(agent_name)
-        if agent_info:
-            primary_name = agent_name
-            query = text  # Use full text as query (no command prefix needed)
-        else:
-            logger.warning(
-                f"Agent '{agent_name}' not found in registry, falling back to normal routing"
-            )
-            agent_info = None
-            primary_name = None
-            query = ""
-    else:
-        # Strip Slack markdown formatting (bold, italic, etc.) before routing
-        # Slack sends *bold* and _italic_ which breaks command parsing
-        clean_text = text.strip()
-        # Remove leading/trailing markdown characters
-        while clean_text and clean_text[0] in ["*", "_", "~"]:
-            clean_text = clean_text[1:]
-        while clean_text and clean_text[-1] in ["*", "_", "~"]:
-            clean_text = clean_text[:-1]
-
-        logger.info(f"Cleaned text for routing: '{clean_text}'")
-
-        # Use router to parse and route command
-        agent_info, query, primary_name = route_command(clean_text)
-
-    # Debug: Log router results
-    logger.info(
-        f"Router results: agent_info={agent_info is not None}, primary_name={primary_name}, query='{query}'"
-    )
-
-    # If no agent found, return False (not handled)
-    if not agent_info or not primary_name:
-        logger.info("No agent found, returning False")
-        return False
-
-    logger.info(f"Routing to agent '{primary_name}' with query: {query}")
-
-    # Send thinking indicator
-    thinking_message_ts = None
-    try:
-        thinking_message_ts = await slack_service.send_thinking_indicator(
-            channel, thread_ts
-        )
-    except Exception as e:
-        logger.error(f"Error posting thinking message: {e}")
-
-    try:
-        # Build context for agent
-        context = {
-            "user_id": user_id,
-            "channel": channel,
-            "thread_ts": thread_ts,
-            "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
-            "slack_service": slack_service,
-            "llm_service": llm_service,
-            "conversation_cache": conversation_cache,  # For caching agent-generated docs
-        }
-
-        # Add file information if available
-        if document_content:
-            context["document_content"] = document_content
-        if files:
-            context["files"] = files
-            context["file_names"] = [f.get("name", "unknown") for f in files]
-
-        # Check permissions before execution
-        from services.permission_service import get_permission_service
-
-        permission_service = get_permission_service()
-        allowed, reason = permission_service.can_use_agent(user_id, primary_name)
-
-        if not allowed:
-            # Permission denied - don't execute agent
-            logger.warning(
-                f"Permission denied: user {user_id} tried to use agent {primary_name}: {reason}"
-            )
-
-            # Clean up thinking message
-            if thinking_message_ts:
-                try:
-                    await slack_service.delete_thinking_indicator(
-                        channel, thinking_message_ts
-                    )
-                except Exception as e:
-                    logger.warning(f"Error deleting thinking message: {e}")
-
-            # Send permission denied message
-            await slack_service.send_message(
-                channel=channel,
-                text=f"🔒 *Access Denied*\n\n{reason}\n\nContact an administrator if you need access to this agent.",
-                thread_ts=thread_ts,
-            )
-            return True  # Command handled (but denied)
-
-        # Permission granted - execute agent via agent-service
-        logger.info(f"Permission granted: user {user_id} can use agent {primary_name}")
-        from services.agent_client import get_agent_client
-
-        agent_client = get_agent_client()
-
-        # Use streaming for research agent to show real-time progress
-        if primary_name == "research":
-            logger.info("Using streaming execution for research agent")
-
-            # Clean up thinking message before streaming starts
-            if thinking_message_ts:
-                try:
-                    await slack_service.delete_thinking_indicator(
-                        channel, thinking_message_ts
-                    )
-                except Exception as e:
-                    logger.warning(f"Error deleting thinking message: {e}")
-
-            # Stream updates to Slack in real-time
-            full_response = ""
-            message_ts = None
-
-            try:
-                async for chunk in agent_client.stream_agent(
-                    primary_name, query, context
-                ):
-                    full_response += chunk + "\n"
-
-                    # Post or update message in Slack
-                    if message_ts:
-                        # Update existing message
-                        await slack_service.update_message(
-                            channel=channel,
-                            ts=message_ts,
-                            text=full_response,
-                        )
-                    else:
-                        # Post initial message
-                        result = await slack_service.send_message(
-                            channel=channel,
-                            text=full_response,
-                            thread_ts=thread_ts,
-                        )
-                        message_ts = result.get("ts") if result else None
-
-            except Exception as stream_error:
-                logger.error(f"Streaming error: {stream_error}")
-                await slack_service.send_message(
-                    channel=channel,
-                    text=f"❌ Research agent error: {str(stream_error)}",
-                    thread_ts=thread_ts,
-                )
-
-            # Track thread
-            if thread_ts and primary_name:
-                await _thread_tracking.track_thread(thread_ts, primary_name)
-
-            response = full_response
-            metadata = {}
-
-        else:
-            # Non-streaming execution for other agents
-            result = await agent_client.invoke_agent(primary_name, query, context)
-            response = result.get("response", "No response from agent")
-            metadata = result.get("metadata", {})
-
-            # Track this thread for future continuity (if we have a thread_ts)
-            # Agent tracking and LangGraph checkpointing use SAME thread_id (thread_ts)
-            # But allow agents to opt-out of tracking via metadata
-            if thread_ts and primary_name:
-                # Check if agent wants to auto-clear after completion
-                if metadata.get("clear_thread_tracking", False):
-                    await _thread_tracking.clear_thread(thread_ts)
-                    logger.info(
-                        f"🔓 Cleared both agent tracking AND LangGraph checkpoint for thread {thread_ts}"
-                    )
-                else:
-                    await _thread_tracking.track_thread(thread_ts, primary_name)
-                    logger.info(
-                        f"📌 Thread {thread_ts} tracked for agent '{primary_name}' (both Redis + LangGraph checkpoint)"
-                    )
-
-            # Clean up thinking message
-            if thinking_message_ts:
-                try:
-                    await slack_service.delete_thinking_indicator(
-                        channel, thinking_message_ts
-                    )
-                except Exception as e:
-                    logger.warning(f"Error deleting thinking message: {e}")
-
-            # Format and send response (only if non-empty)
-            # Agent may return empty response if it already posted the message (e.g., PDF upload with summary)
-            if response:
-                formatted_response = await MessageFormatter.format_message(response)
-                await slack_service.send_message(
-                    channel=channel, text=formatted_response, thread_ts=thread_ts
-                )
-            else:
-                logger.info(
-                    "Agent returned empty response (likely already posted message)"
-                )
-
-        # Record agent conversation turn in Langfuse for lifetime stats
-        langfuse_service = get_langfuse_service()
-        if langfuse_service and response:  # Only track if we have a response
-            try:
-                langfuse_service.trace_conversation(
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    user_message=query,  # Agent query
-                    bot_response=response or "",
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Error tracing agent conversation turn to Langfuse: {e}"
-                )
-
-        return True
-
-    except Exception as e:
-        # Clean up thinking message on error
-        if thinking_message_ts:
-            with contextlib.suppress(Exception):
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-
-        logger.error(f"Bot command '{primary_name}' failed: {e}")
-        error_response = f"❌ Bot command '/{primary_name}' failed: {str(e)}"
-        await slack_service.send_message(
-            channel=channel, text=error_response, thread_ts=thread_ts
-        )
-        return True
+# Main message handler
 
 
 async def handle_message(
     text: str,
     user_id: str,
     slack_service: SlackService,
-    llm_service: LLMService,
     channel: str,
     thread_ts: str | None = None,
     files: list[dict] | None = None,
     conversation_cache: object | None = None,
     message_ts: str | None = None,
 ) -> None:
-    """Handle an incoming message from Slack.
+    """
+    Handle an incoming message from Slack.
+
+    This is now a THIN ADAPTER - all business logic is in rag-service.
+    This function only handles Slack-specific operations:
+    - File processing (Slack API)
+    - User prompt management (Slack user settings)
+    - Thread history (Slack API)
+    - Formatting (Slack markdown)
+    - Sending (Slack API)
 
     Args:
         text: Message text
         user_id: Slack user ID
         slack_service: Slack service instance
-        llm_service: LLM service instance
         channel: Slack channel ID
         thread_ts: Thread timestamp (optional)
         files: List of file attachments (optional)
@@ -753,60 +243,86 @@ async def handle_message(
     # Record metrics
     _record_message_metrics(user_id, channel, text, conversation_id, thread_ts)
 
+    thinking_message_ts = None
+
     try:
-        # Process file attachments and retrieve cached documents
+        # Process file attachments (Slack-specific)
         document_content, document_filename = await _process_and_cache_files(
             files, slack_service, conversation_cache, thread_ts
         )
 
-        # Check for bot agent commands (e.g., -profile, -meddic)
-        handled = await handle_bot_command(
-            text=text,
-            user_id=user_id,
-            slack_service=slack_service,
-            channel=channel,
-            thread_ts=thread_ts,
-            files=files,
-            document_content=document_content,
-            llm_service=llm_service,
-            check_thread_context=True,
-            conversation_cache=conversation_cache,
-            conversation_id=conversation_id,
-        )
-
-        if handled:
-            return
-
-        # Handle agent process commands (e.g., "start <process>")
-        if await _handle_agent_process_command(
-            text, slack_service, channel, thread_ts, user_id, conversation_id
-        ):
-            return
-
-        # Add document reference to conversation cache
-        await _add_document_reference_to_cache(
-            document_content, conversation_cache, thread_ts, files
-        )
-
-        # Determine RAG setting based on thread type
+        # Determine RAG setting based on thread type (Slack-specific)
         use_rag = await _determine_rag_setting(
             thread_ts, conversation_cache, document_filename
         )
 
-        # Generate and send LLM response
-        response = await _generate_and_send_llm_response(
-            text=text,
+        # Get user's custom system prompt (Slack-specific)
+        system_message = get_user_system_prompt(user_id)
+
+        # Get thread history (Slack-specific)
+        history, should_use_thread_context = await slack_service.get_thread_history(
+            channel, thread_ts
+        )
+
+        if should_use_thread_context:
+            logger.info(
+                f"Using thread context with {len(history)} messages for response generation"
+            )
+
+        # Send thinking indicator (Slack-specific)
+        try:
+            thinking_message_ts = await slack_service.send_thinking_indicator(
+                channel, thread_ts
+            )
+        except Exception as e:
+            logger.error(f"Error posting thinking message: {e}")
+
+        # ===================================================================
+        # CALL RAG-SERVICE - This handles ALL the intelligence:
+        # - Agent routing (decides if query needs specialized agent)
+        # - RAG retrieval (vector search for context)
+        # - LLM generation (with tools like web search)
+        # - Response generation with citations
+        # ===================================================================
+
+        rag_client = get_rag_client()
+        result = await rag_client.generate_response(
+            query=text,
+            conversation_history=history,
+            system_message=system_message,
             user_id=user_id,
-            channel=channel,
-            thread_ts=thread_ts,
-            slack_service=slack_service,
-            llm_service=llm_service,
             conversation_id=conversation_id,
-            conversation_cache=conversation_cache,
+            use_rag=use_rag,
             document_content=document_content,
             document_filename=document_filename,
-            use_rag=use_rag,
+            session_id=thread_ts,
         )
+
+        response = result.get("response", "")
+        # citations = result.get("citations", [])  # TODO: Format citations for Slack
+        # metadata = result.get("metadata", {})
+
+        # Clean up thinking message (Slack-specific)
+        if thinking_message_ts:
+            with contextlib.suppress(Exception):
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+            thinking_message_ts = None
+
+        # Format and send response (Slack-specific)
+        if response:
+            formatted_response = await MessageFormatter.format_message(response)
+            await slack_service.send_message(
+                channel=channel, text=formatted_response, thread_ts=thread_ts
+            )
+        else:
+            response = (
+                "I apologize, but I couldn't generate a response. Please try again."
+            )
+            await slack_service.send_message(
+                channel=channel, text=response, thread_ts=thread_ts
+            )
 
         # Trace conversation to Langfuse
         langfuse_service = get_langfuse_service()
@@ -830,6 +346,13 @@ async def handle_message(
             ).observe(duration)
 
     except Exception as e:
+        # Clean up thinking message on error
+        if thinking_message_ts:
+            with contextlib.suppress(Exception):
+                await slack_service.delete_thinking_indicator(
+                    channel, thinking_message_ts
+                )
+
         await handle_error(
             slack_service.client,
             channel,

@@ -25,9 +25,9 @@ get_tracer("bot")
 from services import agent_registry
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
-from services.llm_service import LLMService
 from services.metrics_service import initialize_metrics_service
 from services.prompt_service import initialize_prompt_service
+from services.rag_client import get_rag_client
 from services.search_clients import close_search_clients, initialize_search_clients
 from services.slack_service import SlackService
 from utils.logging import configure_logging
@@ -79,10 +79,11 @@ def create_app():
         f"Registered {len(unique_agents)} agents: {', '.join(sorted(unique_agents))}"
     )
 
-    # Create LLM service
-    llm_service = LLMService(settings)
+    # Initialize RAG client (connects to rag-service)
+    rag_client = get_rag_client()
+    logger.info(f"RAG client initialized: {rag_client.base_url}")
 
-    return app, slack_service, llm_service, conversation_cache, metrics_service
+    return app, slack_service, conversation_cache, metrics_service
 
 
 async def maintain_presence(client: WebClient):
@@ -135,18 +136,11 @@ async def run():
     settings = None
     health_checker = None
     handler = None
-    llm_service = None
 
     try:
         # Create and configure the app
-        app, slack_service, llm_service, conversation_cache, metrics_service = (
-            create_app()
-        )
+        app, slack_service, conversation_cache, metrics_service = create_app()
         settings = Settings()
-
-        # Initialize LLM service (includes RAG)
-        await llm_service.initialize()
-        logger.info("LLM service initialized")
 
         # Initialize search clients (Tavily + Perplexity)
         await initialize_search_clients(
@@ -157,9 +151,6 @@ async def run():
 
         # Start health check server
         langfuse_service = get_langfuse_service()
-        # If global langfuse service is None, get it directly from LLM service
-        if langfuse_service is None:
-            langfuse_service = llm_service.langfuse_service
         health_checker = HealthChecker(settings, conversation_cache, langfuse_service)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
@@ -167,7 +158,7 @@ async def run():
         logger.info(f"Metrics available at: http://localhost:{health_port}/prometheus")
 
         # Register event handlers
-        await register_handlers(app, slack_service, llm_service, conversation_cache)
+        await register_handlers(app, slack_service, conversation_cache)
 
         # Set bot presence to "auto" (online)
         try:
@@ -226,12 +217,6 @@ async def run():
                 await handler.close_async()
             except Exception as e:
                 logger.error(f"Error closing socket handler: {e}")
-
-        if llm_service:
-            try:
-                await llm_service.close()
-            except Exception as e:
-                logger.error(f"Error closing LLM service: {e}")
 
         # Close search clients
         try:

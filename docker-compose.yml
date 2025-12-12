@@ -239,6 +239,7 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - AGENT_SERVICE_URL=http://agent_service:8000
+      - RAG_SERVICE_URL=http://rag_service:8002
       - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
       - CONTROL_PLANE_SERVICE_TOKEN=${CONTROL_PLANE_SERVICE_TOKEN}
       - ENABLE_HEALTH_SERVER=true  # Internal metrics only, no external port
@@ -250,7 +251,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      agent_service:
+      rag_service:
         condition: service_started
     command: >
       sh -c "
@@ -371,6 +372,50 @@ services:
       service: "agent_service"
       component: "agents"
     networks:
+  # RAG Service - Chat completion proxy with agent routing
+  rag_service:
+    build:
+      context: .
+      dockerfile: ./rag-service/Dockerfile
+    image: insightmesh-rag-service:latest
+    container_name: insightmesh-rag-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:${MYSQL_DATA_PASSWORD:-changeme_data_password}@mysql:3306/insightmesh_data
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - CACHE_REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=production
+      - PORT=8002
+      - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
+      - AGENT_SERVICE_URL=http://agent_service:8000
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+    ports:
+      - "${RAG_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      agent_service:
+        condition: service_started
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "rag_service"
+      component: "rag"
+    networks:
+      - insightmesh
       - insightmesh
 
   # Loki - Log Aggregation Server

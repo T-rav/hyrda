@@ -2,7 +2,6 @@ import logging
 import traceback
 
 from handlers.message_handlers import handle_message
-from services.llm_service import LLMService
 from services.slack_service import SlackService
 from utils.errors import handle_error
 
@@ -12,7 +11,6 @@ logger = logging.getLogger(__name__)
 async def register_handlers(
     app: object,
     slack_service: SlackService,
-    llm_service: LLMService,
     conversation_cache: object | None = None,
 ) -> None:
     """Register all event handlers with the Slack app"""
@@ -63,7 +61,6 @@ async def register_handlers(
                 text=text,
                 user_id=user_id,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
                 files=body["event"].get("files", []),
@@ -123,7 +120,6 @@ async def register_handlers(
                 thread_ts=thread_ts,
                 ts=ts,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 conversation_cache=conversation_cache,
                 files=files,
             )
@@ -142,7 +138,6 @@ async def process_message_by_context(
     thread_ts: str | None,
     ts: str,
     slack_service: SlackService,
-    llm_service: LLMService,
     conversation_cache=None,
     files: list[dict] | None = None,
 ):
@@ -159,7 +154,6 @@ async def process_message_by_context(
             text=text,
             user_id=user_id,
             slack_service=slack_service,
-            llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,  # Use thread_ts if in thread, otherwise ts
             files=files,
@@ -179,7 +173,6 @@ async def process_message_by_context(
             text=clean_text,
             user_id=user_id,
             slack_service=slack_service,
-            llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,
             files=files,
@@ -202,7 +195,6 @@ async def process_message_by_context(
                     text=text,
                     user_id=user_id,
                     slack_service=slack_service,
-                    llm_service=llm_service,
                     channel=channel,
                     thread_ts=thread_ts,
                     files=files,
@@ -217,7 +209,6 @@ async def process_message_by_context(
                 text=text,
                 user_id=user_id,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
                 files=files,
