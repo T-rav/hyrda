@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system
+.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -347,6 +347,31 @@ status:
 	@echo "$(YELLOW)📊 Monitoring Stack Containers:$(RESET)"
 	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)❌ Monitoring stack not running$(RESET)"
 	@echo ""
+
+# =============================================================================
+# LibreChat Service Management
+# =============================================================================
+librechat-start: check-env
+	@echo "$(BLUE)💬 Starting LibreChat + MongoDB...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose up -d mongodb librechat
+	@echo "$(GREEN)✅ LibreChat started!$(RESET)"
+	@echo "$(BLUE)  - 💬 LibreChat UI: http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
+	@echo "$(BLUE)  - 🗄️  MongoDB: mongodb://localhost:27017$(RESET)"
+
+librechat-logs:
+	@echo "$(BLUE)📋 Showing LibreChat logs (Ctrl+C to exit)...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose logs -f librechat mongodb
+
+librechat-restart:
+	@echo "$(BLUE)🔄 Restarting LibreChat...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose restart librechat mongodb
+	@echo "$(GREEN)✅ LibreChat restarted!$(RESET)"
+
+librechat-stop:
+	@echo "$(BLUE)🛑 Stopping LibreChat...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && docker compose stop librechat mongodb
+	@echo "$(GREEN)✅ LibreChat stopped!$(RESET)"
+
 	@echo "$(YELLOW)📈 All InsightMesh Containers:$(RESET)"
 	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)❌ No InsightMesh containers found$(RESET)"
 	@echo ""

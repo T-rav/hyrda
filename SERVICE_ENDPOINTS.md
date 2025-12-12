@@ -48,9 +48,23 @@
 - **Description**: System-wide monitoring dashboard
 - **Dependencies**: Bot, Agent Service, Tasks, Control Plane
 
+### 6. LibreChat (insightmesh-librechat)
+- **Container**: insightmesh-librechat
+- **Image**: ghcr.io/danny-avila/librechat:latest
+- **External Port**: 3080 (configurable via LIBRECHAT_PORT)
+- **URL**: http://localhost:3080
+- **Description**: ChatGPT alternative UI with multi-LLM support
+- **Dependencies**: MongoDB
+- **Features**:
+  - Google OAuth SSO integration
+  - Multiple LLM providers (OpenAI, Anthropic, Ollama)
+  - Conversation history and management
+  - File uploads and attachments
+  - Plugin system for future RAG integration
+
 ## Data Services
 
-### 6. MySQL Database
+### 7. MySQL Database
 - **Container**: insightmesh-mysql
 - **Image**: mysql:8.0
 - **External Port**: 3306
@@ -61,13 +75,22 @@
   - insightmesh_security
   - insightmesh_system
 
-### 7. phpMyAdmin
+### 8. MongoDB Database
+- **Container**: insightmesh-mongodb
+- **Image**: mongo:6
+- **External Port**: 27017
+- **URL**: mongodb://localhost:27017
+- **Databases**:
+  - librechat (LibreChat conversations and users)
+- **Description**: Document database for LibreChat sessions
+
+### 9. phpMyAdmin
 - **Container**: insightmesh-phpmyadmin
 - **External Port**: 8081
 - **URL**: http://localhost:8081
 - **Description**: Database management UI
 
-### 8. Qdrant Vector Database
+### 10. Qdrant Vector Database
 - **Container**: insightmesh-qdrant
 - **Image**: qdrant/qdrant:latest
 - **External Ports**:
@@ -76,7 +99,7 @@
 - **URL**: http://localhost:6333
 - **Dashboard**: http://localhost:6333/dashboard
 
-### 9. Redis Cache
+### 11. Redis Cache
 - **Container**: insightmesh-redis
 - **Image**: redis:7-alpine
 - **External Port**: 6379
@@ -84,19 +107,19 @@
 
 ## Observability Services
 
-### 10. Loki (Log Aggregation)
+### 12. Loki (Log Aggregation)
 - **Container**: insightmesh-loki
 - **Image**: grafana/loki:latest
 - **External Port**: 3100
 - **URL**: http://localhost:3100
 - **Description**: Centralized log storage
 
-### 11. Promtail (Log Shipper)
+### 13. Promtail (Log Shipper)
 - **Container**: insightmesh-promtail
 - **Image**: grafana/promtail:latest
 - **Description**: Collects logs from Docker containers and ships to Loki
 
-### 12. Jaeger (Distributed Tracing)
+### 14. Jaeger (Distributed Tracing)
 - **Container**: insightmesh-jaeger
 - **Image**: jaegertracing/all-in-one:latest
 - **External Ports**:
@@ -108,14 +131,14 @@
 
 ## Monitoring Stack (docker-compose.monitoring.yml)
 
-### 13. Prometheus (Metrics Collection)
+### 15. Prometheus (Metrics Collection)
 - **Container**: insightmesh-prometheus
 - **Image**: prom/prometheus:latest
 - **External Port**: 9090 (configurable via PROMETHEUS_PORT)
 - **URL**: http://localhost:9090
 - **Description**: Metrics scraping and storage
 
-### 14. Grafana (Visualization)
+### 16. Grafana (Visualization)
 - **Container**: insightmesh-grafana
 - **Image**: grafana/grafana:latest
 - **External Port**: 3000 (configurable via GRAFANA_PORT)
@@ -123,7 +146,7 @@
 - **Credentials**: admin/admin
 - **Description**: Unified dashboard for logs and metrics
 
-### 15. AlertManager (Alerting)
+### 17. AlertManager (Alerting)
 - **Container**: insightmesh-alertmanager
 - **Image**: prom/alertmanager:latest
 - **External Port**: 9093
@@ -135,6 +158,7 @@
 | Service | URL | Description |
 |---------|-----|-------------|
 | Dashboard | http://localhost:8080 | System overview |
+| **LibreChat** | **http://localhost:3080** | **ChatGPT UI** |
 | Tasks UI | https://localhost:5001 | Task scheduler |
 | Control Plane | https://localhost:6001 | Admin UI |
 | Agent Service | http://localhost:8000 | Agent API |
@@ -158,6 +182,12 @@ make docker-monitor          # Start monitoring stack
 make stop                    # Stop everything
 make restart                 # Restart everything
 make status                  # Show container status
+
+# LibreChat management
+make librechat-start         # Start LibreChat + MongoDB
+make librechat-logs          # View LibreChat logs
+make librechat-restart       # Restart LibreChat
+make librechat-stop          # Stop LibreChat
 
 # Development
 make test                    # Run all unit tests

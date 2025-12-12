@@ -1,0 +1,83 @@
+# LibreChat Configuration for InsightMesh
+# https://docs.librechat.ai/install/configuration/custom_config
+
+version: 1.0.5
+
+# Cache settings for performance
+cache: true
+
+# Interface customization
+interface:
+  privacyPolicy:
+    externalUrl: 'https://8thlight.com/privacy'
+    openNewTab: true
+  termsOfService:
+    externalUrl: 'https://8thlight.com/terms'
+    openNewTab: true
+
+# Model configurations
+endpoints:
+  # OpenAI Configuration
+  openAI:
+    - name: "OpenAI"
+      apiKey: "${OPENAI_API_KEY}"
+      baseURL: "https://api.openai.com/v1"
+      models:
+        default:
+          - "gpt-4o"
+          - "gpt-4o-mini"
+          - "gpt-4-turbo"
+          - "gpt-3.5-turbo"
+        fetch: false
+      titleConvo: true
+      titleModel: "gpt-3.5-turbo"
+      summarize: false
+      summaryModel: "gpt-3.5-turbo"
+      dropParams: ["user"]
+
+  # Anthropic Claude Configuration
+  anthropic:
+    - name: "Anthropic"
+      apiKey: "${ANTHROPIC_API_KEY}"
+      baseURL: "https://api.anthropic.com/v1"
+      models:
+        default:
+          - "claude-3-5-sonnet-20241022"
+          - "claude-3-5-haiku-20241022"
+          - "claude-3-opus-20240229"
+        fetch: false
+      titleConvo: true
+      titleModel: "claude-3-5-haiku-20241022"
+
+# Registration and authentication
+registration:
+  socialLogins: ["google"]
+  allowedDomains:
+    - "8thlight.com"
+
+# File handling
+fileConfig:
+  endpoints:
+    assistants:
+      fileLimit: 5
+      fileSizeLimit: 10  # MB
+      totalSizeLimit: 50  # MB
+    openAI:
+      disabled: false
+    default:
+      totalSizeLimit: 20  # MB
+  serverFileSizeLimit: 100  # MB
+  avatarSizeLimit: 2  # MB
+
+# Rate limiting
+rateLimits:
+  fileUploads:
+    ipMax: 100
+    ipWindowInMinutes: 60
+    userMax: 50
+    userWindowInMinutes: 60
+  conversationsImport:
+    ipMax: 100
+    ipWindowInMinutes: 60
+    userMax: 50
+    userWindowInMinutes: 60
