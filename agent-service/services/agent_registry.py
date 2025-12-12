@@ -45,7 +45,7 @@ def _load_agent_classes() -> dict[str, type]:
     except Exception as e:
         logger.error(f"❌ Error loading system agents: {e}", exc_info=True)
 
-    # Load external agents (client-provided, can override system agents)
+    # Load external agents (client-provided, CANNOT override system agents)
     # Skip if EXTERNAL_AGENTS_IN_CLOUD=true (agents deployed to LangGraph Cloud)
     import os
     load_external = os.getenv("LOAD_EXTERNAL_AGENTS", "true").lower() == "true"
@@ -57,8 +57,16 @@ def _load_agent_classes() -> dict[str, type]:
             external_loader = get_external_loader()
             external_agents = external_loader.discover_agents()
 
+            # Prevent external agents from overriding system agents
             for name, agent_class in external_agents.items():
-                all_agents[name.lower()] = agent_class
+                name_lower = name.lower()
+                if name_lower in all_agents:
+                    logger.error(
+                        f"❌ External agent '{name}' conflicts with system agent - IGNORING external version"
+                    )
+                    # Skip this external agent - system takes precedence
+                else:
+                    all_agents[name_lower] = agent_class
 
             if external_agents:
                 logger.info(f"✅ Loaded {len(external_agents)} external agent(s) from volume mount")
