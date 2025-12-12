@@ -3,6 +3,8 @@
 import os
 import json
 import logging
+
+from config.settings import Settings
 import re
 from typing import Any
 
@@ -38,8 +40,8 @@ async def create_research_plan(state: ResearchAgentState) -> dict[str, Any]:
     # Use os.getenv to avoid blocking I/O
 
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        api_key=os.getenv("LLM_API_KEY", ""),
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
         temperature=0.1
     )
 

@@ -5,6 +5,8 @@ Supervisor delegates research tasks to parallel researchers and coordinates exec
 
 import os
 import logging
+
+from config.settings import Settings
 from datetime import datetime
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -83,12 +85,13 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         )
 
     # Get LLM configuration (Settings() in thread to avoid blocking os.getcwd)
-    # Use os.getenv to avoid blocking I/O
+    # Initialize LLM
+    settings = Settings()
 
     # Create ChatOpenAI instance
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        api_key=os.getenv("LLM_API_KEY", ""),
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
         temperature=0.7,
     )
 

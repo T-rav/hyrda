@@ -2,6 +2,8 @@
 
 import os
 import logging
+
+from config.settings import Settings
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -43,8 +45,8 @@ async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
     # Use os.getenv to avoid blocking I/O
 
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        api_key=os.getenv("LLM_API_KEY", ""),
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
         temperature=0.3
     )
 

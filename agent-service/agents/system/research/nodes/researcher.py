@@ -1,11 +1,12 @@
 """Researcher node - executes research tasks with tools."""
 
 import logging
-import os
 from typing import Any
 
 from langchain_core.messages import HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
+
+from config.settings import Settings
 
 from ..state import ResearcherState
 from ..tools import (
@@ -40,10 +41,11 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
 
     logger.info(f"Researcher working on: {current_task.description[:60]}...")
 
-    # Initialize LLM with tools (use os.getenv to avoid blocking)
+    # Initialize LLM
+    settings = Settings()
     llm = ChatOpenAI(
-        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        api_key=os.getenv("LLM_API_KEY", ""),
+        model=settings.llm.model,
+        api_key=settings.llm.api_key,
         temperature=0.2
     )
 
