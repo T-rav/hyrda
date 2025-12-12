@@ -16,6 +16,14 @@ from ..tools import (
 
 logger = logging.getLogger(__name__)
 
+# Initialize tools at module level to avoid blocking I/O in async context
+# Tool __init__ methods do network calls (Qdrant, Redis) which are blocking
+_RESEARCH_TOOLS = [
+    InternalSearchTool(),  # Qdrant client initialization (blocking)
+    SECQueryTool(),  # Redis client initialization (blocking)
+    EnhancedWebSearchTool(),  # Tavily client initialization (blocking)
+]
+
 
 async def researcher(state: ResearcherState) -> dict[str, Any]:
     """Execute research task with tool calling.
@@ -39,16 +47,8 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
         temperature=0.2
     )
 
-    # Initialize all research tools
-    # IMPORTANT: InternalSearchTool first - always check internal data before external
-    # NOTE: All tools handle their own caching automatically (transparent to researcher)
-    tools = [
-        InternalSearchTool(),  # Check internal knowledge base FIRST
-        SECQueryTool(),  # SEC filings (10-K, 8-K) - auto-cached to Redis
-        EnhancedWebSearchTool(),  # Web search - auto-cached to MinIO
-    ]
-
-    llm_with_tools = llm.bind_tools(tools)
+    # Use pre-instantiated tools (initialized at module level to avoid blocking I/O)
+    llm_with_tools = llm.bind_tools(_RESEARCH_TOOLS)
 
     # Create research prompt with internal-first priority
     if not researcher_messages:
