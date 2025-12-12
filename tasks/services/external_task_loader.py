@@ -1,4 +1,8 @@
-"""Dynamic external task loader for client-provided tasks/jobs.
+"""Dynamic task loader for system and external tasks/jobs.
+
+Loads tasks from two sources:
+1. System tasks (jobs/system/) - Built into image, always available
+2. External tasks (external_tasks/) - Client-provided, mounted at runtime
 
 Allows clients to mount their own tasks directory and load jobs at runtime
 without rebuilding the Docker image. Supports hot-reload for development.
@@ -31,42 +35,91 @@ logger = logging.getLogger(__name__)
 
 
 class ExternalTaskLoader:
-    """Loads tasks/jobs from external directory (client-provided)."""
+    """Loads tasks/jobs from system (built-in) and external (client-provided) directories."""
 
     def __init__(self, external_tasks_path: str | None = None):
-        """Initialize external task loader.
+        """Initialize task loader.
 
         Args:
             external_tasks_path: Path to external tasks directory.
                                  Defaults to EXTERNAL_TASKS_PATH env var.
         """
+        # System tasks path (built into image)
+        self.system_path = Path(__file__).parent.parent / "jobs" / "system"
+
+        # External tasks path (client-provided)
         self.external_path = external_tasks_path or os.getenv("EXTERNAL_TASKS_PATH")
+
         self._loaded_tasks: dict[str, type] = {}
         self._task_modules: dict[str, Any] = {}  # Track modules for reload
 
+        logger.info(f"System tasks path: {self.system_path}")
         if self.external_path:
-            logger.info(f"External task loader initialized: {self.external_path}")
+            logger.info(f"External tasks path: {self.external_path}")
         else:
             logger.info("No external tasks path configured (EXTERNAL_TASKS_PATH not set)")
 
     def discover_tasks(self) -> dict[str, type]:
-        """Discover and load all tasks from external directory.
+        """Discover and load all tasks from system and external directories.
+
+        System tasks (jobs/system/) are loaded first, then external tasks.
+        External tasks can override system tasks if they have the same name.
 
         Returns:
             Dict mapping task names to task/job classes
         """
-        if not self.external_path:
-            return {}
+        discovered = {}
 
-        external_dir = Path(self.external_path)
-        if not external_dir.exists():
-            logger.warning(f"External tasks directory not found: {self.external_path}")
-            return {}
+        # 1. Load system tasks (built into image)
+        if self.system_path.exists():
+            logger.info(f"Scanning system tasks: {self.system_path}")
+            discovered.update(self._scan_task_directory(self.system_path, "system"))
+        else:
+            logger.warning(f"System tasks directory not found: {self.system_path}")
 
+        # 2. Load external tasks (client-provided, can override system)
+        if self.external_path:
+            external_dir = Path(self.external_path)
+            if external_dir.exists():
+                logger.info(f"Scanning external tasks: {self.external_path}")
+                external_tasks = self._scan_task_directory(external_dir, "external")
+
+                # Warn if external task overrides system task
+                for task_name in external_tasks:
+                    if task_name in discovered:
+                        logger.warning(
+                            f"⚠️ External task '{task_name}' overrides system task"
+                        )
+
+                discovered.update(external_tasks)
+            else:
+                logger.warning(f"External tasks directory not found: {self.external_path}")
+        else:
+            logger.info("No external tasks configured")
+
+        self._loaded_tasks = discovered
+        logger.info(
+            f"✅ Loaded {len(discovered)} tasks "
+            f"(system + external)"
+        )
+        return discovered
+
+    def _scan_task_directory(
+        self, directory: Path, source_type: str
+    ) -> dict[str, type]:
+        """Scan a directory for task modules.
+
+        Args:
+            directory: Directory to scan
+            source_type: 'system' or 'external' (for logging)
+
+        Returns:
+            Dict mapping task names to job classes
+        """
         discovered = {}
 
         # Scan for task directories
-        for task_dir in external_dir.iterdir():
+        for task_dir in directory.iterdir():
             if not task_dir.is_dir() or task_dir.name.startswith("_"):
                 continue
 
@@ -81,27 +134,38 @@ class ExternalTaskLoader:
                 continue
 
             try:
-                job_class = self._load_task_module(task_dir.name, job_file)
+                job_class = self._load_task_module(
+                    task_dir.name, job_file, source_type
+                )
                 if job_class:
                     discovered[task_dir.name] = job_class
-                    logger.info(f"✅ Loaded external task: {task_dir.name}")
+                    logger.info(f"✅ Loaded {source_type} task: {task_dir.name}")
             except Exception as e:
-                logger.error(f"❌ Failed to load task {task_dir.name}: {e}", exc_info=True)
+                logger.error(
+                    f"❌ Failed to load {source_type} task {task_dir.name}: {e}",
+                    exc_info=True,
+                )
 
-        self._loaded_tasks = discovered
         return discovered
 
-    def _load_task_module(self, task_name: str, job_file: Path) -> type | None:
+    def _load_task_module(
+        self, task_name: str, job_file: Path, source_type: str = "external"
+    ) -> type | None:
         """Load job class from Python file.
 
         Args:
             task_name: Name of the task
             job_file: Path to job.py file
+            source_type: 'system' or 'external' (for module naming)
 
         Returns:
             Job class if found, None otherwise
         """
-        module_name = f"external_tasks.{task_name}"
+        # Use appropriate module prefix based on source
+        if source_type == "system":
+            module_name = f"jobs.system.{task_name}"
+        else:
+            module_name = f"external_tasks.{task_name}"
 
         try:
             # Load module from file

@@ -1,7 +1,11 @@
 """Job registry for managing different types of scheduled jobs.
 
-All jobs are now loaded from external_tasks/ directory for client customization.
-Jobs are dynamically discovered at runtime without rebuilding the Docker image.
+Jobs are loaded from two sources:
+1. System tasks (jobs/system/) - Built into image (slack, gdrive)
+2. External tasks (external_tasks/) - Client-provided (metric_sync, portal_sync)
+
+System tasks are always available. External tasks are discovered at runtime
+without rebuilding the Docker image.
 """
 
 import logging
