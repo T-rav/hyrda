@@ -1,18 +1,81 @@
 """Synthesizer node - combines findings into comprehensive report."""
 
+import asyncio
 import os
 import logging
-
-from config.settings import Settings
+from datetime import datetime
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
+from config.settings import Settings
 
 from ..state import ResearchAgentState
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_and_upload_pdf(
+    final_report: str, query: str, task_count: int
+) -> str | None:
+    """Generate PDF and upload to S3 (blocking I/O, run in thread).
+
+    Args:
+        final_report: Markdown content
+        query: Research query
+        task_count: Number of completed tasks
+
+    Returns:
+        Presigned URL or None if failed
+    """
+    try:
+        from utils.pdf_generator import markdown_to_pdf
+
+        from ..services.file_cache import ResearchFileCache
+
+        # Generate PDF from markdown (blocking file I/O)
+        pdf_bytes_io = markdown_to_pdf(
+            markdown_content=final_report,
+            title=f"Research Report: {query[:100]}",
+            metadata={
+                "generated_at": datetime.now().isoformat(),
+                "query": query,
+                "task_count": task_count,
+            },
+            style="professional",
+        )
+
+        if not pdf_bytes_io:
+            logger.warning("PDF generation returned None")
+            return None
+
+        # Upload to S3/MinIO (blocking network I/O)
+        file_cache = ResearchFileCache()
+        cached_file = file_cache.cache_file(
+            file_type="pdf",
+            content=pdf_bytes_io.getvalue(),
+            metadata={
+                "query": query,
+                "title": f"Research Report: {query[:100]}",
+                "generated_at": datetime.now().isoformat(),
+                "report_length": len(final_report),
+            },
+        )
+
+        if not cached_file:
+            logger.warning("File cache returned None")
+            return None
+
+        # Generate presigned URL (valid for 7 days)
+        pdf_url = file_cache.get_presigned_url(
+            cached_file.file_path, expiration=604800
+        )
+        return pdf_url
+
+    except Exception as e:
+        logger.error(f"PDF generation/upload failed: {e}")
+        return None
 
 
 async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
@@ -100,52 +163,18 @@ Format as markdown bullet list with key takeaways."""
 
         logger.info(f"Report synthesized: {len(final_report)} characters")
 
-        # Generate PDF and upload to S3
+        # Generate PDF and upload to S3 (in thread to avoid blocking I/O)
         pdf_url = None
         try:
-            from datetime import datetime
-
-            from utils.pdf_generator import markdown_to_pdf
-
-            from ..services.file_cache import ResearchFileCache
-
-            # Generate PDF from markdown
-            pdf_bytes_io = markdown_to_pdf(
-                markdown_content=final_report,
-                title=f"Research Report: {query[:100]}",
-                metadata={
-                    "generated_at": datetime.now().isoformat(),
-                    "query": query,
-                    "task_count": len(completed_tasks),
-                },
-                style="professional",
+            # Run PDF generation in separate thread (blocking file I/O)
+            pdf_url = await asyncio.to_thread(
+                _generate_and_upload_pdf,
+                final_report,
+                query,
+                len(completed_tasks)
             )
-
-            if pdf_bytes_io:
-                # Upload to S3/MinIO
-                file_cache = ResearchFileCache()
-                cached_file = file_cache.cache_file(
-                    file_type="pdf",
-                    content=pdf_bytes_io.getvalue(),
-                    metadata={
-                        "query": query,
-                        "title": f"Research Report: {query[:100]}",
-                        "generated_at": datetime.now().isoformat(),
-                        "report_length": len(final_report),
-                    },
-                )
-
-                # Generate presigned URL (valid for 7 days)
-                if cached_file:
-                    pdf_url = file_cache.get_presigned_url(
-                        cached_file.file_path, expiration=604800
-                    )
-                    logger.info(f"✅ PDF uploaded to S3: {pdf_url[:100]}...")
-                else:
-                    logger.warning("File cache returned None")
-            else:
-                logger.warning("PDF generation returned None")
-
+            if pdf_url:
+                logger.info(f"✅ PDF uploaded to S3: {pdf_url[:100]}...")
         except Exception as pdf_error:
             logger.error(f"Failed to generate/upload PDF: {pdf_error}")
             # Continue without PDF - don't fail the whole synthesis
