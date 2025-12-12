@@ -34,8 +34,8 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
 
     logger.info(f"Researcher working on: {current_task.description[:60]}...")
 
-    # Initialize LLM with tools
-    settings = await asyncio.to_thread(Settings)
+    # Initialize LLM with tools (Settings() in thread to avoid blocking os.getcwd)
+    settings = await asyncio.to_thread(lambda: Settings())
 
     llm = ChatOpenAI(
         model=settings.llm.model,

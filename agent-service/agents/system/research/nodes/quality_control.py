@@ -68,8 +68,8 @@ async def quality_control(state: ResearchAgentState) -> dict[str, Any]:
             "messages": [AIMessage(content=f"⚠️ Quality issues: {', '.join(issues)}")],
         }
 
-    # Deep quality check with LLM
-    settings = await asyncio.to_thread(Settings)
+    # Deep quality check with LLM (Settings() in thread to avoid blocking os.getcwd)
+    settings = await asyncio.to_thread(lambda: Settings())
 
     llm = ChatOpenAI(
         model=settings.llm.model,

@@ -40,8 +40,8 @@ async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
             "messages": [AIMessage(content="⚠️ No completed tasks to synthesize")],
         }
 
-    # Initialize LLM
-    settings = await asyncio.to_thread(Settings)
+    # Initialize LLM (Settings() in thread to avoid blocking os.getcwd)
+    settings = await asyncio.to_thread(lambda: Settings())
 
     llm = ChatOpenAI(
         model=settings.llm.model,

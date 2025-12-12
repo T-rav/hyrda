@@ -83,8 +83,8 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
             update={"supervisor_messages": state.get("supervisor_messages", [])},
         )
 
-    # Get LLM configuration
-    settings = await asyncio.to_thread(Settings)
+    # Get LLM configuration (Settings() in thread to avoid blocking os.getcwd)
+    settings = await asyncio.to_thread(lambda: Settings())
 
     # Create ChatOpenAI instance
     llm = ChatOpenAI(
