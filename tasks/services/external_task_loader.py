@@ -63,7 +63,7 @@ class ExternalTaskLoader:
         """Discover and load all tasks from system and external directories.
 
         System tasks (jobs/system/) are loaded first, then external tasks.
-        External tasks can override system tasks if they have the same name.
+        External tasks CANNOT override system tasks - conflicts are rejected.
 
         Returns:
             Dict mapping task names to task/job classes
@@ -77,21 +77,22 @@ class ExternalTaskLoader:
         else:
             logger.warning(f"System tasks directory not found: {self.system_path}")
 
-        # 2. Load external tasks (client-provided, can override system)
+        # 2. Load external tasks (client-provided, CANNOT override system)
         if self.external_path:
             external_dir = Path(self.external_path)
             if external_dir.exists():
                 logger.info(f"Scanning external tasks: {self.external_path}")
                 external_tasks = self._scan_task_directory(external_dir, "external")
 
-                # Warn if external task overrides system task
-                for task_name in external_tasks:
+                # Prevent external tasks from overriding system tasks
+                for task_name, task_class in external_tasks.items():
                     if task_name in discovered:
-                        logger.warning(
-                            f"⚠️ External task '{task_name}' overrides system task"
+                        logger.error(
+                            f"❌ External task '{task_name}' conflicts with system task - IGNORING external version"
                         )
-
-                discovered.update(external_tasks)
+                        # Skip this external task - system takes precedence
+                    else:
+                        discovered[task_name] = task_class
             else:
                 logger.warning(f"External tasks directory not found: {self.external_path}")
         else:
