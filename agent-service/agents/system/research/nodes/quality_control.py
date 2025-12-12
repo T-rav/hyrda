@@ -69,9 +69,8 @@ async def quality_control(state: ResearchAgentState) -> dict[str, Any]:
             "messages": [AIMessage(content=f"⚠️ Quality issues: {', '.join(issues)}")],
         }
 
-    # Deep quality check with LLM (Settings() in thread to avoid blocking os.getcwd)
-    # Use os.getenv to avoid blocking I/O
-
+    # Deep quality check with LLM
+    settings = Settings()
     llm = ChatOpenAI(
         model=settings.llm.model,
         api_key=settings.llm.api_key,

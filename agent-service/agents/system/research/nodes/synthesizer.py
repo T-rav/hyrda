@@ -41,9 +41,8 @@ async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
             "messages": [AIMessage(content="⚠️ No completed tasks to synthesize")],
         }
 
-    # Initialize LLM (Settings() in thread to avoid blocking os.getcwd)
-    # Use os.getenv to avoid blocking I/O
-
+    # Initialize LLM
+    settings = Settings()
     llm = ChatOpenAI(
         model=settings.llm.model,
         api_key=settings.llm.api_key,

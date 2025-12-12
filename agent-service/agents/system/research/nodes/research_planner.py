@@ -36,9 +36,8 @@ async def create_research_plan(state: ResearchAgentState) -> dict[str, Any]:
 
     logger.info(f"Creating research plan for query: {query[:100]}...")
 
-    # Initialize LLM with Settings (Settings() in thread to avoid blocking os.getcwd)
-    # Use os.getenv to avoid blocking I/O
-
+    # Initialize LLM
+    settings = Settings()
     llm = ChatOpenAI(
         model=settings.llm.model,
         api_key=settings.llm.api_key,
