@@ -21,7 +21,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 from config.settings import TasksSettings
 from task_types import JobExecutionResult
 
-from .base_job import BaseJob
+from jobs.base_job import BaseJob
 
 Base = declarative_base()
 

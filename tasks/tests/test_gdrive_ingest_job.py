@@ -9,7 +9,7 @@ from unittest.mock import Mock
 import pytest
 
 from config.settings import TasksSettings
-from jobs.gdrive_ingest import GDriveIngestJob
+from jobs.system.gdrive_ingest.job import GDriveIngestJob
 
 
 @pytest.fixture

@@ -5,8 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from config.settings import TasksSettings
-
-from .base_job import BaseJob
+from jobs.base_job import BaseJob
 
 logger = logging.getLogger(__name__)
 

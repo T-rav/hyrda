@@ -9,7 +9,7 @@ from jobs.base_job import BaseJob
 
 # MetricsCollectionJob removed - module doesn't exist
 # from jobs.metrics_collection import MetricsCollectionJob
-from jobs.slack_user_import import SlackUserImportJob
+from jobs.system.slack_user_import.job import SlackUserImportJob
 
 # Import test utilities from centralized location
 from tests.utils import (
