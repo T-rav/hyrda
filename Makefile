@@ -300,6 +300,7 @@ docker-up: check-env
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
 	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
 	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - 💬 LibreChat UI: http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
 	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - 🗄️  Database Admin: http://localhost:8081$(RESET)"
 	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
@@ -499,6 +500,7 @@ start: docker-build docker-up docker-monitor
 	@echo ""
 	@echo "$(BLUE)📊 Main Services:$(RESET)"
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
+	@echo "$(BLUE)  - 💬 LibreChat (ChatGPT UI): http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 	@echo ""
