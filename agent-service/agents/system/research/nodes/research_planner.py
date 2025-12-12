@@ -1,6 +1,6 @@
 """Research planning node - creates structured research plan with TODO tasks."""
 
-import asyncio
+import os
 import json
 import logging
 import re
@@ -9,7 +9,6 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
-from config.settings import Settings
 
 from ..state import ResearchAgentState, ResearchTask
 
@@ -36,11 +35,11 @@ async def create_research_plan(state: ResearchAgentState) -> dict[str, Any]:
     logger.info(f"Creating research plan for query: {query[:100]}...")
 
     # Initialize LLM with Settings (Settings() in thread to avoid blocking os.getcwd)
-    settings = await asyncio.to_thread(lambda: Settings())
+    # Use os.getenv to avoid blocking I/O
 
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
+        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        api_key=os.getenv("LLM_API_KEY", ""),
         temperature=0.1
     )
 

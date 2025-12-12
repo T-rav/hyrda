@@ -1,13 +1,12 @@
 """Synthesizer node - combines findings into comprehensive report."""
 
-import asyncio
+import os
 import logging
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
-from config.settings import Settings
 
 from ..state import ResearchAgentState
 
@@ -41,11 +40,11 @@ async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
         }
 
     # Initialize LLM (Settings() in thread to avoid blocking os.getcwd)
-    settings = await asyncio.to_thread(lambda: Settings())
+    # Use os.getenv to avoid blocking I/O
 
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
+        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        api_key=os.getenv("LLM_API_KEY", ""),
         temperature=0.3
     )
 

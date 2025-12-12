@@ -1,13 +1,12 @@
 """Quality control node - validates report quality with revision loop."""
 
-import asyncio
+import os
 import logging
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
-from config.settings import Settings
 
 from ..configuration import (
     MAX_REVISIONS,
@@ -69,11 +68,11 @@ async def quality_control(state: ResearchAgentState) -> dict[str, Any]:
         }
 
     # Deep quality check with LLM (Settings() in thread to avoid blocking os.getcwd)
-    settings = await asyncio.to_thread(lambda: Settings())
+    # Use os.getenv to avoid blocking I/O
 
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
+        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        api_key=os.getenv("LLM_API_KEY", ""),
         temperature=0.1
     )
 

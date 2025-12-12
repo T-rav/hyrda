@@ -3,7 +3,7 @@
 Supervisor delegates research tasks to parallel researchers and coordinates execution.
 """
 
-import asyncio
+import os
 import logging
 from datetime import datetime
 
@@ -13,7 +13,6 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END
 from langgraph.types import Command
 
-from config.settings import Settings
 
 from ..state import (
     ConductResearch,
@@ -84,12 +83,12 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         )
 
     # Get LLM configuration (Settings() in thread to avoid blocking os.getcwd)
-    settings = await asyncio.to_thread(lambda: Settings())
+    # Use os.getenv to avoid blocking I/O
 
     # Create ChatOpenAI instance
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
+        model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+        api_key=os.getenv("LLM_API_KEY", ""),
         temperature=0.7,
     )
 
