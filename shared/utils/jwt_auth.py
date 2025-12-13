@@ -25,12 +25,14 @@ def _get_redis():
     if _redis_client is None:
         try:
             import redis
+
             redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
             _redis_client = redis.from_url(redis_url, decode_responses=True)
         except Exception as e:
             logger.warning(f"Redis not available for token revocation: {e}")
             _redis_client = False  # Mark as unavailable
     return _redis_client if _redis_client is not False else None
+
 
 # JWT Configuration
 # SECURITY: Fail fast if JWT_SECRET_KEY not set in production
@@ -44,6 +46,7 @@ if not JWT_SECRET_KEY:
         )
     # Development only - use insecure default
     import secrets
+
     JWT_SECRET_KEY = secrets.token_urlsafe(32)
     logger.warning(
         f"⚠️  Using randomly generated JWT secret for development: {JWT_SECRET_KEY[:10]}... "
@@ -66,6 +69,7 @@ if not SERVICE_TOKEN:
         )
     # Development only - use random token
     import secrets
+
     SERVICE_TOKEN = f"dev-{secrets.token_urlsafe(32)}"
     logger.warning(
         f"⚠️  Using randomly generated service token for development: {SERVICE_TOKEN[:15]}... "
@@ -294,5 +298,5 @@ def verify_service_token(token: str) -> dict[str, str] | None:
             logger.debug(f"Valid service token for: {service_name}")
             return {"service": service_name}
 
-    logger.warning(f"Invalid service token attempted")
+    logger.warning("Invalid service token attempted")
     return None

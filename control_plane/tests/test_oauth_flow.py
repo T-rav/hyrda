@@ -3,11 +3,8 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 # Add control_plane to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -37,10 +34,11 @@ class TestOAuthScopeHandling:
         ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import get_flow
 
-            flow = get_flow("https://localhost:6001/auth/callback")
+            get_flow("https://localhost:6001/auth/callback")
 
         # Verify Flow.from_client_config was called with correct parameters
         mock_flow_class.assert_called_once()
@@ -60,6 +58,7 @@ class TestDomainVerification:
         with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "*"}, clear=False):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -69,9 +68,12 @@ class TestDomainVerification:
 
     def test_specific_domain_only_allows_matching_emails(self):
         """Test that specific domain only allows matching emails."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False
+        ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -85,6 +87,7 @@ class TestDomainVerification:
         with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "*"}, clear=False):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -93,9 +96,12 @@ class TestDomainVerification:
 
     def test_malformed_email_returns_false(self):
         """Test that malformed email returns False."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False
+        ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -108,9 +114,12 @@ class TestOAuthCallback:
 
     def test_callback_requires_session_state(self):
         """Test that callback requires OAuth state in session."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False
+        ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 

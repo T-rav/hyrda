@@ -2,7 +2,9 @@
 
 Security: Validates all job parameters to prevent injection attacks and type confusion.
 """
-from typing import Any, Optional
+
+from typing import Any
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -12,31 +14,24 @@ class GDriveIngestParams(BaseModel):
     Security: Validates folder/file IDs, credential IDs, and metadata structure.
     """
 
-    folder_id: Optional[str] = Field(
+    folder_id: str | None = Field(
         None,
         min_length=1,
         max_length=200,
-        description="Google Drive folder ID to ingest"
+        description="Google Drive folder ID to ingest",
     )
-    file_id: Optional[str] = Field(
-        None,
-        min_length=1,
-        max_length=200,
-        description="Google Drive file ID to ingest"
+    file_id: str | None = Field(
+        None, min_length=1, max_length=200, description="Google Drive file ID to ingest"
     )
     credential_id: str = Field(
         ...,
         min_length=1,
         max_length=100,
-        description="OAuth credential ID from database"
+        description="OAuth credential ID from database",
     )
-    recursive: bool = Field(
-        default=True,
-        description="Recursively ingest subfolders"
-    )
+    recursive: bool = Field(default=True, description="Recursively ingest subfolders")
     metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Custom metadata to attach to documents"
+        default_factory=dict, description="Custom metadata to attach to documents"
     )
 
     @field_validator("metadata")
@@ -51,6 +46,7 @@ class GDriveIngestParams(BaseModel):
 
         # Limit metadata size to prevent DoS
         import json
+
         metadata_json = json.dumps(v)
         if len(metadata_json) > 10000:  # 10KB limit
             raise ValueError("metadata exceeds maximum size of 10KB")
@@ -77,14 +73,11 @@ class GDriveIngestParams(BaseModel):
         file_id = self.file_id
 
         if not folder_id and not file_id:
-            raise ValueError(
-                "Must provide either 'folder_id' or 'file_id' parameter"
-            )
+            raise ValueError("Must provide either 'folder_id' or 'file_id' parameter")
 
         if folder_id and file_id:
             raise ValueError(
-                "Cannot provide both 'folder_id' and 'file_id' parameters. "
-                "Choose one."
+                "Cannot provide both 'folder_id' and 'file_id' parameters. Choose one."
             )
 
         return self
@@ -122,6 +115,7 @@ def validate_job_params(job_type: str, params: dict[str, Any]) -> dict[str, Any]
         # Unknown job type - allow but log warning
         # (for extensibility with external job types)
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(
             f"No validation schema for job type '{job_type}'. "

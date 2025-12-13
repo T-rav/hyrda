@@ -5,7 +5,7 @@ import os
 # Cache directory for storing downloaded data
 RESEARCH_CACHE_DIR = os.getenv(
     "RESEARCH_CACHE_DIR",
-    "/tmp/research_cache"  # Default to /tmp, override in production
+    "/tmp/research_cache",  # Default to /tmp, override in production
 )
 
 # Research depth settings

@@ -30,6 +30,7 @@ router = APIRouter(
 # Pydantic models for request/response
 class UserAdminUpdate(BaseModel):
     """UserAdminUpdate class."""
+
     is_admin: bool
 
 
@@ -84,7 +85,9 @@ async def list_users(request: Request) -> dict[str, Any]:
     """
     try:
         # Get pagination parameters
-        page, per_page = get_pagination_params(request, default_per_page=50, max_per_page=100)
+        page, per_page = get_pagination_params(
+            request, default_per_page=50, max_per_page=100
+        )
 
         with get_db_session() as session:
             # Build query
@@ -264,7 +267,9 @@ async def update_user_admin_status(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{user_id}/permissions", dependencies=[Depends(get_current_user_or_service)])
+@router.get(
+    "/{user_id}/permissions", dependencies=[Depends(get_current_user_or_service)]
+)
 async def get_user_permissions(user_id: str) -> dict:
     """Get user's agent permissions (direct + inherited from groups)."""
     try:
@@ -286,6 +291,7 @@ async def get_user_permissions(user_id: str) -> dict:
 
             # Get permissions from all groups the user belongs to
             from models import AgentGroupPermission
+
             group_permissions = []
             if group_names:
                 group_permissions = (
@@ -302,23 +308,27 @@ async def get_user_permissions(user_id: str) -> dict:
             for p in direct_permissions:
                 if p.agent_name not in all_agent_names:
                     all_agent_names.add(p.agent_name)
-                    permissions_list.append({
-                        "agent_name": p.agent_name,
-                        "granted_by": p.granted_by,
-                        "granted_at": str(p.granted_at),
-                        "source": "direct"
-                    })
+                    permissions_list.append(
+                        {
+                            "agent_name": p.agent_name,
+                            "granted_by": p.granted_by,
+                            "granted_at": str(p.granted_at),
+                            "source": "direct",
+                        }
+                    )
 
             # Add inherited group permissions
             for p in group_permissions:
                 if p.agent_name not in all_agent_names:
                     all_agent_names.add(p.agent_name)
-                    permissions_list.append({
-                        "agent_name": p.agent_name,
-                        "granted_by": p.granted_by or "group",
-                        "granted_at": str(p.granted_at) if p.granted_at else "",
-                        "source": f"group:{p.group_name}"
-                    })
+                    permissions_list.append(
+                        {
+                            "agent_name": p.agent_name,
+                            "granted_by": p.granted_by or "group",
+                            "granted_at": str(p.granted_at) if p.granted_at else "",
+                            "source": f"group:{p.group_name}",
+                        }
+                    )
 
             return {"permissions": permissions_list}
 

@@ -47,6 +47,7 @@ class HelpAgent(BaseAgent):
 
         # Get all registered agents from control-plane
         from services.agent_registry import list_agents
+
         agents = list_agents()
 
         # Build response

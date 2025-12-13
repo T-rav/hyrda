@@ -116,7 +116,7 @@ async def require_service_auth(
 
     logger.info(
         f"Service call: {service_name} -> {method} {path} | "
-        f"IP: {client_ip} | Auth time: {elapsed*1000:.2f}ms | "
+        f"IP: {client_ip} | Auth time: {elapsed * 1000:.2f}ms | "
         f"Timestamp: {datetime.now(UTC).isoformat()}"
     )
 

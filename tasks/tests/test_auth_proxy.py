@@ -1,7 +1,5 @@
 """Tests for tasks service auth proxy to control-plane."""
 
-import os
-
 
 class TestAuthProxyConfiguration:
     """Test auth proxy configuration."""

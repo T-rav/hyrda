@@ -26,7 +26,9 @@ class TestGetAgent:
             "agent_class": mock_agent_class,
         }
 
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             agent = get_agent("test_agent")
 
             assert agent == mock_agent_instance
@@ -46,9 +48,12 @@ class TestGetAgent:
             # Missing agent_class
         }
 
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             with pytest.raises(
-                ValueError, match="found in control-plane but no implementation available"
+                ValueError,
+                match="found in control-plane but no implementation available",
             ):
                 get_agent("test_agent")
 
@@ -64,7 +69,9 @@ class TestGetAgent:
         }
 
         # get_agent_info should handle alias resolution
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             agent = get_agent("profiler")  # Using alias
 
             assert agent == mock_agent_instance
@@ -82,7 +89,9 @@ class TestGetAgent:
         }
 
         # get_agent_info handles case conversion
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             agent = get_agent("PROFILE")  # Uppercase
 
             assert agent == mock_agent_instance
@@ -97,7 +106,9 @@ class TestGetAgent:
             "agent_class": mock_agent_class,
         }
 
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             with pytest.raises(Exception, match="Initialization failed"):
                 get_agent("broken_agent")
 
@@ -113,7 +124,9 @@ class TestGetAgent:
             "agent_class": mock_agent_class,
         }
 
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             agent1 = get_agent("test_agent")
             agent2 = get_agent("test_agent")
 
@@ -134,14 +147,14 @@ class TestGetAgentIntegration:
         agent_dir = tmp_path / "test_agent"
         agent_dir.mkdir()
 
-        agent_code = '''
+        agent_code = """
 class Agent:
     def __init__(self):
         self.name = "test"
 
     async def invoke(self, query: str, context: dict) -> dict:
         return {"response": f"Echo: {query}", "metadata": {}}
-'''
+"""
         (agent_dir / "agent.py").write_text(agent_code)
 
         # Mock control-plane to return agent metadata
@@ -206,7 +219,9 @@ class Agent:
             "langgraph_assistant_id": "asst_123",  # For cloud mode
         }
 
-        with patch("services.agent_registry.get_agent_info", return_value=mock_agent_info):
+        with patch(
+            "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ):
             # In embedded mode, get_agent returns instance
             agent = get_agent("profile")
             assert agent == mock_instance

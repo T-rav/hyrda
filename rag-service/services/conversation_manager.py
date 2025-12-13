@@ -128,15 +128,11 @@ class ConversationManager:
         """
         # Short conversation: no summarization needed
         if not self.should_summarize(messages, system_message, existing_summary):
-            logger.info(
-                f"Conversation has {len(messages)} messages, no summarization needed"
-            )
+            logger.info(f"Conversation has {len(messages)} messages, no summarization needed")
             return system_message, messages
 
         # Long conversation: summarize old messages
-        logger.info(
-            f"Conversation has {len(messages)} messages, triggering summarization"
-        )
+        logger.info(f"Conversation has {len(messages)} messages, triggering summarization")
 
         # Keep last N recent messages, summarize the rest
         recent_messages = messages[-self.keep_recent :]
@@ -317,9 +313,7 @@ def estimate_message_tokens(messages: list[dict[str, str]]) -> int:
     return int(total_chars / 4)  # Rough approximation
 
 
-def should_trigger_summarization(
-    messages: list[dict[str, str]], max_messages: int = 20
-) -> bool:
+def should_trigger_summarization(messages: list[dict[str, str]], max_messages: int = 20) -> bool:
     """
     Check if summarization should be triggered.
 

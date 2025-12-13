@@ -68,6 +68,7 @@ class SECQueryTool(BaseTool):
 
     class Config:
         """Config class."""
+
         arbitrary_types_allowed = True
 
     def __init__(self, llm: Any = None, openai_api_key: str | None = None, **kwargs):
@@ -183,7 +184,9 @@ class SECQueryTool(BaseTool):
                     # Process all chunks from the same filing together
                     filing_groups: dict[tuple, list[tuple[str, dict]]] = {}
                     for chunk, metadata in zip(
-                        cached_data["chunks"], cached_data["chunk_metadata"], strict=False
+                        cached_data["chunks"],
+                        cached_data["chunk_metadata"],
+                        strict=False,
                     ):
                         # Create a key from filing-level metadata (excluding chunk_index)
                         filing_key = (

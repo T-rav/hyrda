@@ -7,14 +7,14 @@ Security:
 - External calls: Use HTTPS with proper certificate validation
 - Never use verify=False in production
 """
+
 import os
 import httpx
 from typing import Optional
 
 
 def get_secure_client(
-    timeout: float = 10.0,
-    verify: Optional[bool] = None
+    timeout: float = 10.0, verify: Optional[bool] = None
 ) -> httpx.AsyncClient:
     """Get a properly configured HTTP client for service-to-service calls.
 
@@ -34,6 +34,7 @@ def get_secure_client(
     - For external calls, always use HTTPS with proper verification
     """
     import logging
+
     logger = logging.getLogger(__name__)
 
     env = os.getenv("ENVIRONMENT", "development").lower()

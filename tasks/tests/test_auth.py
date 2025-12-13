@@ -169,9 +169,8 @@ class TestOAuthFlow:
         with (
             patch.dict(os.environ, {}, clear=True),
             patch("utils.auth.GOOGLE_CLIENT_ID", None),
-            patch("utils.auth.GOOGLE_CLIENT_SECRET", None),pytest.raises(
-            utils.auth.AuthError, match="Google OAuth not configured"
-        )
+            patch("utils.auth.GOOGLE_CLIENT_SECRET", None),
+            pytest.raises(utils.auth.AuthError, match="Google OAuth not configured"),
         ):
             utils.auth.get_flow("http://localhost:5001/auth/callback")
 

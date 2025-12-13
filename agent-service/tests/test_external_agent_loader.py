@@ -9,7 +9,7 @@ with importlib.import_module-based loading.
 
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -47,8 +47,7 @@ def temp_agents_dir(tmp_path):
 
     # Cleanup: Remove any modules from sys.modules that were loaded from this temp dir
     modules_to_remove = [
-        key for key in list(sys.modules.keys())
-        if key.startswith("external_agents")
+        key for key in list(sys.modules.keys()) if key.startswith("external_agents")
     ]
     for module_key in modules_to_remove:
         sys.modules.pop(module_key, None)
@@ -190,7 +189,7 @@ class TestAgentLoading:
         (agent_dir / "helper.py").write_text("def helper(): return 'helped'")
 
         # Create agent that imports helper
-        agent_code = '''
+        agent_code = """
 from .helper import helper
 
 class Agent:
@@ -199,7 +198,7 @@ class Agent:
 
     async def invoke(self, query: str, context: dict) -> dict:
         return {"response": self.name, "metadata": {}}
-'''
+"""
         (agent_dir / "agent.py").write_text(agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))
@@ -353,12 +352,12 @@ class TestEdgeCases:
 
     def test_agent_with_import_errors(self, temp_agents_dir):
         """Test handling of agent with import errors."""
-        agent_code = '''
+        agent_code = """
 import nonexistent_module
 
 class Agent:
     pass
-'''
+"""
         create_agent_package(temp_agents_dir, "import_error_agent", agent_code)
 
         loader = ExternalAgentLoader(str(temp_agents_dir))

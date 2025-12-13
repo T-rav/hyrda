@@ -22,10 +22,8 @@ def clear_prometheus_registry():
     """Clear Prometheus registry before each test."""
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
-        try:
+        with contextlib.suppress(Exception):
             REGISTRY.unregister(collector)
-        except Exception:
-            pass
     yield
 
 

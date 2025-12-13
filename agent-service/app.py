@@ -95,7 +95,9 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(agents_router, prefix="/api")  # Public API (RBAC, delegates to AgentClient)
+app.include_router(
+    agents_router, prefix="/api"
+)  # Public API (RBAC, delegates to AgentClient)
 app.include_router(embedded_agents_router)  # Execution API (runs actual agent code)
 
 

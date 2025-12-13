@@ -43,9 +43,7 @@ class LLMService:
         logger.info("Using standard RAG service")
 
         # Initialize Langfuse service
-        self.langfuse_service = initialize_langfuse_service(
-            settings.langfuse, settings.environment
-        )
+        self.langfuse_service = initialize_langfuse_service(settings.langfuse, settings.environment)
 
         # Legacy properties for backward compatibility
         self.model = settings.llm.model

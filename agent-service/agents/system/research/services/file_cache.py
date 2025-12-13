@@ -118,9 +118,7 @@ class ResearchFileCache:
                 except Exception as e:
                     logger.error(f"Failed to create bucket {bucket_name}: {e}")
 
-    def _generate_file_name(
-        self, file_type: str, metadata: dict[str, Any]
-    ) -> str:
+    def _generate_file_name(self, file_type: str, metadata: dict[str, Any]) -> str:
         """Generate smart file name based on type and metadata.
 
         Args:
@@ -210,10 +208,7 @@ class ResearchFileCache:
         filename = self._generate_file_name(file_type, metadata)
 
         # Convert to bytes if string
-        if isinstance(content, str):
-            content_bytes = content.encode("utf-8")
-        else:
-            content_bytes = content
+        content_bytes = content.encode("utf-8") if isinstance(content, str) else content
 
         # Store metadata in S3 object metadata
         s3_metadata = {
@@ -438,9 +433,7 @@ class ResearchFileCache:
             "endpoint": self.endpoint_url,
         }
 
-    def get_presigned_url(
-        self, file_path: str, expiration: int = 3600
-    ) -> str | None:
+    def get_presigned_url(self, file_path: str, expiration: int = 3600) -> str | None:
         """Generate presigned URL for file access.
 
         Args:
@@ -471,7 +464,9 @@ class ResearchFileCache:
                 ExpiresIn=expiration,
             )
 
-            logger.info(f"Generated presigned URL for {file_path} (expires in {expiration}s)")
+            logger.info(
+                f"Generated presigned URL for {file_path} (expires in {expiration}s)"
+            )
             return url
 
         except ClientError as e:

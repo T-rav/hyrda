@@ -8,13 +8,12 @@ so we test them with real tools rather than mocking complex Langchain internals.
 from unittest.mock import AsyncMock
 
 import pytest
-from langchain_core.messages import ToolMessage
-
 from agents.profiler.nodes.researcher import (
     _execute_deep_research,
     _execute_scrape_url,
     _execute_web_search,
 )
+from langchain_core.messages import ToolMessage
 
 
 class TestResearcherHelpers:

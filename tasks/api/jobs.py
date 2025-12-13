@@ -82,9 +82,7 @@ async def get_job(
 
 @router.post("/jobs/{job_id}/pause")
 async def pause_job(
-    request: Request,
-    job_id: str,
-    user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(get_current_user)
 ):
     """Pause a job.
 
@@ -103,8 +101,7 @@ async def pause_job(
     # Verify admin access
     if not user.get("is_admin"):
         raise HTTPException(
-            status_code=403,
-            detail="Admin access required to pause jobs"
+            status_code=403, detail="Admin access required to pause jobs"
         )
 
     scheduler_service = request.app.state.scheduler_service
@@ -121,9 +118,7 @@ async def pause_job(
 
 @router.post("/jobs/{job_id}/resume")
 async def resume_job(
-    request: Request,
-    job_id: str,
-    user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(get_current_user)
 ):
     """Resume a job.
 
@@ -142,8 +137,7 @@ async def resume_job(
     # Verify admin access
     if not user.get("is_admin"):
         raise HTTPException(
-            status_code=403,
-            detail="Admin access required to resume jobs"
+            status_code=403, detail="Admin access required to resume jobs"
         )
 
     scheduler_service = request.app.state.scheduler_service
@@ -160,9 +154,7 @@ async def resume_job(
 
 @router.delete("/jobs/{job_id}")
 async def delete_job(
-    request: Request,
-    job_id: str,
-    user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(get_current_user)
 ):
     """Delete a job and its associated metadata.
 
@@ -181,8 +173,7 @@ async def delete_job(
     # Verify admin access
     if not user.get("is_admin"):
         raise HTTPException(
-            status_code=403,
-            detail="Admin access required to delete jobs"
+            status_code=403, detail="Admin access required to delete jobs"
         )
 
     scheduler_service = request.app.state.scheduler_service
@@ -256,8 +247,7 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
             validated_params = validate_job_params(job_type, job_params)
         except ValueError as e:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid job parameters: {str(e)}"
+                status_code=400, detail=f"Invalid job parameters: {str(e)}"
             )
 
         # Create job using registry (with validated parameters)

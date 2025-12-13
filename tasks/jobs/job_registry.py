@@ -140,9 +140,13 @@ def execute_job_by_type(
 
                         # Check if job should be marked as failed despite completing
                         # Only mark as failed if there were actual errors (not just skipped records)
-                        if (task_run.records_processed and task_run.records_processed > 0
+                        if (
+                            task_run.records_processed
+                            and task_run.records_processed > 0
                             and task_run.records_success == 0
-                            and task_run.records_failed and task_run.records_failed > 0):
+                            and task_run.records_failed
+                            and task_run.records_failed > 0
+                        ):
                             task_run.status = "failed"
                             task_run.error_message = f"All {task_run.records_processed} records failed to process"
 
@@ -182,10 +186,14 @@ class JobRegistry:
         from services.external_task_loader import get_external_loader
 
         external_loader = get_external_loader()
-        self.job_types = external_loader._loaded_tasks.copy()  # Get all discovered tasks
+        self.job_types = (
+            external_loader._loaded_tasks.copy()
+        )  # Get all discovered tasks
 
         if self.job_types:
-            logger.info(f"✅ Loaded {len(self.job_types)} job type(s) from external_tasks/")
+            logger.info(
+                f"✅ Loaded {len(self.job_types)} job type(s) from external_tasks/"
+            )
         else:
             logger.warning(
                 "⚠️ No jobs loaded! Ensure EXTERNAL_TASKS_PATH is set and tasks directory is mounted"

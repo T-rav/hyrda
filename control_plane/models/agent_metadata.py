@@ -23,9 +23,13 @@ class AgentMetadata(Base):
     aliases = Column(Text, nullable=True)  # JSON array of aliases
 
     # Cloud mode deployment info (only used if AGENT_EXECUTION_MODE=cloud)
-    langgraph_assistant_id = Column(String(255), nullable=True)  # LangGraph Cloud assistant ID
+    langgraph_assistant_id = Column(
+        String(255), nullable=True
+    )  # LangGraph Cloud assistant ID
     langgraph_url = Column(String(512), nullable=True)  # LangGraph Cloud deployment URL
-    endpoint_url = Column(String(512), nullable=True)  # HTTP endpoint for agent invocation (embedded or cloud)
+    endpoint_url = Column(
+        String(512), nullable=True
+    )  # HTTP endpoint for agent invocation (embedded or cloud)
 
     # Permission settings
     is_public = Column(

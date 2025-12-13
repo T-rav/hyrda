@@ -3,7 +3,6 @@
 import logging
 import os
 import sys
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -18,7 +17,11 @@ from utils.rate_limit import rate_limit
 
 # Import JWT utilities from shared directory
 sys.path.insert(0, "/app")  # Add app root to path for shared imports
-from shared.utils.jwt_auth import create_access_token, extract_token_from_request, revoke_token
+from shared.utils.jwt_auth import (
+    create_access_token,
+    extract_token_from_request,
+    revoke_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -200,7 +203,7 @@ async def get_token(request: Request):
     if not user_email or not user_info:
         raise HTTPException(
             status_code=401,
-            detail="Not authenticated - please login first at /auth/callback"
+            detail="Not authenticated - please login first at /auth/callback",
         )
 
     # Generate JWT token
@@ -254,10 +257,9 @@ async def logout(request: Request):
     )
 
     # Create response and clear cookie
-    response = JSONResponse({
-        "message": "Logged out successfully",
-        "token_revoked": revoked
-    })
+    response = JSONResponse(
+        {"message": "Logged out successfully", "token_revoked": revoked}
+    )
     response.delete_cookie("access_token")
 
     return response

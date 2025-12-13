@@ -41,13 +41,16 @@ def _load_agent_classes() -> dict[str, type]:
             all_agents[name.lower()] = agent_class
 
         if system_agents:
-            logger.info(f"✅ Loaded {len(system_agents)} system agent(s) from agents/system/")
+            logger.info(
+                f"✅ Loaded {len(system_agents)} system agent(s) from agents/system/"
+            )
     except Exception as e:
         logger.error(f"❌ Error loading system agents: {e}", exc_info=True)
 
     # Load external agents (client-provided, CANNOT override system agents)
     # Skip if EXTERNAL_AGENTS_IN_CLOUD=true (agents deployed to LangGraph Cloud)
     import os
+
     load_external = os.getenv("LOAD_EXTERNAL_AGENTS", "true").lower() == "true"
 
     if load_external:
@@ -69,7 +72,9 @@ def _load_agent_classes() -> dict[str, type]:
                     all_agents[name_lower] = agent_class
 
             if external_agents:
-                logger.info(f"✅ Loaded {len(external_agents)} external agent(s) from volume mount")
+                logger.info(
+                    f"✅ Loaded {len(external_agents)} external agent(s) from volume mount"
+                )
             else:
                 logger.warning(
                     "⚠️ No external agents loaded (EXTERNAL_AGENTS_PATH not set or empty)"
@@ -77,7 +82,9 @@ def _load_agent_classes() -> dict[str, type]:
         except Exception as e:
             logger.error(f"❌ Error loading external agents: {e}", exc_info=True)
     else:
-        logger.info("⏭️ Skipping external agents (LOAD_EXTERNAL_AGENTS=false - deployed to cloud)")
+        logger.info(
+            "⏭️ Skipping external agents (LOAD_EXTERNAL_AGENTS=false - deployed to cloud)"
+        )
 
     _agent_classes = all_agents
     logger.info(f"📦 Total agents available: {len(_agent_classes)} (system + external)")
@@ -118,11 +125,14 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
 
         import requests
         import urllib3
+
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
 
-        response = requests.get(f"{control_plane_url}/api/agents", timeout=5, verify=False)
+        response = requests.get(
+            f"{control_plane_url}/api/agents", timeout=5, verify=False
+        )
         if response.status_code == 200:
             data = response.json()
             agents = data.get("agents", [])
@@ -229,7 +239,7 @@ def get_primary_name(agent_name: str) -> str | None:
     # If it's an alias, find the primary agent with the same name
     registry = get_agent_registry()
     agent_base_name = agent_info.get("name")
-    for name, info in registry.items():
+    for _name, info in registry.items():
         if info.get("is_primary", False) and info.get("name") == agent_base_name:
             return info["name"]
 

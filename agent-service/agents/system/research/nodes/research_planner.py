@@ -1,16 +1,14 @@
 """Research planning node - creates structured research plan with TODO tasks."""
 
-import os
 import json
 import logging
-
-from config.settings import Settings
 import re
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
+from config.settings import Settings
 
 from ..state import ResearchAgentState, ResearchTask
 
@@ -39,9 +37,7 @@ async def create_research_plan(state: ResearchAgentState) -> dict[str, Any]:
     # Initialize LLM
     settings = Settings()
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.1
+        model=settings.llm.model, api_key=settings.llm.api_key, temperature=0.1
     )
 
     # Create planning prompt
@@ -81,15 +77,13 @@ Example task format:
 
     try:
         # Generate research plan
-        response = await llm.ainvoke(
-            [HumanMessage(content=planning_prompt)]
-        )
+        response = await llm.ainvoke([HumanMessage(content=planning_prompt)])
 
         # Parse response (assume JSON or extract structured data)
         content = response.content
 
         # Try to extract JSON from response
-        json_match = re.search(r'\{[\s\S]*\}', content)
+        json_match = re.search(r"\{[\s\S]*\}", content)
         if json_match:
             plan_data = json.loads(json_match.group())
         else:
@@ -97,7 +91,7 @@ Example task format:
             plan_data = {
                 "strategy": content[:500],
                 "tasks": [],
-                "report_structure": "Executive Summary, Key Findings, Detailed Analysis, Conclusion"
+                "report_structure": "Executive Summary, Key Findings, Detailed Analysis, Conclusion",
             }
 
         # Extract strategy
@@ -107,7 +101,7 @@ Example task format:
         research_tasks = []
         for i, task_data in enumerate(plan_data.get("tasks", [])[:20]):  # Max 20 tasks
             task = ResearchTask(
-                task_id=f"task_{i+1}",
+                task_id=f"task_{i + 1}",
                 description=task_data.get("description", "Research task"),
                 priority=task_data.get("priority", "medium"),
                 status="pending",

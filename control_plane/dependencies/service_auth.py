@@ -5,7 +5,6 @@ rather than end users.
 """
 
 import logging
-import os
 import sys
 from typing import Literal
 
@@ -19,8 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 async def verify_service_auth(
-    request: Request,
-    allowed_services: list[str] | None = None
+    request: Request, allowed_services: list[str] | None = None
 ) -> str:
     """
     Verify service-to-service authentication.
@@ -41,10 +39,12 @@ async def verify_service_auth(
     auth_header = request.headers.get("Authorization")
 
     if not auth_header:
-        logger.warning(f"Service auth failed: No token provided | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}")
+        logger.warning(
+            f"Service auth failed: No token provided | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}"
+        )
         raise HTTPException(
             status_code=401,
-            detail="Service authentication required. Include service token in Authorization header."
+            detail="Service authentication required. Include service token in Authorization header.",
         )
 
     # Extract token from "Bearer <token>" format
@@ -62,21 +62,24 @@ async def verify_service_auth(
             break
 
     if not authenticated_service:
-        logger.warning(f"Service auth failed: Invalid token | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid service token"
+        logger.warning(
+            f"Service auth failed: Invalid token | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}"
         )
+        raise HTTPException(status_code=401, detail="Invalid service token")
 
     # Check if service is allowed
     if allowed_services and authenticated_service not in allowed_services:
-        logger.warning(f"Service auth failed: Service '{authenticated_service}' not allowed | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}")
+        logger.warning(
+            f"Service auth failed: Service '{authenticated_service}' not allowed | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}"
+        )
         raise HTTPException(
             status_code=403,
-            detail=f"Service '{authenticated_service}' not authorized for this endpoint"
+            detail=f"Service '{authenticated_service}' not authorized for this endpoint",
         )
 
-    logger.info(f"Service authenticated: {authenticated_service} | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}")
+    logger.info(
+        f"Service authenticated: {authenticated_service} | IP: {request.client.host} | Method: {request.method} | Path: {request.url.path}"
+    )
     return authenticated_service
 
 
@@ -89,6 +92,6 @@ async def verify_agent_service(request: Request) -> Literal["agent-service"]:
     # Note: SERVICE_TOKENS keys don't have "agent-service", they have service names like "bot", "control-plane"
     # For agent-service, we need to check if it's using a valid service token
     # For now, accept any valid service token
-    service = await verify_service_auth(request)
+    await verify_service_auth(request)
     # Agent-service would use its own token or bot token
     return "agent-service"  # type: ignore

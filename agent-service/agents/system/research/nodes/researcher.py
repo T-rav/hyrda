@@ -44,9 +44,7 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
     # Initialize LLM
     settings = Settings()
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.2
+        model=settings.llm.model, api_key=settings.llm.api_key, temperature=0.2
     )
 
     # Use pre-instantiated tools (initialized at module level to avoid blocking I/O)

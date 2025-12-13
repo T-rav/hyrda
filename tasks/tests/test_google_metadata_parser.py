@@ -1,7 +1,5 @@
 """Tests for Google Drive metadata parser."""
 
-import pytest
-
 from services.gdrive.google_metadata_parser import GoogleMetadataParser
 
 
@@ -288,6 +286,8 @@ class TestEnrichFileMetadata:
         assert enriched["folder_path"] == "Shared/Folder"
         assert enriched["owner_emails"] == "owner@example.com"
         # Returns comma-separated emails, not "private_N_users"
-        assert enriched["permissions_summary"] == "owner@example.com, reader@example.com"
+        assert (
+            enriched["permissions_summary"] == "owner@example.com, reader@example.com"
+        )
         assert "formatted_permissions" in enriched
         assert len(enriched["owners"]) == 1

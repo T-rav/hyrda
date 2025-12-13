@@ -6,7 +6,6 @@ These are framework-level agents that ship with every deployment.
 
 import importlib
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -32,9 +31,7 @@ class SystemAgentLoader:
             self.system_agents_path = Path(system_agents_path)
         else:
             # Default: agents/system relative to this file
-            self.system_agents_path = (
-                Path(__file__).parent.parent / "agents" / "system"
-            )
+            self.system_agents_path = Path(__file__).parent.parent / "agents" / "system"
 
         self._loaded_agents: dict[str, Any] = {}
         logger.info(f"SystemAgentLoader initialized: {self.system_agents_path}")

@@ -103,7 +103,8 @@ async def ready():
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
-                    f"{base_url}/health", timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT)
+                    f"{base_url}/health",
+                    timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT),
                 ) as response:
                     if response.status == 200:
                         checks[service_name] = {
@@ -126,7 +127,8 @@ async def ready():
         # Fetch additional data from bot metrics for the UI
         try:
             async with session.get(
-                f"{SERVICES['bot']}/api/metrics", timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT)
+                f"{SERVICES['bot']}/api/metrics",
+                timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT),
             ) as response:
                 if response.status == 200:
                     bot_metrics = await response.json()
@@ -208,7 +210,8 @@ async def get_all_metrics():
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
-                    f"{base_url}/api/metrics", timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT)
+                    f"{base_url}/api/metrics",
+                    timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT),
                 ) as response:
                     if response.status == 200:
                         metrics[service_name] = await response.json()
@@ -241,7 +244,8 @@ async def get_services_health():
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
-                    f"{base_url}/health", timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT)
+                    f"{base_url}/health",
+                    timeout=aiohttp.ClientTimeout(total=DEFAULT_SERVICE_TIMEOUT),
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
@@ -289,10 +293,13 @@ async def get_agent_metrics():
     ALL invocations regardless of client (Slack, LibreChat, direct API).
     """
     try:
-        async with aiohttp.ClientSession() as session, session.get(
-            f"{SERVICES['agent_service']}/api/metrics",
-            timeout=aiohttp.ClientTimeout(total=5),
-        ) as response:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
+                f"{SERVICES['agent_service']}/api/metrics",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response,
+        ):
             if response.status == 200:
                 data = await response.json()
                 return data.get("agent_invocations", {})

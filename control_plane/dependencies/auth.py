@@ -43,11 +43,14 @@ async def get_current_user(request: Request) -> dict:
         HTTPException: 401 if not authenticated
     """
     import logging
+
     logger = logging.getLogger(__name__)
 
     # Try JWT token first (from Authorization header or cookie)
     auth_header = request.headers.get("Authorization")
-    logger.info(f"🔍 AUTH DEBUG: Method={request.method}, Path={request.url.path}, Auth header present: {bool(auth_header)}")
+    logger.info(
+        f"🔍 AUTH DEBUG: Method={request.method}, Path={request.url.path}, Auth header present: {bool(auth_header)}"
+    )
 
     token = extract_token_from_request(auth_header)
 
@@ -87,7 +90,7 @@ async def get_current_user(request: Request) -> dict:
             raise HTTPException(
                 status_code=307,  # Temporary redirect
                 detail="Redirecting to login",
-                headers={"Location": f"{login_url}?redirect={redirect_after_login}"}
+                headers={"Location": f"{login_url}?redirect={redirect_after_login}"},
             )
         else:
             # API clients get 401 with instructions

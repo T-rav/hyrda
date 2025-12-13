@@ -259,8 +259,11 @@ class IngestionOrchestrator:
 
             except Exception as e:
                 import logging
+
                 logger = logging.getLogger(__name__)
-                error_msg = f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
+                error_msg = (
+                    f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
+                )
                 print(error_msg)
                 logger.error(error_msg, exc_info=True)  # Include full traceback
                 error_count += 1
@@ -373,7 +376,9 @@ class IngestionOrchestrator:
             # Get stored metadata
             stored_metadata = doc_info.get("metadata", {})
             stored_owner_emails = stored_metadata.get("owner_emails", "unknown")
-            stored_permissions = stored_metadata.get("permissions_summary", "no_permissions")
+            stored_permissions = stored_metadata.get(
+                "permissions_summary", "no_permissions"
+            )
 
             # Check if metadata changed
             metadata_changed = (
@@ -395,13 +400,13 @@ class IngestionOrchestrator:
 
             # Update each chunk's metadata in Qdrant
             import uuid
+
             for chunk_idx in range(chunk_count):
                 chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{chunk_idx}"))
 
                 # Update payload for this point
                 await self.vector_service.update_payload(
-                    point_id=chunk_uuid,
-                    payload=metadata_updates
+                    point_id=chunk_uuid, payload=metadata_updates
                 )
 
             # Update tracking database with new metadata
@@ -428,6 +433,7 @@ class IngestionOrchestrator:
 
         except Exception as e:
             import logging
+
             logger = logging.getLogger(__name__)
             logger.error(f"Failed to update metadata for {file_info.get('name')}: {e}")
             return False

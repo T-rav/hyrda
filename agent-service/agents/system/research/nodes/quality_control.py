@@ -1,14 +1,12 @@
 """Quality control node - validates report quality with revision loop."""
 
-import os
 import logging
-
-from config.settings import Settings
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
+from config.settings import Settings
 
 from ..configuration import (
     MAX_REVISIONS,
@@ -72,9 +70,7 @@ async def quality_control(state: ResearchAgentState) -> dict[str, Any]:
     # Deep quality check with LLM
     settings = Settings()
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.1
+        model=settings.llm.model, api_key=settings.llm.api_key, temperature=0.1
     )
 
     quality_prompt = f"""Evaluate this research report for quality and completeness.
@@ -137,7 +133,9 @@ Be strict - this should be world-class research quality.
                 "revision_prompt": revision_feedback,
                 "max_revisions_exceeded": False,
                 "messages": [
-                    AIMessage(content=f"🔄 Revision needed: {revision_feedback[:100]}...")
+                    AIMessage(
+                        content=f"🔄 Revision needed: {revision_feedback[:100]}..."
+                    )
                 ],
             }
 

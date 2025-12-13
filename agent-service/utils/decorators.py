@@ -39,6 +39,7 @@ def handle_service_errors(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T | Any]:
         """Decorator."""
+
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
             """Async Wrapper."""
@@ -127,6 +128,7 @@ def retry_on_failure(
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         """Decorator."""
+
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
             """Async Wrapper."""

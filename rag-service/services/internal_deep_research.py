@@ -95,15 +95,11 @@ class InternalDeepResearchService:
             # Determine number of sub-queries based on effort (reduced by ~50% for cost savings)
             num_queries = {"low": 3, "medium": 2, "high": 1}.get(effort, 2)
 
-            logger.info(
-                f"🔍 Starting internal deep research ({effort} effort): {query}"
-            )
+            logger.info(f"🔍 Starting internal deep research ({effort} effort): {query}")
 
             # Step 1: Decompose query into sub-queries
             sub_queries = await self._decompose_query(query, num_queries)
-            logger.info(
-                f"📋 Generated {len(sub_queries)} sub-queries for comprehensive search"
-            )
+            logger.info(f"📋 Generated {len(sub_queries)} sub-queries for comprehensive search")
 
             # Step 2: Retrieve context for each sub-query
             all_chunks = []
@@ -149,10 +145,7 @@ class InternalDeepResearchService:
 
             # Calculate statistics
             unique_documents = len(
-                {
-                    chunk.get("metadata", {}).get("file_name", "unknown")
-                    for chunk in final_chunks
-                }
+                {chunk.get("metadata", {}).get("file_name", "unknown") for chunk in final_chunks}
             )
 
             return {
@@ -213,9 +206,7 @@ Return ONLY the JSON array, no explanation."""
 
             # Validate response
             if isinstance(sub_queries, list) and len(sub_queries) > 0:
-                logger.info(
-                    f"✅ Generated {len(sub_queries)} sub-queries for: {query[:50]}..."
-                )
+                logger.info(f"✅ Generated {len(sub_queries)} sub-queries for: {query[:50]}...")
                 return sub_queries
             else:
                 logger.warning(f"Invalid sub-query format: {response}")
@@ -340,9 +331,7 @@ class _InternalDeepResearchServiceSingleton:
 
             # Check if vector storage is enabled
             if not settings.vector.enabled:
-                logger.info(
-                    "Vector storage disabled - internal deep research unavailable"
-                )
+                logger.info("Vector storage disabled - internal deep research unavailable")
                 return None
 
             # Get required services
@@ -351,12 +340,8 @@ class _InternalDeepResearchServiceSingleton:
             llm_service = LLMService(settings)
             retrieval_service = RetrievalService(settings)
 
-            if not all(
-                [vector_service, embedding_service, llm_service, retrieval_service]
-            ):
-                logger.warning(
-                    "Required services unavailable for internal deep research"
-                )
+            if not all([vector_service, embedding_service, llm_service, retrieval_service]):
+                logger.warning("Required services unavailable for internal deep research")
                 return None
 
             # Initialize vector store (CRITICAL: must be called to set up Qdrant client)

@@ -24,9 +24,7 @@ class RAGGenerateRequest(BaseModel):
         default_factory=list,
         description="Previous conversation messages in format [{'role': 'user', 'content': '...'}, ...]",
     )
-    system_message: str | None = Field(
-        None, description="Custom system prompt (overrides default)"
-    )
+    system_message: str | None = Field(None, description="Custom system prompt (overrides default)")
     user_id: str | None = Field(None, description="User ID for tracing and personalization")
     conversation_id: str | None = Field(
         None, description="Conversation ID for tracing (e.g., Slack thread_ts)"

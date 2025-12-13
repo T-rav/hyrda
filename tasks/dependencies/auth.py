@@ -2,14 +2,11 @@
 
 import os
 import sys
-from pathlib import Path
 
 from fastapi import HTTPException, Request
-from fastapi.responses import RedirectResponse
 
 # Import JWT utilities from shared directory
 sys.path.insert(0, "/app")  # Add app root to path for shared imports
-from shared.utils.jwt_auth import JWTAuthError, extract_token_from_request, verify_token
 from utils.auth import verify_domain
 
 # Control plane base URL for redirects
@@ -33,7 +30,9 @@ async def get_current_user(request: Request) -> dict:
     import httpx
 
     # Proxy auth check to control-plane
-    control_plane_url = os.getenv("CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001")
+    control_plane_url = os.getenv(
+        "CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001"
+    )
 
     try:
         # Forward both Authorization header (JWT) and cookies (session)
@@ -47,7 +46,7 @@ async def get_current_user(request: Request) -> dict:
                 f"{control_plane_url}/api/users/me",
                 headers=headers,
                 cookies=request.cookies,
-                timeout=5.0
+                timeout=5.0,
             )
 
             if response.status_code == 200:

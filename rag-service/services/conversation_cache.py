@@ -36,9 +36,7 @@ class ConversationCache:
                 self._redis_available = True
                 logger.info(f"Connected to Redis at {self.redis_url}")
             except (redis.ConnectionError, redis.TimeoutError, OSError) as e:
-                logger.warning(
-                    f"Redis connection failed: {e}. Will use Slack API only."
-                )
+                logger.warning(f"Redis connection failed: {e}. Will use Slack API only.")
                 self._redis_available = False
                 self.redis_client = None
 
@@ -102,9 +100,7 @@ class ConversationCache:
                     return messages, True, "cache"
 
             except Exception as e:
-                logger.warning(
-                    f"Cache retrieval failed: {e}. Falling back to Slack API."
-                )
+                logger.warning(f"Cache retrieval failed: {e}. Falling back to Slack API.")
 
         # Fallback to Slack API
         logger.info(
@@ -147,18 +143,14 @@ class ConversationCache:
 
             await redis_client.setex(document_key, self.ttl, json.dumps(document_data))
 
-            logger.info(
-                f"Stored document content for thread {thread_ts}: {document_filename}"
-            )
+            logger.info(f"Stored document content for thread {thread_ts}: {document_filename}")
             return True
 
         except Exception as e:
             logger.warning(f"Failed to store document content: {e}")
             return False
 
-    async def get_document_content(
-        self, thread_ts: str
-    ) -> tuple[str | None, str | None]:
+    async def get_document_content(self, thread_ts: str) -> tuple[str | None, str | None]:
         """Retrieve stored document content for thread
 
         Returns:
@@ -283,9 +275,7 @@ class ConversationCache:
             logger.warning(f"Failed to store summary: {e}")
             return False
 
-    async def get_summary(
-        self, thread_ts: str, version: int | None = None
-    ) -> str | None:
+    async def get_summary(self, thread_ts: str, version: int | None = None) -> str | None:
         """
         Retrieve conversation summary from cache.
 
@@ -312,9 +302,7 @@ class ConversationCache:
                 return None
 
             data = json.loads(summary_data)
-            version_str = (
-                f"v{data.get('version', '?')}" if data.get("version") else "current"
-            )
+            version_str = f"v{data.get('version', '?')}" if data.get("version") else "current"
             logger.info(
                 f"Retrieved summary {version_str} for thread {thread_ts}: "
                 f"{len(data.get('summary', ''))} chars (~{data.get('token_count', '?')} tokens)"
@@ -325,9 +313,7 @@ class ConversationCache:
             logger.warning(f"Failed to retrieve summary: {e}")
             return None
 
-    async def get_summary_metadata(
-        self, thread_ts: str, version: int | None = None
-    ) -> dict | None:
+    async def get_summary_metadata(self, thread_ts: str, version: int | None = None) -> dict | None:
         """
         Retrieve summary metadata without the full summary text.
 
@@ -482,9 +468,7 @@ class ConversationCache:
     def _get_cache_age(self, metadata: dict) -> int:
         """Calculate cache age in seconds"""
         try:
-            cached_at = datetime.fromisoformat(
-                metadata["cached_at"].replace("Z", "+00:00")
-            )
+            cached_at = datetime.fromisoformat(metadata["cached_at"].replace("Z", "+00:00"))
             age = (datetime.now(UTC) - cached_at).total_seconds()
             return int(age)
         except Exception:
@@ -517,9 +501,7 @@ class ConversationCache:
                 history = json.loads(history_data)
                 versions = history.get("versions", [])
                 for version_info in versions:
-                    version_key = self._get_summary_key(
-                        thread_ts, version_info["version"]
-                    )
+                    version_key = self._get_summary_key(thread_ts, version_info["version"])
                     keys_to_delete.append(version_key)
 
             deleted = await redis_client.delete(*keys_to_delete)
@@ -550,9 +532,7 @@ class ConversationCache:
 
         try:
             meta_key = self._get_metadata_key(thread_ts)
-            logger.info(
-                f"🔍 Storing thread_type='{thread_type}' for {thread_ts}, key={meta_key}"
-            )
+            logger.info(f"🔍 Storing thread_type='{thread_type}' for {thread_ts}, key={meta_key}")
 
             # Get existing metadata or create new
             existing_meta = await redis_client.get(meta_key)
@@ -586,9 +566,7 @@ class ConversationCache:
         """
         redis_client = await self._get_redis_client()
         if not redis_client:
-            logger.warning(
-                f"get_thread_type: No Redis client available for thread {thread_ts}"
-            )
+            logger.warning(f"get_thread_type: No Redis client available for thread {thread_ts}")
             return None
 
         try:
@@ -597,22 +575,16 @@ class ConversationCache:
             metadata_json = await redis_client.get(meta_key)
 
             if not metadata_json:
-                logger.warning(
-                    f"❌ No metadata found for thread {thread_ts} at key {meta_key}"
-                )
+                logger.warning(f"❌ No metadata found for thread {thread_ts} at key {meta_key}")
                 return None
 
             metadata = json.loads(metadata_json)
             thread_type = metadata.get("thread_type")
-            logger.info(
-                f"✅ Retrieved thread_type='{thread_type}' for thread {thread_ts}"
-            )
+            logger.info(f"✅ Retrieved thread_type='{thread_type}' for thread {thread_ts}")
             return thread_type
 
         except Exception as e:
-            logger.error(
-                f"Failed to retrieve thread type for {thread_ts}: {e}", exc_info=True
-            )
+            logger.error(f"Failed to retrieve thread type for {thread_ts}: {e}", exc_info=True)
             return None
 
     async def get_cache_stats(self) -> dict:

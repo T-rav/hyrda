@@ -51,9 +51,7 @@ class OpenTelemetryTracing:
         # Get OTLP endpoint from environment
         # Default: Jaeger (localhost:4317)
         # Can override for Datadog, New Relic, etc.
-        otlp_endpoint = os.getenv(
-            "OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317"
-        )
+        otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4317")
 
         # Create resource with service name
         resource = Resource(attributes={SERVICE_NAME: service_name})

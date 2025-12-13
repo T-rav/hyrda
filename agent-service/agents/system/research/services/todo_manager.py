@@ -158,9 +158,7 @@ class ResearchTodoManager:
         pending_ready = len(self.get_pending_tasks())
         blocked = len(self.get_blocked_tasks())
         completed = len(self.get_completed_tasks())
-        in_progress = len(
-            [t for t in self.tasks.values() if t.status == "in_progress"]
-        )
+        in_progress = len([t for t in self.tasks.values() if t.status == "in_progress"])
 
         return {
             "total": len(self.tasks),

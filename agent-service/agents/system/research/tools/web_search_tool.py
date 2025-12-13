@@ -82,7 +82,9 @@ class EnhancedWebSearchTool(BaseTool):
                 self.file_cache = ResearchFileCache()
                 logger.info("Initialized auto-caching for web search results")
             except Exception as e:
-                logger.warning(f"File cache unavailable: {e}, continuing without caching")
+                logger.warning(
+                    f"File cache unavailable: {e}, continuing without caching"
+                )
 
     def _run(self, query: str, depth: str = "standard") -> str:
         """Execute web search with automatic caching.
@@ -157,7 +159,9 @@ class EnhancedWebSearchTool(BaseTool):
 
             if cached_files:
                 # Return most recent cached result
-                latest = sorted(cached_files, key=lambda f: f.cached_at, reverse=True)[0]
+                latest = sorted(cached_files, key=lambda f: f.cached_at, reverse=True)[
+                    0
+                ]
                 content = self.file_cache.retrieve_file(latest.file_path)
                 if content:
                     return str(content)

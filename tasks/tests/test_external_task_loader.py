@@ -5,8 +5,7 @@ No integration with real external tasks or databases.
 """
 
 import os
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -213,7 +212,7 @@ class TestTaskLoading:
         (task_dir / "helper.py").write_text("def helper(): return 'helped'")
 
         # Create job that imports helper
-        job_code = '''
+        job_code = """
 from helper import helper
 from jobs.base_job import BaseJob
 
@@ -231,7 +230,7 @@ class ComplexJob(BaseJob):
         return {"records_processed": 1, "records_success": 1, "records_failed": 0}
 
 Job = ComplexJob
-'''
+"""
         (task_dir / "job.py").write_text(job_code)
 
         loader = ExternalTaskLoader(str(temp_tasks_dir))
@@ -383,7 +382,9 @@ class TestSystemTaskProtection:
         # Create system task
         system_task_dir = system_dir / "slack_user_import"
         system_task_dir.mkdir()
-        (system_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "SystemJob"))
+        (system_task_dir / "job.py").write_text(
+            simple_job_code.replace("TestJob", "SystemJob")
+        )
 
         # Create external tasks directory
         external_dir = temp_tasks_dir / "external"
@@ -392,7 +393,9 @@ class TestSystemTaskProtection:
         # Create external task with SAME name (conflict)
         external_task_dir = external_dir / "slack_user_import"
         external_task_dir.mkdir()
-        (external_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "ExternalJob"))
+        (external_task_dir / "job.py").write_text(
+            simple_job_code.replace("TestJob", "ExternalJob")
+        )
 
         # Initialize loader with both paths
         loader = ExternalTaskLoader(str(external_dir))
@@ -415,7 +418,9 @@ class TestSystemTaskProtection:
         # Create system task
         system_task_dir = system_dir / "slack_user_import"
         system_task_dir.mkdir()
-        (system_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "SystemJob"))
+        (system_task_dir / "job.py").write_text(
+            simple_job_code.replace("TestJob", "SystemJob")
+        )
 
         # Create external tasks directory
         external_dir = temp_tasks_dir / "external"
@@ -424,7 +429,9 @@ class TestSystemTaskProtection:
         # Create external task with DIFFERENT name (no conflict)
         external_task_dir = external_dir / "metric_sync"
         external_task_dir.mkdir()
-        (external_task_dir / "job.py").write_text(simple_job_code.replace("TestJob", "ExternalJob"))
+        (external_task_dir / "job.py").write_text(
+            simple_job_code.replace("TestJob", "ExternalJob")
+        )
 
         # Initialize loader
         loader = ExternalTaskLoader(str(external_dir))
@@ -458,7 +465,9 @@ class TestEdgeCases:
         """Test handling of task with syntax errors."""
         task_dir = temp_tasks_dir / "syntax_error_task"
         task_dir.mkdir()
-        (task_dir / "job.py").write_text("class Job:\n    def __init__(self")  # Missing closing
+        (task_dir / "job.py").write_text(
+            "class Job:\n    def __init__(self"
+        )  # Missing closing
 
         loader = ExternalTaskLoader(str(temp_tasks_dir))
         tasks = loader.discover_tasks()
@@ -469,12 +478,12 @@ class TestEdgeCases:
         """Test handling of task with import errors."""
         task_dir = temp_tasks_dir / "import_error_task"
         task_dir.mkdir()
-        job_code = '''
+        job_code = """
 import nonexistent_module
 
 class Job:
     pass
-'''
+"""
         (task_dir / "job.py").write_text(job_code)
 
         loader = ExternalTaskLoader(str(temp_tasks_dir))

@@ -52,15 +52,18 @@ class AgentListResponse(BaseModel):
     agents: list[dict[str, Any]]
 
 
-@router.get("", response_model=AgentListResponse, dependencies=[Depends(require_service_auth)])
+@router.get(
+    "", response_model=AgentListResponse, dependencies=[Depends(require_service_auth)]
+)
 async def list_agents():
     """List all available agents from control plane.
 
     Returns:
         List of agent names and their metadata
     """
-    import httpx
     import os
+
+    import httpx
 
     control_plane_url = os.getenv("CONTROL_PLANE_URL", "https://control_plane:6001")
     service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
@@ -70,7 +73,7 @@ async def list_agents():
             response = await client.get(
                 f"{control_plane_url}/api/agents",
                 headers={"X-Service-Token": service_token},
-                timeout=5.0
+                timeout=5.0,
             )
             response.raise_for_status()
             data = response.json()
@@ -89,8 +92,7 @@ async def list_agents():
     except Exception as e:
         logger.error(f"Failed to list agents from control plane: {e}", exc_info=True)
         raise HTTPException(
-            status_code=503,
-            detail="Failed to retrieve agents from control plane"
+            status_code=503, detail="Failed to retrieve agents from control plane"
         )
 
 
@@ -126,14 +128,14 @@ async def get_agent_info(agent_name: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.error(f"Error getting agent info: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to get agent info: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get agent info: {str(e)}"
+        )
 
 
 @router.post("/{agent_name}/invoke", response_model=AgentInvokeResponse)
 async def invoke_agent(
-    agent_name: str,
-    request: AgentInvokeRequest,
-    http_request: Request
+    agent_name: str, request: AgentInvokeRequest, http_request: Request
 ):
     """Invoke an agent with a query.
 
@@ -174,6 +176,7 @@ async def invoke_agent(
     if auth_header.startswith("Bearer "):
         try:
             from dependencies.auth import get_current_user
+
             user_info = await get_current_user(http_request)
             user_id = user_info["user_id"]
             auth_type = "jwt"
@@ -184,7 +187,9 @@ async def invoke_agent(
     # Try service token (internal service request)
     if not user_id:
         service_token = http_request.headers.get("X-Service-Token")
-        expected_service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+        expected_service_token = os.getenv(
+            "SERVICE_TOKEN", "dev-service-token-insecure"
+        )
         if service_token == expected_service_token:
             auth_type = "service"
             logger.info("Authenticated as internal service")
@@ -194,7 +199,7 @@ async def invoke_agent(
             # No valid auth
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required: provide JWT token or service token"
+                detail="Authentication required: provide JWT token or service token",
             )
 
     # Check user permissions if user_id extracted from JWT (user request)
@@ -210,41 +215,53 @@ async def invoke_agent(
 
         try:
             async with httpx.AsyncClient(verify=False) as client:
-                perm_response = await client.get(permissions_url, headers=headers, timeout=5.0)
+                perm_response = await client.get(
+                    permissions_url, headers=headers, timeout=5.0
+                )
 
                 if perm_response.status_code == 200:
                     perm_data = perm_response.json()
-                    permissions = perm_data.get("permissions", []) if isinstance(perm_data, dict) else perm_data
+                    permissions = (
+                        perm_data.get("permissions", [])
+                        if isinstance(perm_data, dict)
+                        else perm_data
+                    )
 
                     # Check if user has permission for this specific agent
                     # Accept EITHER the primary name OR any alias (permissions may be granted by alias)
-                    agent_names = [p.get("agent_name") for p in permissions if isinstance(p, dict)]
+                    agent_names = [
+                        p.get("agent_name") for p in permissions if isinstance(p, dict)
+                    ]
 
-                    logger.info(f"User {user_id} permissions: {agent_names}, checking for: {primary_name}")
+                    logger.info(
+                        f"User {user_id} permissions: {agent_names}, checking for: {primary_name}"
+                    )
 
                     # Check if user has permission for the primary name OR the requested name (alias)
-                    has_permission = primary_name in agent_names or agent_name.lower() in agent_names
+                    has_permission = (
+                        primary_name in agent_names or agent_name.lower() in agent_names
+                    )
 
                     if not has_permission:
                         raise HTTPException(
                             status_code=403,
-                            detail=f"User {user_id} does not have permission to invoke agent '{primary_name}'"
+                            detail=f"User {user_id} does not have permission to invoke agent '{primary_name}'",
                         )
                 else:
                     # If we can't get permissions, deny access (fail closed)
                     raise HTTPException(
-                        status_code=403,
-                        detail="Could not verify user permissions"
+                        status_code=403, detail="Could not verify user permissions"
                     )
         except httpx.RequestError as e:
             # If control-plane is unavailable, deny access (fail closed)
             logger.error(f"Error checking permissions: {e}")
             raise HTTPException(
-                status_code=503,
-                detail="Permission service unavailable"
+                status_code=503, detail="Permission service unavailable"
             )
 
-    logger.info(f"Invoking agent '{agent_name}' (auth: {auth_type}, user: {user_id or 'none'})")
+    logger.info(
+        f"Invoking agent '{agent_name}' (auth: {auth_type}, user: {user_id or 'none'})"
+    )
 
     # Track invocation timing
     start_time = time.time()
@@ -263,9 +280,7 @@ async def invoke_agent(
         context["auth_type"] = auth_type
 
         result = await agent_client.invoke(
-            agent_name=primary_name,
-            query=request.query,
-            context=context
+            agent_name=primary_name, query=request.query, context=context
         )
 
         status = "success"
@@ -295,9 +310,7 @@ async def invoke_agent(
 
 @router.post("/{agent_name}/stream")
 async def stream_agent(
-    agent_name: str,
-    request: AgentInvokeRequest,
-    http_request: Request
+    agent_name: str, request: AgentInvokeRequest, http_request: Request
 ):
     """Invoke an agent with streaming response via HTTP.
 
@@ -338,6 +351,7 @@ async def stream_agent(
     if auth_header.startswith("Bearer "):
         try:
             from dependencies.auth import get_current_user
+
             user_info = await get_current_user(http_request)
             user_id = user_info["user_id"]
             auth_type = "jwt"
@@ -348,7 +362,9 @@ async def stream_agent(
     # Try service token (internal service request)
     if not user_id:
         service_token = http_request.headers.get("X-Service-Token")
-        expected_service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+        expected_service_token = os.getenv(
+            "SERVICE_TOKEN", "dev-service-token-insecure"
+        )
         if service_token == expected_service_token:
             auth_type = "service"
             logger.info("Authenticated as internal service for streaming")
@@ -358,7 +374,7 @@ async def stream_agent(
             # No valid auth
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required: provide JWT token or service token"
+                detail="Authentication required: provide JWT token or service token",
             )
 
     # Check user permissions if user_id extracted from JWT (user request)
@@ -374,33 +390,43 @@ async def stream_agent(
 
         try:
             async with httpx.AsyncClient(verify=False) as client:
-                perm_response = await client.get(permissions_url, headers=headers, timeout=5.0)
+                perm_response = await client.get(
+                    permissions_url, headers=headers, timeout=5.0
+                )
 
                 if perm_response.status_code == 200:
                     perm_data = perm_response.json()
-                    permissions = perm_data.get("permissions", []) if isinstance(perm_data, dict) else perm_data
+                    permissions = (
+                        perm_data.get("permissions", [])
+                        if isinstance(perm_data, dict)
+                        else perm_data
+                    )
 
-                    agent_names = [p.get("agent_name") for p in permissions if isinstance(p, dict)]
-                    has_permission = primary_name in agent_names or agent_name.lower() in agent_names
+                    agent_names = [
+                        p.get("agent_name") for p in permissions if isinstance(p, dict)
+                    ]
+                    has_permission = (
+                        primary_name in agent_names or agent_name.lower() in agent_names
+                    )
 
                     if not has_permission:
                         raise HTTPException(
                             status_code=403,
-                            detail=f"User {user_id} does not have permission to invoke agent '{primary_name}'"
+                            detail=f"User {user_id} does not have permission to invoke agent '{primary_name}'",
                         )
                 else:
                     raise HTTPException(
-                        status_code=403,
-                        detail="Could not verify user permissions"
+                        status_code=403, detail="Could not verify user permissions"
                     )
         except httpx.RequestError as e:
             logger.error(f"Error checking permissions: {e}")
             raise HTTPException(
-                status_code=503,
-                detail="Permission service unavailable"
+                status_code=503, detail="Permission service unavailable"
             )
 
-    logger.info(f"Streaming agent '{agent_name}' (auth: {auth_type}, user: {user_id or 'none'})")
+    logger.info(
+        f"Streaming agent '{agent_name}' (auth: {auth_type}, user: {user_id or 'none'})"
+    )
 
     async def event_generator():
         """Generate server-sent events from agent execution via HTTP."""
@@ -416,9 +442,7 @@ async def stream_agent(
             context["auth_type"] = auth_type
 
             async for chunk in agent_client.stream(
-                agent_name=primary_name,
-                query=request.query,
-                context=context
+                agent_name=primary_name, query=request.query, context=context
             ):
                 yield f"data: {chunk}\n\n"
 

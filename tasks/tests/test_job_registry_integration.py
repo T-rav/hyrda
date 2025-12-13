@@ -3,8 +3,9 @@
 Tests the full integration between JobRegistry and ExternalTaskLoader.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from config.settings import TasksSettings
 from jobs.job_registry import JobRegistry, execute_job_by_type
@@ -78,7 +79,9 @@ class TestJobRegistryWithExternalLoader:
         (task_dir / "job.py").write_text(simple_job_code)
 
         # Mock the external loader to use our temp directory
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -92,7 +95,9 @@ class TestJobRegistryWithExternalLoader:
 
     def test_job_registry_with_no_external_tasks(self, mock_settings, mock_scheduler):
         """Test JobRegistry with no external tasks configured."""
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(external_tasks_path=None)
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -111,7 +116,9 @@ class TestJobRegistryWithExternalLoader:
         task_dir.mkdir()
         (task_dir / "job.py").write_text(simple_job_code)
 
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -133,7 +140,9 @@ class TestJobRegistryWithExternalLoader:
         task_dir.mkdir()
         (task_dir / "job.py").write_text(simple_job_code)
 
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -150,7 +159,11 @@ class TestJobRegistryWithExternalLoader:
                     return "manual"
 
                 async def execute(self) -> dict:
-                    return {"records_processed": 1, "records_success": 1, "records_failed": 0}
+                    return {
+                        "records_processed": 1,
+                        "records_success": 1,
+                        "records_failed": 0,
+                    }
 
             registry.register_job_type("manual_job", ManualJob)
 
@@ -171,7 +184,9 @@ class TestExecuteJobByType:
         (task_dir / "job.py").write_text(simple_job_code)
 
         # Mock the external loader
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -195,7 +210,9 @@ class TestExecuteJobByType:
 
     def test_execute_job_by_type_unknown_job_error(self):
         """Test execute_job_by_type with unknown job type."""
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(external_tasks_path=None)
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -210,7 +227,7 @@ class TestExecuteJobByType:
     def test_execute_job_by_type_with_params(self, temp_tasks_dir):
         """Test execute_job_by_type passes parameters correctly."""
         # Create a test task that accepts parameters
-        job_code = '''
+        job_code = """
 class ParamJob:
     JOB_NAME = "Param Job"
 
@@ -229,12 +246,14 @@ class ParamJob:
         }
 
 Job = ParamJob
-'''
+"""
         task_dir = temp_tasks_dir / "param_task"
         task_dir.mkdir()
         (task_dir / "job.py").write_text(job_code)
 
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -265,7 +284,9 @@ class TestJobRegistryCreateJob:
         task_dir.mkdir()
         (task_dir / "job.py").write_text(simple_job_code)
 
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(str(temp_tasks_dir))
             loader.discover_tasks()
             mock_get_loader.return_value = loader
@@ -284,7 +305,9 @@ class TestJobRegistryCreateJob:
 
     def test_create_job_unknown_type_error(self, mock_settings, mock_scheduler):
         """Test create_job with unknown job type."""
-        with patch("services.external_task_loader.get_external_loader") as mock_get_loader:
+        with patch(
+            "services.external_task_loader.get_external_loader"
+        ) as mock_get_loader:
             loader = ExternalTaskLoader(external_tasks_path=None)
             loader.discover_tasks()
             mock_get_loader.return_value = loader

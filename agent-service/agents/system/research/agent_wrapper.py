@@ -49,7 +49,11 @@ class ResearchAgentWrapper:
         executive_summary = result.get("executive_summary", "")
         pdf_url = result.get("pdf_url", "")
 
-        response = f"{executive_summary}\n\n📎 **Download Full Report:** {pdf_url}" if pdf_url else executive_summary
+        response = (
+            f"{executive_summary}\n\n📎 **Download Full Report:** {pdf_url}"
+            if pdf_url
+            else executive_summary
+        )
 
         return {
             "response": response,

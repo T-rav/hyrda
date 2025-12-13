@@ -10,7 +10,6 @@ import os
 import secrets
 from typing import Any
 
-from starlette.datastructures import MutableHeaders
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.types import ASGIApp
@@ -64,7 +63,9 @@ class RedisSessionMiddleware(BaseHTTPMiddleware):
         if self._redis:
             logger.info("Redis session storage initialized")
         else:
-            logger.warning("Redis unavailable - sessions will not persist across restarts")
+            logger.warning(
+                "Redis unavailable - sessions will not persist across restarts"
+            )
 
     def _get_redis(self):
         """Get Redis client for session storage."""

@@ -121,10 +121,12 @@ def test_permissions_api():
 
         logger.info(f"   Folder: {folder_info.get('name')}")
         logger.info(f"   Type: {folder_info.get('mimeType')}")
-        logger.info(f"   Permissions in basic request: {folder_info.get('permissions', 'MISSING')}")
+        logger.info(
+            f"   Permissions in basic request: {folder_info.get('permissions', 'MISSING')}"
+        )
 
         # List files in folder
-        logger.info(f"\n2. Listing files in folder...")
+        logger.info("\n2. Listing files in folder...")
         query = f"'{folder_id}' in parents and trashed=false"
         results = (
             service.files()
@@ -149,14 +151,12 @@ def test_permissions_api():
         test_file = files[0]
         logger.info(f"\n3. Testing detailed permissions on file: {test_file['name']}")
         logger.info(f"   File ID: {test_file['id']}")
-        logger.info(f"   From list() call:")
+        logger.info("   From list() call:")
         logger.info(f"     - owners: {test_file.get('owners', 'MISSING')}")
-        logger.info(
-            f"     - permissions: {test_file.get('permissions', 'MISSING')}"
-        )
+        logger.info(f"     - permissions: {test_file.get('permissions', 'MISSING')}")
 
         # Make the detailed permissions call (what google_drive_api.py does)
-        logger.info(f"\n4. Calling get() with fields='permissions(*)'")
+        logger.info("\n4. Calling get() with fields='permissions(*)'")
         file_permissions = (
             service.files()
             .get(
@@ -168,7 +168,7 @@ def test_permissions_api():
         )
 
         # Also try getting full file info with ALL fields
-        logger.info(f"\n5. Trying to get ALL available fields...")
+        logger.info("\n5. Trying to get ALL available fields...")
         try:
             full_file_info = (
                 service.files()
@@ -180,12 +180,16 @@ def test_permissions_api():
                 .execute()
             )
             logger.info(f"   Available fields: {list(full_file_info.keys())}")
-            logger.info(f"   'permissions' field present: {'permissions' in full_file_info}")
+            logger.info(
+                f"   'permissions' field present: {'permissions' in full_file_info}"
+            )
             logger.info(f"   'owners' field: {full_file_info.get('owners', 'MISSING')}")
-            logger.info(f"   'permissionIds' field: {full_file_info.get('permissionIds', 'MISSING')}")
+            logger.info(
+                f"   'permissionIds' field: {full_file_info.get('permissionIds', 'MISSING')}"
+            )
 
             # Check if we need to use permissions.list() instead
-            logger.info(f"\n6. Trying permissions.list() API...")
+            logger.info("\n6. Trying permissions.list() API...")
             try:
                 perms_list = (
                     service.permissions()
@@ -197,7 +201,9 @@ def test_permissions_api():
                     .execute()
                 )
                 perm_items = perms_list.get("permissions", [])
-                logger.info(f"   permissions.list() returned: {len(perm_items)} permissions")
+                logger.info(
+                    f"   permissions.list() returned: {len(perm_items)} permissions"
+                )
                 if perm_items:
                     logger.info(f"   Sample permission: {perm_items[0]}")
             except Exception as e:
@@ -221,9 +227,7 @@ def test_permissions_api():
                 logger.info(f"     - full structure: {perm}")
         else:
             logger.error("\n   ❌ NO PERMISSIONS RETURNED!")
-            logger.error(
-                "   This explains why owner_emails shows 'unknown'!"
-            )
+            logger.error("   This explains why owner_emails shows 'unknown'!")
 
         logger.info("\n" + "=" * 80)
         logger.info("SUMMARY:")

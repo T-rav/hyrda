@@ -156,7 +156,9 @@ def rate_limit(
                 request = kwargs.get("request")
 
             if not request:
-                logger.warning(f"Rate limit decorator on {f.__name__}: No Request found")
+                logger.warning(
+                    f"Rate limit decorator on {f.__name__}: No Request found"
+                )
                 return await f(*args, **kwargs)
 
             # Generate rate limit key

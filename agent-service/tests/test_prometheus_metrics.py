@@ -3,8 +3,6 @@
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from prometheus_client import REGISTRY
-
 from shared.middleware.prometheus_metrics import (
     PrometheusMetricsMiddleware,
     create_metrics_endpoint,

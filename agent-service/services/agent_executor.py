@@ -60,11 +60,11 @@ class AgentExecutor:
             logger.info("Agent execution mode: EMBEDDED (local)")
 
         # Control-plane URL for fetching agent metadata
-        self.control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
+        self.control_plane_url = os.getenv(
+            "CONTROL_PLANE_URL", "http://control_plane:6001"
+        )
 
-    async def invoke_agent(
-        self, agent_name: str, query: str, context: dict
-    ) -> dict:
+    async def invoke_agent(self, agent_name: str, query: str, context: dict) -> dict:
         """Execute agent based on global execution mode.
 
         Args:
@@ -106,9 +106,7 @@ class AgentExecutor:
 
         return result
 
-    async def _invoke_cloud(
-        self, agent_name: str, query: str, context: dict
-    ) -> dict:
+    async def _invoke_cloud(self, agent_name: str, query: str, context: dict) -> dict:
         """Execute agent on LangGraph Cloud.
 
         Args:

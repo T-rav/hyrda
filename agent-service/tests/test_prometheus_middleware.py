@@ -14,6 +14,8 @@ from prometheus_client import REGISTRY
 # Add shared to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import contextlib
+
 from shared.middleware.prometheus_metrics import (  # noqa: E402
     PrometheusMetricsMiddleware,
     create_metrics_endpoint,
@@ -34,10 +36,8 @@ def clear_prometheus_registry():
     # Cleanup after test
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
-        try:
+        with contextlib.suppress(Exception):
             REGISTRY.unregister(collector)
-        except Exception:
-            pass
 
 
 @pytest.fixture
@@ -217,6 +217,19 @@ def test_histogram_buckets_correct(client):
     metrics_text = metrics_response.text
 
     # Check all expected bucket boundaries
-    expected_buckets = ["0.005", "0.01", "0.025", "0.05", "0.1", "0.25", "0.5", "1.0", "2.5", "5.0", "10.0", "+Inf"]
+    expected_buckets = [
+        "0.005",
+        "0.01",
+        "0.025",
+        "0.05",
+        "0.1",
+        "0.25",
+        "0.5",
+        "1.0",
+        "2.5",
+        "5.0",
+        "10.0",
+        "+Inf",
+    ]
     for bucket in expected_buckets:
         assert f'le="{bucket}"' in metrics_text

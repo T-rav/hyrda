@@ -96,7 +96,7 @@ class RoutingService:
             match = re.match(pattern, query_lower)
             if match:
                 # Remove matched prefix and return rest
-                remaining = query[match.end():].strip()
+                remaining = query[match.end() :].strip()
                 return remaining if remaining else query
 
         # If no pattern matched, return original

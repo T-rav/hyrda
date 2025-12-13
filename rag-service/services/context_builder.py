@@ -142,9 +142,7 @@ class ContextBuilder:
             similarity = chunk.get("similarity", 0)
             metadata = chunk.get("metadata", {})
             source_doc = metadata.get("file_name", "Unknown")
-            retrieved_texts.append(
-                f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}"
-            )
+            retrieved_texts.append(f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}")
         return "\n\n".join(retrieved_texts)
 
     def _build_rag_instruction(self, context_section: str) -> str:
@@ -182,9 +180,7 @@ class ContextBuilder:
             if source not in sources:
                 sources[source] = {"count": 0, "max_similarity": 0}
             sources[source]["count"] += 1
-            sources[source]["max_similarity"] = max(
-                sources[source]["max_similarity"], similarity
-            )
+            sources[source]["max_similarity"] = max(sources[source]["max_similarity"], similarity)
 
         # Build summary
         summary_parts = []
@@ -236,9 +232,7 @@ class ContextBuilder:
         if len(unique_sources) == 1 and len(context_chunks) > 3:
             warnings.append("All chunks from single source - consider broader search")
         if avg_similarity < 0.3:
-            warnings.append(
-                "Low average similarity - query may not match available content"
-            )
+            warnings.append("Low average similarity - query may not match available content")
 
         return {
             "quality_score": quality_score,

@@ -24,7 +24,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from shared.utils.tracing import (
     TraceContext,
-    add_trace_id_to_headers,
     extract_trace_id_from_headers,
     format_trace_summary,
 )

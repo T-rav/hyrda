@@ -149,6 +149,7 @@ class GoogleMetadataParser:
 
         # Process owners
         import logging
+
         logger = logging.getLogger(__name__)
 
         owners = item.get("owners", [])
@@ -163,12 +164,15 @@ class GoogleMetadataParser:
             # For Shared Drives, owners field is often empty
             # Try to extract from detailed_permissions instead
             detailed_perms = item.get("detailed_permissions", [])
-            logger.info(f"   No owners field, checking detailed_permissions: {len(detailed_perms)} entries")
+            logger.info(
+                f"   No owners field, checking detailed_permissions: {len(detailed_perms)} entries"
+            )
             if detailed_perms:
                 # For Shared Drives: look for owner, organizer, or fileOrganizer roles
                 # These are the "responsible parties" in Shared Drives
                 owner_perms = [
-                    p for p in detailed_perms
+                    p
+                    for p in detailed_perms
                     if p.get("role") in ["owner", "organizer", "fileOrganizer"]
                 ]
                 logger.info(f"   Found {len(owner_perms)} owner/organizer permissions")
@@ -185,13 +189,19 @@ class GoogleMetadataParser:
                         item["owner_emails"] = owner_emails
                         # Store extracted owners for consistency
                         item["owners"] = extracted_owners
-                        logger.info(f"   ✅ Set owner_emails from detailed_permissions (Shared Drive): {owner_emails}")
+                        logger.info(
+                            f"   ✅ Set owner_emails from detailed_permissions (Shared Drive): {owner_emails}"
+                        )
                     else:
-                        logger.warning(f"   ⚠️  No email addresses found in owner/organizer permissions")
+                        logger.warning(
+                            "   ⚠️  No email addresses found in owner/organizer permissions"
+                        )
                 else:
-                    logger.warning(f"   ⚠️  No owner/organizer role found in detailed_permissions")
+                    logger.warning(
+                        "   ⚠️  No owner/organizer role found in detailed_permissions"
+                    )
             else:
-                logger.warning(f"   ⚠️  No detailed_permissions available")
+                logger.warning("   ⚠️  No detailed_permissions available")
 
         return item
 

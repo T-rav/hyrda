@@ -56,7 +56,9 @@ def validate_oauth_config() -> None:
         if not GOOGLE_CLIENT_ID:
             logger.warning("GOOGLE_OAUTH_CLIENT_ID not set (optional in development)")
         if not GOOGLE_CLIENT_SECRET:
-            logger.warning("GOOGLE_OAUTH_CLIENT_SECRET not set (optional in development)")
+            logger.warning(
+                "GOOGLE_OAUTH_CLIENT_SECRET not set (optional in development)"
+            )
 
 
 class AuthError(Exception):

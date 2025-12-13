@@ -10,7 +10,6 @@ import logging
 from typing import Any
 
 import aiohttp
-
 from bot_types import DeepResearchResult, WebScrapeResult, WebSearchResult
 
 logger = logging.getLogger(__name__)
@@ -80,9 +79,7 @@ class TavilyClient:
                         {
                             "title": item.get("title", ""),
                             "url": item.get("url", ""),
-                            "snippet": item.get(
-                                "content", ""
-                            ),  # Tavily calls it 'content'
+                            "snippet": item.get("content", ""),  # Tavily calls it 'content'
                         }
                     )
 
@@ -217,9 +214,7 @@ class PerplexityClient:
 
             logger.info(f"Perplexity deep research: {query}")
 
-            async with self.session.post(
-                url, json=payload, headers=headers
-            ) as response:  # type: ignore
+            async with self.session.post(url, json=payload, headers=headers) as response:  # type: ignore
                 response.raise_for_status()
                 data = await response.json()
 

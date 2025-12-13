@@ -68,34 +68,40 @@ class TestFileCache:
 
     def test_init_missing_access_key(self):
         """Test initialization fails without MINIO_ACCESS_KEY."""
-        with patch.dict(os.environ, {"MINIO_ENDPOINT": "http://localhost:9000"}, clear=True):
+        with patch.dict(
+            os.environ, {"MINIO_ENDPOINT": "http://localhost:9000"}, clear=True
+        ):
             with pytest.raises(ValueError, match="MINIO_ACCESS_KEY not configured"):
                 ResearchFileCache()
 
     def test_init_missing_secret_key(self):
         """Test initialization fails without MINIO_SECRET_KEY."""
-        with patch.dict(
-            os.environ,
-            {"MINIO_ENDPOINT": "http://localhost:9000", "MINIO_ACCESS_KEY": "key"},
-            clear=True,
+        with (
+            patch.dict(
+                os.environ,
+                {"MINIO_ENDPOINT": "http://localhost:9000", "MINIO_ACCESS_KEY": "key"},
+                clear=True,
+            ),
+            pytest.raises(ValueError, match="MINIO_SECRET_KEY not configured"),
         ):
-            with pytest.raises(ValueError, match="MINIO_SECRET_KEY not configured"):
-                ResearchFileCache()
+            ResearchFileCache()
 
     def test_init_connection_failure(self, mock_s3_client):
         """Test initialization fails if S3 connection fails."""
         mock_s3_client.list_buckets.side_effect = Exception("Connection failed")
 
-        with patch.dict(
-            os.environ,
-            {
-                "MINIO_ENDPOINT": "http://localhost:9000",
-                "MINIO_ACCESS_KEY": "key",
-                "MINIO_SECRET_KEY": "secret",
-            },
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "MINIO_ENDPOINT": "http://localhost:9000",
+                    "MINIO_ACCESS_KEY": "key",
+                    "MINIO_SECRET_KEY": "secret",
+                },
+            ),
+            pytest.raises(ValueError, match="Failed to connect to MinIO"),
         ):
-            with pytest.raises(ValueError, match="Failed to connect to MinIO"):
-                ResearchFileCache()
+            ResearchFileCache()
 
     def test_cache_file_success(self, file_cache):
         """Test successful file caching to S3."""
@@ -173,9 +179,14 @@ class TestFileCache:
     def test_search_cache_with_matches(self, file_cache):
         """Test searching cache with matches."""
         from datetime import datetime
+
         file_cache.s3_client.list_objects_v2.return_value = {
             "Contents": [
-                {"Key": "testco_10k_2023.txt", "Size": 1000, "LastModified": datetime(2024, 1, 1)}
+                {
+                    "Key": "testco_10k_2023.txt",
+                    "Size": 1000,
+                    "LastModified": datetime(2024, 1, 1),
+                }
             ]
         }
         file_cache.s3_client.head_object.return_value = {
@@ -191,7 +202,9 @@ class TestFileCache:
     def test_search_cache_no_matches(self, file_cache):
         """Test searching with no matches."""
         file_cache.s3_client.list_objects_v2.return_value = {
-            "Contents": [{"Key": "other_file.txt", "Size": 100, "LastModified": "2024-01-01"}]
+            "Contents": [
+                {"Key": "other_file.txt", "Size": 100, "LastModified": "2024-01-01"}
+            ]
         }
 
         results = file_cache.search_cache("nonexistent")
@@ -231,7 +244,12 @@ class TestFileCache:
 
     def test_generate_file_name_sec_filing(self, file_cache):
         """Test filename generation for SEC filing."""
-        metadata = {"company": "TestCo", "form_type": "10K", "year": 2023, "quarter": "Q4"}
+        metadata = {
+            "company": "TestCo",
+            "form_type": "10K",
+            "year": 2023,
+            "quarter": "Q4",
+        }
         filename = file_cache._generate_file_name("sec_filing", metadata)
 
         assert "testco" in filename
@@ -261,7 +279,7 @@ class TestFileCache:
                 "MINIO_SECRET_KEY": "secret",
             },
         ):
-            cache = ResearchFileCache()
+            ResearchFileCache()
 
             # Verify buckets creation attempted
             assert mock_s3_client.create_bucket.call_count == 4  # 4 bucket types
@@ -303,7 +321,9 @@ class TestFileCacheIntegration:
             "http://localhost:9000/research-pdfs/test.pdf?signature=abc123"
         )
 
-        url = file_cache.get_presigned_url("s3://research-pdfs/test.pdf", expiration=3600)
+        url = file_cache.get_presigned_url(
+            "s3://research-pdfs/test.pdf", expiration=3600
+        )
 
         assert url == "http://localhost:9000/research-pdfs/test.pdf?signature=abc123"
         file_cache.s3_client.generate_presigned_url.assert_called_once_with(
@@ -336,7 +356,9 @@ class TestFileCacheIntegration:
         """Test presigned URL with custom expiration time."""
         file_cache.s3_client.generate_presigned_url.return_value = "http://test-url"
 
-        url = file_cache.get_presigned_url("s3://research-pdfs/test.pdf", expiration=604800)
+        url = file_cache.get_presigned_url(
+            "s3://research-pdfs/test.pdf", expiration=604800
+        )
 
         assert url == "http://test-url"
         file_cache.s3_client.generate_presigned_url.assert_called_once_with(

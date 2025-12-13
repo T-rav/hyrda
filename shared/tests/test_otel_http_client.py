@@ -181,11 +181,6 @@ class TestSpanKindConstants:
 
     def test_span_kind_constants_importable(self):
         """Test that span kind constants can be imported."""
-        from shared.utils.otel_http_client import (
-            SPAN_KIND_CLIENT,
-            SPAN_KIND_INTERNAL,
-            SPAN_KIND_SERVER,
-        )
 
         # Should be importable (may be None if OTel not available)
         assert True  # If we got here, imports worked

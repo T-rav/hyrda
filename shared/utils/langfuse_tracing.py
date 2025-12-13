@@ -11,7 +11,6 @@ This allows you to:
 """
 
 import logging
-from typing import Any
 
 from shared.utils.tracing import get_trace_id, get_parent_trace_id
 

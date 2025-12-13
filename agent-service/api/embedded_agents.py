@@ -10,10 +10,11 @@ Flow:
     → /api/agents/{name}/invoke (THIS FILE - actually runs agent code)
     → Agent implementation (research_agent, help_agent, etc.)
 """
+
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class EmbeddedAgentRequest(BaseModel):
     Security: Called by AgentClient (internal), not directly by users.
     user_id comes from AgentClient's context, which got it from JWT.
     """
+
     query: str
     context: dict[str, Any] = Field(default_factory=dict)
     # NO user_id field - comes from context dict (populated by AgentClient)
@@ -38,6 +40,7 @@ class EmbeddedAgentRequest(BaseModel):
 
 class EmbeddedAgentResponse(BaseModel):
     """Response from embedded agent execution."""
+
     response: str
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -60,15 +63,13 @@ async def invoke_research_agent(request: EmbeddedAgentRequest):
         result = await wrapper.invoke(request.query, request.context)
 
         return EmbeddedAgentResponse(
-            response=result.get("response", ""),
-            metadata=result.get("metadata", {})
+            response=result.get("response", ""), metadata=result.get("metadata", {})
         )
 
     except Exception as e:
         logger.error(f"Error executing research agent: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Research agent execution failed: {str(e)}"
+            status_code=500, detail=f"Research agent execution failed: {str(e)}"
         )
 
 
@@ -122,13 +123,11 @@ async def invoke_help_agent(request: EmbeddedAgentRequest):
         result = await agent.invoke(request.query, request.context)
 
         return EmbeddedAgentResponse(
-            response=result.get("response", ""),
-            metadata=result.get("metadata", {})
+            response=result.get("response", ""), metadata=result.get("metadata", {})
         )
 
     except Exception as e:
         logger.error(f"Error executing help agent: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Help agent execution failed: {str(e)}"
+            status_code=500, detail=f"Help agent execution failed: {str(e)}"
         )

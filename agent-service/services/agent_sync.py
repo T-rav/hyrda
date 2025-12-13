@@ -53,7 +53,9 @@ def sync_agents_to_control_plane() -> None:
         # Get service token for authentication
         service_token = os.getenv("BOT_SERVICE_TOKEN", "")
         if not service_token:
-            logger.warning("No BOT_SERVICE_TOKEN configured - agent registration will fail")
+            logger.warning(
+                "No BOT_SERVICE_TOKEN configured - agent registration will fail"
+            )
 
         for agent_data in agents_to_register:
             try:

@@ -48,7 +48,9 @@ class ExternalAgentLoader:
         if self.external_path:
             logger.info(f"External agent loader initialized: {self.external_path}")
         else:
-            logger.info("No external agents path configured (EXTERNAL_AGENTS_PATH not set)")
+            logger.info(
+                "No external agents path configured (EXTERNAL_AGENTS_PATH not set)"
+            )
 
     def discover_agents(self) -> dict[str, type]:
         """Discover and load all agents from external directory.
@@ -82,7 +84,9 @@ class ExternalAgentLoader:
                     discovered[agent_dir.name] = agent_class
                     logger.info(f"✅ Loaded external agent: {agent_dir.name}")
             except Exception as e:
-                logger.error(f"❌ Failed to load agent {agent_dir.name}: {e}", exc_info=True)
+                logger.error(
+                    f"❌ Failed to load agent {agent_dir.name}: {e}", exc_info=True
+                )
 
         self._loaded_agents = discovered
         return discovered
@@ -123,9 +127,11 @@ class ExternalAgentLoader:
 
             # Find Agent class
             if not hasattr(module, "Agent"):
-                raise AttributeError(f"Module {agent_file} must define an 'Agent' class")
+                raise AttributeError(
+                    f"Module {agent_file} must define an 'Agent' class"
+                )
 
-            agent_class = getattr(module, "Agent")
+            agent_class = module.Agent
             return agent_class
 
         except Exception as e:

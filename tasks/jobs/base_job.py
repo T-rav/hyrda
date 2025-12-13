@@ -87,7 +87,9 @@ class BaseJob(ABC):
 
             # Sanitize params (removes sensitive data)
             if scrubadub:
-                safe_params = scrubadub.clean(str(self.params), replace_with='identifier')
+                safe_params = scrubadub.clean(
+                    str(self.params), replace_with="identifier"
+                )
             else:
                 safe_params = str(self.params)  # Fallback if scrubadub not available
 

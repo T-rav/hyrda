@@ -9,6 +9,7 @@ import logging
 import re
 
 from bot_types import ContextChunk
+
 from config.settings import Settings
 
 from .query_rewriter import AdaptiveQueryRewriter
@@ -105,9 +106,7 @@ STOP_WORDS = {
 class RetrievalService:
     """Service for retrieving and processing context from Qdrant vector store"""
 
-    def __init__(
-        self, settings: Settings, llm_service=None, enable_query_rewriting: bool = True
-    ):
+    def __init__(self, settings: Settings, llm_service=None, enable_query_rewriting: bool = True):
         self.settings = settings
         self.llm_service = llm_service
         self.enable_query_rewriting = enable_query_rewriting
@@ -144,14 +143,8 @@ class RetrievalService:
 
         try:
             # Initialize query rewriter if not already done and LLM service is available
-            if (
-                self.enable_query_rewriting
-                and not self.query_rewriter
-                and self.llm_service
-            ):
-                self.query_rewriter = AdaptiveQueryRewriter(
-                    self.llm_service, enable_rewriting=True
-                )
+            if self.enable_query_rewriting and not self.query_rewriter and self.llm_service:
+                self.query_rewriter = AdaptiveQueryRewriter(self.llm_service, enable_rewriting=True)
                 logger.info("✅ Query rewriter initialized")
 
             # Apply query rewriting if enabled
@@ -185,8 +178,7 @@ class RetrievalService:
             initial_threshold = max(0.1, self.settings.rag.similarity_threshold - 0.2)
             results = await vector_service.search(
                 query_embedding=query_embedding,
-                limit=self.settings.rag.max_results
-                * 3,  # Higher limit for entity boosting
+                limit=self.settings.rag.max_results * 3,  # Higher limit for entity boosting
                 similarity_threshold=initial_threshold,
                 filter=query_filters,
             )
@@ -199,8 +191,7 @@ class RetrievalService:
             filtered_results = [
                 result
                 for result in results
-                if result.get("similarity", 0)
-                >= self.settings.rag.results_similarity_threshold
+                if result.get("similarity", 0) >= self.settings.rag.results_similarity_threshold
             ]
 
             logger.info(
@@ -258,8 +249,7 @@ class RetrievalService:
             diversified_results = self._apply_diversification_strategy(results)
 
             logger.info(
-                f"📚 Retrieved {len(diversified_results)} context chunks "
-                f"using document similarity"
+                f"📚 Retrieved {len(diversified_results)} context chunks using document similarity"
             )
 
             return diversified_results
@@ -288,9 +278,7 @@ class RetrievalService:
         logger.debug(f"Extracted entities from '{query}': {entities}")
         return entities
 
-    def _apply_entity_boosting(
-        self, query: str, results: list[ContextChunk]
-    ) -> list[ContextChunk]:
+    def _apply_entity_boosting(self, query: str, results: list[ContextChunk]) -> list[ContextChunk]:
         """
         Apply entity boosting to search results.
 
@@ -353,9 +341,7 @@ class RetrievalService:
             logger.error(f"Entity boosting failed: {e}")
             return results
 
-    def _apply_diversification_strategy(
-        self, results: list[ContextChunk]
-    ) -> list[ContextChunk]:
+    def _apply_diversification_strategy(self, results: list[ContextChunk]) -> list[ContextChunk]:
         """
         Apply smart similarity-first diversification with automatic document chunk limiting.
 

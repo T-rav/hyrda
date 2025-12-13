@@ -3,10 +3,7 @@
 Supervisor delegates research tasks to parallel researchers and coordinates execution.
 """
 
-import os
 import logging
-
-from config.settings import Settings
 from datetime import datetime
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
@@ -15,6 +12,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import END
 from langgraph.types import Command
 
+from config.settings import Settings
 
 from ..state import (
     ConductResearch,
@@ -48,7 +46,9 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
             update={},
         )
 
-    logger.info(f"Supervisor iteration {research_iterations}, {len(completed_tasks)}/{len(research_tasks)} tasks complete")
+    logger.info(
+        f"Supervisor iteration {research_iterations}, {len(completed_tasks)}/{len(research_tasks)} tasks complete"
+    )
 
     # Safety limits to prevent infinite loops
     MAX_ITERATIONS = 30  # Hard limit to prevent runaway execution
@@ -56,7 +56,9 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
 
     # Check iteration limit
     if research_iterations >= MAX_ITERATIONS:
-        logger.warning(f"Reached maximum iterations ({MAX_ITERATIONS}), forcing completion")
+        logger.warning(
+            f"Reached maximum iterations ({MAX_ITERATIONS}), forcing completion"
+        )
         return Command(
             goto=END,
             update={"supervisor_messages": state.get("supervisor_messages", [])},
@@ -69,7 +71,9 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     if high_priority_tasks:
         completion_rate = len(high_priority_completed) / len(high_priority_tasks)
         if completion_rate >= HIGH_PRIORITY_THRESHOLD and len(completed_tasks) >= 10:
-            logger.info(f"Auto-completing: {completion_rate:.0%} of HIGH priority tasks done, {len(completed_tasks)} total completed")
+            logger.info(
+                f"Auto-completing: {completion_rate:.0%} of HIGH priority tasks done, {len(completed_tasks)} total completed"
+            )
             return Command(
                 goto=END,
                 update={"supervisor_messages": state.get("supervisor_messages", [])},
@@ -153,7 +157,11 @@ Iteration {research_iterations} - Continue delegating or complete research."""
     messages = list(state.get("supervisor_messages", []))
     if not messages:
         messages.append(SystemMessage(content=system_prompt))
-        messages.append(HumanMessage(content="Begin research coordination. Delegate tasks to researchers or complete if done."))
+        messages.append(
+            HumanMessage(
+                content="Begin research coordination. Delegate tasks to researchers or complete if done."
+            )
+        )
 
     # Define tools for supervisor
     tools = [ConductResearch, ResearchComplete]
@@ -241,7 +249,9 @@ async def supervisor_tools(
                     break
 
             if not matching_task:
-                logger.error(f"Task {task_id} not found or not pending. Available tasks: {[t.task_id for t in research_tasks if t.status == 'pending']}")
+                logger.error(
+                    f"Task {task_id} not found or not pending. Available tasks: {[t.task_id for t in research_tasks if t.status == 'pending']}"
+                )
                 tool_results.append(
                     ToolMessage(
                         content=f"❌ Task {task_id} not found in pending tasks",
@@ -279,7 +289,9 @@ async def supervisor_tools(
                     matching_task.findings = findings
                     matching_task.completed_at = datetime.now().isoformat()
                     completed_tasks.append(matching_task)
-                    logger.info(f"✅ Task {task_id} completed and added to completed_tasks")
+                    logger.info(
+                        f"✅ Task {task_id} completed and added to completed_tasks"
+                    )
 
                 tool_results.append(
                     ToolMessage(

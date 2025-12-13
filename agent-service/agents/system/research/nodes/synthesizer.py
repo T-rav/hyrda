@@ -1,7 +1,6 @@
 """Synthesizer node - combines findings into comprehensive report."""
 
 import asyncio
-import os
 import logging
 from datetime import datetime
 from typing import Any
@@ -68,9 +67,7 @@ def _generate_and_upload_pdf(
             return None
 
         # Generate presigned URL (valid for 7 days)
-        pdf_url = file_cache.get_presigned_url(
-            cached_file.file_path, expiration=604800
-        )
+        pdf_url = file_cache.get_presigned_url(cached_file.file_path, expiration=604800)
         return pdf_url
 
     except Exception as e:
@@ -107,9 +104,7 @@ async def synthesize_findings(state: ResearchAgentState) -> dict[str, Any]:
     # Initialize LLM
     settings = Settings()
     llm = ChatOpenAI(
-        model=settings.llm.model,
-        api_key=settings.llm.api_key,
-        temperature=0.3
+        model=settings.llm.model, api_key=settings.llm.api_key, temperature=0.3
     )
 
     # Compile all findings
@@ -168,10 +163,7 @@ Format as markdown bullet list with key takeaways."""
         try:
             # Run PDF generation in separate thread (blocking file I/O)
             pdf_url = await asyncio.to_thread(
-                _generate_and_upload_pdf,
-                final_report,
-                query,
-                len(completed_tasks)
+                _generate_and_upload_pdf, final_report, query, len(completed_tasks)
             )
             if pdf_url:
                 logger.info(f"✅ PDF uploaded to S3: {pdf_url[:100]}...")

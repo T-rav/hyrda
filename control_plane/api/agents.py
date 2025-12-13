@@ -9,7 +9,6 @@ from typing import Any
 sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from dependencies.auth import get_current_user
 from dependencies.service_auth import verify_service_auth
 from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
 from shared.utils.error_responses import (

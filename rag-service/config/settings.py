@@ -7,9 +7,7 @@ from pydantic_settings import BaseSettings
 class LLMSettings(BaseSettings):
     """LLM API settings"""
 
-    provider: str = Field(
-        default="openai", description="LLM provider (only 'openai' is supported)"
-    )
+    provider: str = Field(default="openai", description="LLM provider (only 'openai' is supported)")
     api_key: SecretStr = Field(description="LLM API key")
     model: str = Field(default="gpt-4o-mini", description="LLM model name")
     base_url: str | None = Field(
@@ -47,9 +45,7 @@ class ConversationSettings(BaseSettings):
 class CacheSettings(BaseSettings):
     """Redis cache settings"""
 
-    redis_url: str = Field(
-        default="redis://localhost:6379", description="Redis connection URL"
-    )
+    redis_url: str = Field(default="redis://localhost:6379", description="Redis connection URL")
     conversation_ttl: int = Field(
         default=1800, description="Conversation cache TTL in seconds (30 minutes)"
     )
@@ -75,9 +71,7 @@ class VectorSettings(BaseSettings):
     """Vector database settings for RAG (Qdrant)"""
 
     enabled: bool = Field(default=True, description="Enable vector database features")
-    provider: str = Field(
-        default="qdrant", description="Vector database provider (qdrant)"
-    )
+    provider: str = Field(default="qdrant", description="Vector database provider (qdrant)")
     collection_name: str = Field(
         default="insightmesh-knowledge-base", description="Collection name"
     )
@@ -97,9 +91,7 @@ class EmbeddingSettings(BaseSettings):
         default="openai",
         description="Embedding provider (openai, sentence-transformers)",
     )
-    model: str = Field(
-        default="text-embedding-3-small", description="Embedding model name"
-    )
+    model: str = Field(default="text-embedding-3-small", description="Embedding model name")
     api_key: SecretStr | None = Field(
         default=None, description="Embedding API key (uses LLM key if None)"
     )
@@ -113,16 +105,12 @@ class RAGSettings(BaseSettings):
     """RAG retrieval settings"""
 
     max_chunks: int = Field(default=5, description="Maximum chunks to retrieve")
-    similarity_threshold: float = Field(
-        default=0.35, description="Minimum similarity score"
-    )
+    similarity_threshold: float = Field(default=0.35, description="Minimum similarity score")
     max_results: int = Field(default=5, description="Maximum final results to return")
     results_similarity_threshold: float = Field(
         default=0.5, description="Final results minimum similarity threshold"
     )
-    include_metadata: bool = Field(
-        default=True, description="Include document metadata in context"
-    )
+    include_metadata: bool = Field(default=True, description="Include document metadata in context")
     entity_content_boost: float = Field(
         default=0.05,
         description="Similarity boost per entity found in document content (0.05 = 5%)",

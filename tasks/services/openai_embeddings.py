@@ -137,7 +137,7 @@ class OpenAIEmbeddings:
                 response = client.embeddings.create(
                     input=batch,
                     model=self.model,
-                    dimensions=3072  # Use full 3072 dimensions for text-embedding-3-large
+                    dimensions=3072,  # Use full 3072 dimensions for text-embedding-3-large
                 )
                 batch_embeddings = [data.embedding for data in response.data]
                 all_embeddings.extend(batch_embeddings)

@@ -50,7 +50,9 @@ class TestSynthesizerPDFGeneration:
             cached_at="2024-01-01T00:00:00",
             size_bytes=1024,
         )
-        mock_presigned_url = "http://minio:9000/research-pdfs/test_report.pdf?signature=abc123"
+        mock_presigned_url = (
+            "http://minio:9000/research-pdfs/test_report.pdf?signature=abc123"
+        )
 
         # Mock LLM
         mock_llm = AsyncMock()
@@ -74,11 +76,21 @@ class TestSynthesizerPDFGeneration:
         mock_cache.cache_file.return_value = mock_cached_file
         mock_cache.get_presigned_url.return_value = mock_presigned_url
 
-        with patch("langchain_openai.ChatOpenAI", return_value=mock_llm), \
-             patch("agents.system.research.nodes.synthesizer.Settings", return_value=mock_settings), \
-             patch("agents.system.research.nodes.synthesizer.markdown_to_pdf", side_effect=mock_markdown_to_pdf), \
-             patch("agents.system.research.nodes.synthesizer.ResearchFileCache", return_value=mock_cache):
-
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch(
+                "agents.system.research.nodes.synthesizer.Settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "agents.system.research.nodes.synthesizer.markdown_to_pdf",
+                side_effect=mock_markdown_to_pdf,
+            ),
+            patch(
+                "agents.system.research.nodes.synthesizer.ResearchFileCache",
+                return_value=mock_cache,
+            ),
+        ):
             result = await synthesize_findings(mock_state)
 
             # Verify basic structure
@@ -109,10 +121,17 @@ class TestSynthesizerPDFGeneration:
         mock_settings.llm.model = "gpt-4"
         mock_settings.llm.api_key = "test-key"
 
-        with patch("langchain_openai.ChatOpenAI", return_value=mock_llm), \
-             patch("agents.system.research.nodes.synthesizer.Settings", return_value=mock_settings), \
-             patch("agents.system.research.nodes.synthesizer.markdown_to_pdf", side_effect=Exception("PDF error")):
-
+        with (
+            patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+            patch(
+                "agents.system.research.nodes.synthesizer.Settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "agents.system.research.nodes.synthesizer.markdown_to_pdf",
+                side_effect=Exception("PDF error"),
+            ),
+        ):
             result = await synthesize_findings(mock_state)
 
             # Verify continues without PDF

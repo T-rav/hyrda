@@ -1,7 +1,6 @@
 """Tests for authentication dependencies."""
 
-import pytest
-from fastapi import FastAPI, Depends
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from dependencies.auth import require_service_auth

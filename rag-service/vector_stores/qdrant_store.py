@@ -54,9 +54,7 @@ class QdrantVectorStore(VectorStore):
         """Initialize Qdrant client and collection"""
         try:
             if QdrantClient is None:
-                raise ImportError(
-                    "qdrant-client package is required for Qdrant vector store"
-                )
+                raise ImportError("qdrant-client package is required for Qdrant vector store")
 
             # Initialize Qdrant client
             # Use http:// URL to avoid SSL when using API key in local Docker setup
@@ -90,9 +88,7 @@ class QdrantVectorStore(VectorStore):
                 )
                 logger.info(f"✅ Created Qdrant collection: {self.collection_name}")
             else:
-                logger.info(
-                    f"✅ Qdrant initialized with collection: {self.collection_name}"
-                )
+                logger.info(f"✅ Qdrant initialized with collection: {self.collection_name}")
 
         except ImportError:
             raise ImportError(
@@ -114,9 +110,7 @@ class QdrantVectorStore(VectorStore):
             for i, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
                 # Generate a deterministic UUID from text content + index
                 # This allows us to reupload the same content without duplicates
-                text_hash = hashlib.md5(
-                    f"{text}_{i}".encode(), usedforsecurity=False
-                ).hexdigest()
+                text_hash = hashlib.md5(f"{text}_{i}".encode(), usedforsecurity=False).hexdigest()
                 # Convert MD5 hash to UUID (Qdrant requires UUID or integer)
                 doc_id = str(uuid.UUID(text_hash))
 
@@ -176,11 +170,7 @@ class QdrantVectorStore(VectorStore):
             for namespace in namespaces:
                 # Build filter for namespace
                 query_filter = Filter(
-                    must=[
-                        FieldCondition(
-                            key="namespace", match=MatchValue(value=namespace)
-                        )
-                    ]
+                    must=[FieldCondition(key="namespace", match=MatchValue(value=namespace))]
                 )
 
                 # Run query in executor to avoid blocking (using new query_points API)
@@ -210,9 +200,7 @@ class QdrantVectorStore(VectorStore):
 
             # Also search documents without namespace (default namespace)
             # Build filter to exclude documents with namespace field
-            default_filter = Filter(
-                must_not=[FieldCondition(key="namespace", match=None)]
-            )
+            default_filter = Filter(must_not=[FieldCondition(key="namespace", match=None)])
 
             default_result = await asyncio.get_event_loop().run_in_executor(
                 None,
@@ -304,9 +292,7 @@ class QdrantVectorStore(VectorStore):
         # Round-robin through documents to get one chunk from each first
         round_num = 0
         while len(result) < limit and file_names:
-            for file_name in file_names[
-                :
-            ]:  # Copy list to avoid modification during iteration
+            for file_name in file_names[:]:  # Copy list to avoid modification during iteration
                 if len(result) >= limit:
                     break
 
@@ -356,9 +342,7 @@ class QdrantVectorStore(VectorStore):
 
             collection_info = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: self.client.get_collection(
-                    collection_name=self.collection_name
-                ),
+                lambda: self.client.get_collection(collection_name=self.collection_name),
             )
             return {
                 "total_vector_count": collection_info.points_count,

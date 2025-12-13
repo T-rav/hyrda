@@ -17,15 +17,22 @@ from fastapi import Header, HTTPException, Request
 # Add shared directory to path for JWT utilities
 sys.path.insert(0, "/app")
 from shared.utils.jwt_auth import verify_service_token
-from shared.utils.request_signing import RequestSigningError, extract_and_verify_signature
+from shared.utils.request_signing import (
+    RequestSigningError,
+    extract_and_verify_signature,
+)
 
 logger = logging.getLogger(__name__)
 
 
 async def require_service_auth(
     request: Request,
-    x_service_token: str | None = Header(None, description="Service authentication token"),
-    x_request_timestamp: str | None = Header(None, description="Request timestamp for HMAC"),
+    x_service_token: str | None = Header(
+        None, description="Service authentication token"
+    ),
+    x_request_timestamp: str | None = Header(
+        None, description="Request timestamp for HMAC"
+    ),
     x_request_signature: str | None = Header(None, description="HMAC signature"),
 ) -> dict:
     """
@@ -96,7 +103,9 @@ async def require_service_auth(
                 x_request_signature,
             )
 
-            logger.debug(f"Request signature verified for {service_info.get('service')}")
+            logger.debug(
+                f"Request signature verified for {service_info.get('service')}"
+            )
 
         except RequestSigningError as e:
             logger.warning(
@@ -115,7 +124,7 @@ async def require_service_auth(
 
     logger.info(
         f"Service call: {service_name} -> {method} {path} | "
-        f"IP: {client_ip} | Auth time: {elapsed*1000:.2f}ms | "
+        f"IP: {client_ip} | Auth time: {elapsed * 1000:.2f}ms | "
         f"Timestamp: {datetime.now(UTC).isoformat()}"
     )
 

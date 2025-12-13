@@ -69,7 +69,10 @@ class TestAgentExecutorInitialization:
         """Test that cloud mode without API key raises ValueError."""
         with patch.dict(
             os.environ,
-            {"AGENT_EXECUTION_MODE": "cloud", "LANGGRAPH_CLOUD_URL": "https://test.api"},
+            {
+                "AGENT_EXECUTION_MODE": "cloud",
+                "LANGGRAPH_CLOUD_URL": "https://test.api",
+            },
             clear=False,
         ):
             os.environ.pop("LANGGRAPH_API_KEY", None)
@@ -102,9 +105,7 @@ class TestAgentExecutorEmbeddedMode:
             )
 
             assert result == {"response": "Test response", "metadata": {}}
-            mock_agent.invoke.assert_called_once_with(
-                "test query", {"user_id": "123"}
-            )
+            mock_agent.invoke.assert_called_once_with("test query", {"user_id": "123"})
 
     @pytest.mark.asyncio
     async def test_invoke_agent_routes_to_embedded(self, executor):
@@ -216,7 +217,10 @@ class TestAgentExecutorCloudMode:
         """Test fetching agent metadata from control-plane."""
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"name": "test", "langgraph_assistant_id": "asst_123"}
+        mock_response.json.return_value = {
+            "name": "test",
+            "langgraph_assistant_id": "asst_123",
+        }
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()

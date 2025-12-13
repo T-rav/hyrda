@@ -109,9 +109,7 @@ class CircuitBreaker:
                         f"Circuit breaker: Success in HALF_OPEN ({self.success_count}/{self.success_threshold})"
                     )
                     if self.success_count >= self.success_threshold:
-                        logger.info(
-                            "Circuit breaker: Closing circuit (service recovered)"
-                        )
+                        logger.info("Circuit breaker: Closing circuit (service recovered)")
                         self.state = CircuitState.CLOSED
                         self.failure_count = 0
                 elif self.state == CircuitState.CLOSED:
@@ -127,9 +125,7 @@ class CircuitBreaker:
 
                 if self.state == CircuitState.HALF_OPEN:
                     # Failed in half-open, go back to open
-                    logger.warning(
-                        "Circuit breaker: Failed in HALF_OPEN, reopening circuit"
-                    )
+                    logger.warning("Circuit breaker: Failed in HALF_OPEN, reopening circuit")
                     self.state = CircuitState.OPEN
                     self.success_count = 0
                 elif self.state == CircuitState.CLOSED:
@@ -162,9 +158,7 @@ class AgentClient:
         """
         self.base_url = base_url.rstrip("/")
         # Reduced timeout from 5min to 30s to fail fast
-        self.timeout = httpx.Timeout(
-            DEFAULT_REQUEST_TIMEOUT, connect=DEFAULT_CONNECT_TIMEOUT
-        )
+        self.timeout = httpx.Timeout(DEFAULT_REQUEST_TIMEOUT, connect=DEFAULT_CONNECT_TIMEOUT)
         # Persistent HTTP client to reuse connections (fixes resource leak)
         self._client: httpx.AsyncClient | None = None
         self.max_retries = DEFAULT_MAX_RETRIES
@@ -239,9 +233,7 @@ class AgentClient:
 
         # Prepare request body
         request_body = {"query": query, "context": serializable_context}
-        request_body_str = json.dumps(
-            request_body, separators=(",", ":"), sort_keys=True
-        )
+        request_body_str = json.dumps(request_body, separators=(",", ":"), sort_keys=True)
 
         # Retry with exponential backoff for transient failures
         for attempt in range(self.max_retries):
@@ -301,9 +293,7 @@ class AgentClient:
 
             except httpx.TimeoutException as e:
                 record_exception(e)
-                logger.warning(
-                    f"Timeout on attempt {attempt + 1}/{self.max_retries}: {e}"
-                )
+                logger.warning(f"Timeout on attempt {attempt + 1}/{self.max_retries}: {e}")
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2**attempt)  # Exponential backoff
                     logger.info(f"Retrying in {delay}s...")
@@ -313,17 +303,13 @@ class AgentClient:
 
             except httpx.ConnectError as e:
                 record_exception(e)
-                logger.warning(
-                    f"Connection error on attempt {attempt + 1}/{self.max_retries}: {e}"
-                )
+                logger.warning(f"Connection error on attempt {attempt + 1}/{self.max_retries}: {e}")
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2**attempt)
                     logger.info(f"Retrying in {delay}s...")
                     await asyncio.sleep(delay)
                     continue
-                raise AgentClientError(
-                    "Unable to connect to agent service after retries"
-                ) from e
+                raise AgentClientError("Unable to connect to agent service after retries") from e
 
             except Exception as e:
                 record_exception(e)

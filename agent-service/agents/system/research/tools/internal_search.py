@@ -62,6 +62,7 @@ class InternalSearchTool(BaseTool):
 
     class Config:
         """Config class."""
+
         arbitrary_types_allowed = True
 
     def __init__(
@@ -195,6 +196,7 @@ class InternalSearchTool(BaseTool):
         @dataclass
         class SimpleDoc:
             """SimpleDoc class."""
+
             page_content: str
             metadata: dict
 

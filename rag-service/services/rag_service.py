@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from bot_types import HealthStatus
+
 from config.settings import Settings
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
@@ -40,9 +41,7 @@ class RAGService:
 
         # Initialize core components
         self.vector_store = create_vector_store(settings.vector)
-        self.embedding_provider = create_embedding_provider(
-            settings.embedding, settings.llm
-        )
+        self.embedding_provider = create_embedding_provider(settings.embedding, settings.llm)
         self.llm_provider = create_llm_provider(settings.llm)
 
         # Create separate LLM provider for query rewriting (uses different model)
@@ -137,17 +136,14 @@ class RAGService:
                     # Simple text chunking (document processing handled by ingest service)
                     chunk_size = 1000
                     chunks = [
-                        content[i : i + chunk_size]
-                        for i in range(0, len(content), chunk_size)
+                        content[i : i + chunk_size] for i in range(0, len(content), chunk_size)
                     ]
 
                     # Generate embeddings for chunks
                     for chunk_content in chunks:
                         try:
-                            chunk_embedding = (
-                                await self.embedding_provider.get_embedding(
-                                    chunk_content
-                                )
+                            chunk_embedding = await self.embedding_provider.get_embedding(
+                                chunk_content
                             )
 
                             texts.append(chunk_content)
@@ -165,17 +161,13 @@ class RAGService:
                     )
                     success_count += len(texts)
 
-                logger.info(
-                    f"✅ Processed batch {i // batch_size + 1}: {len(texts)} chunks"
-                )
+                logger.info(f"✅ Processed batch {i // batch_size + 1}: {len(texts)} chunks")
 
             except Exception as e:
                 logger.error(f"Error processing batch {i // batch_size + 1}: {e}")
                 error_count += len(batch)
 
-        logger.info(
-            f"📊 Ingestion complete: {success_count} success, {error_count} errors"
-        )
+        logger.info(f"📊 Ingestion complete: {success_count} success, {error_count} errors")
 
         # Trace document ingestion to Langfuse
         langfuse_service = get_langfuse_service()
@@ -195,9 +187,7 @@ class RAGService:
                     else "unknown",
                 },
             )
-            logger.info(
-                f"📊 Logged document ingestion to Langfuse: {len(documents)} documents"
-            )
+            logger.info(f"📊 Logged document ingestion to Langfuse: {len(documents)} documents")
 
         return success_count, error_count
 
@@ -242,9 +232,7 @@ class RAGService:
             and session_id
             and "**Previous Conversation Summary:**" in managed_system_message
         ):
-            summary_start = managed_system_message.index(
-                "**Previous Conversation Summary:**"
-            )
+            summary_start = managed_system_message.index("**Previous Conversation Summary:**")
             summary_section = managed_system_message[summary_start:]
             await conversation_cache.store_summary(
                 thread_ts=session_id,
@@ -304,23 +292,16 @@ class RAGService:
         metrics_service = get_metrics_service()
         if metrics_service:
             unique_docs = len(
-                {
-                    chunk.get("metadata", {}).get("file_name", "unknown")
-                    for chunk in context_chunks
-                }
+                {chunk.get("metadata", {}).get("file_name", "unknown") for chunk in context_chunks}
             )
-            avg_similarity = sum(
-                chunk.get("similarity", 0) for chunk in context_chunks
-            ) / len(context_chunks)
-            total_context_length = sum(
-                len(chunk.get("content", "")) for chunk in context_chunks
+            avg_similarity = sum(chunk.get("similarity", 0) for chunk in context_chunks) / len(
+                context_chunks
             )
+            total_context_length = sum(len(chunk.get("content", "")) for chunk in context_chunks)
 
             metrics_service.record_rag_query_result(
                 result_type="hit",
-                provider=self.settings.vector.provider
-                if self.settings.vector
-                else "unknown",
+                provider=self.settings.vector.provider if self.settings.vector else "unknown",
                 chunks_found=len(context_chunks),
                 unique_documents=unique_docs,
                 context_length=total_context_length,
@@ -370,9 +351,7 @@ class RAGService:
                     else "unknown",
                 },
             )
-            logger.info(
-                f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse"
-            )
+            logger.info(f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse")
 
     async def _log_retrieval_miss(self) -> None:
         """Log RAG retrieval miss (no context found)."""
@@ -382,9 +361,7 @@ class RAGService:
         if metrics_service:
             metrics_service.record_rag_query_result(
                 result_type="miss",
-                provider=self.settings.vector.provider
-                if self.settings.vector
-                else "unknown",
+                provider=self.settings.vector.provider if self.settings.vector else "unknown",
             )
 
     def _add_document_to_context(
@@ -404,9 +381,7 @@ class RAGService:
         Returns:
             Updated context chunks with document added
         """
-        logger.info(
-            f"💾 Adding chunked uploaded document to context: {document_filename}"
-        )
+        logger.info(f"💾 Adding chunked uploaded document to context: {document_filename}")
         from services.embedding import chunk_text
 
         document_chunks_content = chunk_text(document_content)
@@ -426,8 +401,7 @@ class RAGService:
 
         updated_chunks = document_chunks + context_chunks
         logger.info(
-            f"🔧 Added {len(document_chunks)} document chunks + "
-            f"{len(context_chunks)} RAG chunks"
+            f"🔧 Added {len(document_chunks)} document chunks + {len(context_chunks)} RAG chunks"
         )
         return updated_chunks
 
@@ -550,9 +524,7 @@ class RAGService:
 
             # Step 9: Add citations if we used RAG
             if context_chunks and use_rag and response:
-                response = self.citation_service.add_source_citations(
-                    response, context_chunks
-                )
+                response = self.citation_service.add_source_citations(response, context_chunks)
 
             return response or ""
 
@@ -805,14 +777,10 @@ class RAGService:
 
             try:
                 if tool_name == "web_search":
-                    result = await self._execute_web_search(
-                        tool_args, tool_id, session_id, user_id
-                    )
+                    result = await self._execute_web_search(tool_args, tool_id, session_id, user_id)
                     tool_results.append(result)
                 elif tool_name == "scrape_url":
-                    result = await self._execute_url_scrape(
-                        tool_args, tool_id, session_id, user_id
-                    )
+                    result = await self._execute_url_scrape(tool_args, tool_id, session_id, user_id)
                     tool_results.append(result)
                 elif tool_name == "deep_research":
                     result = await self._execute_deep_research(
@@ -870,9 +838,7 @@ class RAGService:
             "embedding_provider": type(self.embedding_provider).__name__
             if self.embedding_provider
             else None,
-            "llm_provider": type(self.llm_provider).__name__
-            if self.llm_provider
-            else None,
+            "llm_provider": type(self.llm_provider).__name__ if self.llm_provider else None,
             "services": {
                 "retrieval": "initialized",
                 "context_builder": "initialized",

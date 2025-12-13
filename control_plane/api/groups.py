@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Create router with authentication required for all endpoints
 router = APIRouter(
-    prefix="/api/groups",
-    tags=["groups"],
-    dependencies=[Depends(get_current_user)]
+    prefix="/api/groups", tags=["groups"], dependencies=[Depends(get_current_user)]
 )
 
 

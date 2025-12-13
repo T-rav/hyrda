@@ -11,9 +11,7 @@ from bot_types import ContextChunk
 class CitationService:
     """Service for adding source citations to generated responses"""
 
-    def add_source_citations(
-        self, response: str, context_chunks: list[ContextChunk]
-    ) -> str:
+    def add_source_citations(self, response: str, context_chunks: list[ContextChunk]) -> str:
         """
         Add source citations to a response based on retrieved context chunks.
 
@@ -40,9 +38,7 @@ class CitationService:
 
         return response
 
-    def _filter_citation_chunks(
-        self, context_chunks: list[ContextChunk]
-    ) -> list[ContextChunk]:
+    def _filter_citation_chunks(self, context_chunks: list[ContextChunk]) -> list[ContextChunk]:
         """Filter out uploaded documents from citations."""
         return [
             chunk
@@ -89,9 +85,7 @@ class CitationService:
 
         return sources
 
-    def _extract_file_info(
-        self, metadata: dict, source_type: str, index: int
-    ) -> tuple[str, str]:
+    def _extract_file_info(self, metadata: dict, source_type: str, index: int) -> tuple[str, str]:
         """Extract file name and data type from metadata."""
         if source_type == "metric":
             file_name = metadata.get("name", f"Metric Record {index}")
@@ -124,9 +118,7 @@ class CitationService:
             citation += f" • {chunk_count} sections"
 
         # Add subtitle/context
-        citation += self._add_citation_context(
-            metadata, source_type, data_type, doc_title
-        )
+        citation += self._add_citation_context(metadata, source_type, data_type, doc_title)
 
         # Add source indicator and similarity
         citation += self._format_source_indicator(source_type)
@@ -189,9 +181,7 @@ class CitationService:
             metadata = chunk.get("metadata", {})
             if metadata:
                 source_doc = metadata.get("file_name", "Unknown")
-                context_texts.append(
-                    f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}"
-                )
+                context_texts.append(f"[Source: {source_doc}, Score: {similarity:.2f}]\n{content}")
             else:
                 context_texts.append(f"[Score: {similarity:.2f}]\n{content}")
 

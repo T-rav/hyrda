@@ -122,9 +122,7 @@ class OpenAIProvider(LLMProvider):
             # Add tools for function calling
             if tools:
                 request_params["tools"] = tools
-                request_params["tool_choice"] = (
-                    "auto"  # Let model decide when to use tools
-                )
+                request_params["tool_choice"] = "auto"  # Let model decide when to use tools
 
             # Add Langfuse tracking metadata if provided
             metadata = {}

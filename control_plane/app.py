@@ -15,7 +15,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.sessions import SessionMiddleware
 
 # Import security middleware from shared directory
 sys.path.insert(0, str(Path(__file__).parent.parent))  # Add parent to path for shared
@@ -24,7 +23,10 @@ from shared.middleware.prometheus_metrics import (
     create_metrics_endpoint,
 )
 from shared.middleware.redis_session import RedisSessionMiddleware
-from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+from shared.middleware.security import (
+    HTTPSRedirectMiddleware,
+    SecurityHeadersMiddleware,
+)
 from shared.middleware.tracing import TracingMiddleware
 from shared.utils.otel_tracing import instrument_fastapi
 
@@ -131,7 +133,8 @@ def create_app() -> FastAPI:
 
     # Enable CORS - restrict to specific origins
     allowed_origins = os.getenv(
-        "ALLOWED_ORIGINS", "https://localhost:6001,https://localhost:5001,https://localhost:3000"
+        "ALLOWED_ORIGINS",
+        "https://localhost:6001,https://localhost:5001,https://localhost:3000",
     )
     origins_list = [origin.strip() for origin in allowed_origins.split(",")]
     app.add_middleware(

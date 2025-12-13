@@ -200,11 +200,15 @@ class GoogleDriveAPI:
                 .execute()
             )
             perms = permissions_response.get("permissions", [])
-            logger.info(f"✅ permissions().list() returned {len(perms)} permissions for {file_id}")
+            logger.info(
+                f"✅ permissions().list() returned {len(perms)} permissions for {file_id}"
+            )
             if perms:
                 logger.info(f"   Sample permission: {perms[0]}")
             else:
-                logger.warning(f"   ⚠️ EMPTY permissions list returned by API for {file_id}")
+                logger.warning(
+                    f"   ⚠️ EMPTY permissions list returned by API for {file_id}"
+                )
             return perms
         except HttpError as e:
             logger.error(f"❌ Could not fetch detailed permissions for {file_id}: {e}")

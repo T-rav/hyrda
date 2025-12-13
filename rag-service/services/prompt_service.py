@@ -11,6 +11,7 @@ Centralized service for managing system prompts with support for:
 import logging
 
 from bot_types import PromptInfo
+
 from config.settings import Settings
 from services.langfuse_service import get_langfuse_service
 
@@ -128,9 +129,7 @@ class PromptService:
             try:
                 langfuse_service = get_langfuse_service()
                 if langfuse_service:
-                    prompt = langfuse_service.get_prompt_template(
-                        template_name, version
-                    )
+                    prompt = langfuse_service.get_prompt_template(template_name, version)
                     if prompt:
                         self._prompt_cache[cache_key] = prompt
                         logger.debug(f"Fetched custom prompt template: {template_name}")

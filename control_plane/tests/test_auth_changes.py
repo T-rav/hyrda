@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 # Add control_plane to Python path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -20,6 +19,7 @@ class TestDomainVerification:
             # Reimport to pick up env var
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -29,9 +29,12 @@ class TestDomainVerification:
 
     def test_specific_domain_only_allows_matching_emails(self):
         """Test that specific domain only allows matching emails."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False
+        ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -45,6 +48,7 @@ class TestDomainVerification:
         with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "*"}, clear=False):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 
@@ -54,9 +58,12 @@ class TestDomainVerification:
 
     def test_malformed_email_without_at_returns_false(self):
         """Test that email without @ returns False."""
-        with patch.dict(os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False):
+        with patch.dict(
+            os.environ, {"ALLOWED_EMAIL_DOMAIN": "8thlight.com"}, clear=False
+        ):
             import importlib
             import utils.auth
+
             importlib.reload(utils.auth)
             from utils.auth import verify_domain
 

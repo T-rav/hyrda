@@ -191,7 +191,9 @@ class TestLogoutEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Logged out successfully"
-        assert "token_revoked" in data  # May be True or False depending on token presence
+        assert (
+            "token_revoked" in data
+        )  # May be True or False depending on token presence
 
     def test_logout_without_session(self, client):
         """Test logout works even without active session."""

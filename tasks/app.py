@@ -8,7 +8,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 
 from config.settings import get_settings
 from jobs.job_registry import JobRegistry
@@ -21,7 +20,10 @@ from shared.middleware.prometheus_metrics import (
     create_metrics_endpoint,
 )
 from shared.middleware.redis_session import RedisSessionMiddleware
-from shared.middleware.security import HTTPSRedirectMiddleware, SecurityHeadersMiddleware
+from shared.middleware.security import (
+    HTTPSRedirectMiddleware,
+    SecurityHeadersMiddleware,
+)
 from shared.middleware.tracing import TracingMiddleware
 from shared.utils.otel_tracing import instrument_fastapi
 

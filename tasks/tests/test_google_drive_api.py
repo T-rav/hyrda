@@ -1,6 +1,6 @@
 """Unit tests for GoogleDriveAPI service."""
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from googleapiclient.errors import HttpError
@@ -56,7 +56,7 @@ class TestGetDetailedPermissions:
         # Mock the permissions().list() API chain
         mock_permissions = Mock()
         mock_list = Mock()
-        mock_execute = Mock(return_value={"permissions": expected_permissions})
+        Mock(return_value={"permissions": expected_permissions})
 
         google_drive_api.service.permissions.return_value = mock_permissions
         mock_permissions.list.return_value = mock_list
@@ -157,9 +157,7 @@ class TestGetDetailedPermissions:
         # Assert
         assert result == []
 
-    def test_get_detailed_permissions_uses_permissions_list_api(
-        self, google_drive_api
-    ):
+    def test_get_detailed_permissions_uses_permissions_list_api(self, google_drive_api):
         """
         Test that get_detailed_permissions uses permissions().list() API.
 

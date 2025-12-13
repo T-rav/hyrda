@@ -26,7 +26,9 @@ async def get_current_user(request: Request):
     import httpx
 
     # Get control-plane URL (use Docker service name for internal communication)
-    control_plane_url = os.getenv("CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001")
+    control_plane_url = os.getenv(
+        "CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001"
+    )
 
     # Forward the request to control-plane with all cookies
     cookies = request.cookies
@@ -34,28 +36,24 @@ async def get_current_user(request: Request):
     try:
         async with httpx.AsyncClient(verify=False) as client:
             response = await client.get(
-                f"{control_plane_url}/api/users/me",
-                cookies=cookies,
-                timeout=5.0
+                f"{control_plane_url}/api/users/me", cookies=cookies, timeout=5.0
             )
 
             if response.status_code == 200:
                 data = response.json()
-                return JSONResponse({
-                    "authenticated": True,
-                    "email": data.get("email"),
-                    "user": data
-                })
+                return JSONResponse(
+                    {"authenticated": True, "email": data.get("email"), "user": data}
+                )
             else:
                 return JSONResponse(
                     {"authenticated": False, "error": "Not authenticated"},
-                    status_code=401
+                    status_code=401,
                 )
     except Exception as e:
         logger.error(f"Error checking auth with control-plane: {e}")
         return JSONResponse(
             {"authenticated": False, "error": "Auth service unavailable"},
-            status_code=503
+            status_code=503,
         )
 
 
@@ -192,10 +190,9 @@ async def logout(request: Request):
     )
 
     # Create response and clear cookie
-    response = JSONResponse({
-        "message": "Logged out successfully",
-        "token_revoked": revoked
-    })
+    response = JSONResponse(
+        {"message": "Logged out successfully", "token_revoked": revoked}
+    )
     response.delete_cookie("access_token")
 
     return response

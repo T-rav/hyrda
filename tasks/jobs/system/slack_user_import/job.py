@@ -19,9 +19,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from config.settings import TasksSettings
-from task_types import JobExecutionResult
-
 from jobs.base_job import BaseJob
+from task_types import JobExecutionResult
 
 Base = declarative_base()
 

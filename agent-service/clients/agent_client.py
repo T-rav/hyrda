@@ -10,11 +10,14 @@ Security:
 - Uses HTTPS with proper verification for external services
 - Never uses verify=False in production
 """
-import httpx
+
 import logging
 import os
 import sys
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
+
+import httpx
 
 # Add shared directory to path
 sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
@@ -35,13 +38,9 @@ class AgentClient:
     def __init__(self):
         # Use HTTP for internal Docker network (no TLS needed)
         self.control_plane_url = os.getenv(
-            "CONTROL_PLANE_URL",
-            get_internal_service_url("control_plane")
+            "CONTROL_PLANE_URL", get_internal_service_url("control_plane")
         )
-        self.service_token = os.getenv(
-            "SERVICE_TOKEN",
-            "dev-service-token-insecure"
-        )
+        self.service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
         self.langgraph_api_key = os.getenv("LANGGRAPH_API_KEY")
 
         # Agent metadata cache (to avoid repeated control-plane queries)
@@ -75,14 +74,16 @@ class AgentClient:
             async with get_secure_client(timeout=5.0) as client:
                 response = await client.get(
                     f"{self.control_plane_url}/api/agents",
-                    headers={"X-Service-Token": self.service_token}
+                    headers={"X-Service-Token": self.service_token},
                 )
                 response.raise_for_status()
                 data = response.json()
                 agents = data.get("agents", [])
         except Exception as e:
             logger.error(f"Failed to query control plane for agents: {e}")
-            raise ValueError(f"Failed to discover agent '{agent_name}': Control plane unreachable")
+            raise ValueError(
+                f"Failed to discover agent '{agent_name}': Control plane unreachable"
+            )
 
         # Find agent by name or alias
         agent = None
@@ -115,8 +116,7 @@ class AgentClient:
 
         # Determine agent type based on endpoint or langgraph fields
         is_cloud = bool(
-            agent.get("langgraph_assistant_id") or
-            "langraph" in endpoint_url.lower()
+            agent.get("langgraph_assistant_id") or "langraph" in endpoint_url.lower()
         )
 
         agent_info = {
@@ -138,10 +138,7 @@ class AgentClient:
         return agent_info
 
     async def invoke(
-        self,
-        agent_name: str,
-        query: str,
-        context: dict[str, Any] | None = None
+        self, agent_name: str, query: str, context: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Invoke agent via HTTP API (embedded or cloud - same interface).
 
@@ -166,10 +163,7 @@ class AgentClient:
             return await self._invoke_embedded(agent, query, context or {})
 
     async def stream(
-        self,
-        agent_name: str,
-        query: str,
-        context: dict[str, Any] | None = None
+        self, agent_name: str, query: str, context: dict[str, Any] | None = None
     ) -> AsyncGenerator[str, None]:
         """Stream agent execution (embedded or cloud - same interface).
 
@@ -194,10 +188,7 @@ class AgentClient:
                 yield update
 
     async def _invoke_embedded(
-        self,
-        agent: dict,
-        query: str,
-        context: dict
+        self, agent: dict, query: str, context: dict
     ) -> dict[str, Any]:
         """Invoke embedded agent via local HTTP API."""
         endpoint = agent["endpoint_url"]
@@ -205,55 +196,40 @@ class AgentClient:
         payload = {
             "query": query,
             "context": context,
-            "user_id": context.get("user_id")
+            "user_id": context.get("user_id"),
         }
 
         logger.info(f"Invoking embedded agent at {endpoint}")
 
         async with get_secure_client(timeout=120.0) as client:
             response = await client.post(
-                endpoint,
-                json=payload,
-                headers={"X-Service-Token": self.service_token}
+                endpoint, json=payload, headers={"X-Service-Token": self.service_token}
             )
             response.raise_for_status()
             return response.json()
 
     async def _invoke_cloud(
-        self,
-        agent: dict,
-        query: str,
-        context: dict
+        self, agent: dict, query: str, context: dict
     ) -> dict[str, Any]:
         """Invoke LangGraph Cloud agent via remote API."""
         if not self.langgraph_api_key:
-            raise ValueError(
-                "LANGGRAPH_API_KEY not set for cloud agent invocation"
-            )
+            raise ValueError("LANGGRAPH_API_KEY not set for cloud agent invocation")
 
         endpoint = agent["endpoint_url"]
 
         # LangGraph Cloud API format
-        payload = {
-            "input": {
-                "query": query,
-                **context
-            }
-        }
+        payload = {"input": {"query": query, **context}}
 
         headers = {
             "Authorization": f"Bearer {self.langgraph_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         logger.info(f"Invoking cloud agent at {endpoint}")
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=120.0
+                endpoint, json=payload, headers=headers, timeout=120.0
             )
             response.raise_for_status()
             cloud_result = response.json()
@@ -261,14 +237,11 @@ class AgentClient:
             # Normalize cloud response to match embedded format
             return {
                 "response": cloud_result.get("output", {}).get("response", ""),
-                "metadata": cloud_result.get("metadata", {})
+                "metadata": cloud_result.get("metadata", {}),
             }
 
     async def _stream_embedded(
-        self,
-        agent: dict,
-        query: str,
-        context: dict
+        self, agent: dict, query: str, context: dict
     ) -> AsyncGenerator[str, None]:
         """Stream embedded agent via SSE or websocket."""
         # Replace /invoke with /stream in endpoint
@@ -277,28 +250,27 @@ class AgentClient:
         payload = {
             "query": query,
             "context": context,
-            "user_id": context.get("user_id")
+            "user_id": context.get("user_id"),
         }
 
         logger.info(f"Streaming embedded agent at {endpoint}")
 
-        async with get_secure_client(timeout=120.0) as client:
-            async with client.stream(
+        async with (
+            get_secure_client(timeout=120.0) as client,
+            client.stream(
                 "POST",
                 endpoint,
                 json=payload,
-                headers={"X-Service-Token": self.service_token}
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        yield line
+                headers={"X-Service-Token": self.service_token},
+            ) as response,
+        ):
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.strip():
+                    yield line
 
     async def _stream_cloud(
-        self,
-        agent: dict,
-        query: str,
-        context: dict
+        self, agent: dict, query: str, context: dict
     ) -> AsyncGenerator[str, None]:
         """Stream LangGraph Cloud agent via SSE."""
         if not self.langgraph_api_key:
@@ -307,35 +279,27 @@ class AgentClient:
         # LangGraph Cloud streaming endpoint
         endpoint = agent["endpoint_url"].replace("/invoke", "/stream")
 
-        payload = {
-            "input": {
-                "query": query,
-                **context
-            },
-            "stream_mode": "updates"
-        }
+        payload = {"input": {"query": query, **context}, "stream_mode": "updates"}
 
         headers = {
             "Authorization": f"Bearer {self.langgraph_api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         logger.info(f"Streaming cloud agent at {endpoint}")
 
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=120.0
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if line.strip():
-                        # Parse SSE format: "data: {...}"
-                        if line.startswith("data: "):
-                            yield line[6:]  # Strip "data: " prefix
+        async with (
+            httpx.AsyncClient() as client,
+            client.stream(
+                "POST", endpoint, json=payload, headers=headers, timeout=120.0
+            ) as response,
+        ):
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line.strip():
+                    # Parse SSE format: "data: {...}"
+                    if line.startswith("data: "):
+                        yield line[6:]  # Strip "data: " prefix
 
     def clear_cache(self):
         """Clear agent metadata cache (useful for testing)."""

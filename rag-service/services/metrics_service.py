@@ -200,9 +200,7 @@ class MetricsService:
             return
 
         try:
-            self.messages_processed.labels(
-                user_id=user_id, channel_type=channel_type
-            ).inc()
+            self.messages_processed.labels(user_id=user_id, channel_type=channel_type).inc()
         except Exception as e:
             logger.error(f"Error recording message metric: {e}")
 
@@ -218,9 +216,7 @@ class MetricsService:
             return
 
         try:
-            self.rag_retrievals.labels(
-                provider=provider, entity_filter=entity_filter
-            ).inc()
+            self.rag_retrievals.labels(provider=provider, entity_filter=entity_filter).inc()
 
             if avg_similarity > 0:
                 self.retrieval_quality.observe(avg_similarity)
@@ -244,19 +240,13 @@ class MetricsService:
             return
 
         try:
-            self.llm_requests.labels(
-                provider=provider, model=model, status=status
-            ).inc()
+            self.llm_requests.labels(provider=provider, model=model, status=status).inc()
 
             if duration > 0:
-                self.llm_duration.labels(provider=provider, model=model).observe(
-                    duration
-                )
+                self.llm_duration.labels(provider=provider, model=model).observe(duration)
 
             if tokens > 0:
-                self.response_tokens.labels(provider=provider, model=model).observe(
-                    tokens
-                )
+                self.response_tokens.labels(provider=provider, model=model).observe(tokens)
 
         except Exception as e:
             logger.error(f"Error recording LLM request metric: {e}")
@@ -310,9 +300,7 @@ class MetricsService:
                 return
 
             # Record hit/miss/error to Prometheus
-            self.rag_hits_vs_misses.labels(
-                result_type=result_type, provider=provider
-            ).inc()
+            self.rag_hits_vs_misses.labels(result_type=result_type, provider=provider).inc()
 
             # Record chunk and document metrics for successful queries
             if result_type == "hit" and chunks_found > 0:
@@ -334,9 +322,7 @@ class MetricsService:
             return
 
         try:
-            self.rag_document_usage.labels(
-                document_type=document_type, source=source
-            ).inc()
+            self.rag_document_usage.labels(document_type=document_type, source=source).inc()
         except Exception as e:
             logger.error(f"Error recording document usage: {e}")
 
@@ -353,9 +339,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording query type: {e}")
 
-    def record_user_interaction(
-        self, interaction_type: str, user_type: str = "regular"
-    ) -> None:
+    def record_user_interaction(self, interaction_type: str, user_type: str = "regular") -> None:
         """Record user interaction patterns for satisfaction tracking"""
         if not self.enabled:
             return
@@ -445,9 +429,7 @@ class MetricsService:
         # Calculate success rate
         total = stats["total_queries"]
         if total > 0:
-            stats["success_rate"] = round(
-                (stats["successful_queries"] / total) * 100, 1
-            )
+            stats["success_rate"] = round((stats["successful_queries"] / total) * 100, 1)
             stats["miss_rate"] = round((stats["failed_queries"] / total) * 100, 1)
         else:
             stats["success_rate"] = 0.0
@@ -515,9 +497,7 @@ class MetricsService:
         # Calculate success rate
         total = stats["total_invocations"]
         if total > 0:
-            stats["success_rate"] = round(
-                (stats["successful_invocations"] / total) * 100, 1
-            )
+            stats["success_rate"] = round((stats["successful_invocations"] / total) * 100, 1)
             stats["error_rate"] = round((stats["failed_invocations"] / total) * 100, 1)
         else:
             stats["success_rate"] = 0.0
@@ -548,9 +528,7 @@ class MetricsService:
         finally:
             duration = time.time() - start_time
             try:
-                self.request_duration.labels(endpoint=endpoint, method=method).observe(
-                    duration
-                )
+                self.request_duration.labels(endpoint=endpoint, method=method).observe(duration)
             except Exception as e:
                 logger.error(f"Error recording request duration: {e}")
 
@@ -567,9 +545,9 @@ class MetricsService:
         finally:
             duration = time.time() - start_time
             try:
-                self.rag_duration.labels(
-                    operation_type=operation_type, provider=provider
-                ).observe(duration)
+                self.rag_duration.labels(operation_type=operation_type, provider=provider).observe(
+                    duration
+                )
             except Exception as e:
                 logger.error(f"Error recording RAG duration: {e}")
 

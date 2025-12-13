@@ -57,7 +57,9 @@ class ExternalTaskLoader:
         if self.external_path:
             logger.info(f"External tasks path: {self.external_path}")
         else:
-            logger.info("No external tasks path configured (EXTERNAL_TASKS_PATH not set)")
+            logger.info(
+                "No external tasks path configured (EXTERNAL_TASKS_PATH not set)"
+            )
 
     def discover_tasks(self) -> dict[str, type]:
         """Discover and load all tasks from system and external directories.
@@ -94,15 +96,14 @@ class ExternalTaskLoader:
                     else:
                         discovered[task_name] = task_class
             else:
-                logger.warning(f"External tasks directory not found: {self.external_path}")
+                logger.warning(
+                    f"External tasks directory not found: {self.external_path}"
+                )
         else:
             logger.info("No external tasks configured")
 
         self._loaded_tasks = discovered
-        logger.info(
-            f"✅ Loaded {len(discovered)} tasks "
-            f"(system + external)"
-        )
+        logger.info(f"✅ Loaded {len(discovered)} tasks (system + external)")
         return discovered
 
     def _scan_task_directory(
@@ -135,9 +136,7 @@ class ExternalTaskLoader:
                 continue
 
             try:
-                job_class = self._load_task_module(
-                    task_dir.name, job_file, source_type
-                )
+                job_class = self._load_task_module(task_dir.name, job_file, source_type)
                 if job_class:
                     discovered[task_dir.name] = job_class
                     logger.info(f"✅ Loaded {source_type} task: {task_dir.name}")
@@ -189,7 +188,7 @@ class ExternalTaskLoader:
 
             # Find Job class (primary) or fall back to class with Job in name
             if hasattr(module, "Job"):
-                job_class = getattr(module, "Job")
+                job_class = module.Job
             else:
                 # Try to find a class ending with "Job" (defined in this module, not imported)
                 job_class = None

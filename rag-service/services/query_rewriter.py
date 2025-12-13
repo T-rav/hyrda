@@ -13,6 +13,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from bot_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
+
 from services.langfuse_service import observe
 
 if TYPE_CHECKING:
@@ -94,19 +95,14 @@ class AdaptiveQueryRewriter:
                 user_context = self._get_user_context(user_id)
 
             # Step 1: Classify query intent
-            intent = await self._classify_intent(
-                query, conversation_history or [], user_context
-            )
+            intent = await self._classify_intent(query, conversation_history or [], user_context)
 
             logger.info(
                 f"Query intent: {intent.get('type')} (confidence: {intent.get('confidence', 0):.2f})"
             )
 
             # Step 2: Apply appropriate strategy
-            if (
-                intent["type"] == "team_allocation"
-                and intent.get("confidence", 0) > 0.7
-            ):
+            if intent["type"] == "team_allocation" and intent.get("confidence", 0) > 0.7:
                 result = await self._hyde_rewrite(query, intent, user_context)
             elif intent["type"] in ["project_info", "client_info"]:
                 result = await self._semantic_rewrite(query, intent)
@@ -182,9 +178,7 @@ class AdaptiveQueryRewriter:
         user_context_str = ""
         if user_context:
             # Use real_name from Slack (this is the formal full name)
-            name = user_context.get("real_name") or user_context.get(
-                "display_name", "Unknown"
-            )
+            name = user_context.get("real_name") or user_context.get("display_name", "Unknown")
             email = user_context.get("email_address", "")
             user_context_str = f"\n\nCurrent User:\n- Name: {name}\n- Email: {email}\n- When the query contains 'me', 'I', 'my', or 'mine', this refers to {name}"
 
@@ -298,9 +292,7 @@ Now classify this query. Return ONLY the JSON object:"""
 
         # Build prompt with user-specific template if applicable
         if refers_to_user:
-            user_name = user_context.get("real_name") or user_context.get(
-                "display_name", ""
-            )
+            user_name = user_context.get("real_name") or user_context.get("display_name", "")
             user_email = user_context.get("email_address", "")
 
             prompt = f"""Generate a sample employee record for {user_name} that would answer: "{query}"
@@ -335,9 +327,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         # Handle None response from LLM
         if hypothetical_doc is None:
-            logger.warning(
-                "LLM returned None for HyDE generation, using original query"
-            )
+            logger.warning("LLM returned None for HyDE generation, using original query")
             return {"query": query, "filters": {}, "strategy": "passthrough"}
 
         return {
@@ -418,9 +408,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
             "strategy": "expansion",
         }
 
-    async def _lightweight_rewrite(
-        self, query: str, intent: dict
-    ) -> QueryRewriteResult:
+    async def _lightweight_rewrite(self, query: str, intent: dict) -> QueryRewriteResult:
         """
         Minimal rewrite for general queries.
 

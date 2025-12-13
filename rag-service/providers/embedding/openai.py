@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 class OpenAIEmbeddingProvider(EmbeddingProvider):
     """OpenAI embedding provider"""
 
-    def __init__(
-        self, settings: EmbeddingSettings, llm_settings: LLMSettings | None = None
-    ):
+    def __init__(self, settings: EmbeddingSettings, llm_settings: LLMSettings | None = None):
         super().__init__(settings)
 
         # Use embedding API key if provided, otherwise fallback to LLM API key
@@ -46,26 +44,18 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             for i, text in enumerate(texts):
                 # Conservative limit: 6000 chars ≈ 1500 tokens (well under 8192 limit)
                 if len(text) > 6000:
-                    logger.warning(
-                        f"Text {i} is {len(text)} chars, chunking for token safety"
-                    )
+                    logger.warning(f"Text {i} is {len(text)} chars, chunking for token safety")
                     chunks = chunk_text(text, chunk_size=6000, chunk_overlap=200)
                     safe_texts.extend(chunks)
                 else:
                     safe_texts.append(text)
 
             if len(safe_texts) != len(texts):
-                logger.info(
-                    f"Chunked {len(texts)} texts into {len(safe_texts)} safe chunks"
-                )
+                logger.info(f"Chunked {len(texts)} texts into {len(safe_texts)} safe chunks")
 
-            logger.info(
-                f"Generating embeddings for {len(safe_texts)} texts using {self.model}"
-            )
+            logger.info(f"Generating embeddings for {len(safe_texts)} texts using {self.model}")
 
-            response = await self.client.embeddings.create(
-                model=self.model, input=safe_texts
-            )
+            response = await self.client.embeddings.create(model=self.model, input=safe_texts)
 
             embeddings = [data.embedding for data in response.data]
 
