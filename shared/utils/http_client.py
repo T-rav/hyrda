@@ -21,46 +21,49 @@ def get_secure_client(
     Args:
         timeout: Request timeout in seconds
         verify: TLS verification setting. If None, auto-determines based on environment:
-            - Development: verify=False allowed (with warning)
-            - Production: verify=True (or path to CA bundle)
+            - Development: verify=False (accepts self-signed certificates)
+            - Production: verify=True (requires valid CA-signed certificates)
 
     Returns:
         Configured httpx.AsyncClient
 
     Security:
-    - For internal Docker network calls, use HTTP URLs (not HTTPS)
+    - Development: Accepts self-signed certificates (verify=False) for local HTTPS services
+    - Production: Requires valid CA-signed certificates (verify=True) or custom CA bundle
+    - For internal Docker network calls, prefer HTTP URLs (no TLS needed)
     - For external calls, always use HTTPS with proper verification
-    - Development mode allows verify=False with warning
-    - Production mode enforces proper TLS verification
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
     env = os.getenv("ENVIRONMENT", "development").lower()
 
     # Auto-determine verify setting if not specified
     if verify is None:
         if env in ("production", "prod", "staging"):
-            # Production: require proper TLS verification
+            # Production: require proper TLS verification (no self-signed certs)
             ca_bundle = os.getenv("INTERNAL_CA_BUNDLE")
             if ca_bundle and os.path.exists(ca_bundle):
                 verify = ca_bundle  # Use internal CA bundle
             else:
                 verify = True  # Use system CA bundle
+            logger.info(f"Production mode: TLS verification enabled (verify={verify})")
         else:
-            # Development: allow insecure for localhost/Docker
+            # Development: accept self-signed certificates (verify=False)
+            # This allows local HTTPS services with self-signed certs to work
             verify = False
+            logger.debug(
+                f"Development mode: Accepting self-signed certificates (verify=False). "
+                f"Environment: {env}"
+            )
 
     # Warn if using insecure verification
     if verify is False:
-        import logging
-        logger = logging.getLogger(__name__)
         if env in ("production", "prod", "staging"):
             raise ValueError(
                 "SECURITY: Cannot use verify=False in production! "
                 "Use HTTP for internal Docker network or provide CA bundle."
             )
-        logger.warning(
-            "⚠️  Using verify=False for HTTP client (development only). "
-            "For production, use HTTP URLs for internal calls or provide CA bundle."
-        )
 
     return httpx.AsyncClient(timeout=timeout, verify=verify)
 

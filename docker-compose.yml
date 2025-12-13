@@ -103,7 +103,7 @@ services:
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - FLASK_PORT=8081
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -237,7 +237,7 @@ services:
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - AGENT_SERVICE_URL=http://agent_service:8000
       - RAG_SERVICE_URL=http://rag_service:8002
       - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
@@ -338,7 +338,7 @@ services:
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - PORT=8000
       - BOT_SERVICE_TOKEN=${BOT_SERVICE_TOKEN}
       - CONTROL_PLANE_SERVICE_TOKEN=${CONTROL_PLANE_SERVICE_TOKEN}
@@ -390,7 +390,7 @@ services:
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
       - CACHE_REDIS_URL=redis://redis:6379
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - PORT=8002
       - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
       - AGENT_SERVICE_URL=http://agent_service:8000
