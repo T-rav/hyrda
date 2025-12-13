@@ -2,9 +2,11 @@
 name: forge
 description: >
   Orchestrates comprehensive quality and security audits by coordinating test-audit, code-audit,
-  and security scanning, then automatically fixes violations. Use for weekly quality checks,
-  pre-release audits, security assessments, or CI/CD quality gates. Generates unified reports
-  with prioritized action plans. Default is to just report. You need to tell it to fix issues.
+  and security scanning. ENFORCES HARD FAILS for critical violations (exits non-zero, blocks builds).
+  Automatically fixes violations when requested. Use for CI/CD quality gates (blocks bad code),
+  pre-release audits (must pass to ship), security assessments (fail on vulnerabilities).
+  Generates unified reports with prioritized action plans and build artifacts.
+  Default: STRICT MODE - fails build on critical violations. Zero tolerance.
 model: sonnet
 color: purple
 ---
@@ -168,81 +170,292 @@ Warnings impact developer productivity, code maintainability, and team velocity 
 }
 ```
 
-## Execution Modes
+## Execution Modes - STRICT ENFORCEMENT
 
-### Mode 1: Full Quality Audit
+### Mode 1: CI/CD Quality Gate (STRICT - Default)
 ```
-Run comprehensive quality audit.
-Execute: test-audit + code-audit in parallel.
-Generate: unified report with prioritized action plan.
-Output: forge-audit-YYYY-MM-DD.md
+Run forge quality audit
 ```
 
 **What Happens:**
-1. Launch test-audit agent (async)
-2. Launch code-audit agent (async)
-3. Wait for both to complete
-4. Merge results
-5. Prioritize violations
-6. Generate unified report
-7. Calculate quality scores
-8. Compare with previous audit (if exists)
+1. Launch test-audit + code-audit + security-audit (parallel)
+2. Wait for completion
+3. Merge results
+4. **Count critical violations**
+5. Generate unified report + build artifacts
+6. **EXIT CODE:**
+   - `EXIT 1` if ANY critical violations (FAIL BUILD)
+   - `EXIT 0` if zero critical violations (PASS)
 
-**Output:**
-- Single comprehensive report
-- Actionable priorities
-- Quality metrics dashboard
+**Build Artifacts Produced:**
+- `forge-audit-YYYY-MM-DD.md` - Full audit report
+- `forge-metrics.json` - Machine-readable metrics
+- `forge-violations.json` - Structured violation data
+- `forge-exit-code.txt` - Exit status (0 or 1)
+- Console output with summary
 
-### Mode 2: Quick Health Check
-```
-Run quick health check (critical violations only).
-Execute: test-audit + code-audit with --critical-only flag.
-Focus: P0 issues requiring immediate attention.
-```
+**Exit Behavior:**
+```bash
+# Critical violations found:
+❌ FORGE AUDIT FAILED
+Critical violations: 3
+Exit code: 1
+BUILD BLOCKED
 
-**What Happens:**
-1. Run focused audits (critical severity only)
-2. Generate brief summary
-3. Highlight blockers
-4. Skip detailed analysis
-
-**Use Case:**
-- Pre-commit checks
-- CI/CD quality gate
-- Quick status update
-
-### Mode 3: Trend Analysis
-```
-Compare current codebase with previous audit.
-Execute: test-audit + code-audit + diff analysis.
-Output: Trend report showing improvements and regressions.
-```
-
-**What Happens:**
-1. Run full audits
-2. Load previous audit results
-3. Calculate deltas
-4. Identify improvements
-5. Flag regressions
-6. Generate trend report
-
-**Metrics:**
-- Violations fixed since last audit
-- New violations introduced
-- Quality score trajectory
-- Coverage improvements
-
-### Mode 4: Selective Audit
-```
-Run specific audit only.
-Execute: [test-audit | code-audit]
-Output: Single agent report.
+# No critical violations:
+✅ FORGE AUDIT PASSED
+Critical violations: 0
+Exit code: 0
+BUILD ALLOWED
 ```
 
 **Use Case:**
-- Testing new tests (test-audit only)
-- Reviewing production changes (code-audit only)
-- Focused improvements
+- **CI/CD pipeline (BLOCKS bad code)**
+- Pre-commit hooks (blocks commits)
+- PR quality gates (blocks merges)
+
+**This is the DEFAULT MODE - enforces quality standards.**
+
+### Mode 2: Audit & Auto-Fix
+```
+Run forge quality audit and fix all violations
+```
+
+**What Happens:**
+1. Run full audit (test + code + security)
+2. Collect all violations
+3. **Apply ALL auto-fixable violations**
+4. Run tests to verify fixes
+5. Re-audit to confirm improvements
+6. **EXIT CODE:**
+   - `EXIT 1` if critical violations remain after fixes
+   - `EXIT 0` if all critical violations fixed
+
+**Build Artifacts Produced:**
+- Modified source files (with fixes applied)
+- `forge-fixes-YYYY-MM-DD.md` - Detailed fix report
+- `forge-before-after.json` - Quality score delta
+- Git diff of all changes
+
+**Exit Behavior:**
+```bash
+# After fixes, critical violations remain:
+✅ Fixed 45 violations automatically
+❌ 3 CRITICAL violations remain (require manual fix)
+Exit code: 1
+BUILD STILL BLOCKED
+
+# All critical violations fixed:
+✅ Fixed 48 violations automatically
+✅ 0 CRITICAL violations remain
+Exit code: 0
+BUILD ALLOWED
+```
+
+**Use Case:**
+- Local development cleanup
+- Automated tech debt reduction
+- Pre-release quality improvements
+
+### Mode 3: Report Only (Non-Blocking)
+```
+Run forge quality audit --report-only
+```
+
+**What Happens:**
+1. Run full audit
+2. Generate comprehensive report
+3. **ALWAYS EXIT 0** (never blocks)
+4. No fixes applied
+
+**Build Artifacts Produced:**
+- Audit report (informational)
+- Metrics (tracking)
+- No exit code enforcement
+
+**Use Case:**
+- Weekly quality reviews (information only)
+- Trend tracking (historical data)
+- **NOT for CI/CD** (doesn't enforce standards)
+
+**Must be explicitly requested - not default.**
+
+### Mode 4: Security-Only Audit (STRICT)
+```
+Run forge security audit
+```
+
+**What Happens:**
+1. Skip test/code audits
+2. Run security-audit only
+3. **EXIT CODE:**
+   - `EXIT 1` if ANY critical security issues
+   - `EXIT 0` if zero critical security issues
+
+**Build Artifacts Produced:**
+- `forge-security-YYYY-MM-DD.md` - Security report
+- `forge-vulnerabilities.json` - CVE data
+- `forge-compliance.json` - SOC2/GDPR status
+
+**Exit Behavior:**
+```bash
+# Critical security issues:
+❌ SECURITY AUDIT FAILED
+Critical vulnerabilities: 2
+- Hardcoded API key (CWE-798)
+- SQL injection (CWE-89)
+Exit code: 1
+DEPLOYMENT BLOCKED
+
+# No critical issues:
+✅ SECURITY AUDIT PASSED
+Exit code: 0
+DEPLOYMENT ALLOWED
+```
+
+**Use Case:**
+- Security-focused CI/CD checks
+- Pre-deployment security gates
+- Compliance verification
+
+## Artifact Production & Integration
+
+### Build Artifacts Generated
+
+**Every forge run produces:**
+
+1. **Audit Report** (`forge-audit-YYYY-MM-DD.md`)
+   - Human-readable markdown report
+   - Executive summary with scores
+   - Detailed findings by category
+   - Prioritized action plan
+
+2. **Metrics JSON** (`forge-metrics.json`)
+   - Machine-readable quality scores
+   - Violation counts by severity
+   - Trend data (vs previous runs)
+   - Coverage percentages
+
+3. **Violations JSON** (`forge-violations.json`)
+   - Structured violation data
+   - File paths and line numbers
+   - Severity classifications
+   - Auto-fixable flags
+
+4. **Exit Code** (`forge-exit-code.txt` + process exit)
+   - `0` = PASS (no critical violations)
+   - `1` = FAIL (critical violations exist)
+   - Used by CI/CD to block builds
+
+5. **Fix Report** (`forge-fixes-YYYY-MM-DD.md`) - *if fixes applied*
+   - What was fixed automatically
+   - What remains to be fixed manually
+   - Before/after quality scores
+   - Git diff summary
+
+### CI/CD Integration
+
+**GitHub Actions Example:**
+```yaml
+- name: Forge Quality Gate
+  run: |
+    forge quality audit  # Runs in STRICT mode by default
+    # Exit code 1 = critical violations = build fails
+    # Exit code 0 = no critical violations = build proceeds
+
+- name: Upload Artifacts
+  if: always()
+  uses: actions/upload-artifact@v3
+  with:
+    name: forge-reports
+    path: |
+      forge-audit-*.md
+      forge-metrics.json
+      forge-violations.json
+
+- name: Block Merge on Failure
+  if: failure()
+  run: |
+    echo "❌ FORGE AUDIT FAILED - PR BLOCKED"
+    echo "Fix critical violations before merging"
+    exit 1
+```
+
+**GitLab CI Example:**
+```yaml
+forge_quality_gate:
+  stage: test
+  script:
+    - forge quality audit  # STRICT mode - exits 1 if critical violations
+  artifacts:
+    when: always
+    paths:
+      - forge-audit-*.md
+      - forge-metrics.json
+    reports:
+      junit: forge-junit.xml  # Optional: convert to JUnit format
+  allow_failure: false  # Block pipeline on forge failure
+```
+
+### Metrics Tracking Over Time
+
+**Store artifacts for trend analysis:**
+```bash
+.claude/audit-reports/
+├── forge-audit-2025-12-12.md
+├── forge-audit-2025-12-05.md
+├── forge-audit-2025-11-28.md
+└── forge-metrics-history.json  # Time-series data
+```
+
+**Metrics JSON Structure:**
+```json
+{
+  "audit_date": "2025-12-12T10:30:00Z",
+  "exit_code": 0,
+  "scores": {
+    "overall": 89,
+    "code": 91,
+    "test": 86,
+    "security": 95
+  },
+  "violations": {
+    "critical": 0,
+    "high": 3,
+    "medium": 12,
+    "low": 8
+  },
+  "trend": {
+    "overall_change": "+7",
+    "critical_fixed": 3,
+    "new_violations": 0
+  },
+  "build_status": "PASS"
+}
+```
+
+### Dashboard Integration
+
+**Artifacts can feed into:**
+- Grafana dashboards (quality over time)
+- Slack notifications (build status)
+- GitHub PR comments (violation summaries)
+- Jira tickets (auto-create for critical violations)
+
+**Example: Auto-comment on PRs:**
+```yaml
+- name: Comment on PR
+  if: failure()
+  uses: actions/github-script@v6
+  with:
+    script: |
+      const fs = require('fs');
+      const report = fs.readFileSync('forge-audit-*.md', 'utf8');
+      github.rest.issues.createComment({
+        issue_number: context.issue.number,
+        body: `## ❌ Forge Audit Failed\n\n${report}\n\nFix critical violations before merging.`
+      });
+```
 
 ## Agent Coordination
 
