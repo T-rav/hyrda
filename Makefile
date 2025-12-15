@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest test-shared test-dashboard ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
+.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest test-shared test-dashboard test-rag ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-test-rag ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -172,6 +172,9 @@ test: $(VENV)
 	@echo ""
 	@echo "$(YELLOW)📊 Dashboard service unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Dashboard tests skipped$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)🔍 RAG service unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  RAG tests skipped$(RESET)"
 	@echo ""
 	@echo "$(GREEN)✅ All unit test suites completed!$(RESET)"
 
@@ -725,3 +728,11 @@ test-shared: $(VENV)
 test-dashboard: $(VENV)
 	@echo "$(BLUE)Running dashboard service tests...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
+
+test-rag: $(VENV)
+	@echo "$(BLUE)Running RAG service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
+
+ci-test-rag: $(VENV)
+	@echo "$(BLUE)🔍 Running RAG service tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  RAG tests skipped$(RESET)"
