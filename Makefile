@@ -473,7 +473,7 @@ ci-docker: health-ui tasks-ui
 
 # Main CI target - runs all checks (Docker builds excluded - use separate deployment pipeline)
 # Use 'make ci' for sequential or 'make -j4 ci' for parallel execution
-ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-ui
+ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-test-rag ci-ui
 	@echo ""
 	@echo "$(GREEN)✅ ================================$(RESET)"
 	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"

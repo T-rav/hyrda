@@ -1,0 +1,389 @@
+"""Comprehensive tests for RAG API endpoints.
+
+Tests the main /v1/chat/completions endpoint and status endpoint.
+
+NOTE: Most tests are marked as integration tests since they require full app setup.
+Run with: pytest -m integration
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock, Mock, patch
+
+# Mark most API tests as integration tests
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+def client():
+    """Create test client."""
+    from app import app
+    return TestClient(app)
+
+
+@pytest.fixture
+def mock_service_token():
+    """Mock valid service token."""
+    return "test-service-token-valid"
+
+
+@pytest.fixture
+def auth_headers(mock_service_token):
+    """Create auth headers."""
+    return {
+        "X-Service-Token": mock_service_token,
+        "Content-Type": "application/json",
+    }
+
+
+class TestChatCompletionsEndpoint:
+    """Test /v1/chat/completions endpoint."""
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_simple_rag_query_without_agent(
+        self, mock_get_llm, mock_get_routing, client, auth_headers
+    ):
+        """Test simple RAG query that doesn't need agent routing."""
+        # Mock routing service to return None (no agent needed)
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        # Mock LLM service to return a response
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="The answer is 42."
+        )
+        mock_get_llm.return_value = mock_llm
+
+        payload = {
+            "query": "What is the answer to life?",
+            "conversation_history": [],
+            "use_rag": True,
+            "user_id": "test_user",
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "response" in data
+        assert data["response"] == "The answer is 42."
+        assert "citations" in data
+        assert "metadata" in data
+        assert data["metadata"]["routed_to_agent"] is False
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_agent_client")
+    def test_query_with_agent_routing(
+        self, mock_get_agent_client, mock_get_routing, client, auth_headers
+    ):
+        """Test query that gets routed to an agent."""
+        # Mock routing service to detect agent
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = "research"
+        mock_get_routing.return_value = mock_routing
+
+        # Mock agent client
+        mock_agent_client = Mock()
+        mock_agent_client.invoke_agent = AsyncMock(
+            return_value={
+                "response": "Research results here...",
+                "metadata": {"tools_used": ["web_search"]},
+            }
+        )
+        mock_get_agent_client.return_value = mock_agent_client
+
+        payload = {
+            "query": "/research quantum computing",
+            "conversation_history": [],
+            "user_id": "test_user",
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["response"] == "Research results here..."
+        assert data["metadata"]["agent_used"] == "research"
+        assert data["metadata"]["routed_to_agent"] is True
+
+    def test_missing_required_fields(self, client, auth_headers):
+        """Test request with missing required fields."""
+        payload = {
+            "conversation_history": [],  # Missing 'query' field
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422  # Validation error
+
+    def test_missing_authentication(self, client):
+        """Test request without authentication token."""
+        payload = {
+            "query": "Test query",
+            "conversation_history": [],
+        }
+
+        response = client.post("/api/v1/chat/completions", json=payload)
+        assert response.status_code == 401
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_query_with_conversation_history(
+        self, mock_get_llm, mock_get_routing, client, auth_headers
+    ):
+        """Test query with conversation history."""
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="Based on our previous discussion..."
+        )
+        mock_get_llm.return_value = mock_llm
+
+        payload = {
+            "query": "Can you elaborate on that?",
+            "conversation_history": [
+                {"role": "user", "content": "What is RAG?"},
+                {"role": "assistant", "content": "RAG stands for Retrieval-Augmented Generation..."},
+            ],
+            "user_id": "test_user",
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "response" in data
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_query_with_document_content(
+        self, mock_get_llm, mock_get_routing, client, auth_headers
+    ):
+        """Test query with uploaded document content."""
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="Based on the document provided..."
+        )
+        mock_get_llm.return_value = mock_llm
+
+        payload = {
+            "query": "Summarize this document",
+            "conversation_history": [],
+            "document_content": "This is test document content...",
+            "document_filename": "test.pdf",
+            "user_id": "test_user",
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "response" in data
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_query_with_rag_disabled(
+        self, mock_get_llm, mock_get_routing, client, auth_headers
+    ):
+        """Test query with RAG retrieval disabled."""
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="Response without RAG retrieval"
+        )
+        mock_get_llm.return_value = mock_llm
+
+        payload = {
+            "query": "Simple question",
+            "conversation_history": [],
+            "use_rag": False,  # RAG disabled
+            "user_id": "test_user",
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metadata"]["rag_used"] is False
+
+    @patch("api.rag.get_routing_service")
+    def test_error_handling_when_generation_fails(
+        self, mock_get_routing, client, auth_headers
+    ):
+        """Test error handling when LLM generation fails."""
+        mock_routing = Mock()
+        mock_routing.detect_agent.side_effect = Exception("Service unavailable")
+        mock_get_routing.return_value = mock_routing
+
+        payload = {
+            "query": "Test query",
+            "conversation_history": [],
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 500
+        assert "detail" in response.json()
+
+    def test_alias_endpoint_without_v1_prefix(self, client, auth_headers):
+        """Test /chat/completions alias endpoint (without /v1 prefix)."""
+        with patch("api.rag.get_routing_service") as mock_routing:
+            with patch("api.rag.get_llm_service") as mock_llm:
+                mock_routing.return_value.detect_agent.return_value = None
+                mock_llm.return_value.get_response = AsyncMock(return_value="Response")
+
+                payload = {"query": "Test", "conversation_history": []}
+
+                response = client.post(
+                    "/api/chat/completions",
+                    json=payload,
+                    headers=auth_headers,
+                )
+
+                assert response.status_code == 200
+
+
+class TestStatusEndpoint:
+    """Test /v1/status endpoint."""
+
+    @patch("api.rag.get_settings")
+    def test_status_endpoint_with_vector_enabled(self, mock_get_settings, client):
+        """Test status endpoint when vector DB is enabled."""
+        mock_settings = Mock()
+        mock_settings.vector.enabled = True
+        mock_settings.vector.provider = "qdrant"
+        mock_settings.llm.provider = "openai"
+        mock_settings.embedding.provider = "openai"
+        mock_get_settings.return_value = mock_settings
+
+        response = client.get("/api/v1/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["vector_enabled"] is True
+        assert data["llm_provider"] == "openai"
+        assert data["embedding_provider"] == "openai"
+        assert "capabilities" in data
+
+    @patch("api.rag.get_settings")
+    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, client):
+        """Test status endpoint when vector DB is disabled."""
+        mock_settings = Mock()
+        mock_settings.vector.enabled = False
+        mock_settings.llm.provider = "anthropic"
+        mock_settings.embedding.provider = "openai"
+        mock_get_settings.return_value = mock_settings
+
+        response = client.get("/api/v1/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["vector_enabled"] is False
+
+    def test_status_alias_endpoint(self, client):
+        """Test /status alias endpoint (without /v1 prefix)."""
+        with patch("api.rag.get_settings") as mock_settings:
+            mock_settings.return_value.vector.enabled = True
+            mock_settings.return_value.llm.provider = "openai"
+            mock_settings.return_value.embedding.provider = "openai"
+
+            response = client.get("/api/status")
+            assert response.status_code == 200
+
+
+class TestRequestValidation:
+    """Test request validation and edge cases."""
+
+    def test_empty_query(self, client, auth_headers):
+        """Test request with empty query string."""
+        payload = {
+            "query": "",  # Empty query
+            "conversation_history": [],
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        # Should accept but may return validation error or empty response
+        assert response.status_code in [200, 422]
+
+    def test_very_long_query(self, client, auth_headers):
+        """Test request with very long query string."""
+        with patch("api.rag.get_routing_service") as mock_routing:
+            with patch("api.rag.get_llm_service") as mock_llm:
+                mock_routing.return_value.detect_agent.return_value = None
+                mock_llm.return_value.get_response = AsyncMock(return_value="Response")
+
+                payload = {
+                    "query": "Test query " * 1000,  # Very long query
+                    "conversation_history": [],
+                }
+
+                response = client.post(
+                    "/api/v1/chat/completions",
+                    json=payload,
+                    headers=auth_headers,
+                )
+
+                # Should handle gracefully
+                assert response.status_code in [200, 413, 422]
+
+    def test_invalid_conversation_history_format(self, client, auth_headers):
+        """Test request with invalid conversation history format."""
+        payload = {
+            "query": "Test",
+            "conversation_history": "invalid format",  # Should be a list
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422  # Validation error
