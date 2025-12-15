@@ -3,9 +3,8 @@
 from typing import Any
 
 from sqlalchemy import Column, DateTime, String, func
-from sqlalchemy.orm import declarative_base
 
-Base = declarative_base()
+from models.base import Base
 
 
 class TaskMetadata(Base):

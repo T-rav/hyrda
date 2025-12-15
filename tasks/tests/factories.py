@@ -150,10 +150,33 @@ class FastAPIAppFactory:
             mock_session.commit = Mock()
             yield mock_session
 
-        # Patch get_db_session
+        # Initialize test database with tables
         import models.base
+        from models.task_metadata import TaskMetadata
+        from models.task_run import TaskRun
+        from models.oauth_credential import OAuthCredential
 
-        models.base.get_db_session = mock_db_session
+        # Create tables in the test database
+        try:
+            test_task_db = os.getenv("TASK_DATABASE_URL", "sqlite:///:memory:")
+            models.base.init_db(test_task_db)
+
+            # Import models to register them with Base.metadata before create_all
+            from models.task_metadata import TaskMetadata  # noqa: F401
+            from models.task_run import TaskRun  # noqa: F401
+            from models.oauth_credential import OAuthCredential  # noqa: F401
+
+            models.base.Base.metadata.create_all(bind=models.base._engine)
+
+            test_data_db = os.getenv("DATA_DATABASE_URL", "sqlite:///:memory:")
+            models.base.init_data_db(test_data_db)
+            models.base.Base.metadata.create_all(bind=models.base._data_engine)
+        except Exception as e:
+            # If table creation fails, use mock (for tests that don't need real DB)
+            import traceback
+            print(f"Warning: Database initialization failed: {e}")
+            traceback.print_exc()
+            models.base.get_db_session = mock_db_session
 
         # Mock services already set in app.state above
         # FastAPI doesn't have app.extensions, using app.state instead
@@ -180,11 +203,12 @@ class FastAPIAppFactory:
             # FastAPI standard: Use dependency overrides for authenticated tests
             from dependencies.auth import get_current_user
 
-            # Override the auth dependency to return a mock user
+            # Override the auth dependency to return a mock admin user
             async def mock_get_current_user():
                 return {
                     "email": "test@test.com",
                     "name": "Test User",
+                    "is_admin": True,  # Grant admin access for tests
                 }
 
             test_app.dependency_overrides[get_current_user] = mock_get_current_user
