@@ -56,8 +56,35 @@ def test_app():
 
 
 @pytest.fixture
+def client(test_app):
+    """Create test client with mocked authentication."""
+    from dependencies.auth import require_service_auth
+
+    # Override the authentication dependency to return mock service info
+    async def mock_require_service_auth():
+        return {
+            "service": "test-service",
+            "token_id": "test-token-id",
+        }
+
+    test_app.dependency_overrides[require_service_auth] = mock_require_service_auth
+
+    with TestClient(test_app) as client:
+        yield client
+
+    # Clean up dependency overrides
+    test_app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def test_client(test_app):
-    """Create test client."""
+    """Alias for client fixture for backward compatibility."""
+    return client(test_app)
+
+
+@pytest.fixture
+def unauth_client(test_app):
+    """Create test client WITHOUT mocked authentication for testing auth failures."""
     with TestClient(test_app) as client:
         yield client
 

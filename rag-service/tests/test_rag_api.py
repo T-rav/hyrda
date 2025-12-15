@@ -14,28 +14,6 @@ from unittest.mock import AsyncMock, Mock, patch
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def client():
-    """Create test client."""
-    from app import app
-    return TestClient(app)
-
-
-@pytest.fixture
-def mock_service_token():
-    """Mock valid service token."""
-    return "test-service-token-valid"
-
-
-@pytest.fixture
-def auth_headers(mock_service_token):
-    """Create auth headers."""
-    return {
-        "X-Service-Token": mock_service_token,
-        "Content-Type": "application/json",
-    }
-
-
 class TestChatCompletionsEndpoint:
     """Test /v1/chat/completions endpoint."""
 
@@ -131,14 +109,14 @@ class TestChatCompletionsEndpoint:
 
         assert response.status_code == 422  # Validation error
 
-    def test_missing_authentication(self, client):
+    def test_missing_authentication(self, unauth_client):
         """Test request without authentication token."""
         payload = {
             "query": "Test query",
             "conversation_history": [],
         }
 
-        response = client.post("/api/v1/chat/completions", json=payload)
+        response = unauth_client.post("/api/v1/chat/completions", json=payload)
         assert response.status_code == 401
 
     @patch("api.rag.get_routing_service")
@@ -287,15 +265,33 @@ class TestChatCompletionsEndpoint:
 class TestStatusEndpoint:
     """Test /v1/status endpoint."""
 
+    @patch("api.rag.get_agent_client")
+    @patch("api.rag.create_vector_store")
     @patch("api.rag.get_settings")
-    def test_status_endpoint_with_vector_enabled(self, mock_get_settings, client):
+    def test_status_endpoint_with_vector_enabled(
+        self, mock_get_settings, mock_create_vector_store, mock_get_agent_client, client
+    ):
         """Test status endpoint when vector DB is enabled."""
         mock_settings = Mock()
         mock_settings.vector.enabled = True
         mock_settings.vector.provider = "qdrant"
         mock_settings.llm.provider = "openai"
         mock_settings.embedding.provider = "openai"
+        mock_settings.rag.enable_query_rewriting = False
+        mock_settings.search.tavily_api_key = None
+        mock_settings.search.perplexity_enabled = False
+        mock_settings.search.perplexity_api_key = None
         mock_get_settings.return_value = mock_settings
+
+        # Mock vector store health check
+        mock_vector_store = AsyncMock()
+        mock_vector_store.get_collection_info = AsyncMock(return_value={"vectors_count": 100})
+        mock_create_vector_store.return_value = mock_vector_store
+
+        # Mock agent client health check
+        mock_agent_client = AsyncMock()
+        mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
+        mock_get_agent_client.return_value = mock_agent_client
 
         response = client.get("/api/v1/status")
 
@@ -307,14 +303,24 @@ class TestStatusEndpoint:
         assert data["embedding_provider"] == "openai"
         assert "capabilities" in data
 
+    @patch("api.rag.get_agent_client")
     @patch("api.rag.get_settings")
-    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, client):
+    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, mock_get_agent_client, client):
         """Test status endpoint when vector DB is disabled."""
         mock_settings = Mock()
         mock_settings.vector.enabled = False
         mock_settings.llm.provider = "anthropic"
         mock_settings.embedding.provider = "openai"
+        mock_settings.rag.enable_query_rewriting = False
+        mock_settings.search.tavily_api_key = None
+        mock_settings.search.perplexity_enabled = False
+        mock_settings.search.perplexity_api_key = None
         mock_get_settings.return_value = mock_settings
+
+        # Mock agent client health check
+        mock_agent_client = AsyncMock()
+        mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
+        mock_get_agent_client.return_value = mock_agent_client
 
         response = client.get("/api/v1/status")
 
@@ -322,12 +328,28 @@ class TestStatusEndpoint:
         data = response.json()
         assert data["vector_enabled"] is False
 
-    def test_status_alias_endpoint(self, client):
+    @patch("api.rag.get_agent_client")
+    @patch("api.rag.create_vector_store")
+    def test_status_alias_endpoint(self, mock_create_vector_store, mock_get_agent_client, client):
         """Test /status alias endpoint (without /v1 prefix)."""
         with patch("api.rag.get_settings") as mock_settings:
             mock_settings.return_value.vector.enabled = True
             mock_settings.return_value.llm.provider = "openai"
             mock_settings.return_value.embedding.provider = "openai"
+            mock_settings.return_value.rag.enable_query_rewriting = False
+            mock_settings.return_value.search.tavily_api_key = None
+            mock_settings.return_value.search.perplexity_enabled = False
+            mock_settings.return_value.search.perplexity_api_key = None
+
+            # Mock vector store health check
+            mock_vector_store = AsyncMock()
+            mock_vector_store.get_collection_info = AsyncMock(return_value={"vectors_count": 100})
+            mock_create_vector_store.return_value = mock_vector_store
+
+            # Mock agent client health check
+            mock_agent_client = AsyncMock()
+            mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
+            mock_get_agent_client.return_value = mock_agent_client
 
             response = client.get("/api/status")
             assert response.status_code == 200

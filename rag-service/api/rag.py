@@ -6,7 +6,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from config.settings import get_settings
 from dependencies.auth import require_service_auth
+from services.agent_client import get_agent_client
+from services.llm_service import get_llm_service
+from services.routing_service import get_routing_service
+from services.vector_service import create_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -105,11 +110,6 @@ async def generate_response(
     )
 
     try:
-        # Import here to avoid circular dependencies
-        from config.settings import get_settings
-        from services.agent_client import get_agent_client
-        from services.routing_service import get_routing_service
-
         settings = get_settings()
 
         # Step 1: Check if query needs agent routing
@@ -151,8 +151,6 @@ async def generate_response(
         # Step 2: RAG generation (no agent needed)
         logger.info("Processing with RAG pipeline")
 
-        from services.llm_service import get_llm_service
-
         llm_service = get_llm_service()
 
         # Build messages list from conversation history + current query
@@ -173,6 +171,13 @@ async def generate_response(
             use_rag=request.use_rag,
         )
 
+        # Handle empty/invalid responses
+        if not response_text:
+            raise HTTPException(
+                status_code=422,
+                detail="Unable to generate response. Query may be empty or invalid.",
+            )
+
         # TODO: Extract citations from context (implement in Phase 2)
         citations = []
 
@@ -186,6 +191,9 @@ async def generate_response(
             },
         )
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (validation errors, etc.)
+        raise
     except Exception as e:
         logger.error(f"RAG generation failed: {e}", exc_info=True)
         raise HTTPException(
@@ -212,8 +220,6 @@ async def get_status(
         RAGStatusResponse with service status and capabilities
     """
     try:
-        from config.settings import get_settings
-
         settings = get_settings()
 
         capabilities = ["RAG generation"]
@@ -236,8 +242,6 @@ async def get_status(
         # Check vector DB
         if settings.vector.enabled:
             try:
-                from services.vector_service import create_vector_store
-
                 vector_store = create_vector_store(settings.vector)
                 collection_info = await vector_store.get_collection_info()
                 services_status["vector_db"] = "healthy" if collection_info else "degraded"
@@ -247,8 +251,6 @@ async def get_status(
 
         # Check agent-service connectivity
         try:
-            from services.agent_client import get_agent_client
-
             agent_client = get_agent_client()
             # Simple connectivity check
             agents = await agent_client.list_agents()
