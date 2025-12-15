@@ -162,7 +162,7 @@ test: $(VENV)
 	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
 	@echo ""
 	@echo "$(YELLOW)🤖 Agent service unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Some agent-service tests skipped$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Some agent-service tests skipped$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
@@ -201,7 +201,7 @@ test-tasks: $(VENV)
 
 test-agent-service: $(VENV)
 	@echo "$(BLUE)Running agent service tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0 -k "not (test_agent_processes or test_profile_agent)" || echo "$(YELLOW)Some agent-service tests skipped due to import errors$(RESET)"
+	cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)Some agent-service tests skipped due to import errors$(RESET)"
 
 lint-tasks: $(VENV)
 	@echo "$(BLUE)Running task service linting...$(RESET)"
