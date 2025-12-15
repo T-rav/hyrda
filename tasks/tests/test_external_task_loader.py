@@ -79,16 +79,22 @@ class TestTaskDiscovery:
     """Test task discovery functionality."""
 
     def test_discover_tasks_no_path(self):
-        """Test discovery with no external path configured."""
+        """Test discovery with no external path configured - should still load system tasks."""
         loader = ExternalTaskLoader(external_tasks_path=None)
         tasks = loader.discover_tasks()
-        assert tasks == {}
+        # Should load system tasks (slack_user_import, gdrive_ingest)
+        assert len(tasks) == 2
+        assert "slack_user_import" in tasks
+        assert "gdrive_ingest" in tasks
 
     def test_discover_tasks_missing_directory(self):
-        """Test discovery when directory doesn't exist."""
+        """Test discovery when external directory doesn't exist - should still load system tasks."""
         loader = ExternalTaskLoader("/nonexistent/path")
         tasks = loader.discover_tasks()
-        assert tasks == {}
+        # Should load system tasks even if external path doesn't exist
+        assert len(tasks) == 2
+        assert "slack_user_import" in tasks
+        assert "gdrive_ingest" in tasks
 
     def test_discover_single_task(self, temp_tasks_dir, simple_job_code):
         """Test discovering a single valid task."""
@@ -116,9 +122,12 @@ class TestTaskDiscovery:
         loader = ExternalTaskLoader(str(temp_tasks_dir))
         tasks = loader.discover_tasks()
 
-        assert len(tasks) == 2
-        assert "task1" in tasks
-        assert "task2" in tasks
+        # Should have 4 tasks: 2 system + 2 external
+        assert len(tasks) == 4
+        assert "slack_user_import" in tasks  # system
+        assert "gdrive_ingest" in tasks  # system
+        assert "task1" in tasks  # external
+        assert "task2" in tasks  # external
 
     def test_skip_directory_without_job_py(self, temp_tasks_dir):
         """Test skipping directories without job.py."""
@@ -271,7 +280,8 @@ Job = ComplexJob
         loader.discover_tasks()
 
         task_names = loader.list_external_tasks()
-        assert sorted(task_names) == ["task1", "task2"]
+        # Should include both system and external tasks
+        assert sorted(task_names) == ["gdrive_ingest", "slack_user_import", "task1", "task2"]
 
 
 class TestTaskReload:

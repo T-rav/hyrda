@@ -31,6 +31,7 @@ def authenticated_client(app):
             "email": "user@8thlight.com",
             "name": "Test User",
             "picture": "https://example.com/photo.jpg",
+            "is_admin": True,
         }
 
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -64,7 +65,7 @@ def client_with_services(app, mock_scheduler, mock_job_registry):
     from dependencies.auth import get_current_user
 
     async def override_get_current_user():
-        return {"email": "user@8thlight.com", "name": "Test User"}
+        return {"email": "user@8thlight.com", "name": "Test User", "is_admin": True}
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     app.state.scheduler_service = mock_scheduler

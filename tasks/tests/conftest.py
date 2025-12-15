@@ -27,6 +27,21 @@ def clear_prometheus_registry():
     yield
 
 
+# Reset external task loader before each test to avoid pollution
+@pytest.fixture(scope="function", autouse=True)
+def reset_external_loader():
+    """Reset the global external task loader before each test."""
+    import services.external_task_loader as loader_module
+
+    # Reset the global loader
+    loader_module._external_loader = None
+
+    yield
+
+    # Clean up after test
+    loader_module._external_loader = None
+
+
 @pytest.fixture
 def test_settings():
     """Create test settings with temporary database."""
