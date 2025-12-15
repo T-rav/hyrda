@@ -8,7 +8,7 @@ Includes adaptive query rewriting for improved retrieval accuracy.
 import logging
 import re
 
-from bot_types import ContextChunk
+from rag_types import ContextChunk
 
 from config.settings import Settings
 

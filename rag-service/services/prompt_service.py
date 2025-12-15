@@ -10,7 +10,7 @@ Centralized service for managing system prompts with support for:
 
 import logging
 
-from bot_types import PromptInfo
+from rag_types import PromptInfo
 
 from config.settings import Settings
 from services.langfuse_service import get_langfuse_service

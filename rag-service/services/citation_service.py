@@ -5,7 +5,7 @@ Handles formatting and adding source citations to RAG responses.
 Provides clean separation of citation logic from core RAG functionality.
 """
 
-from bot_types import ContextChunk
+from rag_types import ContextChunk
 
 
 class CitationService:

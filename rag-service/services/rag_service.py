@@ -11,7 +11,7 @@ Clean, focused RAG orchestration service that coordinates between:
 import logging
 from typing import Any
 
-from bot_types import HealthStatus
+from rag_types import HealthStatus
 
 from config.settings import Settings
 from services.citation_service import CitationService

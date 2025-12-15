@@ -12,7 +12,7 @@ import json
 import logging
 from typing import TYPE_CHECKING
 
-from bot_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
+from rag_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
 
 from services.langfuse_service import observe
 

@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 import aiohttp
-from bot_types import DeepResearchResult, WebScrapeResult, WebSearchResult
+from rag_types import DeepResearchResult, WebScrapeResult, WebSearchResult
 
 logger = logging.getLogger(__name__)
 

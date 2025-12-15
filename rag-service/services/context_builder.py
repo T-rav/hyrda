@@ -8,7 +8,7 @@ Manages prompt engineering and context formatting.
 import logging
 from datetime import datetime
 
-from bot_types import ContextChunk, ContextQuality
+from rag_types import ContextChunk, ContextQuality
 
 logger = logging.getLogger(__name__)
 
