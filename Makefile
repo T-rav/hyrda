@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
+.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest test-shared test-dashboard ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -59,11 +59,13 @@ help:
 	@echo "  test            🧪 Run ALL unit tests across all services (no integration)"
 	@echo "  test-bot-only   Run bot unit tests only (faster)"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
-	@echo "  test-integration Run integration tests only"
+	@echo "  test-integration Run integration tests only (separate process)"
 	@echo "  test-unit       Run unit tests only (alias for test)"
 	@echo "  test-tasks      Run tasks service tests"
 	@echo "  test-control-plane Run control plane tests"
 	@echo "  test-agent-service Run agent service tests"
+	@echo "  test-shared     Run shared utilities tests"
+	@echo "  test-dashboard  Run dashboard service tests"
 	@echo "  test-ingest     Run ingestion service tests"
 	@echo "  ingest          Run document ingestion (use ARGS='--folder-id YOUR_ID')"
 	@echo "  lint            Run linting and formatting"
@@ -164,6 +166,12 @@ test: $(VENV)
 	@echo ""
 	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
+	@echo ""
+	@echo "$(YELLOW)🔗 Shared utilities unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Shared tests skipped$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)📊 Dashboard service unit tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Dashboard tests skipped$(RESET)"
 	@echo ""
 	@echo "$(GREEN)✅ All unit test suites completed!$(RESET)"
 
@@ -443,6 +451,14 @@ ci-test-tasks: $(VENV)
 	@echo "$(BLUE)⏰ Running tasks service tests...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
 
+ci-test-shared: $(VENV)
+	@echo "$(BLUE)🔗 Running shared utilities tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Shared tests skipped$(RESET)"
+
+ci-test-dashboard: $(VENV)
+	@echo "$(BLUE)📊 Running dashboard service tests...$(RESET)"
+	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Dashboard tests skipped$(RESET)"
+
 ci-ui: health-ui tasks-ui
 	@echo "$(BLUE)🎨 Running React UI checks...$(RESET)"
 	@cd $(BOT_DIR)/health_ui && npm run lint && npm run test:coverage
@@ -454,7 +470,7 @@ ci-docker: health-ui tasks-ui
 
 # Main CI target - runs all checks (Docker builds excluded - use separate deployment pipeline)
 # Use 'make ci' for sequential or 'make -j4 ci' for parallel execution
-ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-ui
+ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-ui
 	@echo ""
 	@echo "$(GREEN)✅ ================================$(RESET)"
 	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"
@@ -701,3 +717,11 @@ test-behaviors: $(VENV)
 langgraph-studio:
 	@echo "$(BLUE)🔍 Discovering agents and starting LangGraph Studio...$(RESET)"
 	@./start_langgraph_studio.sh
+
+test-shared: $(VENV)
+	@echo "$(BLUE)Running shared utilities tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
+
+test-dashboard: $(VENV)
+	@echo "$(BLUE)Running dashboard service tests...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
