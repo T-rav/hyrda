@@ -1,4 +1,9 @@
-"""Tests for agent-service API endpoints."""
+"""Tests for agent-service API endpoints.
+
+INTEGRATION TESTS: These tests start the full FastAPI app with all middleware,
+connect to external services (control plane), and test the complete HTTP layer.
+Run separately with: pytest -m integration
+"""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,6 +11,9 @@ from fastapi.testclient import TestClient
 from app import app
 
 client = TestClient(app)
+
+# Mark all tests in this module as integration tests
+pytestmark = pytest.mark.integration
 
 
 class TestHealthEndpoint:

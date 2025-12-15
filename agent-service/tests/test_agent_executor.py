@@ -1,4 +1,8 @@
-"""Unit tests for AgentExecutor (dual-mode execution router)."""
+"""Unit tests for AgentExecutor (dual-mode execution router).
+
+INTEGRATION TESTS: Tests agent executor which requires real agent loading
+and external service connections. Run separately with: pytest -m integration
+"""
 
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -6,6 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.agent_executor import AgentExecutor, ExecutionMode
+
+# Mark all tests in this module as integration tests
+pytestmark = pytest.mark.integration
 
 
 class TestAgentExecutorInitialization:

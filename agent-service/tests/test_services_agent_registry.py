@@ -8,6 +8,8 @@ import os
 import sys
 from unittest.mock import Mock, patch
 
+import pytest
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from services import agent_registry
@@ -261,8 +263,12 @@ class TestServicesAgentRegistry:
         assert "agent_class" not in registry["test"]
 
     @patch.dict("sys.modules")
+    @pytest.mark.integration
     def test_load_agent_classes_loads_from_local_registry(self):
-        """Test that _load_agent_classes loads from local registry."""
+        """Test that _load_agent_classes loads from local registry.
+
+        INTEGRATION TEST: Loads actual agents from filesystem.
+        """
         # This test verifies the function can access the local registry
         # We'll mock the import to avoid dependency issues
         test_agent_class = TestAgentFactory.create_simple_agent(name="test")
@@ -299,12 +305,16 @@ class TestServicesAgentRegistry:
         assert agent_registry._cached_agents is None
         assert agent_registry._cache_timestamp == 0
 
+    @pytest.mark.integration
     @patch("services.agent_registry.get_system_loader")
-    @patch("services.agent_registry.get_external_loader")
+    @patch("services.external_agent_loader.get_external_loader")
     def test_external_cannot_override_system_agent(
         self, mock_external_loader, mock_system_loader
     ):
-        """Test that external agents cannot override system agents."""
+        """Test that external agents cannot override system agents.
+
+        INTEGRATION TEST: Tests agent loader behavior.
+        """
         # Mock system agent
         system_agent_class = Mock()
         system_agent_class.__name__ = "SystemResearchAgent"
@@ -331,12 +341,16 @@ class TestServicesAgentRegistry:
         assert classes["research"] == system_agent_class  # System wins!
         assert classes["research"] != external_agent_class  # External rejected
 
+    @pytest.mark.integration
     @patch("services.agent_registry.get_system_loader")
-    @patch("services.agent_registry.get_external_loader")
+    @patch("services.external_agent_loader.get_external_loader")
     def test_external_loads_when_no_conflict(
         self, mock_external_loader, mock_system_loader
     ):
-        """Test that external agents load normally when no conflict."""
+        """Test that external agents load normally when no conflict.
+
+        INTEGRATION TEST: Tests agent loader behavior.
+        """
         # Mock system agent
         system_agent_class = Mock()
         system_agent_class.__name__ = "ResearchAgent"
