@@ -104,8 +104,10 @@ class TestJobRegistryWithExternalLoader:
 
             registry = JobRegistry(mock_settings, mock_scheduler)
 
-            # Should have no job types
-            assert len(registry.job_types) == 0
+            # Should have only system job types (slack_user_import, gdrive_ingest)
+            assert len(registry.job_types) == 2
+            assert "slack_user_import" in registry.job_types
+            assert "gdrive_ingest" in registry.job_types
 
     def test_job_registry_get_available_job_types(
         self, temp_tasks_dir, simple_job_code, mock_settings, mock_scheduler
@@ -126,10 +128,13 @@ class TestJobRegistryWithExternalLoader:
             registry = JobRegistry(mock_settings, mock_scheduler)
             job_types = registry.get_available_job_types()
 
-            assert len(job_types) == 1
-            assert job_types[0]["type"] == "test_task"
-            assert job_types[0]["name"] == "Test Job"
-            assert job_types[0]["description"] == "Test job description"
+            # Should have 3 job types: 2 system + 1 external
+            assert len(job_types) == 3
+
+            # Find the test_task job type
+            test_task = next(jt for jt in job_types if jt["type"] == "test_task")
+            assert test_task["name"] == "Test Job"
+            assert test_task["description"] == "Test job description"
 
     def test_job_registry_register_additional_job(
         self, temp_tasks_dir, simple_job_code, mock_settings, mock_scheduler
@@ -168,7 +173,8 @@ class TestJobRegistryWithExternalLoader:
             registry.register_job_type("manual_job", ManualJob)
 
             assert "manual_job" in registry.job_types
-            assert len(registry.job_types) == 2
+            # Should have 4 job types: 2 system + 1 external + 1 manual
+            assert len(registry.job_types) == 4
 
 
 class TestExecuteJobByType:

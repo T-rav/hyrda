@@ -39,7 +39,7 @@ class TestJobRegistry:
         # Check for expected job types
         job_type_names = [jt["type"] for jt in job_types]
         assert "slack_user_import" in job_type_names
-        assert "metric_sync" in job_type_names
+        assert "gdrive_ingest" in job_type_names
 
     def test_create_slack_user_import_job(self, test_settings):
         """Test creating a Slack user import job."""
@@ -60,20 +60,20 @@ class TestJobRegistry:
         # Cleanup
         scheduler_service.shutdown(wait=False)
 
-    def test_create_metric_sync_job(self, test_settings):
-        """Test creating a metric sync job."""
+    def test_create_gdrive_ingest_job(self, test_settings):
+        """Test creating a Google Drive ingest job."""
         scheduler_service = SchedulerService(test_settings)
         scheduler_service.start()
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metric_sync",
-            job_id="test_metrics",
+            job_type="gdrive_ingest",
+            job_id="test_gdrive",
             schedule={"trigger": "interval", "minutes": 30},
+            folder_id="test-folder-id",
         )
 
-        assert job.id == "test_metrics"
-        assert job.name == "Metric.ai Data Sync"
+        assert job.id == "test_gdrive"
 
         # Cleanup
         scheduler_service.shutdown(wait=False)
@@ -85,7 +85,9 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metric_sync", job_id="test_default_schedule"
+            job_type="gdrive_ingest",
+            job_id="test_default_schedule",
+            folder_id="test-folder-id",
         )
 
         assert job.id == "test_default_schedule"
@@ -111,8 +113,8 @@ class TestJobRegistry:
         slack_class = registry.get_job_class("slack_user_import")
         assert slack_class is not None
 
-        metric_sync_class = registry.get_job_class("metric_sync")
-        assert metric_sync_class is not None
+        gdrive_ingest_class = registry.get_job_class("gdrive_ingest")
+        assert gdrive_ingest_class is not None
 
         # Test invalid job type
         invalid_class = registry.get_job_class("invalid_type")
@@ -125,9 +127,10 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metric_sync",
+            job_type="gdrive_ingest",
             job_id="test_cron_job",
             schedule={"trigger": "cron", "hour": 0, "minute": 0},
+            folder_id="test-folder-id",
         )
 
         assert job.id == "test_cron_job"
@@ -142,12 +145,13 @@ class TestJobRegistry:
         registry = JobRegistry(test_settings, scheduler_service)
 
         job = registry.create_job(
-            job_type="metric_sync",
+            job_type="gdrive_ingest",
             # No job_id provided, should be auto-generated
             schedule={"trigger": "interval", "minutes": 15},
+            folder_id="test-folder-id",
         )
 
-        assert job.id.startswith("metric_sync_")
+        assert job.id.startswith("gdrive_ingest_")
 
         # Cleanup
         scheduler_service.shutdown(wait=False)
