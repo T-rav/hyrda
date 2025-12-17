@@ -148,10 +148,7 @@ def create_app() -> FastAPI:
     # Register routers
     register_routers(app)
 
-    # Prometheus metrics endpoint
-    app.get("/metrics")(create_metrics_endpoint())
-
-    # Serve static files (React UI)
+    # Serve static files (React UI) - MUST be mounted before catch-all route
     static_folder = Path(__file__).parent / "ui" / "dist"
     if static_folder.exists():
         # Mount assets folder for JS/CSS files
@@ -159,10 +156,24 @@ def create_app() -> FastAPI:
         if assets_folder.exists():
             app.mount("/assets", StaticFiles(directory=str(assets_folder)), name="assets")
 
+    # Prometheus metrics endpoint
+    app.get("/metrics")(create_metrics_endpoint())
+
+    # Catch-all route for SPA - this must be LAST
+    if static_folder.exists():
         @app.get("/")
         @app.get("/{path:path}")
         async def serve_react_app(path: str = ""):
-            """Serve React app for all routes (SPA)."""
+            """Serve React app for all routes (SPA).
+
+            Note: This catch-all must be registered AFTER all other routes/mounts
+            to avoid intercepting API calls and static assets.
+            """
+            # Don't serve index.html for API or assets paths (safety check)
+            if path.startswith("api/") or path.startswith("assets/"):
+                from fastapi import HTTPException
+                raise HTTPException(404)
+
             index_file = static_folder / "index.html"
             if index_file.exists():
                 return FileResponse(index_file)
