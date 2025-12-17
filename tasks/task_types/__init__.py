@@ -44,6 +44,17 @@ class JobExecutionResult(TypedDict, total=False):
     Returned by job execute() methods.
     """
 
+    # Standard fields returned by BaseJob.run()
+    status: str  # Job status: "success" or "error"
+    job_id: str  # Job ID
+    job_name: str  # Job name
+    start_time: str  # ISO datetime when job started
+    execution_time_seconds: float  # Execution duration in seconds
+    result: Any  # Result from job execute() method
+    error_type: str  # Error type (e.g., "ValueError")
+    error_context: dict[str, Any]  # Error context details
+
+    # Fields from job execute() implementations
     success: bool  # Whether job succeeded
     message: str  # Success/error message
     records_processed: int  # Number of records processed
@@ -51,6 +62,14 @@ class JobExecutionResult(TypedDict, total=False):
     records_failed: int  # Number of failed records
     error: str  # Error message if failed
     details: dict[str, Any]  # Additional result details
+
+    # Job-specific fields (examples from various jobs)
+    total_users_fetched: int  # From slack_user_import
+    filtered_users_count: int  # From slack_user_import
+    new_users_count: int  # From slack_user_import
+    updated_users_count: int  # From slack_user_import
+    users_sample: list[Any]  # From slack_user_import
+    processed_count: int  # From slack_user_import
 
 
 class EmployeeProfile(TypedDict, total=False):

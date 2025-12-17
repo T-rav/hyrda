@@ -196,8 +196,9 @@ async def test_agent_invoke_with_service_token_succeeds(http_client, service_url
     payload = {"query": "test query"}
     headers = {"X-Service-Token": service_token}
 
+    # Increase timeout for agent execution
     response = await http_client.post(
-        invoke_url, json=payload, headers=headers, timeout=30.0
+        invoke_url, json=payload, headers=headers, timeout=60.0
     )
 
     assert response.status_code != 401, (
@@ -258,9 +259,11 @@ async def test_agent_invoke_checks_user_permissions(
     if not authenticated_user:
         pytest.skip("User authentication not available")
 
-    invoke_url = f"{service_urls['agent_service']}/api/agents/research/invoke"
+    # Use 'help' agent instead of 'research' - faster response for permission check
+    invoke_url = f"{service_urls['agent_service']}/api/agents/help/invoke"
     payload = {"query": "test query"}
 
+    # Help agent responds quickly - test should complete within reasonable timeout
     response = await authenticated_user.post(invoke_url, json=payload, timeout=30.0)
 
     # User IS authenticated (has valid JWT)

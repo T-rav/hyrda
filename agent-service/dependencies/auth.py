@@ -129,3 +129,46 @@ async def require_service_auth(
     )
 
     return service_info
+
+
+async def get_current_user(request: Request) -> dict:
+    """
+    Dependency to get the current authenticated user from JWT token.
+
+    Use with: Depends(get_current_user)
+
+    Returns:
+        dict: User info with email, name, and user_id
+
+    Raises:
+        HTTPException: 401 if not authenticated or invalid token
+    """
+    from shared.utils.jwt_auth import JWTAuthError, verify_token
+
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Provide Bearer token in Authorization header.",
+        )
+
+    token = auth_header[7:]  # Remove "Bearer " prefix
+
+    try:
+        payload = verify_token(token)
+        user_info = {
+            "user_id": payload.get("user_id") or payload.get("sub"),
+            "email": payload.get("email"),
+            "name": payload.get("name"),
+            "is_admin": payload.get("is_admin", False),
+        }
+
+        if not user_info["user_id"]:
+            raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+
+        return user_info
+
+    except JWTAuthError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")

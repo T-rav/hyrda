@@ -34,7 +34,9 @@ def init_db(database_url: str) -> None:
     if database_url.startswith("sqlite"):
         _engine = create_engine(
             database_url,
-            connect_args={"check_same_thread": False},  # Allow multi-threading for SQLite
+            connect_args={
+                "check_same_thread": False
+            },  # Allow multi-threading for SQLite
         )
     else:
         _engine = create_engine(
@@ -55,7 +57,9 @@ def init_data_db(database_url: str) -> None:
     if database_url.startswith("sqlite"):
         _data_engine = create_engine(
             database_url,
-            connect_args={"check_same_thread": False},  # Allow multi-threading for SQLite
+            connect_args={
+                "check_same_thread": False
+            },  # Allow multi-threading for SQLite
         )
     else:
         _data_engine = create_engine(
@@ -81,16 +85,19 @@ def get_db_session():
     elif _engine:
         # Debug: Check if tables exist
         from sqlalchemy import inspect
+
         inspector = inspect(_engine)
         tables = inspector.get_table_names()
         if not tables:
             # Tables missing - reinitialize and create
             from config.settings import get_settings
+            from models.oauth_credential import OAuthCredential  # noqa: F401
             from models.task_metadata import TaskMetadata  # noqa: F401
             from models.task_run import TaskRun  # noqa: F401
-            from models.oauth_credential import OAuthCredential  # noqa: F401
+
             Base.metadata.create_all(bind=_engine)
 
+    assert _SessionLocal is not None, "SessionLocal not initialized"
     session = _SessionLocal()
     try:
         yield session
@@ -107,6 +114,7 @@ def get_data_db_session():
         settings = get_settings()
         init_data_db(settings.data_database_url)
 
+    assert _DataSessionLocal is not None, "DataSessionLocal not initialized"
     session = _DataSessionLocal()
     try:
         yield session

@@ -69,7 +69,7 @@ class IngestionOrchestrator:
 
     async def ingest_files(
         self, files: list[dict], metadata: dict | None = None
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, int]:
         """
         Ingest files into the vector database.
 
@@ -78,7 +78,7 @@ class IngestionOrchestrator:
             metadata: Additional metadata to add to each document
 
         Returns:
-            Tuple of (success_count, error_count)
+            Tuple of (success_count, error_count, skipped_count)
         """
         # Check that services are properly initialized
         if not self.vector_service:

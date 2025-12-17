@@ -349,6 +349,9 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_HOST:-}
       - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-test-key-for-testing}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-anthropic-key}
+      - LLM_API_KEY=${LLM_API_KEY:-test-llm-key}
       - EXTERNAL_AGENTS_PATH=/app/external_agents  # Path where agents are mounted
     volumes:
       # Mount external agents directory (client-customizable)

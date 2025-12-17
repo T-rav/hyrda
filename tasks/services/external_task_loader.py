@@ -195,10 +195,13 @@ class ExternalTaskLoader:
                 candidates = []
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if isinstance(attr, type) and attr_name.endswith("Job"):
+                    if (
+                        isinstance(attr, type)
+                        and attr_name.endswith("Job")
+                        and attr.__module__ == module_name
+                    ):
                         # Only consider classes defined in this module (not imported)
-                        if attr.__module__ == module_name:
-                            candidates.append((attr_name, attr))
+                        candidates.append((attr_name, attr))
 
                 # Prefer longer names (more specific, e.g., "MyCustomJob" over "Job")
                 if candidates:

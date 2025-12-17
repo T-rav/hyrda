@@ -4,7 +4,7 @@ import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -368,56 +368,172 @@ class TestCredentialsDeleteEndpoint:
         assert response.status_code == 500
 
 
-@pytest.mark.skip(reason="Requires control-plane to be running for auth proxy")
+@pytest.mark.integration
 class TestAuthDependencies:
-    """Test authentication dependency injection functions."""
+    """Test authentication dependency with REAL control-plane integration."""
 
     @pytest.mark.asyncio
-    async def test_get_current_user_authenticated(self):
-        """Test get_current_user with authenticated session."""
-        from dependencies.auth import get_current_user
+    async def test_authenticated_endpoint_with_real_jwt(
+        self, client, authenticated_request_headers, control_plane_url
+    ):
+        """
+        INTEGRATION TEST: Test authenticated endpoint with REAL JWT token.
 
-        mock_request = Mock()
-        mock_request.session = {
-            "user_email": "user@8thlight.com",
-            "user_info": {"email": "user@8thlight.com", "name": "Test User"},
-        }
+        Given: Valid JWT token for 8thlight.com user
+        When: GET /api/jobs with Bearer token
+        Then: Request succeeds (not 401/403)
 
-        with patch("dependencies.auth.verify_domain", return_value=True):
-            result = await get_current_user(mock_request)
-            assert result["email"] == "user@8thlight.com"
+        This tests the FULL auth flow:
+        1. JWT token in Authorization header
+        2. get_current_user() dependency extracts token
+        3. REAL HTTP call to control-plane /api/users/me
+        4. Control-plane validates token and returns user info
+        5. verify_domain() checks email domain
+        6. Request proceeds to endpoint
+        """
+        # Import here to ensure fixtures are loaded
+        pytest.importorskip("integration_conftest")
+
+        # Ensure control-plane is reachable
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(verify=False, timeout=5.0) as test_client:
+                health_response = await test_client.get(f"{control_plane_url}/health")
+                assert health_response.status_code == 200, (
+                    f"❌ Control-plane not available at {control_plane_url}!\n"
+                    f"Integration tests require control-plane to be running.\n"
+                    f"Health check failed: {health_response.status_code}"
+                )
+        except Exception as e:
+            pytest.fail(
+                f"❌ Cannot reach control-plane at {control_plane_url}!\n"
+                f"Integration tests require control-plane to be running.\n"
+                f"Error: {e}"
+            )
+
+        # Make authenticated request with real JWT token
+        response = client.get("/api/jobs", headers=authenticated_request_headers)
+
+        # Should succeed (200) or fail for reasons OTHER than auth (401/403)
+        assert response.status_code != 401, (
+            f"❌ Authentication failed with valid JWT!\n"
+            f"Expected: Not 401 (auth should work)\n"
+            f"Got: {response.status_code}\n"
+            f"Response: {response.text[:200]}\n"
+            f"The JWT token should authenticate successfully with control-plane!"
+        )
+
+        assert response.status_code != 403, (
+            f"❌ Authorization failed for valid 8thlight.com user!\n"
+            f"Expected: Not 403 (domain should be allowed)\n"
+            f"Got: {response.status_code}\n"
+            f"Response: {response.text[:200]}\n"
+            f"User with @8thlight.com email should pass domain verification!"
+        )
+
+        print(
+            f"✅ PASS: Authenticated request with real JWT succeeded (status: {response.status_code})"
+        )
 
     @pytest.mark.asyncio
-    async def test_get_current_user_not_authenticated(self):
-        """Test get_current_user raises 401 when not authenticated."""
-        from dependencies.auth import get_current_user
+    async def test_unauthenticated_endpoint_returns_401(
+        self, client, control_plane_url
+    ):
+        """
+        INTEGRATION TEST: Test unauthenticated request returns 401.
 
-        mock_request = Mock()
-        mock_request.session = {}  # No session data
+        Given: No authentication headers
+        When: GET /api/jobs without Bearer token
+        Then: Returns 401 Unauthorized
 
-        with pytest.raises(HTTPException) as exc_info:
-            await get_current_user(mock_request)
+        This tests the FULL auth flow without credentials:
+        1. No JWT token in request
+        2. get_current_user() dependency tries to extract token
+        3. REAL HTTP call to control-plane fails (no token)
+        4. Returns 401 Unauthorized
+        """
+        # Import here to ensure fixtures are loaded
+        pytest.importorskip("integration_conftest")
 
-        assert exc_info.value.status_code == 401
-        assert "Not authenticated" in exc_info.value.detail
+        # Ensure control-plane is reachable
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(verify=False, timeout=5.0) as test_client:
+                health_response = await test_client.get(f"{control_plane_url}/health")
+                assert health_response.status_code == 200, (
+                    f"❌ Control-plane not available at {control_plane_url}!\n"
+                    f"Health check failed: {health_response.status_code}"
+                )
+        except Exception as e:
+            pytest.fail(
+                f"❌ Cannot reach control-plane at {control_plane_url}!\n"
+                f"Error: {e}"
+            )
+
+        # Make request WITHOUT authentication
+        response = client.get("/api/jobs")
+
+        assert response.status_code == 401, (
+            f"❌ Unauthenticated request did not return 401!\n"
+            f"Expected: 401 Unauthorized\n"
+            f"Got: {response.status_code}\n"
+            f"Response: {response.text[:200]}\n"
+            f"Protected endpoints MUST require authentication!"
+        )
+
+        print("✅ PASS: Unauthenticated request correctly returned 401")
 
     @pytest.mark.asyncio
-    async def test_get_current_user_invalid_domain(self):
-        """Test get_current_user raises 403 for invalid domain."""
-        from dependencies.auth import get_current_user
+    async def test_invalid_domain_returns_403(
+        self, client, generate_real_jwt, invalid_domain_user_data, control_plane_url
+    ):
+        """
+        INTEGRATION TEST: Test invalid domain returns 403.
 
-        mock_request = Mock()
-        mock_request.session = {
-            "user_email": "attacker@evil.com",
-            "user_info": {"email": "attacker@evil.com"},
-        }
+        Given: Valid JWT token for NON-8thlight.com user
+        When: GET /api/jobs with Bearer token for @evil.com
+        Then: Returns 403 Forbidden
 
-        with patch("dependencies.auth.verify_domain", return_value=False):
-            with pytest.raises(HTTPException) as exc_info:
-                await get_current_user(mock_request)
+        This tests domain verification:
+        1. JWT token is valid (authentication succeeds)
+        2. REAL HTTP call to control-plane succeeds
+        3. verify_domain() checks email domain
+        4. Domain is not 8thlight.com → 403 Forbidden
+        """
+        # Import here to ensure fixtures are loaded
+        pytest.importorskip("integration_conftest")
 
-            assert exc_info.value.status_code == 403
-            assert "not allowed" in exc_info.value.detail
+        # Ensure control-plane is reachable
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(verify=False, timeout=5.0) as test_client:
+                health_response = await test_client.get(f"{control_plane_url}/health")
+                assert health_response.status_code == 200
+        except Exception as e:
+            pytest.fail(f"❌ Cannot reach control-plane: {e}")
+
+        # Generate JWT for invalid domain user
+        invalid_token = generate_real_jwt(invalid_domain_user_data)
+        headers = {"Authorization": f"Bearer {invalid_token}"}
+
+        # Make request with invalid domain JWT
+        response = client.get("/api/jobs", headers=headers)
+
+        # Should return 403 (authenticated but wrong domain) or 401 (if control-plane rejects token)
+        assert response.status_code in [401, 403], (
+            f"❌ Invalid domain request did not return 401/403!\n"
+            f"Expected: 403 Forbidden (or 401 if control-plane rejects)\n"
+            f"Got: {response.status_code}\n"
+            f"Response: {response.text[:200]}\n"
+            f"Non-8thlight.com users should be rejected!"
+        )
+
+        print(
+            f"✅ PASS: Invalid domain request correctly rejected (status: {response.status_code})"
+        )
 
     @pytest.mark.asyncio
     async def test_get_optional_user_authenticated(self):

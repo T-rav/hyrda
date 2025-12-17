@@ -76,10 +76,11 @@ if not SERVICE_TOKEN:
         "Set SERVICE_TOKEN in .env for persistence"
     )
 
-# Legacy service tokens (deprecated - use SERVICE_TOKEN instead)
+# Service tokens for authentication
 SERVICE_TOKENS = {
     "bot": os.getenv("BOT_SERVICE_TOKEN", SERVICE_TOKEN),
     "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", SERVICE_TOKEN),
+    "generic": SERVICE_TOKEN,  # Generic SERVICE_TOKEN for tests and general use
 }
 
 

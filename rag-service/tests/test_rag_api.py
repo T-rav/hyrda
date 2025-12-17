@@ -20,7 +20,7 @@ class TestChatCompletionsEndpoint:
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_llm_service")
     def test_simple_rag_query_without_agent(
-        self, mock_get_llm, mock_get_routing, client, auth_headers
+        self, mock_get_llm, mock_get_routing, client, signed_headers
     ):
         """Test simple RAG query that doesn't need agent routing."""
         # Mock routing service to return None (no agent needed)
@@ -45,7 +45,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 200
@@ -59,7 +59,7 @@ class TestChatCompletionsEndpoint:
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_agent_client")
     def test_query_with_agent_routing(
-        self, mock_get_agent_client, mock_get_routing, client, auth_headers
+        self, mock_get_agent_client, mock_get_routing, client, signed_headers
     ):
         """Test query that gets routed to an agent."""
         # Mock routing service to detect agent
@@ -86,7 +86,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 200
@@ -95,7 +95,7 @@ class TestChatCompletionsEndpoint:
         assert data["metadata"]["agent_used"] == "research"
         assert data["metadata"]["routed_to_agent"] is True
 
-    def test_missing_required_fields(self, client, auth_headers):
+    def test_missing_required_fields(self, client, signed_headers):
         """Test request with missing required fields."""
         payload = {
             "conversation_history": [],  # Missing 'query' field
@@ -104,7 +104,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 422  # Validation error
@@ -122,7 +122,7 @@ class TestChatCompletionsEndpoint:
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_llm_service")
     def test_query_with_conversation_history(
-        self, mock_get_llm, mock_get_routing, client, auth_headers
+        self, mock_get_llm, mock_get_routing, client, signed_headers
     ):
         """Test query with conversation history."""
         mock_routing = Mock()
@@ -147,7 +147,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 200
@@ -157,7 +157,7 @@ class TestChatCompletionsEndpoint:
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_llm_service")
     def test_query_with_document_content(
-        self, mock_get_llm, mock_get_routing, client, auth_headers
+        self, mock_get_llm, mock_get_routing, client, signed_headers
     ):
         """Test query with uploaded document content."""
         mock_routing = Mock()
@@ -181,7 +181,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 200
@@ -191,7 +191,7 @@ class TestChatCompletionsEndpoint:
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_llm_service")
     def test_query_with_rag_disabled(
-        self, mock_get_llm, mock_get_routing, client, auth_headers
+        self, mock_get_llm, mock_get_routing, client, signed_headers
     ):
         """Test query with RAG retrieval disabled."""
         mock_routing = Mock()
@@ -214,7 +214,7 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 200
@@ -223,7 +223,7 @@ class TestChatCompletionsEndpoint:
 
     @patch("api.rag.get_routing_service")
     def test_error_handling_when_generation_fails(
-        self, mock_get_routing, client, auth_headers
+        self, mock_get_routing, client, signed_headers
     ):
         """Test error handling when LLM generation fails."""
         mock_routing = Mock()
@@ -238,13 +238,13 @@ class TestChatCompletionsEndpoint:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 500
         assert "detail" in response.json()
 
-    def test_alias_endpoint_without_v1_prefix(self, client, auth_headers):
+    def test_alias_endpoint_without_v1_prefix(self, client, signed_headers):
         """Test /chat/completions alias endpoint (without /v1 prefix)."""
         with patch("api.rag.get_routing_service") as mock_routing:
             with patch("api.rag.get_llm_service") as mock_llm:
@@ -256,7 +256,7 @@ class TestChatCompletionsEndpoint:
                 response = client.post(
                     "/api/chat/completions",
                     json=payload,
-                    headers=auth_headers,
+                    headers=signed_headers(payload),
                 )
 
                 assert response.status_code == 200
@@ -269,7 +269,7 @@ class TestStatusEndpoint:
     @patch("api.rag.create_vector_store")
     @patch("api.rag.get_settings")
     def test_status_endpoint_with_vector_enabled(
-        self, mock_get_settings, mock_create_vector_store, mock_get_agent_client, client
+        self, mock_get_settings, mock_create_vector_store, mock_get_agent_client, client, auth_headers
     ):
         """Test status endpoint when vector DB is enabled."""
         mock_settings = Mock()
@@ -293,7 +293,7 @@ class TestStatusEndpoint:
         mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
         mock_get_agent_client.return_value = mock_agent_client
 
-        response = client.get("/api/v1/status")
+        response = client.get("/api/v1/status", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -305,7 +305,7 @@ class TestStatusEndpoint:
 
     @patch("api.rag.get_agent_client")
     @patch("api.rag.get_settings")
-    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, mock_get_agent_client, client):
+    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, mock_get_agent_client, client, auth_headers):
         """Test status endpoint when vector DB is disabled."""
         mock_settings = Mock()
         mock_settings.vector.enabled = False
@@ -322,7 +322,7 @@ class TestStatusEndpoint:
         mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
         mock_get_agent_client.return_value = mock_agent_client
 
-        response = client.get("/api/v1/status")
+        response = client.get("/api/v1/status", headers=auth_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -330,7 +330,7 @@ class TestStatusEndpoint:
 
     @patch("api.rag.get_agent_client")
     @patch("api.rag.create_vector_store")
-    def test_status_alias_endpoint(self, mock_create_vector_store, mock_get_agent_client, client):
+    def test_status_alias_endpoint(self, mock_create_vector_store, mock_get_agent_client, client, auth_headers):
         """Test /status alias endpoint (without /v1 prefix)."""
         with patch("api.rag.get_settings") as mock_settings:
             mock_settings.return_value.vector.enabled = True
@@ -351,14 +351,14 @@ class TestStatusEndpoint:
             mock_agent_client.list_agents = AsyncMock(return_value=[{"name": "test_agent"}])
             mock_get_agent_client.return_value = mock_agent_client
 
-            response = client.get("/api/status")
+            response = client.get("/api/status", headers=auth_headers)
             assert response.status_code == 200
 
 
 class TestRequestValidation:
     """Test request validation and edge cases."""
 
-    def test_empty_query(self, client, auth_headers):
+    def test_empty_query(self, client, signed_headers):
         """Test request with empty query string."""
         payload = {
             "query": "",  # Empty query
@@ -368,13 +368,13 @@ class TestRequestValidation:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         # Should accept but may return validation error or empty response
         assert response.status_code in [200, 422]
 
-    def test_very_long_query(self, client, auth_headers):
+    def test_very_long_query(self, client, signed_headers):
         """Test request with very long query string."""
         with patch("api.rag.get_routing_service") as mock_routing:
             with patch("api.rag.get_llm_service") as mock_llm:
@@ -389,13 +389,13 @@ class TestRequestValidation:
                 response = client.post(
                     "/api/v1/chat/completions",
                     json=payload,
-                    headers=auth_headers,
+                    headers=signed_headers(payload),
                 )
 
                 # Should handle gracefully
                 assert response.status_code in [200, 413, 422]
 
-    def test_invalid_conversation_history_format(self, client, auth_headers):
+    def test_invalid_conversation_history_format(self, client, signed_headers):
         """Test request with invalid conversation history format."""
         payload = {
             "query": "Test",
@@ -405,7 +405,7 @@ class TestRequestValidation:
         response = client.post(
             "/api/v1/chat/completions",
             json=payload,
-            headers=auth_headers,
+            headers=signed_headers(payload),
         )
 
         assert response.status_code == 422  # Validation error

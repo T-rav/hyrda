@@ -36,6 +36,11 @@ dev = [
     "pytest-cov>=4.1.0",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402"]  # Allow imports after sys.path modifications in tests
 

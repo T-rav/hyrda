@@ -1,8 +1,9 @@
 """Tests for authentication dependencies."""
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 from fastapi import HTTPException, Request
-from unittest.mock import AsyncMock, Mock, patch
 
 from dependencies.auth import get_current_user, get_optional_user
 
@@ -95,7 +96,9 @@ class TestGetCurrentUser:
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__.return_value = mock_client
-            mock_client.get = AsyncMock(side_effect=httpx.RequestError("Connection refused"))
+            mock_client.get = AsyncMock(
+                side_effect=httpx.RequestError("Connection refused")
+            )
             mock_client_class.return_value = mock_client
 
             with pytest.raises(HTTPException) as exc_info:

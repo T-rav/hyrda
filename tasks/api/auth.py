@@ -34,7 +34,8 @@ async def get_current_user(request: Request):
     cookies = request.cookies
 
     try:
-        async with httpx.AsyncClient(verify=False) as client:
+        # Note: verify=False is intentional for local development (control-plane may use self-signed certs)
+        async with httpx.AsyncClient(verify=False) as client:  # nosec B501
             response = await client.get(
                 f"{control_plane_url}/api/users/me", cookies=cookies, timeout=5.0
             )

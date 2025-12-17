@@ -199,6 +199,14 @@ class TestFastAPIAuthCallback:
             "oauth_csrf": "test-csrf-token",
             "oauth_redirect": "/test-protected",
         }
+        # Configure scope to return session dict
+        mock_request.scope = {
+            "session": {
+                "oauth_state": "test-state",
+                "oauth_csrf": "test-csrf-token",
+                "oauth_redirect": "/test-protected",
+            }
+        }
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
         mock_request.url.__str__ = Mock(
@@ -218,6 +226,8 @@ class TestFastAPIAuthCallback:
         """Test callback with missing CSRF token (session fixation attack)."""
         mock_request = MagicMock(spec=Request)
         mock_request.session = {"oauth_state": "test-state"}  # Missing oauth_csrf!
+        # Configure scope with session missing CSRF
+        mock_request.scope = {"session": {"oauth_state": "test-state"}}
         mock_request.cookies = {}
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
@@ -232,6 +242,8 @@ class TestFastAPIAuthCallback:
         """Test callback with missing state."""
         mock_request = MagicMock(spec=Request)
         mock_request.session = {}
+        # Configure scope with empty session
+        mock_request.scope = {"session": {}}
         mock_request.cookies = {}
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"
@@ -264,6 +276,14 @@ class TestFastAPIAuthCallback:
             "oauth_state": "test-state",
             "oauth_csrf": "test-csrf-token",
             "oauth_redirect": "/test-protected",
+        }
+        # Configure scope with session data
+        mock_request.scope = {
+            "session": {
+                "oauth_state": "test-state",
+                "oauth_csrf": "test-csrf-token",
+                "oauth_redirect": "/test-protected",
+            }
         }
         mock_request.url = MagicMock()
         mock_request.url.path = "/auth/callback"

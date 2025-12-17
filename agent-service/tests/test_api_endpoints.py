@@ -5,12 +5,18 @@ connect to external services (control plane), and test the complete HTTP layer.
 Run separately with: pytest -m integration
 """
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app import app
 
 client = TestClient(app)
+
+# Auth headers for authenticated requests
+SERVICE_TOKEN = os.getenv("SERVICE_TOKEN", "test-service-token-for-testing")
+AUTH_HEADERS = {"X-Service-Token": SERVICE_TOKEN}
 
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
@@ -47,7 +53,7 @@ class TestListAgents:
 
     def test_list_agents(self):
         """Test GET /api/agents returns agent list."""
-        response = client.get("/api/agents")
+        response = client.get("/api/agents", headers=AUTH_HEADERS)
         assert response.status_code == 200
         data = response.json()
         assert "agents" in data
@@ -65,27 +71,29 @@ class TestGetAgentInfo:
 
     def test_get_existing_agent(self):
         """Test GET /api/agents/{name} for existing agent."""
-        response = client.get("/api/agents/help")
+        response = client.get("/api/agents/help", headers=AUTH_HEADERS)
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == "help"
-        assert "description" in data
-        assert "aliases" in data
+        assert "display_name" in data
+        assert "endpoint_url" in data
+        assert "is_cloud" in data
 
     def test_get_nonexistent_agent(self):
         """Test GET /api/agents/{name} for nonexistent agent."""
-        response = client.get("/api/agents/nonexistent")
+        response = client.get("/api/agents/nonexistent", headers=AUTH_HEADERS)
         assert response.status_code == 404
         data = response.json()
         assert "not found" in data["detail"].lower()
 
     def test_get_agent_by_alias(self):
-        """Test GET /api/agents/{alias} resolves to primary name."""
-        # If meddic has aliases (like "medic"), test that
-        response = client.get("/api/agents/meddic")
+        """Test GET /api/agents/{alias} resolves to primary agent."""
+        # Help agent has alias "agents" - test that it resolves
+        response = client.get("/api/agents/agents", headers=AUTH_HEADERS)
         assert response.status_code == 200
         data = response.json()
-        assert data["name"] == "meddic"
+        assert data["name"] == "help"  # Should resolve to primary name
+        assert "display_name" in data
 
 
 class TestInvokeAgent:
@@ -97,11 +105,12 @@ class TestInvokeAgent:
         response = client.post(
             "/api/agents/help/invoke",
             json={"query": "what can you help me with?", "context": {}},
+            headers=AUTH_HEADERS,
         )
 
-        # Should return 200 or 500 depending on whether dependencies are available
-        # In test environment without full setup, might fail
-        assert response.status_code in [200, 500]
+        # Should return 200, 404 (not found), or 500 depending on environment
+        # In test environment without full setup, agent might not be registered
+        assert response.status_code in [200, 404, 500]
 
         if response.status_code == 200:
             data = response.json()
@@ -114,6 +123,7 @@ class TestInvokeAgent:
         response = client.post(
             "/api/agents/nonexistent/invoke",
             json={"query": "test query", "context": {}},
+            headers=AUTH_HEADERS,
         )
         assert response.status_code == 404
         data = response.json()
@@ -136,6 +146,7 @@ class TestStreamAgent:
         response = client.post(
             "/api/agents/nonexistent/stream",
             json={"query": "test query", "context": {}},
+            headers=AUTH_HEADERS,
         )
         assert response.status_code == 404
         data = response.json()

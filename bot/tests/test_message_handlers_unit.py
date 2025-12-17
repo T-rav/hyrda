@@ -245,60 +245,6 @@ class TestFileAttachmentProcessing:
             assert call_kwargs["document_content"] == "file content"
             assert call_kwargs["document_filename"] == "test.txt"
 
-
-@pytest.mark.skip(
-    reason="Bot command routing moved to rag-service in microservices refactor. "
-    "See rag-service tests for routing logic."
-)
-class TestBotCommandRouting:
-    """Unit tests for bot command routing logic
-
-    NOTE: This tests OLD ARCHITECTURE. Routing now happens in rag-service.
-    """
-
-    @pytest.mark.asyncio
-    async def test_bot_command_routes_to_agent(self):
-        """Test that recognized bot commands route to agents"""
-        mock_slack = AsyncMock()
-        mock_slack.send_thinking_indicator = AsyncMock(return_value="ts123")
-        mock_slack.delete_thinking_indicator = AsyncMock()
-        mock_slack.send_message = AsyncMock()
-
-        with patch("handlers.message_handlers.route_command") as mock_route:
-            mock_route.return_value = (
-                "profile",
-                {},
-                "Anthropic",
-            )  # (agent_name, params, query)
-
-            with patch("handlers.message_handlers.get_agent_info") as mock_agent_info:
-                mock_agent_info.return_value = {
-                    "agent_name": "profile",
-                    "display_name": "Profile Agent",
-                }
-
-                with patch(
-                    "handlers.prompt_manager.get_user_system_prompt"
-                ) as mock_prompt:
-                    mock_prompt.return_value = "system prompt"
-
-                    # Mock the agent client to prevent actual HTTP calls
-                    with patch("services.agent_client.AgentClient") as MockAgentClient:
-                        mock_client = AsyncMock()
-                        mock_client.invoke_agent = AsyncMock(
-                            return_value={"response": "agent response"}
-                        )
-                        MockAgentClient.return_value = mock_client
-
-                        # Note: handle_bot_command removed in microservices refactor
-                        # This test is skipped - kept for reference
-                        result = True  # Placeholder for old test logic
-
-                        # Should return True (command handled)
-                        assert result is True
-
-
-class TestMetricsTracking:
     """Unit tests for metrics tracking in message handlers"""
 
     @pytest.mark.asyncio

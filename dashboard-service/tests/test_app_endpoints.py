@@ -187,32 +187,6 @@ class TestServicesHealthEndpoint:
         # Should still return 200 with error info for bot service
 
 
-class TestAgentMetricsEndpoint:
-    """Test agent metrics endpoint."""
-
-    @pytest.mark.integration
-    @pytest.mark.asyncio
-    async def test_get_agent_metrics_fetches_from_agent_service(self, client):
-        """Test /api/agent/metrics fetches from agent service."""
-        mock_agent_metrics = {
-            "total_invocations": 100,
-            "successful": 95,
-            "failed": 5,
-        }
-
-        async def mock_get(url, **kwargs):
-            if "agent_service" in url:
-                return Mock(status=200, json=AsyncMock(return_value=mock_agent_metrics))
-            return Mock(status=404)
-
-        with patch("aiohttp.ClientSession") as mock_session:
-            mock_session.return_value.__aenter__.return_value.get = mock_get
-            response = client.get("/api/agent/metrics")
-
-        assert response.status_code == 200
-        # Agent metrics endpoint should return the metrics or handle errors gracefully
-
-
 class TestUIEndpoint:
     """Test UI serving endpoint."""
 

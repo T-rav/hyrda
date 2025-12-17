@@ -50,7 +50,7 @@ class TestEncryptionServiceInitialization:
 
     def test_init_with_invalid_key_raises_error(self):
         """Test that invalid key raises error during initialization."""
-        with pytest.raises(Exception):  # Fernet will raise ValueError
+        with pytest.raises(ValueError):  # Fernet will raise ValueError
             EncryptionService(encryption_key="invalid-key-not-base64")
 
 

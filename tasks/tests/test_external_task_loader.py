@@ -281,7 +281,12 @@ Job = ComplexJob
 
         task_names = loader.list_external_tasks()
         # Should include both system and external tasks
-        assert sorted(task_names) == ["gdrive_ingest", "slack_user_import", "task1", "task2"]
+        assert sorted(task_names) == [
+            "gdrive_ingest",
+            "slack_user_import",
+            "task1",
+            "task2",
+        ]
 
 
 class TestTaskReload:

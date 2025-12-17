@@ -14,11 +14,11 @@ if str(tasks_dir) not in sys.path:
 
 import utils.auth  # noqa: E402, I001
 
-from tests.factories import (
+from tests.factories import (  # noqa: E402
     FastAPIAppFactory,
     MockJobRegistryFactory,
     MockSchedulerFactory,
-)  # noqa: E402
+)
 
 
 # Auth tests need their own fixtures that don't set ENVIRONMENT=testing
@@ -119,16 +119,39 @@ class TestAuthMiddleware:
         # May return error but shouldn't redirect to web OAuth
         assert response.status_code != 302 or "/auth/callback" not in response.location
 
-    @pytest.mark.skip(reason="Requires control-plane to be running for auth proxy")
+    @pytest.mark.integration
     def test_protected_endpoint_returns_401_when_not_authenticated(
         self, unauth_client, mock_oauth_env
     ):
-        """Test that protected endpoints return 401 when not authenticated."""
-        # With dependency injection, unauthenticated requests get 401
+        """
+        INTEGRATION TEST: Protected endpoint returns 401 without auth.
+
+        This tests REAL auth flow with control-plane:
+        1. No JWT token in request
+        2. get_current_user() dependency makes REAL HTTP call to control-plane
+        3. Control-plane returns 401 (no token)
+        4. Endpoint returns 401 to client
+
+        NOTE: Requires control-plane to be running.
+        If control-plane is not available, test will fail with clear message.
+        """
+        # Make request WITHOUT authentication headers
         response = unauth_client.get("/api/jobs")
-        assert response.status_code == 401
+
+        # Should return 401 (unauthenticated) not 503 (service unavailable)
+        assert response.status_code == 401, (
+            f"❌ Unauthenticated request did not return 401!\n"
+            f"Expected: 401 Unauthorized\n"
+            f"Got: {response.status_code}\n"
+            f"Response: {response.text[:200] if hasattr(response, 'text') else 'N/A'}\n"
+            f"If you got 503, control-plane is not running.\n"
+            f"Integration tests require control-plane service at CONTROL_PLANE_URL."
+        )
+
         data = response.json()
-        assert "detail" in data
+        assert "detail" in data, f"Expected 'detail' in error response, got: {data}"
+
+        print("✅ PASS: Unauthenticated request correctly returned 401")
 
     def test_protected_endpoint_allows_authenticated_user(self, client, mock_oauth_env):
         """Test that authenticated users can access protected endpoints."""

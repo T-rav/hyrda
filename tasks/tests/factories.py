@@ -152,9 +152,9 @@ class FastAPIAppFactory:
 
         # Initialize test database with tables
         import models.base
+        from models.oauth_credential import OAuthCredential
         from models.task_metadata import TaskMetadata
         from models.task_run import TaskRun
-        from models.oauth_credential import OAuthCredential
 
         # Create tables in the test database
         try:
@@ -162,9 +162,9 @@ class FastAPIAppFactory:
             models.base.init_db(test_task_db)
 
             # Import models to register them with Base.metadata before create_all
+            from models.oauth_credential import OAuthCredential  # noqa: F401
             from models.task_metadata import TaskMetadata  # noqa: F401
             from models.task_run import TaskRun  # noqa: F401
-            from models.oauth_credential import OAuthCredential  # noqa: F401
 
             models.base.Base.metadata.create_all(bind=models.base._engine)
 
@@ -174,6 +174,7 @@ class FastAPIAppFactory:
         except Exception as e:
             # If table creation fails, use mock (for tests that don't need real DB)
             import traceback
+
             print(f"Warning: Database initialization failed: {e}")
             traceback.print_exc()
             models.base.get_db_session = mock_db_session

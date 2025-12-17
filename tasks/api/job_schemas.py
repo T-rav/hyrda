@@ -129,4 +129,6 @@ def validate_job_params(job_type: str, params: dict[str, Any]) -> dict[str, Any]
         validated = schema(**params)
         return validated.model_dump()
     except Exception as e:
-        raise ValueError(f"Invalid parameters for job type '{job_type}': {str(e)}")
+        raise ValueError(
+            f"Invalid parameters for job type '{job_type}': {str(e)}"
+        ) from e

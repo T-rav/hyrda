@@ -143,9 +143,14 @@ class TestGetAgentIntegration:
     @pytest.mark.integration
     def test_get_agent_with_external_loader(self, tmp_path):
         """Test get_agent with external agent loader integration."""
-        # Create temporary agent
-        agent_dir = tmp_path / "test_agent"
+        # Create external_agents directory structure
+        external_agents_dir = tmp_path / "external_agents"
+        external_agents_dir.mkdir()
+        (external_agents_dir / "__init__.py").write_text("")  # Make it a package
+
+        agent_dir = external_agents_dir / "test_agent"
         agent_dir.mkdir()
+        (agent_dir / "__init__.py").write_text("")  # Make it a package
 
         agent_code = """
 class Agent:
@@ -169,40 +174,48 @@ class Agent:
             }
         ]
 
-        with patch("services.agent_registry.requests.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"agents": mock_control_plane_response}
-            mock_get.return_value = mock_response
+        # Add tmp_path to sys.path so imports work
+        import sys
+        sys.path.insert(0, str(tmp_path))
 
-            # Set external agents path
-            with patch("os.getenv") as mock_getenv:
+        try:
+            with patch("requests.get") as mock_get:
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                mock_response.json.return_value = {"agents": mock_control_plane_response}
+                mock_get.return_value = mock_response
 
-                def getenv_side_effect(key, default=None):
-                    if key == "EXTERNAL_AGENTS_PATH":
-                        return str(tmp_path)
-                    elif key == "CONTROL_PLANE_URL":
-                        return "http://control_plane:6001"
-                    return default
+                # Set external agents path
+                with patch("os.getenv") as mock_getenv:
 
-                mock_getenv.side_effect = getenv_side_effect
+                    def getenv_side_effect(key, default=None):
+                        if key == "EXTERNAL_AGENTS_PATH":
+                            return str(external_agents_dir)
+                        elif key == "CONTROL_PLANE_URL":
+                            return "http://control_plane:6001"
+                        return default
 
-                # Clear cache to force reload
-                from services.agent_registry import clear_cache
+                    mock_getenv.side_effect = getenv_side_effect
 
-                clear_cache()
+                    # Clear cache to force reload
+                    from services.agent_registry import clear_cache
 
-                # Reset loader
-                import services.external_agent_loader as loader_module
+                    clear_cache()
 
-                loader_module._external_loader = None
+                    # Reset loader
+                    import services.external_agent_loader as loader_module
 
-                # Get agent
-                agent = get_agent("test_agent")
+                    loader_module._external_loader = None
 
-                assert agent is not None
-                assert hasattr(agent, "invoke")
-                assert agent.name == "test"
+                    # Get agent
+                    agent = get_agent("test_agent")
+
+                    assert agent is not None
+                    assert hasattr(agent, "invoke")
+                    assert agent.name == "test"
+        finally:
+            # Clean up sys.path
+            sys.path.remove(str(tmp_path))
 
     @pytest.mark.integration
     def test_get_agent_embedded_cloud_consistency(self):

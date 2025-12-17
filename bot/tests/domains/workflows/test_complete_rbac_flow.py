@@ -54,7 +54,9 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
     if not authenticated_admin or not authenticated_user:
         pytest.skip("Authentication not available")
 
-    agent_name = "research"  # Use research agent (loaded from system directory)
+    # Use "research" agent - not in default groups (required for permission testing)
+    # Agent execution may take time, but test must complete or fail - no graceful failures
+    agent_name = "research"
     control_plane = service_urls["control_plane"]
 
     # ===================================================================
@@ -121,8 +123,12 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
 
     print("✅ GRANTED: Permission granted via API")
 
+    # Small delay to ensure database propagation (MySQL commit + any caching)
+    await asyncio.sleep(0.5)
+
     # ===================================================================
     # STEP 3: Verify user CAN NOW invoke agent
+    # NO graceful failures - agent must execute successfully or test FAILS
     # ===================================================================
     can_invoke_after_grant = await user_can_invoke_agent(
         authenticated_user, service_urls, agent_name, test_user_id
@@ -131,7 +137,7 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
     assert can_invoke_after_grant, (
         "🔴 BEHAVIOR BUG: Permission granted but user still cannot invoke agent!\n"
         "Permission was granted successfully (200) but user_can_invoke_agent() returned False.\n"
-        "This means the permission system is BROKEN - permissions don't actually work!"
+        "This means the permission system is BROKEN!"
     )
 
     print(f"✅ VERIFIED: User CAN NOW invoke {agent_name}")
@@ -220,7 +226,8 @@ async def test_user_inherits_permissions_from_group_membership(
     if not authenticated_admin or not authenticated_user:
         pytest.skip("Authentication not available")
 
-    agent_name = "research_agent"
+    # Use "research" agent (actual name, no "_agent" suffix)
+    agent_name = "research"
     control_plane = service_urls["control_plane"]
 
     # ===================================================================
@@ -232,10 +239,16 @@ async def test_user_inherits_permissions_from_group_membership(
     )
 
     if create_response.status_code not in [200, 201]:
+        error_detail = (
+            create_response.text[:200] if create_response.text else "No error details"
+        )
+        print(
+            f"❌ Failed to create group: {create_response.status_code} - {error_detail}"
+        )
         pytest.skip(f"Cannot create group: {create_response.status_code}")
 
     group_data = create_response.json()
-    group_name = group_data.get("name", test_group_data["name"])
+    group_name = group_data.get("group_name", test_group_data["group_name"])
 
     print(f"✅ CREATED: Group '{group_name}'")
 
@@ -292,6 +305,7 @@ async def test_user_inherits_permissions_from_group_membership(
 
         # ===================================================================
         # STEP 6: Verify user CAN NOW invoke agent (inherited permission)
+        # NO graceful failures - agent must execute successfully or test FAILS
         # ===================================================================
         can_invoke_after_join = await user_can_invoke_agent(
             authenticated_user, service_urls, agent_name, test_user_id

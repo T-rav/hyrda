@@ -104,7 +104,7 @@ app.include_router(embedded_agents_router)  # Execution API (runs actual agent c
 @app.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"service": "agent-service"}
+    return {"service": "agent-service", "status": "healthy"}
 
 
 @app.get("/api/metrics")

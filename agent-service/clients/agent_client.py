@@ -190,23 +190,22 @@ class AgentClient:
     async def _invoke_embedded(
         self, agent: dict, query: str, context: dict
     ) -> dict[str, Any]:
-        """Invoke embedded agent via local HTTP API."""
-        endpoint = agent["endpoint_url"]
+        """Invoke embedded agent directly (not via HTTP to avoid recursion)."""
+        agent_name = agent["agent_name"]
 
-        payload = {
-            "query": query,
-            "context": context,
-            "user_id": context.get("user_id"),
-        }
+        logger.info(f"Invoking embedded agent '{agent_name}' directly")
 
-        logger.info(f"Invoking embedded agent at {endpoint}")
+        # Import agent registry to get agent instance
+        from services.agent_registry import get_agent
 
-        async with get_secure_client(timeout=120.0) as client:
-            response = await client.post(
-                endpoint, json=payload, headers={"X-Service-Token": self.service_token}
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            # Get agent instance and invoke it directly
+            agent_instance = get_agent(agent_name)
+            result = await agent_instance.invoke(query, context)
+            return result
+        except Exception as e:
+            logger.error(f"Error invoking embedded agent '{agent_name}': {e}")
+            raise
 
     async def _invoke_cloud(
         self, agent: dict, query: str, context: dict

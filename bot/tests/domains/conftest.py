@@ -4,7 +4,7 @@ This provides production-quality fixtures that:
 1. Actually authenticate users (not just mock tokens)
 2. Create and clean up test data
 3. Provide authenticated HTTP clients
-4. Handle service unavailability gracefully
+4. Require all services to be running
 """
 
 import os
@@ -13,6 +13,21 @@ from collections.abc import AsyncGenerator
 
 import httpx
 import pytest
+
+# ==============================================================================
+# Environment Setup
+# ==============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment variables."""
+    # Service token for service-to-service auth (matches agent-service)
+    if not os.getenv("SERVICE_TOKEN"):
+        os.environ["SERVICE_TOKEN"] = (
+            "172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"
+        )
+
 
 # ==============================================================================
 # Service URLs
@@ -216,23 +231,20 @@ async def created_test_group(
 
     create_url = f"{service_urls['control_plane']}/api/groups"
 
-    try:
-        response = await authenticated_admin.post(create_url, json=test_group_data)
+    # NO exception handling - let it fail if service unavailable
+    response = await authenticated_admin.post(create_url, json=test_group_data)
 
-        if response.status_code not in [200, 201]:
-            pytest.skip(f"Cannot create test group: {response.status_code}")
+    if response.status_code not in [200, 201]:
+        pytest.skip(f"Cannot create test group: {response.status_code}")
 
-        group_data = response.json()
-        group_name = group_data.get("name", test_group_data["name"])
+    group_data = response.json()
+    group_name = group_data.get("name", test_group_data["name"])
 
-        yield group_data
+    yield group_data
 
-        # Cleanup: Delete group
-        delete_url = f"{service_urls['control_plane']}/api/groups/{group_name}"
-        await authenticated_admin.delete(delete_url)
-
-    except httpx.RequestError as e:
-        pytest.skip(f"Control plane unavailable: {e}")
+    # Cleanup: Delete group
+    delete_url = f"{service_urls['control_plane']}/api/groups/{group_name}"
+    await authenticated_admin.delete(delete_url)
 
 
 @pytest.fixture
@@ -250,24 +262,21 @@ async def created_test_job(
 
     create_url = f"{service_urls['tasks']}/api/jobs"
 
-    try:
-        response = await authenticated_admin.post(create_url, json=test_job_data)
+    # NO exception handling - let it fail if service unavailable
+    response = await authenticated_admin.post(create_url, json=test_job_data)
 
-        if response.status_code not in [200, 201]:
-            pytest.skip(f"Cannot create test job: {response.status_code}")
+    if response.status_code not in [200, 201]:
+        pytest.skip(f"Cannot create test job: {response.status_code}")
 
-        job_data = response.json()
-        job_id = job_data.get("job_id") or job_data.get("id")
+    job_data = response.json()
+    job_id = job_data.get("job_id") or job_data.get("id")
 
-        yield job_data
+    yield job_data
 
-        # Cleanup: Delete job
-        if job_id:
-            delete_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
-            await authenticated_admin.delete(delete_url)
-
-    except httpx.RequestError as e:
-        pytest.skip(f"Tasks service unavailable: {e}")
+    # Cleanup: Delete job
+    if job_id:
+        delete_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
+        await authenticated_admin.delete(delete_url)
 
 
 # ==============================================================================
@@ -283,7 +292,7 @@ async def user_can_invoke_agent(
 ) -> bool:
     """
     Check if user can actually invoke an agent.
-    Returns True if user can invoke, False if forbidden.
+    Returns True if user can invoke, False if forbidden/error.
     """
     invoke_url = f"{service_urls['agent_service']}/api/agents/{agent_name}/invoke"
     payload = {
@@ -292,15 +301,13 @@ async def user_can_invoke_agent(
         "context": {},
     }
 
-    try:
-        response = await http_client.post(invoke_url, json=payload, timeout=5.0)
-        print(
-            f"DEBUG: Agent invoke attempt: {response.status_code} - {response.text[:200]}"
-        )
-        return response.status_code in [200, 201, 202]  # Success codes
-    except httpx.RequestError as e:
-        print(f"DEBUG: Agent invoke failed with exception: {e}")
-        return False
+    # NO exception handling - let connection errors propagate and HARD FAIL
+    # Timeout increased to 120s for research agent execution
+    response = await http_client.post(invoke_url, json=payload, timeout=120.0)
+    print(
+        f"DEBUG: Agent invoke attempt: {response.status_code} - {response.text[:200]}"
+    )
+    return response.status_code in [200, 201, 202]  # Success codes
 
 
 async def user_has_permission(
@@ -314,20 +321,17 @@ async def user_has_permission(
     """
     permissions_url = f"{service_urls['control_plane']}/api/users/{user_id}/permissions"
 
-    try:
-        response = await http_client.get(permissions_url, timeout=5.0)
+    # NO exception handling - let connection errors propagate
+    response = await http_client.get(permissions_url, timeout=5.0)
 
-        if response.status_code != 200:
-            return False
-
-        data = response.json()
-        permissions = data.get("permissions", []) if isinstance(data, dict) else data
-
-        agent_names = [p.get("agent_name") for p in permissions]
-        return agent_name in agent_names
-
-    except httpx.RequestError:
+    if response.status_code != 200:
         return False
+
+    data = response.json()
+    permissions = data.get("permissions", []) if isinstance(data, dict) else data
+
+    agent_names = [p.get("agent_name") for p in permissions]
+    return agent_name in agent_names
 
 
 async def job_is_in_state(
@@ -341,24 +345,21 @@ async def job_is_in_state(
     """
     job_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
 
-    try:
-        response = await http_client.get(job_url, timeout=5.0)
+    # NO exception handling - let connection errors propagate
+    response = await http_client.get(job_url, timeout=5.0)
 
-        if response.status_code != 200:
-            return False
-
-        job_data = response.json()
-
-        # Check various state fields
-        if expected_state == "enabled":
-            return job_data.get("enabled", False)
-        elif expected_state == "paused":
-            return not job_data.get("enabled", True)
-        else:
-            return job_data.get("status") == expected_state
-
-    except httpx.RequestError:
+    if response.status_code != 200:
         return False
+
+    job_data = response.json()
+
+    # Check various state fields
+    if expected_state == "enabled":
+        return job_data.get("enabled", False)
+    elif expected_state == "paused":
+        return not job_data.get("enabled", True)
+    else:
+        return job_data.get("status") == expected_state
 
 
 async def group_has_member(
@@ -372,20 +373,17 @@ async def group_has_member(
     """
     members_url = f"{service_urls['control_plane']}/api/groups/{group_name}/users"
 
-    try:
-        response = await http_client.get(members_url, timeout=5.0)
+    # NO exception handling - let connection errors propagate
+    response = await http_client.get(members_url, timeout=5.0)
 
-        if response.status_code != 200:
-            return False
-
-        data = response.json()
-        members = data.get("users", []) if isinstance(data, dict) else data
-
-        member_ids = [m.get("user_id") for m in members]
-        return user_id in member_ids
-
-    except httpx.RequestError:
+    if response.status_code != 200:
         return False
+
+    data = response.json()
+    members = data.get("users", []) if isinstance(data, dict) else data
+
+    member_ids = [m.get("user_id") for m in members]
+    return user_id in member_ids
 
 
 # ==============================================================================
@@ -403,7 +401,8 @@ def test_group_name() -> str:
 def test_group_data(test_group_name: str) -> dict:
     """Test group data."""
     return {
-        "name": test_group_name,
+        "group_name": test_group_name,  # API expects 'group_name', not 'name'
+        "display_name": f"Test Group {test_group_name[-8:]}",
         "description": "Integration test group",
         "metadata": {"created_by": "integration_test"},
     }

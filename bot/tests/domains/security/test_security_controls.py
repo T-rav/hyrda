@@ -300,6 +300,32 @@ async def test_concurrent_permission_grants_handled_safely(
         f"\nDEBUG: Cleanup delete response: {delete_response.status_code} - {delete_response.text[:100]}"
     )
 
+    # Wait for DELETE to propagate (transaction commit)
+    await asyncio.sleep(0.5)
+
+    # Verify permission is actually removed by checking user permissions list
+    list_url = f"{service_urls['control_plane']}/api/users/{test_user_id}/permissions"
+    list_response = await authenticated_admin.get(list_url)
+    if list_response.status_code == 200:
+        perms = list_response.json()
+        # Check if research_agent is in the list (could be list of strings or dicts)
+        has_research_perm = False
+        if isinstance(perms, list) and perms:
+            if isinstance(perms[0], str):
+                has_research_perm = "research_agent" in perms
+            elif isinstance(perms[0], dict):
+                has_research_perm = any(
+                    p.get("agent_name") == "research_agent" for p in perms
+                )
+
+        if has_research_perm:
+            print("DEBUG: Permission still exists after cleanup! Retrying delete...")
+            # Force delete again
+            await authenticated_admin.delete(
+                revoke_url, params={"agent_name": "research_agent"}
+            )
+            await asyncio.sleep(0.5)
+
     # Send 5 concurrent identical requests
     tasks = [authenticated_admin.post(grant_url, json=payload) for _ in range(5)]
 

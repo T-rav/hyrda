@@ -248,7 +248,7 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
         except ValueError as e:
             raise HTTPException(
                 status_code=400, detail=f"Invalid job parameters: {str(e)}"
-            )
+            ) from e
 
         # Create job using registry (with validated parameters)
         job = job_registry.create_job(

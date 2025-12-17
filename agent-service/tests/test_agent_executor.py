@@ -35,7 +35,7 @@ class TestAgentExecutorInitialization:
 
             assert executor.mode == ExecutionMode.EMBEDDED
 
-    @patch("services.agent_executor.get_client")
+    @patch("langgraph_sdk.get_client")
     def test_cloud_mode_initialization(self, mock_get_client):
         """Test initialization in cloud mode."""
         mock_client = MagicMock()
@@ -106,7 +106,7 @@ class TestAgentExecutorEmbeddedMode:
             return_value={"response": "Test response", "metadata": {}}
         )
 
-        with patch("services.agent_executor.get_agent", return_value=mock_agent):
+        with patch("services.agent_registry.get_agent", return_value=mock_agent):
             result = await executor.invoke_agent(
                 agent_name="test_agent", query="test query", context={"user_id": "123"}
             )
@@ -135,7 +135,7 @@ class TestAgentExecutorCloudMode:
     def executor(self):
         """Create executor in cloud mode."""
         mock_client = MagicMock()
-        with patch("services.agent_executor.get_client", return_value=mock_client):
+        with patch("langgraph_sdk.get_client", return_value=mock_client):
             with patch.dict(
                 os.environ,
                 {

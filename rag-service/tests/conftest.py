@@ -1,104 +1,105 @@
-"""Pytest configuration and shared fixtures for RAG service tests."""
+"""Pytest configuration - disable tracing during tests."""
+import json
+import os
+import time
 
+# Set environment variables BEFORE imports (critical for jwt_auth module initialization)
+os.environ["OTEL_TRACES_ENABLED"] = "false"
+os.environ["LLM_API_KEY"] = "test-api-key-for-testing"
+if not os.getenv("SERVICE_TOKEN"):
+    os.environ["SERVICE_TOKEN"] = "172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"
+
+# Now safe to import after environment is configured
 import pytest
 from fastapi.testclient import TestClient
-from prometheus_client import REGISTRY
+
+# Import after environment setup
+import sys
+from unittest.mock import patch
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from shared.utils.request_signing import generate_signature
+
+
+@pytest.fixture
+def test_client():
+    """Create FastAPI test client for integration tests."""
+    from app import app
+    return TestClient(app)
+
+
+@pytest.fixture
+def client():
+    """Create FastAPI test client (alias for test_client)."""
+    from app import app
+    return TestClient(app)
+
+
+@pytest.fixture
+def unauth_client():
+    """Create unauthenticated test client."""
+    from app import app
+    return TestClient(app)
+
+
+@pytest.fixture
+def auth_headers():
+    """Provide authentication headers for GET requests (no HMAC required)."""
+    return {"X-Service-Token": os.getenv("SERVICE_TOKEN", "test-service-token")}
+
+
+def generate_signed_headers(payload: dict) -> dict:
+    """Generate properly signed headers for POST requests with HMAC.
+
+    Args:
+        payload: Request body as dict
+
+    Returns:
+        Headers dict with X-Service-Token, X-Request-Timestamp, and X-Request-Signature
+    """
+    service_token = os.getenv("SERVICE_TOKEN", "test-service-token")
+    timestamp = str(int(time.time()))
+    # Use same JSON encoding as FastAPI TestClient (no spaces, sorted keys)
+    body_json = json.dumps(payload, separators=(',', ':'), sort_keys=True)
+
+    signature = generate_signature(service_token, body_json, timestamp)
+
+    return {
+        "X-Service-Token": service_token,
+        "X-Request-Timestamp": timestamp,
+        "X-Request-Signature": signature,
+    }
+
+
+@pytest.fixture
+def signed_headers():
+    """Provide helper function to generate signed headers for POST requests."""
+    return generate_signed_headers
 
 
 @pytest.fixture(autouse=True)
-def clear_prometheus_registry():
-    """Clear Prometheus registry before each test to prevent pollution."""
-    # Get all collectors
-    collectors = list(REGISTRY._collector_to_names.keys())
+def mock_signature_verification():
+    """Mock HMAC signature verification to always pass for tests."""
+    with patch("shared.utils.request_signing.verify_signature") as mock_verify:
+        # Return (True, None) to indicate signature is valid
+        mock_verify.return_value = (True, None)
+        yield mock_verify
 
-    # Unregister all except default collectors (process, platform, gc)
-    for collector in collectors:
-        try:
-            # Don't unregister default collectors
-            if not any(name.startswith(('python_', 'process_', 'platform_'))
-                      for name in REGISTRY._collector_to_names.get(collector, [])):
-                REGISTRY.unregister(collector)
-        except Exception:
-            pass  # Collector already unregistered or is a default collector
+
+@pytest.fixture(autouse=True)
+def reset_prometheus_registry():
+    """Reset Prometheus registry between tests to avoid duplicate metric errors."""
+    from prometheus_client import REGISTRY
+
+    # Collect all collectors before test
+    collectors_before = list(REGISTRY._collector_to_names.keys())
 
     yield
 
-    # Cleanup after test
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        try:
-            if not any(name.startswith(('python_', 'process_', 'platform_'))
-                      for name in REGISTRY._collector_to_names.get(collector, [])):
+    # Clean up any new collectors added during test
+    collectors_after = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors_after:
+        if collector not in collectors_before:
+            try:
                 REGISTRY.unregister(collector)
-        except Exception:
-            pass
-
-
-@pytest.fixture(autouse=True)
-def mock_env(monkeypatch):
-    """Mock environment variables for all tests."""
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_MODEL", "gpt-4")
-    monkeypatch.setenv("LLM_API_KEY", "test-api-key-for-testing")
-    monkeypatch.setenv("VECTOR_PROVIDER", "qdrant")
-    monkeypatch.setenv("VECTOR_HOST", "localhost")
-    monkeypatch.setenv("VECTOR_PORT", "6333")
-    monkeypatch.setenv("EMBEDDING_PROVIDER", "openai")
-    monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-small")
-
-
-@pytest.fixture
-def test_app():
-    """Create test FastAPI application."""
-    from app import app
-
-    return app
-
-
-@pytest.fixture
-def client(test_app):
-    """Create test client with mocked authentication."""
-    from dependencies.auth import require_service_auth
-
-    # Override the authentication dependency to return mock service info
-    async def mock_require_service_auth():
-        return {
-            "service": "test-service",
-            "token_id": "test-token-id",
-        }
-
-    test_app.dependency_overrides[require_service_auth] = mock_require_service_auth
-
-    with TestClient(test_app) as client:
-        yield client
-
-    # Clean up dependency overrides
-    test_app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def test_client(test_app):
-    """Alias for client fixture for backward compatibility."""
-    return client(test_app)
-
-
-@pytest.fixture
-def unauth_client(test_app):
-    """Create test client WITHOUT mocked authentication for testing auth failures."""
-    with TestClient(test_app) as client:
-        yield client
-
-
-@pytest.fixture
-def mock_service_token():
-    """Mock service token for testing."""
-    return "test-service-token-12345"
-
-
-@pytest.fixture
-def auth_headers(mock_service_token):
-    """Create authentication headers for testing."""
-    return {
-        "X-Service-Token": mock_service_token,
-        "Content-Type": "application/json",
-    }
+            except Exception:
+                pass  # Already unregistered or not in registry

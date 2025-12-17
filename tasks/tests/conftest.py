@@ -15,6 +15,9 @@ from tests.factories import (
     MockSchedulerFactory,
 )
 
+# Load integration test fixtures (real services, no mocks)
+pytest_plugins = ["tests.integration_conftest"]
+
 
 # Clear Prometheus collectors before each test to avoid duplication
 @pytest.fixture(scope="function", autouse=True)

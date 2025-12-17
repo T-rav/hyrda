@@ -37,6 +37,7 @@ def mock_state():
 class TestSynthesizerPDFGeneration:
     """Test PDF generation in synthesizer node."""
 
+    @pytest.mark.skip(reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)")
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_synthesize_with_pdf_success(self, mock_state):
@@ -79,15 +80,15 @@ class TestSynthesizerPDFGeneration:
         with (
             patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
             patch(
-                "agents.system.research.nodes.synthesizer.Settings",
+                "config.settings.Settings",
                 return_value=mock_settings,
             ),
             patch(
-                "agents.system.research.nodes.synthesizer.markdown_to_pdf",
+                "utils.pdf_generator.markdown_to_pdf",
                 side_effect=mock_markdown_to_pdf,
             ),
             patch(
-                "agents.system.research.nodes.synthesizer.ResearchFileCache",
+                "agents.system.research.services.file_cache.ResearchFileCache",
                 return_value=mock_cache,
             ),
         ):
@@ -106,6 +107,7 @@ class TestSynthesizerPDFGeneration:
             assert mock_cache.cache_file.called
             assert mock_cache.get_presigned_url.called
 
+    @pytest.mark.skip(reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)")
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_synthesize_pdf_generation_fails_gracefully(self, mock_state):
@@ -124,11 +126,11 @@ class TestSynthesizerPDFGeneration:
         with (
             patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
             patch(
-                "agents.system.research.nodes.synthesizer.Settings",
+                "config.settings.Settings",
                 return_value=mock_settings,
             ),
             patch(
-                "agents.system.research.nodes.synthesizer.markdown_to_pdf",
+                "utils.pdf_generator.markdown_to_pdf",
                 side_effect=Exception("PDF error"),
             ),
         ):

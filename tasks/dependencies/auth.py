@@ -41,7 +41,8 @@ async def get_current_user(request: Request) -> dict:
         if auth_header:
             headers["Authorization"] = auth_header
 
-        async with httpx.AsyncClient(verify=False) as client:
+        # Note: verify=False is intentional for local development (control-plane may use self-signed certs)
+        async with httpx.AsyncClient(verify=False) as client:  # nosec B501
             response = await client.get(
                 f"{control_plane_url}/api/users/me",
                 headers=headers,
@@ -61,7 +62,7 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(
             status_code=503,
             detail=f"Auth service unavailable: {e}",
-        )
+        ) from e
 
 
 async def get_optional_user(request: Request) -> dict | None:

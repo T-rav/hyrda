@@ -10,7 +10,13 @@ import pytest
 from pydantic import SecretStr
 
 from bot.services.rag_service import RAGService
-from config.settings import EmbeddingSettings, LLMSettings, Settings, VectorSettings
+from config.settings import (
+    EmbeddingSettings,
+    LLMSettings,
+    Settings,
+    SlackSettings,
+    VectorSettings,
+)
 
 
 # TDD Factory Patterns for RAG Service Testing
@@ -25,6 +31,10 @@ class SettingsFactory:
     ) -> Settings:
         """Create complete RAG settings with all components"""
         return Settings(
+            slack=SlackSettings(
+                bot_token="xoxb-test-token",
+                app_token="xapp-test-token",
+            ),
             embedding=EmbeddingSettings(
                 provider=embedding_provider,
                 model="text-embedding-ada-002",

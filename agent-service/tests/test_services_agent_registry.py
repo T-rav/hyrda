@@ -269,30 +269,23 @@ class TestServicesAgentRegistry:
 
         INTEGRATION TEST: Loads actual agents from filesystem.
         """
-        # This test verifies the function can access the local registry
-        # We'll mock the import to avoid dependency issues
+        # This test verifies the function can load from system loader
         test_agent_class = TestAgentFactory.create_simple_agent(name="test")
-        mock_local_registry = Mock()
-        mock_local_registry._agents = {
-            "test": {
-                "name": "test",
-                "agent_class": test_agent_class,
-                "aliases": ["alias"],
-            }
-        }
-        mock_agents_module = Mock()
-        mock_agents_module.agent_registry = mock_local_registry
-        sys.modules["agents.registry"] = mock_agents_module
+
+        # Mock the system loader to return our test agent
+        mock_system_loader = Mock()
+        mock_system_loader.discover_agents.return_value = {"test": test_agent_class}
 
         # Clear the cache to force reload
         agent_registry._agent_classes = {}
 
-        classes = agent_registry._load_agent_classes()
+        with patch("services.system_agent_loader.get_system_loader", return_value=mock_system_loader):
+            # Disable external agents to test only system loader
+            with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "false"}):
+                classes = agent_registry._load_agent_classes()
 
         assert "test" in classes
         assert classes["test"] == test_agent_class
-        assert "alias" in classes
-        assert classes["alias"] == test_agent_class
 
     def test_clear_cache_clears_cached_data(self):
         """Test that clear_cache clears cached registry."""
@@ -306,7 +299,7 @@ class TestServicesAgentRegistry:
         assert agent_registry._cache_timestamp == 0
 
     @pytest.mark.integration
-    @patch("services.agent_registry.get_system_loader")
+    @patch("services.system_agent_loader.get_system_loader")
     @patch("services.external_agent_loader.get_external_loader")
     def test_external_cannot_override_system_agent(
         self, mock_external_loader, mock_system_loader
@@ -342,7 +335,7 @@ class TestServicesAgentRegistry:
         assert classes["research"] != external_agent_class  # External rejected
 
     @pytest.mark.integration
-    @patch("services.agent_registry.get_system_loader")
+    @patch("services.system_agent_loader.get_system_loader")
     @patch("services.external_agent_loader.get_external_loader")
     def test_external_loads_when_no_conflict(
         self, mock_external_loader, mock_system_loader
