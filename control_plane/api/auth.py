@@ -169,27 +169,32 @@ async def auth_callback(request: Request):
                         slack_user_id = slack_user["id"]
                         slack_name = slack_user.get("real_name") or slack_user.get("name")
 
+                        # Check if this is the first user (bootstrap admin)
+                        user_count = db_session.query(User).count()
+                        is_first_user = user_count == 0
+                        is_admin = is_first_user  # First user becomes admin
+
                         # Create user in database
                         new_user = User(
                             slack_user_id=slack_user_id,
                             email=email,
                             name=slack_name,
-                            is_admin=False  # New users are not admin by default
+                            is_admin=is_admin
                         )
                         db_session.add(new_user)
                         db_session.commit()
 
                         user_id = slack_user_id
-                        is_admin = False
 
                         logger.info(
-                            f"User {email} found in Slack and created in database: user_id={user_id}"
+                            f"User {email} found in Slack and created in database: user_id={user_id}, is_admin={is_admin}, first_user={is_first_user}"
                         )
                         AuditLogger.log_auth_event(
                             "user_created_from_slack",
                             email=email,
                             success=True,
-                            user_id=user_id
+                            user_id=user_id,
+                            metadata={"is_admin": is_admin, "is_first_user": is_first_user}
                         )
                     else:
                         # User not found in Slack - deny access
