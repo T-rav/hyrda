@@ -136,16 +136,89 @@ async def auth_callback(request: Request):
 
         with get_db_session() as db_session:
             user = db_session.query(User).filter(User.email == email).first()
+
             if user:
+                # User exists in database
                 is_admin = user.is_admin
-                user_id = user.slack_user_id  # Use slack_user_id as user_id
+                user_id = user.slack_user_id
                 logger.info(
                     f"User {email} found in database: is_admin={is_admin}, user_id={user_id}"
                 )
             else:
-                logger.warning(
-                    f"User {email} not found in database - creating JWT without admin privileges"
-                )
+                # User not in database - try to sync from Slack
+                logger.info(f"User {email} not in database - attempting Slack lookup")
+
+                try:
+                    from slack_sdk import WebClient
+
+                    slack_token = os.getenv("SLACK_BOT_TOKEN")
+                    if not slack_token:
+                        logger.error("SLACK_BOT_TOKEN not configured")
+                        raise HTTPException(
+                            status_code=403,
+                            detail="User not found and Slack integration not configured"
+                        )
+
+                    slack_client = WebClient(token=slack_token)
+
+                    # Look up user in Slack by email
+                    response = slack_client.users_lookupByEmail(email=email)
+
+                    if response["ok"] and response.get("user"):
+                        slack_user = response["user"]
+                        slack_user_id = slack_user["id"]
+                        slack_name = slack_user.get("real_name") or slack_user.get("name")
+
+                        # Create user in database
+                        new_user = User(
+                            slack_user_id=slack_user_id,
+                            email=email,
+                            name=slack_name,
+                            is_admin=False  # New users are not admin by default
+                        )
+                        db_session.add(new_user)
+                        db_session.commit()
+
+                        user_id = slack_user_id
+                        is_admin = False
+
+                        logger.info(
+                            f"User {email} found in Slack and created in database: user_id={user_id}"
+                        )
+                        AuditLogger.log_auth_event(
+                            "user_created_from_slack",
+                            email=email,
+                            success=True,
+                            user_id=user_id
+                        )
+                    else:
+                        # User not found in Slack - deny access
+                        logger.warning(f"User {email} not found in Slack - denying access")
+                        AuditLogger.log_auth_event(
+                            "login_denied_not_in_slack",
+                            email=email,
+                            success=False,
+                            error="User not found in Slack workspace"
+                        )
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Access denied: User not found in Slack workspace. Please contact your administrator."
+                        )
+
+                except HTTPException:
+                    raise
+                except Exception as e:
+                    logger.error(f"Error looking up user in Slack: {e}", exc_info=True)
+                    AuditLogger.log_auth_event(
+                        "slack_lookup_failed",
+                        email=email,
+                        success=False,
+                        error=str(e)
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Unable to verify user access. Please contact your administrator."
+                    )
 
         # Generate JWT token with is_admin and user_id
         user_name = idinfo.get("name")
