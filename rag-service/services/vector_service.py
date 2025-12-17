@@ -5,7 +5,8 @@ Factory for creating Qdrant vector store instances.
 """
 
 from config.settings import VectorSettings
-from services.vector_stores import QdrantVectorStore, VectorStore
+from vector_stores.base import VectorStore
+from vector_stores.qdrant_store import QdrantVectorStore
 
 
 def create_vector_store(settings: VectorSettings) -> VectorStore:

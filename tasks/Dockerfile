@@ -61,9 +61,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose nginx port
 EXPOSE 5001
 
-# Add health check
+# Add health check (check Flask app directly on internal port)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5001/health || exit 1
+    CMD curl -f http://localhost:8081/health || exit 1
 
 # Copy supervisor configuration
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
