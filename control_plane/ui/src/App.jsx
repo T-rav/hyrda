@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, Bot } from 'lucide-react'
+import { Shield, Users, Bot, LogOut } from 'lucide-react'
 import './App.css'
 import AgentsView from './components/AgentsView'
 import UsersView from './components/UsersView'
@@ -69,6 +69,22 @@ function App() {
     fetchUsers()
   }, [])
 
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      // Redirect to login page
+      window.location.href = '/auth/login'
+    } catch (error) {
+      console.error('Logout failed:', error)
+      // Redirect anyway to clear UI
+      window.location.href = '/auth/login'
+    }
+  }
+
   // Fetch agent details when an agent is selected
   useEffect(() => {
     if (selectedAgent) {
@@ -106,6 +122,14 @@ function App() {
             >
               <Users size={20} />
               Groups
+            </button>
+            <button
+              className="nav-link logout-btn"
+              onClick={handleLogout}
+              title="Logout"
+            >
+              <LogOut size={20} />
+              Logout
             </button>
           </nav>
         </div>

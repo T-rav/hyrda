@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
@@ -28,6 +28,17 @@ function App() {
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type })
     setTimeout(() => setNotification(null), 3000)
+  }
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      // Tasks uses control-plane auth, so redirect to control-plane logout
+      window.location.href = 'http://localhost:6001/auth/login'
+    } catch (error) {
+      console.error('Logout failed:', error)
+      window.location.href = 'http://localhost:6001/auth/login'
+    }
   }
 
   return (
@@ -70,6 +81,14 @@ function App() {
               <Activity size={20} />
               Health
             </a>
+            <button
+              className="nav-link logout-btn"
+              onClick={handleLogout}
+              title="Logout"
+            >
+              <LogOut size={20} />
+              Logout
+            </button>
             <div className="nav-divider"></div>
           </nav>
         </div>

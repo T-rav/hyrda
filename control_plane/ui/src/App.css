@@ -81,6 +81,16 @@
   color: #64748b;
 }
 
+.nav-link.logout-btn {
+  margin-left: 1rem;
+  color: #ef4444;
+}
+
+.nav-link.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
 /* Main Content */
 .main-content {
   max-width: 1400px;

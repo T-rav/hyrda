@@ -89,6 +89,16 @@ body {
   color: #6b7280;
 }
 
+.nav-link.logout-btn {
+  margin-left: 0.5rem;
+  color: #ef4444;
+}
+
+.nav-link.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
 .nav-divider {
   width: 1px;
   height: 24px;
