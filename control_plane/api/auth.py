@@ -128,13 +128,33 @@ async def auth_callback(request: Request):
             )
             raise HTTPException(status_code=403, detail="Access restricted")
 
-        # Generate JWT token
+        # Look up user in database to get admin status and user_id
+        from models import User, get_db_session
+
+        is_admin = False
+        user_id = None
+
+        with get_db_session() as db_session:
+            user = db_session.query(User).filter(User.email == email).first()
+            if user:
+                is_admin = user.is_admin
+                user_id = user.slack_user_id  # Use slack_user_id as user_id
+                logger.info(
+                    f"User {email} found in database: is_admin={is_admin}, user_id={user_id}"
+                )
+            else:
+                logger.warning(
+                    f"User {email} not found in database - creating JWT without admin privileges"
+                )
+
+        # Generate JWT token with is_admin and user_id
         user_name = idinfo.get("name")
         user_picture = idinfo.get("picture")
         jwt_token = create_access_token(
             user_email=email,
             user_name=user_name,
             user_picture=user_picture,
+            additional_claims={"is_admin": is_admin, "user_id": user_id},
         )
 
         # Store user info in session (for backward compatibility)
@@ -206,14 +226,34 @@ async def get_token(request: Request):
             detail="Not authenticated - please login first at /auth/callback",
         )
 
-    # Generate JWT token
+    # Look up user in database to get admin status and user_id
+    from models import User, get_db_session
+
+    is_admin = False
+    user_id = None
+
+    with get_db_session() as db_session:
+        user = db_session.query(User).filter(User.email == user_email).first()
+        if user:
+            is_admin = user.is_admin
+            user_id = user.slack_user_id
+            logger.info(
+                f"User {user_email} found in database: is_admin={is_admin}, user_id={user_id}"
+            )
+        else:
+            logger.warning(
+                f"User {user_email} not found in database - creating JWT without admin privileges"
+            )
+
+    # Generate JWT token with is_admin and user_id
     jwt_token = create_access_token(
         user_email=user_email,
         user_name=user_info.get("name"),
         user_picture=user_info.get("picture"),
+        additional_claims={"is_admin": is_admin, "user_id": user_id},
     )
 
-    logger.info(f"Generated JWT token for {user_email}")
+    logger.info(f"Generated JWT token for {user_email} (is_admin={is_admin})")
 
     return {
         "access_token": jwt_token,
