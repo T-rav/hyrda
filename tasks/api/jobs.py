@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from dependencies.auth import get_current_user
+from dependencies.auth import get_current_user, require_admin_from_database
 from models.base import get_db_session
 from models.task_metadata import TaskMetadata
 
@@ -82,27 +82,24 @@ async def get_job(
 
 @router.post("/jobs/{job_id}/pause")
 async def pause_job(
-    request: Request, job_id: str, user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
     """Pause a job.
 
-    Security: Requires admin authentication (JWT token).
+    Security: Requires admin authentication verified from database.
+    Defense-in-depth: Re-checks admin status from DB, not just JWT.
 
     Args:
         job_id: Job identifier
-        user: Current authenticated user (from JWT)
+        user: Current authenticated user (verified as admin from database)
 
     Returns:
         Success message
 
     Raises:
-        HTTPException: 403 if user is not admin
+        HTTPException: 401 if not authenticated, 403 if not admin
     """
-    # Verify admin access
-    if not user.get("is_admin"):
-        raise HTTPException(
-            status_code=403, detail="Admin access required to pause jobs"
-        )
+    # Admin access already verified by require_admin_from_database dependency
 
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
@@ -118,27 +115,24 @@ async def pause_job(
 
 @router.post("/jobs/{job_id}/resume")
 async def resume_job(
-    request: Request, job_id: str, user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
     """Resume a job.
 
-    Security: Requires admin authentication (JWT token).
+    Security: Requires admin authentication verified from database.
+    Defense-in-depth: Re-checks admin status from DB, not just JWT.
 
     Args:
         job_id: Job identifier
-        user: Current authenticated user (from JWT)
+        user: Current authenticated user (verified as admin from database)
 
     Returns:
         Success message
 
     Raises:
-        HTTPException: 403 if user is not admin
+        HTTPException: 401 if not authenticated, 403 if not admin
     """
-    # Verify admin access
-    if not user.get("is_admin"):
-        raise HTTPException(
-            status_code=403, detail="Admin access required to resume jobs"
-        )
+    # Admin access already verified by require_admin_from_database dependency
 
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
@@ -154,27 +148,24 @@ async def resume_job(
 
 @router.delete("/jobs/{job_id}")
 async def delete_job(
-    request: Request, job_id: str, user: dict = Depends(get_current_user)
+    request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
     """Delete a job and its associated metadata.
 
-    Security: Requires admin authentication (JWT token).
+    Security: Requires admin authentication verified from database.
+    Defense-in-depth: Re-checks admin status from DB, not just JWT.
 
     Args:
         job_id: Job identifier
-        user: Current authenticated user (from JWT)
+        user: Current authenticated user (verified as admin from database)
 
     Returns:
         Success message
 
     Raises:
-        HTTPException: 403 if user is not admin
+        HTTPException: 401 if not authenticated, 403 if not admin
     """
-    # Verify admin access
-    if not user.get("is_admin"):
-        raise HTTPException(
-            status_code=403, detail="Admin access required to delete jobs"
-        )
+    # Admin access already verified by require_admin_from_database dependency
 
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:

@@ -72,6 +72,36 @@ async def get_current_user_endpoint(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/verify-admin")
+async def verify_admin_status(email: str) -> dict[str, Any]:
+    """Verify admin status from database.
+
+    SECURITY: This endpoint re-verifies admin status from the database,
+    not from JWT token. Used for defense-in-depth on critical operations.
+
+    Args:
+        email: User email to verify
+
+    Returns:
+        dict with is_admin boolean from database
+    """
+    try:
+        with get_db_session() as session:
+            user = session.query(User).filter(User.email == email).first()
+
+            if not user:
+                logger.warning(f"Admin verification failed: user {email} not found in database")
+                return {"is_admin": False, "user_found": False}
+
+            logger.info(f"Admin verification for {email}: is_admin={user.is_admin}")
+            return {"is_admin": user.is_admin, "user_found": True}
+
+    except Exception as e:
+        logger.error(f"Error verifying admin status for {email}: {e}", exc_info=True)
+        # Fail closed - deny access on error
+        return {"is_admin": False, "error": str(e)}
+
+
 @router.get("", dependencies=[Depends(get_current_user)])
 async def list_users(request: Request) -> dict[str, Any]:
     """List all users from security database with their group memberships.

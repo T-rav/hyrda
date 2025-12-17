@@ -54,7 +54,7 @@ if not JWT_SECRET_KEY:
     )
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "24"))
+JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "4"))  # 4 hours for better security
 JWT_ISSUER = "insightmesh"
 
 # Service-to-service authentication tokens

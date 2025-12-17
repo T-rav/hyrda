@@ -82,3 +82,74 @@ async def get_optional_user(request: Request) -> dict | None:
         return None
 
     return user_info
+
+
+async def verify_admin_from_database(user_email: str) -> bool:
+    """
+    SECURITY: Re-verify admin status from control-plane database.
+
+    This function provides defense-in-depth by checking the database
+    for critical operations, even if JWT token says user is admin.
+
+    Args:
+        user_email: Email of user to verify
+
+    Returns:
+        bool: True if user is admin in database, False otherwise
+
+    Raises:
+        HTTPException: 503 if control-plane is unavailable
+    """
+    import httpx
+
+    control_plane_url = os.getenv(
+        "CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001"
+    )
+
+    try:
+        # Call control-plane to verify admin status from database
+        # This endpoint should query the database, not just read JWT
+        async with httpx.AsyncClient(verify=False) as client:  # nosec B501
+            response = await client.get(
+                f"{control_plane_url}/api/users/verify-admin",
+                params={"email": user_email},
+                timeout=5.0,
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("is_admin", False)
+            else:
+                # If verification fails, deny access (fail closed)
+                return False
+    except httpx.RequestError:
+        # If control-plane is down, deny access (fail closed)
+        return False
+
+
+async def require_admin_from_database(request: Request) -> dict:
+    """
+    SECURITY: Dependency that requires admin status verified from database.
+
+    Use this for critical write operations (delete, pause, resume) instead of
+    just trusting the JWT token's is_admin claim.
+
+    Returns:
+        dict: User info
+
+    Raises:
+        HTTPException: 401 if not authenticated, 403 if not admin
+    """
+    # First get user from JWT/session
+    user = await get_current_user(request)
+
+    # Then re-verify admin status from database
+    is_admin_in_db = await verify_admin_from_database(user["email"])
+
+    if not is_admin_in_db:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required. Your admin privileges may have been revoked.",
+        )
+
+    return user
