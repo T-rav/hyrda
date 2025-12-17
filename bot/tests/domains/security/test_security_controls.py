@@ -117,6 +117,162 @@ async def test_regular_user_cannot_promote_themselves_to_admin(
     print("✅ BLOCKED: User cannot self-promote to admin")
 
 
+async def test_regular_user_cannot_delete_jobs(
+    authenticated_user,
+    authenticated_admin,
+    service_urls,
+    test_job_data,
+):
+    """
+    SECURITY TEST - Job Management Authorization
+
+    Given: Regular (non-admin) user
+    When: They try to delete a scheduled job
+    Then: Request is rejected with 403 Forbidden
+
+    Only admins should be able to delete jobs!
+    """
+    if not authenticated_user:
+        pytest.skip("User authentication not available")
+
+    # Arrange - Create a test job as admin first
+    if authenticated_admin:
+        create_url = f"{service_urls['tasks']}/api/jobs"
+        create_response = await authenticated_admin.post(create_url, json=test_job_data)
+
+        if create_response.status_code in [200, 201]:
+            job_data = create_response.json()
+            job_id = job_data.get("job_id") or job_data.get("id")
+
+            if job_id:
+                # Act - Try to delete as regular user
+                delete_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
+                response = await authenticated_user.delete(delete_url)
+
+                # Assert
+                assert response.status_code == 403, (
+                    f"🔴 AUTHORIZATION BUG!\n"
+                    f"Regular user was able to delete job!\n"
+                    f"Status: {response.status_code}\n"
+                    f"Only admins should delete jobs!"
+                )
+
+                print("✅ BLOCKED: Regular user cannot delete jobs")
+
+                # Cleanup - Delete as admin
+                await authenticated_admin.delete(delete_url)
+                return
+
+    # If we couldn't set up the test, skip it
+    pytest.skip("Could not create test job for deletion test")
+
+
+async def test_regular_user_cannot_pause_jobs(
+    authenticated_user,
+    authenticated_admin,
+    service_urls,
+    test_job_data,
+):
+    """
+    SECURITY TEST - Job Management Authorization
+
+    Given: Regular (non-admin) user
+    When: They try to pause a scheduled job
+    Then: Request is rejected with 403 Forbidden
+
+    Only admins should be able to pause jobs!
+    """
+    if not authenticated_user:
+        pytest.skip("User authentication not available")
+
+    # Arrange - Create a test job as admin first
+    if authenticated_admin:
+        create_url = f"{service_urls['tasks']}/api/jobs"
+        create_response = await authenticated_admin.post(create_url, json=test_job_data)
+
+        if create_response.status_code in [200, 201]:
+            job_data = create_response.json()
+            job_id = job_data.get("job_id") or job_data.get("id")
+
+            if job_id:
+                # Act - Try to pause as regular user
+                pause_url = f"{service_urls['tasks']}/api/jobs/{job_id}/pause"
+                response = await authenticated_user.post(pause_url)
+
+                # Assert
+                assert response.status_code == 403, (
+                    f"🔴 AUTHORIZATION BUG!\n"
+                    f"Regular user was able to pause job!\n"
+                    f"Status: {response.status_code}\n"
+                    f"Only admins should pause jobs!"
+                )
+
+                print("✅ BLOCKED: Regular user cannot pause jobs")
+
+                # Cleanup - Delete as admin
+                delete_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
+                await authenticated_admin.delete(delete_url)
+                return
+
+    # If we couldn't set up the test, skip it
+    pytest.skip("Could not create test job for pause test")
+
+
+async def test_regular_user_cannot_resume_jobs(
+    authenticated_user,
+    authenticated_admin,
+    service_urls,
+    test_job_data,
+):
+    """
+    SECURITY TEST - Job Management Authorization
+
+    Given: Regular (non-admin) user
+    When: They try to resume a paused job
+    Then: Request is rejected with 403 Forbidden
+
+    Only admins should be able to resume jobs!
+    """
+    if not authenticated_user:
+        pytest.skip("User authentication not available")
+
+    # Arrange - Create and pause a test job as admin first
+    if authenticated_admin:
+        create_url = f"{service_urls['tasks']}/api/jobs"
+        create_response = await authenticated_admin.post(create_url, json=test_job_data)
+
+        if create_response.status_code in [200, 201]:
+            job_data = create_response.json()
+            job_id = job_data.get("job_id") or job_data.get("id")
+
+            if job_id:
+                # Pause the job as admin
+                pause_url = f"{service_urls['tasks']}/api/jobs/{job_id}/pause"
+                await authenticated_admin.post(pause_url)
+
+                # Act - Try to resume as regular user
+                resume_url = f"{service_urls['tasks']}/api/jobs/{job_id}/resume"
+                response = await authenticated_user.post(resume_url)
+
+                # Assert
+                assert response.status_code == 403, (
+                    f"🔴 AUTHORIZATION BUG!\n"
+                    f"Regular user was able to resume job!\n"
+                    f"Status: {response.status_code}\n"
+                    f"Only admins should resume jobs!"
+                )
+
+                print("✅ BLOCKED: Regular user cannot resume jobs")
+
+                # Cleanup - Delete as admin
+                delete_url = f"{service_urls['tasks']}/api/jobs/{job_id}"
+                await authenticated_admin.delete(delete_url)
+                return
+
+    # If we couldn't set up the test, skip it
+    pytest.skip("Could not create test job for resume test")
+
+
 # ==============================================================================
 # CSRF Protection
 # ==============================================================================
