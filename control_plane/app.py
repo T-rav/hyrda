@@ -154,7 +154,10 @@ def create_app() -> FastAPI:
     # Serve static files (React UI)
     static_folder = Path(__file__).parent / "ui" / "dist"
     if static_folder.exists():
-        app.mount("/static", StaticFiles(directory=str(static_folder)), name="static")
+        # Mount assets folder for JS/CSS files
+        assets_folder = static_folder / "assets"
+        if assets_folder.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_folder)), name="assets")
 
         @app.get("/")
         @app.get("/{path:path}")
