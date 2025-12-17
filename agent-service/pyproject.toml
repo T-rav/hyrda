@@ -157,6 +157,20 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
+# Pytest configuration
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_paths = ["."]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "unit: marks tests as unit tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
 # Pyright configuration
 [tool.pyright]
 pythonVersion = "3.11"

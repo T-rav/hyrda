@@ -102,7 +102,7 @@ class TestTavilyClientSearch:
         client = TavilyClient(api_key="test-tavily-key")
 
         # Mock session and response
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -151,7 +151,7 @@ class TestTavilyClientSearch:
         client = TavilyClient(api_key="test-tavily-key")
 
         # Mock the post method
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -175,7 +175,7 @@ class TestTavilyClientSearch:
         """Test search uses default max_results."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -202,7 +202,7 @@ class TestTavilyClientSearch:
         """Test search with empty results."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -225,7 +225,7 @@ class TestTavilyClientSearch:
         """Test search handles missing fields gracefully."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -260,7 +260,7 @@ class TestTavilyClientSearch:
         """Test search handles HTTP errors."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = Mock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=Mock(),
@@ -290,7 +290,7 @@ class TestTavilyClientSearch:
         client = TavilyClient(api_key="test-tavily-key")
 
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(side_effect=aiohttp.ClientConnectionError())
+        mock_session.post = Mock(side_effect=aiohttp.ClientConnectionError())
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock()
 
@@ -309,7 +309,7 @@ class TestTavilyClientSearch:
         """Test search handles JSON decode errors."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(side_effect=ValueError("Invalid JSON"))
         mock_response.raise_for_status = Mock()
@@ -337,7 +337,7 @@ class TestTavilyClientScrapeUrl:
         """Test successful URL scraping."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -371,7 +371,7 @@ class TestTavilyClientScrapeUrl:
         """Test scrape_url auto-initializes session if not initialized."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -395,7 +395,7 @@ class TestTavilyClientScrapeUrl:
         """Test scrape_url with no content found."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -420,7 +420,7 @@ class TestTavilyClientScrapeUrl:
         """Test scrape_url with missing raw_content field."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={"results": [{}]}  # Missing raw_content
@@ -446,7 +446,7 @@ class TestTavilyClientScrapeUrl:
         """Test scrape_url handles HTTP errors."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = Mock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=Mock(),
@@ -477,7 +477,7 @@ class TestTavilyClientScrapeUrl:
         client = TavilyClient(api_key="test-tavily-key")
 
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(
+        mock_session.post = Mock(
             side_effect=aiohttp.ClientTimeout("Request timeout")
         )
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -498,7 +498,7 @@ class TestTavilyClientScrapeUrl:
         """Test scrape_url extracts title from URL."""
         client = TavilyClient(api_key="test-tavily-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={"results": [{"raw_content": "Test content"}]}
@@ -602,7 +602,7 @@ class TestPerplexityClientDeepResearch:
         """Test successful deep research."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -646,7 +646,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research auto-initializes session if not initialized."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={"choices": [{"message": {"content": "Test"}}], "citations": []}
@@ -672,7 +672,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research with no choices in response."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": []})
         mock_response.raise_for_status = Mock()
@@ -696,7 +696,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research with no citations."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -725,7 +725,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research parses URLs correctly for titles."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -763,7 +763,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research handles HTTP errors."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = Mock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=Mock(),
@@ -793,7 +793,7 @@ class TestPerplexityClientDeepResearch:
         client = PerplexityClient(api_key="test-perplexity-key")
 
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(side_effect=aiohttp.ServerTimeoutError())
+        mock_session.post = Mock(side_effect=aiohttp.ServerTimeoutError())
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock()
 
@@ -812,7 +812,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research handles malformed URLs in citations."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -847,7 +847,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research uses correct system prompt."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -884,7 +884,7 @@ class TestPerplexityClientDeepResearch:
         """Test deep_research uses correct configuration parameters."""
         client = PerplexityClient(api_key="test-perplexity-key")
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={

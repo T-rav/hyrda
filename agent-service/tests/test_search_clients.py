@@ -2,7 +2,7 @@
 
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import aiohttp
 import pytest
@@ -78,7 +78,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_search_success(self, tavily_client):
         """Test successful web search."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -121,16 +121,17 @@ class TestTavilyClient:
         """Test that search() auto-initializes session if not present."""
         assert tavily_client.session is None
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(aiohttp, "ClientSession") as mock_session_class:
             mock_session = AsyncMock()
-            mock_session.post = AsyncMock(
-                return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
-            )
+            mock_context = AsyncMock()
+            mock_context.__aenter__.return_value = mock_response
+            mock_context.__aexit__.return_value = None
+            mock_session.post = MagicMock(return_value=mock_context)
             mock_session_class.return_value = mock_session
 
             results = await tavily_client.search("test query")
@@ -144,7 +145,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_search_empty_results(self, tavily_client):
         """Test search with no results."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = MagicMock()
@@ -164,7 +165,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_search_api_error(self, tavily_client):
         """Test search when API returns an error."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = MagicMock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=MagicMock(), history=(), status=500, message="Server Error"
@@ -187,7 +188,7 @@ class TestTavilyClient:
     async def test_search_network_timeout(self, tavily_client):
         """Test search when network times out."""
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(
+        mock_session.post = Mock(
             side_effect=aiohttp.ClientTimeout("Request timeout")
         )
 
@@ -200,7 +201,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_search_custom_max_results(self, tavily_client):
         """Test search with custom max_results parameter."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = MagicMock()
@@ -222,7 +223,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_scrape_url_success(self, tavily_client):
         """Test successful URL scraping."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -256,16 +257,17 @@ class TestTavilyClient:
         """Test that scrape_url() auto-initializes session if not present."""
         assert tavily_client.session is None
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(aiohttp, "ClientSession") as mock_session_class:
             mock_session = AsyncMock()
-            mock_session.post = AsyncMock(
-                return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
-            )
+            mock_context = AsyncMock()
+            mock_context.__aenter__.return_value = mock_response
+            mock_context.__aexit__.return_value = None
+            mock_session.post = MagicMock(return_value=mock_context)
             mock_session_class.return_value = mock_session
 
             result = await tavily_client.scrape_url("https://example.com")
@@ -279,7 +281,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_scrape_url_no_content_found(self, tavily_client):
         """Test scraping when no content is returned."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = MagicMock()
@@ -301,7 +303,7 @@ class TestTavilyClient:
     @pytest.mark.asyncio
     async def test_scrape_url_api_error(self, tavily_client):
         """Test scraping when API returns an error."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = MagicMock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=MagicMock(), history=(), status=403, message="Forbidden"
@@ -326,7 +328,7 @@ class TestTavilyClient:
     async def test_scrape_url_network_error(self, tavily_client):
         """Test scraping when network fails."""
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(
+        mock_session.post = Mock(
             side_effect=aiohttp.ClientError("Network error")
         )
 
@@ -386,7 +388,7 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_deep_research_success(self, perplexity_client):
         """Test successful deep research."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -430,16 +432,17 @@ class TestPerplexityClient:
         """Test that deep_research() auto-initializes session if not present."""
         assert perplexity_client.session is None
 
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": []})
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(aiohttp, "ClientSession") as mock_session_class:
             mock_session = AsyncMock()
-            mock_session.post = AsyncMock(
-                return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
-            )
+            mock_context = AsyncMock()
+            mock_context.__aenter__.return_value = mock_response
+            mock_context.__aexit__.return_value = None
+            mock_session.post = MagicMock(return_value=mock_context)
             mock_session_class.return_value = mock_session
 
             result = await perplexity_client.deep_research("test query")
@@ -453,7 +456,7 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_deep_research_no_response(self, perplexity_client):
         """Test deep research when API returns no choices."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value={"choices": []})
         mock_response.raise_for_status = MagicMock()
@@ -474,7 +477,7 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_deep_research_api_error(self, perplexity_client):
         """Test deep research when API returns an error."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.raise_for_status = MagicMock(
             side_effect=aiohttp.ClientResponseError(
                 request_info=MagicMock(), history=(), status=401, message="Unauthorized"
@@ -498,7 +501,7 @@ class TestPerplexityClient:
     async def test_deep_research_network_timeout(self, perplexity_client):
         """Test deep research when network times out."""
         mock_session = AsyncMock()
-        mock_session.post = AsyncMock(
+        mock_session.post = Mock(
             side_effect=aiohttp.ClientTimeout("Request timeout")
         )
 
@@ -512,7 +515,7 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_deep_research_source_formatting(self, perplexity_client):
         """Test that sources are formatted correctly with domains and paths."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -548,7 +551,7 @@ class TestPerplexityClient:
     @pytest.mark.asyncio
     async def test_deep_research_request_format(self, perplexity_client):
         """Test that deep research sends correct request format."""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
             return_value={"choices": [{"message": {"content": "Answer"}}], "citations": []}

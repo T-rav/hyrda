@@ -39,7 +39,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_successful_search_response(num_results: int = 3) -> Mock:
         """Create successful Tavily search response"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -59,7 +59,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_empty_search_response() -> Mock:
         """Create empty Tavily search response (no results)"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -68,7 +68,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_successful_scrape_response(content: str = "Scraped content") -> Mock:
         """Create successful Tavily scrape response"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -85,7 +85,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_empty_scrape_response() -> Mock:
         """Create empty Tavily scrape response (no content found)"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
@@ -101,7 +101,7 @@ class MockHttpResponseFactory:
                 "https://example.com/source1",
                 "https://techblog.com/article",
             ]
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(
             return_value={
@@ -115,7 +115,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_empty_perplexity_response() -> Mock:
         """Create empty Perplexity response (no choices)"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(return_value={"choices": []})
         mock_response.raise_for_status = Mock()
@@ -149,7 +149,7 @@ class MockHttpResponseFactory:
     @staticmethod
     def create_malformed_json_response() -> Mock:
         """Create response with malformed JSON"""
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json = AsyncMock(
             side_effect=json.JSONDecodeError("msg", "doc", 0)
@@ -1170,7 +1170,7 @@ class TestEdgeCases:
         """Test search when some results are missing fields"""
         # Arrange
         tavily_client.session = mock_session
-        mock_response = AsyncMock()
+        mock_response = Mock()
         mock_response.status_code = 200
         # Some results missing title or content
         mock_response.json = AsyncMock(
