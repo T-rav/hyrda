@@ -5,6 +5,9 @@ import os
 import tempfile
 from unittest.mock import AsyncMock, Mock
 
+# Disable OpenTelemetry tracing during tests
+os.environ["OTEL_TRACES_ENABLED"] = "false"
+
 import pytest
 from prometheus_client import REGISTRY
 

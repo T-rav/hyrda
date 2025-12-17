@@ -310,3 +310,183 @@ class TestFastAPILogout:
         # Response is a JSONResponse object
         assert response.status_code == 200
         # Function deletes cookies via response.delete_cookie()
+
+
+class TestAuthEdgeCases:
+    """Test edge cases and error handling in auth module."""
+
+    def test_get_flow_without_oauth_config(self):
+        """Test that get_flow raises error when OAuth is not configured."""
+        from utils.auth import AuthError, get_flow
+
+        with patch.dict(
+            os.environ,
+            {"GOOGLE_OAUTH_CLIENT_ID": "", "GOOGLE_OAUTH_CLIENT_SECRET": ""},
+            clear=False,
+        ):
+            with pytest.raises(AuthError) as exc_info:
+                get_flow("http://localhost:8080/auth/callback")
+
+            assert "Google OAuth not configured" in str(exc_info.value)
+
+    def test_verify_token_with_invalid_token(self):
+        """Test that verify_token raises error for invalid tokens."""
+        from utils.auth import AuthError, verify_token
+
+        with patch("utils.auth.GOOGLE_CLIENT_ID", "test-client-id"):
+            with patch("utils.auth.id_token.verify_oauth2_token") as mock_verify:
+                mock_verify.side_effect = ValueError("Invalid token signature")
+
+                with pytest.raises(AuthError) as exc_info:
+                    verify_token("invalid-token")
+
+                assert "Invalid token" in str(exc_info.value)
+
+    def test_verify_domain_with_empty_email(self):
+        """Test that verify_domain returns False for empty email."""
+        from utils.auth import verify_domain
+
+        assert verify_domain("") is False
+        assert verify_domain(None) is False
+
+    @pytest.mark.asyncio
+    @patch("utils.auth.get_flow")
+    @patch("utils.auth.verify_token")
+    async def test_auth_callback_no_email_in_token(
+        self, mock_verify_token, mock_get_flow, mock_oauth_env
+    ):
+        """Test callback when token doesn't contain email."""
+        mock_flow = MagicMock()
+        mock_credentials = MagicMock()
+        mock_credentials.id_token = "test-id-token"
+        mock_flow.credentials = mock_credentials
+        mock_get_flow.return_value = mock_flow
+
+        # Token without email
+        mock_verify_token.return_value = {
+            "name": "Test User",
+            "picture": "https://example.com/pic.jpg",
+        }
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.scope = {
+            "session": {
+                "oauth_state": "test-state",
+                "oauth_csrf": "test-csrf-token",
+                "oauth_redirect": "/",
+            }
+        }
+        mock_request.cookies = {}
+        mock_request.url = MagicMock()
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.__str__ = Mock(
+            return_value="http://localhost:8080/auth/callback?code=test"
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
+
+        # The HTTPException is caught and re-raised as 500 by exception handler
+        assert exc_info.value.status_code == 500
+        assert "Authentication failed" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    @patch("utils.auth.get_flow")
+    async def test_auth_callback_generic_exception(
+        self, mock_get_flow, mock_oauth_env
+    ):
+        """Test callback handling generic exceptions."""
+        mock_get_flow.side_effect = Exception("Network error")
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.scope = {
+            "session": {
+                "oauth_state": "test-state",
+                "oauth_csrf": "test-csrf-token",
+                "oauth_redirect": "/",
+            }
+        }
+        mock_request.cookies = {}
+        mock_request.url = MagicMock()
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.__str__ = Mock(
+            return_value="http://localhost:8080/auth/callback?code=test"
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
+
+        assert exc_info.value.status_code == 500
+        assert "Authentication failed" in str(exc_info.value.detail)
+
+    def test_middleware_bypasses_api_endpoints(self, client, mock_oauth_env):
+        """Test that API endpoints bypass authentication."""
+        # Add an API endpoint to the test app
+        @client.app.get("/api/test")
+        async def api_endpoint():
+            return {"data": "test"}
+
+        response = client.get("/api/test")
+        # Should succeed without authentication
+        assert response.status_code == 200
+
+    def test_middleware_bypasses_assets(self, client, mock_oauth_env):
+        """Test that static assets bypass authentication."""
+        # Test will return 404 since route doesn't exist, but shouldn't redirect to OAuth
+        response = client.get("/assets/style.css", follow_redirects=False)
+        # Should not redirect to OAuth (302 to Google)
+        if response.status_code == 302:
+            assert "accounts.google.com" not in response.headers.get("location", "")
+
+    def test_middleware_bypasses_root_ui_path(self, client, mock_oauth_env):
+        """Test that root UI paths bypass authentication."""
+        # Test will return 404 but shouldn't redirect to OAuth
+        response = client.get("/ui", follow_redirects=False)
+        # Should not redirect to OAuth
+        if response.status_code == 302:
+            assert "accounts.google.com" not in response.headers.get("location", "")
+
+    @pytest.mark.asyncio
+    @patch("utils.auth.get_flow")
+    @patch("utils.auth.verify_token")
+    async def test_auth_callback_with_auth_error(
+        self, mock_verify_token, mock_get_flow, mock_oauth_env
+    ):
+        """Test callback handling AuthError exceptions."""
+        from utils.auth import AuthError
+
+        mock_flow = MagicMock()
+        mock_credentials = MagicMock()
+        mock_credentials.id_token = "test-id-token"
+        mock_flow.credentials = mock_credentials
+        mock_get_flow.return_value = mock_flow
+
+        # Raise AuthError during verification
+        mock_verify_token.side_effect = AuthError("Token expired")
+
+        mock_request = MagicMock(spec=Request)
+        mock_request.scope = {
+            "session": {
+                "oauth_state": "test-state",
+                "oauth_csrf": "test-csrf-token",
+                "oauth_redirect": "/",
+            }
+        }
+        mock_request.cookies = {}
+        mock_request.url = MagicMock()
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.__str__ = Mock(
+            return_value="http://localhost:8080/auth/callback?code=test"
+        )
+
+        with pytest.raises(HTTPException) as exc_info:
+            await fastapi_auth_callback(
+                mock_request, "http://localhost:8080", "/auth/callback"
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "Token expired" in str(exc_info.value.detail)

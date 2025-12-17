@@ -18,6 +18,18 @@ if not os.getenv("LLM_API_KEY"):
 if not os.getenv("ANTHROPIC_API_KEY"):
     os.environ["ANTHROPIC_API_KEY"] = "test-anthropic-api-key"
 
+# Set Slack tokens for tests (required for Settings initialization)
+if not os.getenv("SLACK_BOT_TOKEN"):
+    os.environ["SLACK_BOT_TOKEN"] = "xoxb-test-token"
+if not os.getenv("SLACK_APP_TOKEN"):
+    os.environ["SLACK_APP_TOKEN"] = "xapp-test-token"
+
+import sys
+
+# Add project root to Python path to access shared module
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 
