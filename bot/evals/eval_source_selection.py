@@ -163,7 +163,12 @@ Return ONLY the JSON object, no other text."""
     )
 
     response = await llm.ainvoke(selection_prompt)
-    response_text = response.content.strip()
+    response_content = response.content
+    # Handle case where response content might be a list
+    if isinstance(response_content, list):
+        response_text = str(response_content)
+    else:
+        response_text = response_content.strip()
 
     # Parse JSON response
     json_match = re.search(r"```json\s*(\{.*?\})\s*```", response_text, re.DOTALL)

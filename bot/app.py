@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
+from slack_sdk.web.async_client import AsyncWebClient
 
 # Initialize OpenTelemetry for distributed tracing
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -86,7 +87,7 @@ def create_app():
     return app, slack_service, conversation_cache, metrics_service
 
 
-async def maintain_presence(client: WebClient):
+async def maintain_presence(client: AsyncWebClient | WebClient) -> None:
     """Keep the bot's presence status active.
 
     Uses asyncio.CancelledError to enable graceful shutdown without waiting

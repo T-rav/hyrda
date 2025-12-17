@@ -37,7 +37,7 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
     # Iterate through pages - BLOCKING I/O
     for page_num in range(pdf_document.page_count):
         page = pdf_document.load_page(page_num)
-        page_text = page.get_text()
+        page_text = page.get_text()  # type: ignore[attr-defined]
         if page_text.strip():
             text_content += f"\n\n--- Page {page_num + 1} ---\n{page_text}"
 

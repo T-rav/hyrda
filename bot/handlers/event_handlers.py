@@ -1,5 +1,6 @@
 import logging
 import traceback
+from typing import Any
 
 from handlers.message_handlers import handle_message
 from services.slack_service import SlackService
@@ -9,14 +10,16 @@ logger = logging.getLogger(__name__)
 
 
 async def register_handlers(
-    app: object,
+    app: Any,
     slack_service: SlackService,
-    conversation_cache: object | None = None,
+    conversation_cache: Any | None = None,
 ) -> None:
     """Register all event handlers with the Slack app"""
 
     @app.event("assistant_thread_started")
-    async def handle_assistant_thread_started(body, client):
+    async def handle_assistant_thread_started(
+        body: dict[str, Any], client: Any
+    ) -> None:
         """Handle the event when a user starts an AI assistant thread"""
         logger.info("Assistant thread started")
         try:
@@ -36,7 +39,7 @@ async def register_handlers(
             logger.error(f"Error handling assistant thread started: {e}")
 
     @app.event("app_mention")
-    async def handle_mention(body, client):
+    async def handle_mention(body: dict[str, Any], client: Any) -> None:
         """Handle when the bot is mentioned in a channel"""
         logger.info("Received app mention")
         try:
@@ -77,7 +80,7 @@ async def register_handlers(
             )
 
     @app.event("message")
-    async def handle_message_event(body, client):
+    async def handle_message_event(body: dict[str, Any], client: Any) -> None:
         """Handle all message events including those in threads"""
         logger.info("Received message event")
         try:
@@ -138,9 +141,9 @@ async def process_message_by_context(
     thread_ts: str | None,
     ts: str,
     slack_service: SlackService,
-    conversation_cache=None,
-    files: list[dict] | None = None,
-):
+    conversation_cache: Any = None,
+    files: list[dict[str, Any]] | None = None,
+) -> None:
     """Process message based on its context (DM, mention, thread)"""
 
     logger.debug(

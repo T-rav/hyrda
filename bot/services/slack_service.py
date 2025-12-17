@@ -8,6 +8,7 @@ from typing import Any
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+from slack_sdk.web.async_client import AsyncWebClient
 
 from bot_types import SlackFileUploadResponse, SlackMessageResponse
 from config.settings import SlackSettings
@@ -31,7 +32,7 @@ DEFAULT_THREAD_MESSAGE_LIMIT = 100  # Default limit for retrieving thread messag
 class SlackService:
     """Service for interacting with the Slack API"""
 
-    def __init__(self, settings: SlackSettings, client: WebClient):
+    def __init__(self, settings: SlackSettings, client: AsyncWebClient | WebClient):
         self.settings = settings
         self.client = client
         self.bot_id = settings.bot_id

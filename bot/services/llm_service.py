@@ -100,8 +100,10 @@ class LLMService:
             from shared.utils.langfuse_tracing import add_trace_to_langfuse_context
 
             add_trace_to_langfuse_context()
-        except Exception:
-            pass  # Silently ignore if tracing not available
+        except Exception as e:
+            logger.debug(
+                f"Tracing not available: {e}"
+            )  # Log for debugging, non-blocking
         metrics_service = get_metrics_service()
         start_time = time.time()
 

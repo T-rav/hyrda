@@ -137,14 +137,18 @@ SAMPLE_ANALYSIS = """**M - Metrics:** Missing
 **C - Competition:** Unclear"""
 
 
-async def test_intent_detection(temperature: float = 0.2):
+async def test_intent_detection(temperature: float = 0.2) -> None:
     """Test the intent detection prompt with all test cases."""
+
+    api_key = os.getenv("LLM_API_KEY")
+    if not api_key:
+        raise ValueError("LLM_API_KEY environment variable is required")
 
     llm = ChatOpenAI(
         model="gpt-4o",
         temperature=temperature,
         model_kwargs={"response_format": {"type": "json_object"}},
-        api_key=os.getenv("LLM_API_KEY"),
+        api_key=api_key,
     )
 
     results = []
@@ -163,6 +167,9 @@ async def test_intent_detection(temperature: float = 0.2):
             response_content = (
                 response.content if hasattr(response, "content") else str(response)
             )
+            # Handle case where response_content might be a list
+            if isinstance(response_content, list):
+                response_content = str(response_content)
             parsed = json.loads(response_content)
             actual_intent = parsed.get("intent", "unknown")
 

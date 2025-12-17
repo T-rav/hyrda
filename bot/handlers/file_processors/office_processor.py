@@ -128,8 +128,8 @@ async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) ->
         for slide_num, slide in enumerate(presentation.slides, 1):
             slide_text = []
             for shape in slide.shapes:
-                if hasattr(shape, "text") and shape.text.strip():
-                    slide_text.append(shape.text)
+                if hasattr(shape, "text") and shape.text.strip():  # type: ignore[attr-defined]
+                    slide_text.append(shape.text)  # type: ignore[attr-defined]
 
             if slide_text:
                 text_parts.append(f"\n=== Slide {slide_num} ===\n")

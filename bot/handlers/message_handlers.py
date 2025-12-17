@@ -11,6 +11,7 @@ This module only handles Slack-specific operations:
 import contextlib
 import logging
 import time
+from typing import Any
 
 from handlers.file_processors import process_file_attachments
 from handlers.prompt_manager import get_user_system_prompt
@@ -95,9 +96,9 @@ def _record_message_metrics(
 
 
 async def _process_and_cache_files(
-    files: list[dict] | None,
+    files: list[dict[str, Any]] | None,
     slack_service: SlackService,
-    conversation_cache: object | None,
+    conversation_cache: Any | None,
     thread_ts: str | None,
 ) -> tuple[str, str | None]:
     """Process file attachments and cache document content.
@@ -147,7 +148,7 @@ async def _process_and_cache_files(
 
 async def _determine_rag_setting(
     thread_ts: str | None,
-    conversation_cache: object | None,
+    conversation_cache: Any | None,
     document_filename: str | None,
 ) -> bool:
     """Determine whether to use RAG for this conversation.
@@ -197,8 +198,8 @@ async def handle_message(
     slack_service: SlackService,
     channel: str,
     thread_ts: str | None = None,
-    files: list[dict] | None = None,
-    conversation_cache: object | None = None,
+    files: list[dict[str, Any]] | None = None,
+    conversation_cache: Any | None = None,
     message_ts: str | None = None,
 ) -> None:
     """

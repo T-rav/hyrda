@@ -63,6 +63,9 @@ def get_security_db_session(database_url: str | None = None):
 
         init_security_db(database_url)
 
+    if _SecuritySessionLocal is None:
+        raise RuntimeError("Failed to initialize security database session")
+
     session = _SecuritySessionLocal()
     try:
         yield session
