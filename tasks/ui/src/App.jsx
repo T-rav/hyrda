@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
@@ -17,9 +17,28 @@ function useDocumentTitle(title) {
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null)
 
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
+
+  // Fetch current user info
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch('http://localhost:6001/api/users/me', {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setCurrentUser(data)
+        }
+      } catch (error) {
+        console.error('Failed to fetch current user:', error)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
@@ -81,6 +100,12 @@ function App() {
               <Activity size={20} />
               Health
             </a>
+            {currentUser && (
+              <div className="user-info">
+                <User size={16} />
+                <span>{currentUser.email}</span>
+              </div>
+            )}
             <button
               className="nav-link logout-btn"
               onClick={handleLogout}

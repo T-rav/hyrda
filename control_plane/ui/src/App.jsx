@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, Bot, LogOut } from 'lucide-react'
+import { Shield, Users, Bot, LogOut, User } from 'lucide-react'
 import './App.css'
 import AgentsView from './components/AgentsView'
 import UsersView from './components/UsersView'
@@ -123,6 +123,12 @@ function App() {
               <Users size={20} />
               Groups
             </button>
+            {currentUserEmail && (
+              <div className="user-info">
+                <User size={16} />
+                <span>{currentUserEmail}</span>
+              </div>
+            )}
             <button
               className="nav-link logout-btn"
               onClick={handleLogout}
