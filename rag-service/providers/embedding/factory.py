@@ -3,8 +3,8 @@ Factory function for creating embedding providers
 """
 
 from config.settings import EmbeddingSettings, LLMSettings
-from services.embedding.base import EmbeddingProvider
-from services.embedding.openai import OpenAIEmbeddingProvider
+from providers.embedding.base import EmbeddingProvider
+from providers.embedding.openai import OpenAIEmbeddingProvider
 
 
 def create_embedding_provider(

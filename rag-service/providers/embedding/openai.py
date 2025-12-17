@@ -10,8 +10,8 @@ except ImportError:
     from openai import AsyncOpenAI
 
 from config.settings import EmbeddingSettings, LLMSettings
-from services.embedding.base import EmbeddingProvider
-from services.embedding.utils import chunk_text
+from providers.embedding.base import EmbeddingProvider
+from providers.embedding.utils import chunk_text
 
 logger = logging.getLogger(__name__)
 

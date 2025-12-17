@@ -14,10 +14,10 @@ from typing import Any
 from rag_types import HealthStatus
 
 from config.settings import Settings
+from providers.embedding.factory import create_embedding_provider
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
 from services.conversation_manager import ConversationManager
-from services.embedding import create_embedding_provider
 from services.internal_deep_research import create_internal_deep_research_service
 from services.langfuse_service import get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
@@ -382,7 +382,7 @@ class RAGService:
             Updated context chunks with document added
         """
         logger.info(f"💾 Adding chunked uploaded document to context: {document_filename}")
-        from services.embedding import chunk_text
+        from providers.embedding.utils import chunk_text
 
         document_chunks_content = chunk_text(document_content)
         document_chunks = []

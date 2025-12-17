@@ -322,7 +322,7 @@ class _InternalDeepResearchServiceSingleton:
         try:
             # Import here to avoid circular dependencies
             from config.settings import Settings
-            from services.embedding_service import create_embedding_provider
+            from providers.embedding.factory import create_embedding_provider
             from services.llm_service import LLMService
             from services.retrieval_service import RetrievalService
             from services.vector_service import create_vector_store
