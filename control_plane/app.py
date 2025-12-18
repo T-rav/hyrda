@@ -11,6 +11,7 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -61,6 +62,17 @@ root_logger.addHandler(file_handler)
 logger = logging.getLogger(__name__)
 
 
+def get_app_version() -> str:
+    """Get application version from .version file at project root."""
+    try:
+        version_file = Path(__file__).parent.parent / ".version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "0.0.0"
+    except Exception:
+        return "0.0.0"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown."""
@@ -86,7 +98,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Control Plane",
         description="Agent and permission management service",
-        version="1.0.0",
+        version=get_app_version(),
         lifespan=lifespan,
     )
 

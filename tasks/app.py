@@ -59,6 +59,17 @@ scheduler_service = None
 job_registry = None
 
 
+def get_app_version() -> str:
+    """Get application version from .version file at project root."""
+    try:
+        version_file = Path(__file__).parent.parent / ".version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "0.0.0"
+    except Exception:
+        return "0.0.0"
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown."""
@@ -99,7 +110,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="AI Slack Bot - Tasks Service",
         description="APScheduler WebUI for scheduled task management",
-        version="1.2.6",
+        version=get_app_version(),
         lifespan=lifespan,
     )
 

@@ -17,6 +17,8 @@ import os
 import sys
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -75,10 +77,21 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app
+def get_app_version() -> str:
+    """Get application version from .version file at project root."""
+    try:
+        version_file = Path(__file__).parent.parent / ".version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "0.0.0"
+    except Exception:
+        return "0.0.0"
+
+
 app = FastAPI(
     title="RAG Service",
     description="Retrieval-Augmented Generation service with agent routing",
-    version="1.0.0",
+    version=get_app_version(),
     lifespan=lifespan,
 )
 
@@ -189,7 +202,7 @@ async def root():
 
     return {
         "service": "rag-service",
-        "version": "1.0.0",
+        "version": get_app_version(),
         "capabilities": [
             "RAG generation",
             "Agent routing",

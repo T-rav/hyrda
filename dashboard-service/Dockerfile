@@ -25,6 +25,9 @@ RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app
 
 # Copy application code
+# Copy version file from project root
+COPY --chown=appuser:appuser ../.version ./.version
+
 COPY --chown=appuser:appuser . .
 
 # Copy built UI from stage 1
