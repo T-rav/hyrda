@@ -148,9 +148,9 @@ function App() {
               Groups
             </button>
             {currentUserEmail && (
-              <div className="user-info">
-                <User size={16} />
-                <span>{currentUserEmail}</span>
+              <div className="nav-link user-display" title={currentUserEmail}>
+                <User size={20} />
+                {currentUserEmail}
               </div>
             )}
             <button

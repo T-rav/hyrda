@@ -81,20 +81,17 @@
   color: #64748b;
 }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  margin-left: 1rem;
-  font-size: 0.875rem;
-  color: #64748b;
-  background: rgba(139, 92, 246, 0.05);
-  border-radius: 0.375rem;
+.nav-link.user-display {
+  cursor: default;
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+  font-weight: 500;
+  pointer-events: none;
 }
 
-.user-info span {
-  font-weight: 500;
+.nav-link.user-display:hover {
+  background: rgba(139, 92, 246, 0.1);
+  transform: none;
 }
 
 .nav-link.logout-btn {
