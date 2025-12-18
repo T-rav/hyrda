@@ -13,7 +13,9 @@ export function useHealthData() {
 
   const fetchData = useCallback(async () => {
     try {
-      setData(prev => ({ ...prev, loading: true, error: null }))
+      // Don't set loading:true during refetch if we already have data
+      // This prevents cards from disappearing while fetching updates
+      setData(prev => ({ ...prev, loading: !prev.health, error: null }))
 
       // Check for test mode
       if (isTestMode()) {

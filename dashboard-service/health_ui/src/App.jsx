@@ -195,6 +195,9 @@ function LifetimeStatisticsSection({ metrics }) {
 
   const hasError = lifetimeStats?.error
 
+  // Always show the section, even when loading
+  const showSection = metrics || true  // Always true
+
   return (
     <div className="grid-section">
       <h2><Activity size={20} /> Lifetime Statistics</h2>
@@ -206,7 +209,7 @@ function LifetimeStatisticsSection({ metrics }) {
           ⚠️ {lifetimeStats.error}
         </div>
       )}
-      <div className="cards-row">
+      <div className="cards-row" style={{ minHeight: '140px' }}>
         {lifetimeStats && (
           <>
             <MetricsCard
