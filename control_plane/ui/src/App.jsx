@@ -73,19 +73,14 @@ function App() {
   }, [])
 
   // Logout handler
-  const handleLogout = async () => {
-    try {
-      await fetch('/auth/logout', {
-        method: 'POST',
-        credentials: 'include'
-      })
-      // Redirect to login page
-      window.location.href = '/auth/login'
-    } catch (error) {
-      console.error('Logout failed:', error)
-      // Redirect anyway to clear UI
-      window.location.href = '/auth/login'
-    }
+  const handleLogout = () => {
+    // Use window.location to POST to logout endpoint
+    // This allows the server's redirect to /auth/logged-out to work properly
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = '/auth/logout'
+    document.body.appendChild(form)
+    form.submit()
   }
 
   // Fetch agent details when an agent is selected

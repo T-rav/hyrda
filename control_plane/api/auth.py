@@ -3,9 +3,10 @@
 import logging
 import os
 import sys
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from utils.auth import (
     AuditLogger,
     get_flow,
@@ -30,8 +31,22 @@ router = APIRouter(prefix="/auth")
 
 
 @router.get("/login")
+async def auth_login_page():
+    """Serve the login page HTML.
+
+    Returns:
+        HTML login page with "Sign in with Google" button
+    """
+    template_path = Path(__file__).parent.parent / "templates" / "login.html"
+    if not template_path.exists():
+        raise HTTPException(status_code=500, detail="Login template not found")
+
+    return HTMLResponse(content=template_path.read_text())
+
+
+@router.get("/start")
 @rate_limit(max_requests=10, window_seconds=60)
-async def auth_login(request: Request, redirect: str | None = None):
+async def auth_start(request: Request, redirect: str | None = None):
     """Initiate OAuth login flow.
 
     Rate limited to 10 requests per 60 seconds per IP to prevent abuse.
@@ -374,10 +389,8 @@ async def logout(request: Request):
         email=email,
     )
 
-    # Create response and clear cookie with matching parameters
-    response = JSONResponse(
-        {"message": "Logged out successfully", "token_revoked": revoked}
-    )
+    # Redirect to logout success page with cookie cleared
+    response = RedirectResponse(url="/auth/logged-out", status_code=302)
     # Must match the parameters used when setting the cookie
     response.delete_cookie(
         key="access_token",
@@ -387,3 +400,17 @@ async def logout(request: Request):
     )
 
     return response
+
+
+@router.get("/logged-out")
+async def auth_logged_out():
+    """Serve the logout success page.
+
+    Returns:
+        HTML page confirming successful logout
+    """
+    template_path = Path(__file__).parent.parent / "templates" / "logout.html"
+    if not template_path.exists():
+        raise HTTPException(status_code=500, detail="Logout template not found")
+
+    return HTMLResponse(content=template_path.read_text())
