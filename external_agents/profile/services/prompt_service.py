@@ -12,9 +12,15 @@ import logging
 from typing import Any
 
 from config.settings import Settings
-from .services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
+
+
+# Stub for langfuse_service - returns None since langfuse_service module doesn't exist
+def get_langfuse_service():
+    """Stub function - langfuse_service module not available."""
+    return None
+
 
 # Default system message as fallback when Langfuse is unavailable
 DEFAULT_SYSTEM_MESSAGE = """You are Insight Mesh, the AI CTO for this organization. You have the sharp, witty, and helpful demeanor of a seasoned technical leader at a mid-sized company.

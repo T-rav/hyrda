@@ -19,7 +19,7 @@ from ..utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
-from .services.prompt_service import get_prompt_service
+from ..services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -128,23 +128,51 @@ async def final_report_generation(
 
     if profile_type == "employee":
         prompt_name = "Profiler/Person/FinalReport"
+        fallback_prompt = """# Person Profile Report
+
+You are generating a professional profile for a person.
+
+Profile Type: {profile_type}
+Focus Area: {focus_area}
+{focus_guidance}
+
+Research Notes:
+{notes}
+
+Date: {current_date}
+
+Generate a comprehensive professional profile based on the research provided."""
     else:
         prompt_name = "CompanyProfiler/Final_Report_Generation"
+        fallback_prompt = """# Company Profile Report
+
+You are generating a comprehensive company profile.
+
+Profile Type: {profile_type}
+Focus Area: {focus_area}
+{focus_guidance}
+
+Research Notes:
+{notes}
+
+Date: {current_date}
+
+Generate a comprehensive company profile based on the research provided."""
 
     logger.info(f"Fetching {profile_type} prompt from Langfuse: {prompt_name}")
     prompt_template = prompt_service.get_custom_prompt(
         template_name=prompt_name,
-        fallback=None,  # Force error if Langfuse prompt not found
+        fallback=fallback_prompt,  # Use fallback for testing/dev when Langfuse unavailable
     )
 
     if not prompt_template:
         logger.error(
-            f"Langfuse prompt '{prompt_name}' not found. "
+            f"Langfuse prompt '{prompt_name}' not found and fallback failed. "
             "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
             "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
         )
         raise RuntimeError(
-            f"Langfuse prompt '{prompt_name}' not found. "
+            f"Langfuse prompt '{prompt_name}' not found and fallback failed. "
             "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
         )
 

@@ -201,7 +201,17 @@ class AgentClient:
         try:
             # Get agent instance and invoke it directly
             agent_instance = get_agent(agent_name)
-            result = await agent_instance.invoke(query, context)
+
+            # Check if agent is a LangGraph CompiledStateGraph
+            if hasattr(agent_instance, "ainvoke") and not hasattr(
+                agent_instance, "run"
+            ):
+                # LangGraph graph - invoke with state dict
+                result = await agent_instance.ainvoke({"query": query, **context})
+            else:
+                # Regular agent with invoke/run methods
+                result = await agent_instance.invoke(query, context)
+
             return result
         except Exception as e:
             logger.error(f"Error invoking embedded agent '{agent_name}': {e}")

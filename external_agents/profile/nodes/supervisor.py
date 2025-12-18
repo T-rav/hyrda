@@ -155,7 +155,7 @@ async def supervisor_tools(
     Returns:
         Command to return to supervisor or END
     """
-    from nodes.graph_builder import build_researcher_subgraph
+    from .graph_builder import build_researcher_subgraph
 
     configuration = ProfileConfiguration.from_runnable_config(config)
     messages = state.get("supervisor_messages", [])

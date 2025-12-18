@@ -101,8 +101,13 @@ class AgentExecutor:
         # Get agent from local registry
         agent = get_agent(agent_name)
 
-        # Execute locally
-        result = await agent.invoke(query, context)
+        # Check if agent is a LangGraph CompiledStateGraph
+        if hasattr(agent, "ainvoke") and not hasattr(agent, "run"):
+            # LangGraph graph - invoke with state dict
+            result = await agent.ainvoke({"query": query, **context})
+        else:
+            # Regular agent with invoke/run methods
+            result = await agent.invoke(query, context)
 
         return result
 

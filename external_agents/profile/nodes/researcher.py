@@ -25,7 +25,7 @@ from ..utils import (
     think_tool,
 )
 from config.settings import Settings
-from .services.search_clients import get_perplexity_client, get_tavily_client
+from ..services.search_clients import get_perplexity_client, get_tavily_client
 
 logger = logging.getLogger(__name__)
 

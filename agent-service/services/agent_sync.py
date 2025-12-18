@@ -6,6 +6,10 @@ This allows control plane UI to enable/disable agents dynamically.
 
 import logging
 import os
+import urllib3
+
+# Suppress SSL warnings for self-signed certificates
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,10 @@ def sync_agents_to_control_plane() -> None:
 
         # Get local agent implementations
 
+        # Agent service hostname for internal Docker network
+        agent_service_host = os.getenv("AGENT_SERVICE_HOST", "agent_service")
+
+        # All agents use the unified /api/agents/{name}/invoke endpoint
         agents_to_register = [
             {
                 "name": "profile",
@@ -31,6 +39,7 @@ def sync_agents_to_control_plane() -> None:
                 "description": "Generate comprehensive company profiles through deep research (supports specific focus areas like 'AI needs', 'DevOps practices', etc.)",
                 "aliases": ["-profile"],
                 "is_system": False,
+                "endpoint_url": f"http://{agent_service_host}:8000/api/agents/profile/invoke",
             },
             {
                 "name": "meddic",
@@ -38,6 +47,7 @@ def sync_agents_to_control_plane() -> None:
                 "description": "MEDDPICC sales qualification and coaching - transforms sales notes into structured analysis with coaching insights",
                 "aliases": ["medic", "meddpicc"],
                 "is_system": False,
+                "endpoint_url": f"http://{agent_service_host}:8000/api/agents/meddic/invoke",
             },
             {
                 "name": "help",
@@ -45,6 +55,7 @@ def sync_agents_to_control_plane() -> None:
                 "description": "List available bot agents and their aliases",
                 "aliases": ["agents"],
                 "is_system": True,  # System agents cannot be disabled
+                "endpoint_url": f"http://{agent_service_host}:8000/api/agents/help/invoke",
             },
         ]
 
@@ -68,6 +79,7 @@ def sync_agents_to_control_plane() -> None:
                     json=agent_data,
                     headers=headers,
                     timeout=5,
+                    verify=False,  # Skip SSL verification for self-signed certs
                 )
                 if response.status_code == 200:
                     logger.info(

@@ -281,7 +281,7 @@ def get_agent(agent_name: str):
             f"Check control-plane registry or external_agents/ directory."
         )
 
-    # Get agent class
+    # Get agent class/instance
     agent_class = agent_info.get("agent_class")
 
     if not agent_class:
@@ -290,8 +290,22 @@ def get_agent(agent_name: str):
             f"Ensure agent exists in external_agents/{agent_name}/agent.py"
         )
 
-    # Instantiate and return
-    return agent_class()
+    # Check if agent is already an instance (e.g., LangGraph CompiledStateGraph)
+    # If it's a LangGraph graph, it will have 'ainvoke' but not 'run' method
+    if hasattr(agent_class, "ainvoke") and not hasattr(agent_class, "run"):
+        # Already an instance (LangGraph graph) - return as-is
+        logger.info(
+            f"Agent '{agent_name}' is a LangGraph graph instance - returning as-is"
+        )
+        return agent_class
+    elif callable(agent_class):
+        # It's a class - instantiate it
+        logger.info(f"Agent '{agent_name}' is a class - instantiating")
+        return agent_class()
+    else:
+        # Already an instance of some other type - return as-is
+        logger.info(f"Agent '{agent_name}' is an instance - returning as-is")
+        return agent_class
 
 
 def clear_cache():
