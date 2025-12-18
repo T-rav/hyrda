@@ -147,20 +147,24 @@ function App() {
               <Users size={20} />
               Groups
             </button>
-            {currentUserEmail && (
-              <div className="nav-link user-display" title={currentUserEmail}>
-                <User size={20} />
-                {currentUserEmail}
-              </div>
-            )}
-            <button
-              className="nav-link logout-btn"
-              onClick={handleLogout}
-              title="Logout"
-            >
-              <LogOut size={20} />
-              Logout
-            </button>
+            <div className="logout-dropdown">
+              <button
+                className="nav-link logout-btn"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+              {currentUserEmail && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-item user-email">
+                    <User size={16} />
+                    {currentUserEmail}
+                  </div>
+                </div>
+              )}
+            </div>
           </nav>
         </div>
       </header>
