@@ -25,7 +25,7 @@ from health import HealthChecker
 get_tracer("bot")
 from services import agent_registry
 from services.conversation_cache import ConversationCache
-from services.langfuse_service import get_langfuse_service
+from services.langfuse_service import get_langfuse_service, initialize_langfuse_service
 from services.metrics_service import initialize_metrics_service
 from services.prompt_service import initialize_prompt_service
 from services.rag_client import get_rag_client
@@ -83,6 +83,11 @@ def create_app():
     # Initialize RAG client (connects to rag-service)
     rag_client = get_rag_client()
     logger.info(f"RAG client initialized: {rag_client.base_url}")
+
+    # Initialize Langfuse service if enabled
+    if settings.langfuse.enabled:
+        initialize_langfuse_service(settings.langfuse, environment=settings.environment)
+        logger.info("Langfuse service initialized")
 
     return app, slack_service, conversation_cache, metrics_service
 
