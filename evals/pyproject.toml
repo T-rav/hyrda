@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "insight-mesh-evals"
-version = "1.0.0"
+dynamic = ["version"]
 description = "System prompt evaluation framework for Insight Mesh using Langfuse"
 authors = [{name = "Insight Mesh Team"}]
 readme = "README.md"
@@ -25,6 +25,11 @@ dev = [
 
 [project.scripts]
 setup-evals = "setup_langfuse_evals:main"
+
+[tool.setuptools]
+
+[tool.setuptools.dynamic]
+version = {file = "../.version"}
 
 [tool.ruff]
 line-length = 88

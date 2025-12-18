@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-slack-bot-tasks"
-version = "1.2.6"
+dynamic = ["version"]
 description = "APScheduler WebUI for AI Slack Bot - Scheduled task management"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
@@ -106,6 +106,9 @@ tasks-server = "app:main"
 
 # Package discovery configuration
 [tool.setuptools]
+
+[tool.setuptools.dynamic]
+version = {file = "../.version"}
 packages = ["config", "jobs", "services", "models", "tests"]
 
 # Ruff configuration

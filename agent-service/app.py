@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +32,17 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def get_app_version() -> str:
+    """Get application version from .version file at project root."""
+    try:
+        version_file = Path(__file__).parent.parent / ".version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "0.0.0"
+    except Exception:
+        return "0.0.0"
 
 # Import agents after logging is configured
 from agents import agent_registry  # noqa: E402
@@ -68,7 +80,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Agent Service",
     description="LangGraph agent execution service",
-    version="1.0.0",
+    version=get_app_version(),
     lifespan=lifespan,
 )
 
@@ -141,7 +153,7 @@ async def root():
     """Root endpoint with service info."""
     return {
         "service": "agent-service",
-        "version": "1.0.0",
+        "version": get_app_version(),
         "agents": [
             {
                 "name": agent["name"],

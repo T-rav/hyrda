@@ -1,6 +1,6 @@
 [project]
 name = "rag-service"
-version = "1.0.0"
+dynamic = ["version"]
 description = "RAG orchestration service with agent routing"
 requires-python = ">=3.11"
 
@@ -9,6 +9,9 @@ requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
+
+[tool.setuptools.dynamic]
+version = {file = "../.version"}
 py-modules = []
 
 [tool.ruff]
