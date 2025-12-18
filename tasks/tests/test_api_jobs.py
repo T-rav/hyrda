@@ -24,7 +24,7 @@ def app():
 @pytest.fixture
 def authenticated_client(app):
     """Create authenticated test client with dependency override."""
-    from dependencies.auth import get_current_user
+    from dependencies.auth import get_current_user, require_admin_from_database
 
     async def override_get_current_user():
         return {
@@ -34,7 +34,15 @@ def authenticated_client(app):
             "is_admin": True,
         }
 
+    async def override_require_admin():
+        return {
+            "email": "admin@8thlight.com",
+            "name": "Test Admin",
+            "is_admin": True,
+        }
+
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_admin_from_database] = override_require_admin
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
@@ -62,12 +70,16 @@ def mock_job_registry():
 @pytest.fixture
 def client_with_services(app, mock_scheduler, mock_job_registry):
     """Create client with mocked services in app state."""
-    from dependencies.auth import get_current_user
+    from dependencies.auth import get_current_user, require_admin_from_database
 
     async def override_get_current_user():
         return {"email": "user@8thlight.com", "name": "Test User", "is_admin": True}
 
+    async def override_require_admin():
+        return {"email": "admin@8thlight.com", "name": "Test Admin", "is_admin": True}
+
     app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_admin_from_database] = override_require_admin
     app.state.scheduler_service = mock_scheduler
     app.state.job_registry = mock_job_registry
 

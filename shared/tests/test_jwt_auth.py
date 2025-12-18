@@ -585,7 +585,7 @@ class TestEnvironmentConfiguration:
 
     def test_jwt_expiration_hours_default(self) -> None:
         """Test default JWT expiration hours."""
-        assert JWT_EXPIRATION_HOURS == 24
+        assert JWT_EXPIRATION_HOURS == 4  # 4 hours for better security
 
     def test_jwt_issuer_is_insightmesh(self) -> None:
         """Test JWT issuer is set correctly."""

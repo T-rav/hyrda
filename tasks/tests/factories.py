@@ -202,7 +202,7 @@ class FastAPIAppFactory:
 
         if authenticated:
             # FastAPI standard: Use dependency overrides for authenticated tests
-            from dependencies.auth import get_current_user
+            from dependencies.auth import get_current_user, require_admin_from_database
 
             # Override the auth dependency to return a mock admin user
             async def mock_get_current_user():
@@ -212,6 +212,15 @@ class FastAPIAppFactory:
                     "is_admin": True,  # Grant admin access for tests
                 }
 
+            # Override admin verification to avoid HTTP calls to control plane
+            async def mock_require_admin():
+                return {
+                    "email": "test@test.com",
+                    "name": "Test Admin",
+                    "is_admin": True,
+                }
+
             test_app.dependency_overrides[get_current_user] = mock_get_current_user
+            test_app.dependency_overrides[require_admin_from_database] = mock_require_admin
 
         return client
