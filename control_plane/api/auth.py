@@ -193,7 +193,7 @@ async def auth_callback(request: Request):
                         new_user = User(
                             slack_user_id=slack_user_id,
                             email=email,
-                            name=slack_name,
+                            full_name=slack_name,
                             is_admin=is_admin
                         )
                         db_session.add(new_user)
