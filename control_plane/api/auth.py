@@ -78,7 +78,7 @@ async def auth_start(request: Request, redirect: str | None = None):
     # Get authorization URL
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
-        prompt="consent",
+        prompt="select_account",  # Show account picker, not consent screen every time
     )
 
     AuditLogger.log_auth_event(
