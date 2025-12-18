@@ -64,14 +64,15 @@ export function useHealthData() {
         readyRes.json()
       ])
 
-      setData({
-        health,
-        metrics,
-        ready,
+      // Keep previous data if new data is null/undefined
+      setData(prev => ({
+        health: health || prev.health,
+        metrics: metrics || prev.metrics,
+        ready: ready || prev.ready,
         loading: false,
         error: null,
         lastUpdate: new Date()
-      })
+      }))
     } catch (error) {
       console.error('Error fetching health data:', error)
       setData(prev => ({
