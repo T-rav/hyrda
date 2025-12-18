@@ -186,10 +186,6 @@ function LifetimeStatisticsSection({ metrics }) {
   const lifetimeStats = metrics?.lifetime_stats
   const botMetrics = metrics?.bot
 
-  if (!lifetimeStats && !botMetrics) {
-    return null
-  }
-
   const formatNumber = (value) => {
     if (typeof value === 'number') {
       return value.toLocaleString()
