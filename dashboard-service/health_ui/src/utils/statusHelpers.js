@@ -22,7 +22,7 @@ export function getServiceDetails(service, serviceData, metricsData) {
     case 'cache':
       if (serviceData.status === 'healthy') {
         const conversations = serviceData.cached_conversations || 0
-        const memory = metricsData?.cache?.memory_used || serviceData.memory_used || 'N/A'
+        const memory = metricsData?.cache?.memory_used || serviceData?.memory_used || 'N/A'
         return `${conversations} conversations • ${memory} memory`
       }
       return serviceData.message || serviceData.error || 'Not configured'
@@ -64,9 +64,9 @@ export function shouldShowAsMetric(service, serviceData) {
 export function getMetricValue(service, serviceData, metricsData) {
   switch (service) {
     case 'cache':
-      return metricsData?.cache?.memory_used || serviceData.memory_used || 'N/A'
+      return metricsData?.cache?.memory_used || serviceData?.memory_used || 'N/A'
     case 'metrics':
-      return metricsData?.active_conversations?.total || serviceData.active_conversations || 0
+      return metricsData?.active_conversations?.total || serviceData?.active_conversations || 0
     case 'rag':
       const ragData = metricsData?.rag_performance
       if (ragData && ragData.total_queries > 0) {
