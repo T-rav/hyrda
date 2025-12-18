@@ -387,7 +387,7 @@ function InfrastructureServices({ ready, metrics }) {
               <div className="service-status">
                 {getStatusIcon(service.status)}
                 <span className={getStatusBadgeClass(service.status)}>
-                  {service.status}
+                  {service.status?.charAt(0).toUpperCase() + service.status?.slice(1) || 'Unknown'}
                 </span>
               </div>
             </div>
