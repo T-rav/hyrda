@@ -218,51 +218,45 @@ function LifetimeStatisticsSection({ metrics }) {
         </div>
       )}
       <div className="cards-row" style={{ minHeight: '140px' }}>
-        {lifetimeStats && (
-          <>
-            <MetricsCard
-              title="Total User Messages"
-              value={formatNumber(lifetimeStats.total_traces)}
-              label={`User interactions since ${lifetimeStats.since_date || 'N/A'}`}
-              icon={<Activity size={20} />}
-              status={hasError ? 'error' : 'info'}
-            />
-            <MetricsCard
-              title="Unique Conversation Threads"
-              value={formatNumber(lifetimeStats.unique_threads)}
-              label={`Distinct sessions since ${lifetimeStats.since_date || 'N/A'}`}
-              icon={<Server size={20} />}
-              status={hasError ? 'error' : 'info'}
-            />
-            {lifetimeStats.total_traces > 0 && lifetimeStats.unique_threads > 0 && (
-              <MetricsCard
-                title="Avg Messages per Thread"
-                value={(lifetimeStats.total_traces / lifetimeStats.unique_threads).toFixed(1)}
-                label="User messages per conversation"
-                icon={<Zap size={20} />}
-                status="info"
-              />
-            )}
-          </>
-        )}
-        {botMetrics?.active_conversations && (
-          <MetricsCard
-            title="Active Conversations"
-            value={formatNumber(botMetrics.active_conversations.total)}
-            label="Active in last 7 days"
-            icon={<Activity size={20} />}
-            status="info"
-          />
-        )}
-        {botMetrics?.agent_invocations && (
-          <MetricsCard
-            title="Agent Invocations"
-            value={formatNumber(botMetrics.agent_invocations.total)}
-            label={`${botMetrics.agent_invocations.successful} successful, ${botMetrics.agent_invocations.failed} failed`}
-            icon={<Zap size={20} />}
-            status="info"
-          />
-        )}
+        <MetricsCard
+          title="Total User Messages"
+          value={formatNumber(lifetimeStats?.total_traces)}
+          label={`User interactions since ${lifetimeStats?.since_date || 'N/A'}`}
+          icon={<Activity size={20} />}
+          status={hasError ? 'error' : 'info'}
+        />
+        <MetricsCard
+          title="Unique Conversation Threads"
+          value={formatNumber(lifetimeStats?.unique_threads)}
+          label={`Distinct sessions since ${lifetimeStats?.since_date || 'N/A'}`}
+          icon={<Server size={20} />}
+          status={hasError ? 'error' : 'info'}
+        />
+        <MetricsCard
+          title="Avg Messages per Thread"
+          value={lifetimeStats?.total_traces > 0 && lifetimeStats?.unique_threads > 0
+            ? (lifetimeStats.total_traces / lifetimeStats.unique_threads).toFixed(1)
+            : 'N/A'}
+          label="User messages per conversation"
+          icon={<Zap size={20} />}
+          status="info"
+        />
+        <MetricsCard
+          title="Active Conversations"
+          value={formatNumber(botMetrics?.active_conversations?.total)}
+          label="Active in last 7 days"
+          icon={<Activity size={20} />}
+          status="info"
+        />
+        <MetricsCard
+          title="Agent Invocations"
+          value={formatNumber(botMetrics?.agent_invocations?.total)}
+          label={botMetrics?.agent_invocations
+            ? `${botMetrics.agent_invocations.successful} successful, ${botMetrics.agent_invocations.failed} failed`
+            : 'N/A'}
+          icon={<Zap size={20} />}
+          status="info"
+        />
       </div>
     </div>
   )
@@ -445,16 +439,11 @@ function RAGMetricsSection({ ready }) {
     return 'N/A'
   }
 
-  // Don't render if no data available yet
-  if (!ragData) {
-    return null
-  }
-
-  const hitRate = ragData.hit_rate || 0
-  const missRate = ragData.miss_rate || 0
-  const avgChunks = ragData.avg_chunks || 0
-  const totalQueries = ragData.total_queries || 0
-  const documentsUsed = ragData.documents_used || 0
+  const hitRate = ragData?.hit_rate || 0
+  const missRate = ragData?.miss_rate || 0
+  const avgChunks = ragData?.avg_chunks || 0
+  const totalQueries = ragData?.total_queries || 0
+  const documentsUsed = ragData?.documents_used || 0
 
   return (
     <div className="grid-section">
