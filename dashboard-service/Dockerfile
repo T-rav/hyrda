@@ -26,7 +26,7 @@ RUN useradd -m -u 1000 appuser && \
 
 # Copy application code
 # Copy version file from project root
-COPY --chown=appuser:appuser .version ./.version
+COPY --chown=appuser:appuser ../.version ./.version
 
 COPY --chown=appuser:appuser . .
 
