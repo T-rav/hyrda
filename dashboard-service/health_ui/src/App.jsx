@@ -406,7 +406,8 @@ function InfrastructureServices({ ready, metrics }) {
 function RAGMetricsSection({ ready }) {
   const ragData = ready?.checks?.rag
 
-  if (!ragData || ragData.status === 'disabled') {
+  // Only hide if explicitly disabled, not if just loading
+  if (ragData?.status === 'disabled') {
     return null
   }
 
