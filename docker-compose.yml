@@ -184,8 +184,8 @@ services:
   # System Dashboard Service
   dashboard:
     build:
-      context: ./dashboard-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: dashboard-service/Dockerfile
     image: insightmesh-dashboard:latest
     container_name: insightmesh-dashboard
     restart: unless-stopped

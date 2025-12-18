@@ -1,9 +1,9 @@
 # Stage 1: Build React UI
 FROM node:20-alpine AS ui-builder
 WORKDIR /app/health_ui
-COPY health_ui/package*.json ./
+COPY dashboard-service/health_ui/package*.json ./
 RUN npm ci --no-audit
-COPY health_ui/ ./
+COPY dashboard-service/health_ui/ ./
 RUN npm run build
 
 # Stage 2: Python application
@@ -26,9 +26,9 @@ RUN useradd -m -u 1000 appuser && \
 
 # Copy application code
 # Copy version file from project root
-COPY --chown=appuser:appuser ../.version ./.version
+COPY --chown=appuser:appuser .version ./.version
 
-COPY --chown=appuser:appuser . .
+COPY --chown=appuser:appuser dashboard-service/ .
 
 # Copy built UI from stage 1
 COPY --from=ui-builder /app/health_ui/dist ./health_ui/dist
