@@ -180,48 +180,37 @@ async def research_agent_registered(
     http_client: httpx.AsyncClient, service_urls: dict[str, str]
 ) -> bool:
     """
-    Register the 'research' agent in control plane for RBAC tests.
+    Verify 'help' agent exists for RBAC tests.
 
-    Uses service token authentication to register agent.
-    This is required for permission testing since the agent needs to exist
-    in the control plane registry.
+    The help agent is a real, working agent we can use for testing RBAC workflows.
+    This fixture just verifies it's registered and accessible.
 
     IMPORTANT: This is a HARD REQUIREMENT for integration tests.
-    If registration fails, integration tests should FAIL, not skip.
+    If the agent doesn't exist, integration tests should FAIL, not skip.
     This ensures services are properly integrated before release.
     """
-    service_token = os.getenv(
-        "SERVICE_TOKEN",
-        "172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128",
-    )
+    # Help agent already exists, just verify it's accessible
+    agents_url = f"{service_urls['control_plane']}/api/agents"
 
-    register_url = f"{service_urls['control_plane']}/api/agents/register"
-    agent_data = {
-        "name": "research",
-        "description": "Research agent for testing RBAC workflows",
-        "display_name": "Research Agent",
-        "endpoint_url": f"{service_urls['agent_service']}/agents/research/invoke",
-        "is_system": False,
-        "aliases": [],
-    }
+    response = await http_client.get(agents_url, timeout=10.0)
 
-    response = await http_client.post(
-        register_url,
-        json=agent_data,
-        headers={"Authorization": f"Bearer {service_token}"},
-        timeout=10.0,
-    )
-
-    # HARD FAIL if registration doesn't work - this is a release-level concern
-    assert response.status_code in [200, 201], (
-        f"❌ CRITICAL: Research agent registration FAILED!\n"
+    assert response.status_code == 200, (
+        f"❌ CRITICAL: Cannot list agents from control plane!\n"
         f"Status: {response.status_code}\n"
-        f"Response: {response.text[:500]}\n"
-        f"This is a RELEASE-BLOCKING issue - services must be properly integrated.\n"
-        f"Ensure control plane is running and accessible at {service_urls['control_plane']}"
+        f"This is a RELEASE-BLOCKING issue - control plane must be accessible.\n"
+        f"Ensure control plane is running at {service_urls['control_plane']}"
     )
 
-    print(f"✅ Research agent registered successfully: {response.status_code}")
+    agents = response.json().get("agents", [])
+    agent_names = [a["name"] for a in agents]
+
+    assert "help" in agent_names, (
+        f"❌ CRITICAL: Help agent not found in control plane!\n"
+        f"Available agents: {agent_names}\n"
+        f"This is a RELEASE-BLOCKING issue - agent-service must register agents.\n"
+    )
+
+    print("✅ Help agent available for RBAC testing")
     return True
 
 

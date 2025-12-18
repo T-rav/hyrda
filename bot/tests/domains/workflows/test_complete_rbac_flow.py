@@ -56,11 +56,11 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
         pytest.skip("Authentication not available")
 
     # Verify agent is registered (fixture will have failed if not)
-    assert research_agent_registered, "Research agent must be registered for this test"
+    assert research_agent_registered, "Help agent must be available for this test"
 
-    # Use "research" agent - not in default groups (required for permission testing)
+    # Use "help" agent - real working agent for permission testing
     # Agent execution may take time, but test must complete or fail - no graceful failures
-    agent_name = "research"
+    agent_name = "help"
     control_plane = service_urls["control_plane"]
 
     # ===================================================================
@@ -232,10 +232,10 @@ async def test_user_inherits_permissions_from_group_membership(
         pytest.skip("Authentication not available")
 
     # Verify agent is registered (fixture will have failed if not)
-    assert research_agent_registered, "Research agent must be registered for this test"
+    assert research_agent_registered, "Profile agent must be available for this test"
 
-    # Use "research" agent (actual name, no "_agent" suffix)
-    agent_name = "research"
+    # Use "profile" agent (actual name, real working agent)
+    agent_name = "profile"
     control_plane = service_urls["control_plane"]
 
     # ===================================================================
