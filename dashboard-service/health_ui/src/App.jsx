@@ -339,27 +339,30 @@ function InfrastructureServices({ ready, metrics }) {
   const renderServiceDetails = (details) => {
     if (!details || typeof details !== 'object') return null
 
-    return Object.entries(details).map(([key, value]) => {
-      // Format the key for display
-      const label = key.replace(/_/g, ' ') + ':'
+    // Filter out fields already shown in the header
+    return Object.entries(details)
+      .filter(([key]) => !['service', 'status', 'name'].includes(key))
+      .map(([key, value]) => {
+        // Format the key for display
+        const label = key.replace(/_/g, ' ') + ':'
 
-      // Format the value for display
-      let displayValue = value
-      if (typeof value === 'boolean') {
-        displayValue = value ? 'Yes' : 'No'
-      } else if (Array.isArray(value)) {
-        displayValue = value.join(', ')
-      } else if (typeof value === 'object') {
-        displayValue = JSON.stringify(value)
-      }
+        // Format the value for display
+        let displayValue = value
+        if (typeof value === 'boolean') {
+          displayValue = value ? 'Yes' : 'No'
+        } else if (Array.isArray(value)) {
+          displayValue = value.join(', ')
+        } else if (typeof value === 'object') {
+          displayValue = JSON.stringify(value)
+        }
 
-      return (
-        <div key={key} className="service-detail">
-          <span className="detail-label">{label}</span>
-          <span className="detail-value">{displayValue}</span>
-        </div>
-      )
-    })
+        return (
+          <div key={key} className="service-detail">
+            <span className="detail-label">{label}</span>
+            <span className="detail-value">{displayValue}</span>
+          </div>
+        )
+      })
   }
 
   return (
