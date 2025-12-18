@@ -64,11 +64,11 @@ export function useHealthData() {
         readyRes.json()
       ])
 
-      // Keep previous data if new data is null/undefined
+      // Keep previous data if new data is null/undefined/empty
       setData(prev => ({
-        health: health || prev.health,
-        metrics: metrics || prev.metrics,
-        ready: ready || prev.ready,
+        health: (health?.status) ? health : prev.health,
+        metrics: (metrics?.lifetime_stats || metrics?.bot) ? metrics : prev.metrics,
+        ready: (ready?.checks) ? ready : prev.ready,
         loading: false,
         error: null,
         lastUpdate: new Date()
