@@ -63,11 +63,12 @@ app.add_middleware(
 
 
 # Service URLs (Docker service names)
+# Note: control_plane uses HTTPS with self-signed cert
 SERVICES = {
     "bot": "http://bot:8080",
     "agent_service": "http://agent_service:8000",
     "tasks": "http://tasks:8081",
-    "control_plane": "http://control_plane:6001",
+    "control_plane": "https://control_plane:6001",
 }
 
 
@@ -240,7 +241,9 @@ async def get_services_health():
     """Get health status of all services."""
     services = {}
 
-    async with aiohttp.ClientSession() as session:
+    # Disable SSL verification for self-signed certs (control-plane uses HTTPS)
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
