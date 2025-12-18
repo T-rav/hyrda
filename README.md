@@ -6,7 +6,7 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 
 ## 🆕 What's New in v1.1.0
 
-### Latest Updates (December 2024)
+### Latest Updates (December 2025)
 - **LangGraph Agent Integration**: Fixed agent invocation for LangGraph CompiledStateGraph instances
   - Agents now properly detected and invoked with correct method signatures
   - Support for both traditional agents and LangGraph graph-based agents
