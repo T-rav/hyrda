@@ -121,9 +121,16 @@ async def list_agents(request: Request) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=internal_error(str(e)))
 
 
-@router.post("/register", dependencies=[Depends(verify_service_auth)])
+async def _verify_service_only(request: Request) -> str:
+    """Wrapper for verify_service_auth without allowed_services parameter."""
+    return await verify_service_auth(request, allowed_services=None)
+
+
+@router.post("/register")
 @require_idempotency(ttl_hours=24)
-async def register_agent(request: Request) -> dict[str, Any]:
+async def register_agent(
+    request: Request, service: str = Depends(_verify_service_only)
+) -> dict[str, Any]:
     """Register or update an agent in the database.
 
     Called by agent-service on startup to sync available agents.
