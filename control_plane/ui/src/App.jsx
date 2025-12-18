@@ -61,6 +61,28 @@ function App() {
     revokeAgentFromGroup,
   } = usePermissions(toast, fetchAgentDetails, fetchAgents)
 
+  // Verify authentication on mount and prevent back-button access after logout
+  useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch('/api/users/me', {
+          credentials: 'include'
+        })
+        if (!response.ok) {
+          // Not authenticated - redirect to login
+          window.location.href = '/auth/login'
+          return
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        window.location.href = '/auth/login'
+        return
+      }
+    }
+
+    verifyAuth()
+  }, [])
+
   // Initial data fetch
   useEffect(() => {
     document.title = 'InsightMesh - Control Plane'
