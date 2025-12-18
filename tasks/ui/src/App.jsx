@@ -22,7 +22,7 @@ function App() {
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
 
-  // Fetch current user info and verify authentication
+  // Fetch current user info (without aggressive redirect)
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -32,14 +32,9 @@ function App() {
         if (response.ok) {
           const data = await response.json()
           setCurrentUser(data)
-        } else {
-          // Not authenticated - redirect to login
-          window.location.href = 'http://localhost:6001/auth/login'
         }
       } catch (error) {
         console.error('Failed to fetch current user:', error)
-        // Redirect to login on error
-        window.location.href = 'http://localhost:6001/auth/login'
       }
     }
     fetchCurrentUser()
