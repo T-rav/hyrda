@@ -183,20 +183,6 @@ function App() {
 
 // Lifetime Statistics Component
 function LifetimeStatisticsSection({ metrics }) {
-  // Keep last known good data in state
-  const [lifetimeStats, setLifetimeStats] = useState(null)
-  const [botMetrics, setBotMetrics] = useState(null)
-
-  // Update state when new data arrives
-  useEffect(() => {
-    if (metrics?.lifetime_stats) {
-      setLifetimeStats(metrics.lifetime_stats)
-    }
-    if (metrics?.bot) {
-      setBotMetrics(metrics.bot)
-    }
-  }, [metrics])
-
   const formatNumber = (value) => {
     if (typeof value === 'number') {
       return value.toLocaleString()
@@ -204,6 +190,8 @@ function LifetimeStatisticsSection({ metrics }) {
     return 'N/A'
   }
 
+  const lifetimeStats = metrics?.lifetime_stats
+  const botMetrics = metrics?.bot
   const hasError = lifetimeStats?.error
 
   return (
@@ -406,19 +394,7 @@ function InfrastructureServices({ ready, metrics }) {
 
 // RAG Metrics Component
 function RAGMetricsSection({ ready }) {
-  // Keep last known good data in state
-  const [ragData, setRagData] = useState(null)
-
-  // Update state when new data arrives
-  useEffect(() => {
-    const newRagData = ready?.checks?.rag
-    if (newRagData && newRagData.status !== 'disabled') {
-      setRagData(newRagData)
-    } else if (newRagData?.status === 'disabled') {
-      // Clear data if RAG is explicitly disabled
-      setRagData(null)
-    }
-  }, [ready])
+  const ragData = ready?.checks?.rag
 
   // Only hide section if RAG is explicitly disabled
   if (ragData?.status === 'disabled') {
