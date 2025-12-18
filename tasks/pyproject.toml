@@ -106,10 +106,10 @@ tasks-server = "app:main"
 
 # Package discovery configuration
 [tool.setuptools]
+packages = ["config", "jobs", "services", "models", "tests"]
 
 [tool.setuptools.dynamic]
 version = {file = "../.version"}
-packages = ["config", "jobs", "services", "models", "tests"]
 
 # Ruff configuration
 [tool.ruff]

@@ -108,10 +108,10 @@ agent-service = "app:main"
 
 # Package discovery configuration
 [tool.setuptools]
+packages = ["agents", "api", "config", "services", "models", "utils"]
 
 [tool.setuptools.dynamic]
 version = {file = "../.version"}
-packages = ["agents", "api", "config", "services", "models", "utils"]
 
 # Ruff configuration
 [tool.ruff]
