@@ -100,7 +100,9 @@ async def ready():
     }
 
     # Check all services
-    async with aiohttp.ClientSession() as session:
+    # Disable SSL verification for self-signed certs (control-plane uses HTTPS)
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
@@ -207,7 +209,9 @@ async def get_all_metrics():
     }
 
     # Fetch metrics from each service
-    async with aiohttp.ClientSession() as session:
+    # Disable SSL verification for self-signed certs (control-plane uses HTTPS)
+    connector = aiohttp.TCPConnector(ssl=False)
+    async with aiohttp.ClientSession(connector=connector) as session:
         for service_name, base_url in SERVICES.items():
             try:
                 async with session.get(
