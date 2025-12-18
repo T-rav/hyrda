@@ -22,22 +22,29 @@ function App() {
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
 
-  // Fetch current user info (without aggressive redirect)
+  // Check authentication on mount to prevent back-button access after logout
   useEffect(() => {
-    const fetchCurrentUser = async () => {
+    const verifyAuth = async () => {
       try {
         const response = await fetch('http://localhost:6001/api/users/me', {
           credentials: 'include'
         })
-        if (response.ok) {
-          const data = await response.json()
-          setCurrentUser(data)
+        if (!response.ok) {
+          // Not authenticated - redirect to control plane login
+          console.log('Not authenticated, redirecting to login')
+          window.location.href = 'http://localhost:6001/auth/login'
+          return
         }
+        // Authenticated - set current user
+        const data = await response.json()
+        setCurrentUser(data)
       } catch (error) {
-        console.error('Failed to fetch current user:', error)
+        console.error('Auth check failed:', error)
+        window.location.href = 'http://localhost:6001/auth/login'
       }
     }
-    fetchCurrentUser()
+
+    verifyAuth()
   }, [])
 
   const handleTabChange = (tab) => {
@@ -50,14 +57,14 @@ function App() {
   }
 
   // Logout handler
-  const handleLogout = async () => {
-    try {
-      // Tasks uses control-plane auth, so redirect to control-plane logout
-      window.location.href = 'http://localhost:6001/auth/login'
-    } catch (error) {
-      console.error('Logout failed:', error)
-      window.location.href = 'http://localhost:6001/auth/login'
-    }
+  const handleLogout = () => {
+    // Tasks uses control-plane auth, so POST to control-plane logout endpoint
+    // This will clear the session and redirect to the logout success page
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = 'http://localhost:6001/auth/logout'
+    document.body.appendChild(form)
+    form.submit()
   }
 
   return (
