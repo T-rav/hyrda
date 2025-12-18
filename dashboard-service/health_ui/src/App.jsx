@@ -90,6 +90,22 @@ function App() {
                   icon={<Clock size={20} />}
                 />
               </div>
+              <div className="cards-row" style={{ marginTop: '1rem' }}>
+                <ServiceCard
+                  service="cache"
+                  title="Cache"
+                  icon={<Database size={20} />}
+                  serviceData={ready?.checks?.cache}
+                  metricsData={metrics}
+                />
+                <ServiceCard
+                  service="langfuse"
+                  title="Langfuse"
+                  icon={<Activity size={20} />}
+                  serviceData={ready?.checks?.langfuse}
+                  metricsData={metrics}
+                />
+              </div>
             </div>
 
 
@@ -382,24 +398,6 @@ function InfrastructureServices({ ready, metrics }) {
             )}
           </div>
         ))}
-      </div>
-
-      {/* Application Services Row */}
-      <div className="cards-row" style={{ marginTop: '1rem' }}>
-        <ServiceCard
-          service="cache"
-          title="Cache"
-          icon={<Database size={20} />}
-          serviceData={ready?.checks?.cache}
-          metricsData={metrics}
-        />
-        <ServiceCard
-          service="langfuse"
-          title="Langfuse"
-          icon={<Activity size={20} />}
-          serviceData={ready?.checks?.langfuse}
-          metricsData={metrics}
-        />
       </div>
     </div>
   )
