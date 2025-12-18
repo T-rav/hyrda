@@ -33,15 +33,19 @@ START_TIME = datetime.now(UTC)
 
 
 def get_app_version() -> str:
-    """Get application version from .version file at project root."""
+    """Get application version from .version file."""
     try:
-        version_file = Path(__file__).parent.parent / ".version"
+        # In Docker, .version is copied to /app/.version
+        # In development, it's at project_root/.version (parent.parent)
+        version_file = Path(__file__).parent / ".version"
+        if not version_file.exists():
+            version_file = Path(__file__).parent.parent / ".version"
         if version_file.exists():
             return version_file.read_text().strip()
-        return "1.0.0"
+        return "0.0.0"
     except Exception as e:
         logger.warning(f"Failed to read version from .version file: {e}")
-        return "1.0.0"
+        return "0.0.0"
 
 
 app = FastAPI(
