@@ -7,16 +7,37 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 ## 🆕 What's New in v1.1.0
 
 ### Latest Updates (December 2025)
-- **LangGraph Agent Integration**: Fixed agent invocation for LangGraph CompiledStateGraph instances
-  - Agents now properly detected and invoked with correct method signatures
-  - Support for both traditional agents and LangGraph graph-based agents
-- **Enhanced Testing**: All 3,302 tests passing across all services
-  - Comprehensive RBAC integration test coverage
-  - Fixed authentication test suite
-  - Control plane agent registration tests
-- **Profile Agent Improvements**: Added fallback prompts for development/testing environments
-  - Graceful degradation when Langfuse unavailable
-  - Proper PromptService initialization
+
+#### 🔧 Agent System Enhancements
+- **LangGraph Integration Fixed**: Resolved agent invocation issues for LangGraph CompiledStateGraph instances
+  - Automatic detection of graph-based vs traditional agents
+  - Correct method signatures for both `ainvoke()` (graphs) and `invoke()` (traditional agents)
+  - Enhanced agent registry to handle both agent types seamlessly
+- **Profile Agent Stability**: Production-ready fallback mechanisms
+  - Graceful degradation when Langfuse prompt templates unavailable
+  - Development/testing fallback prompts for all agent types
+  - Proper PromptService initialization on agent startup
+  - Import path fixes for external agent modules
+
+#### ✅ Testing & Quality Assurance
+- **Complete Test Coverage**: 3,302 tests passing across all microservices
+  - **bot**: 1,012 tests (unit + integration)
+  - **agent-service**: 611 tests (agent invocation, LangGraph graphs)
+  - **control_plane**: 239 tests (RBAC, permissions, agent registration)
+  - **rag-service**: 458 tests (retrieval, embeddings, reranking)
+  - **tasks**: 655 tests (scheduling, Google Drive OAuth)
+  - **shared**: 327 tests (utilities, middleware, tracing)
+- **RBAC Integration Tests**: End-to-end permission inheritance validation
+- **Authentication Test Suite**: Service token and JWT authentication coverage
+- **Agent Registration Flow**: Complete lifecycle testing from registration to invocation
+
+#### 🏗️ Infrastructure Improvements
+- **Service Authentication**: Fixed control-plane agent registration endpoint
+  - Proper service token validation for agent-to-control-plane communication
+  - Enhanced security for inter-service authentication
+- **Error Handling**: Improved error messages and debugging information
+  - Better diagnostics for agent invocation failures
+  - Clear error messages for missing dependencies
 
 ### Architecture Improvements
 - **Microservices Architecture**: Agents extracted to separate HTTP-based service for better scalability
