@@ -183,8 +183,19 @@ function App() {
 
 // Lifetime Statistics Component
 function LifetimeStatisticsSection({ metrics }) {
-  const lifetimeStats = metrics?.lifetime_stats
-  const botMetrics = metrics?.bot
+  // Keep last known good data in state
+  const [lifetimeStats, setLifetimeStats] = useState(null)
+  const [botMetrics, setBotMetrics] = useState(null)
+
+  // Update state when new data arrives
+  useEffect(() => {
+    if (metrics?.lifetime_stats) {
+      setLifetimeStats(metrics.lifetime_stats)
+    }
+    if (metrics?.bot) {
+      setBotMetrics(metrics.bot)
+    }
+  }, [metrics])
 
   const formatNumber = (value) => {
     if (typeof value === 'number') {
@@ -194,9 +205,6 @@ function LifetimeStatisticsSection({ metrics }) {
   }
 
   const hasError = lifetimeStats?.error
-
-  // Always show the section, even when loading
-  const showSection = metrics || true  // Always true
 
   return (
     <div className="grid-section">
@@ -215,14 +223,14 @@ function LifetimeStatisticsSection({ metrics }) {
             <MetricsCard
               title="Total User Messages"
               value={formatNumber(lifetimeStats.total_traces)}
-              label={`User interactions since ${lifetimeStats.since_date}`}
+              label={`User interactions since ${lifetimeStats.since_date || 'N/A'}`}
               icon={<Activity size={20} />}
               status={hasError ? 'error' : 'info'}
             />
             <MetricsCard
               title="Unique Conversation Threads"
               value={formatNumber(lifetimeStats.unique_threads)}
-              label={`Distinct sessions since ${lifetimeStats.since_date}`}
+              label={`Distinct sessions since ${lifetimeStats.since_date || 'N/A'}`}
               icon={<Server size={20} />}
               status={hasError ? 'error' : 'info'}
             />
@@ -404,9 +412,21 @@ function InfrastructureServices({ ready, metrics }) {
 
 // RAG Metrics Component
 function RAGMetricsSection({ ready }) {
-  const ragData = ready?.checks?.rag
+  // Keep last known good data in state
+  const [ragData, setRagData] = useState(null)
 
-  // Only hide if explicitly disabled, not if just loading
+  // Update state when new data arrives
+  useEffect(() => {
+    const newRagData = ready?.checks?.rag
+    if (newRagData && newRagData.status !== 'disabled') {
+      setRagData(newRagData)
+    } else if (newRagData?.status === 'disabled') {
+      // Clear data if RAG is explicitly disabled
+      setRagData(null)
+    }
+  }, [ready])
+
+  // Only hide section if RAG is explicitly disabled
   if (ragData?.status === 'disabled') {
     return null
   }
@@ -425,12 +445,16 @@ function RAGMetricsSection({ ready }) {
     return 'N/A'
   }
 
-  // const getStatusColor = (successRate) => {
-  //   if (typeof successRate !== 'number') return '#6b7280'
-  //   if (successRate >= 80) return '#10b981' // green
-  //   if (successRate >= 60) return '#f59e0b' // yellow
-  //   return '#ef4444' // red
-  // }
+  // Don't render if no data available yet
+  if (!ragData) {
+    return null
+  }
+
+  const hitRate = ragData.hit_rate || 0
+  const missRate = ragData.miss_rate || 0
+  const avgChunks = ragData.avg_chunks || 0
+  const totalQueries = ragData.total_queries || 0
+  const documentsUsed = ragData.documents_used || 0
 
   return (
     <div className="grid-section">
@@ -438,43 +462,43 @@ function RAGMetricsSection({ ready }) {
       <div className="cards-row">
         <MetricsCard
           title="Cache Hit Rate"
-          value={formatPercentage(ragData.hit_rate)}
+          value={formatPercentage(hitRate)}
           label="Documents found in cache"
           icon={<Database size={20} />}
-          status={ragData.hit_rate >= 70 ? 'healthy' : ragData.hit_rate >= 40 ? 'warning' : 'error'}
+          status={hitRate >= 70 ? 'healthy' : hitRate >= 40 ? 'warning' : 'error'}
         />
         <MetricsCard
           title="Avg Chunks/Query"
-          value={typeof ragData.avg_chunks === 'number' ? ragData.avg_chunks.toFixed(1) : 'N/A'}
+          value={typeof avgChunks === 'number' ? avgChunks.toFixed(1) : 'N/A'}
           label="Documents retrieved per query"
           icon={<Search size={20} />}
           status="info"
         />
         <MetricsCard
           title="Queries with No Documents"
-          value={Math.round((ragData.total_queries * ragData.miss_rate) / 100) || 0}
+          value={Math.round((totalQueries * missRate) / 100) || 0}
           label="Queries returning no results"
           icon={<XCircle size={20} />}
-          status={ragData.miss_rate <= 10 ? 'healthy' : ragData.miss_rate <= 30 ? 'warning' : 'error'}
+          status={missRate <= 10 ? 'healthy' : missRate <= 30 ? 'warning' : 'error'}
         />
         <MetricsCard
           title="Total Queries"
-          value={formatNumber(ragData.total_queries)}
+          value={formatNumber(totalQueries)}
           label="Since last restart"
           icon={<Activity size={20} />}
           status="info"
         />
       </div>
 
-      {ragData.documents_used > 0 && (
+      {documentsUsed > 0 && (
         <div className="rag-stats-detail">
           <div className="stat-detail-item">
             <span className="stat-detail-label">Documents Used:</span>
-            <span className="stat-detail-value">{formatNumber(ragData.documents_used)}</span>
+            <span className="stat-detail-value">{formatNumber(documentsUsed)}</span>
           </div>
           <div className="stat-detail-item">
             <span className="stat-detail-label">Miss Rate:</span>
-            <span className="stat-detail-value">{formatPercentage(ragData.miss_rate)}</span>
+            <span className="stat-detail-value">{formatPercentage(missRate)}</span>
           </div>
         </div>
       )}
