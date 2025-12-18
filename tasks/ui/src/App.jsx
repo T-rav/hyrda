@@ -26,14 +26,14 @@ function App() {
   useEffect(() => {
     const verifyAuth = async () => {
       try {
-        const response = await fetch('http://localhost:6001/api/users/me', {
+        const response = await fetch('https://localhost:6001/api/users/me', {
           credentials: 'include'
         })
         if (!response.ok) {
           // Not authenticated - redirect to control plane login with return URL
           console.log('Not authenticated, redirecting to login')
           const returnUrl = encodeURIComponent(window.location.href)
-          window.location.href = `http://localhost:6001/auth/login?redirect=${returnUrl}`
+          window.location.href = `https://localhost:6001/auth/login?redirect=${returnUrl}`
           return
         }
         // Authenticated - set current user
@@ -42,7 +42,7 @@ function App() {
       } catch (error) {
         console.error('Auth check failed:', error)
         const returnUrl = encodeURIComponent(window.location.href)
-        window.location.href = `http://localhost:6001/auth/login?redirect=${returnUrl}`
+        window.location.href = `https://localhost:6001/auth/login?redirect=${returnUrl}`
       }
     }
 
@@ -64,7 +64,7 @@ function App() {
     // This will clear the session and redirect to the logout success page
     const form = document.createElement('form')
     form.method = 'POST'
-    form.action = 'http://localhost:6001/auth/logout'
+    form.action = 'https://localhost:6001/auth/logout'
     document.body.appendChild(form)
     form.submit()
   }
@@ -109,20 +109,24 @@ function App() {
               <Activity size={20} />
               Health
             </a>
-            {currentUser && (
-              <div className="user-info">
-                <User size={16} />
-                <span>{currentUser.email}</span>
-              </div>
-            )}
-            <button
-              className="nav-link logout-btn"
-              onClick={handleLogout}
-              title="Logout"
-            >
-              <LogOut size={20} />
-              Logout
-            </button>
+            <div className="logout-dropdown">
+              <button
+                className="nav-link logout-btn"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+              {currentUser && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-item user-email">
+                    <User size={16} />
+                    {currentUser.email}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="nav-divider"></div>
           </nav>
         </div>

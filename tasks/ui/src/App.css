@@ -105,14 +105,61 @@ body {
   font-weight: 500;
 }
 
-.nav-link.logout-btn {
+.logout-dropdown {
+  position: relative;
   margin-left: 0.5rem;
+}
+
+.nav-link.logout-btn {
   color: #ef4444;
 }
 
 .nav-link.logout-btn:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #dc2626;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.logout-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item.user-email {
+  background: #f8fafc;
+  color: #667eea;
+  font-weight: 500;
+  cursor: default;
 }
 
 .nav-divider {

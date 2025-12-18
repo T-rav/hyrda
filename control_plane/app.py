@@ -169,8 +169,8 @@ def create_app() -> FastAPI:
             Note: This catch-all must be registered AFTER all other routes/mounts
             to avoid intercepting API calls and static assets.
             """
-            # Don't serve index.html for API or assets paths (safety check)
-            if path.startswith("api/") or path.startswith("assets/"):
+            # Don't serve index.html for API, auth, or assets paths (safety check)
+            if path.startswith("api/") or path.startswith("auth/") or path.startswith("assets/"):
                 from fastapi import HTTPException
                 raise HTTPException(404)
 
