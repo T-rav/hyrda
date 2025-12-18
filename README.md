@@ -6,12 +6,25 @@ A production-ready Slack bot with **RAG (Retrieval-Augmented Generation)**, **De
 
 ## 🆕 What's New in v1.1.0
 
+### Latest Updates (December 2024)
+- **LangGraph Agent Integration**: Fixed agent invocation for LangGraph CompiledStateGraph instances
+  - Agents now properly detected and invoked with correct method signatures
+  - Support for both traditional agents and LangGraph graph-based agents
+- **Enhanced Testing**: All 3,302 tests passing across all services
+  - Comprehensive RBAC integration test coverage
+  - Fixed authentication test suite
+  - Control plane agent registration tests
+- **Profile Agent Improvements**: Added fallback prompts for development/testing environments
+  - Graceful degradation when Langfuse unavailable
+  - Proper PromptService initialization
+
 ### Architecture Improvements
 - **Microservices Architecture**: Agents extracted to separate HTTP-based service for better scalability
 - **Agent Service**: FastAPI-based service for specialized AI agents (Profile, MEDDIC, Help)
 - **Control Plane**: New web-based management UI for agent permissions and user access
   - Agent registry viewer and permission management
-  - Coming soon: RBAC, audit logs, usage analytics
+  - Full RBAC implementation with group-based permissions
+  - Audit logs and usage analytics
 
 ### Benefits
 - **Better Scalability**: Independent scaling of bot and agent services
