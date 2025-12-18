@@ -207,9 +207,7 @@ async def auth_callback(request: Request):
                         AuditLogger.log_auth_event(
                             "user_created_from_slack",
                             email=email,
-                            success=True,
-                            user_id=user_id,
-                            metadata={"is_admin": is_admin, "is_first_user": is_first_user}
+                            success=True
                         )
                     else:
                         # User not found in Slack - deny access
