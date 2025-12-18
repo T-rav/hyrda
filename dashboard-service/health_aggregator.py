@@ -631,6 +631,83 @@ class HealthChecker:
 
         services = {}
 
+        # Bot Service Health
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://bot:8080/health", timeout=5) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        services["bot"] = {
+                            "name": "Bot",
+                            "status": "healthy",
+                            "details": {
+                                "endpoint": "http://bot:8080",
+                                "uptime_seconds": data.get("uptime_seconds", 0),
+                            },
+                        }
+                    else:
+                        services["bot"] = {
+                            "name": "Bot",
+                            "status": "unhealthy",
+                            "details": {"error": f"HTTP {resp.status}"},
+                        }
+        except Exception as e:
+            services["bot"] = {
+                "name": "Bot",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
+        # Agent Service Health
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "http://agent_service:8000/health", timeout=5
+                ) as resp:
+                    if resp.status == 200:
+                        services["agent_service"] = {
+                            "name": "Agent Service",
+                            "status": "healthy",
+                            "details": {"endpoint": "http://agent_service:8000"},
+                        }
+                    else:
+                        services["agent_service"] = {
+                            "name": "Agent Service",
+                            "status": "unhealthy",
+                            "details": {"error": f"HTTP {resp.status}"},
+                        }
+        except Exception as e:
+            services["agent_service"] = {
+                "name": "Agent Service",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
+        # Control Plane Health
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "http://control_plane:6001/health", timeout=5
+                ) as resp:
+                    if resp.status == 200:
+                        services["control_plane"] = {
+                            "name": "Control Plane",
+                            "status": "healthy",
+                            "details": {"endpoint": "http://control_plane:6001"},
+                        }
+                    else:
+                        services["control_plane"] = {
+                            "name": "Control Plane",
+                            "status": "unhealthy",
+                            "details": {"error": f"HTTP {resp.status}"},
+                        }
+        except Exception as e:
+            services["control_plane"] = {
+                "name": "Control Plane",
+                "status": "error",
+                "details": {"error": str(e)},
+            }
+
         # Task Scheduler Health
         try:
             async with aiohttp.ClientSession() as session:
