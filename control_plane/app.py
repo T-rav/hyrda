@@ -176,7 +176,12 @@ def create_app() -> FastAPI:
 
             index_file = static_folder / "index.html"
             if index_file.exists():
-                return FileResponse(index_file)
+                # Prevent browser caching to ensure auth checks run on every page load
+                response = FileResponse(index_file)
+                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+                return response
             return {"status": "UI not built"}
 
     logger.info("Control Plane FastAPI application initialized on port 6001")

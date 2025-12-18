@@ -374,10 +374,16 @@ async def logout(request: Request):
         email=email,
     )
 
-    # Create response and clear cookie
+    # Create response and clear cookie with matching parameters
     response = JSONResponse(
         {"message": "Logged out successfully", "token_revoked": revoked}
     )
-    response.delete_cookie("access_token")
+    # Must match the parameters used when setting the cookie
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
 
     return response
