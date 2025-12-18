@@ -55,6 +55,12 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
     if not authenticated_admin or not authenticated_user:
         pytest.skip("Authentication not available")
 
+    # Skip if research agent registration failed (services not running)
+    if not research_agent_registered:
+        pytest.skip(
+            "Research agent not registered - control plane or agent service may not be running"
+        )
+
     # Use "research" agent - not in default groups (required for permission testing)
     # Agent execution may take time, but test must complete or fail - no graceful failures
     agent_name = "research"
@@ -227,6 +233,12 @@ async def test_user_inherits_permissions_from_group_membership(
     """
     if not authenticated_admin or not authenticated_user:
         pytest.skip("Authentication not available")
+
+    # Skip if research agent registration failed (services not running)
+    if not research_agent_registered:
+        pytest.skip(
+            "Research agent not registered - control plane or agent service may not be running"
+        )
 
     # Use "research" agent (actual name, no "_agent" suffix)
     agent_name = "research"
