@@ -9,6 +9,7 @@ Aggregates metrics from all services:
 
 import logging
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiohttp
@@ -27,10 +28,26 @@ logger = logging.getLogger(__name__)
 # HTTP client configuration constants
 DEFAULT_SERVICE_TIMEOUT = 5  # Timeout for service health checks in seconds
 
+# Track service start time for uptime
+START_TIME = datetime.now(UTC)
+
+
+def get_app_version() -> str:
+    """Get application version from .version file at project root."""
+    try:
+        version_file = Path(__file__).parent.parent / ".version"
+        if version_file.exists():
+            return version_file.read_text().strip()
+        return "1.0.0"
+    except Exception as e:
+        logger.warning(f"Failed to read version from .version file: {e}")
+        return "1.0.0"
+
+
 app = FastAPI(
     title="InsightMesh Dashboard",
     description="System-wide health and metrics dashboard",
-    version="1.0.0",
+    version=get_app_version(),
 )
 
 # Add session middleware for authentication
@@ -99,7 +116,13 @@ async def logout():
 @app.get("/api/health")
 async def health():
     """Health check for dashboard service itself."""
-    return {"status": "healthy", "service": "dashboard"}
+    uptime = datetime.now(UTC) - START_TIME
+    return {
+        "status": "healthy",
+        "service": "dashboard",
+        "version": get_app_version(),
+        "uptime_seconds": int(uptime.total_seconds()),
+    }
 
 
 @app.get("/api/ready")
