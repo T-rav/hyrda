@@ -206,10 +206,62 @@ def register_routers(app: FastAPI) -> None:
     logger.info("Registered all API routers")
 
 
+def cleanup_duplicate_user_groups() -> None:
+    """Remove duplicate user group memberships (one-time cleanup)."""
+    try:
+        from models import UserGroup, get_db_session
+        from sqlalchemy import func
+
+        with get_db_session() as session:
+            # Find duplicate entries (same user + group combination)
+            duplicates = (
+                session.query(
+                    UserGroup.slack_user_id,
+                    UserGroup.group_name,
+                    func.count(UserGroup.id).label('count')
+                )
+                .group_by(UserGroup.slack_user_id, UserGroup.group_name)
+                .having(func.count(UserGroup.id) > 1)
+                .all()
+            )
+
+            if not duplicates:
+                return
+
+            logger.info(f"Found {len(duplicates)} duplicate user-group combinations")
+
+            total_removed = 0
+            for slack_user_id, group_name, count in duplicates:
+                # Get all entries for this user-group combination
+                entries = (
+                    session.query(UserGroup)
+                    .filter(
+                        UserGroup.slack_user_id == slack_user_id,
+                        UserGroup.group_name == group_name
+                    )
+                    .order_by(UserGroup.created_at.asc())  # Keep the oldest
+                    .all()
+                )
+
+                # Delete all but the first (oldest) entry
+                for entry in entries[1:]:
+                    session.delete(entry)
+                    total_removed += 1
+
+            session.commit()
+            logger.info(f"Cleaned up {total_removed} duplicate user group entries")
+
+    except Exception as e:
+        logger.error(f"Error cleaning up duplicate user groups: {e}")
+
+
 def ensure_all_users_group() -> None:
     """Ensure the 'All Users' system group exists and populate it."""
     try:
         from models import PermissionGroup, User, UserGroup, get_db_session
+
+        # First, clean up any duplicates
+        cleanup_duplicate_user_groups()
 
         with get_db_session() as session:
             # Check if "all_users" group exists

@@ -1,6 +1,6 @@
 """Permission group models for group-based access control."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 
 from .base import Base
@@ -33,6 +33,9 @@ class UserGroup(Base):
     """Model for user-to-group membership (many-to-many)."""
 
     __tablename__ = "user_groups"
+    __table_args__ = (
+        UniqueConstraint('slack_user_id', 'group_name', name='uq_user_group'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
