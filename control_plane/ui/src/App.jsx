@@ -61,8 +61,34 @@ function App() {
     revokeAgentFromGroup,
   } = usePermissions(toast, fetchAgentDetails, fetchAgents)
 
-  // Note: Removed aggressive auth check - let server-side auth handle it
-  // The backend will return 401/403 if not authenticated
+  // Check authentication on mount to prevent back-button access after logout
+  useEffect(() => {
+    const verifyAuth = async () => {
+      // Skip auth check if we're on an auth-related path
+      const isAuthPath = window.location.pathname.startsWith('/auth/')
+      if (isAuthPath) {
+        return
+      }
+
+      try {
+        const response = await fetch('/api/users/me', {
+          credentials: 'include'
+        })
+        if (!response.ok) {
+          // Not authenticated - redirect to login
+          console.log('Not authenticated, redirecting to login')
+          window.location.href = '/auth/login'
+          return
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        window.location.href = '/auth/login'
+        return
+      }
+    }
+
+    verifyAuth()
+  }, [])
 
   // Initial data fetch
   useEffect(() => {
