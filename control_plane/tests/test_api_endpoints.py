@@ -714,6 +714,8 @@ class TestAgentDeletionAPI:
 
     def test_can_reregister_deleted_agent(self, authenticated_client, db_session):
         """Test that a deleted agent can be re-registered."""
+        from shared.utils.jwt_auth import SERVICE_TOKEN
+
         # Create and delete an agent
         agent = AgentMetadata(
             agent_name="reregister_test",
@@ -727,7 +729,7 @@ class TestAgentDeletionAPI:
         # Delete it
         authenticated_client.delete("/api/agents/reregister_test")
 
-        # Re-register the agent
+        # Re-register the agent (requires service token)
         response = authenticated_client.post(
             "/api/agents/register",
             json={
@@ -735,6 +737,7 @@ class TestAgentDeletionAPI:
                 "display_name": "Reregistered",
                 "description": "Reactivated agent",
             },
+            headers={"Authorization": f"Bearer {SERVICE_TOKEN}"},
         )
         if response.status_code != 200:
             print(f"Error response: {response.json()}")
