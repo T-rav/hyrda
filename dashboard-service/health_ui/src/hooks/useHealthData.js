@@ -66,9 +66,9 @@ export function useHealthData() {
 
       // Keep previous data if new data is null/undefined/empty
       setData(prev => ({
-        health: (health?.status) ? health : prev.health,
-        metrics: (metrics?.lifetime_stats || metrics?.bot) ? metrics : prev.metrics,
-        ready: (ready?.checks) ? ready : prev.ready,
+        health: (health && Object.keys(health).length > 0) ? health : prev.health,
+        metrics: (metrics && Object.keys(metrics).length > 0) ? metrics : prev.metrics,
+        ready: (ready && Object.keys(ready).length > 0) ? ready : prev.ready,
         loading: false,
         error: null,
         lastUpdate: new Date()
