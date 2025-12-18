@@ -85,7 +85,51 @@ class TestCreateSpan:
         with span:
             pass  # Should not raise
 
-    # REMOVED: test_create_span_sets_attributes_when_available - OTel library compatibility issue
+    def test_create_span_with_attributes_no_double_enter(self):
+        """Test that attributes are passed correctly without double __enter__ call.
+
+        This test verifies the fix for the bug where attributes were being set
+        after calling __enter__(), which caused AttributeError when the calling
+        code tried to enter the context manager again.
+        """
+        span = create_span(
+            "test.operation",
+            attributes={"test.key": "test.value", "test.number": 123},
+        )
+
+        # Should be usable with 'with' statement without AttributeError
+        with span:
+            pass  # Should not raise
+
+    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not installed")
+    def test_create_span_attributes_passed_to_tracer(self):
+        """Test that attributes are correctly passed to tracer when OTel is available."""
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
+
+        # Setup tracing with in-memory exporter
+        exporter = InMemorySpanExporter()
+        provider = TracerProvider()
+        provider.add_span_processor(SimpleSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+
+        # Create span with attributes
+        attributes = {"http.method": "GET", "http.url": "http://example.com"}
+        with create_span("http.request", attributes=attributes):
+            pass
+
+        # Verify span was created with attributes
+        spans = exporter.get_finished_spans()
+        assert len(spans) > 0
+
+        # Verify attributes were set (converted to strings)
+        span_attributes = spans[0].attributes
+        assert span_attributes.get("http.method") == "GET"
+        assert span_attributes.get("http.url") == "http://example.com"
 
 
 class TestRecordException:

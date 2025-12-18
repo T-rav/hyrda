@@ -69,18 +69,13 @@ def create_span(
 
     tracer = trace.get_tracer(__name__)
 
+    # Create span with attributes from the start
+    span_attributes = {k: str(v) for k, v in attributes.items()} if attributes else None
+
     if span_kind is not None:
-        span = tracer.start_as_current_span(name, kind=span_kind)
+        return tracer.start_as_current_span(name, kind=span_kind, attributes=span_attributes)
     else:
-        span = tracer.start_as_current_span(name)
-
-    # Add attributes if provided
-    if attributes:
-        span_obj = span.__enter__()
-        for key, value in attributes.items():
-            span_obj.set_attribute(key, str(value))
-
-    return span
+        return tracer.start_as_current_span(name, attributes=span_attributes)
 
 
 def record_exception(exception: Exception) -> None:

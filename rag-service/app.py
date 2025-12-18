@@ -72,8 +72,27 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")
 
+    # Initialize search clients (Tavily, Perplexity)
+    try:
+        from services.search_clients import initialize_search_clients
+
+        await initialize_search_clients(
+            tavily_api_key=settings.search.tavily_api_key,
+            perplexity_api_key=settings.search.perplexity_api_key,
+        )
+    except Exception as e:
+        logger.warning(f"Search clients initialization failed (tools will be unavailable): {e}")
+
     yield
     logger.info("Shutting down RAG Service...")
+
+    # Cleanup search clients
+    try:
+        from services.search_clients import cleanup_search_clients
+
+        await cleanup_search_clients()
+    except Exception:
+        pass
 
 
 # Create FastAPI app

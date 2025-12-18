@@ -416,3 +416,62 @@ class TestGlobalServiceManagement:
 
         assert service is not None
         assert isinstance(service, LLMService)
+
+
+class TestPromptServiceIntegration:
+    """Test LLM service integration with prompt service."""
+
+    @pytest.mark.asyncio
+    async def test_get_response_uses_prompt_service(self):
+        """Test that get_response fetches system prompt from prompt service."""
+        settings = Settings()
+        service = LLMService(settings)
+
+        # Mock prompt service
+        mock_prompt_service = Mock()
+        mock_prompt_service.get_system_prompt.return_value = "Custom system prompt from Langfuse"
+        service.prompt_service = mock_prompt_service
+
+        # Mock RAG service
+        mock_rag = AsyncMock()
+        mock_rag.generate_response = AsyncMock(return_value="Test response")
+        service.rag_service = mock_rag
+
+        # Call get_response
+        result = await service.get_response(
+            messages=[{"role": "user", "content": "test query"}],
+            user_id="test-user",
+            use_rag=True,
+        )
+
+        # Verify prompt service was called
+        mock_prompt_service.get_system_prompt.assert_called_once_with("test-user")
+
+        # Verify RAG service received the custom system prompt
+        rag_call = mock_rag.generate_response.call_args
+        assert rag_call.kwargs["system_message"] == "Custom system prompt from Langfuse"
+
+    @pytest.mark.asyncio
+    async def test_get_response_uses_default_prompt_when_service_unavailable(self):
+        """Test that get_response uses default prompt when prompt service unavailable."""
+        settings = Settings()
+        service = LLMService(settings)
+
+        # Set prompt service to None
+        service.prompt_service = None
+
+        # Mock RAG service
+        mock_rag = AsyncMock()
+        mock_rag.generate_response = AsyncMock(return_value="Test response")
+        service.rag_service = mock_rag
+
+        # Call get_response
+        result = await service.get_response(
+            messages=[{"role": "user", "content": "test query"}],
+            user_id="test-user",
+            use_rag=True,
+        )
+
+        # Verify RAG service received the default system prompt
+        rag_call = mock_rag.generate_response.call_args
+        assert rag_call.kwargs["system_message"] == "You are a helpful AI assistant."

@@ -118,8 +118,10 @@ class RAGClient:
                 "Content-Type": "application/json",
             }
 
-            # Add HMAC signature headers for authentication
+            # Serialize request body once and use the exact same string for signing and sending
             request_body_str = json.dumps(request_body)
+
+            # Add HMAC signature headers for authentication
             headers = add_signature_headers(
                 headers, self.service_token, request_body_str
             )
@@ -127,7 +129,7 @@ class RAGClient:
             client = await self._get_client()
             response = await client.post(
                 url,
-                json=request_body,
+                content=request_body_str,  # Send the exact string that was signed
                 headers=headers,
             )
 

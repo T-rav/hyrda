@@ -104,10 +104,15 @@ class LLMService:
         start_time = time.time()
 
         try:
-            # Get system prompt with user context injected
-            from handlers.prompt_manager import get_user_system_prompt
+            # Get system prompt from prompt service
+            from services.prompt_service import get_prompt_service
 
-            system_message = get_user_system_prompt(user_id)
+            prompt_service = get_prompt_service()
+            system_message = (
+                prompt_service.get_system_prompt(user_id)
+                if prompt_service
+                else "You are a helpful AI assistant."
+            )
 
             # Use provided current_query or extract from messages
             if current_query:
