@@ -36,6 +36,7 @@ async def test_permission_grant_enables_agent_invocation_end_to_end(
     authenticated_user,
     service_urls,
     test_user_id,
+    research_agent_registered,
 ):
     """
     COMPLETE WORKFLOW TEST
@@ -213,6 +214,7 @@ async def test_user_inherits_permissions_from_group_membership(
     service_urls,
     test_user_id,
     test_group_data,
+    research_agent_registered,
 ):
     """
     COMPLETE WORKFLOW TEST

@@ -176,6 +176,54 @@ async def authenticated_user(
 
 
 @pytest.fixture
+async def research_agent_registered(
+    http_client: httpx.AsyncClient, service_urls: dict[str, str]
+) -> bool:
+    """
+    Register the 'research' agent in control plane for RBAC tests.
+
+    Uses service token authentication to register agent.
+    This is required for permission testing since the agent needs to exist
+    in the control plane registry.
+    """
+    service_token = os.getenv(
+        "SERVICE_TOKEN",
+        "172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128",
+    )
+
+    register_url = f"{service_urls['control_plane']}/api/agents/register"
+    agent_data = {
+        "name": "research",
+        "description": "Research agent for testing RBAC workflows",
+        "version": "1.0.0",
+        "capabilities": ["query", "research", "analysis"],
+        "required_permissions": [],
+        "endpoint": f"{service_urls['agent_service']}/agents/research/invoke",
+    }
+
+    try:
+        response = await http_client.post(
+            register_url,
+            json=agent_data,
+            headers={"Authorization": f"Bearer {service_token}"},
+            timeout=10.0,
+        )
+
+        # 200 (updated) or 201 (created) are both success
+        if response.status_code in [200, 201]:
+            print(f"✅ Registered research agent: {response.status_code}")
+            return True
+        else:
+            print(
+                f"⚠️  Failed to register research agent: {response.status_code} - {response.text[:200]}"
+            )
+            return False
+    except Exception as e:
+        print(f"⚠️  Error registering research agent: {e}")
+        return False
+
+
+@pytest.fixture
 def test_user_id() -> str:
     """Test user ID (matches test@example.com in DB)."""
     return "U123"
