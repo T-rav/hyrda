@@ -119,9 +119,9 @@ class TestAuthAPI:
     """Test authentication API endpoints."""
 
     def test_logout_endpoint(self):
-        """Test GET /auth/logout endpoint."""
+        """Test POST /auth/logout endpoint."""
         client = TestClient(app)
-        response = client.get("/auth/logout")
+        response = client.post("/auth/logout")
         # Should redirect or return success
         assert response.status_code in [200, 302, 303, 307]
 

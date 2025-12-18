@@ -62,6 +62,7 @@ function App() {
   } = usePermissions(toast, fetchAgentDetails, fetchAgents)
 
   // Check authentication on mount to prevent back-button access after logout
+  // Note: This is NOT aggressive - skips auth paths and let server-side auth handle it
   useEffect(() => {
     const verifyAuth = async () => {
       // Skip auth check if we're on an auth-related path

@@ -96,10 +96,10 @@ class TestLogoutCookieDeletion:
         # Import after mocking
         from api.auth import logout
 
-        # Create mock response to inspect
-        with patch("api.auth.JSONResponse") as mock_json_response:
-            mock_response = MagicMock(spec=JSONResponse)
-            mock_json_response.return_value = mock_response
+        # Create mock response to inspect (logout returns RedirectResponse, not JSONResponse)
+        with patch("api.auth.RedirectResponse") as mock_redirect_response:
+            mock_response = MagicMock()
+            mock_redirect_response.return_value = mock_response
 
             # Call logout (it's async, so we need to handle that)
             import asyncio
