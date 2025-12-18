@@ -64,11 +64,11 @@ export function useHealthData() {
         readyRes.json()
       ])
 
-      // Keep previous data if new data is null/undefined/empty
+      // Always keep previous data and only update with valid new data
       setData(prev => ({
-        health: (health && Object.keys(health).length > 0) ? health : prev.health,
-        metrics: (metrics && Object.keys(metrics).length > 0) ? metrics : prev.metrics,
-        ready: (ready && Object.keys(ready).length > 0) ? ready : prev.ready,
+        health: (health && Object.keys(health).length > 0) ? health : (prev.health || health),
+        metrics: (metrics && Object.keys(metrics).length > 0) ? metrics : (prev.metrics || metrics),
+        ready: (ready && Object.keys(ready).length > 0) ? ready : (prev.ready || ready),
         loading: false,
         error: null,
         lastUpdate: new Date()
