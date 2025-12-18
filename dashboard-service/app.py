@@ -72,6 +72,15 @@ SERVICES = {
     "control_plane": "https://control_plane:6001",
 }
 
+# Service display names
+SERVICE_DISPLAY_NAMES = {
+    "bot": "Slack",
+    "agent_service": "Agents",
+    "rag_service": "RAG",
+    "tasks": "Tasks",
+    "control_plane": "Security",
+}
+
 
 # Authentication routes
 @app.get("/auth/callback")
@@ -257,29 +266,40 @@ async def get_services_health():
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
+                        # Filter bot service details to only show essential fields
+                        if service_name == "bot":
+                            data = {}  # Remove verbose details for bot
                         services[service_name] = {
-                            "name": service_name.replace("_", " ").title(),
+                            "name": SERVICE_DISPLAY_NAMES.get(
+                                service_name, service_name.replace("_", " ").title()
+                            ),
                             "status": "healthy",
                             "url": base_url,
                             "details": data,
                         }
                     else:
                         services[service_name] = {
-                            "name": service_name.replace("_", " ").title(),
+                            "name": SERVICE_DISPLAY_NAMES.get(
+                                service_name, service_name.replace("_", " ").title()
+                            ),
                             "status": "unhealthy",
                             "url": base_url,
                             "details": {"error": f"HTTP {response.status}"},
                         }
             except aiohttp.ClientConnectorError:
                 services[service_name] = {
-                    "name": service_name.replace("_", " ").title(),
+                    "name": SERVICE_DISPLAY_NAMES.get(
+                        service_name, service_name.replace("_", " ").title()
+                    ),
                     "status": "unavailable",
                     "url": base_url,
                     "details": {"error": "Service not reachable"},
                 }
             except Exception as e:
                 services[service_name] = {
-                    "name": service_name.replace("_", " ").title(),
+                    "name": SERVICE_DISPLAY_NAMES.get(
+                        service_name, service_name.replace("_", " ").title()
+                    ),
                     "status": "error",
                     "url": base_url,
                     "details": {"error": str(e)},
