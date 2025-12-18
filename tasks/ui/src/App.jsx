@@ -30,9 +30,10 @@ function App() {
           credentials: 'include'
         })
         if (!response.ok) {
-          // Not authenticated - redirect to control plane login
+          // Not authenticated - redirect to control plane login with return URL
           console.log('Not authenticated, redirecting to login')
-          window.location.href = 'http://localhost:6001/auth/login'
+          const returnUrl = encodeURIComponent(window.location.href)
+          window.location.href = `http://localhost:6001/auth/login?redirect=${returnUrl}`
           return
         }
         // Authenticated - set current user
@@ -40,7 +41,8 @@ function App() {
         setCurrentUser(data)
       } catch (error) {
         console.error('Auth check failed:', error)
-        window.location.href = 'http://localhost:6001/auth/login'
+        const returnUrl = encodeURIComponent(window.location.href)
+        window.location.href = `http://localhost:6001/auth/login?redirect=${returnUrl}`
       }
     }
 
