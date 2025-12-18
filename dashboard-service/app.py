@@ -67,6 +67,7 @@ app.add_middleware(
 SERVICES = {
     "bot": "http://bot:8080",
     "agent_service": "http://agent_service:8000",
+    "rag_service": "http://rag_service:8002",
     "tasks": "http://tasks:8081",
     "control_plane": "https://control_plane:6001",
 }
