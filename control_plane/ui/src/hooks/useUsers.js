@@ -14,7 +14,7 @@ export function useUsers(toast) {
       setUsers(data.users || [])
 
       // Get current user email from session
-      const meResponse = await fetch('/api/me')
+      const meResponse = await fetch('/api/users/me')
       if (meResponse.ok) {
         const meData = await meResponse.json()
         setCurrentUserEmail(meData.email)
