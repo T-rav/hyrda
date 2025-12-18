@@ -74,7 +74,7 @@ function App() {
                 <StatusCard
                   title="Application"
                   status={health?.status || 'unknown'}
-                  details="Health API Server"
+                  details={`Version ${health?.version || '1.0.0'}`}
                   icon={<Activity size={20} />}
                 />
                 <StatusCard

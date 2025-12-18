@@ -51,12 +51,11 @@ export function getServiceDetails(service, serviceData, metricsData) {
 }
 
 export function shouldShowAsMetric(service, serviceData) {
-  if (!serviceData) return false
-
+  // Always show cache and metrics as metrics to prevent flickering
   switch (service) {
     case 'cache':
     case 'metrics':
-      return serviceData.status === 'healthy'
+      return true
     default:
       return false
   }
