@@ -64,10 +64,11 @@ async def lifespan(app: FastAPI):
     # Initialize vector store
     if settings.vector.enabled:
         try:
-            from services.vector_service import create_vector_store
+            from services.vector_service import create_vector_store, set_vector_store
 
             vector_store = create_vector_store(settings.vector)
             await vector_store.initialize()
+            set_vector_store(vector_store)  # Store as global singleton
             logger.info("✅ Vector store initialized")
         except Exception as e:
             logger.error(f"Failed to initialize vector store: {e}")

@@ -23,7 +23,7 @@ from services.langfuse_service import get_langfuse_service, observe
 from providers.llm_providers import create_llm_provider
 from services.retrieval_service import RetrievalService
 from services.search_clients import get_perplexity_client, get_tavily_client
-from services.vector_service import create_vector_store
+from services.vector_service import get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ class RAGService:
         self.settings = settings
 
         # Initialize core components
-        self.vector_store = create_vector_store(settings.vector)
+        # Use global vector store singleton (initialized in app.py)
+        self.vector_store = get_vector_store()
         self.embedding_provider = create_embedding_provider(settings.embedding, settings.llm)
         self.llm_provider = create_llm_provider(settings.llm)
 

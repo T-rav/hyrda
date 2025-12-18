@@ -325,7 +325,7 @@ class _InternalDeepResearchServiceSingleton:
             from providers.embedding.factory import create_embedding_provider
             from services.llm_service import LLMService
             from services.retrieval_service import RetrievalService
-            from services.vector_service import create_vector_store
+            from services.vector_service import get_vector_store
 
             settings = Settings()
 
@@ -334,8 +334,8 @@ class _InternalDeepResearchServiceSingleton:
                 logger.info("Vector storage disabled - internal deep research unavailable")
                 return None
 
-            # Get required services
-            vector_service = create_vector_store(settings.vector)
+            # Get required services (use global vector store singleton)
+            vector_service = get_vector_store()
             embedding_service = create_embedding_provider(settings.embedding)
             llm_service = LLMService(settings)
             retrieval_service = RetrievalService(settings)
