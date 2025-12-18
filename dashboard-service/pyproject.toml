@@ -62,7 +62,7 @@ exclude = [
 [tool.setuptools]
 
 [tool.setuptools.dynamic]
-version = {file = "../.version"}
+version = {file = ".version"}
 
 [tool.ruff]
 target-version = "py311"

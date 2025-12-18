@@ -112,7 +112,7 @@ slack-bot = "app:main"
 packages = ["config", "handlers", "services", "utils", "tests"]
 
 [tool.setuptools.dynamic]
-version = {file = "../.version"}
+version = {file = ".version"}
 
 # Ruff configuration
 [tool.ruff]

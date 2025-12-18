@@ -39,6 +39,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
+    - name: Copy .version to service directories
+      run: |
+        cp .version bot/.version
+        cp .version tasks/.version
+        cp .version control_plane/.version
+        cp .version agent-service/.version
+        cp .version rag-service/.version
+        cp .version dashboard-service/.version
+
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip

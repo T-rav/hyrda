@@ -111,7 +111,7 @@ agent-service = "app:main"
 packages = ["agents", "api", "config", "services", "models", "utils"]
 
 [tool.setuptools.dynamic]
-version = {file = "../.version"}
+version = {file = ".version"}
 
 # Ruff configuration
 [tool.ruff]

@@ -109,7 +109,7 @@ tasks-server = "app:main"
 packages = ["config", "jobs", "services", "models", "tests"]
 
 [tool.setuptools.dynamic]
-version = {file = "../.version"}
+version = {file = ".version"}
 
 # Ruff configuration
 [tool.ruff]
