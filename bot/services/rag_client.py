@@ -1,10 +1,16 @@
 """HTTP client for calling rag-service (chat completion proxy)."""
 
+import json
 import logging
 import os
+import sys
 from typing import Any
 
 import httpx
+
+# Add shared directory to path for request signing utilities
+sys.path.insert(0, "/app")
+from shared.utils.request_signing import add_signature_headers
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +117,12 @@ class RAGClient:
                 "X-Service-Token": self.service_token,
                 "Content-Type": "application/json",
             }
+
+            # Add HMAC signature headers for authentication
+            request_body_str = json.dumps(request_body)
+            headers = add_signature_headers(
+                headers, self.service_token, request_body_str
+            )
 
             client = await self._get_client()
             response = await client.post(
