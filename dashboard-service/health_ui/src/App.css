@@ -55,20 +55,16 @@
 }
 
 .status-badge {
-  padding: 0.5rem 1rem;
-  border-radius: 20px;
   font-weight: 500;
   font-size: 0.875rem;
 }
 
 .status-badge.healthy {
-  background: #d4edda;
-  color: #155724;
+  color: #10b981;
 }
 
 .status-badge.unhealthy {
-  background: #f8d7da;
-  color: #721c24;
+  color: #ef4444;
 }
 
 .last-update {
@@ -195,21 +191,15 @@
 }
 
 .status-badge.error {
-  background: #fee2e2;
-  color: #dc2626;
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  color: #ef4444;
 }
 
 .status-badge.unknown {
-  background: #f3f4f6;
   color: #6b7280;
-  padding: 0.25rem 0.5rem;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
+}
+
+.status-badge.disabled {
+  color: #f59e0b;
 }
 
 .loading-text, .error-text {
