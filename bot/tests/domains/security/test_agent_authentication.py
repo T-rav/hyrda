@@ -30,7 +30,7 @@ async def test_agent_invoke_without_auth_returns_401(http_client, service_urls):
     When: POST /api/agents/{agent_name}/invoke
     Then: MUST return 401 (or test FAILS)
     """
-    invoke_url = f"{service_urls['agent_service']}/api/agents/research/invoke"
+    invoke_url = f"{service_urls['agent_service']}/api/agents/help/invoke"
     payload = {"query": "test query"}
 
     response = await http_client.post(invoke_url, json=payload)
@@ -59,7 +59,7 @@ async def test_agent_stream_without_auth_returns_401(http_client, service_urls):
     When: POST /api/agents/{agent_name}/stream
     Then: MUST return 401 (or test FAILS)
     """
-    stream_url = f"{service_urls['agent_service']}/api/agents/research/stream"
+    stream_url = f"{service_urls['agent_service']}/api/agents/help/stream"
     payload = {"query": "test query"}
 
     response = await http_client.post(stream_url, json=payload)
@@ -222,7 +222,7 @@ async def test_agent_invoke_with_invalid_service_token_fails(http_client, servic
     When: POST /api/agents/{agent_name}/invoke
     Then: MUST return 401 (or test FAILS)
     """
-    invoke_url = f"{service_urls['agent_service']}/api/agents/research/invoke"
+    invoke_url = f"{service_urls['agent_service']}/api/agents/help/invoke"
     payload = {"query": "test query"}
     headers = {"X-Service-Token": "invalid-token-12345"}
 
