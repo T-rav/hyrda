@@ -83,11 +83,12 @@ function App() {
                   details={`${ready?.checks?.llm_api?.provider || 'Unknown'} - ${ready?.checks?.llm_api?.model || 'Unknown'}`}
                   icon={<Zap size={20} />}
                 />
-                <MetricsCard
-                  title="System Uptime"
-                  value={uptimeFormatted}
-                  label={`Last updated: ${lastUpdate?.toLocaleTimeString() || 'Never'}`}
-                  icon={<Clock size={20} />}
+                <ServiceCard
+                  service="langfuse"
+                  title="Langfuse"
+                  icon={<Activity size={20} />}
+                  serviceData={ready?.checks?.langfuse}
+                  metricsData={metrics}
                 />
               </div>
               <div className="cards-row" style={{ marginTop: '1rem' }}>
@@ -98,12 +99,11 @@ function App() {
                   serviceData={ready?.checks?.cache}
                   metricsData={metrics}
                 />
-                <ServiceCard
-                  service="langfuse"
-                  title="Langfuse"
-                  icon={<Activity size={20} />}
-                  serviceData={ready?.checks?.langfuse}
-                  metricsData={metrics}
+                <MetricsCard
+                  title="System Uptime"
+                  value={uptimeFormatted}
+                  label={`Last updated: ${lastUpdate?.toLocaleTimeString() || 'Never'}`}
+                  icon={<Clock size={20} />}
                 />
               </div>
             </div>
