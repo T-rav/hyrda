@@ -35,6 +35,10 @@ RUN mkdir -p /app/logs && \
 COPY --chown=appuser:appuser ./shared /app/shared
 
 # Copy application code (needed for pyproject.toml to work)
+# Copy version file from project root
+COPY --chown=appuser:appuser .version /app/.version
+
+
 COPY --chown=appuser:appuser ./bot /app
 
 # Verify Python version and upgrade pip
