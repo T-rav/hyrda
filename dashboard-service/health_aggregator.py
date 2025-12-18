@@ -685,9 +685,11 @@ class HealthChecker:
 
         # Control Plane Health
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(
+                connector=aiohttp.TCPConnector(ssl=False)
+            ) as session:
                 async with session.get(
-                    "http://control_plane:6001/health", timeout=5
+                    "https://control_plane:6001/health", timeout=5
                 ) as resp:
                     if resp.status == 200:
                         services["control_plane"] = {
