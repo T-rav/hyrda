@@ -199,10 +199,10 @@ async def research_agent_registered(
     agent_data = {
         "name": "research",
         "description": "Research agent for testing RBAC workflows",
-        "version": "1.0.0",
-        "capabilities": ["query", "research", "analysis"],
-        "required_permissions": [],
-        "endpoint": f"{service_urls['agent_service']}/agents/research/invoke",
+        "display_name": "Research Agent",
+        "endpoint_url": f"{service_urls['agent_service']}/agents/research/invoke",
+        "is_system": False,
+        "aliases": [],
     }
 
     response = await http_client.post(
