@@ -383,11 +383,6 @@ function InfrastructureServices({ ready, metrics }) {
                 </span>
               </div>
             </div>
-            {service.details && (
-              <div className="service-details">
-                {renderServiceDetails(service.details)}
-              </div>
-            )}
           </div>
         ))}
       </div>
