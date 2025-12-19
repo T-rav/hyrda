@@ -43,19 +43,34 @@ class TestAddOtelHeaders:
         from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider
 
-        # Create a tracer provider and set it globally
-        provider = TracerProvider()
-        trace.set_tracer_provider(provider)
+        # Save original provider to restore after test
+        original_provider = trace.get_tracer_provider()
 
-        tracer = trace.get_tracer(__name__)
+        try:
+            # Create a tracer provider and set it globally
+            provider = TracerProvider()
+            trace.set_tracer_provider(provider)
 
-        # Start a span to create active trace context
-        with tracer.start_as_current_span("test"):
-            headers = {"X-Custom": "value"}
-            result = add_otel_headers(headers)
+            tracer = trace.get_tracer(__name__)
 
-            # Should have traceparent header injected
-            assert "traceparent" in result or "X-Custom" in result
+            # Start a span to create active trace context
+            with tracer.start_as_current_span("test"):
+                headers = {"X-Custom": "value"}
+                result = add_otel_headers(headers)
+
+                # Should have traceparent header injected
+                assert "traceparent" in result or "X-Custom" in result
+        finally:
+            # Shut down the provider to clean up resources
+            try:
+                provider = trace.get_tracer_provider()
+                if hasattr(provider, "shutdown"):
+                    provider.shutdown()
+            except Exception:
+                pass
+
+            # Restore original tracer provider to avoid test pollution
+            trace.set_tracer_provider(original_provider)
 
 
 class TestCreateSpan:

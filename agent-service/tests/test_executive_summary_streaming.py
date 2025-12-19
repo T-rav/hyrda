@@ -58,6 +58,26 @@ def ensure_external_agents_path():
         sys.path.insert(0, _PROJECT_ROOT)
 
 
+@pytest.fixture(autouse=True, scope="module")
+def cleanup_external_agents_imports():
+    """Clean up external_agents imports from sys.modules after this test module.
+
+    This prevents pollution of subsequent tests that also use external_agents,
+    particularly test_external_agent_loader.py which creates its own temporary
+    external_agents directories.
+    """
+    yield
+
+    # After all tests in this module complete, clean up sys.modules
+    # This ensures test_external_agent_loader.py starts with a clean slate
+    keys_to_remove = [
+        key for key in list(sys.modules.keys())
+        if key.startswith("external_agents")
+    ]
+    for key in keys_to_remove:
+        del sys.modules[key]
+
+
 @pytest.mark.asyncio
 async def test_agent_client_prioritizes_executive_summary():
     """Test that agent_client yields executive_summary instead of full report."""
