@@ -39,12 +39,13 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
     """
     try:
         # MinIO configuration
-        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")  # Internal endpoint for boto3
+        s3_public_url = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")  # Public endpoint for presigned URLs
         s3_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         s3_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
         bucket_name = os.getenv("REPORTS_BUCKET", "profile-reports")
 
-        # Create S3 client
+        # Create S3 client (uses internal endpoint for API calls)
         s3_client = boto3.client(
             "s3",
             endpoint_url=s3_endpoint,
@@ -78,6 +79,12 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
             Params={"Bucket": bucket_name, "Key": filename},
             ExpiresIn=2592000,  # 30 days
         )
+
+        # Replace internal endpoint with public URL for external access
+        # This allows the presigned URL to work from outside Docker network
+        if s3_endpoint in url:
+            url = url.replace(s3_endpoint, s3_public_url)
+            logger.info(f"Converted presigned URL from {s3_endpoint} to {s3_public_url}")
 
         logger.info(f"Uploaded report to S3: {filename} ({len(report_content)} chars)")
         return url

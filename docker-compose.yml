@@ -385,6 +385,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-anthropic-key}
       - LLM_API_KEY=${LLM_API_KEY:-test-llm-key}
       - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}  # Public URL for presigned links
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - REPORTS_BUCKET=profile-reports
