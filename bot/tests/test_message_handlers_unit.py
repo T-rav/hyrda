@@ -348,3 +348,195 @@ class TestErrorHandling:
         assert len(calls) > 0, "Expected at least one call to send_message"
         fallback_call = calls[-1]  # Last call should be fallback
         assert "couldn't generate a response" in fallback_call[1]["text"]
+
+
+class TestContentInjection:
+    """Unit tests for content injection from URLs"""
+
+    @pytest.mark.asyncio
+    async def test_inject_content_flag_triggers_fetch(self, mock_rag_dependencies):
+        """Test that inject_content flag triggers URL fetch and content injection"""
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        mock_slack = AsyncMock()
+        mock_slack.get_thread_history = AsyncMock(return_value=([], True))
+        mock_slack.send_thinking_indicator = AsyncMock(return_value="ts123")
+        mock_slack.delete_thinking_indicator = AsyncMock()
+        mock_slack.send_message = AsyncMock(return_value={"ts": "msg123"})
+        mock_slack.update_message = AsyncMock()
+
+        # Mock RAG client to return streaming response with inject_content flag
+        mock_rag = AsyncMock()
+
+        async def mock_generate_response_stream(*args, **kwargs):
+            # Yield agent response with inject_content flag
+            yield (
+                json.dumps(
+                    {
+                        "type": "content",
+                        "content": "Executive Summary",
+                        "report_url": "http://minio:9000/report.md",
+                        "inject_content": True,
+                        "full_report": "Full report content",
+                    }
+                )
+                + "\n"
+            )
+
+        mock_rag.generate_response_stream = mock_generate_response_stream
+
+        # Mock httpx to return full report content
+        mock_response = AsyncMock()
+        mock_response.status_code = 200
+        mock_response.text = "# Full Report\n\nDetailed content here..."
+
+        with (
+            patch("handlers.message_handlers.get_rag_client", return_value=mock_rag),
+            patch("httpx.AsyncClient") as mock_httpx_class,
+            patch(
+                "handlers.message_handlers.MessageFormatter.format_message",
+                side_effect=lambda x: x,
+            ),
+        ):
+            mock_httpx_instance = AsyncMock()
+            mock_httpx_instance.get = AsyncMock(return_value=mock_response)
+            mock_httpx_instance.__aenter__ = AsyncMock(return_value=mock_httpx_instance)
+            mock_httpx_instance.__aexit__ = AsyncMock(return_value=None)
+            mock_httpx_class.return_value = mock_httpx_instance
+
+            await handle_message(
+                text="/profile test company",
+                user_id="U123",
+                slack_service=mock_slack,
+                channel="C123",
+                thread_ts="1234.5678",
+            )
+
+            # Verify httpx was called to fetch content
+            mock_httpx_instance.get.assert_called_once_with(
+                "http://minio:9000/report.md", timeout=30.0
+            )
+
+            # Verify full report was sent to Slack (not just executive summary)
+            calls = list(mock_slack.send_message.call_args_list)
+            final_message_call = calls[-1] if calls else None
+            assert final_message_call is not None
+            sent_text = final_message_call[1]["text"]
+            assert "Full Report" in sent_text or "Detailed content" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_inject_content_false_uses_summary(self, mock_rag_dependencies):
+        """Test that inject_content=false uses executive summary instead"""
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        mock_slack = AsyncMock()
+        mock_slack.get_thread_history = AsyncMock(return_value=([], True))
+        mock_slack.send_thinking_indicator = AsyncMock(return_value="ts123")
+        mock_slack.delete_thinking_indicator = AsyncMock()
+        mock_slack.send_message = AsyncMock(return_value={"ts": "msg123"})
+        mock_slack.update_message = AsyncMock()
+
+        # Mock RAG client - inject_content=false
+        mock_rag = AsyncMock()
+
+        async def mock_generate_response_stream(*args, **kwargs):
+            yield (
+                json.dumps(
+                    {
+                        "type": "content",
+                        "content": "📊 Executive Summary Only",
+                        "report_url": "http://minio:9000/report.md",
+                        "inject_content": False,  # Don't inject
+                        "full_report": "Full report content",
+                    }
+                )
+                + "\n"
+            )
+
+        mock_rag.generate_response_stream = mock_generate_response_stream
+
+        with (
+            patch("handlers.message_handlers.get_rag_client", return_value=mock_rag),
+            patch(
+                "handlers.message_handlers.MessageFormatter.format_message",
+                side_effect=lambda x: x,
+            ),
+        ):
+            await handle_message(
+                text="/profile test company",
+                user_id="U123",
+                slack_service=mock_slack,
+                channel="C123",
+                thread_ts="1234.5678",
+            )
+
+            # Verify executive summary was sent (not full report)
+            calls = list(mock_slack.send_message.call_args_list)
+            final_message_call = calls[-1] if calls else None
+            assert final_message_call is not None
+            sent_text = final_message_call[1]["text"]
+            assert "Executive Summary Only" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_inject_content_fetch_failure_falls_back(self, mock_rag_dependencies):
+        """Test that fetch failure falls back to executive summary"""
+        import json
+        from unittest.mock import AsyncMock, patch
+
+        mock_slack = AsyncMock()
+        mock_slack.get_thread_history = AsyncMock(return_value=([], True))
+        mock_slack.send_thinking_indicator = AsyncMock(return_value="ts123")
+        mock_slack.delete_thinking_indicator = AsyncMock()
+        mock_slack.send_message = AsyncMock(return_value={"ts": "msg123"})
+        mock_slack.update_message = AsyncMock()
+
+        # Mock RAG client
+        mock_rag = AsyncMock()
+
+        async def mock_generate_response_stream(*args, **kwargs):
+            yield (
+                json.dumps(
+                    {
+                        "type": "content",
+                        "content": "Executive Summary (Fallback)",
+                        "report_url": "http://minio:9000/report.md",
+                        "inject_content": True,
+                        "full_report": "Full report",
+                    }
+                )
+                + "\n"
+            )
+
+        mock_rag.generate_response_stream = mock_generate_response_stream
+
+        # Mock httpx to raise exception
+        with (
+            patch("handlers.message_handlers.get_rag_client", return_value=mock_rag),
+            patch("httpx.AsyncClient") as mock_httpx_class,
+            patch(
+                "handlers.message_handlers.MessageFormatter.format_message",
+                side_effect=lambda x: x,
+            ),
+        ):
+            mock_httpx_instance = AsyncMock()
+            mock_httpx_instance.get = AsyncMock(side_effect=Exception("Network error"))
+            mock_httpx_instance.__aenter__ = AsyncMock(return_value=mock_httpx_instance)
+            mock_httpx_instance.__aexit__ = AsyncMock(return_value=None)
+            mock_httpx_class.return_value = mock_httpx_instance
+
+            await handle_message(
+                text="/profile test company",
+                user_id="U123",
+                slack_service=mock_slack,
+                channel="C123",
+                thread_ts="1234.5678",
+            )
+
+            # Verify fallback to executive summary when fetch fails
+            calls = list(mock_slack.send_message.call_args_list)
+            final_message_call = calls[-1] if calls else None
+            assert final_message_call is not None
+            sent_text = final_message_call[1]["text"]
+            assert "Executive Summary (Fallback)" in sent_text
