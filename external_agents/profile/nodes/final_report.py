@@ -319,7 +319,8 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
 
                 # Add footer encouraging follow-up questions
                 executive_summary += (
-                    "\n\n---\n\n"
+                    "\n\n\n"
+                    "---\n\n"
                     "_💬 Ask me follow-up questions about this profile in this thread!_\n"
                     "_Or start your message with `profile [company name]` to profile another company._"
                 )
@@ -330,7 +331,7 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 executive_summary = (
                     "📊 *Executive Summary*\n\n"
                     "• Full detailed report attached as PDF\n\n"
-                    "📎 _Unable to generate summary - see full report_\n\n"
+                    "📎 _Unable to generate summary - see full report_\n\n\n"
                     "---\n\n"
                     "_💬 Ask me follow-up questions about this profile in this thread!_\n"
                     "_Or start your message with `profile [company name]` to profile another company._"
@@ -345,7 +346,7 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
 
             if report_url:
                 # Add link to executive summary
-                executive_summary += f"\n\n📄 [View Full Report]({report_url})"
+                executive_summary += f"\n\n\n📄 [View Full Report]({report_url})"
 
             return {
                 "final_report": final_report,  # Still keep for fallback
@@ -376,7 +377,7 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
 
     fallback_summary = "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_"
     if report_url:
-        fallback_summary += f"\n\n📄 [View Full Report]({report_url})"
+        fallback_summary += f"\n\n\n📄 [View Full Report]({report_url})"
 
     return {
         "final_report": fallback_report,
