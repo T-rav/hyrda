@@ -381,31 +381,33 @@ async def handle_message(
                         # Final report content
                         final_content = payload.get("content", "")
 
-                        # Check if there's a report URL to fetch and inject
-                        report_url = payload.get("report_url")
-                        if report_url:
+                        # Check if content should be fetched and injected from URL
+                        inject_content = payload.get("inject_content", False)
+                        content_url = payload.get("report_url")
+
+                        if inject_content and content_url:
                             logger.info(
-                                f"Report URL detected: {report_url} - fetching content for injection"
+                                f"inject_content flag set - fetching from {content_url}"
                             )
                             try:
                                 import httpx
 
                                 async with httpx.AsyncClient() as client:
                                     response = await client.get(
-                                        report_url, timeout=30.0
+                                        content_url, timeout=30.0
                                     )
                                     if response.status_code == 200:
                                         final_content = response.text
                                         logger.info(
-                                            f"Successfully fetched report from URL ({len(final_content)} chars)"
+                                            f"Successfully fetched and injected content ({len(final_content)} chars)"
                                         )
                                     else:
                                         logger.warning(
-                                            f"Failed to fetch report: HTTP {response.status_code}"
+                                            f"Failed to fetch content: HTTP {response.status_code}"
                                         )
                             except Exception as e:
-                                logger.error(f"Error fetching report from URL: {e}")
-                                # Keep using executive summary if fetch fails
+                                logger.error(f"Error fetching content from URL: {e}")
+                                # Keep using summary/original content if fetch fails
 
                         # Cache full profile report for follow-ups (if available)
                         full_report = payload.get("full_report")
@@ -414,7 +416,7 @@ async def handle_message(
                                 f"Caching profile report for thread {thread_ts}"
                             )
                             await conversation_cache.store_profile_report(
-                                thread_ts, full_report, report_url
+                                thread_ts, full_report, content_url
                             )
                     else:
                         # Step status update

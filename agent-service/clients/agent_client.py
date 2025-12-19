@@ -348,6 +348,8 @@ class AgentClient:
                                                 # Include full report and URL for caching (if available)
                                                 "full_report": result.get("final_report"),
                                                 "report_url": result.get("report_url"),
+                                                # Flag to tell Slack bot to fetch and inject content from URL
+                                                "inject_content": bool(result.get("report_url")),
                                             }
                                             yield json.dumps(content_status) + "\n"
                                             logger.info(f"Yielded final {key} (with metadata)")
