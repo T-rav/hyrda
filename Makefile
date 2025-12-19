@@ -503,7 +503,10 @@ pre-commit:
 
 security: $(VENV)
 	@echo "$(BLUE)Running security scan with bandit...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json || $(PYTHON) -m bandit -r . -f txt
+	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json \
+		--exclude ./venv,./build,./dist,./.pytest_cache,./.tox,./htmlcov,./__pycache__ \
+		|| $(PYTHON) -m bandit -r . -f txt \
+		--exclude ./venv,./build,./dist,./.pytest_cache,./.tox,./htmlcov,./__pycache__
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"
