@@ -95,10 +95,12 @@ class TestChatCompletionsEndpoint:
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert "Research results here" in data["response"]
-        assert data["metadata"]["agent_used"] == "research"
-        assert data["metadata"]["routed_to_agent"] is True
+        # Agent routing returns a streaming response (SSE format)
+        # Check the response is text/event-stream
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+        # Read the streaming response content
+        content = response.text
+        assert "Research results here" in content
 
     def test_missing_required_fields(self, client, signed_headers):
         """Test request with missing required fields."""
