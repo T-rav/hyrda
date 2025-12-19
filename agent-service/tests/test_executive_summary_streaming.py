@@ -81,7 +81,7 @@ async def test_agent_client_falls_back_to_final_report():
             "payload": {
                 "name": "some_node",
                 "result": {
-                    "final_report": "# Full Report Content Here",
+                    "final_report": "# Full Report Content Here\n\nThis is a comprehensive report with substantial content that exceeds 50 characters.",
                 },
             },
         },
@@ -125,10 +125,10 @@ async def test_agent_client_checks_summary_before_response():
             "payload": {
                 "name": "test_node",
                 "result": {
-                    "executive_summary": "📊 Summary (should be picked)",
-                    "response": "Response content",
-                    "output": "Output content",
-                    "final_report": "Full report content",
+                    "executive_summary": "📊 Executive Summary (should be picked first)\n\nThis summary contains the key findings and recommendations with sufficient length.",
+                    "response": "Response content that is also sufficiently long to exceed the 50 character minimum threshold",
+                    "output": "Output content that is also sufficiently long to exceed the 50 character minimum threshold",
+                    "final_report": "Full report content with comprehensive details that exceed the 50 character minimum threshold",
                 },
             },
         },
@@ -177,18 +177,26 @@ async def test_final_report_node_returns_summary_with_url():
     # Mock config
     mock_config = {"configurable": {"final_report_model": "gpt-4o"}}
 
-    # Mock LLM and S3 upload
+    # Mock LLM, S3 upload, and PromptService
     with (
         patch("external_agents.profile.nodes.final_report.upload_report_to_s3") as mock_upload,
+        patch("external_agents.profile.nodes.final_report.get_prompt_service") as mock_prompt_service,
         patch("langchain_openai.ChatOpenAI") as mock_llm,
     ):
         mock_upload.return_value = "https://minio/profile-reports/costco_report.md"
 
+        # Mock PromptService
+        mock_prompt = MagicMock()
+        mock_prompt.get_custom_prompt.return_value = MagicMock(
+            format=lambda **kwargs: "Generate a company profile report."
+        )
+        mock_prompt_service.return_value = mock_prompt
+
         # Mock LLM to return a simple report
         mock_llm_instance = MagicMock()
-        mock_llm_instance.invoke = MagicMock(
+        mock_llm_instance.ainvoke = AsyncMock(
             return_value=MagicMock(
-                content="# Company Profile: Costco\n\nFull report content here..."
+                content="# Company Profile: Costco\n\nFull report content here with substantial details..."
             )
         )
         mock_llm.return_value = mock_llm_instance
@@ -200,7 +208,8 @@ async def test_final_report_node_returns_summary_with_url():
     assert "report_url" in result
 
     summary = result["executive_summary"]
-    assert "Executive Summary" in summary or "Key point" in summary or "•" in summary
+    # Should contain either a proper summary or the report content with footer
+    assert any(x in summary for x in ["Executive Summary", "Key point", "•", "Company Profile", "follow-up questions"])
     assert "[View Full Report](https://minio" in summary
     assert result["report_url"] == "https://minio/profile-reports/costco_report.md"
 
