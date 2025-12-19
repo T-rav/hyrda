@@ -215,11 +215,11 @@ class ConversationCache:
                 "stored_at": datetime.now(UTC).isoformat(),
             }
 
-            # Store for 30 days (match other research caches)
+            # Store for 7 days (hot cache, MinIO has 30-day backup)
             await redis_client.setex(
                 profile_key,
-                2592000,
-                json.dumps(report_data),  # 30 days in seconds
+                604800,
+                json.dumps(report_data),  # 7 days in seconds
             )
 
             logger.info(
