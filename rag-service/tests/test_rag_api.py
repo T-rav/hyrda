@@ -69,6 +69,12 @@ class TestChatCompletionsEndpoint:
 
         # Mock agent client
         mock_agent_client = Mock()
+
+        # Mock async generator for stream_agent
+        async def mock_stream():
+            yield '{"response": "Research results here...", "metadata": {"tools_used": ["web_search"], "agent_used": "research", "routed_to_agent": true}}'
+
+        mock_agent_client.stream_agent = Mock(return_value=mock_stream())
         mock_agent_client.invoke_agent = AsyncMock(
             return_value={
                 "response": "Research results here...",
