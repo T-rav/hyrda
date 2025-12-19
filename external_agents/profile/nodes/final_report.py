@@ -72,11 +72,11 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
             ContentType="text/markdown",
         )
 
-        # Generate presigned URL (valid for 7 days)
+        # Generate presigned URL (valid for 30 days)
         url = s3_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket_name, "Key": filename},
-            ExpiresIn=604800,  # 7 days
+            ExpiresIn=2592000,  # 30 days
         )
 
         logger.info(f"Uploaded report to S3: {filename} ({len(report_content)} chars)")

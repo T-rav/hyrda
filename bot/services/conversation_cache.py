@@ -215,11 +215,11 @@ class ConversationCache:
                 "stored_at": datetime.now(UTC).isoformat(),
             }
 
-            # Store for 7 days (match S3 presigned URL expiry)
+            # Store for 30 days (match other research caches)
             await redis_client.setex(
                 profile_key,
-                604800,
-                json.dumps(report_data),  # 7 days in seconds
+                2592000,
+                json.dumps(report_data),  # 30 days in seconds
             )
 
             logger.info(
