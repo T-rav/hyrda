@@ -1,10 +1,12 @@
 import logging
+import os
 import re
 import traceback
 from io import BytesIO
 from typing import Any
 
 from slack_sdk import WebClient
+from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.errors import SlackApiError
 
 from config.settings import SlackSettings

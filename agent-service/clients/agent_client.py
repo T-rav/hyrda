@@ -252,31 +252,131 @@ class AgentClient:
     async def _stream_embedded(
         self, agent: dict, query: str, context: dict
     ) -> AsyncGenerator[str, None]:
-        """Stream embedded agent via SSE or websocket."""
-        # Replace /invoke with /stream in endpoint
-        endpoint = agent["endpoint_url"].replace("/invoke", "/stream")
+        """Stream embedded agent directly (not via HTTP to avoid recursion)."""
+        agent_name = agent["agent_name"]
 
-        payload = {
-            "query": query,
-            "context": context,
-            "user_id": context.get("user_id"),
-        }
+        logger.info(f"Streaming embedded agent '{agent_name}' directly")
 
-        logger.info(f"Streaming embedded agent at {endpoint}")
+        # Import agent registry to get agent instance
+        from services.agent_registry import get_agent
+        import inspect
 
-        async with (
-            get_secure_client(timeout=120.0) as client,
-            client.stream(
-                "POST",
-                endpoint,
-                json=payload,
-                headers={"X-Service-Token": self.service_token},
-            ) as response,
-        ):
-            response.raise_for_status()
-            async for line in response.aiter_lines():
-                if line.strip():
-                    yield line
+        try:
+            # Get agent instance and stream it directly
+            agent_instance = get_agent(agent_name)
+
+            # Check for astream first (LangGraph graphs have both stream and astream)
+            if hasattr(agent_instance, "astream"):
+                # LangGraph graph - stream with debug mode to track node start/end
+                logger.info(f"Streaming LangGraph agent with stream_mode='debug'")
+
+                # Track node execution timing
+                import json
+                import time
+                node_start_times = {}
+
+                async for event in agent_instance.astream(
+                    {"query": query, **context},
+                    stream_mode="debug"  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
+                ):
+                    logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
+
+                    # Debug mode yields events with type, timestamp, and payload
+                    if isinstance(event, dict):
+                        event_type = event.get("type")
+                        payload = event.get("payload", {})
+                        node_name = payload.get("name")
+
+                        # Skip internal nodes
+                        if node_name and node_name.startswith("__"):
+                            continue
+
+                        current_time = time.time()
+                        formatted_name = node_name.replace("_", " ").title() if node_name else ""
+
+                        if event_type == "task" and node_name:
+                            # Node is STARTING
+                            node_start_times[node_name] = current_time
+                            logger.info(f"⏳ Node starting: {node_name}")
+
+                            # Emit started status
+                            status = {
+                                "step": node_name,
+                                "phase": "started",
+                                "message": formatted_name
+                            }
+                            yield json.dumps(status) + "\n"
+
+                        elif event_type == "task_result" and node_name:
+                            # Node COMPLETED
+                            if node_name in node_start_times:
+                                duration = current_time - node_start_times[node_name]
+                            else:
+                                duration = 1.0  # Fallback if we missed the start
+
+                            # Format duration
+                            if duration < 60:
+                                duration_str = f"{duration:.1f}s"
+                            else:
+                                minutes = int(duration // 60)
+                                seconds = int(duration % 60)
+                                duration_str = f"{minutes}m {seconds}s"
+
+                            logger.info(f"✅ Node completed: {node_name} ({duration_str})")
+
+                            # Emit completed status
+                            status = {
+                                "step": node_name,
+                                "phase": "completed",
+                                "message": formatted_name,
+                                "duration": duration_str
+                            }
+                            yield json.dumps(status) + "\n"
+
+                            # Check for final output in the result payload
+                            result = payload.get("result", {})
+                            if isinstance(result, dict):
+                                for key in ["response", "output", "final_report"]:
+                                    if key in result and result[key]:
+                                        final_output = result[key]
+                                        if isinstance(final_output, str) and len(final_output) > 100:
+                                            # Emit final content as JSON
+                                            content_status = {
+                                                "type": "content",
+                                                "content": final_output
+                                            }
+                                            yield json.dumps(content_status) + "\n"
+                                            logger.info(f"Yielded final {key}")
+                                            break
+
+            # Check if agent has a stream method (for non-LangGraph agents)
+            elif hasattr(agent_instance, "stream"):
+                stream_method = agent_instance.stream(query, context)
+
+                # Check if it's an async generator or regular generator
+                if inspect.isasyncgen(stream_method):
+                    # Async generator - use async for
+                    async for chunk in stream_method:
+                        yield chunk
+                elif inspect.isgenerator(stream_method):
+                    # Regular generator - iterate synchronously but yield async
+                    for chunk in stream_method:
+                        yield chunk
+                else:
+                    # Not a generator, just return the result
+                    yield str(stream_method)
+
+            else:
+                # No streaming support, fall back to invoke
+                logger.warning(
+                    f"Agent '{agent_name}' doesn't support streaming, using invoke"
+                )
+                result = await self._invoke_embedded(agent, query, context)
+                yield result.get("response", "")
+
+        except Exception as e:
+            logger.error(f"Error streaming embedded agent '{agent_name}': {e}")
+            raise
 
     async def _stream_cloud(
         self, agent: dict, query: str, context: dict

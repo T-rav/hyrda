@@ -448,6 +448,7 @@ async def stream_agent(
             async for chunk in agent_client.stream(
                 agent_name=primary_name, query=request.query, context=context
             ):
+                logger.info(f"🔥 API received chunk from agent_client: {chunk[:50]}...")
                 yield f"data: {chunk}\n\n"
 
         except ValueError as e:

@@ -44,6 +44,9 @@ class RAGGenerateRequest(BaseModel):
     session_id: str | None = Field(
         None, description="Session ID for conversation cache (e.g., thread_ts)"
     )
+    context: dict[str, Any] | None = Field(
+        None, description="Additional context (channel, thread_ts for Slack updates)"
+    )
 
 
 class RAGGenerateResponse(BaseModel):
@@ -132,19 +135,35 @@ async def generate_response(
                 context["document_content"] = request.document_content
                 context["document_filename"] = request.document_filename
 
-            agent_response = await agent_client.invoke_agent(
-                agent_name=agent_name,
-                query=request.query,
-                context=context,
-            )
+            # Use streaming for agents to provide progress updates
+            logger.info(f"Streaming agent '{agent_name}' for real-time progress updates")
 
-            return RAGGenerateResponse(
-                response=agent_response["response"],
-                citations=[],  # Agents may include citations in response text
-                metadata={
-                    "agent_used": agent_name,
-                    "routed_to_agent": True,
-                    **agent_response.get("metadata", {}),
+            from fastapi.responses import StreamingResponse
+
+            async def stream_agent_with_context():
+                """Stream agent execution with Slack context for progress updates."""
+                # Add Slack context for agent to send updates
+                context["channel"] = request.context.get("channel") if request.context else None
+                context["thread_ts"] = request.context.get("thread_ts") if request.context else None
+
+                logger.info("💥 stream_agent_with_context starting to consume agent_client.stream_agent")
+                async for chunk in agent_client.stream_agent(
+                    agent_name=agent_name,
+                    query=request.query,
+                    context=context,
+                ):
+                    logger.info(f"💥 RAG API received chunk: {chunk[:50]}")
+                    # Wrap in SSE format for bot to consume
+                    yield f"data: {chunk}\n\n"
+                logger.info("💥 stream_agent_with_context finished")
+
+            return StreamingResponse(
+                stream_agent_with_context(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Accel-Buffering": "no",  # Disable nginx buffering
                 },
             )
 

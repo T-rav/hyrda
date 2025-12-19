@@ -287,43 +287,191 @@ async def handle_message(
         # ===================================================================
 
         rag_client = get_rag_client()
-        result = await rag_client.generate_response(
-            query=text,
-            conversation_history=history,
-            system_message=system_message,
-            user_id=user_id,
-            conversation_id=conversation_id,
-            use_rag=use_rag,
-            document_content=document_content,
-            document_filename=document_filename,
-            session_id=thread_ts,
+
+        # Fetch dynamic agent patterns
+        import re
+
+        agent_patterns = await rag_client.fetch_agent_patterns()
+        # Strip Slack formatting (*, _, ~, etc.) before matching
+        text_clean = text.strip().replace("*", "").replace("_", "").replace("~", "")
+        text_lower = text_clean.lower()
+        logger.info(
+            f"🔍 Checking agent patterns: text='{text_lower}', total_patterns={len(agent_patterns)}, sample={agent_patterns[:3]}"
         )
+        is_agent_query = any(
+            re.search(pattern, text_lower) for pattern in agent_patterns
+        )
+        logger.info(f"🔍 Agent query detection: is_agent_query={is_agent_query}")
 
-        response = result.get("response", "")
-        # citations = result.get("citations", [])  # TODO: Format citations for Slack
-        # metadata = result.get("metadata", {})
+        if is_agent_query:
+            # Use streaming for agent queries to show progress
+            logger.info("Detected agent query - using streaming")
 
-        # Clean up thinking message (Slack-specific)
-        if thinking_message_ts:
-            with contextlib.suppress(Exception):
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-            thinking_message_ts = None
+            # Clean up thinking message before streaming
+            if thinking_message_ts:
+                with contextlib.suppress(Exception):
+                    await slack_service.delete_thinking_indicator(
+                        channel, thinking_message_ts
+                    )
+                thinking_message_ts = None
 
-        # Format and send response (Slack-specific)
-        if response:
-            formatted_response = await MessageFormatter.format_message(response)
-            await slack_service.send_message(
-                channel=channel, text=formatted_response, thread_ts=thread_ts
-            )
+            # Stream agent execution with real-time updates
+            import json
+
+            step_status = {}  # Track status of each step
+            final_content = None
+            current_message_ts = None
+            first_update = True
+
+            async for chunk in rag_client.generate_response_stream(
+                query=text,
+                conversation_history=history,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                use_rag=use_rag,
+                channel=channel,
+                thread_ts=thread_ts,
+                document_content=document_content,
+                document_filename=document_filename,
+                session_id=thread_ts,
+            ):
+                logger.info(f"⭐ Message handler received chunk: {repr(chunk[:100])}")
+
+                # Show initial "working" message on first update
+                if first_update and not current_message_ts:
+                    result = await slack_service.send_message(
+                        channel=channel,
+                        text="⏳ Agent working...",
+                        thread_ts=thread_ts,
+                    )
+                    if result:
+                        current_message_ts = result.get("ts")
+                    first_update = False
+
+                # Parse JSON payload
+                try:
+                    payload = json.loads(chunk.strip())
+                    logger.info(f"⭐ Parsed payload: {payload}")
+
+                    if payload.get("type") == "content":
+                        # Final report content
+                        final_content = payload.get("content", "")
+                    else:
+                        # Step status update
+                        step_name = payload.get("step")
+                        if step_name:
+                            step_status[step_name] = payload
+
+                    # Build status message from current state
+                    status_lines = []
+                    for _step_name, status in step_status.items():
+                        phase = status.get("phase")
+                        message = status.get("message")
+                        duration = status.get("duration")
+                        elapsed = status.get("elapsed")
+
+                        if phase == "started":
+                            status_lines.append(f"⏳ {message}...")
+                        elif phase == "running" and elapsed:
+                            status_lines.append(f"🏃 {message}... ({elapsed} elapsed)")
+                        elif phase == "completed" and duration:
+                            status_lines.append(f"✅ {message} ({duration})")
+
+                    # Render current status (or keep working message if no steps yet)
+                    if status_lines:
+                        current_text = "\n".join(status_lines)
+                        if final_content:
+                            current_text += f"\n\n{final_content}"
+                    else:
+                        current_text = "⏳ Agent working..."
+
+                    # Update Slack
+                    logger.info(f"⭐ Updating Slack with {len(step_status)} steps")
+                    formatted = await MessageFormatter.format_message(current_text)
+
+                    if current_message_ts:
+                        # Update existing message
+                        await slack_service.update_message(
+                            channel=channel,
+                            ts=current_message_ts,
+                            text=formatted,
+                        )
+                    else:
+                        # Send initial message
+                        result = await slack_service.send_message(
+                            channel=channel,
+                            text=formatted,
+                            thread_ts=thread_ts,
+                        )
+                        if result:
+                            current_message_ts = result.get("ts")
+
+                except json.JSONDecodeError as e:
+                    logger.warning(
+                        f"⭐ Failed to parse JSON chunk: {e} - chunk: {chunk[:100]}"
+                    )
+                    continue
+
+            # Final update - ensure all steps show as completed
+            if step_status or final_content:
+                # Build final status showing only completed steps
+                status_lines = []
+                for _step_name, status in step_status.items():
+                    if status.get("phase") == "completed":
+                        message = status.get("message")
+                        duration = status.get("duration")
+                        if duration:
+                            status_lines.append(f"✅ {message} ({duration})")
+
+                final_text = "\n".join(status_lines)
+                if final_content:
+                    final_text += f"\n\n{final_content}"
+
+                formatted_final = await MessageFormatter.format_message(final_text)
+
+                if current_message_ts:
+                    await slack_service.update_message(
+                        channel=channel,
+                        ts=current_message_ts,
+                        text=formatted_final,
+                    )
+                else:
+                    await slack_service.send_message(
+                        channel=channel,
+                        text=formatted_final,
+                        thread_ts=thread_ts,
+                    )
+
         else:
-            response = (
-                "I apologize, but I couldn't generate a response. Please try again."
+            # Regular non-agent query
+            result = await rag_client.generate_response(
+                query=text,
+                conversation_history=history,
+                system_message=system_message,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                use_rag=use_rag,
+                document_content=document_content,
+                document_filename=document_filename,
+                session_id=thread_ts,
             )
-            await slack_service.send_message(
-                channel=channel, text=response, thread_ts=thread_ts
-            )
+
+            response = result.get("response", "")
+
+            # Clean up thinking message
+            if thinking_message_ts:
+                with contextlib.suppress(Exception):
+                    await slack_service.delete_thinking_indicator(
+                        channel, thinking_message_ts
+                    )
+                thinking_message_ts = None
+
+            # Send response
+            if response:
+                formatted_response = await MessageFormatter.format_message(response)
+                await slack_service.send_message(
+                    channel=channel, text=formatted_response, thread_ts=thread_ts
+                )
 
         # Trace conversation to Langfuse
         langfuse_service = get_langfuse_service()
