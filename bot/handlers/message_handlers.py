@@ -381,9 +381,34 @@ async def handle_message(
                         # Final report content
                         final_content = payload.get("content", "")
 
+                        # Check if there's a report URL to fetch and inject
+                        report_url = payload.get("report_url")
+                        if report_url:
+                            logger.info(
+                                f"Report URL detected: {report_url} - fetching content for injection"
+                            )
+                            try:
+                                import httpx
+
+                                async with httpx.AsyncClient() as client:
+                                    response = await client.get(
+                                        report_url, timeout=30.0
+                                    )
+                                    if response.status_code == 200:
+                                        final_content = response.text
+                                        logger.info(
+                                            f"Successfully fetched report from URL ({len(final_content)} chars)"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Failed to fetch report: HTTP {response.status_code}"
+                                        )
+                            except Exception as e:
+                                logger.error(f"Error fetching report from URL: {e}")
+                                # Keep using executive summary if fetch fails
+
                         # Cache full profile report for follow-ups (if available)
                         full_report = payload.get("full_report")
-                        report_url = payload.get("report_url")
                         if full_report and conversation_cache and thread_ts:
                             logger.info(
                                 f"Caching profile report for thread {thread_ts}"
