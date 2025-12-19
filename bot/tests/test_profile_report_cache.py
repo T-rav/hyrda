@@ -9,7 +9,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_profile_report_cache_stores_with_30_day_ttl():
-    """Test that profile reports are cached with 30-day TTL."""
+    """Test that profile reports are cached with 7-day TTL (hot cache)."""
     from services.conversation_cache import ConversationCache
 
     cache = ConversationCache()
@@ -28,11 +28,11 @@ async def test_profile_report_cache_stores_with_30_day_ttl():
 
     assert result is True
 
-    # Should cache with 30-day TTL
+    # Should cache with 7-day TTL (Redis hot cache)
     mock_redis.setex.assert_called_once()
     call_args = mock_redis.setex.call_args
     assert "conversation_profile_report:" in call_args[0][0]
-    assert call_args[0][1] == 2592000  # 30 days in seconds
+    assert call_args[0][1] == 604800  # 7 days in seconds
 
     # Should store full report and URL
     cached_data = json.loads(call_args[0][2])

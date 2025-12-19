@@ -507,6 +507,14 @@ async def handle_message(
                 await slack_service.send_message(
                     channel=channel, text=formatted_response, thread_ts=thread_ts
                 )
+            else:
+                # Send fallback message if response is empty
+                fallback_message = (
+                    "I'm sorry, I couldn't generate a response. Please try again."
+                )
+                await slack_service.send_message(
+                    channel=channel, text=fallback_message, thread_ts=thread_ts
+                )
 
         # Trace conversation to Langfuse
         langfuse_service = get_langfuse_service()

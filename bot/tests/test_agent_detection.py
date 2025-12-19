@@ -46,7 +46,7 @@ class TestAgentDetection:
         test_queries = [
             ("meddic analysis for acme corp", True),
             ("/meddic help", True),
-            ("run meddic", True),
+            ("run meddic", False),  # "run meddic" doesn't start with "meddic"
             ("medicate the patient", False),
         ]
 

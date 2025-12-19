@@ -152,6 +152,7 @@ class TestRAGControl:
         mock_slack.send_message = AsyncMock()
         mock_cache.get_thread_type = AsyncMock(return_value="profile")
         mock_cache.get_document_content = AsyncMock(return_value=(None, None))
+        mock_cache.get_profile_report = AsyncMock(return_value=(None, None))
 
         with (
             patch("handlers.message_handlers.get_metrics_service", return_value=None),
@@ -184,6 +185,7 @@ class TestRAGControl:
         mock_slack.send_message = AsyncMock()
         mock_cache.get_thread_type = AsyncMock(return_value=None)
         mock_cache.get_document_content = AsyncMock(return_value=(None, None))
+        mock_cache.get_profile_report = AsyncMock(return_value=(None, None))
 
         with (
             patch("handlers.message_handlers.get_metrics_service", return_value=None),
@@ -343,5 +345,6 @@ class TestErrorHandling:
 
         # Verify fallback message was sent
         calls = mock_slack.send_message.call_args_list
+        assert len(calls) > 0, "Expected at least one call to send_message"
         fallback_call = calls[-1]  # Last call should be fallback
         assert "couldn't generate a response" in fallback_call[1]["text"]
