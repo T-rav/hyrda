@@ -31,7 +31,7 @@ async def test_agent_streaming_flow_with_debug_mode():
                 "name": "write_research_brief",
                 "result": {
                     "research_brief": "Brief content...",
-                    "final_report": "# Company Profile: Costco\n\n## Overview\nCostco is a leading retailer...",
+                    "final_report": "# Company Profile: Costco\n\n## Overview\nCostco is a leading retailer with significant market presence and strong financial performance across multiple markets.",
                 },
             },
         },

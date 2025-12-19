@@ -149,7 +149,7 @@ async def test_stream_extracts_final_report():
             "type": "task_result",
             "payload": {
                 "name": "final_report_generation",
-                "result": {"final_report": "# Company Profile\n\nFull report content here with sufficient length for extraction..."},
+                "result": {"final_report": "# Company Profile\n\nFull report content here with sufficient length for extraction. This comprehensive report includes detailed analysis and findings that provide substantial value to the reader."},
             },
         },
     ]

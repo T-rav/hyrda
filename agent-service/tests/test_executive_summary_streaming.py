@@ -154,7 +154,7 @@ async def test_agent_client_checks_summary_before_response():
 
     # Should pick executive_summary (highest priority)
     assert len(content_chunks) == 1
-    assert "Summary (should be picked)" in content_chunks[0]["content"]
+    assert "should be picked first" in content_chunks[0]["content"]
     assert "Response content" not in content_chunks[0]["content"]
 
 
