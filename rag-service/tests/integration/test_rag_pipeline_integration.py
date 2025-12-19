@@ -25,9 +25,9 @@ class TestRAGServiceInitialization:
         settings = Settings()
 
         # Mock the external service factories
-        with patch('services.rag_service.create_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
+        with patch('services.vector_service.get_vector_store') as mock_vector:
+            with patch('providers.embedding.factory.create_embedding_provider') as mock_embed:
+                with patch('providers.llm_providers.create_llm_provider') as mock_llm:
                     # Setup mocks
                     mock_vector.return_value = AsyncMock()
                     mock_embed.return_value = AsyncMock()
@@ -49,9 +49,9 @@ class TestRAGServiceInitialization:
         """Test RAG service initialization."""
         settings = Settings()
 
-        with patch('services.rag_service.create_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
+        with patch('services.vector_service.get_vector_store') as mock_vector:
+            with patch('providers.embedding.factory.create_embedding_provider') as mock_embed:
+                with patch('providers.llm_providers.create_llm_provider') as mock_llm:
                     mock_vector_store = AsyncMock()
                     mock_vector_store.initialize = AsyncMock()
                     mock_vector.return_value = mock_vector_store
@@ -73,11 +73,12 @@ class TestDocumentIngestion:
         """Test successful document ingestion."""
         settings = Settings()
 
-        with patch('services.rag_service.create_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
+        with patch('services.vector_service.get_vector_store') as mock_vector:
+            with patch('providers.embedding.factory.create_embedding_provider') as mock_embed:
+                with patch('providers.llm_providers.create_llm_provider') as mock_llm:
                     # Setup vector store mock
                     mock_vector_store = AsyncMock()
+                    mock_vector_store.initialize = AsyncMock()
                     mock_vector_store.upsert = AsyncMock(return_value=True)
                     mock_vector.return_value = mock_vector_store
 
@@ -110,9 +111,9 @@ class TestDocumentIngestion:
         """Test ingesting empty document list."""
         settings = Settings()
 
-        with patch('services.rag_service.create_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
+        with patch('services.vector_service.get_vector_store') as mock_vector:
+            with patch('providers.embedding.factory.create_embedding_provider') as mock_embed:
+                with patch('providers.llm_providers.create_llm_provider') as mock_llm:
                     mock_vector.return_value = AsyncMock()
                     mock_embed.return_value = AsyncMock()
                     mock_llm.return_value = AsyncMock()
@@ -250,9 +251,9 @@ class TestSystemStatus:
         """Test system status retrieval."""
         settings = Settings()
 
-        with patch('services.rag_service.create_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
+        with patch('services.vector_service.get_vector_store') as mock_vector:
+            with patch('providers.embedding.factory.create_embedding_provider') as mock_embed:
+                with patch('providers.llm_providers.create_llm_provider') as mock_llm:
                     mock_vector.return_value = AsyncMock()
                     mock_embed.return_value = AsyncMock()
                     mock_llm.return_value = AsyncMock()
