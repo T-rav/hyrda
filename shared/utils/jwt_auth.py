@@ -80,6 +80,7 @@ if not SERVICE_TOKEN:
 SERVICE_TOKENS = {
     "bot": os.getenv("BOT_SERVICE_TOKEN", SERVICE_TOKEN),
     "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", SERVICE_TOKEN),
+    "rag": os.getenv("RAG_SERVICE_TOKEN", SERVICE_TOKEN),
     "generic": SERVICE_TOKEN,  # Generic SERVICE_TOKEN for tests and general use
 }
 

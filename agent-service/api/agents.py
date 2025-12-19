@@ -186,13 +186,15 @@ async def invoke_agent(
 
     # Try service token (internal service request)
     if not user_id:
+        from shared.utils.jwt_auth import verify_service_token
+
         service_token = http_request.headers.get("X-Service-Token")
-        expected_service_token = os.getenv(
-            "SERVICE_TOKEN", "dev-service-token-insecure"
-        )
-        if service_token == expected_service_token:
+        service_info = verify_service_token(service_token) if service_token else None
+
+        if service_info:
             auth_type = "service"
-            logger.info("Authenticated as internal service")
+            service_name = service_info.get("service", "unknown")
+            logger.info(f"Authenticated as internal service: {service_name}")
             # Service can optionally forward user context (trusted)
             user_id = http_request.headers.get("X-User-Context")
         else:
@@ -361,13 +363,15 @@ async def stream_agent(
 
     # Try service token (internal service request)
     if not user_id:
+        from shared.utils.jwt_auth import verify_service_token
+
         service_token = http_request.headers.get("X-Service-Token")
-        expected_service_token = os.getenv(
-            "SERVICE_TOKEN", "dev-service-token-insecure"
-        )
-        if service_token == expected_service_token:
+        service_info = verify_service_token(service_token) if service_token else None
+
+        if service_info:
             auth_type = "service"
-            logger.info("Authenticated as internal service for streaming")
+            service_name = service_info.get("service", "unknown")
+            logger.info(f"Authenticated as internal service for streaming: {service_name}")
             # Service can optionally forward user context (trusted)
             user_id = http_request.headers.get("X-User-Context")
         else:
