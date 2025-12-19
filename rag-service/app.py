@@ -89,9 +89,9 @@ async def lifespan(app: FastAPI):
 
     # Cleanup search clients
     try:
-        from services.search_clients import cleanup_search_clients
+        from services.search_clients import close_search_clients
 
-        await cleanup_search_clients()
+        await close_search_clients()
     except Exception:
         pass
 

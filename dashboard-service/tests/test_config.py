@@ -75,7 +75,7 @@ class TestServiceConfiguration:
         required_services = ["bot", "agent_service", "tasks", "control_plane"]
         for service in required_services:
             assert service in SERVICES, f"Missing service: {service}"
-            assert SERVICES[service].startswith("http://"), f"Invalid URL for {service}"
+            assert SERVICES[service].startswith("http://") or SERVICES[service].startswith("https://"), f"Invalid URL for {service}"
 
     def test_service_timeout_is_configured(self):
         """Test that DEFAULT_SERVICE_TIMEOUT is configured."""

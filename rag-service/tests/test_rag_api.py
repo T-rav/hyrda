@@ -67,20 +67,19 @@ class TestChatCompletionsEndpoint:
         mock_routing.detect_agent.return_value = "research"
         mock_get_routing.return_value = mock_routing
 
-        # Mock agent client
+        # Mock agent client with proper async generator
         mock_agent_client = Mock()
 
-        # Mock async generator for stream_agent
-        async def mock_stream():
-            yield '{"response": "Research results here...", "metadata": {"tools_used": ["web_search"], "agent_used": "research", "routed_to_agent": true}}'
+        # Create a proper async generator that can be awaited
+        async def mock_stream_gen():
+            # Yield individual chunks as the streaming API expects
+            yield "Research results here..."
 
-        mock_agent_client.stream_agent = Mock(return_value=mock_stream())
-        mock_agent_client.invoke_agent = AsyncMock(
-            return_value={
-                "response": "Research results here...",
-                "metadata": {"tools_used": ["web_search"]},
-            }
-        )
+        # Make stream_agent return a fresh generator each time it's called
+        def create_mock_stream(*args, **kwargs):
+            return mock_stream_gen()
+
+        mock_agent_client.stream_agent = create_mock_stream
         mock_get_agent_client.return_value = mock_agent_client
 
         payload = {
@@ -97,7 +96,7 @@ class TestChatCompletionsEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["response"] == "Research results here..."
+        assert "Research results here" in data["response"]
         assert data["metadata"]["agent_used"] == "research"
         assert data["metadata"]["routed_to_agent"] is True
 

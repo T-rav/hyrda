@@ -17,35 +17,36 @@ class TestAppLifespan:
 
         mock_app = FastAPI()
 
-        with patch("app.get_app_version", return_value="test") as mock_metrics_init:
-            with patch("app.get_settings") as mock_settings:
-                with patch("app.create_vector_store") as mock_vector_store:
-                    with patch("app.initialize_search_clients") as mock_search_init:
-                        # Setup mocks
-                        mock_settings_obj = MagicMock()
-                        mock_settings_obj.port = 8002
-                        mock_settings_obj.environment = "test"
-                        mock_settings_obj.vector.enabled = True
-                        mock_settings_obj.rag.enable_query_rewriting = True
-                        mock_settings_obj.search.tavily_api_key = "test-tavily-key"
-                        mock_settings_obj.search.perplexity_api_key = "test-perplexity-key"
-                        mock_settings.return_value = mock_settings_obj
+        with patch("services.metrics_service.initialize_metrics_service") as mock_metrics_init:
+            with patch("config.settings.get_settings") as mock_settings:
+                with patch("services.vector_service.create_vector_store") as mock_vector_store:
+                    with patch("services.vector_service.set_vector_store") as mock_set_vector:
+                        with patch("services.search_clients.initialize_search_clients") as mock_search_init:
+                            # Setup mocks
+                            mock_settings_obj = MagicMock()
+                            mock_settings_obj.port = 8002
+                            mock_settings_obj.environment = "test"
+                            mock_settings_obj.vector.enabled = True
+                            mock_settings_obj.rag.enable_query_rewriting = True
+                            mock_settings_obj.search.tavily_api_key = "test-tavily-key"
+                            mock_settings_obj.search.perplexity_api_key = "test-perplexity-key"
+                            mock_settings.return_value = mock_settings_obj
 
-                        mock_vector = AsyncMock()
-                        mock_vector.initialize = AsyncMock()
-                        mock_vector_store.return_value = mock_vector
+                            mock_vector = AsyncMock()
+                            mock_vector.initialize = AsyncMock()
+                            mock_vector_store.return_value = mock_vector
 
-                        mock_search_init.return_value = AsyncMock()
+                            mock_search_init.return_value = AsyncMock()
 
-                        # Run lifespan
-                        async with lifespan(mock_app):
-                            pass
+                            # Run lifespan
+                            async with lifespan(mock_app):
+                                pass
 
-                        # Verify search clients were initialized
-                        mock_search_init.assert_called_once_with(
-                            tavily_api_key="test-tavily-key",
-                            perplexity_api_key="test-perplexity-key",
-                        )
+                            # Verify search clients were initialized
+                            mock_search_init.assert_called_once_with(
+                                tavily_api_key="test-tavily-key",
+                                perplexity_api_key="test-perplexity-key",
+                            )
 
     @pytest.mark.asyncio
     async def test_lifespan_handles_search_client_init_failure(self):
@@ -55,11 +56,10 @@ class TestAppLifespan:
 
         mock_app = FastAPI()
 
-        with patch("app.get_app_version", return_value="test"):
-            with patch("app.get_settings") as mock_settings:
-                with patch("app.create_vector_store") as mock_vector_store:
-                    with patch("app.initialize_search_clients") as mock_search_init:
-                        with patch("app.logger") as mock_logger:
+        with patch("services.metrics_service.initialize_metrics_service"):
+            with patch("config.settings.get_settings") as mock_settings:
+                with patch("services.search_clients.initialize_search_clients") as mock_search_init:
+                    with patch("app.logger") as mock_logger:
                             # Setup mocks
                             mock_settings_obj = MagicMock()
                             mock_settings_obj.port = 8002
@@ -82,7 +82,6 @@ class TestAppLifespan:
                             warning_call = mock_logger.warning.call_args[0][0]
                             assert "Search clients initialization failed" in warning_call
 
-    @pytest.mark.skip(reason="Outdated mocks - lifespan API changed")
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_search_clients(self):
         """Test that lifespan cleans up search clients on shutdown."""
@@ -91,11 +90,10 @@ class TestAppLifespan:
 
         mock_app = FastAPI()
 
-        with patch("app.get_app_version", return_value="test"):
-            with patch("app.get_settings") as mock_settings:
-                with patch("app.create_vector_store") as mock_vector_store:
-                    with patch("app.initialize_search_clients"):
-                        with patch("app.cleanup_search_clients") as mock_cleanup:
+        with patch("services.metrics_service.initialize_metrics_service"):
+            with patch("config.settings.get_settings") as mock_settings:
+                with patch("services.search_clients.initialize_search_clients"):
+                    with patch("services.search_clients.close_search_clients") as mock_cleanup:
                             # Setup mocks
                             mock_settings_obj = MagicMock()
                             mock_settings_obj.port = 8002
@@ -115,7 +113,6 @@ class TestAppLifespan:
                             # Verify cleanup was called
                             mock_cleanup.assert_called_once()
 
-    @pytest.mark.skip(reason="Outdated mocks - app.get_settings no longer exists")
     @pytest.mark.asyncio
     async def test_lifespan_initializes_vector_store(self):
         """Test that lifespan initializes vector store when enabled."""
@@ -124,31 +121,32 @@ class TestAppLifespan:
 
         mock_app = FastAPI()
 
-        with patch("app.get_app_version", return_value="test"):
-            with patch("app.get_settings") as mock_settings:
-                with patch("app.create_vector_store") as mock_vector_store:
-                    with patch("app.initialize_search_clients"):
-                        # Setup mocks
-                        mock_settings_obj = MagicMock()
-                        mock_settings_obj.port = 8002
-                        mock_settings_obj.environment = "test"
-                        mock_settings_obj.vector.enabled = True
-                        mock_settings_obj.rag.enable_query_rewriting = True
-                        mock_settings_obj.search.tavily_api_key = "test-key"
-                        mock_settings_obj.search.perplexity_api_key = None
-                        mock_settings.return_value = mock_settings_obj
+        with patch("services.metrics_service.initialize_metrics_service"):
+            with patch("config.settings.get_settings") as mock_settings:
+                with patch("services.vector_service.create_vector_store") as mock_vector_store:
+                    with patch("services.vector_service.set_vector_store"):
+                        with patch("services.search_clients.initialize_search_clients"):
+                            # Setup mocks
+                            mock_settings_obj = MagicMock()
+                            mock_settings_obj.port = 8002
+                            mock_settings_obj.environment = "test"
+                            mock_settings_obj.vector.enabled = True
+                            mock_settings_obj.rag.enable_query_rewriting = True
+                            mock_settings_obj.search.tavily_api_key = "test-key"
+                            mock_settings_obj.search.perplexity_api_key = None
+                            mock_settings.return_value = mock_settings_obj
 
-                        mock_vector = AsyncMock()
-                        mock_vector.initialize = AsyncMock()
-                        mock_vector_store.return_value = mock_vector
+                            mock_vector = AsyncMock()
+                            mock_vector.initialize = AsyncMock()
+                            mock_vector_store.return_value = mock_vector
 
-                        # Run lifespan
-                        async with lifespan(mock_app):
-                            pass
+                            # Run lifespan
+                            async with lifespan(mock_app):
+                                pass
 
-                        # Verify vector store was created and initialized
-                        mock_vector_store.assert_called_once()
-                        mock_vector.initialize.assert_called_once()
+                            # Verify vector store was created and initialized
+                            mock_vector_store.assert_called_once()
+                            mock_vector.initialize.assert_called_once()
 
 
 class TestAppVersion:

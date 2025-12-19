@@ -421,7 +421,6 @@ class TestGlobalServiceManagement:
 class TestPromptServiceIntegration:
     """Test LLM service integration with prompt service."""
 
-    @pytest.mark.skip(reason="PromptService integration refactored - test needs updating")
     @pytest.mark.asyncio
     async def test_get_response_uses_prompt_service(self):
         """Test that get_response fetches system prompt from prompt service."""
@@ -431,26 +430,27 @@ class TestPromptServiceIntegration:
         # Mock prompt service
         mock_prompt_service = Mock()
         mock_prompt_service.get_system_prompt.return_value = "Custom system prompt from Langfuse"
-        service.prompt_service = mock_prompt_service
 
         # Mock RAG service
         mock_rag = AsyncMock()
         mock_rag.generate_response = AsyncMock(return_value="Test response")
         service.rag_service = mock_rag
 
-        # Call get_response
-        result = await service.get_response(
-            messages=[{"role": "user", "content": "test query"}],
-            user_id="test-user",
-            use_rag=True,
-        )
+        # Patch get_prompt_service to return our mock
+        with patch("services.prompt_service.get_prompt_service", return_value=mock_prompt_service):
+            # Call get_response
+            result = await service.get_response(
+                messages=[{"role": "user", "content": "test query"}],
+                user_id="test-user",
+                use_rag=True,
+            )
 
-        # Verify prompt service was called
-        mock_prompt_service.get_system_prompt.assert_called_once_with("test-user")
+            # Verify prompt service was called
+            mock_prompt_service.get_system_prompt.assert_called_once_with("test-user")
 
-        # Verify RAG service received the custom system prompt
-        rag_call = mock_rag.generate_response.call_args
-        assert rag_call.kwargs["system_message"] == "Custom system prompt from Langfuse"
+            # Verify RAG service received the custom system prompt
+            rag_call = mock_rag.generate_response.call_args
+            assert rag_call.kwargs["system_message"] == "Custom system prompt from Langfuse"
 
     @pytest.mark.asyncio
     async def test_get_response_uses_default_prompt_when_service_unavailable(self):
