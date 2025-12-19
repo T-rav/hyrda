@@ -1,13 +1,16 @@
 """Enhanced web search tool for deep research.
 
-Better than OpenAI/Gemini research with multi-source search and automatic caching.
-Automatically caches all search results to MinIO S3 for reuse.
+Better than OpenAI/Gemini research with multi-source search and dual caching.
+Automatically caches all search results to Redis (fast) + MinIO (persistent).
 """
 
+import hashlib
+import json
 import logging
 import os
 from typing import Any
 
+import redis.asyncio as redis
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
 
@@ -30,10 +33,10 @@ class WebSearchInput(BaseModel):
 
 
 class EnhancedWebSearchTool(BaseTool):
-    """Enhanced web search with multiple sources and smart result aggregation.
+    """Enhanced web search with multiple sources and dual caching.
 
     Searches across multiple sources (Tavily, Perplexity) and aggregates results
-    for comprehensive coverage. Better than OpenAI/Gemini for research depth.
+    for comprehensive coverage. Caches in Redis (fast) + MinIO (persistent).
     """
 
     name: str = "web_search"
@@ -47,7 +50,10 @@ class EnhancedWebSearchTool(BaseTool):
 
     tavily_api_key: str | None = None
     perplexity_api_key: str | None = None
-    file_cache: ResearchFileCache | None = None  # Auto-caching
+    file_cache: ResearchFileCache | None = None  # MinIO caching
+    redis_client: redis.Redis | None = None  # Redis caching
+    redis_url: str = "redis://redis:6379"
+    redis_ttl: int = 3600  # 1 hour
 
     class Config:
         """Config."""
@@ -59,14 +65,16 @@ class EnhancedWebSearchTool(BaseTool):
         tavily_api_key: str | None = None,
         perplexity_api_key: str | None = None,
         file_cache: ResearchFileCache | None = None,
+        redis_url: str | None = None,
         **kwargs: Any,
     ):
-        """Initialize with API keys and optional file cache.
+        """Initialize with API keys and dual cache.
 
         Args:
             tavily_api_key: Tavily API key
             perplexity_api_key: Perplexity API key
-            file_cache: Optional file cache for auto-caching results
+            file_cache: Optional file cache for MinIO caching
+            redis_url: Redis connection URL
             **kwargs: Additional BaseTool arguments
         """
         kwargs["tavily_api_key"] = tavily_api_key or os.getenv("TAVILY_API_KEY")
@@ -74,17 +82,43 @@ class EnhancedWebSearchTool(BaseTool):
             "PERPLEXITY_API_KEY"
         )
         kwargs["file_cache"] = file_cache
+        kwargs["redis_url"] = redis_url or os.getenv(
+            "CACHE_REDIS_URL", "redis://redis:6379"
+        )
         super().__init__(**kwargs)
 
-        # Initialize file cache if not provided
+        # Initialize MinIO file cache if not provided
         if not self.file_cache:
             try:
                 self.file_cache = ResearchFileCache()
-                logger.info("Initialized auto-caching for web search results")
+                logger.info("Initialized MinIO caching for web search results")
             except Exception as e:
                 logger.warning(
-                    f"File cache unavailable: {e}, continuing without caching"
+                    f"MinIO cache unavailable: {e}, continuing without MinIO caching"
                 )
+
+        # Initialize Redis cache
+        self._init_redis()
+
+    def _init_redis(self) -> None:
+        """Initialize Redis client for fast caching."""
+        try:
+            self.redis_client = redis.from_url(
+                self.redis_url,
+                decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
+            logger.info(f"Initialized Redis caching at {self.redis_url}")
+        except Exception as e:
+            logger.warning(f"Redis init failed: {e}, continuing without Redis caching")
+            self.redis_client = None
+
+    def _get_cache_key(self, query: str, depth: str = "standard") -> str:
+        """Generate cache key for query."""
+        # Use hash to avoid key length issues
+        query_hash = hashlib.md5(f"{query}:{depth}".encode()).hexdigest()
+        return f"web_search:{query_hash}"
 
     def _run(self, query: str, depth: str = "standard") -> str:
         """Execute web search with automatic caching.
@@ -98,8 +132,8 @@ class EnhancedWebSearchTool(BaseTool):
         """
         try:
             # Check cache first (only if not deep search - deep always fetches fresh)
-            if depth != "deep" and self.file_cache:
-                cached_results = self._check_cache(query)
+            if depth != "deep":
+                cached_results = self._check_dual_cache(query, depth)
                 if cached_results:
                     logger.info(f"✅ Cache hit for query: {query[:50]}...")
                     return f"📦 (From cache)\n\n{cached_results}"
@@ -131,9 +165,8 @@ class EnhancedWebSearchTool(BaseTool):
 
             final_output = "".join(output)
 
-            # Auto-cache results (fire and forget, don't block on errors)
-            if self.file_cache:
-                self._cache_results(query, final_output, depth)
+            # Auto-cache results in both Redis and MinIO
+            self._cache_dual(query, final_output, depth)
 
             return final_output
 
@@ -141,63 +174,87 @@ class EnhancedWebSearchTool(BaseTool):
             logger.error(f"Error in web search: {e}")
             return f"❌ Web search error: {str(e)}"
 
-    def _check_cache(self, query: str) -> str | None:
-        """Check if search results are already cached.
+    def _check_dual_cache(self, query: str, depth: str = "standard") -> str | None:
+        """Check if search results are cached (Redis first, MinIO fallback).
 
         Args:
             query: Search query
+            depth: Search depth
 
         Returns:
             Cached results or None
         """
-        try:
-            if not self.file_cache:
-                return None
+        cache_key = self._get_cache_key(query, depth)
 
-            # Search cache for this query
-            cached_files = self.file_cache.search_cache(query, file_type="web_page")
+        # Try Redis first (fastest)
+        if self.redis_client:
+            try:
+                cached = self.redis_client.get(cache_key)
+                if cached:
+                    logger.info(f"✅ Redis cache hit for: {query[:50]}...")
+                    return cached
+            except Exception as e:
+                logger.warning(f"Redis cache check failed: {e}")
 
-            if cached_files:
-                # Return most recent cached result
-                latest = sorted(cached_files, key=lambda f: f.cached_at, reverse=True)[
-                    0
-                ]
-                content = self.file_cache.retrieve_file(latest.file_path)
-                if content:
-                    return str(content)
+        # Try MinIO fallback
+        if self.file_cache:
+            try:
+                # Search cache for this query
+                cached_files = self.file_cache.search_cache(query, file_type="web_page")
 
-            return None
-        except Exception as e:
-            logger.warning(f"Error checking cache: {e}")
-            return None
+                if cached_files:
+                    # Return most recent cached result
+                    latest = sorted(
+                        cached_files, key=lambda f: f.cached_at, reverse=True
+                    )[0]
+                    content = self.file_cache.retrieve_file(latest.file_path)
+                    if content:
+                        logger.info(f"✅ MinIO cache hit for: {query[:50]}...")
+                        # Re-cache in Redis for fast access
+                        if self.redis_client:
+                            try:
+                                self.redis_client.setex(
+                                    cache_key, self.redis_ttl, str(content)
+                                )
+                            except Exception:
+                                pass
+                        return str(content)
+            except Exception as e:
+                logger.warning(f"MinIO cache check failed: {e}")
 
-    def _cache_results(self, query: str, results: str, depth: str) -> None:
-        """Auto-cache search results (fire and forget).
+        return None
+
+    def _cache_dual(self, query: str, results: str, depth: str) -> None:
+        """Cache search results in both Redis and MinIO (fire and forget).
 
         Args:
             query: Search query
             results: Search results to cache
             depth: Search depth
         """
-        try:
-            if not self.file_cache:
-                return
+        cache_key = self._get_cache_key(query, depth)
 
-            # Create metadata
-            metadata = {
-                "query": query,
-                "depth": depth,
-                "source": "web_search",
-                "title": f"web_search_{query[:50]}",
-            }
+        # Cache in Redis (fast access)
+        if self.redis_client:
+            try:
+                self.redis_client.setex(cache_key, self.redis_ttl, results)
+                logger.info(f"✅ Cached to Redis: {query[:50]}...")
+            except Exception as e:
+                logger.warning(f"Failed to cache to Redis: {e}")
 
-            # Cache to MinIO
-            self.file_cache.cache_file("web_page", results, metadata)
-            logger.info(f"✅ Auto-cached web search results for: {query[:50]}...")
-
-        except Exception as e:
-            # Don't fail the search if caching fails
-            logger.warning(f"Failed to cache search results: {e}")
+        # Cache in MinIO (long-term storage)
+        if self.file_cache:
+            try:
+                metadata = {
+                    "query": query,
+                    "depth": depth,
+                    "source": "web_search",
+                    "title": f"web_search_{query[:50]}",
+                }
+                self.file_cache.cache_file("web_page", results, metadata)
+                logger.info(f"✅ Cached to MinIO: {query[:50]}...")
+            except Exception as e:
+                logger.warning(f"Failed to cache to MinIO: {e}")
 
     def _search_tavily(self, query: str, max_results: int) -> list[str]:
         """Search using Tavily API.
