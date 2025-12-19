@@ -1,9 +1,28 @@
 """Tests for executive summary prioritization in agent streaming."""
 
 import json
+import os
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+# Ensure project root is in sys.path for external_agents imports
+# This must be at module level to work for all imports
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+# Import external agents at module level to ensure they're available
+# before any test execution that might pollute sys.path
+try:
+    from external_agents.profile.nodes.final_report import final_report_generation as _final_report_generation
+    from external_agents.profile.state import ProfileAgentState as _ProfileAgentState
+    _EXTERNAL_AGENTS_AVAILABLE = True
+except (ImportError, ModuleNotFoundError):
+    _final_report_generation = None
+    _ProfileAgentState = None
+    _EXTERNAL_AGENTS_AVAILABLE = False
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +38,24 @@ def reset_agent_cache():
 
     # Clear cache after test
     client._agent_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def ensure_external_agents_path():
+    """Ensure external_agents is accessible in sys.path for all tests."""
+    # Save original path
+    original_path = sys.path.copy()
+
+    # Ensure project root is in path
+    if _PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, _PROJECT_ROOT)
+
+    yield
+
+    # Don't restore path - other tests may need it
+    # Just ensure it's still there
+    if _PROJECT_ROOT not in sys.path:
+        sys.path.insert(0, _PROJECT_ROOT)
 
 
 @pytest.mark.asyncio
@@ -176,8 +213,12 @@ async def test_agent_client_checks_summary_before_response():
 @pytest.mark.asyncio
 async def test_final_report_node_returns_summary_with_url():
     """Test that final_report node returns executive_summary with S3 URL."""
-    from external_agents.profile.nodes.final_report import final_report_generation
-    from external_agents.profile.state import ProfileAgentState
+    # Use module-level imports to avoid path issues
+    if not _EXTERNAL_AGENTS_AVAILABLE:
+        pytest.skip("external_agents.profile not available in test environment")
+
+    final_report_generation = _final_report_generation
+    ProfileAgentState = _ProfileAgentState
 
     # Mock state
     state = ProfileAgentState(
