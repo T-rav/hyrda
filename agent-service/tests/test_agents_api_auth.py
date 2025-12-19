@@ -11,7 +11,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_with_valid_rag_service_token(self):
         """Test that RAG service can invoke agents with RAG_SERVICE_TOKEN."""
-        from api.agents import invoke_agent_endpoint
+        from api.agents import invoke_agent, AgentInvokeRequest
 
         # Mock request with RAG service token
         mock_request = MagicMock()
@@ -21,7 +21,7 @@ class TestAgentAPIServiceTokenAuth:
 
         # Mock agent client
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock successful token verification
                 mock_verify.return_value = {"service": "rag"}
 
@@ -30,8 +30,8 @@ class TestAgentAPIServiceTokenAuth:
                     return_value={"agent_name": "profile", "enabled": True}
                 )
 
-                # Mock agent execution
-                mock_agent_client.execute_agent = AsyncMock(
+                # Mock agent invocation (invoke, not execute_agent)
+                mock_agent_client.invoke = AsyncMock(
                     return_value={
                         "response": "Test profile response",
                         "metadata": {},
@@ -39,9 +39,9 @@ class TestAgentAPIServiceTokenAuth:
                 )
 
                 # Call endpoint
-                result = await invoke_agent_endpoint(
+                result = await invoke_agent(
                     agent_name="profile",
-                    request={"query": "test company", "context": {}},
+                    request=AgentInvokeRequest(query="test company", context={}),
                     http_request=mock_request,
                 )
 
@@ -49,12 +49,12 @@ class TestAgentAPIServiceTokenAuth:
                 mock_verify.assert_called_once_with("rag-service-secret-token-test123")
 
                 # Verify agent was executed
-                assert result["response"] == "Test profile response"
+                assert result.response == "Test profile response"
 
     @pytest.mark.asyncio
     async def test_invoke_agent_with_valid_bot_service_token(self):
         """Test that bot service can invoke agents with BOT_SERVICE_TOKEN."""
-        from api.agents import invoke_agent_endpoint
+        from api.agents import invoke_agent, AgentInvokeRequest
 
         # Mock request with bot service token
         mock_request = MagicMock()
@@ -64,7 +64,7 @@ class TestAgentAPIServiceTokenAuth:
 
         # Mock agent client
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock successful token verification
                 mock_verify.return_value = {"service": "bot"}
 
@@ -74,7 +74,7 @@ class TestAgentAPIServiceTokenAuth:
                 )
 
                 # Mock agent execution
-                mock_agent_client.execute_agent = AsyncMock(
+                mock_agent_client.invoke = AsyncMock(
                     return_value={
                         "response": "Test response",
                         "metadata": {},
@@ -82,20 +82,20 @@ class TestAgentAPIServiceTokenAuth:
                 )
 
                 # Call endpoint
-                result = await invoke_agent_endpoint(
+                result = await invoke_agent(
                     agent_name="profile",
-                    request={"query": "test company", "context": {}},
+                    request=AgentInvokeRequest(query="test company", context={}),
                     http_request=mock_request,
                 )
 
                 # Verify token was verified
                 mock_verify.assert_called_once_with("bot-service-secret-token-test123")
-                assert result["response"] == "Test response"
+                assert result.response == "Test response"
 
     @pytest.mark.asyncio
     async def test_invoke_agent_rejects_invalid_service_token(self):
         """Test that invalid service tokens are rejected."""
-        from api.agents import invoke_agent_endpoint
+        from api.agents import invoke_agent, AgentInvokeRequest
 
         # Mock request with invalid token
         mock_request = MagicMock()
@@ -104,7 +104,7 @@ class TestAgentAPIServiceTokenAuth:
         }
 
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock failed token verification
                 mock_verify.return_value = None
 
@@ -115,9 +115,9 @@ class TestAgentAPIServiceTokenAuth:
 
                 # Call endpoint - should raise 401
                 with pytest.raises(HTTPException) as exc_info:
-                    await invoke_agent_endpoint(
+                    await invoke_agent(
                         agent_name="profile",
-                        request={"query": "test", "context": {}},
+                        request=AgentInvokeRequest(query="test", context={}),
                         http_request=mock_request,
                     )
 
@@ -127,14 +127,14 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_rejects_missing_service_token(self):
         """Test that requests without service tokens are rejected."""
-        from api.agents import invoke_agent_endpoint
+        from api.agents import invoke_agent, AgentInvokeRequest
 
         # Mock request without token
         mock_request = MagicMock()
         mock_request.headers = {}
 
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock agent discovery
                 mock_agent_client.discover_agent = AsyncMock(
                     return_value={"agent_name": "profile", "enabled": True}
@@ -142,9 +142,9 @@ class TestAgentAPIServiceTokenAuth:
 
                 # Call endpoint - should raise 401
                 with pytest.raises(HTTPException) as exc_info:
-                    await invoke_agent_endpoint(
+                    await invoke_agent(
                         agent_name="profile",
-                        request={"query": "test", "context": {}},
+                        request=AgentInvokeRequest(query="test", context={}),
                         http_request=mock_request,
                     )
 
@@ -153,7 +153,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_stream_agent_with_valid_rag_service_token(self):
         """Test that RAG service can stream agents with RAG_SERVICE_TOKEN."""
-        from api.agents import stream_agent_endpoint
+        from api.agents import stream_agent, AgentInvokeRequest
 
         # Mock request with RAG service token
         mock_request = MagicMock()
@@ -162,7 +162,7 @@ class TestAgentAPIServiceTokenAuth:
         }
 
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock successful token verification
                 mock_verify.return_value = {"service": "rag"}
 
@@ -180,9 +180,9 @@ class TestAgentAPIServiceTokenAuth:
                 mock_agent_client.stream_agent_execution = mock_stream
 
                 # Call endpoint
-                response = await stream_agent_endpoint(
+                response = await stream_agent(
                     agent_name="profile",
-                    request={"query": "test company", "context": {}},
+                    request=AgentInvokeRequest(query="test company", context={}),
                     http_request=mock_request,
                 )
 
@@ -192,7 +192,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_stream_agent_rejects_invalid_service_token(self):
         """Test that streaming rejects invalid service tokens."""
-        from api.agents import stream_agent_endpoint
+        from api.agents import stream_agent, AgentInvokeRequest
 
         # Mock request with invalid token
         mock_request = MagicMock()
@@ -201,7 +201,7 @@ class TestAgentAPIServiceTokenAuth:
         }
 
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("api.agents.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
                 # Mock failed token verification
                 mock_verify.return_value = None
 
@@ -212,9 +212,9 @@ class TestAgentAPIServiceTokenAuth:
 
                 # Call endpoint - should raise 401
                 with pytest.raises(HTTPException) as exc_info:
-                    await stream_agent_endpoint(
+                    await stream_agent(
                         agent_name="profile",
-                        request={"query": "test", "context": {}},
+                        request=AgentInvokeRequest(query="test", context={}),
                         http_request=mock_request,
                     )
 

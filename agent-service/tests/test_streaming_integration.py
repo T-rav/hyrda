@@ -50,7 +50,7 @@ async def test_agent_streaming_flow_with_debug_mode():
 
     from unittest.mock import patch
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         # Set up agent in cache
         client._agent_cache["profile"] = {
             "agent_name": "profile",
@@ -113,7 +113,7 @@ async def test_streaming_handles_rapid_node_execution():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test"] = {"agent_name": "test", "is_cloud": False}
 
         chunks = []
@@ -166,7 +166,7 @@ async def test_streaming_formats_node_names_consistently():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test"] = {"agent_name": "test", "is_cloud": False}
 
         chunks = []

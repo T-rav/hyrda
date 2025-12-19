@@ -40,7 +40,7 @@ async def test_agent_client_prioritizes_executive_summary():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test_agent"] = {
             "agent_name": "test_agent",
             "is_cloud": False,
@@ -95,7 +95,7 @@ async def test_agent_client_falls_back_to_final_report():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test_agent"] = {"agent_name": "test_agent", "is_cloud": False}
 
         chunks = []
@@ -142,7 +142,7 @@ async def test_agent_client_checks_summary_before_response():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test_agent"] = {"agent_name": "test_agent", "is_cloud": False}
 
         chunks = []

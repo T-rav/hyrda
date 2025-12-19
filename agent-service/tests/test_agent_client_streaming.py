@@ -53,7 +53,7 @@ async def test_stream_embedded_agent_with_debug_mode():
     mock_agent.astream = mock_astream
 
     # Mock get_agent to return our mock
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         # Mock the agent discovery to return embedded agent
         client._agent_cache["test_agent"] = {
             "agent_name": "test_agent",
@@ -121,7 +121,7 @@ async def test_stream_skips_internal_nodes():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test_agent"] = {
             "agent_name": "test_agent",
             "is_cloud": False,
@@ -149,7 +149,7 @@ async def test_stream_extracts_final_report():
             "type": "task_result",
             "payload": {
                 "name": "final_report_generation",
-                "result": {"final_report": "# Company Profile\n\nFull report content here..."},
+                "result": {"final_report": "# Company Profile\n\nFull report content here with sufficient length for extraction..."},
             },
         },
     ]
@@ -162,7 +162,7 @@ async def test_stream_extracts_final_report():
 
     mock_agent.astream = mock_astream
 
-    with patch("clients.agent_client.get_agent", return_value=mock_agent):
+    with patch("services.agent_registry.get_agent", return_value=mock_agent):
         client._agent_cache["test_agent"] = {"agent_name": "test_agent", "is_cloud": False}
 
         chunks = []
