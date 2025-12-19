@@ -5,8 +5,11 @@ Includes Langfuse tracing for observability.
 """
 
 import logging
+import os
 from datetime import datetime
+from typing import Optional
 
+import boto3
 from langchain_core.runnables import RunnableConfig
 
 from .. import prompts
@@ -22,6 +25,66 @@ from ..utils import (
 from ..services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
+
+
+def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]:
+    """Upload full report to MinIO/S3 and return presigned URL.
+
+    Args:
+        report_content: Full markdown report content
+        company_name: Company name for filename
+
+    Returns:
+        Presigned URL or None if upload fails
+    """
+    try:
+        # MinIO configuration
+        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+        s3_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+        s3_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+        bucket_name = os.getenv("REPORTS_BUCKET", "profile-reports")
+
+        # Create S3 client
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=s3_endpoint,
+            aws_access_key_id=s3_access_key,
+            aws_secret_access_key=s3_secret_key,
+        )
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+        filename = f"profile_{safe_company_name}_{timestamp}.md"
+
+        # Create bucket if it doesn't exist
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+        except:
+            s3_client.create_bucket(Bucket=bucket_name)
+            logger.info(f"Created bucket: {bucket_name}")
+
+        # Upload report
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=filename,
+            Body=report_content.encode("utf-8"),
+            ContentType="text/markdown",
+        )
+
+        # Generate presigned URL (valid for 7 days)
+        url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket_name, "Key": filename},
+            ExpiresIn=604800,  # 7 days
+        )
+
+        logger.info(f"Uploaded report to S3: {filename} ({len(report_content)} chars)")
+        return url
+
+    except Exception as e:
+        logger.error(f"Failed to upload report to S3: {e}")
+        return None
 
 
 async def final_report_generation(
@@ -273,9 +336,21 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                     "_Or start your message with `profile [company name]` to profile another company._"
                 )
 
+            # Extract company name from query or report title
+            query = state.get("query", "company")
+            company_name = query.replace("profile ", "").strip() or "company"
+
+            # Upload full report to S3 and get URL
+            report_url = upload_report_to_s3(final_report, company_name)
+
+            if report_url:
+                # Add link to executive summary
+                executive_summary += f"\n\n📄 [View Full Report]({report_url})"
+
             return {
-                "final_report": final_report,
+                "final_report": final_report,  # Still keep for fallback
                 "executive_summary": executive_summary,
+                "report_url": report_url,
             }
 
         except Exception as e:
@@ -294,7 +369,17 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
         + "\n\n".join(notes[:3])
     )
 
+    # Try to upload fallback report too
+    query = state.get("query", "company")
+    company_name = query.replace("profile ", "").strip() or "company"
+    report_url = upload_report_to_s3(fallback_report, company_name)
+
+    fallback_summary = "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_"
+    if report_url:
+        fallback_summary += f"\n\n📄 [View Full Report]({report_url})"
+
     return {
         "final_report": fallback_report,
-        "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
+        "executive_summary": fallback_summary,
+        "report_url": report_url,
     }

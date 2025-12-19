@@ -334,12 +334,13 @@ class AgentClient:
                             yield json.dumps(status) + "\n"
 
                             # Check for final output in the result payload
+                            # Priority: executive_summary (concise) > response/output > final_report (full)
                             result = payload.get("result", {})
                             if isinstance(result, dict):
-                                for key in ["response", "output", "final_report"]:
+                                for key in ["executive_summary", "response", "output", "final_report"]:
                                     if key in result and result[key]:
                                         final_output = result[key]
-                                        if isinstance(final_output, str) and len(final_output) > 100:
+                                        if isinstance(final_output, str) and len(final_output) > 50:
                                             # Emit final content as JSON
                                             content_status = {
                                                 "type": "content",
