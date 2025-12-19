@@ -11,33 +11,34 @@ from shared.utils.otel_http_client import (
 )
 
 
-@pytest.fixture(scope="class", autouse=True)
-def reset_tracer_between_classes():
-    """Reset global TracerProvider to clean state between test classes.
+@pytest.fixture(autouse=True)
+def reset_otel_state_after_each_test():
+    """Reset OpenTelemetry state after each test to prevent pollution.
 
-    This prevents TestAddOtelHeaders from polluting TestCreateSpan.
+    Uses OpenTelemetry's internal _reset_trace() to fully reset global state.
     """
     if not OTEL_AVAILABLE:
         yield
         return
 
     from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
 
     yield
 
-    # After each test class, reset to a completely fresh TracerProvider
-    # This ensures next test class starts with clean state
+    # After each test, reset OpenTelemetry to clean state
     try:
-        current = trace.get_tracer_provider()
-        if hasattr(current, "shutdown"):
+        # Shutdown current provider if it exists
+        current_provider = trace.get_tracer_provider()
+        if hasattr(current_provider, "shutdown"):
             try:
-                current.shutdown()
+                current_provider.shutdown()
             except Exception:
                 pass
 
-        # Set a brand new TracerProvider (not restoring old one)
-        trace.set_tracer_provider(TracerProvider())
+        # Use internal _reset_trace() to completely reset global state
+        # This is the only way to allow setting a new TracerProvider
+        if hasattr(trace, "_reset_trace"):
+            trace._reset_trace()
     except Exception:
         pass
 
@@ -74,34 +75,20 @@ class TestAddOtelHeaders:
         from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider
 
-        # Save original provider to restore after test
-        original_provider = trace.get_tracer_provider()
+        # Create a tracer provider and set it globally
+        # The autouse fixture will handle cleanup after this test
+        provider = TracerProvider()
+        trace.set_tracer_provider(provider)
 
-        try:
-            # Create a tracer provider and set it globally
-            provider = TracerProvider()
-            trace.set_tracer_provider(provider)
+        tracer = trace.get_tracer(__name__)
 
-            tracer = trace.get_tracer(__name__)
+        # Start a span to create active trace context
+        with tracer.start_as_current_span("test"):
+            headers = {"X-Custom": "value"}
+            result = add_otel_headers(headers)
 
-            # Start a span to create active trace context
-            with tracer.start_as_current_span("test"):
-                headers = {"X-Custom": "value"}
-                result = add_otel_headers(headers)
-
-                # Should have traceparent header injected
-                assert "traceparent" in result or "X-Custom" in result
-        finally:
-            # Shut down the provider to clean up resources
-            try:
-                provider = trace.get_tracer_provider()
-                if hasattr(provider, "shutdown"):
-                    provider.shutdown()
-            except Exception:
-                pass
-
-            # Restore original tracer provider to avoid test pollution
-            trace.set_tracer_provider(original_provider)
+            # Should have traceparent header injected
+            assert "traceparent" in result or "X-Custom" in result
 
 
 class TestCreateSpan:
@@ -147,51 +134,9 @@ class TestCreateSpan:
         with span:
             pass  # Should not raise
 
-    @pytest.mark.skipif(not OTEL_AVAILABLE, reason="OpenTelemetry not installed")
-    def test_create_span_attributes_passed_to_tracer(self):
-        """Test that attributes are correctly passed to tracer when OTel is available."""
-        from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
-            InMemorySpanExporter,
-        )
-
-        # Setup tracing with in-memory exporter
-        # Note: We create a completely fresh provider instead of saving/restoring
-        # to avoid complex state pollution issues
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        trace.set_tracer_provider(provider)
-
-        try:
-            # Create span with attributes
-            attributes = {"http.method": "GET", "http.url": "http://example.com"}
-            with create_span("http.request", attributes=attributes):
-                pass
-
-            # Verify span was created with attributes
-            spans = exporter.get_finished_spans()
-
-            # If no spans were created, it means OpenTelemetry state was polluted
-            # by a previous test. Skip this test rather than fail.
-            if len(spans) == 0:
-                pytest.skip(
-                    "OpenTelemetry state polluted by previous test - "
-                    "test passes in isolation but fails in full suite"
-                )
-
-            # Verify attributes were set (converted to strings)
-            span_attributes = spans[0].attributes
-            assert span_attributes.get("http.method") == "GET"
-            assert span_attributes.get("http.url") == "http://example.com"
-        finally:
-            # Shutdown provider to clean up resources
-            try:
-                provider.shutdown()
-            except Exception:
-                pass
+    # NOTE: test_create_span_attributes_passed_to_tracer has been moved to
+    # test_otel_span_attributes.py to run in isolation, preventing state
+    # pollution from test_add_otel_headers_injects_traceparent_when_available
 
 
 class TestRecordException:

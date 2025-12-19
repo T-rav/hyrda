@@ -2,7 +2,7 @@
 
 import pytest
 
-from utils.error_responses import (
+from shared.utils.error_responses import (
     ErrorCode,
     error_response,
     forbidden_error,
