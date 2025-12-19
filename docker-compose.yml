@@ -81,6 +81,38 @@ services:
     networks:
       - insightmesh
 
+  # MinIO Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: insightmesh-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console UI
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "minio"
+      component: "object-storage"
+    networks:
+      - insightmesh
+
   # Task Scheduler Service (nginx + Flask in single container)
   tasks:
     build:
@@ -352,6 +384,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-test-key-for-testing}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-test-anthropic-key}
       - LLM_API_KEY=${LLM_API_KEY:-test-llm-key}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - REPORTS_BUCKET=profile-reports
       - EXTERNAL_AGENTS_PATH=/app/external_agents  # Path where agents are mounted
     volumes:
       # Mount external agents directory (client-customizable)
@@ -364,6 +400,8 @@ services:
       qdrant:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     logging:
       driver: "json-file"
@@ -552,6 +590,8 @@ volumes:
   qdrant_data:
     driver: local
   redis_data:
+    driver: local
+  minio_data:
     driver: local
   loki_data:
     driver: local
