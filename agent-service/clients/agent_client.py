@@ -341,13 +341,16 @@ class AgentClient:
                                     if key in result and result[key]:
                                         final_output = result[key]
                                         if isinstance(final_output, str) and len(final_output) > 50:
-                                            # Emit final content as JSON
+                                            # Emit final content as JSON with metadata
                                             content_status = {
                                                 "type": "content",
-                                                "content": final_output
+                                                "content": final_output,
+                                                # Include full report and URL for caching (if available)
+                                                "full_report": result.get("final_report"),
+                                                "report_url": result.get("report_url"),
                                             }
                                             yield json.dumps(content_status) + "\n"
-                                            logger.info(f"Yielded final {key}")
+                                            logger.info(f"Yielded final {key} (with metadata)")
                                             break
 
             # Check if agent has a stream method (for non-LangGraph agents)

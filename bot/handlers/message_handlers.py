@@ -270,6 +270,30 @@ async def handle_message(
                 f"Using thread context with {len(history)} messages for response generation"
             )
 
+        # Check for cached profile report (for follow-up questions)
+        if thread_ts and conversation_cache and should_use_thread_context:
+            cached_report, cached_url = await conversation_cache.get_profile_report(
+                thread_ts
+            )
+            if cached_report:
+                logger.info(
+                    f"Found cached profile report for thread {thread_ts} ({len(cached_report)} chars)"
+                )
+                # Inject full report into history as a system message for context
+                # This allows follow-up questions to reference the full report
+                history.insert(
+                    0,
+                    {
+                        "role": "system",
+                        "content": f"# Full Profile Report (for context)\n\n{cached_report}\n\n"
+                        f"Note: Use this full report to answer detailed follow-up questions. "
+                        f"The user previously received an executive summary with link: {cached_url or 'N/A'}",
+                    },
+                )
+                logger.info(
+                    "Injected cached profile report into conversation history for follow-up context"
+                )
+
         # Send thinking indicator (Slack-specific)
         try:
             thinking_message_ts = await slack_service.send_thinking_indicator(
@@ -356,6 +380,17 @@ async def handle_message(
                     if payload.get("type") == "content":
                         # Final report content
                         final_content = payload.get("content", "")
+
+                        # Cache full profile report for follow-ups (if available)
+                        full_report = payload.get("full_report")
+                        report_url = payload.get("report_url")
+                        if full_report and conversation_cache and thread_ts:
+                            logger.info(
+                                f"Caching profile report for thread {thread_ts}"
+                            )
+                            await conversation_cache.store_profile_report(
+                                thread_ts, full_report, report_url
+                            )
                     else:
                         # Step status update
                         step_name = payload.get("step")
