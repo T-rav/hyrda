@@ -20,6 +20,20 @@ from services.external_agent_loader import (
 )
 
 
+@pytest.fixture(autouse=True)
+def reset_external_loader_singleton():
+    """Reset the global _external_loader singleton between tests to ensure isolation."""
+    import services.external_agent_loader as loader_module
+
+    # Save original state
+    original_loader = loader_module._external_loader
+
+    yield
+
+    # Reset to None to ensure each test gets a fresh loader
+    loader_module._external_loader = None
+
+
 def create_agent_package(base_dir: Path, agent_name: str, agent_code: str):
     """Helper to create a proper Python package for an agent."""
     agent_dir = base_dir / agent_name
