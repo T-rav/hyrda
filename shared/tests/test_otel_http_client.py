@@ -111,25 +111,32 @@ class TestCreateSpan:
             InMemorySpanExporter,
         )
 
-        # Setup tracing with in-memory exporter
-        exporter = InMemorySpanExporter()
-        provider = TracerProvider()
-        provider.add_span_processor(SimpleSpanProcessor(exporter))
-        trace.set_tracer_provider(provider)
+        # Save original provider to restore after test
+        original_provider = trace.get_tracer_provider()
 
-        # Create span with attributes
-        attributes = {"http.method": "GET", "http.url": "http://example.com"}
-        with create_span("http.request", attributes=attributes):
-            pass
+        try:
+            # Setup tracing with in-memory exporter
+            exporter = InMemorySpanExporter()
+            provider = TracerProvider()
+            provider.add_span_processor(SimpleSpanProcessor(exporter))
+            trace.set_tracer_provider(provider)
 
-        # Verify span was created with attributes
-        spans = exporter.get_finished_spans()
-        assert len(spans) > 0
+            # Create span with attributes
+            attributes = {"http.method": "GET", "http.url": "http://example.com"}
+            with create_span("http.request", attributes=attributes):
+                pass
 
-        # Verify attributes were set (converted to strings)
-        span_attributes = spans[0].attributes
-        assert span_attributes.get("http.method") == "GET"
-        assert span_attributes.get("http.url") == "http://example.com"
+            # Verify span was created with attributes
+            spans = exporter.get_finished_spans()
+            assert len(spans) > 0
+
+            # Verify attributes were set (converted to strings)
+            span_attributes = spans[0].attributes
+            assert span_attributes.get("http.method") == "GET"
+            assert span_attributes.get("http.url") == "http://example.com"
+        finally:
+            # Restore original tracer provider to avoid test pollution
+            trace.set_tracer_provider(original_provider)
 
 
 class TestRecordException:

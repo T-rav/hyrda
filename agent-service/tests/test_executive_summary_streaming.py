@@ -6,6 +6,21 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def reset_agent_cache():
+    """Reset AgentClient cache between tests to ensure isolation."""
+    from clients.agent_client import AgentClient
+
+    # Clear cache before test
+    client = AgentClient()
+    client._agent_cache.clear()
+
+    yield
+
+    # Clear cache after test
+    client._agent_cache.clear()
+
+
 @pytest.mark.asyncio
 async def test_agent_client_prioritizes_executive_summary():
     """Test that agent_client yields executive_summary instead of full report."""
