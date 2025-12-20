@@ -28,24 +28,63 @@ logger = logging.getLogger(__name__)
 
 
 def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]:
-    """Upload full report to MinIO/S3 and return presigned URL.
+    """Convert markdown to PDF and upload to MinIO/S3.
 
     Args:
         report_content: Full markdown report content
         company_name: Company name for filename
 
     Returns:
-        Presigned URL or None if upload fails
+        Presigned URL to PDF or None if upload fails
     """
     try:
+        # Use professional PDF generator (local copy)
+        from ..pdf_utils.pdf_generator import markdown_to_pdf
+        import re
+
+        logger.info("Converting markdown to PDF...")
+
+        # Strip LLM preambles (e.g., "Here is the revised report...")
+        # Remove any text before the first markdown heading
+        cleaned_content = re.sub(
+            r'^.*?(?=^#\s)',  # Remove everything before first # heading
+            '',
+            report_content,
+            flags=re.MULTILINE | re.DOTALL
+        ).strip()
+
+        # Strip metadata fields that LLM might add (Date:, Profile Type:, Focus Area:)
+        # These appear as standalone lines before the first section content
+        cleaned_content = re.sub(
+            r'^(Date|Profile Type|Focus Area):\s*.*?$',
+            '',
+            cleaned_content,
+            flags=re.MULTILINE
+        )
+
+        # Remove extra blank lines created by stripping
+        cleaned_content = re.sub(r'\n{3,}', '\n\n', cleaned_content).strip()
+
+        # Generate PDF with professional styling (no metadata clutter)
+        pdf_buffer = markdown_to_pdf(
+            markdown_content=cleaned_content,
+            title=f"{company_name.title()} - Company Profile",  # Title case for consistency
+            metadata={},  # No metadata header
+            style="professional"
+        )
+
+        if not pdf_buffer:
+            raise Exception("PDF generation failed")
+
+        pdf_bytes = pdf_buffer.getvalue()
+
         # MinIO configuration
-        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")  # Internal endpoint for boto3
-        s3_public_url = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")  # Public endpoint for presigned URLs
+        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
         s3_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         s3_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
         bucket_name = os.getenv("REPORTS_BUCKET", "profile-reports")
 
-        # Create S3 client (uses internal endpoint for API calls)
+        # Create S3 client
         s3_client = boto3.client(
             "s3",
             endpoint_url=s3_endpoint,
@@ -53,10 +92,10 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
             aws_secret_access_key=s3_secret_key,
         )
 
-        # Generate filename
+        # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
-        filename = f"profile_{safe_company_name}_{timestamp}.md"
+        filename = f"profile_{safe_company_name}_{timestamp}.pdf"
 
         # Create bucket if it doesn't exist
         try:
@@ -65,32 +104,26 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
             s3_client.create_bucket(Bucket=bucket_name)
             logger.info(f"Created bucket: {bucket_name}")
 
-        # Upload report
+        # Upload PDF
         s3_client.put_object(
             Bucket=bucket_name,
             Key=filename,
-            Body=report_content.encode("utf-8"),
-            ContentType="text/markdown",
+            Body=pdf_bytes,
+            ContentType="application/pdf",
         )
 
-        # Generate presigned URL (valid for 30 days)
+        # Generate presigned URL (internal endpoint for bot)
         url = s3_client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket_name, "Key": filename},
             ExpiresIn=2592000,  # 30 days
         )
 
-        # Replace internal endpoint with public URL for external access
-        # This allows the presigned URL to work from outside Docker network
-        if s3_endpoint in url:
-            url = url.replace(s3_endpoint, s3_public_url)
-            logger.info(f"Converted presigned URL from {s3_endpoint} to {s3_public_url}")
-
-        logger.info(f"Uploaded report to S3: {filename} ({len(report_content)} chars)")
+        logger.info(f"Uploaded PDF to S3: {filename} ({len(pdf_bytes)} bytes)")
         return url
 
     except Exception as e:
-        logger.error(f"Failed to upload report to S3: {e}")
+        logger.error(f"Failed to generate/upload PDF: {e}")
         return None
 
 
@@ -320,17 +353,15 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 if not executive_summary or len(executive_summary.strip()) == 0:
                     raise ValueError("LLM returned empty executive summary")
 
+                # Convert standard markdown to Slack markdown
+                # Standard markdown: **bold** __italic__ → Slack: *bold* _italic_
+                executive_summary = executive_summary.replace('**', '*').replace('__', '_')
+
                 logger.info(
                     f"Executive summary generated: {len(executive_summary)} characters"
                 )
 
-                # Add footer encouraging follow-up questions
-                executive_summary += (
-                    "\n\n\n"
-                    "---\n\n"
-                    "_💬 Ask me follow-up questions about this profile in this thread!_\n"
-                    "_Or start your message with `profile [company name]` to profile another company._"
-                )
+                # Footer is already in the prompt, don't add it again
 
             except Exception as summary_error:
                 logger.warning(f"Failed to generate executive summary: {summary_error}")
@@ -351,14 +382,27 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
             # Upload full report to S3 and get URL
             report_url = upload_report_to_s3(final_report, company_name)
 
+            # Build standardized output for Slack integration
+            # Use timestamp in filename for Slack attachment
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+            slack_filename = f"profile_{safe_company_name}_{timestamp}.pdf"
+
+            attachments = []
             if report_url:
-                # Add link to executive summary
-                executive_summary += f"\n\n\n📄 [View Full Report]({report_url})"
+                attachments.append({
+                    "url": report_url,
+                    "inject": True,  # Download and attach as Slack file
+                    "type": "pdf",
+                    "filename": slack_filename
+                })
 
             return {
-                "final_report": final_report,  # Still keep for fallback
+                "message": executive_summary,  # Slack-ready display text
+                "attachments": attachments,  # URLs to process
+                # Keep legacy fields for backward compatibility during transition
+                "final_report": final_report,
                 "executive_summary": executive_summary,
-                "report_url": report_url,
             }
 
         except Exception as e:
@@ -382,12 +426,26 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
     company_name = query.replace("profile ", "").strip() or "company"
     report_url = upload_report_to_s3(fallback_report, company_name)
 
-    fallback_summary = "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_"
+    fallback_summary = "📊 **Executive Summary**\n\n- Partial report generated\n\n---\n\n💬 *Ask follow-up questions in this thread!*"
+
+    # Build standardized output with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+    fallback_filename = f"profile_{safe_company_name}_{timestamp}_partial.pdf"
+
+    attachments = []
     if report_url:
-        fallback_summary += f"\n\n\n📄 [View Full Report]({report_url})"
+        attachments.append({
+            "url": report_url,
+            "inject": True,
+            "type": "pdf",
+            "filename": fallback_filename
+        })
 
     return {
+        "message": fallback_summary,
+        "attachments": attachments,
+        # Legacy fields
         "final_report": fallback_report,
         "executive_summary": fallback_summary,
-        "report_url": report_url,
     }

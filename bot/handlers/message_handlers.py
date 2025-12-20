@@ -377,47 +377,59 @@ async def handle_message(
                     payload = json.loads(chunk.strip())
                     logger.info(f"⭐ Parsed payload: {payload}")
 
-                    if payload.get("type") == "content":
-                        # Final report content
-                        final_content = payload.get("content", "")
+                    if payload.get("type") == "result":
+                        # Standardized contract: {message, attachments}
+                        node_name = payload.get("node")
+                        data = payload.get("data", {})
 
-                        # Check if content should be fetched and injected from URL
-                        inject_content = payload.get("inject_content", False)
-                        content_url = payload.get("report_url")
+                        logger.info(
+                            f"📦 Result from '{node_name}': {list(data.keys())}"
+                        )
 
-                        if inject_content and content_url:
-                            logger.info(
-                                f"inject_content flag set - fetching from {content_url}"
-                            )
-                            try:
-                                import httpx
+                        # Get message and attachments
+                        final_content = data.get("message", "")
+                        attachments = data.get("attachments", [])
 
-                                async with httpx.AsyncClient() as client:
-                                    response = await client.get(
-                                        content_url, timeout=30.0
-                                    )
-                                    if response.status_code == 200:
-                                        final_content = response.text
-                                        logger.info(
-                                            f"Successfully fetched and injected content ({len(final_content)} chars)"
-                                        )
-                                    else:
-                                        logger.warning(
-                                            f"Failed to fetch content: HTTP {response.status_code}"
-                                        )
-                            except Exception as e:
-                                logger.error(f"Error fetching content from URL: {e}")
-                                # Keep using summary/original content if fetch fails
+                        # Process attachments (upload files to Slack)
+                        for attachment in attachments:
+                            url = attachment.get("url")
+                            should_inject = attachment.get("inject", False)
+                            file_type = attachment.get("type", "file")
+                            filename = attachment.get("filename", "attachment")
 
-                        # Cache full profile report for follow-ups (if available)
-                        full_report = payload.get("full_report")
-                        if full_report and conversation_cache and thread_ts:
-                            logger.info(
-                                f"Caching profile report for thread {thread_ts}"
-                            )
-                            await conversation_cache.store_profile_report(
-                                thread_ts, full_report, content_url
-                            )
+                            if url and should_inject:
+                                logger.info(f"📥 Downloading {file_type} from {url}")
+                                try:
+                                    import httpx
+
+                                    async with httpx.AsyncClient() as client:
+                                        response = await client.get(url, timeout=30.0)
+                                        if response.status_code == 200:
+                                            file_bytes = response.content
+                                            logger.info(
+                                                f"✅ Downloaded {len(file_bytes)} bytes"
+                                            )
+
+                                            # Upload to Slack as file attachment
+                                            if thread_ts:
+                                                logger.info(
+                                                    f"📎 Uploading {filename} to Slack"
+                                                )
+                                                await slack_service.upload_file(
+                                                    channel=channel,
+                                                    file_content=file_bytes,
+                                                    filename=filename,
+                                                    thread_ts=thread_ts,
+                                                    initial_comment=final_content,
+                                                )
+                                                # Clear final_content since it's included in file upload
+                                                final_content = None
+                                        else:
+                                            logger.warning(
+                                                f"⚠️  HTTP {response.status_code}"
+                                            )
+                                except Exception as e:
+                                    logger.error(f"❌ File upload failed: {e}")
                     else:
                         # Step status update
                         step_name = payload.get("step")

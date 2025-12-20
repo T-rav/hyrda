@@ -59,6 +59,7 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         notes: Compressed and synthesized research findings
         final_report: Generated comprehensive profile report
         executive_summary: Short summary for Slack display (3-5 bullets)
+        report_url: Presigned URL to full report PDF in MinIO (for inject_content feature)
         profile_type: Type of profile (company or employee)
         focus_area: Specific intent/aspect to emphasize (e.g., "AI needs", "hiring challenges")
         revision_count: Number of quality control revisions attempted
@@ -80,6 +81,9 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     notes: list[str]
     final_report: str
     executive_summary: str
+    report_url: str | None
+    message: str  # Slack-ready display text (standardized contract)
+    attachments: list[dict]  # URLs to process (standardized contract)
     profile_type: str
     focus_area: str
     revision_count: int
@@ -149,8 +153,13 @@ class ProfileAgentInputState(TypedDict):
 
 # Output state from main graph
 class ProfileAgentOutputState(TypedDict):
-    """Output from the profile agent graph."""
+    """Output from the profile agent graph.
+
+    Uses standardized contract for Slack integration:
+    - message: Slack-ready markdown text to display
+    - attachments: List of URLs with processing instructions
+    """
 
     messages: list[MessageLikeRepresentation]
-    final_report: str
-    executive_summary: str
+    message: str  # Slack-ready formatted message
+    attachments: list[dict]  # [{"url": "...", "inject": bool}]

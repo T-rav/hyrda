@@ -1020,16 +1020,21 @@ For Employee/Project Profiles:
 - Notable achievement/outcome
 </What to Include>
 
-<Output Format - FOLLOW EXACTLY>
-📊 *Executive Summary*
+<Output Format - FOLLOW EXACTLY - USE STANDARD MARKDOWN>
+📊 **Executive Summary**
 
-• [Single sentence - 15-20 words max]
-• [Single sentence - 15-20 words max]
-• [Single sentence - 15-20 words max]
+- [Single sentence - 15-20 words max]
+- [Single sentence - 15-20 words max]
+- [Single sentence - 15-20 words max]
 
-📎 _Full detailed report attached as PDF_
+---
+
+💬 *Ask follow-up questions in this thread!*
 
 STOP HERE - DO NOT ADD MORE BULLETS OR EXPLANATIONS
+
+NOTE: Use standard markdown formatting (** for bold, * for italic, - for bullets).
+The message handler will convert this to Slack format automatically.
 </Output Format>
 
 Generate EXACTLY 3 bullet points now.

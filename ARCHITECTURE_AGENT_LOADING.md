@@ -269,6 +269,7 @@ docker compose restart agent_service
 - [External Agents README](./external_agents/README.md) - How to create/customize agents
 - [Agent Execution Modes](./AGENT_EXECUTION_MODES.md) - Embedded vs Cloud deployment
 - [Control-Plane API](./control_plane/README.md) - Agent registry management
+- [Agent-to-Slack Output Contract](./docs/AGENT_SLACK_CONTRACT.md) - Standardized output format for Slack integration
 
 ---
 

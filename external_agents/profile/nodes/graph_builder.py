@@ -15,6 +15,7 @@ from .brief_validation import (
 from .clarification import clarify_with_user
 from .compression import compress_research
 from .final_report import final_report_generation
+from .output import output_node
 from .quality_control import (
     quality_control_node,
     quality_control_router,
@@ -124,6 +125,7 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     profile_builder.add_node("research_supervisor", supervisor_subgraph)
     profile_builder.add_node("final_report_generation", final_report_generation)
     profile_builder.add_node("quality_control", quality_control_node)
+    profile_builder.add_node("output", output_node)
 
     # Add edges
     # Main path uses static edges
@@ -151,9 +153,12 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
         quality_control_router,
         {
             "revise": "final_report_generation",  # Loop back for revision
-            "end": END,  # Quality passed or max revisions exceeded
+            "end": "output",  # Quality passed, emit final output
         },
     )
+
+    # Output node emits final result and then ends
+    profile_builder.add_edge("output", END)
 
     # Compile and return with checkpointer if provided
     if checkpointer:
