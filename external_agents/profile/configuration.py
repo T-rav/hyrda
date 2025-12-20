@@ -38,9 +38,9 @@ class ProfileConfiguration(BaseModel):
 
     # Search configuration
     search_api: SearchAPI = SearchAPI.TAVILY  # Use direct Tavily integration
-    max_researcher_iterations: int = 4  # More iterations for deeper research (was 3)
+    max_researcher_iterations: int = 12  # Deep research for comprehensive 20+ page reports
     max_react_tool_calls: int = (
-        8  # More tool calls per researcher for thorough research (was 6)
+        10  # More tool calls per researcher for thorough research
     )
 
     # Model configuration (reuse existing LLM settings)

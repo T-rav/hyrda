@@ -223,15 +223,12 @@ async def final_report_generation(
     else:
         focus_guidance = ""
 
-    # Get prompt from Langfuse (required - no local fallback)
+    # Use local prompts (not Langfuse)
     # Select prompt based on profile type
-    prompt_service = get_prompt_service()
-    if not prompt_service:
-        raise RuntimeError("PromptService not available - required for profile agent")
-
     if profile_type == "employee":
-        prompt_name = "Profiler/Person/FinalReport"
-        fallback_prompt = """# Person Profile Report
+        # TODO: Add person_profile_final_report_prompt to prompts.py
+        logger.warning("Employee/person profiles not yet migrated to local prompts - using fallback")
+        prompt_template = """# Person Profile Report
 
 You are generating a professional profile for a person.
 
@@ -246,38 +243,9 @@ Date: {current_date}
 
 Generate a comprehensive professional profile based on the research provided."""
     else:
-        prompt_name = "CompanyProfiler/Final_Report_Generation"
-        fallback_prompt = """# Company Profile Report
-
-You are generating a comprehensive company profile.
-
-Profile Type: {profile_type}
-Focus Area: {focus_area}
-{focus_guidance}
-
-Research Notes:
-{notes}
-
-Date: {current_date}
-
-Generate a comprehensive company profile based on the research provided."""
-
-    logger.info(f"Fetching {profile_type} prompt from Langfuse: {prompt_name}")
-    prompt_template = prompt_service.get_custom_prompt(
-        template_name=prompt_name,
-        fallback=fallback_prompt,  # Use fallback for testing/dev when Langfuse unavailable
-    )
-
-    if not prompt_template:
-        logger.error(
-            f"Langfuse prompt '{prompt_name}' not found and fallback failed. "
-            "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
-            "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
-        )
-        raise RuntimeError(
-            f"Langfuse prompt '{prompt_name}' not found and fallback failed. "
-            "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
-        )
+        # Use local company profile prompt (from prompts.py)
+        logger.info("Using local company_profile_final_report_prompt")
+        prompt_template = prompts.company_profile_final_report_prompt
 
     system_prompt = prompt_template.format(
         profile_type=profile_type,
