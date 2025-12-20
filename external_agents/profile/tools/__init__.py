@@ -1,5 +1,6 @@
 """Tools for company profile research agents."""
 
-from tools.internal_search import InternalSearchTool
+from .internal_search import InternalSearchTool
+from .sec_query import SECQueryTool
 
-__all__ = ["InternalSearchTool"]
+__all__ = ["InternalSearchTool", "SECQueryTool"]
