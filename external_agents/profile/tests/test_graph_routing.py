@@ -76,27 +76,3 @@ async def test_graph_compiles_with_new_routing():
 
     # Verify graph structure (basic check)
     assert graph is not None
-
-
-@pytest.mark.skip(reason="Integration test requires full graph mocking - router logic tested in unit tests")
-@pytest.mark.asyncio
-async def test_graph_routes_to_qa_with_existing_report():
-    """Integration test: verify graph routes to Q&A node when report exists.
-
-    NOTE: This test is skipped because it requires extensive mocking of the entire
-    workflow. The router logic is adequately tested by unit tests above.
-    For true integration testing, use end-to-end tests with real environment.
-    """
-    pass
-
-
-@pytest.mark.skip(reason="Integration test requires full graph mocking - router logic tested in unit tests")
-@pytest.mark.asyncio
-async def test_graph_routes_to_full_workflow_without_report():
-    """Integration test: verify graph routes to full workflow when no report.
-
-    NOTE: This test is skipped because it requires extensive mocking of the entire
-    workflow. The router logic is adequately tested by unit tests above.
-    For true integration testing, use end-to-end tests with real environment.
-    """
-    pass
