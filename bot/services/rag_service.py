@@ -789,6 +789,164 @@ class RAGService:
             return final_response.get("content", "")
         return final_response or ""
 
+    async def deep_research_for_agent(
+        self,
+        query: str,
+        system_prompt: str | None = None,
+        effort: str = "medium",
+        agent_context: dict[str, Any] | None = None,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Perform deep research with agent-specific context and custom prompts.
+
+        This method is designed for agents (like the research agent) to call
+        instead of implementing their own custom internal search tools.
+
+        Args:
+            query: Research query to investigate
+            system_prompt: Optional custom system prompt for agent-specific behavior
+            effort: Research effort level - "low", "medium", or "high"
+            agent_context: Agent-specific metadata (e.g., {"research_topic": "...", "focus_area": "..."})
+            user_id: User ID for access control and personalization
+
+        Returns:
+            Dict with:
+                - success: bool - Whether research succeeded
+                - content: str - Formatted answer with citations
+                - chunks: list[dict] - Retrieved context chunks with metadata
+                - sources: list[str] - Unique document sources (file names)
+                - summary: str - Synthesized summary of findings
+                - unique_documents: int - Number of unique documents found
+                - total_chunks: int - Total number of chunks retrieved
+                - error: str - Error message if failed (only if success=False)
+
+        Example:
+            result = await rag_service.deep_research_for_agent(
+                query="What are our best practices for AI implementation?",
+                system_prompt="You are researching for a technical proposal...",
+                effort="high",
+                agent_context={"research_topic": "AI Strategy", "focus_area": "implementation"}
+            )
+
+            if result["success"]:
+                print(result["content"])  # Formatted answer with citations
+        """
+        if not self.internal_deep_research:
+            logger.warning("Internal deep research service not available")
+            return {
+                "success": False,
+                "error": "Internal deep research service not configured",
+                "query": query,
+            }
+
+        try:
+            logger.info(f"🔬 Agent deep research ({effort} effort): {query[:100]}...")
+
+            # Use the internal deep research service (already integrated)
+            result = await self.internal_deep_research.deep_research(
+                query=query,
+                effort=effort,
+                conversation_history=None,  # Agents typically don't have conversation history
+                user_id=user_id,
+            )
+
+            if not result.get("success"):
+                return result  # Return error as-is
+
+            # Extract results
+            chunks = result.get("chunks", [])
+            summary = result.get("summary", "")
+
+            # Build formatted content with citations
+            formatted_content = self._format_agent_research_result(
+                query=query,
+                summary=summary,
+                chunks=chunks,
+                system_prompt=system_prompt,
+                agent_context=agent_context,
+            )
+
+            # Extract unique sources
+            sources = list(
+                {
+                    chunk.get("metadata", {}).get("file_name", "unknown")
+                    for chunk in chunks
+                }
+            )
+
+            logger.info(
+                f"✅ Agent deep research complete: {len(chunks)} chunks from "
+                f"{result.get('unique_documents', 0)} documents"
+            )
+
+            return {
+                "success": True,
+                "content": formatted_content,  # Formatted for agent consumption
+                "chunks": chunks,  # Raw chunks for additional processing
+                "sources": sources,  # List of document names
+                "summary": summary,  # Synthesized summary
+                "unique_documents": result.get("unique_documents", 0),
+                "total_chunks": result.get("total_chunks", 0),
+                "query": query,
+                "effort": effort,
+            }
+
+        except Exception as e:
+            logger.error(f"Agent deep research failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "query": query,
+            }
+
+    def _format_agent_research_result(
+        self,
+        query: str,
+        summary: str,
+        chunks: list[dict[str, Any]],
+        system_prompt: str | None,
+        agent_context: dict[str, Any] | None,
+    ) -> str:
+        """
+        Format deep research results for agent consumption.
+
+        Args:
+            query: Original research query
+            summary: Synthesized summary from deep research
+            chunks: Retrieved context chunks
+            system_prompt: Optional custom prompt (for context)
+            agent_context: Optional agent metadata
+
+        Returns:
+            Formatted string with summary and citations
+        """
+        if not chunks:
+            return "No relevant information found in internal knowledge base."
+
+        # Start with summary
+        formatted = f"**Research Summary:**\n{summary}\n\n"
+
+        # Add sources section with citations
+        formatted += "**Sources:**\n"
+        unique_sources = {}
+        for idx, chunk in enumerate(chunks[:10], 1):  # Limit to top 10 sources
+            file_name = chunk.get("metadata", {}).get("file_name", "unknown")
+            if file_name not in unique_sources:
+                unique_sources[file_name] = idx
+                # Add snippet for context
+                content_preview = chunk.get("content", "")[:200].replace("\n", " ")
+                formatted += f"\n[{idx}] **{file_name}**\n"
+                formatted += f"    Excerpt: {content_preview}...\n"
+
+        # Add metadata if agent context provided
+        if agent_context:
+            formatted += "\n**Research Context:**\n"
+            for key, value in agent_context.items():
+                formatted += f"- {key}: {value}\n"
+
+        return formatted
+
     async def get_system_status(self) -> dict[str, Any]:
         """Get system status information"""
         status = {
