@@ -2,7 +2,10 @@ name: insightmesh
 
 services:
   librechat:
-    image: ghcr.io/danny-avila/librechat:latest
+    build:
+      context: ./librechat-custom
+      dockerfile: Dockerfile
+    image: insightmesh-librechat:latest
     container_name: insightmesh-librechat
     restart: unless-stopped
     ports:
@@ -12,15 +15,20 @@ services:
       - PORT=3080
       - MONGO_URI=mongodb://insightmesh-mongodb:27017/librechat
       - MEILI_HOST=http://meilisearch:7700
-      # JWT Secret for authentication (generate with: openssl rand -base64 32)
+      # JWT Secrets for authentication
+      # SECURITY: In production, these MUST be set via environment variables
+      # Generate with: openssl rand -base64 32
+      # The validation script will prevent startup with default values in production
       - JWT_SECRET=${JWT_SECRET:-insightmesh-librechat-jwt-secret-change-in-production}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-insightmesh-librechat-refresh-secret-change-in-production}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       # API Keys
-      - OPENAI_API_KEY=${LIBRECHAT_SERVICE_TOKEN:-librechat-service-token}
+      - OPENAI_API_KEY=${LIBRECHAT_SERVICE_TOKEN}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      # RAG Service Configuration
-      - RAG_API_URL=http://insightmesh-rag-service:8002
-      - LIBRECHAT_SERVICE_TOKEN=${LIBRECHAT_SERVICE_TOKEN:-librechat-service-token}
+      # InsightMesh Service Configuration
+      - RAG_SERVICE_URL=http://insightmesh-rag-service:8002
+      - AGENT_SERVICE_URL=http://insightmesh-control-plane:5002
+      - LIBRECHAT_SERVICE_TOKEN=${LIBRECHAT_SERVICE_TOKEN}
       # Social Login Configuration
       - ALLOW_SOCIAL_LOGIN=true
       - DOMAIN_CLIENT=${SERVER_BASE_URL:-http://localhost:3080}

@@ -166,3 +166,57 @@ jobs:
         directory: bot/health_ui/coverage
         flags: react-bot
         name: react-bot-coverage
+
+  librechat-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [api-test, client-test, build]
+    name: LibreChat ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: |
+          librechat-custom/package-lock.json
+          librechat-custom/api/package-lock.json
+          librechat-custom/client/package-lock.json
+
+    - name: Install root dependencies
+      if: matrix.task != 'build'
+      working-directory: librechat-custom
+      run: npm ci --no-audit
+
+    - name: Run API tests
+      if: matrix.task == 'api-test'
+      working-directory: librechat-custom/api
+      env:
+        NODE_ENV: test
+      run: npm run test:ci
+
+    - name: Run client tests
+      if: matrix.task == 'client-test'
+      working-directory: librechat-custom/client
+      env:
+        NODE_ENV: development
+      run: npm run test:ci
+
+    - name: Set up Docker Buildx
+      if: matrix.task == 'build'
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build LibreChat Docker image
+      if: matrix.task == 'build'
+      run: |
+        docker compose -f docker-compose.librechat.yml build
+
+    - name: Verify image was created
+      if: matrix.task == 'build'
+      run: |
+        docker images | grep insightmesh-librechat

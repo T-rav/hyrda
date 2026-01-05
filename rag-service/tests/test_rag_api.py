@@ -416,3 +416,153 @@ class TestRequestValidation:
         )
 
         assert response.status_code == 422  # Validation error
+
+
+class TestStreamingEndpoints:
+    """Test streaming-specific functionality for RAG API."""
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_agent_client")
+    def test_sse_format_validation(
+        self, mock_get_agent_client, mock_get_routing, client, signed_headers
+    ):
+        """Test that streaming responses use proper SSE format."""
+        # Arrange
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = "research"
+        mock_get_routing.return_value = mock_routing
+
+        mock_agent_client = Mock()
+
+        async def mock_stream_gen():
+            yield "chunk1"
+            yield "chunk2"
+            yield "chunk3"
+
+        def create_mock_stream(*args, **kwargs):
+            return mock_stream_gen()
+
+        mock_agent_client.stream_agent = create_mock_stream
+        mock_get_agent_client.return_value = mock_agent_client
+
+        payload = {
+            "query": "/research AI safety",
+            "conversation_history": [],
+            "user_id": "test_user",
+        }
+
+        # Act
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=signed_headers(payload),
+        )
+
+        # Assert
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "text/event-stream; charset=utf-8"
+        assert response.headers["Cache-Control"] == "no-cache"
+        assert response.headers["Connection"] == "keep-alive"
+        assert response.headers["X-Accel-Buffering"] == "no"
+
+        # Verify SSE format: data: {chunk}\n\n
+        content = response.text
+        assert "data: chunk1\n\n" in content
+        assert "data: chunk2\n\n" in content
+        assert "data: chunk3\n\n" in content
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_agent_client")
+    def test_streaming_with_context_propagation(
+        self, mock_get_agent_client, mock_get_routing, client, signed_headers
+    ):
+        """Test that context (channel, thread_ts) is propagated to agent."""
+        # Arrange
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = "research"
+        mock_get_routing.return_value = mock_routing
+
+        mock_agent_client = Mock()
+        captured_context = {}
+
+        async def mock_stream_gen():
+            yield "result"
+
+        def create_mock_stream(*args, **kwargs):
+            # Capture the context passed to agent
+            nonlocal captured_context
+            captured_context = kwargs.get("context", {})
+            return mock_stream_gen()
+
+        mock_agent_client.stream_agent = create_mock_stream
+        mock_get_agent_client.return_value = mock_agent_client
+
+        payload = {
+            "query": "/research quantum computing",
+            "conversation_history": [],
+            "user_id": "test_user",
+            "context": {
+                "channel": "C12345",
+                "thread_ts": "1234567890.123456",
+            },
+        }
+
+        # Act
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=signed_headers(payload),
+        )
+
+        # Assert
+        assert response.status_code == 200
+        assert captured_context.get("channel") == "C12345"
+        assert captured_context.get("thread_ts") == "1234567890.123456"
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_agent_client")
+    def test_metadata_header_parsing_deep_search(
+        self, mock_get_agent_client, mock_get_routing, client, signed_headers
+    ):
+        """Test X-Conversation-Metadata header parsing for deep search."""
+        # Arrange
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None  # Will be overridden by metadata
+        mock_get_routing.return_value = mock_routing
+
+        mock_agent_client = Mock()
+        captured_agent_name = None
+        captured_context = {}
+
+        async def mock_stream_gen():
+            yield "deep research results"
+
+        def create_mock_stream(agent_name, *args, **kwargs):
+            nonlocal captured_agent_name, captured_context
+            captured_agent_name = agent_name
+            captured_context = kwargs.get("context", {})
+            return mock_stream_gen()
+
+        mock_agent_client.stream_agent = create_mock_stream
+        mock_get_agent_client.return_value = mock_agent_client
+
+        payload = {
+            "query": "Research AI trends",
+            "conversation_history": [],
+            "user_id": "test_user",
+        }
+
+        headers = signed_headers(payload)
+        headers["X-Conversation-Metadata"] = '{"deepSearchEnabled": true, "researchDepth": "comprehensive"}'
+
+        # Act
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+
+        # Assert
+        assert response.status_code == 200
+        assert captured_agent_name == "research"
+        assert captured_context.get("research_depth") == "comprehensive"

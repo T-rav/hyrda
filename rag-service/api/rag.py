@@ -1,9 +1,10 @@
 """RAG API endpoints with request/response models."""
 
+import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from config.settings import get_settings
@@ -84,21 +85,24 @@ class RAGStatusResponse(BaseModel):
 async def generate_response(
     request: RAGGenerateRequest,
     service: dict = Depends(require_service_auth),
+    x_conversation_metadata: str | None = Header(None, alias="X-Conversation-Metadata"),
 ):
     """
     Generate RAG-enhanced response with automatic agent routing.
 
     This endpoint orchestrates the entire RAG pipeline:
-    1. Checks if query needs agent routing (e.g., /profile, /research commands)
-    2. If agent needed: Routes to agent-service
-    3. If not: Performs RAG retrieval and LLM generation with tools
-    4. Returns response with citations and metadata
+    1. Checks conversation metadata for deep search or agent selection
+    2. If deep search enabled: Routes to research agent with specified depth
+    3. If agent selected: Routes to specific agent
+    4. If query pattern matches: Routes to pattern-based agent
+    5. Otherwise: Performs standard RAG retrieval and LLM generation with tools
 
-    The endpoint is authenticated via service tokens (bot, control-plane, etc.).
+    The endpoint is authenticated via service tokens (bot, control-plane, librechat, etc.).
 
     Args:
         request: RAG generation request with query and context
         service: Service info from authentication (injected by dependency)
+        x_conversation_metadata: Optional JSON metadata from LibreChat with routing preferences
 
     Returns:
         RAGGenerateResponse with generated text, citations, and metadata
@@ -115,9 +119,43 @@ async def generate_response(
     try:
         settings = get_settings()
 
-        # Step 1: Check if query needs agent routing
-        routing_service = get_routing_service()
-        agent_name = routing_service.detect_agent(request.query)
+        # Step 1: Parse conversation metadata from header (LibreChat integration)
+        deep_search_enabled = False
+        selected_agent = None
+        research_depth = "deep"  # Default depth for deep research
+
+        if x_conversation_metadata:
+            try:
+                metadata = json.loads(x_conversation_metadata)
+                deep_search_enabled = metadata.get("deepSearchEnabled", False)
+                selected_agent = metadata.get("selectedAgent")
+                research_depth = metadata.get("researchDepth", "deep")
+                logger.info(
+                    f"Conversation metadata: deep_search={deep_search_enabled}, "
+                    f"selected_agent={selected_agent}, research_depth={research_depth}"
+                )
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid conversation metadata JSON: {x_conversation_metadata}")
+
+        # Step 2: Routing logic with priority
+        agent_name = None
+        agent_context = {}
+
+        # Priority 1: Deep search enabled (routes to research agent)
+        if deep_search_enabled:
+            agent_name = "research"
+            agent_context["research_depth"] = research_depth
+            logger.info(f"Deep search enabled - routing to research agent (depth={research_depth})")
+
+        # Priority 2: Selected agent from LibreChat sidebar
+        elif selected_agent:
+            agent_name = selected_agent
+            logger.info(f"Agent selected via LibreChat - routing to: {selected_agent}")
+
+        # Priority 3: Pattern-based agent detection (existing behavior)
+        else:
+            routing_service = get_routing_service()
+            agent_name = routing_service.detect_agent(request.query)
 
         if agent_name:
             logger.info(f"Routing to agent: {agent_name}")
@@ -129,6 +167,9 @@ async def generate_response(
                 "conversation_id": request.conversation_id,
                 "session_id": request.session_id,
             }
+
+            # Add agent-specific context (e.g., research_depth for research agent)
+            context.update(agent_context)
 
             # Add document context if provided
             if request.document_content:
@@ -218,7 +259,7 @@ async def generate_response(
         raise HTTPException(
             status_code=500,
             detail=f"RAG generation failed: {str(e)}",
-        )
+        ) from e
 
 
 @router.get("/v1/status", response_model=RAGStatusResponse)
@@ -300,4 +341,4 @@ async def get_status(
         raise HTTPException(
             status_code=500,
             detail=f"Status check failed: {str(e)}",
-        )
+        ) from e

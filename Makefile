@@ -420,8 +420,8 @@ python-version: $(VENV)
 	@$(PIP) --version
 
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
-# Main start command - includes everything (core + monitoring)
-start: docker-build docker-up docker-monitor
+# Main start command - includes everything (core + monitoring + LibreChat)
+start: docker-build docker-up librechat-build librechat-up docker-monitor
 	@echo "$(GREEN)🔥 ================================$(RESET)"
 	@echo "$(GREEN)🚀 FULL STACK STARTED SUCCESSFULLY!$(RESET)"
 	@echo "$(GREEN)🔥 ================================$(RESET)"
@@ -429,6 +429,7 @@ start: docker-build docker-up docker-monitor
 	@echo "$(BLUE)📊 Main Services:$(RESET)"
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - LibreChat UI: http://localhost:3080$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)🔍 Monitoring & Logging Stack:$(RESET)"
@@ -437,7 +438,7 @@ start: docker-build docker-up docker-monitor
 	@echo "$(YELLOW)  - Loki Logs: http://localhost:3100 (view via Grafana)$(RESET)"
 	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
 	@echo ""
-	@echo "$(GREEN)🎉 All services running with centralized logging! Check Grafana for logs and metrics.$(RESET)"
+	@echo "$(GREEN)🎉 All services including LibreChat UI running!$(RESET)"
 
 # Core services only (without monitoring)
 start-core: docker-build docker-up
@@ -572,3 +573,40 @@ db-status: $(VENV)
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+
+# ===== LIBRECHAT UI =====
+
+# Build custom LibreChat Docker image with InsightMesh UI
+librechat-build:
+	@echo "$(BLUE)🔨 Building custom LibreChat with InsightMesh UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml build
+	@echo "$(GREEN)✅ LibreChat image built successfully!$(RESET)"
+
+# Start LibreChat UI
+librechat-up: check-env
+	@echo "$(BLUE)🚀 Starting LibreChat UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml up -d
+	@echo "$(GREEN)✅ LibreChat started!$(RESET)"
+	@echo "$(BLUE)  - LibreChat UI: http://localhost:3080$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)💡 Required environment variables:$(RESET)"
+	@echo "$(YELLOW)  - AGENT_SERVICE_URL (currently: $${AGENT_SERVICE_URL:-NOT SET})$(RESET)"
+	@echo "$(YELLOW)  - LIBRECHAT_SERVICE_TOKEN (currently: $${LIBRECHAT_SERVICE_TOKEN:-NOT SET})$(RESET)"
+
+# Stop LibreChat UI
+librechat-down:
+	@echo "$(YELLOW)🛑 Stopping LibreChat UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml down
+	@echo "$(GREEN)✅ LibreChat stopped$(RESET)"
+
+# View LibreChat logs
+librechat-logs:
+	docker compose -f docker-compose.librechat.yml logs -f
+
+# Restart LibreChat
+librechat-restart: librechat-down librechat-up
+
+# Build and start LibreChat
+librechat-start: librechat-build librechat-up
+
+.PHONY: librechat-build librechat-up librechat-down librechat-logs librechat-restart librechat-start
