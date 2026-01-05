@@ -80,8 +80,208 @@ class RAGStatusResponse(BaseModel):
 # Endpoints
 
 
+# Helper functions for generate_response
+
+
+def _parse_conversation_metadata(x_conversation_metadata: str | None) -> tuple[bool, str | None, str]:
+    """
+    Parse LibreChat conversation metadata from header.
+
+    Args:
+        x_conversation_metadata: JSON string with deepSearchEnabled, selectedAgent, researchDepth
+
+    Returns:
+        Tuple of (deep_search_enabled, selected_agent, research_depth)
+    """
+    deep_search_enabled = False
+    selected_agent = None
+    research_depth = "deep"
+
+    if x_conversation_metadata:
+        try:
+            metadata = json.loads(x_conversation_metadata)
+            deep_search_enabled = metadata.get("deepSearchEnabled", False)
+            selected_agent = metadata.get("selectedAgent")
+            research_depth = metadata.get("researchDepth", "deep")
+            logger.info(
+                f"Conversation metadata: deep_search={deep_search_enabled}, "
+                f"selected_agent={selected_agent}, research_depth={research_depth}"
+            )
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid conversation metadata JSON: {x_conversation_metadata}")
+
+    return deep_search_enabled, selected_agent, research_depth
+
+
+def _determine_agent_routing(
+    deep_search_enabled: bool,
+    selected_agent: str | None,
+    query: str,
+) -> tuple[str | None, dict[str, Any]]:
+    """
+    Determine agent routing based on metadata and query patterns.
+
+    Priority:
+    1. Deep search enabled → research agent
+    2. Agent selected → specific agent
+    3. Pattern match → pattern-based agent
+    4. None → standard RAG pipeline
+
+    Args:
+        deep_search_enabled: Whether deep search toggle is enabled
+        selected_agent: Agent name from LibreChat sidebar
+        query: User query for pattern matching
+
+    Returns:
+        Tuple of (agent_name, agent_context)
+    """
+    agent_name = None
+    agent_context = {}
+
+    # Priority 1: Deep search enabled (routes to research agent)
+    if deep_search_enabled:
+        agent_name = "research"
+        logger.info("Deep search enabled - routing to research agent")
+
+    # Priority 2: Selected agent from LibreChat sidebar
+    elif selected_agent:
+        agent_name = selected_agent
+        logger.info(f"Agent selected via LibreChat - routing to: {selected_agent}")
+
+    # Priority 3: Pattern-based agent detection (existing behavior)
+    else:
+        routing_service = get_routing_service()
+        agent_name = routing_service.detect_agent(query)
+        if agent_name:
+            logger.info(f"Pattern matched - routing to agent: {agent_name}")
+
+    return agent_name, agent_context
+
+
+async def _stream_agent_response(
+    agent_name: str,
+    request: RAGGenerateRequest,
+    agent_context: dict[str, Any],
+    research_depth: str,
+):
+    """
+    Stream agent execution with SSE format.
+
+    Args:
+        agent_name: Name of agent to execute
+        request: Original RAG request
+        agent_context: Agent-specific context
+        research_depth: Research depth for research agent
+
+    Returns:
+        StreamingResponse with SSE-formatted agent output
+    """
+    from fastapi.responses import StreamingResponse
+
+    agent_client = get_agent_client()
+
+    # Build execution context
+    context = {
+        "user_id": request.user_id,
+        "conversation_id": request.conversation_id,
+        "session_id": request.session_id,
+    }
+
+    # Add agent-specific context
+    context.update(agent_context)
+    if agent_name == "research":
+        context["research_depth"] = research_depth
+
+    # Add document context if provided
+    if request.document_content:
+        context["document_content"] = request.document_content
+        context["document_filename"] = request.document_filename
+
+    # Add Slack context for progress updates
+    if request.context:
+        context["channel"] = request.context.get("channel")
+        context["thread_ts"] = request.context.get("thread_ts")
+
+    async def stream_generator():
+        """Generator for SSE-formatted agent chunks."""
+        logger.info(f"Starting agent stream: {agent_name}")
+        async for chunk in agent_client.stream_agent(
+            agent_name=agent_name,
+            query=request.query,
+            context=context,
+        ):
+            logger.info(f"Received chunk: {chunk[:50]}")
+            yield f"data: {chunk}\n\n"
+        logger.info("Agent stream completed")
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def _generate_rag_response(
+    request: RAGGenerateRequest,
+    settings,
+) -> RAGGenerateResponse:
+    """
+    Generate response using standard RAG pipeline (no agent).
+
+    Args:
+        request: RAG generation request
+        settings: Application settings
+
+    Returns:
+        RAGGenerateResponse with generated text and metadata
+    """
+    logger.info("Processing with RAG pipeline")
+
+    llm_service = get_llm_service()
+
+    # Build messages list from conversation history + current query
+    messages = request.conversation_history.copy()
+    if not messages or messages[-1]["content"] != request.query:
+        messages.append({"role": "user", "content": request.query})
+
+    # Generate response via LLM service
+    response_text = await llm_service.get_response(
+        messages=messages,
+        user_id=request.user_id,
+        current_query=request.query,
+        document_content=request.document_content,
+        document_filename=request.document_filename,
+        conversation_id=request.conversation_id,
+        conversation_cache=None,
+        use_rag=request.use_rag,
+    )
+
+    if not response_text:
+        raise HTTPException(
+            status_code=422,
+            detail="Unable to generate response. Query may be empty or invalid.",
+        )
+
+    # TODO: Extract citations from context (implement in Phase 2)
+    citations = []
+
+    return RAGGenerateResponse(
+        response=response_text,
+        citations=citations,
+        metadata={
+            "rag_used": request.use_rag,
+            "routed_to_agent": False,
+            "vector_db_enabled": settings.vector.enabled,
+        },
+    )
+
+
 @router.post("/v1/chat/completions", response_model=RAGGenerateResponse)
-@router.post("/chat/completions", response_model=RAGGenerateResponse)  # Alias without v1
+@router.post("/chat/completions", response_model=RAGGenerateResponse)
 async def generate_response(
     request: RAGGenerateRequest,
     service: dict = Depends(require_service_auth),
@@ -91,168 +291,60 @@ async def generate_response(
     Generate RAG-enhanced response with automatic agent routing.
 
     This endpoint orchestrates the entire RAG pipeline:
-    1. Checks conversation metadata for deep search or agent selection
-    2. If deep search enabled: Routes to research agent with specified depth
-    3. If agent selected: Routes to specific agent
-    4. If query pattern matches: Routes to pattern-based agent
-    5. Otherwise: Performs standard RAG retrieval and LLM generation with tools
+    1. Parses conversation metadata for routing preferences
+    2. Determines agent routing (deep search, selected agent, or pattern match)
+    3. Routes to agent with streaming if applicable
+    4. Falls back to standard RAG pipeline if no agent match
 
     The endpoint is authenticated via service tokens (bot, control-plane, librechat, etc.).
 
     Args:
         request: RAG generation request with query and context
         service: Service info from authentication (injected by dependency)
-        x_conversation_metadata: Optional JSON metadata from LibreChat with routing preferences
+        x_conversation_metadata: Optional JSON metadata from LibreChat
 
     Returns:
         RAGGenerateResponse with generated text, citations, and metadata
+        Or StreamingResponse for agent execution
 
     Raises:
         HTTPException: 500 if generation fails
     """
     service_name = service.get("service", "unknown")
     logger.info(
-        f"[{service_name}] RAG generate request: query='{request.query[:50]}...', "
+        f"[{service_name}] RAG request: query='{request.query[:50]}...', "
         f"use_rag={request.use_rag}, conversation_id={request.conversation_id}"
     )
 
     try:
         settings = get_settings()
 
-        # Step 1: Parse conversation metadata from header (LibreChat integration)
-        deep_search_enabled = False
-        selected_agent = None
-        research_depth = "deep"  # Default depth for deep research
+        # Parse metadata from LibreChat
+        deep_search_enabled, selected_agent, research_depth = _parse_conversation_metadata(
+            x_conversation_metadata
+        )
 
-        if x_conversation_metadata:
-            try:
-                metadata = json.loads(x_conversation_metadata)
-                deep_search_enabled = metadata.get("deepSearchEnabled", False)
-                selected_agent = metadata.get("selectedAgent")
-                research_depth = metadata.get("researchDepth", "deep")
-                logger.info(
-                    f"Conversation metadata: deep_search={deep_search_enabled}, "
-                    f"selected_agent={selected_agent}, research_depth={research_depth}"
-                )
-            except json.JSONDecodeError:
-                logger.warning(f"Invalid conversation metadata JSON: {x_conversation_metadata}")
+        # Determine routing
+        agent_name, agent_context = _determine_agent_routing(
+            deep_search_enabled,
+            selected_agent,
+            request.query,
+        )
 
-        # Step 2: Routing logic with priority
-        agent_name = None
-        agent_context = {}
-
-        # Priority 1: Deep search enabled (routes to research agent)
-        if deep_search_enabled:
-            agent_name = "research"
-            agent_context["research_depth"] = research_depth
-            logger.info(f"Deep search enabled - routing to research agent (depth={research_depth})")
-
-        # Priority 2: Selected agent from LibreChat sidebar
-        elif selected_agent:
-            agent_name = selected_agent
-            logger.info(f"Agent selected via LibreChat - routing to: {selected_agent}")
-
-        # Priority 3: Pattern-based agent detection (existing behavior)
-        else:
-            routing_service = get_routing_service()
-            agent_name = routing_service.detect_agent(request.query)
-
+        # Route to agent if applicable
         if agent_name:
             logger.info(f"Routing to agent: {agent_name}")
-
-            # Route to agent-service
-            agent_client = get_agent_client()
-            context = {
-                "user_id": request.user_id,
-                "conversation_id": request.conversation_id,
-                "session_id": request.session_id,
-            }
-
-            # Add agent-specific context (e.g., research_depth for research agent)
-            context.update(agent_context)
-
-            # Add document context if provided
-            if request.document_content:
-                context["document_content"] = request.document_content
-                context["document_filename"] = request.document_filename
-
-            # Use streaming for agents to provide progress updates
-            logger.info(f"Streaming agent '{agent_name}' for real-time progress updates")
-
-            from fastapi.responses import StreamingResponse
-
-            async def stream_agent_with_context():
-                """Stream agent execution with Slack context for progress updates."""
-                # Add Slack context for agent to send updates
-                context["channel"] = request.context.get("channel") if request.context else None
-                context["thread_ts"] = request.context.get("thread_ts") if request.context else None
-
-                logger.info("💥 stream_agent_with_context starting to consume agent_client.stream_agent")
-                async for chunk in agent_client.stream_agent(
-                    agent_name=agent_name,
-                    query=request.query,
-                    context=context,
-                ):
-                    logger.info(f"💥 RAG API received chunk: {chunk[:50]}")
-                    # Wrap in SSE format for bot to consume
-                    yield f"data: {chunk}\n\n"
-                logger.info("💥 stream_agent_with_context finished")
-
-            return StreamingResponse(
-                stream_agent_with_context(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive",
-                    "X-Accel-Buffering": "no",  # Disable nginx buffering
-                },
+            return await _stream_agent_response(
+                agent_name,
+                request,
+                agent_context,
+                research_depth,
             )
 
-        # Step 2: RAG generation (no agent needed)
-        logger.info("Processing with RAG pipeline")
-
-        llm_service = get_llm_service()
-
-        # Build messages list from conversation history + current query
-        messages = request.conversation_history.copy()
-        if not messages or messages[-1]["content"] != request.query:
-            # Add current query if not already last message
-            messages.append({"role": "user", "content": request.query})
-
-        # Generate response via LLM service
-        response_text = await llm_service.get_response(
-            messages=messages,
-            user_id=request.user_id,
-            current_query=request.query,
-            document_content=request.document_content,
-            document_filename=request.document_filename,
-            conversation_id=request.conversation_id,
-            conversation_cache=None,  # Cache handled internally by llm_service
-            use_rag=request.use_rag,
-        )
-
-        # Handle empty/invalid responses
-        if not response_text:
-            raise HTTPException(
-                status_code=422,
-                detail="Unable to generate response. Query may be empty or invalid.",
-            )
-
-        # TODO: Extract citations from context (implement in Phase 2)
-        citations = []
-
-        return RAGGenerateResponse(
-            response=response_text,
-            citations=citations,
-            metadata={
-                "rag_used": request.use_rag,
-                "routed_to_agent": False,
-                "vector_db_enabled": settings.vector.enabled,
-            },
-        )
+        # Standard RAG pipeline
+        return await _generate_rag_response(request, settings)
 
     except HTTPException:
-        # Re-raise HTTPExceptions (validation errors, etc.)
         raise
     except Exception as e:
         logger.error(f"RAG generation failed: {e}", exc_info=True)

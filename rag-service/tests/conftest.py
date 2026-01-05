@@ -54,7 +54,7 @@ def generate_signed_headers(payload: dict) -> dict:
         payload: Request body as dict
 
     Returns:
-        Headers dict with X-Service-Token, X-Request-Timestamp, and X-Request-Signature
+        Headers dict with X-Service-Token, X-Request-Timestamp, X-Request-Signature, and X-User-Email
     """
     service_token = os.getenv("RAG_SERVICE_TOKEN", "test-rag-service-token")
     timestamp = str(int(time.time()))
@@ -67,6 +67,7 @@ def generate_signed_headers(payload: dict) -> dict:
         "X-Service-Token": service_token,
         "X-Request-Timestamp": timestamp,
         "X-Request-Signature": signature,
+        "X-User-Email": "test@example.com",  # Required by auth middleware
     }
 
 

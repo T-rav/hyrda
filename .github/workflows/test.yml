@@ -220,3 +220,62 @@ jobs:
       if: matrix.task == 'build'
       run: |
         docker images | grep insightmesh-librechat
+
+    - name: Run Trivy vulnerability scanner
+      if: matrix.task == 'build'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'insightmesh-librechat:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'  # Fail build on critical/high vulnerabilities
+
+    - name: Upload Trivy results to GitHub Security
+      if: matrix.task == 'build' && always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  docker-security:
+    name: Docker Security Scanning
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [bot, rag-service, agent-service, control-plane, tasks]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Copy .version to service directories
+      run: |
+        cp .version bot/.version
+        cp .version tasks/.version
+        cp .version control_plane/.version
+        cp .version agent-service/.version
+        cp .version rag-service/.version
+        cp .version dashboard-service/.version
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build ${{ matrix.service }} Docker image
+      run: |
+        docker compose build ${{ matrix.service }}
+
+    - name: Run Trivy vulnerability scanner on ${{ matrix.service }}
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'insightmesh-${{ matrix.service }}:latest'
+        format: 'sarif'
+        output: 'trivy-${{ matrix.service }}.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '1'
+
+    - name: Upload Trivy results to GitHub Security
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-${{ matrix.service }}.sarif'
+        category: 'docker-${{ matrix.service }}'
