@@ -212,7 +212,7 @@ REACT_APP_THEME_SURFACE_SUBMIT=4 120 87
 ```tsx
 function getThemeFromEnv(): IThemeRGB | undefined {
   // Check if any theme environment variables are set
-  const hasThemeEnvVars = Object.keys(process.env).some(key => 
+  const hasThemeEnvVars = Object.keys(process.env).some(key =>
     key.startsWith('REACT_APP_THEME_')
   );
 
@@ -231,7 +231,7 @@ function getThemeFromEnv(): IThemeRGB | undefined {
 ### 3. Apply Environment Theme
 
 ```tsx
-<ThemeProvider 
+<ThemeProvider
   initialTheme="system"
   themeRGB={getThemeFromEnv()}
 >
@@ -250,7 +250,7 @@ import { useTheme } from '@librechat/client';
 
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  
+
   return (
     <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
       Current theme: {theme}
@@ -285,7 +285,7 @@ import { ThemeContext, ThemeProvider } from '@librechat/client';
 The new ThemeProvider is backward compatible but adds new capabilities:
 
 ```tsx
-<ThemeProvider 
+<ThemeProvider
   initialTheme="system"  // Same as before
   themeRGB={customTheme} // New: optional custom colors
 >
@@ -380,9 +380,9 @@ import { useState } from 'react';
 
 function App() {
   const [isDark, setIsDark] = useState(false);
-  
+
   return (
-    <ThemeProvider 
+    <ThemeProvider
       initialTheme={isDark ? 'dark' : 'light'}
       themeRGB={isDark ? darkTheme : defaultTheme}
       themeName={isDark ? 'dark' : 'default'}
@@ -415,9 +415,9 @@ const themes = {
 
 function App() {
   const [selectedTheme, setSelectedTheme] = useState('default');
-  
+
   return (
-    <ThemeProvider 
+    <ThemeProvider
       themeRGB={themes[selectedTheme]}
       themeName={selectedTheme}
     >
@@ -442,9 +442,9 @@ import { getThemeFromEnv } from './utils';
 
 function App() {
   const envTheme = getThemeFromEnv();
-  
+
   return (
-    <ThemeProvider 
+    <ThemeProvider
       // Only pass props if you want to override stored values
       // If you always pass props, they will override localStorage
       initialTheme={envTheme ? "system" : undefined}
@@ -470,4 +470,4 @@ When adding new theme colors:
 
 ## License
 
-This theme system is part of the @librechat/client package. 
+This theme system is part of the @librechat/client package.

@@ -8,7 +8,7 @@ spec:
     - {{ .Values.librechat.imageVolume.accessModes }}
 {{- if .Values.librechat.imageVolume.storageClassName }}
   storageClassName: {{ .Values.librechat.imageVolume.storageClassName }}
-{{- end }}          
+{{- end }}
   volumeMode: Filesystem
   resources:
     requests:

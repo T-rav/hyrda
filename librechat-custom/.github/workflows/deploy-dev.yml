@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.repository == 'danny-avila/LibreChat' &&
-      (github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'workflow_dispatch' ||
        (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'dev'))
     steps:
     - name: Checkout repository

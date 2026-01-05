@@ -49,7 +49,7 @@ Project maintainers have the right and responsibility to remove, edit, or reject
 
 1. Before starting work, make sure your main branch has the latest commits with `npm run update`.
 3. Run linting command to find errors: `npm run lint`. Alternatively, ensure husky pre-commit checks are functioning.
-3. After your changes, reinstall packages in your current branch using `npm run reinstall` and ensure everything still works. 
+3. After your changes, reinstall packages in your current branch using `npm run reinstall` and ensure everything still works.
     - Restart the ESLint server ("ESLint: Restart ESLint Server" in VS Code command bar) and your IDE after reinstalling or updating.
 4. Clear web app localStorage and cookies before and after changes.
 5. For frontend changes, compile typescript before and after changes to check for introduced errors: `cd client && npm run build`.
@@ -129,24 +129,24 @@ Apply the following naming conventions to branches, labels, and other Git-relate
 
 3. **Backend Considerations**:
    - Transitioning the backend to TypeScript would be a more intricate process, especially for an established Express.js server.
-   
+
    - **Options for Transition**:
       - **Single Phase Overhaul**: This involves converting the entire backend to TypeScript in one go. It's the most straightforward approach but can be disruptive, especially for larger codebases.
-      
+
       - **Incremental Transition**: Convert parts of the backend progressively. This can be done by:
          - Maintaining a separate directory for TypeScript files.
          - Gradually migrating and testing individual modules or routes.
          - Using a build tool like `tsc` to compile TypeScript files independently until the entire transition is complete.
-         
-   - **Compilation Considerations**: 
+
+   - **Compilation Considerations**:
       - Introducing a compilation step for the server is an option. This would involve using tools like `ts-node` for development and `tsc` for production builds.
       - However, this is not a conventional approach for Express.js servers and could introduce added complexity, especially in terms of build and deployment processes.
-      
+
    - **Current Stance**: At present, this backend transition is of lower priority and might not be pursued.
 
 ## 8. Module Import Conventions
 
-- `npm` packages first, 
+- `npm` packages first,
      - from longest line (top) to shortest (bottom)
 
 - Followed by typescript types (pertains to data-provider and client workspaces)

@@ -187,7 +187,7 @@ import type * as t from '~/types';
 
 export function createEntityNameModel(mongoose: typeof import('mongoose')) {
   return (
-    mongoose.models.EntityName || 
+    mongoose.models.EntityName ||
     mongoose.model<t.IEntityName>('EntityName', entityNameSchema)
   );
 }
@@ -286,8 +286,8 @@ For complex queries, add compound indexes:
 schema.index({ field1: 1, field2: 1 });
 schema.index(
   { uniqueField: 1 },
-  { 
-    unique: true, 
+  {
+    unique: true,
     partialFilterExpression: { uniqueField: { $exists: true } }
   }
 );
@@ -315,4 +315,4 @@ When adding new entities, ensure:
 
 - [Mongoose Documentation](https://mongoosejs.com/docs/)
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [MongoDB Indexes](https://docs.mongodb.com/manual/indexes/) 
+- [MongoDB Indexes](https://docs.mongodb.com/manual/indexes/)

@@ -13,12 +13,12 @@ echo "🛑 Stopping Redis Cluster..."
 # Function to stop a Redis node
 stop_node() {
     local port=$1
-    
+
     if redis-cli -p $port ping &> /dev/null; then
         # Try graceful shutdown first
         redis-cli -p $port SHUTDOWN NOSAVE 2>/dev/null || true
         sleep 2
-        
+
         # Check if still running and force kill if needed
         if redis-cli -p $port ping &> /dev/null; then
             PID=$(ps aux | grep "[r]edis-server.*:$port" | awk '{print $2}')
@@ -30,7 +30,7 @@ stop_node() {
                 fi
             fi
         fi
-        
+
         # Final check
         if redis-cli -p $port ping &> /dev/null; then
             echo "❌ Failed to stop Redis node on port $port"

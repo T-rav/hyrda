@@ -81,16 +81,16 @@ describe('unescapeLaTeX', () => {
 
 ### STARTERS
 
-**Crispy Calamari** - *\\\\$14*  
+**Crispy Calamari** - *\\\\$14*
 Lightly fried, served with marinara & lemon aioli
 
-**Truffle Fries** - *\\\\$12*  
+**Truffle Fries** - *\\\\$12*
 Hand-cut fries, parmesan, truffle oil, fresh herbs
 
-**Burrata & Heirloom Tomatoes** - *\\\\$16*  
+**Burrata & Heirloom Tomatoes** - *\\\\$16*
 Fresh burrata, basil pesto, balsamic reduction, grilled sourdough
 
-**Thai Chicken Lettuce Wraps** - *\\\\$13*  
+**Thai Chicken Lettuce Wraps** - *\\\\$13*
 Spicy ground chicken, water chestnuts, ginger-soy glaze
 
 **Soup of the Day** - *\\\\$9`;
@@ -102,16 +102,16 @@ Spicy ground chicken, water chestnuts, ginger-soy glaze
 
 ### STARTERS
 
-**Crispy Calamari** - *$14*  
+**Crispy Calamari** - *$14*
 Lightly fried, served with marinara & lemon aioli
 
-**Truffle Fries** - *$12*  
+**Truffle Fries** - *$12*
 Hand-cut fries, parmesan, truffle oil, fresh herbs
 
-**Burrata & Heirloom Tomatoes** - *$16*  
+**Burrata & Heirloom Tomatoes** - *$16*
 Fresh burrata, basil pesto, balsamic reduction, grilled sourdough
 
-**Thai Chicken Lettuce Wraps** - *$13*  
+**Thai Chicken Lettuce Wraps** - *$13*
 Spicy ground chicken, water chestnuts, ginger-soy glaze
 
 **Soup of the Day** - *$9`;
