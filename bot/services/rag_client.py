@@ -45,8 +45,82 @@ class RAGClient:
 
         # Cache for agent patterns (refreshed periodically)
         self._agent_patterns: list[str] = []
+        self._agent_pattern_map: dict[str, str] = {}  # pattern -> agent_name
         self._patterns_last_fetched: float = 0
         self._patterns_cache_ttl: float = 300.0  # 5 minutes
+
+    async def fetch_agent_info(self) -> tuple[list[str], dict[str, str]]:
+        """Fetch agent patterns and pattern-to-agent mapping.
+
+        Returns:
+            Tuple of (patterns, pattern_map) where pattern_map is {pattern: agent_name}
+        """
+        import time
+
+        # Return cached if recent
+        if (
+            self._agent_patterns
+            and time.time() - self._patterns_last_fetched < self._patterns_cache_ttl
+        ):
+            return self._agent_patterns, self._agent_pattern_map
+
+        try:
+            # Fetch agent list from agent service
+            agent_service_url = os.getenv(
+                "AGENT_SERVICE_URL", "http://agent_service:8000"
+            )
+            url = f"{agent_service_url}/api/agents"
+
+            headers = {"X-Service-Token": self.service_token}
+            client = await self._get_client()
+
+            response = await client.get(url, headers=headers, timeout=5.0)
+            if response.status_code == 200:
+                data = response.json()
+                agents = data.get("agents", [])
+
+                # Generate patterns and mapping
+                patterns = []
+                pattern_map = {}
+
+                for agent in agents:
+                    name = agent.get("name", "")
+                    aliases = agent.get("aliases", [])
+
+                    if name:
+                        # Add patterns for agent name
+                        name_patterns = [
+                            f"^/{name}",  # /profile
+                            f"^{name}\\s",  # profile <query>
+                        ]
+                        for pattern in name_patterns:
+                            patterns.append(pattern)
+                            pattern_map[pattern] = name
+
+                        # Add patterns for aliases
+                        for alias in aliases:
+                            alias_patterns = [
+                                f"^/{alias}",
+                                f"^{alias}\\s",
+                            ]
+                            for pattern in alias_patterns:
+                                patterns.append(pattern)
+                                pattern_map[pattern] = name
+
+                self._agent_patterns = patterns
+                self._agent_pattern_map = pattern_map
+                self._patterns_last_fetched = time.time()
+
+                logger.info(
+                    f"Generated {len(patterns)} patterns from {len(agents)} agents"
+                )
+                return patterns, pattern_map
+            else:
+                logger.warning(f"Failed to fetch agents: {response.status_code}")
+                return self._agent_patterns or [], self._agent_pattern_map or {}
+        except Exception as e:
+            logger.error(f"Error fetching agent info: {e}")
+            return self._agent_patterns or [], self._agent_pattern_map or {}
 
     async def fetch_agent_patterns(self) -> list[str]:
         """Fetch agent invocation patterns from RAG service.

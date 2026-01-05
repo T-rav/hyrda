@@ -7,7 +7,9 @@ import logging
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from typing import Literal
 
+from .answer_question import answer_question
 from .brief_validation import (
     research_brief_router,
     validate_research_brief,
@@ -33,6 +35,26 @@ from ..state import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def start_router(state: ProfileAgentState) -> Literal["answer_question", "clarify_with_user"]:
+    """Route to Q&A node if report exists, otherwise full workflow.
+
+    Args:
+        state: Current profile agent state
+
+    Returns:
+        "answer_question" if final_report exists (follow-up question)
+        "clarify_with_user" if no report (initial profile request)
+    """
+    final_report = state.get("final_report", "")
+
+    if final_report:
+        logger.info("📚 Final report exists - routing to Q&A node for follow-up")
+        return "answer_question"
+    else:
+        logger.info("🔬 No report found - routing to full research workflow")
+        return "clarify_with_user"
 
 
 def build_researcher_subgraph() -> CompiledStateGraph:
@@ -119,6 +141,7 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     )
 
     # Add nodes
+    profile_builder.add_node("answer_question", answer_question)  # Q&A for follow-ups
     profile_builder.add_node("clarify_with_user", clarify_with_user)
     profile_builder.add_node("write_research_brief", write_research_brief)
     profile_builder.add_node("validate_research_brief", validate_research_brief)
@@ -128,8 +151,20 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     profile_builder.add_node("output", output_node)
 
     # Add edges
-    # Main path uses static edges
-    profile_builder.add_edge(START, "clarify_with_user")
+    # START uses conditional routing to detect follow-up questions
+    profile_builder.add_conditional_edges(
+        START,
+        start_router,
+        {
+            "answer_question": "answer_question",  # Follow-up: use Q&A
+            "clarify_with_user": "clarify_with_user",  # Initial: full workflow
+        },
+    )
+
+    # Q&A path goes directly to output
+    profile_builder.add_edge("answer_question", "output")
+
+    # Main research path uses static edges
     profile_builder.add_edge("clarify_with_user", "write_research_brief")
     profile_builder.add_edge("write_research_brief", "validate_research_brief")
 

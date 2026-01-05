@@ -20,9 +20,13 @@ from services.langfuse_service import get_langfuse_service
 from services.metrics_service import get_metrics_service
 from services.rag_client import get_rag_client
 from services.slack_service import SlackService
+from services.thread_tracking import get_thread_tracking
 from utils.errors import handle_error
 
 logger = logging.getLogger(__name__)
+
+# Initialize thread tracking service
+_thread_tracking = get_thread_tracking()
 
 
 # Helper functions
@@ -312,24 +316,52 @@ async def handle_message(
 
         rag_client = get_rag_client()
 
-        # Fetch dynamic agent patterns
+        # Check if this thread belongs to an agent (for follow-up questions)
+        tracked_agent = None
+        if thread_ts:
+            tracked_agent = await _thread_tracking.get_thread_agent(thread_ts)
+            if tracked_agent:
+                logger.info(
+                    f"🔗 Thread {thread_ts} belongs to agent '{tracked_agent}' - routing follow-up automatically"
+                )
+
+        # Fetch dynamic agent patterns with agent mapping
         import re
 
-        agent_patterns = await rag_client.fetch_agent_patterns()
+        agent_patterns, pattern_map = await rag_client.fetch_agent_info()
         # Strip Slack formatting (*, _, ~, etc.) before matching
         text_clean = text.strip().replace("*", "").replace("_", "").replace("~", "")
         text_lower = text_clean.lower()
         logger.info(
             f"🔍 Checking agent patterns: text='{text_lower}', total_patterns={len(agent_patterns)}, sample={agent_patterns[:3]}"
         )
-        is_agent_query = any(
-            re.search(pattern, text_lower) for pattern in agent_patterns
+
+        # Determine which agent matched (if any)
+        matched_agent = None
+        for pattern in agent_patterns:
+            if re.search(pattern, text_lower):
+                matched_agent = pattern_map.get(pattern)
+                logger.info(f"🎯 Pattern '{pattern}' matched - agent: {matched_agent}")
+                break
+
+        # Route to agent if thread is tracked OR pattern matches
+        is_agent_query = tracked_agent is not None or matched_agent is not None
+        agent_name = (
+            tracked_agent or matched_agent
+        )  # Use tracked agent if available, otherwise matched
+        logger.info(
+            f"🔍 Agent query detection: is_agent_query={is_agent_query}, agent_name={agent_name}"
         )
-        logger.info(f"🔍 Agent query detection: is_agent_query={is_agent_query}")
 
         if is_agent_query:
             # Use streaming for agent queries to show progress
             logger.info("Detected agent query - using streaming")
+
+            # Track this thread if we have an agent name and thread_ts
+            if agent_name and thread_ts and matched_agent:
+                # Only track for new queries (matched_agent), not follow-ups (tracked_agent)
+                await _thread_tracking.track_thread(thread_ts, agent_name)
+                logger.info(f"📌 Tracked thread {thread_ts} for agent '{agent_name}'")
 
             # Clean up thinking message before streaming
             if thinking_message_ts:

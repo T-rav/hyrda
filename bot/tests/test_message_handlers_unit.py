@@ -16,6 +16,9 @@ def mock_rag_dependencies():
     """Auto-mock RAG service dependencies for all tests in this file"""
     mock_rag = AsyncMock()
     mock_rag.generate_response = AsyncMock(return_value={"response": "test response"})
+    mock_rag.fetch_agent_info = AsyncMock(
+        return_value=([], {})
+    )  # Return empty patterns and pattern_map
 
     with (
         patch("handlers.message_handlers.get_rag_client", return_value=mock_rag),
@@ -68,6 +71,7 @@ class TestConversationIDLogic:
         mock_rag.generate_response = AsyncMock(
             return_value={"response": "test response"}
         )
+        mock_rag.fetch_agent_info = AsyncMock(return_value=([], {}))
         mock_slack.send_thinking_indicator = AsyncMock(return_value="ts123")
         mock_slack.delete_thinking_indicator = AsyncMock()
         mock_slack.send_message = AsyncMock()

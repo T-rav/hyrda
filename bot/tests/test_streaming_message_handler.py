@@ -37,7 +37,9 @@ async def test_message_handler_shows_working_message():
         )
 
     mock_rag_client.generate_response_stream = mock_stream
-    mock_rag_client.fetch_agent_patterns = AsyncMock(return_value=["^profile\\s"])
+    mock_rag_client.fetch_agent_info = AsyncMock(
+        return_value=(["^profile\\s"], {"^profile\\s": "profile"})
+    )
 
     with (
         patch("handlers.message_handlers.get_rag_client", return_value=mock_rag_client),
@@ -89,13 +91,22 @@ async def test_message_handler_parses_json_payloads():
                 "duration": "3.2s",
             }
         )
-        # Yield final content
+        # Yield final result (modern format with type: "result")
         yield json.dumps(
-            {"type": "content", "content": "# Final Report\n\nReport content..."}
+            {
+                "type": "result",
+                "node": "final_report",
+                "data": {
+                    "message": "# Final Report\n\nReport content...",
+                    "attachments": [],
+                },
+            }
         )
 
     mock_rag_client.generate_response_stream = mock_stream
-    mock_rag_client.fetch_agent_patterns = AsyncMock(return_value=["^profile\\s"])
+    mock_rag_client.fetch_agent_info = AsyncMock(
+        return_value=(["^profile\\s"], {"^profile\\s": "profile"})
+    )
 
     with (
         patch("handlers.message_handlers.get_rag_client", return_value=mock_rag_client),
@@ -150,7 +161,9 @@ async def test_message_handler_replaces_started_with_completed():
         )
 
     mock_rag_client.generate_response_stream = mock_stream
-    mock_rag_client.fetch_agent_patterns = AsyncMock(return_value=["^profile\\s"])
+    mock_rag_client.fetch_agent_info = AsyncMock(
+        return_value=(["^profile\\s"], {"^profile\\s": "profile"})
+    )
 
     with (
         patch("handlers.message_handlers.get_rag_client", return_value=mock_rag_client),
@@ -198,7 +211,9 @@ async def test_agent_detection_strips_slack_formatting():
         )
 
     mock_rag_client.generate_response_stream = mock_stream
-    mock_rag_client.fetch_agent_patterns = AsyncMock(return_value=["^profile\\s"])
+    mock_rag_client.fetch_agent_info = AsyncMock(
+        return_value=(["^profile\\s"], {"^profile\\s": "profile"})
+    )
 
     with (
         patch("handlers.message_handlers.get_rag_client", return_value=mock_rag_client),
