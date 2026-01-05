@@ -76,3 +76,46 @@ async def test_graph_compiles_with_new_routing():
 
     # Verify graph structure (basic check)
     assert graph is not None
+
+
+def test_start_router_prioritizes_followup_mode():
+    """Test that start_router prioritizes followup_mode over final_report check."""
+    # State with both followup_mode and final_report
+    state: ProfileAgentState = {
+        "query": "follow-up question",
+        "final_report": "# Existing Report",
+        "followup_mode": True,
+    }
+
+    result = start_router(state)
+
+    # Should route to Q&A because of followup_mode (Priority 1)
+    assert result == "answer_question"
+
+
+def test_start_router_followup_mode_false_with_report():
+    """Test that router checks final_report when followup_mode is False."""
+    state: ProfileAgentState = {
+        "query": "question",
+        "final_report": "# Existing Report",
+        "followup_mode": False,  # Explicitly false
+    }
+
+    result = start_router(state)
+
+    # Should still route to Q&A because report exists (Priority 2)
+    assert result == "answer_question"
+
+
+def test_start_router_followup_mode_exits():
+    """Test that router routes to workflow when followup_mode is False and no report."""
+    state: ProfileAgentState = {
+        "query": "new profile request",
+        "followup_mode": False,  # User exited follow-up mode
+        # No final_report
+    }
+
+    result = start_router(state)
+
+    # Should route to full workflow (Priority 3)
+    assert result == "clarify_with_user"

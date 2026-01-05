@@ -71,6 +71,9 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         brief_revision_prompt: Specific instructions for brief revision
         brief_max_revisions_exceeded: Flag indicating max brief revision limit reached
         brief_revision_instructions: Validation instructions for brief revision
+        followup_mode: Whether in follow-up questions mode after report generation (Phase 1)
+        conversation_history: Full conversation history with role/content dicts (Phase 2)
+        conversation_summary: Semantic summary of older conversation messages (Phase 3)
     """
 
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
@@ -95,6 +98,10 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
     brief_revision_prompt: str
     brief_max_revisions_exceeded: bool
     brief_revision_instructions: str
+    # Conversational follow-up features (inspired by MEDDIC)
+    followup_mode: bool  # Phase 1: Intent-based follow-up control
+    conversation_history: list[dict[str, str]]  # Phase 2: Full conversation tracking
+    conversation_summary: str  # Phase 3: Semantic summary for long conversations
 
 
 # Supervisor state - manages research delegation
@@ -141,14 +148,19 @@ class ResearcherOutputState(TypedDict):
     raw_notes: list[str]
 
 
-# Input state for main graph - only query is required
-class ProfileAgentInputState(TypedDict):
+# Input state for main graph - only query is required, but conversation fields can be restored
+class ProfileAgentInputState(TypedDict, total=False):
     """Input to the profile agent graph.
 
-    Only query is required for input.
+    Query is required for input. Conversation state fields can be provided
+    (typically restored from checkpoint when continuing a conversation).
     """
 
-    query: str
+    query: str  # REQUIRED
+    followup_mode: bool  # Restored from checkpoint
+    conversation_history: list[dict[str, str]]  # Restored from checkpoint
+    conversation_summary: str  # Restored from checkpoint
+    final_report: str  # Restored from checkpoint for Q&A
 
 
 # Output state from main graph

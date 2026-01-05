@@ -371,6 +371,8 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                 # Keep legacy fields for backward compatibility during transition
                 "final_report": final_report,
                 "executive_summary": executive_summary,
+                # Enable follow-up mode after report generation
+                "followup_mode": True,  # Allow conversational follow-ups
             }
 
         except Exception as e:
@@ -416,4 +418,6 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
         # Legacy fields
         "final_report": fallback_report,
         "executive_summary": fallback_summary,
+        # Enable follow-up mode even for fallback reports
+        "followup_mode": True,
     }

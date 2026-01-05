@@ -40,21 +40,36 @@ logger = logging.getLogger(__name__)
 def start_router(state: ProfileAgentState) -> Literal["answer_question", "clarify_with_user"]:
     """Route to Q&A node if report exists, otherwise full workflow.
 
+    Routing priority (inspired by MEDDIC agent):
+    1. followup_mode=True → Q&A (user in active conversation)
+    2. final_report exists → Q&A (follow-up after report)
+    3. No report → Full workflow (initial request)
+
     Args:
         state: Current profile agent state
 
     Returns:
-        "answer_question" if final_report exists (follow-up question)
+        "answer_question" if in follow-up mode or report exists
         "clarify_with_user" if no report (initial profile request)
     """
+    followup_mode = state.get("followup_mode", False)
     final_report = state.get("final_report", "")
 
+    # Priority 1: If in follow-up mode (from checkpoint), route to Q&A
+    if followup_mode:
+        logger.info(
+            "🔄 In follow-up mode (from checkpoint) - routing to Q&A node"
+        )
+        return "answer_question"
+
+    # Priority 2: If final_report exists, route to Q&A
     if final_report:
         logger.info("📚 Final report exists - routing to Q&A node for follow-up")
         return "answer_question"
-    else:
-        logger.info("🔬 No report found - routing to full research workflow")
-        return "clarify_with_user"
+
+    # Priority 3: No report - route to full workflow
+    logger.info("🔬 No report found - routing to full research workflow")
+    return "clarify_with_user"
 
 
 def build_researcher_subgraph() -> CompiledStateGraph:
