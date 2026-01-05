@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+# Sentinel value to detect when rag_service was not provided
+_UNSET = object()
+
 
 class RAGInternalSearchInput(BaseModel):
     """Input schema for RAG-based internal search tool."""
@@ -61,7 +64,7 @@ class RAGInternalSearchTool(BaseTool):
 
     def __init__(
         self,
-        rag_service: Any = None,
+        rag_service: Any = _UNSET,
         research_topic: str | None = None,
         focus_area: str | None = None,
         **kwargs,
@@ -69,11 +72,19 @@ class RAGInternalSearchTool(BaseTool):
         """Initialize with RAG service.
 
         Args:
-            rag_service: RAG service instance (must have deep_research_for_agent method)
+            rag_service: RAG service instance (must have deep_research_for_agent method).
+                        Pass None to explicitly disable lazy-loading.
             research_topic: Optional research topic for context
             focus_area: Optional focus area for context
             **kwargs: Additional BaseTool arguments
         """
+        # Detect if rag_service was explicitly provided (even if None)
+        rag_service_provided = rag_service is not _UNSET
+
+        # Convert _UNSET to None for Pydantic
+        if rag_service is _UNSET:
+            rag_service = None
+
         # Pass components as kwargs to avoid Pydantic issues
         kwargs["rag_service"] = rag_service
         kwargs["research_topic"] = research_topic
@@ -81,8 +92,8 @@ class RAGInternalSearchTool(BaseTool):
 
         super().__init__(**kwargs)
 
-        # Lazy-load RAG service if not provided
-        if not self.rag_service:
+        # Only lazy-load RAG service if not explicitly provided (including explicit None)
+        if not self.rag_service and not rag_service_provided:
             self._initialize_rag_service()
 
     def _initialize_rag_service(self):

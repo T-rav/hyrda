@@ -167,8 +167,8 @@ services:
   # AI Slack Bot Service
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: bot/Dockerfile
     image: insightmesh-bot:latest
     container_name: insightmesh-bot
     restart: unless-stopped
