@@ -50,12 +50,11 @@ class TestGetAgent:
 
         with patch(
             "services.agent_registry.get_agent_info", return_value=mock_agent_info
+        ), pytest.raises(
+            ValueError,
+            match="found in control-plane but no implementation available",
         ):
-            with pytest.raises(
-                ValueError,
-                match="found in control-plane but no implementation available",
-            ):
-                get_agent("test_agent")
+            get_agent("test_agent")
 
     def test_get_agent_by_alias(self):
         """Test getting agent by alias."""
@@ -108,9 +107,8 @@ class TestGetAgent:
 
         with patch(
             "services.agent_registry.get_agent_info", return_value=mock_agent_info
-        ):
-            with pytest.raises(Exception, match="Initialization failed"):
-                get_agent("broken_agent")
+        ), pytest.raises(Exception, match="Initialization failed"):
+            get_agent("broken_agent")
 
     def test_get_agent_returns_new_instance_each_time(self):
         """Test that get_agent returns a new instance each call."""

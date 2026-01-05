@@ -70,9 +70,8 @@ class TestFileCache:
         """Test initialization fails without MINIO_ACCESS_KEY."""
         with patch.dict(
             os.environ, {"MINIO_ENDPOINT": "http://localhost:9000"}, clear=True
-        ):
-            with pytest.raises(ValueError, match="MINIO_ACCESS_KEY not configured"):
-                ResearchFileCache()
+        ), pytest.raises(ValueError, match="MINIO_ACCESS_KEY not configured"):
+            ResearchFileCache()
 
     def test_init_missing_secret_key(self):
         """Test initialization fails without MINIO_SECRET_KEY."""

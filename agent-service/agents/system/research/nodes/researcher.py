@@ -11,16 +11,17 @@ from config.settings import Settings
 from ..state import ResearcherState
 from ..tools import (
     EnhancedWebSearchTool,
-    InternalSearchTool,
+    RAGInternalSearchTool,  # New: RAG service-based (portable)
     SECQueryTool,
 )
 
 logger = logging.getLogger(__name__)
 
 # Initialize tools at module level to avoid blocking I/O in async context
-# Tool __init__ methods do network calls (Qdrant, Redis) which are blocking
+# Tool __init__ methods do network calls (Redis, Tavily) which are blocking
+# Note: RAGInternalSearchTool lazy-loads RAG service, avoiding blocking I/O here
 _RESEARCH_TOOLS = [
-    InternalSearchTool(),  # Qdrant client initialization (blocking)
+    RAGInternalSearchTool(),  # New: Uses RAG service (portable, no direct Qdrant access)
     SECQueryTool(),  # Redis client initialization (blocking)
     EnhancedWebSearchTool(),  # Tavily client initialization (blocking)
 ]
@@ -59,28 +60,34 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
 
 🎯 **CRITICAL: Always check internal knowledge base FIRST**
 
-**Tool Priority (use in this order):**
+**Research Workflow:**
 
-1. **internal_search** - ALWAYS START HERE
-   - Check for existing relationships (companies, people, past work)
-   - Search internal knowledge base for relevant context
-   - If found, include in your research
+1. **internal_search_tool** - ALWAYS START HERE
+   - Search our internal knowledge base for existing information
+   - Check for relevant documents, policies, past work, and historical context
+   - Use this to understand what we already know about the topic
+   - **Effort levels:** "low" (quick), "medium" (balanced), "high" (comprehensive)
 
-2. **sec_query** / **sec_research** - For company research
-   - SEC 10-K (annual reports), 8-K (material events)
-   - Financial data, risk factors, strategic priorities
-   - Executive changes, acquisitions, partnerships
+2. **sec_query** - For public company financial data (if relevant)
+   - SEC filings: 10-K (annual reports), 8-K (material events), 10-Q (quarterly)
+   - Use only when researching public companies
+   - Provides authoritative financial and business information
 
-3. **web_search** - For current information
-   - Recent news, trends, market data
-   - Use when internal data is outdated or missing
+3. **web_search** - For current external information
+   - Recent news, trends, and developments
+   - Industry analysis and expert opinions
+   - Use when internal data is insufficient or outdated
+   - **Search types:** "standard" (quick results) or "deep" (comprehensive analysis)
 
-**Important:**
-- If internal data mentions companies/people, always check internal_search for relationships
-- Combine internal and external sources for comprehensive view
-- Cite sources clearly (internal vs SEC vs web)
+**Research Best Practices:**
 
-Be thorough and gather multiple perspectives. When you have comprehensive findings, summarize them clearly with proper attribution.
+- **Start internal:** Always check internal knowledge base before going external
+- **Cross-reference:** When internal sources mention related topics/entities, search for those too
+- **Combine sources:** Synthesize internal and external information for complete picture
+- **Cite clearly:** Distinguish between internal sources, SEC filings, and web sources
+- **Be thorough:** Gather multiple perspectives and verify information across sources
+
+When you have comprehensive findings, summarize them clearly with proper source attribution.
 """
         researcher_messages = [HumanMessage(content=system_prompt)]
 

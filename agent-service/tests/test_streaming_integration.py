@@ -8,8 +8,9 @@ import pytest
 @pytest.mark.asyncio
 async def test_agent_streaming_flow_with_debug_mode():
     """Test complete streaming flow: agent client → JSON payloads → status updates."""
-    from clients.agent_client import AgentClient
     from unittest.mock import MagicMock
+
+    from clients.agent_client import AgentClient
 
     client = AgentClient()
 
@@ -90,8 +91,9 @@ async def test_agent_streaming_flow_with_debug_mode():
 @pytest.mark.asyncio
 async def test_streaming_handles_rapid_node_execution():
     """Test that streaming correctly handles nodes that complete quickly."""
-    from clients.agent_client import AgentClient
     from unittest.mock import MagicMock, patch
+
+    from clients.agent_client import AgentClient
 
     client = AgentClient()
 
@@ -146,8 +148,9 @@ async def test_streaming_handles_rapid_node_execution():
 @pytest.mark.asyncio
 async def test_streaming_formats_node_names_consistently():
     """Test that node names are consistently formatted for display."""
-    from clients.agent_client import AgentClient
     from unittest.mock import MagicMock, patch
+
+    from clients.agent_client import AgentClient
 
     client = AgentClient()
 

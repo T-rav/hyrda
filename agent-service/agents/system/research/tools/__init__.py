@@ -1,7 +1,10 @@
 """Research tools for deep research agent."""
 
 from .file_cache_tool import FileCacheTool, RetrieveCacheTool
-from .internal_search import InternalSearchTool
+from .internal_search import InternalSearchTool  # Legacy tool (direct Qdrant access)
+from .rag_internal_search import (
+    RAGInternalSearchTool,  # New: RAG service-based (portable)
+)
 from .sec_query import SECQueryTool
 from .todo_tools import CompleteTaskTool, CreateTaskTool
 from .web_search_tool import EnhancedWebSearchTool
@@ -14,7 +17,8 @@ __all__ = [
     "CompleteTaskTool",
     "FileCacheTool",
     "RetrieveCacheTool",
-    "InternalSearchTool",
+    "InternalSearchTool",  # Legacy (direct Qdrant)
+    "RAGInternalSearchTool",  # New (RAG service) - RECOMMENDED
     "SECQueryTool",
     "EnhancedWebSearchTool",
 ]

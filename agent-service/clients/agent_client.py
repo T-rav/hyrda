@@ -258,8 +258,9 @@ class AgentClient:
         logger.info(f"Streaming embedded agent '{agent_name}' directly")
 
         # Import agent registry to get agent instance
-        from services.agent_registry import get_agent
         import inspect
+
+        from services.agent_registry import get_agent
 
         try:
             # Get agent instance and stream it directly
@@ -268,7 +269,7 @@ class AgentClient:
             # Check for astream first (LangGraph graphs have both stream and astream)
             if hasattr(agent_instance, "astream"):
                 # LangGraph graph - stream with debug mode to track node start/end
-                logger.info(f"Streaming LangGraph agent with stream_mode='debug'")
+                logger.info("Streaming LangGraph agent with stream_mode='debug'")
 
                 # Track node execution timing and counts
                 import json

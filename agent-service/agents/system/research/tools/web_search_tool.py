@@ -5,7 +5,6 @@ Automatically caches all search results to Redis (fast) + MinIO (persistent).
 """
 
 import hashlib
-import json
 import logging
 import os
 from typing import Any

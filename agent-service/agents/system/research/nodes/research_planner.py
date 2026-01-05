@@ -69,7 +69,7 @@ Format as JSON with keys: strategy, tasks (list of objects), report_structure
 
 Example task format:
 {{
-  "description": "Research company's Q4 2023 financial performance",
+  "description": "Analyze key findings from internal documentation",
   "priority": "high",
   "dependencies": []
 }}

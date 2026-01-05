@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 def test_web_search_caches_to_both_redis_and_minio():
     """Test that web search results are cached to both Redis and MinIO."""

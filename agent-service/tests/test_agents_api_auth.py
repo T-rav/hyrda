@@ -1,7 +1,8 @@
 """Tests for agent API authentication with service tokens."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from fastapi import HTTPException
 
 
@@ -11,7 +12,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_with_valid_rag_service_token(self):
         """Test that RAG service can invoke agents with RAG_SERVICE_TOKEN."""
-        from api.agents import invoke_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, invoke_agent
 
         # Mock request with RAG service token
         mock_request = MagicMock()
@@ -54,7 +55,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_with_valid_bot_service_token(self):
         """Test that bot service can invoke agents with BOT_SERVICE_TOKEN."""
-        from api.agents import invoke_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, invoke_agent
 
         # Mock request with bot service token
         mock_request = MagicMock()
@@ -95,7 +96,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_rejects_invalid_service_token(self):
         """Test that invalid service tokens are rejected."""
-        from api.agents import invoke_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, invoke_agent
 
         # Mock request with invalid token
         mock_request = MagicMock()
@@ -127,7 +128,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_invoke_agent_rejects_missing_service_token(self):
         """Test that requests without service tokens are rejected."""
-        from api.agents import invoke_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, invoke_agent
 
         # Mock request without token
         mock_request = MagicMock()
@@ -153,7 +154,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_stream_agent_with_valid_rag_service_token(self):
         """Test that RAG service can stream agents with RAG_SERVICE_TOKEN."""
-        from api.agents import stream_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, stream_agent
 
         # Mock request with RAG service token
         mock_request = MagicMock()
@@ -192,7 +193,7 @@ class TestAgentAPIServiceTokenAuth:
     @pytest.mark.asyncio
     async def test_stream_agent_rejects_invalid_service_token(self):
         """Test that streaming rejects invalid service tokens."""
-        from api.agents import stream_agent, AgentInvokeRequest
+        from api.agents import AgentInvokeRequest, stream_agent
 
         # Mock request with invalid token
         mock_request = MagicMock()
@@ -239,8 +240,8 @@ class TestSharedJWTAuthServiceTokens:
 
     def test_verify_service_token_accepts_rag_token(self):
         """Test that verify_service_token accepts RAG_SERVICE_TOKEN."""
-        import sys
         import os
+        import sys
         sys.path.insert(0, "/app")
 
         # Set test tokens
@@ -248,6 +249,7 @@ class TestSharedJWTAuthServiceTokens:
         with patch.dict(os.environ, {"RAG_SERVICE_TOKEN": test_rag_token}):
             # Reimport to pick up new env var
             import importlib
+
             from shared.utils import jwt_auth
             importlib.reload(jwt_auth)
 

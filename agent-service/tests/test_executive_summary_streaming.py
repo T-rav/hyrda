@@ -16,7 +16,9 @@ if _PROJECT_ROOT not in sys.path:
 # Import external agents at module level to ensure they're available
 # before any test execution that might pollute sys.path
 try:
-    from external_agents.profile.nodes.final_report import final_report_generation as _final_report_generation
+    from external_agents.profile.nodes.final_report import (
+        final_report_generation as _final_report_generation,
+    )
     from external_agents.profile.state import ProfileAgentState as _ProfileAgentState
     _EXTERNAL_AGENTS_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
