@@ -27,16 +27,17 @@ from shared.utils.jwt_auth import (  # noqa: E402
     JWT_EXPIRATION_HOURS,
     JWT_ISSUER,
     JWT_SECRET_KEY,
-    SERVICE_TOKEN,
-    SERVICE_TOKENS,
     JWTAuthError,
     create_access_token,
     extract_token_from_request,
     get_user_from_token,
     is_token_revoked,
     revoke_token,
-    verify_service_token,
     verify_token,
+)
+from shared.utils.service_auth import (  # noqa: E402
+    SERVICE_TOKENS,
+    verify_service_token,
 )
 
 
@@ -323,13 +324,14 @@ class TestServiceTokenValidation:
     """Test service-to-service token validation."""
 
     def test_verify_valid_service_token(self) -> None:
-        """Test verifying valid generic service token."""
-        service_info = verify_service_token(SERVICE_TOKEN)
+        """Test verifying valid service token (bot)."""
+        # In the new security model, each service has a unique token
+        bot_token = SERVICE_TOKENS["bot"]
+        service_info = verify_service_token(bot_token)
 
         assert service_info is not None
-        # Service token can match any service that uses the same token
         assert "service" in service_info
-        assert service_info["service"] in SERVICE_TOKENS.keys()
+        assert service_info["service"] == "bot"
 
     def test_verify_bot_service_token(self) -> None:
         """Test verifying bot-specific service token."""
@@ -337,8 +339,8 @@ class TestServiceTokenValidation:
         service_info = verify_service_token(bot_token)
 
         assert service_info is not None
-        # Since bot token defaults to SERVICE_TOKEN in dev, it could be "bot" or "generic"
-        assert service_info["service"] in ("bot", "generic")
+        # Each service has unique token now
+        assert service_info["service"] == "bot"
 
     def test_verify_control_plane_service_token(self) -> None:
         """Test verifying control-plane service token."""
@@ -372,8 +374,14 @@ class TestServiceTokenValidation:
         """Test that SERVICE_TOKENS has expected structure."""
         assert "bot" in SERVICE_TOKENS
         assert "control-plane" in SERVICE_TOKENS
-        assert "generic" in SERVICE_TOKENS
-        assert SERVICE_TOKENS["generic"] == SERVICE_TOKEN
+        assert "rag" in SERVICE_TOKENS
+        assert "librechat" in SERVICE_TOKENS
+        assert "agent-service" in SERVICE_TOKENS
+        # Ensure no "generic" fallback (security risk)
+        assert "generic" not in SERVICE_TOKENS
+        # Each service has a unique token
+        tokens = list(SERVICE_TOKENS.values())
+        assert len(tokens) == len(set(tokens)), "All service tokens must be unique"
 
 
 class TestTokenRevocation:
@@ -591,10 +599,12 @@ class TestEnvironmentConfiguration:
         """Test JWT issuer is set correctly."""
         assert JWT_ISSUER == "insightmesh"
 
-    def test_service_token_exists(self) -> None:
-        """Test that service token is configured."""
-        assert SERVICE_TOKEN is not None
-        assert len(SERVICE_TOKEN) > 0
+    def test_service_tokens_all_configured(self) -> None:
+        """Test that all service tokens are configured."""
+        assert len(SERVICE_TOKENS) > 0
+        for service_name, token in SERVICE_TOKENS.items():
+            assert token is not None, f"{service_name} token is None"
+            assert len(token) > 0, f"{service_name} token is empty"
 
 
 class TestJWTAuthError:

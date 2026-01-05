@@ -57,32 +57,6 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "4"))  # 4 hours for better security
 JWT_ISSUER = "insightmesh"
 
-# Service-to-service authentication tokens
-# SECURITY: Fail fast if SERVICE_TOKEN not set in production
-SERVICE_TOKEN = os.getenv("SERVICE_TOKEN")
-if not SERVICE_TOKEN:
-    env = os.getenv("ENVIRONMENT", "development")
-    if env.lower() in ("production", "prod", "staging"):
-        raise ValueError(
-            "CRITICAL SECURITY: SERVICE_TOKEN must be set in production! "
-            "Generate with: openssl rand -hex 32"
-        )
-    # Development only - use random token
-    import secrets
-
-    SERVICE_TOKEN = f"dev-{secrets.token_urlsafe(32)}"
-    logger.warning(
-        f"⚠️  Using randomly generated service token for development: {SERVICE_TOKEN[:15]}... "
-        "Set SERVICE_TOKEN in .env for persistence"
-    )
-
-# Service tokens for authentication
-SERVICE_TOKENS = {
-    "bot": os.getenv("BOT_SERVICE_TOKEN", SERVICE_TOKEN),
-    "control-plane": os.getenv("CONTROL_PLANE_SERVICE_TOKEN", SERVICE_TOKEN),
-    "rag": os.getenv("RAG_SERVICE_TOKEN", SERVICE_TOKEN),
-    "generic": SERVICE_TOKEN,  # Generic SERVICE_TOKEN for tests and general use
-}
 
 
 class JWTAuthError(Exception):
@@ -275,30 +249,3 @@ def get_user_from_token(token: str) -> dict[str, Any]:
         "name": payload.get("name"),
         "picture": payload.get("picture"),
     }
-
-
-def verify_service_token(token: str) -> dict[str, str] | None:
-    """Verify a service-to-service authentication token.
-
-    Args:
-        token: Service token string (from X-Service-Token header)
-
-    Returns:
-        Dictionary with service info {"service": "bot"} if valid, None otherwise
-
-    Example:
-        service_info = verify_service_token(request.headers.get("X-Service-Token"))
-        if service_info:
-            print(f"Request from service: {service_info['service']}")
-    """
-    if not token:
-        return None
-
-    # Check if token matches any known service
-    for service_name, service_token in SERVICE_TOKENS.items():
-        if token == service_token:
-            logger.debug(f"Valid service token for: {service_name}")
-            return {"service": service_name}
-
-    logger.warning("Invalid service token attempted")
-    return None

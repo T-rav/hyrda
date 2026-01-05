@@ -232,11 +232,13 @@ class TestSharedJWTAuthServiceTokens:
         sys.path.insert(0, "/app")
         from shared.utils.jwt_auth import SERVICE_TOKENS
 
-        # Verify RAG service token is registered
+        # Verify all service tokens are registered
         assert "rag" in SERVICE_TOKENS
         assert "bot" in SERVICE_TOKENS
         assert "control-plane" in SERVICE_TOKENS
-        assert "generic" in SERVICE_TOKENS
+        assert "librechat" in SERVICE_TOKENS
+        # Ensure no "generic" fallback (security risk)
+        assert "generic" not in SERVICE_TOKENS
 
     def test_verify_service_token_accepts_rag_token(self):
         """Test that verify_service_token accepts RAG_SERVICE_TOKEN."""

@@ -16,11 +16,11 @@ services:
       - JWT_SECRET=${JWT_SECRET:-insightmesh-librechat-jwt-secret-change-in-production}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-insightmesh-librechat-refresh-secret-change-in-production}
       # API Keys
-      - OPENAI_API_KEY=${RAG_SERVICE_TOKEN:-librechat-service-token}
+      - OPENAI_API_KEY=${LIBRECHAT_SERVICE_TOKEN:-librechat-service-token}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       # RAG Service Configuration
       - RAG_API_URL=http://insightmesh-rag-service:8002
-      - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN:-librechat-service-token}
+      - LIBRECHAT_SERVICE_TOKEN=${LIBRECHAT_SERVICE_TOKEN:-librechat-service-token}
       # Social Login Configuration
       - ALLOW_SOCIAL_LOGIN=true
       - DOMAIN_CLIENT=${SERVER_BASE_URL:-http://localhost:3080}

@@ -66,7 +66,7 @@ async def list_agents():
     import httpx
 
     control_plane_url = os.getenv("CONTROL_PLANE_URL", "https://control_plane:6001")
-    service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+    service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
 
     try:
         async with httpx.AsyncClient(verify=False) as client:
@@ -212,7 +212,7 @@ async def invoke_agent(
         permissions_url = f"{control_plane_url}/api/users/{user_id}/permissions"
 
         # Use service token for service-to-service auth (agent-service → control-plane)
-        service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+        service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
         headers = {"X-Service-Token": service_token}
 
         try:
@@ -389,7 +389,7 @@ async def stream_agent(
         permissions_url = f"{control_plane_url}/api/users/{user_id}/permissions"
 
         # Use service token for service-to-service auth
-        service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+        service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
         headers = {"X-Service-Token": service_token}
 
         try:

@@ -40,7 +40,7 @@ class AgentClient:
         self.control_plane_url = os.getenv(
             "CONTROL_PLANE_URL", get_internal_service_url("control_plane")
         )
-        self.service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+        self.service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
         self.langgraph_api_key = os.getenv("LANGGRAPH_API_KEY")
 
         # Agent metadata cache (to avoid repeated control-plane queries)
