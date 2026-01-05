@@ -1,0 +1,75 @@
+name: insightmesh
+
+services:
+  librechat:
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: insightmesh-librechat
+    restart: unless-stopped
+    ports:
+      - "3080:3080"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3080
+      - MONGO_URI=mongodb://insightmesh-mongodb:27017/librechat
+      - MEILI_HOST=http://meilisearch:7700
+      # JWT Secret for authentication (generate with: openssl rand -base64 32)
+      - JWT_SECRET=${JWT_SECRET:-insightmesh-librechat-jwt-secret-change-in-production}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-insightmesh-librechat-refresh-secret-change-in-production}
+      # API Keys
+      - OPENAI_API_KEY=${RAG_SERVICE_TOKEN:-librechat-service-token}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # RAG Service Configuration
+      - RAG_API_URL=http://insightmesh-rag-service:8002
+      - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN:-librechat-service-token}
+      # Social Login Configuration
+      - ALLOW_SOCIAL_LOGIN=true
+      - DOMAIN_CLIENT=${SERVER_BASE_URL:-http://localhost:3080}
+      - DOMAIN_SERVER=${SERVER_BASE_URL:-http://localhost:3080}
+      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${SERVER_BASE_URL:-http://localhost:3080}/oauth/google/callback
+    volumes:
+      - ./librechat/librechat.yaml:/app/librechat.yaml:ro
+      - librechat_data:/app/client/public/images
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3080/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      meilisearch:
+        condition: service_started
+    networks:
+      - insightmesh
+    labels:
+      logging: "promtail"
+      service: "librechat"
+      component: "ui"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: insightmesh-meilisearch
+    restart: unless-stopped
+    volumes:
+      - meilisearch_data:/meili_data
+    environment:
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_ENV=production
+    networks:
+      - insightmesh
+    labels:
+      logging: "promtail"
+      service: "meilisearch"
+      component: "search"
+
+volumes:
+  librechat_data:
+    driver: local
+  meilisearch_data:
+    driver: local
+
+networks:
+  insightmesh:
+    name: insightmesh
+    external: true

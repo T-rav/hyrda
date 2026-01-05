@@ -26,31 +26,40 @@ logger = logging.getLogger(__name__)
 async def require_service_auth(
     request: Request,
     x_service_token: str | None = Header(None, description="Service authentication token"),
+    x_user_email: str | None = Header(None, description="User email for permissions"),
+    x_librechat_token: str | None = Header(None, description="JWT token from LibreChat"),
+    x_librechat_user: str | None = Header(None, description="LibreChat user ID"),
     x_request_timestamp: str | None = Header(None, description="Request timestamp for HMAC"),
     x_request_signature: str | None = Header(None, description="HMAC signature"),
+    authorization: str | None = Header(None, description="Bearer token (service or JWT)"),
 ) -> dict:
     """
-    Dependency to require service-to-service authentication.
+    Dependency to require authentication from services or LibreChat users.
 
-    Services must provide their token in the X-Service-Token header.
-    Additionally validates HMAC signature to prevent tampering and replay attacks.
-    Logs all service-to-service calls for audit purposes.
+    Supports two authentication methods:
+    1. Service-to-Service (Slack bot, control-plane):
+       - X-Service-Token header + HMAC signature
+       - X-User-Email header for user permissions
 
-    Use with: Depends(require_service_auth)
+    2. LibreChat User:
+       - Authorization: Bearer <service-token> (LibreChat service token)
+       - X-LibreChat-Token header (user JWT)
+       - X-User-Email header for user permissions
 
     Returns:
-        dict: Service info with service name
+        dict: Auth info with service, user_email, auth_method
 
     Raises:
-        HTTPException: 401 if not authenticated or invalid service token/signature
+        HTTPException: 401 if not authenticated
 
     Example:
         @router.post("/api/rag/generate")
         async def generate_response(
             request: RAGGenerateRequest,
-            service: dict = Depends(require_service_auth)
+            auth: dict = Depends(require_service_auth)
         ):
-            # service = {"service": "bot"} or {"service": "control-plane"}
+            # auth = {"service": "bot", "user_email": "john@example.com", "auth_method": "service"}
+            # OR {"service": "librechat", "user_email": "john@example.com", "auth_method": "jwt"}
             pass
     """
     start_time = time.time()
@@ -60,30 +69,57 @@ async def require_service_auth(
     method = request.method
     path = request.url.path
 
-    if not x_service_token:
+    # Determine authentication method and validate service token
+    auth_method = None
+    service_info = {}
+
+    # Extract service token from Authorization header (ALWAYS required)
+    service_token = None
+    if authorization and authorization.startswith("Bearer "):
+        service_token = authorization.replace("Bearer ", "")
+    elif x_service_token:
+        service_token = x_service_token
+
+    if not service_token:
         logger.warning(
-            f"Service auth failed: No token provided | "
+            f"Auth failed: No service token provided | "
             f"IP: {client_ip} | Method: {method} | Path: {path}"
         )
         raise HTTPException(
             status_code=401,
-            detail="Service authentication required. Provide X-Service-Token header.",
+            detail="Service authentication required. Provide Authorization: Bearer <token> or X-Service-Token header.",
         )
 
-    service_info = verify_service_token(x_service_token)
-
+    # Validate service token (bot, librechat, control-plane, etc.)
+    service_info = verify_service_token(service_token)
     if not service_info:
         logger.warning(
             f"Service auth failed: Invalid token | "
             f"IP: {client_ip} | Method: {method} | Path: {path}"
         )
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid service token",
-        )
+        raise HTTPException(status_code=401, detail="Invalid service token")
 
-    # Verify HMAC signature for POST/PUT/PATCH requests
-    if method in ["POST", "PUT", "PATCH"]:
+    # If LibreChat service, also validate user JWT
+    if service_info.get("service") == "librechat" and x_librechat_token:
+        auth_method = "jwt"
+        # Validate user JWT token
+        try:
+            from shared.utils.jwt_auth import verify_jwt_token
+            jwt_payload = verify_jwt_token(x_librechat_token)
+            if not jwt_payload:
+                raise HTTPException(status_code=401, detail="Invalid user JWT token")
+            service_info["jwt_payload"] = jwt_payload
+            service_info["librechat_user"] = x_librechat_user
+            logger.debug(f"LibreChat user JWT validated: {x_librechat_user}")
+        except Exception as e:
+            logger.warning(f"User JWT validation failed: {e}")
+            raise HTTPException(status_code=401, detail=f"User JWT validation failed: {e}")
+    else:
+        # Service-to-service without user JWT (Slack bot, etc.)
+        auth_method = "service"
+
+    # Verify HMAC signature for POST/PUT/PATCH requests (only for service-to-service, not LibreChat)
+    if method in ["POST", "PUT", "PATCH"] and auth_method == "service":
         try:
             # Read request body
             body_bytes = await request.body()
@@ -110,13 +146,29 @@ async def require_service_auth(
                 detail=f"Request signature validation failed: {e}",
             )
 
+    # Validate X-User-Email header (REQUIRED for both auth methods)
+    if not x_user_email:
+        logger.warning(
+            f"Auth failed: X-User-Email header missing | "
+            f"Service: {service_info.get('service')} | IP: {client_ip}"
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="X-User-Email header required for user permissions",
+        )
+
+    # Add user email and auth method to service info
+    service_info["user_email"] = x_user_email
+    service_info["auth_method"] = auth_method
+
     # Audit log successful authentication
     service_name = service_info.get("service", "unknown")
     elapsed = time.time() - start_time
 
     logger.info(
-        f"Service call: {service_name} -> {method} {path} | "
-        f"IP: {client_ip} | Auth time: {elapsed * 1000:.2f}ms | "
+        f"Auth success: {service_name} ({auth_method}) -> {method} {path} | "
+        f"User: {x_user_email} | IP: {client_ip} | "
+        f"Auth time: {elapsed * 1000:.2f}ms | "
         f"Timestamp: {datetime.now(UTC).isoformat()}"
     )
 
