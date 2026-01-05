@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Rename metric_id column to employee_id in portal_records."""
     # Get connection to check if index exists
     conn = op.get_bind()
@@ -59,7 +59,7 @@ def upgrade() -> None:
         op.create_index("idx_portal_employee_id", "portal_records", ["employee_id"])
 
 
-def downgrade() -> None:
+def downgrade():
     """Revert employee_id back to metric_id."""
     # Drop the new index
     op.drop_index("idx_portal_employee_id", table_name="portal_records")

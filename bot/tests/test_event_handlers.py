@@ -199,8 +199,7 @@ class TestEventHandlerRegistration:
         self, mock_app, mock_slack_service, mock_llm_service
     ):
         """Test that handlers are registered correctly"""
-        # Note: llm_service removed in microservices refactor
-        await register_handlers(mock_app, mock_slack_service)
+        await register_handlers(mock_app, mock_slack_service, mock_llm_service)
 
         # Verify that event decorators were called (3 events: assistant_thread_started, app_mention, message)
         assert mock_app.event.call_count >= 3
@@ -220,8 +219,9 @@ class TestEventHandlerRegistration:
         # Create cache using factory
         mock_cache = ConversationCacheFactory.create_basic_cache()
 
-        # Note: llm_service removed in microservices refactor - LLM calls now via rag-service
-        await register_handlers(mock_app, mock_slack_service, mock_cache)
+        await register_handlers(
+            mock_app, mock_slack_service, mock_llm_service, mock_cache
+        )
 
         # Verify that handlers were still registered correctly
         assert mock_app.event.call_count >= 3
@@ -231,8 +231,7 @@ class TestEventHandlerRegistration:
         self, mock_app, mock_slack_service, mock_llm_service
     ):
         """Test that register_handlers creates proper closures with services"""
-        # Note: llm_service removed in microservices refactor
-        await register_handlers(mock_app, mock_slack_service)
+        await register_handlers(mock_app, mock_slack_service, mock_llm_service)
 
         # Verify handlers were created and registered
         assert mock_app.event.called
@@ -297,6 +296,7 @@ class TestEventHandlerFunctionality:
                 text=clean_text,
                 user_id=event["user"],
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
                 channel=event["channel"],
                 thread_ts=event["thread_ts"],
                 conversation_cache=None,
@@ -306,6 +306,7 @@ class TestEventHandlerFunctionality:
                 text="hello there",  # Cleaned text after removing mention
                 user_id="U123456789",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
                 channel="C123456789",
                 thread_ts="1234567890.123456",
                 conversation_cache=None,
@@ -361,6 +362,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             mock_handle_message.assert_called_once()
@@ -385,6 +387,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             mock_handle_message.assert_called_once()
@@ -414,6 +417,7 @@ class TestProcessMessageByContext:
                 thread_ts="1234567890.123456",
                 ts="1234567890.234567",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should respond in threads when bot is participant
@@ -443,6 +447,7 @@ class TestProcessMessageByContext:
                 thread_ts="1234567890.123456",
                 ts="1234567890.234567",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should NOT respond when bot is not a participant
@@ -465,6 +470,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should not call handle_message
@@ -490,6 +496,7 @@ class TestProcessMessageByContext:
                 thread_ts="1234567890.123456",
                 ts="1234567890.234567",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should still respond despite error
@@ -513,6 +520,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
                 conversation_cache=mock_cache,
             )
 
@@ -538,6 +546,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should still call handler with empty string
@@ -561,6 +570,7 @@ class TestProcessMessageByContext:
                 thread_ts=None,
                 ts="1234567890.123456",
                 slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
             )
 
             # Should not respond when bot_id is None
@@ -593,6 +603,7 @@ class TestProcessMessageByContext:
                     thread_ts=None,
                     ts="1234567890.123456",
                     slack_service=mock_slack_service,
+                    llm_service=mock_llm_service,
                 )
 
                 if (
@@ -651,6 +662,7 @@ class TestProcessMessageByContext:
                     thread_ts="1234567890.123456",
                     ts="1234567890.234567",
                     slack_service=mock_slack_service,
+                    llm_service=mock_llm_service,
                 )
 
                 if should_respond:

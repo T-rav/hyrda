@@ -1,8 +1,7 @@
 import os
 import sys
-from contextlib import contextmanager
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from slack_sdk import WebClient
@@ -10,29 +9,6 @@ from slack_sdk.errors import SlackApiError
 
 # Add the parent directory to sys.path to allow importing the module
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-
-# Mock OpenTelemetry before importing services
-@contextmanager
-def mock_create_span(*args, **kwargs):
-    """Mock create_span as a proper context manager."""
-    yield MagicMock()
-
-
-def mock_record_exception(*args, **kwargs):
-    """Mock record_exception as a no-op."""
-    pass
-
-
-# Apply mocks before importing
-_create_span_patcher = patch(
-    "shared.utils.otel_http_client.create_span", side_effect=mock_create_span
-)
-_record_exception_patcher = patch(
-    "shared.utils.otel_http_client.record_exception", side_effect=mock_record_exception
-)
-_create_span_patcher.start()
-_record_exception_patcher.start()
 
 from config.settings import SlackSettings
 from services.slack_service import SlackService

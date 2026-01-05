@@ -82,15 +82,9 @@ def has_explicit_status(relationship_section: str) -> tuple[bool, str | None]:
     section_lower = relationship_section.lower()
 
     # Look for explicit status declarations
-    if (
-        "existing relationship" in section_lower
-        or "has an existing relationship" in section_lower
-    ):
+    if "existing relationship" in section_lower or "has an existing relationship" in section_lower:
         return True, "existing"
-    elif (
-        "no prior engagement" in section_lower
-        or "no relationship found" in section_lower
-    ):
+    elif "no prior engagement" in section_lower or "no relationship found" in section_lower:
         return True, "none"
 
     return False, None
@@ -138,11 +132,9 @@ async def test_vail_resorts_no_false_positive():
     # Extract relationship section
     relationship_section = extract_relationship_section(final_report)
 
-    assert relationship_section is not None, (
-        "Report should have a Relationships section"
-    )
+    assert relationship_section is not None, "Report should have a Relationships section"
 
-    print("\n🔍 Relationship Section:")
+    print(f"\n🔍 Relationship Section:")
     print("=" * 80)
     print(relationship_section)
     print("=" * 80)
@@ -161,7 +153,7 @@ async def test_vail_resorts_no_false_positive():
         f"Relationship section contains forbidden speculative language: {found_phrases}\n"
         f"Section content: {relationship_section}"
     )
-    print("✅ No forbidden language found")
+    print(f"✅ No forbidden language found")
 
     # Check 3: For Vail Resorts specifically, should show NO relationship
     # (unless we actually have a Vail Resorts case study, which would be detected)
@@ -181,14 +173,11 @@ async def test_vail_resorts_no_false_positive():
                 "If claiming relationship with Vail Resorts, sources should include "
                 f"Vail case study or project document. Sources:\n{sources[:1000]}"
             )
-            print("✅ Vail relationship claim backed by direct source evidence")
+            print(f"✅ Vail relationship claim backed by direct source evidence")
     elif status == "none":
-        print("✅ Correctly identified Vail Resorts as having no prior engagement")
+        print(f"✅ Correctly identified Vail Resorts as having no prior engagement")
         # Verify it doesn't mention work with Vail in speculative terms
-        assert (
-            "vail" not in relationship_section.lower()
-            or "no prior engagement" in relationship_section.lower()
-        ), (
+        assert "vail" not in relationship_section.lower() or "no prior engagement" in relationship_section.lower(), (
             "If Vail is mentioned but status is 'none', should explicitly state no engagement"
         )
 
@@ -232,11 +221,9 @@ async def test_allcampus_existing_relationship():
     # Extract relationship section
     relationship_section = extract_relationship_section(final_report)
 
-    assert relationship_section is not None, (
-        "Report should have a Relationships section"
-    )
+    assert relationship_section is not None, "Report should have a Relationships section"
 
-    print("\n🔍 Relationship Section:")
+    print(f"\n🔍 Relationship Section:")
     print("=" * 80)
     print(relationship_section)
     print("=" * 80)
@@ -251,13 +238,13 @@ async def test_allcampus_existing_relationship():
     assert not has_forbidden, (
         f"Relationship section contains forbidden language: {found_phrases}"
     )
-    print("✅ No forbidden language found")
+    print(f"✅ No forbidden language found")
 
     # Check 3: For AllCampus, should show EXISTING relationship
     assert status == "existing", (
         "AllCampus is a known client (has case study in KB), should show existing relationship"
     )
-    print("✅ Correctly identified AllCampus as existing client")
+    print(f"✅ Correctly identified AllCampus as existing client")
 
     # Check 4: Should mention specific projects/deliverables
     section_lower = relationship_section.lower()
@@ -315,11 +302,9 @@ async def test_costco_no_relationship():
     # Extract relationship section
     relationship_section = extract_relationship_section(final_report)
 
-    assert relationship_section is not None, (
-        "Report should have a Relationships section"
-    )
+    assert relationship_section is not None, "Report should have a Relationships section"
 
-    print("\n🔍 Relationship Section:")
+    print(f"\n🔍 Relationship Section:")
     print("=" * 80)
     print(relationship_section)
     print("=" * 80)
@@ -334,13 +319,13 @@ async def test_costco_no_relationship():
     assert not has_forbidden, (
         f"Relationship section contains forbidden language: {found_phrases}"
     )
-    print("✅ No forbidden language found")
+    print(f"✅ No forbidden language found")
 
     # Check 3: Should show NO relationship
     assert status == "none", (
         "Costco should show no relationship (unless we actually have a case study)"
     )
-    print("✅ Correctly identified Costco as having no prior engagement")
+    print(f"✅ Correctly identified Costco as having no prior engagement")
 
     print("\n🎉 TEST PASSED: Costco relationship verification successful")
 
@@ -381,11 +366,9 @@ async def test_3step_existing_relationship():
     # Extract relationship section
     relationship_section = extract_relationship_section(final_report)
 
-    assert relationship_section is not None, (
-        "Report should have a Relationships section"
-    )
+    assert relationship_section is not None, "Report should have a Relationships section"
 
-    print("\n🔍 Relationship Section:")
+    print(f"\n🔍 Relationship Section:")
     print("=" * 80)
     print(relationship_section)
     print("=" * 80)
@@ -400,13 +383,13 @@ async def test_3step_existing_relationship():
     assert not has_forbidden, (
         f"Relationship section contains forbidden language: {found_phrases}"
     )
-    print("✅ No forbidden language found")
+    print(f"✅ No forbidden language found")
 
     # Check 3: For 3Step, should show EXISTING relationship
     assert status == "existing", (
         "3Step is a known client (has case study in KB), should show existing relationship"
     )
-    print("✅ Correctly identified 3Step as existing client")
+    print(f"✅ Correctly identified 3Step as existing client")
 
     # Check 4: Should mention specific projects/deliverables
     section_lower = relationship_section.lower()

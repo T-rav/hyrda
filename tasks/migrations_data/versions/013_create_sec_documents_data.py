@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Create sec_documents_data table for tracking SEC filing ingestion."""
     op.create_table(
         "sec_documents_data",
@@ -76,7 +76,7 @@ def upgrade() -> None:
     op.create_index("idx_company_name", "sec_documents_data", ["company_name"])
 
 
-def downgrade() -> None:
+def downgrade():
     """Drop sec_documents_data table."""
     op.drop_index("idx_company_name", table_name="sec_documents_data")
     op.drop_index("idx_cik", table_name="sec_documents_data")

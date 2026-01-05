@@ -1,38 +1,23 @@
 import logging
 import re
-import sys
 import traceback
 from io import BytesIO
-from pathlib import Path
 from typing import Any
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-from slack_sdk.web.async_client import AsyncWebClient
 
-from bot_types import SlackFileUploadResponse, SlackMessageResponse
 from config.settings import SlackSettings
 from models import ThreadInfo
 from utils.errors import delete_message
 
-# Import OpenTelemetry utilities
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from shared.utils.otel_http_client import (
-    SPAN_KIND_CLIENT,
-    create_span,
-    record_exception,
-)
-
 logger = logging.getLogger(__name__)
-
-# Slack API configuration constants
-DEFAULT_THREAD_MESSAGE_LIMIT = 100  # Default limit for retrieving thread messages
 
 
 class SlackService:
     """Service for interacting with the Slack API"""
 
-    def __init__(self, settings: SlackSettings, client: AsyncWebClient | WebClient):
+    def __init__(self, settings: SlackSettings, client: WebClient):
         self.settings = settings
         self.client = client
         self.bot_id = settings.bot_id
@@ -44,33 +29,24 @@ class SlackService:
         thread_ts: str | None = None,
         blocks: list[dict[str, Any]] | None = None,
         mrkdwn: bool = True,
-    ) -> SlackMessageResponse | None:
+    ) -> dict[str, Any] | None:
         """Send a message to a Slack channel
 
         Returns:
             Response dict with 'ts' key for the message timestamp, or None on error
         """
-        with create_span(
-            "slack.api.chat_postMessage",
-            attributes={
-                "slack.channel": channel,
-                "slack.thread_ts": thread_ts or "none",
-            },
-            span_kind=SPAN_KIND_CLIENT,
-        ):
-            try:
-                response = await self.client.chat_postMessage(  # type: ignore[misc]
-                    channel=channel,
-                    text=text,
-                    thread_ts=thread_ts,
-                    blocks=blocks,
-                    mrkdwn=mrkdwn,
-                )
-                return response  # type: ignore[no-any-return]
-            except SlackApiError as e:
-                record_exception(e)
-                logger.error(f"Error sending message: {e}")
-                return None
+        try:
+            response = await self.client.chat_postMessage(  # type: ignore[misc]
+                channel=channel,
+                text=text,
+                thread_ts=thread_ts,
+                blocks=blocks,
+                mrkdwn=mrkdwn,
+            )
+            return response  # type: ignore[no-any-return]
+        except SlackApiError as e:
+            logger.error(f"Error sending message: {e}")
+            return None
 
     async def update_message(
         self,
@@ -78,7 +54,7 @@ class SlackService:
         ts: str,
         text: str,
         blocks: list[dict[str, Any]] | None = None,
-    ) -> SlackMessageResponse | None:
+    ) -> dict[str, Any] | None:
         """Update an existing Slack message
 
         Args:
@@ -196,7 +172,7 @@ class SlackService:
         title: str | None = None,
         initial_comment: str | None = None,
         thread_ts: str | None = None,
-    ) -> SlackFileUploadResponse | None:
+    ) -> dict[str, Any] | None:
         """Upload a file to a Slack channel or thread.
 
         Args:
@@ -257,7 +233,7 @@ class SlackService:
             history_response = await self.client.conversations_replies(  # type: ignore[misc]
                 channel=channel,
                 ts=thread_ts,
-                limit=DEFAULT_THREAD_MESSAGE_LIMIT,  # Get a good sample of the thread
+                limit=100,  # Get a good sample of the thread
             )
 
             if history_response and history_response.get("messages"):

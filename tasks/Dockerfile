@@ -4,16 +4,10 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 # Install security updates and dependencies including nginx
 RUN apt-get update && apt-get install -y \
     gcc \
-    g++ \
     curl \
     default-mysql-client \
     nginx \
     supervisor \
-    build-essential \
-    libfreetype6-dev \
-    libjpeg-dev \
-    libpng-dev \
-    zlib1g-dev \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,10 +21,7 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
-# Copy shared library first
-COPY --chown=appuser:appuser shared/ /app/shared/
-
-# Copy tasks application code (needed for pyproject.toml to work)
+# Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
 
 # Install Python dependencies
@@ -61,9 +52,9 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose nginx port
 EXPOSE 5001
 
-# Add health check (check Flask app directly on internal port)
+# Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8081/health || exit 1
+    CMD curl -f http://localhost:5001/health || exit 1
 
 # Copy supervisor configuration
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf

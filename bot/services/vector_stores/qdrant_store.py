@@ -33,12 +33,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Qdrant configuration constants
-DEFAULT_QDRANT_TIMEOUT = 60  # Client timeout in seconds
-OPENAI_EMBEDDING_DIMENSION = 1536  # Dimension for text-embedding-3-small
-DEFAULT_BATCH_SIZE = 100  # Default batch size for operations
-DEFAULT_SEARCH_LIMIT = 100  # Default limit for search results
-
 
 class QdrantVectorStore(VectorStore):
     """Qdrant vector store implementation for dense retrieval"""
@@ -64,12 +58,10 @@ class QdrantVectorStore(VectorStore):
                 self.client = QdrantClient(
                     url=f"http://{self.host}:{self.port}",
                     api_key=self.api_key,
-                    timeout=DEFAULT_QDRANT_TIMEOUT,
+                    timeout=60,
                 )
             else:
-                self.client = QdrantClient(
-                    host=self.host, port=self.port, timeout=DEFAULT_QDRANT_TIMEOUT
-                )
+                self.client = QdrantClient(host=self.host, port=self.port, timeout=60)
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
@@ -84,7 +76,7 @@ class QdrantVectorStore(VectorStore):
                     lambda: self.client.create_collection(
                         collection_name=self.collection_name,
                         vectors_config=VectorParams(
-                            size=OPENAI_EMBEDDING_DIMENSION, distance=Distance.COSINE
+                            size=1536, distance=Distance.COSINE
                         ),
                     ),
                 )
@@ -137,7 +129,7 @@ class QdrantVectorStore(VectorStore):
             if self.client is None:
                 raise RuntimeError("Qdrant client not initialized")
 
-            batch_size = DEFAULT_BATCH_SIZE
+            batch_size = 100
             for i in range(0, len(points), batch_size):
                 batch = points[i : i + batch_size]
                 await asyncio.get_event_loop().run_in_executor(
@@ -157,7 +149,7 @@ class QdrantVectorStore(VectorStore):
     async def search(
         self,
         query_embedding: list[float],
-        limit: int = DEFAULT_SEARCH_LIMIT,  # Higher default for better retrieval
+        limit: int = 100,  # Higher default for better retrieval
         similarity_threshold: float = 0.0,  # No threshold for intermediate results
         filter: dict[str, Any] | None = None,
         query_text: str = "",  # Not used for pure vector search

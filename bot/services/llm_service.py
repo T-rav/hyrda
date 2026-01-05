@@ -4,12 +4,8 @@ LLM Service with RAG support - backward compatible interface
 
 import logging
 import time
-from typing import TYPE_CHECKING
 
-from config.settings import LLMSettings, Settings
-
-if TYPE_CHECKING:
-    from services.conversation_cache import ConversationCache
+from config.settings import Settings
 
 # Hybrid search removed
 from services.langfuse_service import (
@@ -71,9 +67,10 @@ class LLMService:
         current_query: str | None = None,
         document_content: str | None = None,
         document_filename: str | None = None,
-        conversation_cache: "ConversationCache | None" = None,
+        conversation_cache=None,
     ) -> str | None:
-        """Get response from LLM with optional RAG enhancement.
+        """
+        Get response from LLM with optional RAG enhancement
 
         Args:
             messages: Conversation history
@@ -87,29 +84,13 @@ class LLMService:
 
         Returns:
             Generated response or None if failed
-
-        Raises:
-            Exception: If LLM service encounters an error during generation
         """
-        # Link Langfuse observation with distributed trace
-        try:
-            import sys
-            from pathlib import Path
-
-            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-            from shared.utils.langfuse_tracing import add_trace_to_langfuse_context
-
-            add_trace_to_langfuse_context()
-        except Exception as e:
-            logger.debug(
-                f"Tracing not available: {e}"
-            )  # Log for debugging, non-blocking
         metrics_service = get_metrics_service()
         start_time = time.time()
 
         try:
             # Get system prompt with user context injected
-            from handlers.prompt_manager import get_user_system_prompt
+            from handlers.message_handlers import get_user_system_prompt
 
             system_message = get_user_system_prompt(user_id)
 
@@ -165,32 +146,8 @@ class LLMService:
 
             return response
 
-        except (ValueError, KeyError, AttributeError, TypeError) as e:
-            logger.error(f"Error in LLM service (invalid data/configuration): {e}")
-
-            # Record error metric
-            if metrics_service:
-                metrics_service.record_llm_request(
-                    provider=self.settings.llm.provider,
-                    model=self.settings.llm.model,
-                    status="error",
-                )
-
-            return None
-        except (ConnectionError, TimeoutError, OSError) as e:
-            logger.error(f"Error in LLM service (network/connection): {e}")
-
-            # Record error metric
-            if metrics_service:
-                metrics_service.record_llm_request(
-                    provider=self.settings.llm.provider,
-                    model=self.settings.llm.model,
-                    status="error",
-                )
-
-            return None
         except Exception as e:
-            logger.error(f"Error in LLM service (unexpected): {e}", exc_info=True)
+            logger.error(f"Error in LLM service: {e}")
 
             # Record error metric
             if metrics_service:
@@ -249,7 +206,7 @@ class LLMService:
         logger.info("LLM service closed")
 
 
-async def create_llm_service(llm_settings: "Settings | LLMSettings") -> LLMService:
+async def create_llm_service(llm_settings) -> LLMService:
     """
     Factory function to create and initialize an LLM service instance
 
@@ -269,11 +226,9 @@ async def create_llm_service(llm_settings: "Settings | LLMSettings") -> LLMServi
         # Override with provided LLM settings if different
         if hasattr(llm_settings, "model"):
             settings.llm = llm_settings
-    except (ValueError, ImportError, AttributeError):
+    except Exception:
         # Fallback: create minimal settings structure
         class MinimalSettings:
-            """MinimalSettings class."""
-
             def __init__(self):
                 self.llm = llm_settings
                 # Add minimal required attributes

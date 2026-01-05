@@ -269,12 +269,7 @@ async def run_quality_judge(report: str, api_key: str) -> dict:
 
     prompt = QUALITY_JUDGE_PROMPT.format(report=report)
     response = await judge_llm.ainvoke(prompt)
-    response_content = response.content
-    # Handle case where response content might be a list
-    if isinstance(response_content, list):
-        response_text = str(response_content)
-    else:
-        response_text = response_content.strip()
+    response_text = response.content.strip()
 
     # Parse JSON
     import re

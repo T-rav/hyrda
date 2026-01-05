@@ -81,9 +81,7 @@ async def test_vail_resorts_query():
             return True
         else:
             print("⚠️  WARNING: No clear relationship status found in result")
-            print(
-                "   Expected to see either 'Existing client' or 'No prior engagement'"
-            )
+            print("   Expected to see either 'Existing client' or 'No prior engagement'")
             return False
 
     except Exception as e:
@@ -140,19 +138,17 @@ async def main():
     print("\n" + "=" * 80)
     print("TEST SUMMARY")
     print("=" * 80)
-    print(
-        f"Test 1 (Internal Search Tool):    {'✅ PASS' if test1_passed else '❌ FAIL'}"
-    )
-    print(
-        f"Test 2 (Full Query):               {'✅ PASS' if test2_passed else '❌ FAIL'}"
-    )
+    print(f"Test 1 (Internal Search Tool):    {'✅ PASS' if test1_passed else '❌ FAIL'}")
+    print(f"Test 2 (Full Query):               {'✅ PASS' if test2_passed else '❌ FAIL'}")
     print("=" * 80)
 
     if test1_passed and test2_passed:
         print("\n✅ All tests passed! No false positive detected.")
         return 0
     else:
-        print("\n❌ Tests failed. False positive bug still present in production.")
+        print(
+            "\n❌ Tests failed. False positive bug still present in production."
+        )
         return 1
 
 

@@ -28,14 +28,14 @@ async def main():
         "--quick", action="store_true", help="Run quick evaluation (subset of tests)"
     )
     parser.add_argument(
-        "--judge-model",
-        default="gpt-4o",
-        help="Model to use for judging (default: gpt-4o)",
+        "--judge-model", default="gpt-4o", help="Model to use for judging (default: gpt-4o)"
     )
     parser.add_argument(
         "--output", default="eval_results.json", help="Output file for results"
     )
-    parser.add_argument("--langfuse-project", help="Langfuse project name (optional)")
+    parser.add_argument(
+        "--langfuse-project", help="Langfuse project name (optional)"
+    )
 
     args = parser.parse_args()
 
@@ -87,13 +87,9 @@ async def main():
 
         if success:
             print("\n🎉 All evaluations PASSED!")
-            print(
-                f"Your system prompt is working great! (Average score: {suite.avg_score:.3f})"
-            )
+            print(f"Your system prompt is working great! (Average score: {suite.avg_score:.3f})")
         else:
-            print(
-                f"\n⚠️  Some evaluations FAILED (Pass rate: {suite.passed_tests}/{suite.total_tests})"
-            )
+            print(f"\n⚠️  Some evaluations FAILED (Pass rate: {suite.passed_tests}/{suite.total_tests})")
             print("Consider updating your System/Default prompt template in Langfuse")
 
         print(f"\n📊 Results saved to: {args.output}")
@@ -102,7 +98,6 @@ async def main():
     except Exception as e:
         print(f"❌ Evaluation failed: {e}")
         import traceback
-
         traceback.print_exc()
         return 1
 

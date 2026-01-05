@@ -9,8 +9,8 @@ Centralized service for managing system prompts with support for:
 """
 
 import logging
+from typing import Any
 
-from bot_types import PromptInfo
 from config.settings import Settings
 from services.langfuse_service import get_langfuse_service
 
@@ -153,7 +153,7 @@ class PromptService:
         self._prompt_cache.clear()
         logger.debug("Prompt cache cleared")
 
-    def get_prompt_info(self) -> PromptInfo:
+    def get_prompt_info(self) -> dict[str, Any]:
         """
         Get information about current prompt configuration
 

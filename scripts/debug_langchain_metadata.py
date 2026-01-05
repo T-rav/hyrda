@@ -4,7 +4,6 @@ Debug script to compare direct Qdrant queries vs LangChain retrieval.
 
 This helps identify why metadata might be missing when retrieved through LangChain.
 """
-
 import asyncio
 import os
 import sys
@@ -22,9 +21,7 @@ async def debug_metadata():
     from qdrant_client import QdrantClient
 
     # Get a recent document ID from logs (pass as argument or use default)
-    doc_id = (
-        sys.argv[1] if len(sys.argv) > 1 else "09187b01-6953-5a1f-82be-7f59e4c5599d"
-    )
+    doc_id = sys.argv[1] if len(sys.argv) > 1 else "09187b01-6953-5a1f-82be-7f59e4c5599d"
 
     print("=" * 100)
     print("COMPARING QDRANT DIRECT vs LANGCHAIN RETRIEVAL")
@@ -37,29 +34,29 @@ async def debug_metadata():
     print("=" * 100)
 
     client = QdrantClient(
-        host=os.getenv("VECTOR_HOST"),
-        port=int(os.getenv("VECTOR_PORT", 6333)),
-        api_key=os.getenv("VECTOR_API_KEY"),
-        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
+        host=os.getenv('VECTOR_HOST'),
+        port=int(os.getenv('VECTOR_PORT', 6333)),
+        api_key=os.getenv('VECTOR_API_KEY'),
+        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
     )
 
-    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
+    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
 
     try:
         docs = client.retrieve(
             collection_name=collection,
             ids=[doc_id],
             with_payload=True,
-            with_vectors=False,
+            with_vectors=False
         )
 
         if docs:
             doc = docs[0]
-            print("\n✅ Document found in Qdrant")
+            print(f"\n✅ Document found in Qdrant")
             print(f"Payload keys: {list(doc.payload.keys())}")
-            print("\nPayload fields:")
+            print(f"\nPayload fields:")
             for key, value in doc.payload.items():
-                if key == "text":
+                if key == 'text':
                     print(f"  {key}: {str(value)[:100]}...")
                 else:
                     print(f"  {key}: {value}")
@@ -100,20 +97,21 @@ async def debug_metadata():
         print("\nSearching for document via LangChain QdrantVectorStore...")
 
         # Get the document content from direct query
-        doc_content = doc.payload.get("text", "")[:200]
+        doc_content = doc.payload.get('text', '')[:200]
         print(f"Searching for content: {doc_content[:80]}...")
 
         # Search using similarity_search_with_score
-        results = langchain_vector_store.similarity_search_with_score(doc_content, k=5)
+        results = langchain_vector_store.similarity_search_with_score(
+            doc_content,
+            k=5
+        )
 
         print(f"\n✅ Found {len(results)} documents via LangChain")
 
         # Check if our document is in the results
         found_target = False
         for i, (langchain_doc, score) in enumerate(results, 1):
-            is_target = langchain_doc.metadata.get("chunk_id", "") == doc.payload.get(
-                "chunk_id", ""
-            )
+            is_target = langchain_doc.metadata.get('chunk_id', '') == doc.payload.get('chunk_id', '')
             marker = "👉 TARGET DOCUMENT" if is_target else ""
 
             print(f"\n{i}. Score: {score:.4f} {marker}")
@@ -126,7 +124,7 @@ async def debug_metadata():
                 found_target = True
                 print("\n   Full metadata from LangChain:")
                 for key, value in langchain_doc.metadata.items():
-                    if key == "text":
+                    if key == 'text':
                         print(f"      {key}: {str(value)[:100]}...")
                     else:
                         print(f"      {key}: {value}")
@@ -137,7 +135,6 @@ async def debug_metadata():
     except Exception as e:
         print(f"\n❌ Error with LangChain retrieval: {e}")
         import traceback
-
         traceback.print_exc()
         return 1
 
@@ -159,7 +156,7 @@ async def debug_metadata():
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         sys.exit(asyncio.run(debug_metadata()))
     except KeyboardInterrupt:

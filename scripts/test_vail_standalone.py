@@ -30,6 +30,7 @@ async def create_internal_search_tool():
     from qdrant_client import QdrantClient
 
     # Import only the tool class, not the factory function
+    import sys
     import importlib.util
 
     # Load the module without triggering bot.agents.__init__

@@ -1,22 +1,11 @@
 """Base class for all scheduled jobs."""
 
 import logging
-import sys
-import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any
 
-# Add shared directory to path for imports
-sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
-
-try:
-    import scrubadub
-except ImportError:
-    scrubadub = None
-
 from config.settings import TasksSettings
-from task_types import JobExecutionResult
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +34,11 @@ class BaseJob(ABC):
         return self.job_id
 
     @abstractmethod
-    async def _execute_job(self) -> JobExecutionResult:
+    async def _execute_job(self) -> dict[str, Any]:
         """Execute the actual job logic. Must be implemented by subclasses."""
         pass
 
-    async def execute(self) -> JobExecutionResult:
+    async def execute(self) -> dict[str, Any]:
         """Execute the job with error handling and logging."""
         start_time = datetime.utcnow()
         logger.info(f"Starting job: {self.JOB_NAME} (ID: {self.job_id})")
@@ -80,26 +69,9 @@ class BaseJob(ABC):
         except Exception as e:
             execution_time = (datetime.utcnow() - start_time).total_seconds()
 
-            # Capture full error context for debugging
-            error_type = type(e).__name__
-            error_message = str(e)
-            stack_trace = traceback.format_exc()
-
-            # Sanitize params (removes sensitive data)
-            if scrubadub:
-                safe_params = scrubadub.clean(
-                    str(self.params), replace_with="identifier"
-                )
-            else:
-                safe_params = str(self.params)  # Fallback if scrubadub not available
-
             logger.error(
                 f"Job failed: {self.JOB_NAME} (ID: {self.job_id}, "
-                f"Duration: {execution_time:.2f}s)\n"
-                f"Error Type: {error_type}\n"
-                f"Error Message: {error_message}\n"
-                f"Parameters: {safe_params}\n"
-                f"Stack Trace:\n{stack_trace}"
+                f"Duration: {execution_time:.2f}s, Error: {str(e)})"
             )
 
             return {
@@ -108,12 +80,7 @@ class BaseJob(ABC):
                 "job_name": self.JOB_NAME,
                 "start_time": start_time.isoformat(),
                 "execution_time_seconds": execution_time,
-                "error": error_message,
-                "error_type": error_type,
-                "error_context": {
-                    "params": safe_params,
-                    "stack_trace": stack_trace,
-                },
+                "error": str(e),
             }
 
     def validate_params(self) -> bool:

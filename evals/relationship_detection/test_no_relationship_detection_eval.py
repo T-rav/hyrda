@@ -1,6 +1,7 @@
 import re
 
 import pytest
+
 from agents.profiler import prompts
 from agents.profiler.utils import format_research_context
 

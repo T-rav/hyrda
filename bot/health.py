@@ -2,7 +2,6 @@ import logging
 import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from aiohttp import web
 from aiohttp.web_runner import AppRunner, TCPSite
@@ -43,7 +42,7 @@ class HealthChecker:
         self.runner: AppRunner | None = None
         self.site: TCPSite | None = None
 
-    async def start_server(self, port: int = 8080) -> None:
+    async def start_server(self, port: int = 8080):
         """Start health check HTTP server"""
         app = web.Application()
 
@@ -85,22 +84,27 @@ class HealthChecker:
         logger.info(f"Health check server started on port {port}")
         logger.info(f"Health UI available at: http://localhost:{port}/ui")
 
-    async def stop_server(self) -> None:
+    async def stop_server(self):
         """Stop health check HTTP server"""
         if self.site:
             await self.site.stop()
         if self.runner:
             await self.runner.cleanup()
 
-    async def health_check(self, request) -> web.Response:
+    async def health_check(self, request):
         """Basic health check - is the service running?"""
+        uptime = datetime.now(UTC) - self.start_time
+
         return web.json_response(
             {
                 "status": "healthy",
+                "uptime_seconds": int(uptime.total_seconds()),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "version": get_app_version(),
             }
         )
 
-    async def readiness_check(self, request: web.Request) -> web.Response:
+    async def readiness_check(self, request):
         """Readiness check - can the service handle requests?"""
         checks = {}
         all_healthy = True
@@ -294,12 +298,14 @@ class HealthChecker:
         status_code = 200 if all_healthy else 503
         return web.json_response(response_data, status=status_code)
 
-    async def metrics(self, request: web.Request) -> web.Response:
+    async def metrics(self, request):
         """Basic metrics endpoint (JSON format)"""
         uptime = datetime.now(UTC) - self.start_time
 
-        metrics: dict[str, Any] = {
+        metrics = {
             "uptime_seconds": int(uptime.total_seconds()),
+            "start_time": self.start_time.isoformat(),
+            "current_time": datetime.now(UTC).isoformat(),
         }
 
         # Add cache statistics if available
@@ -330,18 +336,6 @@ class HealthChecker:
                 "avg_chunks": rag_stats["avg_chunks_per_query"],
                 "documents_used": rag_stats["total_documents_used"],
                 "description": f"RAG queries processed (since {rag_stats['last_reset'].strftime('%H:%M')})",
-            }
-
-            # Get agent invocation stats
-            agent_stats = metrics_service.get_agent_stats()
-            metrics["agent_invocations"] = {
-                "total": agent_stats["total_invocations"],
-                "successful": agent_stats["successful_invocations"],
-                "failed": agent_stats["failed_invocations"],
-                "success_rate": agent_stats["success_rate"],
-                "error_rate": agent_stats["error_rate"],
-                "by_agent": agent_stats["by_agent"],
-                "description": f"Agent invocations (since {agent_stats['last_reset'].strftime('%H:%M')})",
             }
 
         # Add Langfuse lifetime stats
@@ -389,16 +383,9 @@ class HealthChecker:
             },
         }
 
-        # Add LLM configuration from settings
-        if self.settings and self.settings.llm:
-            metrics["llm"] = {
-                "provider": self.settings.llm.provider,
-                "model": self.settings.llm.model,
-            }
-
         return web.json_response(metrics)
 
-    async def prometheus_metrics(self, request) -> web.Response:
+    async def prometheus_metrics(self, request):
         """Prometheus metrics endpoint"""
         metrics_service = get_metrics_service()
         if not metrics_service:
@@ -431,7 +418,7 @@ class HealthChecker:
         ui_index_path = current_dir / "health_ui" / "dist" / "index.html"
         return str(ui_index_path)
 
-    async def health_ui(self, request) -> web.Response:
+    async def health_ui(self, request):
         """Serve the health dashboard UI"""
         try:
             index_path = self._get_ui_index_path()
@@ -450,7 +437,7 @@ class HealthChecker:
 
     # Tasks Service Integration Endpoints
 
-    async def handle_user_import(self, request) -> web.Response:
+    async def handle_user_import(self, request):
         """Handle user import from tasks service."""
         try:
             data = await request.json()
@@ -478,7 +465,7 @@ class HealthChecker:
             logger.error(f"Error processing user import: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def handle_ingest_completed(self, request) -> web.Response:
+    async def handle_ingest_completed(self, request):
         """Handle document ingestion completion notification."""
         try:
             data = await request.json()
@@ -506,7 +493,7 @@ class HealthChecker:
             logger.error(f"Error processing ingestion completion: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def handle_metrics_store(self, request) -> web.Response:
+    async def handle_metrics_store(self, request):
         """Handle metrics storage from tasks service."""
         try:
             data = await request.json()
@@ -530,7 +517,7 @@ class HealthChecker:
             logger.error(f"Error storing metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def get_usage_metrics(self, request) -> web.Response:
+    async def get_usage_metrics(self, request):
         """Get usage metrics for tasks service."""
         try:
             hours = int(request.query.get("hours", 24))
@@ -560,7 +547,7 @@ class HealthChecker:
             logger.error(f"Error getting usage metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def get_performance_metrics(self, request) -> web.Response:
+    async def get_performance_metrics(self, request):
         """Get performance metrics for tasks service."""
         try:
             hours = int(request.query.get("hours", 24))
@@ -596,7 +583,7 @@ class HealthChecker:
             logger.error(f"Error getting performance metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def get_error_metrics(self, request) -> web.Response:
+    async def get_error_metrics(self, request):
         """Get error metrics for tasks service."""
         try:
             hours = int(request.query.get("hours", 24))
@@ -627,7 +614,7 @@ class HealthChecker:
             logger.error(f"Error getting error metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
 
-    async def services_health(self, request: web.Request) -> web.Response:
+    async def services_health(self, request):
         """Get health status of all services."""
         import aiohttp
 

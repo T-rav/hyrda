@@ -11,13 +11,7 @@ from typing import Any
 
 import aiohttp
 
-from bot_types import DeepResearchResult, WebScrapeResult, WebSearchResult
-
 logger = logging.getLogger(__name__)
-
-# Search client configuration constants
-DEFAULT_SEARCH_TIMEOUT = 60  # HTTP request timeout in seconds
-DEFAULT_MAX_SEARCH_RESULTS = 10  # Default maximum search results
 
 
 class TavilyClient:
@@ -31,7 +25,7 @@ class TavilyClient:
     async def initialize(self):
         """Initialize the HTTP session"""
         if not self.session:
-            timeout = aiohttp.ClientTimeout(total=DEFAULT_SEARCH_TIMEOUT)
+            timeout = aiohttp.ClientTimeout(total=60)
             self.session = aiohttp.ClientSession(timeout=timeout)
             logger.info("Tavily client initialized")
 
@@ -41,9 +35,7 @@ class TavilyClient:
             await self.session.close()
             self.session = None
 
-    async def search(
-        self, query: str, max_results: int = DEFAULT_MAX_SEARCH_RESULTS
-    ) -> list[WebSearchResult]:
+    async def search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
         """
         Search the web using Tavily API
 
@@ -93,7 +85,7 @@ class TavilyClient:
             logger.error(f"Tavily search failed: {e}")
             return []
 
-    async def scrape_url(self, url: str) -> WebScrapeResult:
+    async def scrape_url(self, url: str) -> dict[str, Any]:
         """
         Scrape full content from a URL using Tavily Extract API
 
@@ -162,7 +154,7 @@ class PerplexityClient:
             await self.session.close()
             self.session = None
 
-    async def deep_research(self, query: str) -> DeepResearchResult:
+    async def deep_research(self, query: str) -> dict[str, Any]:
         """
         Perform deep research using Perplexity API
 
@@ -324,125 +316,111 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
         - LangGraph agents: web_search + scrape_url + deep_research (Tavily + Perplexity)
     """
     tools = [
-        _get_web_search_tool(),
-        _get_scrape_url_tool(),
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": (
+                    "Search the web for current, real-time information using Tavily. "
+                    "Returns search results with titles, URLs, and snippets. "
+                    "Use this first to find relevant URLs, then use scrape_url to get full content.\n\n"
+                    "Use this tool when the user asks about:\n"
+                    "- Recent news, current events, or today's happenings\n"
+                    "- Latest information about any topic\n"
+                    "- Real-time data, stock prices, weather, sports scores\n"
+                    "- Information that changes frequently or is time-sensitive\n"
+                    "- Anything requiring up-to-date knowledge beyond your training cutoff"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "The web search query. Be specific and use keywords for relevant, "
+                                "current information. Examples: 'latest AI news 2025', 'current bitcoin price', "
+                                "'today's weather New York'"
+                            ),
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results (default: 10, max: 20)",
+                            "default": 10,
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "scrape_url",
+                "description": (
+                    "Scrape and extract full content from a specific URL using Tavily. "
+                    "Converts webpage to clean text format for analysis. "
+                    "Use this AFTER web_search to get detailed content from promising URLs.\n\n"
+                    "Best practices:\n"
+                    "- First use web_search to find relevant URLs\n"
+                    "- Then scrape the 2-3 most relevant URLs for full content\n"
+                    "- Scraping provides much more detail than search snippets"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The full URL to scrape (must start with http:// or https://)",
+                        },
+                    },
+                    "required": ["url"],
+                },
+            },
+        },
     ]
 
     # Conditionally add deep_research tool (only for LangGraph agents)
     if include_deep_research and _perplexity_client:
-        tools.append(_get_deep_research_tool())
+        deep_research_tool = {
+            "type": "function",
+            "function": {
+                "name": "deep_research",
+                "description": (
+                    "Perform comprehensive deep research on complex topics using Perplexity AI. "
+                    "Returns detailed, well-researched answers with citations and sources. "
+                    "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
+                    "**IMPORTANT - Cost Management:**\n"
+                    "This tool is EXPENSIVE (costs money per query). Use strategically:\n\n"
+                    "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics that need comprehensive analysis.\n\n"
+                    "Best for:\n"
+                    "- Complex research questions requiring comprehensive analysis\n"
+                    "- Topics needing expert-level understanding and synthesis\n"
+                    "- Questions requiring multiple perspectives and sources\n"
+                    "- When you need authoritative, well-cited answers\n"
+                    "- Academic or professional research queries\n\n"
+                    "NOT for:\n"
+                    "- Simple factual lookups (use web_search instead)\n"
+                    "- Real-time data like stock prices or weather (use web_search)\n"
+                    "- Single-source information (use scrape_url instead)\n"
+                    "- Exploratory searches (use web_search first)"
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "The research question or topic. Be specific and clear about what you want to understand. "
+                                "Examples: 'What are the latest developments in quantum computing?', "
+                                "'How does CRISPR gene editing work and what are its ethical implications?', "
+                                "'Compare different approaches to carbon capture technology'"
+                            ),
+                        },
+                    },
+                    "required": ["query"],
+                },
+            },
+        }
+        tools.append(deep_research_tool)
 
     return tools
-
-
-def _get_web_search_tool() -> dict[str, Any]:
-    """Get web search tool definition."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "web_search",
-            "description": (
-                "Search the web for current, real-time information using Tavily. "
-                "Returns search results with titles, URLs, and snippets. "
-                "Use this first to find relevant URLs, then use scrape_url to get full content.\n\n"
-                "Use this tool when the user asks about:\n"
-                "- Recent news, current events, or today's happenings\n"
-                "- Latest information about any topic\n"
-                "- Real-time data, stock prices, weather, sports scores\n"
-                "- Information that changes frequently or is time-sensitive\n"
-                "- Anything requiring up-to-date knowledge beyond your training cutoff"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": (
-                            "The web search query. Be specific and use keywords for relevant, "
-                            "current information. Examples: 'latest AI news 2025', 'current bitcoin price', "
-                            "'today's weather New York'"
-                        ),
-                    },
-                    "max_results": {
-                        "type": "integer",
-                        "description": "Maximum number of results (default: 10, max: 20)",
-                        "default": 10,
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    }
-
-
-def _get_scrape_url_tool() -> dict[str, Any]:
-    """Get URL scraping tool definition."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "scrape_url",
-            "description": (
-                "Scrape and extract full content from a specific URL using Tavily. "
-                "Converts webpage to clean text format for analysis. "
-                "Use this AFTER web_search to get detailed content from promising URLs.\n\n"
-                "Best practices:\n"
-                "- First use web_search to find relevant URLs\n"
-                "- Then scrape the 2-3 most relevant URLs for full content\n"
-                "- Scraping provides much more detail than search snippets"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "url": {
-                        "type": "string",
-                        "description": "The full URL to scrape (must start with http:// or https://)",
-                    },
-                },
-                "required": ["url"],
-            },
-        },
-    }
-
-
-def _get_deep_research_tool() -> dict[str, Any]:
-    """Get deep research tool definition."""
-    return {
-        "type": "function",
-        "function": {
-            "name": "deep_research",
-            "description": (
-                "Perform comprehensive deep research on complex topics using Perplexity AI. "
-                "Returns detailed, well-researched answers with citations and sources. "
-                "Use this for in-depth analysis requiring multiple sources and synthesis.\n\n"
-                "**IMPORTANT - Cost Management:**\n"
-                "This tool is EXPENSIVE (costs money per query). Use strategically:\n\n"
-                "**Strategy:** Start with web_search to explore, then use deep_research on 5-10 key topics that need comprehensive analysis.\n\n"
-                "Best for:\n"
-                "- Complex research questions requiring comprehensive analysis\n"
-                "- Topics needing expert-level understanding and synthesis\n"
-                "- Questions requiring multiple perspectives and sources\n"
-                "- When you need authoritative, well-cited answers\n"
-                "- Academic or professional research queries\n\n"
-                "NOT for:\n"
-                "- Simple factual lookups (use web_search instead)\n"
-                "- Real-time data like stock prices or weather (use web_search)\n"
-                "- Single-source information (use scrape_url instead)\n"
-                "- Exploratory searches (use web_search first)"
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": (
-                            "The research question or topic. Be specific and clear about what you want to understand. "
-                            "Examples: 'What are the latest developments in quantum computing?', "
-                            "'How does CRISPR gene editing work and what are its ethical implications?', "
-                            "'Compare different approaches to carbon capture technology'"
-                        ),
-                    },
-                },
-                "required": ["query"],
-            },
-        },
-    }

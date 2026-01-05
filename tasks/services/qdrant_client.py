@@ -33,18 +33,17 @@ class QdrantClient:
 
             # Use http:// URL to avoid SSL when using API key in local Docker setup
             if self.api_key:
-                self.client = QdrantSDK(  # type: ignore[call-arg]
+                self.client = QdrantSDK(
                     url=f"http://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
                 )
             else:
-                self.client = QdrantSDK(host=self.host, port=self.port, timeout=60)  # type: ignore[call-arg]
+                self.client = QdrantSDK(host=self.host, port=self.port, timeout=60)
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self.client.get_collections,  # type: ignore[attr-defined]
+                None, self.client.get_collections
             )
             collection_names = [c.name for c in collections.collections]
 
@@ -52,7 +51,7 @@ class QdrantClient:
                 # Create collection with OpenAI embedding dimensions (3072 for text-embedding-3-large)
                 await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: self.client.create_collection(  # type: ignore[attr-defined]
+                    lambda: self.client.create_collection(
                         collection_name=self.collection_name,
                         vectors_config=VectorParams(
                             size=3072, distance=Distance.COSINE
@@ -125,9 +124,8 @@ class QdrantClient:
         for i in range(0, len(points), batch_size):
             batch = points[i : i + batch_size]
 
-            def upsert_batch(b: Any = batch) -> Any:
-                """Upsert Batch."""
-                return self.client.upsert(  # type: ignore[attr-defined]
+            def upsert_batch(b=batch):
+                return self.client.upsert(
                     collection_name=self.collection_name,
                     points=b,
                 )
@@ -137,26 +135,6 @@ class QdrantClient:
         logger.info(
             f"✅ Added {len(texts)} documents to Qdrant namespace '{namespace}'"
         )
-
-    async def update_payload(self, point_id: str, payload: dict[str, Any]):
-        """
-        Update payload (metadata) for an existing point without changing the vector.
-
-        Args:
-            point_id: UUID of the point to update
-            payload: Dictionary of metadata fields to update
-        """
-        if not self.client:
-            raise RuntimeError("Qdrant not initialized")
-
-        def update():
-            return self.client.set_payload(  # type: ignore[attr-defined]
-                collection_name=self.collection_name,
-                points=[point_id],
-                payload=payload,
-            )
-
-        await asyncio.get_event_loop().run_in_executor(None, update)
 
     async def close(self):
         """Close connection."""

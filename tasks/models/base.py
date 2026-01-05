@@ -3,7 +3,8 @@
 from contextlib import contextmanager
 
 from sqlalchemy import MetaData, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 # Define naming convention for constraints
 convention = {
@@ -26,49 +27,17 @@ _data_engine = None
 _DataSessionLocal = None
 
 
-def init_db(database_url: str) -> None:
-    """Initialize database connection with connection pooling."""
+def init_db(database_url: str):
+    """Initialize database connection."""
     global _engine, _SessionLocal
-
-    # SQLite doesn't support connection pooling parameters
-    if database_url.startswith("sqlite"):
-        _engine = create_engine(
-            database_url,
-            connect_args={
-                "check_same_thread": False
-            },  # Allow multi-threading for SQLite
-        )
-    else:
-        _engine = create_engine(
-            database_url,
-            pool_size=20,  # Max persistent connections
-            max_overflow=10,  # Additional connections when pool exhausted
-            pool_pre_ping=True,  # Verify connections before use
-            pool_recycle=3600,  # Recycle connections after 1 hour
-        )
+    _engine = create_engine(database_url)
     _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
-def init_data_db(database_url: str) -> None:
-    """Initialize data database connection with connection pooling."""
+def init_data_db(database_url: str):
+    """Initialize data database connection."""
     global _data_engine, _DataSessionLocal
-
-    # SQLite doesn't support connection pooling parameters
-    if database_url.startswith("sqlite"):
-        _data_engine = create_engine(
-            database_url,
-            connect_args={
-                "check_same_thread": False
-            },  # Allow multi-threading for SQLite
-        )
-    else:
-        _data_engine = create_engine(
-            database_url,
-            pool_size=20,
-            max_overflow=10,
-            pool_pre_ping=True,
-            pool_recycle=3600,
-        )
+    _data_engine = create_engine(database_url)
     _DataSessionLocal = sessionmaker(
         autocommit=False, autoflush=False, bind=_data_engine
     )
@@ -82,22 +51,7 @@ def get_db_session():
 
         settings = get_settings()
         init_db(settings.task_database_url)
-    elif _engine:
-        # Debug: Check if tables exist
-        from sqlalchemy import inspect
 
-        inspector = inspect(_engine)
-        tables = inspector.get_table_names()
-        if not tables:
-            # Tables missing - reinitialize and create
-            from config.settings import get_settings
-            from models.oauth_credential import OAuthCredential  # noqa: F401
-            from models.task_metadata import TaskMetadata  # noqa: F401
-            from models.task_run import TaskRun  # noqa: F401
-
-            Base.metadata.create_all(bind=_engine)
-
-    assert _SessionLocal is not None, "SessionLocal not initialized"
     session = _SessionLocal()
     try:
         yield session
@@ -114,7 +68,6 @@ def get_data_db_session():
         settings = get_settings()
         init_data_db(settings.data_database_url)
 
-    assert _DataSessionLocal is not None, "DataSessionLocal not initialized"
     session = _DataSessionLocal()
     try:
         yield session

@@ -33,7 +33,8 @@ else:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,7 @@ class SimpleVectorSearch:
         self.host = os.getenv("VECTOR_HOST", "localhost")
         self.port = int(os.getenv("VECTOR_PORT", "6333"))
         self.api_key = os.getenv("VECTOR_API_KEY")
-        self.collection_name = os.getenv(
-            "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
-        )
+        self.collection_name = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
         self.openai_api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
         self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
@@ -76,11 +75,13 @@ class SimpleVectorSearch:
                 self.qdrant_client = QdrantClient(
                     url=f"http://{self.host}:{self.port}",
                     api_key=self.api_key,
-                    timeout=60,
+                    timeout=60
                 )
             else:
                 self.qdrant_client = QdrantClient(
-                    host=self.host, port=self.port, timeout=60
+                    host=self.host,
+                    port=self.port,
+                    timeout=60
                 )
 
             # Verify collection exists
@@ -127,7 +128,8 @@ class SimpleVectorSearch:
             logger.info(f"Generating embedding for query: '{text[:100]}...'")
 
             response = await self.openai_client.embeddings.create(
-                model=self.embedding_model, input=text
+                model=self.embedding_model,
+                input=text
             )
 
             embedding = response.data[0].embedding
@@ -166,7 +168,7 @@ class SimpleVectorSearch:
                 limit=limit,
                 with_payload=True,
                 with_vectors=False,
-                score_threshold=0.35,  # Match the RAG_SIMILARITY_THRESHOLD default
+                score_threshold=0.35  # Match the RAG_SIMILARITY_THRESHOLD default
             )
 
             print(f"✅ Found {len(search_result)} results")
@@ -178,7 +180,7 @@ class SimpleVectorSearch:
                 result = {
                     "id": point.id,
                     "score": point.score,
-                    "payload": point.payload,
+                    "payload": point.payload
                 }
                 results.append(result)
 
@@ -239,14 +241,8 @@ class SimpleVectorSearch:
 
             # Print any other metadata
             other_keys = set(payload.keys()) - {
-                "namespace",
-                "data_type",
-                "name",
-                "client_id",
-                "source",
-                "created_at",
-                "text",
-                "content",
+                "namespace", "data_type", "name", "client_id", "source",
+                "created_at", "text", "content"
             }
             if other_keys:
                 print("\nOther metadata:")
@@ -273,10 +269,13 @@ async def main():
     parser.add_argument(
         "--query",
         default="AllCampus relationships and partnerships",
-        help="Search query (default: 'AllCampus relationships and partnerships')",
+        help="Search query (default: 'AllCampus relationships and partnerships')"
     )
     parser.add_argument(
-        "--limit", type=int, default=10, help="Maximum number of results (default: 10)"
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of results (default: 10)"
     )
 
     args = parser.parse_args()
@@ -285,7 +284,10 @@ async def main():
     searcher = SimpleVectorSearch()
     await searcher.initialize()
 
-    results = await searcher.search(query=args.query, limit=args.limit)
+    results = await searcher.search(
+        query=args.query,
+        limit=args.limit
+    )
 
     searcher.print_results(results, args.query)
 

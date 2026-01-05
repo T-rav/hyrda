@@ -4,13 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from handlers.prompt_manager import get_user_system_prompt
+from handlers.message_handlers import get_user_system_prompt
 
 
 @pytest.fixture
 def mock_prompt_service():
     """Mock PromptService."""
-    with patch("handlers.prompt_manager.get_prompt_service") as mock:
+    with patch("handlers.message_handlers.get_prompt_service") as mock:
         service = MagicMock()
         service.get_system_prompt.return_value = "I'm Insight Mesh, your AI assistant."
         mock.return_value = service
@@ -107,7 +107,7 @@ def test_get_user_system_prompt_with_user_service_error(
 
 def test_get_user_system_prompt_without_prompt_service():
     """Test fallback when PromptService is not available."""
-    with patch("handlers.prompt_manager.get_prompt_service", return_value=None):
+    with patch("handlers.message_handlers.get_prompt_service", return_value=None):
         prompt = get_user_system_prompt()
 
         assert "I'm Insight Mesh, your AI assistant" in prompt

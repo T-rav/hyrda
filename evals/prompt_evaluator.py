@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EvalResult:
     """Single evaluation result"""
-
     test_name: str
     score: float  # 0.0 to 1.0
     passed: bool
@@ -36,7 +35,6 @@ class EvalResult:
 @dataclass
 class EvalSuite:
     """Complete evaluation suite results"""
-
     total_tests: int
     passed_tests: int
     failed_tests: int
@@ -142,7 +140,6 @@ Provide your response in JSON format:
                         score_text = score_line[0]
                         # Extract number
                         import re
-
                         numbers = re.findall(r"0\.\d+|1\.0", score_text)
                         if numbers:
                             return float(numbers[0]), result
@@ -356,7 +353,7 @@ Provide your response in JSON format:
         logger.info(f"Total Tests: {suite.total_tests}")
         logger.info(f"Passed: {suite.passed_tests} ✅")
         logger.info(f"Failed: {suite.failed_tests} ❌")
-        logger.info(f"Pass Rate: {(suite.passed_tests / suite.total_tests) * 100:.1f}%")
+        logger.info(f"Pass Rate: {(suite.passed_tests/suite.total_tests)*100:.1f}%")
         logger.info(f"Average Score: {suite.avg_score:.3f}")
 
         if suite.failed_tests > 0:

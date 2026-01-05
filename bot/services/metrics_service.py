@@ -51,15 +51,6 @@ class MetricsService:
             "last_reset": datetime.now(),
         }
 
-        # Track agent invocation stats (in-memory counters)
-        self._agent_stats = {
-            "total_invocations": 0,
-            "successful_invocations": 0,
-            "failed_invocations": 0,
-            "by_agent": {},  # agent_name -> count
-            "last_reset": datetime.now(),
-        }
-
         if not self.enabled:
             return
 
@@ -82,12 +73,6 @@ class MetricsService:
             ["provider", "model", "status"],
         )
 
-        self.agent_invocations = Counter(
-            "agent_invocations_total",
-            "Total number of agent invocations",
-            ["agent_name", "status"],  # status: success, error
-        )
-
         # Performance metrics
         self.request_duration = Histogram(
             "request_duration_seconds",
@@ -108,13 +93,6 @@ class MetricsService:
             "LLM API request duration",
             ["provider", "model"],
             buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0),
-        )
-
-        self.agent_duration = Histogram(
-            "agent_invocation_duration_seconds",
-            "Agent invocation duration",
-            ["agent_name"],
-            buckets=(0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0, 200.0),
         )
 
         # System metrics
@@ -194,7 +172,7 @@ class MetricsService:
 
         logger.info("Metrics service initialized with Prometheus client")
 
-    def record_message_processed(self, user_id: str, channel_type: str = "dm") -> None:
+    def record_message_processed(self, user_id: str, channel_type: str = "dm"):
         """Record a processed Slack message"""
         if not self.enabled:
             return
@@ -212,7 +190,7 @@ class MetricsService:
         entity_filter: str = "none",
         chunks_found: int = 0,
         avg_similarity: float = 0.0,
-    ) -> None:
+    ):
         """Record a RAG retrieval operation"""
         if not self.enabled:
             return
@@ -238,7 +216,7 @@ class MetricsService:
         status: str = "success",
         duration: float = 0.0,
         tokens: int = 0,
-    ) -> None:
+    ):
         """Record an LLM API request"""
         if not self.enabled:
             return
@@ -261,7 +239,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording LLM request metric: {e}")
 
-    def record_cache_operation(self, operation: str, status: str = "success") -> None:
+    def record_cache_operation(self, operation: str, status: str = "success"):
         """Record a cache operation (hit, miss, set, etc.)"""
         if not self.enabled:
             return
@@ -271,7 +249,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording cache metric: {e}")
 
-    def update_cache_hit_rate(self, hit_rate: float) -> None:
+    def update_cache_hit_rate(self, hit_rate: float):
         """Update current cache hit rate percentage"""
         if not self.enabled:
             return
@@ -289,7 +267,7 @@ class MetricsService:
         unique_documents: int = 0,
         context_length: int = 0,
         avg_similarity: float = 0.0,
-    ) -> None:
+    ):
         """Record RAG query results and quality metrics"""
         try:
             # Update dashboard stats (always track, even if Prometheus disabled)
@@ -328,7 +306,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording RAG query result: {e}")
 
-    def record_document_usage(self, document_type: str, source: str) -> None:
+    def record_document_usage(self, document_type: str, source: str):
         """Record when a document is retrieved and used"""
         if not self.enabled:
             return
@@ -340,7 +318,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording document usage: {e}")
 
-    def record_query_type(self, query_category: str, has_context: bool) -> None:
+    def record_query_type(self, query_category: str, has_context: bool):
         """Record the type of query being processed"""
         if not self.enabled:
             return
@@ -355,7 +333,7 @@ class MetricsService:
 
     def record_user_interaction(
         self, interaction_type: str, user_type: str = "regular"
-    ) -> None:
+    ):
         """Record user interaction patterns for satisfaction tracking"""
         if not self.enabled:
             return
@@ -367,7 +345,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording user interaction: {e}")
 
-    def record_conversation_activity(self, conversation_id: str) -> None:
+    def record_conversation_activity(self, conversation_id: str):
         """Record activity in a conversation"""
         if not self.enabled:
             return
@@ -387,7 +365,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error recording conversation activity: {e}")
 
-    def _cleanup_inactive_conversations(self) -> None:
+    def _cleanup_inactive_conversations(self):
         """Remove inactive conversations and update the metric"""
         if not self.enabled:
             return
@@ -420,7 +398,7 @@ class MetricsService:
         except Exception as e:
             logger.error(f"Error cleaning up conversations: {e}")
 
-    def update_active_conversations(self, count: int) -> None:
+    def update_active_conversations(self, count: int):
         """Update the number of active conversations (legacy method)"""
         if not self.enabled:
             return
@@ -458,7 +436,7 @@ class MetricsService:
 
         return stats
 
-    def reset_rag_stats(self) -> None:
+    def reset_rag_stats(self):
         """Reset RAG statistics (useful for daily/weekly resets)"""
         self._rag_stats = {
             "total_queries": 0,
@@ -466,72 +444,6 @@ class MetricsService:
             "failed_queries": 0,
             "total_documents_used": 0,
             "avg_chunks_per_query": 0.0,
-            "last_reset": datetime.now(),
-        }
-
-    def record_agent_invocation(
-        self, agent_name: str, status: str = "success", duration: float = 0.0
-    ) -> None:
-        """Record an agent invocation"""
-        if not self.enabled:
-            # Still track in-memory stats even if Prometheus is disabled
-            self._agent_stats["total_invocations"] += 1
-            if status == "success":
-                self._agent_stats["successful_invocations"] += 1
-            else:
-                self._agent_stats["failed_invocations"] += 1
-
-            # Track by agent
-            if agent_name not in self._agent_stats["by_agent"]:
-                self._agent_stats["by_agent"][agent_name] = 0
-            self._agent_stats["by_agent"][agent_name] += 1
-            return
-
-        try:
-            # Prometheus metrics
-            self.agent_invocations.labels(agent_name=agent_name, status=status).inc()
-            if duration > 0:
-                self.agent_duration.labels(agent_name=agent_name).observe(duration)
-
-            # In-memory stats for dashboard
-            self._agent_stats["total_invocations"] += 1
-            if status == "success":
-                self._agent_stats["successful_invocations"] += 1
-            else:
-                self._agent_stats["failed_invocations"] += 1
-
-            # Track by agent
-            if agent_name not in self._agent_stats["by_agent"]:
-                self._agent_stats["by_agent"][agent_name] = 0
-            self._agent_stats["by_agent"][agent_name] += 1
-
-        except Exception as e:
-            logger.error(f"Error recording agent invocation metric: {e}")
-
-    def get_agent_stats(self) -> dict:
-        """Get agent invocation statistics for dashboard display"""
-        stats = self._agent_stats.copy()
-
-        # Calculate success rate
-        total = stats["total_invocations"]
-        if total > 0:
-            stats["success_rate"] = round(
-                (stats["successful_invocations"] / total) * 100, 1
-            )
-            stats["error_rate"] = round((stats["failed_invocations"] / total) * 100, 1)
-        else:
-            stats["success_rate"] = 0.0
-            stats["error_rate"] = 0.0
-
-        return stats
-
-    def reset_agent_stats(self):
-        """Reset agent statistics (useful for daily/weekly resets)"""
-        self._agent_stats = {
-            "total_invocations": 0,
-            "successful_invocations": 0,
-            "failed_invocations": 0,
-            "by_agent": {},
             "last_reset": datetime.now(),
         }
 

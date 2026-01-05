@@ -35,7 +35,7 @@ class ConversationCache:
                 await self.redis_client.ping()
                 self._redis_available = True
                 logger.info(f"Connected to Redis at {self.redis_url}")
-            except (redis.ConnectionError, redis.TimeoutError, OSError) as e:
+            except Exception as e:
                 logger.warning(
                     f"Redis connection failed: {e}. Will use Slack API only."
                 )
@@ -55,10 +55,6 @@ class ConversationCache:
     def _get_document_key(self, thread_ts: str) -> str:
         """Generate document cache key for thread"""
         return f"conversation_documents:{thread_ts}"
-
-    def _get_profile_report_key(self, thread_ts: str) -> str:
-        """Generate profile report cache key for thread"""
-        return f"conversation_profile_report:{thread_ts}"
 
     def _get_summary_key(self, thread_ts: str, version: int | None = None) -> str:
         """Generate summary cache key for thread (with optional version)"""
@@ -187,79 +183,6 @@ class ConversationCache:
 
         except Exception as e:
             logger.warning(f"Failed to retrieve document content: {e}")
-            return None, None
-
-    async def store_profile_report(
-        self, thread_ts: str, full_report: str, report_url: str | None = None
-    ) -> bool:
-        """Store full profile report for later retrieval in follow-ups.
-
-        Args:
-            thread_ts: Thread timestamp
-            full_report: Full profile report content (markdown)
-            report_url: S3 URL for the report (optional)
-
-        Returns:
-            True if report was stored successfully
-        """
-        profile_key = self._get_profile_report_key(thread_ts)
-
-        redis_client = await self._get_redis_client()
-        if not redis_client:
-            return False
-
-        try:
-            report_data = {
-                "full_report": full_report,
-                "report_url": report_url,
-                "stored_at": datetime.now(UTC).isoformat(),
-            }
-
-            # Store for 7 days (hot cache, MinIO has 30-day backup)
-            await redis_client.setex(
-                profile_key,
-                604800,
-                json.dumps(report_data),  # 7 days in seconds
-            )
-
-            logger.info(
-                f"Stored profile report for thread {thread_ts}: {len(full_report)} chars"
-            )
-            return True
-
-        except Exception as e:
-            logger.warning(f"Failed to store profile report: {e}")
-            return False
-
-    async def get_profile_report(self, thread_ts: str) -> tuple[str | None, str | None]:
-        """Retrieve stored profile report for thread.
-
-        Returns:
-            tuple: (full_report, report_url) or (None, None) if not found
-        """
-        profile_key = self._get_profile_report_key(thread_ts)
-
-        redis_client = await self._get_redis_client()
-        if not redis_client:
-            return None, None
-
-        try:
-            report_data = await redis_client.get(profile_key)
-            if not report_data:
-                logger.info(f"No cached profile report found for thread {thread_ts}")
-                return None, None
-
-            data = json.loads(report_data)
-            full_report = data.get("full_report")
-            report_url = data.get("report_url")
-
-            logger.info(
-                f"Retrieved cached profile report for thread {thread_ts}: {len(full_report) if full_report else 0} chars"
-            )
-            return full_report, report_url
-
-        except Exception as e:
-            logger.warning(f"Failed to retrieve profile report: {e}")
             return None, None
 
     async def store_summary(

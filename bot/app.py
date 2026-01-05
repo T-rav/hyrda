@@ -17,18 +17,18 @@ from slack_sdk.web.async_client import AsyncWebClient
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from shared.utils.otel_tracing import get_tracer
 
+from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
 
 # Initialize OTel tracer for bot service
 get_tracer("bot")
-from services import agent_registry
 from services.conversation_cache import ConversationCache
-from services.langfuse_service import get_langfuse_service, initialize_langfuse_service
+from services.langfuse_service import get_langfuse_service
+from services.llm_service import LLMService
 from services.metrics_service import initialize_metrics_service
 from services.prompt_service import initialize_prompt_service
-from services.rag_client import get_rag_client
 from services.search_clients import close_search_clients, initialize_search_clients
 from services.slack_service import SlackService
 from utils.logging import configure_logging
@@ -71,25 +71,14 @@ def create_app():
     logger.info("Prompt service initialized")
 
     # Log registered agents
-    registry = agent_registry.get_agent_registry()
-    # Get unique agent names (registry has both primary names and aliases as keys)
-    unique_agents = {
-        info["name"] for info in registry.values() if info.get("is_primary", True)
-    }
-    logger.info(
-        f"Registered {len(unique_agents)} agents: {', '.join(sorted(unique_agents))}"
-    )
+    registered_agents = agent_registry.list_agents()
+    agent_names = [agent["name"] for agent in registered_agents]
+    logger.info(f"Registered {len(agent_names)} agents: {', '.join(agent_names)}")
 
-    # Initialize RAG client (connects to rag-service)
-    rag_client = get_rag_client()
-    logger.info(f"RAG client initialized: {rag_client.base_url}")
+    # Create LLM service
+    llm_service = LLMService(settings)
 
-    # Initialize Langfuse service if enabled
-    if settings.langfuse.enabled:
-        initialize_langfuse_service(settings.langfuse, environment=settings.environment)
-        logger.info("Langfuse service initialized")
-
-    return app, slack_service, conversation_cache, metrics_service
+    return app, slack_service, llm_service, conversation_cache, metrics_service
 
 
 async def maintain_presence(client: AsyncWebClient | WebClient) -> None:
@@ -142,11 +131,18 @@ async def run():
     settings = None
     health_checker = None
     handler = None
+    llm_service = None
 
     try:
         # Create and configure the app
-        app, slack_service, conversation_cache, metrics_service = create_app()
+        app, slack_service, llm_service, conversation_cache, metrics_service = (
+            create_app()
+        )
         settings = Settings()
+
+        # Initialize LLM service (includes RAG)
+        await llm_service.initialize()
+        logger.info("LLM service initialized")
 
         # Initialize search clients (Tavily + Perplexity)
         await initialize_search_clients(
@@ -157,6 +153,9 @@ async def run():
 
         # Start health check server
         langfuse_service = get_langfuse_service()
+        # If global langfuse service is None, get it directly from LLM service
+        if langfuse_service is None:
+            langfuse_service = llm_service.langfuse_service
         health_checker = HealthChecker(settings, conversation_cache, langfuse_service)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
@@ -164,7 +163,7 @@ async def run():
         logger.info(f"Metrics available at: http://localhost:{health_port}/prometheus")
 
         # Register event handlers
-        await register_handlers(app, slack_service, conversation_cache)
+        await register_handlers(app, slack_service, llm_service, conversation_cache)
 
         # Set bot presence to "auto" (online)
         try:
@@ -223,6 +222,13 @@ async def run():
                 await handler.close_async()
             except Exception as e:
                 logger.error(f"Error closing socket handler: {e}")
+
+        # Close search clients
+        try:
+            await close_search_clients()
+            logger.info("Search clients closed")
+        except Exception as e:
+            logger.error(f"Error closing search clients: {e}")
 
         # Close search clients
         try:

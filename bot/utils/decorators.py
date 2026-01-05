@@ -38,11 +38,8 @@ def handle_service_errors(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T | Any]:
-        """Decorator."""
-
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
-            """Async Wrapper."""
             try:
                 return await func(self, *args, **kwargs)
             except Exception as e:
@@ -71,7 +68,6 @@ def handle_service_errors(
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
-            """Sync Wrapper."""
             try:
                 return func(self, *args, **kwargs)
             except Exception as e:
@@ -127,11 +123,8 @@ def retry_on_failure(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """Decorator."""
-
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
-            """Async Wrapper."""
             last_exception = None
             current_delay = delay
 
@@ -164,7 +157,6 @@ def retry_on_failure(
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
-            """Sync Wrapper."""
             last_exception = None
             current_delay = delay
 
@@ -216,12 +208,10 @@ def measure_performance(operation_name: str | None = None):
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """Decorator."""
         op_name = operation_name or func.__name__
 
         @functools.wraps(func)
         async def async_wrapper(self, *args, **kwargs):
-            """Async Wrapper."""
             start_time = time.time()
             success = True
             result = None
@@ -249,7 +239,6 @@ def measure_performance(operation_name: str | None = None):
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
-            """Sync Wrapper."""
             start_time = time.time()
             success = True
             result = None
@@ -302,7 +291,6 @@ def circuit_breaker(
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        """Decorator."""
         # Circuit breaker state (shared across all instances)
         state = {
             "failures": 0,
@@ -310,69 +298,93 @@ def circuit_breaker(
             "state": "closed",  # closed, open, half-open
         }
 
-        def _check_and_update_circuit_state(current_time: float) -> None:
-            """Check and update circuit breaker state."""
+        @functools.wraps(func)
+        async def async_wrapper(self, *args, **kwargs):
+            current_time = time.time()
+
+            # Check if circuit should be half-open
             if (
                 state["state"] == "open"
                 and current_time - state["last_failure_time"] > timeout
             ):
                 state["state"] = "half-open"
 
-        def _handle_failure(e: Exception, current_time: float, self_obj) -> None:
-            """Handle circuit breaker failure."""
-            state["failures"] += 1
-            state["last_failure_time"] = current_time
-
-            if state["failures"] >= failure_threshold:
-                state["state"] = "open"
-                if hasattr(self_obj, "_log_error"):
-                    self_obj._log_error(
-                        f"circuit_breaker_open_{func.__name__}",
-                        e,
-                        failures=state["failures"],
-                        threshold=failure_threshold,
-                    )
-
-        def _handle_success() -> None:
-            """Reset circuit breaker on success."""
-            if state["state"] == "half-open":
-                state["state"] = "closed"
-                state["failures"] = 0
-
-        @functools.wraps(func)
-        async def async_wrapper(self, *args, **kwargs):
-            """Async Wrapper."""
-            current_time = time.time()
-            _check_and_update_circuit_state(current_time)
-
+            # Fail fast if circuit is open
             if state["state"] == "open":
                 raise RuntimeError(f"Circuit breaker open for {func.__name__}")
 
             try:
                 result = await func(self, *args, **kwargs)
-                _handle_success()
+
+                # Reset on success
+                if state["state"] == "half-open":
+                    state["state"] = "closed"
+                    state["failures"] = 0
+
                 return result
+
             except expected_exceptions as e:
-                _handle_failure(e, current_time, self)
+                state["failures"] += 1
+                state["last_failure_time"] = current_time
+
+                # Open circuit if threshold reached
+                if state["failures"] >= failure_threshold:
+                    state["state"] = "open"
+
+                    if hasattr(self, "_log_error"):
+                        self._log_error(
+                            f"circuit_breaker_open_{func.__name__}",
+                            e,
+                            failures=state["failures"],
+                            threshold=failure_threshold,
+                        )
+
                 raise
 
         @functools.wraps(func)
         def sync_wrapper(self, *args, **kwargs):
-            """Sync Wrapper."""
             current_time = time.time()
-            _check_and_update_circuit_state(current_time)
 
+            # Check if circuit should be half-open
+            if (
+                state["state"] == "open"
+                and current_time - state["last_failure_time"] > timeout
+            ):
+                state["state"] = "half-open"
+
+            # Fail fast if circuit is open
             if state["state"] == "open":
                 raise RuntimeError(f"Circuit breaker open for {func.__name__}")
 
             try:
                 result = func(self, *args, **kwargs)
-                _handle_success()
+
+                # Reset on success
+                if state["state"] == "half-open":
+                    state["state"] = "closed"
+                    state["failures"] = 0
+
                 return result
+
             except expected_exceptions as e:
-                _handle_failure(e, current_time, self)
+                state["failures"] += 1
+                state["last_failure_time"] = current_time
+
+                # Open circuit if threshold reached
+                if state["failures"] >= failure_threshold:
+                    state["state"] = "open"
+
+                    if hasattr(self, "_log_error"):
+                        self._log_error(
+                            f"circuit_breaker_open_{func.__name__}",
+                            e,
+                            failures=state["failures"],
+                            threshold=failure_threshold,
+                        )
+
                 raise
 
+        # Return appropriate wrapper based on function type
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper  # type: ignore[return-value]
 
     return decorator

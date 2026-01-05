@@ -13,7 +13,6 @@ from datetime import datetime
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
-from .google_metadata_parser import GoogleMetadataParser
 
 
 class IngestionOrchestrator:
@@ -69,7 +68,7 @@ class IngestionOrchestrator:
 
     async def ingest_files(
         self, files: list[dict], metadata: dict | None = None
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int]:
         """
         Ingest files into the vector database.
 
@@ -78,7 +77,7 @@ class IngestionOrchestrator:
             metadata: Additional metadata to add to each document
 
         Returns:
-            Tuple of (success_count, error_count, skipped_count)
+            Tuple of (success_count, error_count)
         """
         # Check that services are properly initialized
         if not self.vector_service:
@@ -124,16 +123,8 @@ class IngestionOrchestrator:
                 )
 
                 if not needs_reindex:
-                    # Content unchanged, but check if metadata needs updating
-                    # (e.g., owner/permissions changed)
-                    if existing_uuid and await self._update_metadata_if_changed(
-                        file_info, existing_uuid
-                    ):
-                        print(f"🔄 Updated metadata: {file_info['name']}")
-                        success_count += 1
-                    else:
-                        print(f"⏭️  Skipping (unchanged): {file_info['name']}")
-                        skipped_count += 1
+                    print(f"⏭️  Skipping (unchanged): {file_info['name']}")
+                    skipped_count += 1
                     continue
 
                 if existing_uuid:
@@ -156,10 +147,10 @@ class IngestionOrchestrator:
                     "created_time": file_info.get("createdTime"),
                     "size": file_info.get("size"),
                     "web_view_link": file_info.get("webViewLink"),
-                    "owner_emails": GoogleMetadataParser.get_owner_emails(
+                    "owner_emails": GoogleDriveClient.get_owner_emails(
                         file_info.get("owners", [])
                     ),
-                    "permissions_summary": GoogleMetadataParser.get_permissions_summary(
+                    "permissions_summary": GoogleDriveClient.get_permissions_summary(
                         file_info.get("detailed_permissions", [])
                     ),
                     "ingested_at": datetime.utcnow().isoformat(),
@@ -241,10 +232,10 @@ class IngestionOrchestrator:
                         if file_info.get("size")
                         else None,
                         metadata={
-                            "owner_emails": GoogleMetadataParser.get_owner_emails(
+                            "owner_emails": GoogleDriveClient.get_owner_emails(
                                 file_info.get("owners", [])
                             ),
-                            "permissions_summary": GoogleMetadataParser.get_permissions_summary(
+                            "permissions_summary": GoogleDriveClient.get_permissions_summary(
                                 file_info.get("detailed_permissions", [])
                             ),
                             "web_view_link": file_info.get("webViewLink"),
@@ -258,14 +249,7 @@ class IngestionOrchestrator:
                 success_count += 1
 
             except Exception as e:
-                import logging
-
-                logger = logging.getLogger(__name__)
-                error_msg = (
-                    f"❌ Error processing {file_info.get('name', 'unknown')}: {e}"
-                )
-                print(error_msg)
-                logger.error(error_msg, exc_info=True)  # Include full traceback
+                print(f"❌ Error processing {file_info.get('name', 'unknown')}: {e}")
                 error_count += 1
 
                 # Record failed ingestion
@@ -345,95 +329,3 @@ class IngestionOrchestrator:
                     print(f"    ... and {len(documents) - 5} more documents")
 
         return await self.ingest_files(files, metadata)
-
-    async def _update_metadata_if_changed(
-        self, file_info: dict, base_uuid: str
-    ) -> bool:
-        """
-        Update metadata in Qdrant for existing document if metadata changed.
-
-        Args:
-            file_info: File metadata from Google Drive
-            base_uuid: Base UUID for the document
-
-        Returns:
-            True if metadata was updated, False otherwise
-        """
-        try:
-            # Get stored document info
-            doc_info = self.document_tracker.get_document_info(file_info["id"])
-            if not doc_info:
-                return False
-
-            # Extract current metadata from file_info
-            current_owner_emails = GoogleMetadataParser.get_owner_emails(
-                file_info.get("owners", [])
-            )
-            current_permissions = GoogleMetadataParser.get_permissions_summary(
-                file_info.get("detailed_permissions", [])
-            )
-
-            # Get stored metadata
-            stored_metadata = doc_info.get("metadata", {})
-            stored_owner_emails = stored_metadata.get("owner_emails", "unknown")
-            stored_permissions = stored_metadata.get(
-                "permissions_summary", "no_permissions"
-            )
-
-            # Check if metadata changed
-            metadata_changed = (
-                current_owner_emails != stored_owner_emails
-                or current_permissions != stored_permissions
-            )
-
-            if not metadata_changed:
-                return False  # No changes needed
-
-            # Metadata changed - update all chunks in Qdrant
-            chunk_count = doc_info.get("chunk_count", 0)
-
-            # Prepare updated metadata fields
-            metadata_updates = {
-                "owner_emails": current_owner_emails,
-                "permissions_summary": current_permissions,
-            }
-
-            # Update each chunk's metadata in Qdrant
-            import uuid
-
-            for chunk_idx in range(chunk_count):
-                chunk_uuid = str(uuid.uuid5(uuid.UUID(base_uuid), f"chunk_{chunk_idx}"))
-
-                # Update payload for this point
-                await self.vector_service.update_payload(
-                    point_id=chunk_uuid, payload=metadata_updates
-                )
-
-            # Update tracking database with new metadata
-            self.document_tracker.record_document_ingestion(
-                google_drive_id=file_info["id"],
-                file_path=file_info.get("full_path", file_info["name"]),
-                document_name=file_info["name"],
-                content="",  # Don't need to rehash
-                vector_uuid=base_uuid,
-                chunk_count=chunk_count,
-                mime_type=file_info["mimeType"],
-                file_size=int(file_info.get("size", 0))
-                if file_info.get("size")
-                else None,
-                metadata={
-                    "owner_emails": current_owner_emails,
-                    "permissions_summary": current_permissions,
-                    "web_view_link": file_info.get("webViewLink"),
-                },
-                status="success",
-            )
-
-            return True
-
-        except Exception as e:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.error(f"Failed to update metadata for {file_info.get('name')}: {e}")
-            return False

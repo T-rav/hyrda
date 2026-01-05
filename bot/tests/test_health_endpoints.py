@@ -367,6 +367,10 @@ class TestHealthEndpoints(AioHTTPTestCase):
 
         data = await resp.json()
         assert data["status"] == "healthy"
+        assert "uptime_seconds" in data
+        assert "timestamp" in data
+        assert "version" in data
+        assert isinstance(data["uptime_seconds"], int)
 
     async def test_readiness_check_healthy(self):
         """Test readiness check when all services are healthy"""
@@ -407,6 +411,9 @@ class TestHealthEndpoints(AioHTTPTestCase):
         assert resp.status == 200
 
         data = await resp.json()
+        assert "uptime_seconds" in data
+        assert "start_time" in data
+        assert "current_time" in data
         assert "cache" in data
         assert "services" in data
 

@@ -5,7 +5,6 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 # Load environment variables from root .env
 from dotenv import load_dotenv
@@ -322,8 +321,7 @@ class MetricSyncRunner:
         for i in range(0, len(vectors), batch_size):
             batch = vectors[i : i + batch_size]
 
-            def upsert_batch(b: Any = batch) -> Any:
-                """Upsert Batch."""
+            def upsert_batch(b=batch):
                 return vector_store.index.upsert(vectors=b, namespace="metric")
 
             await asyncio.get_event_loop().run_in_executor(None, upsert_batch)

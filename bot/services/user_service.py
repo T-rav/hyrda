@@ -2,11 +2,11 @@
 
 import json
 import logging
+from typing import Any
 
 from sqlalchemy import Boolean, Column, Integer, String, create_engine, select
-from sqlalchemy.orm import declarative_base, sessionmaker
-
-from bot_types import UserInfo
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class UserService:
         """Generate Redis cache key for user info."""
         return f"user_info:{slack_user_id}"
 
-    def _get_from_cache(self, slack_user_id: str) -> UserInfo | None:
+    def _get_from_cache(self, slack_user_id: str) -> dict[str, Any] | None:
         """
         Get user info from Redis cache.
 
@@ -90,7 +90,7 @@ class UserService:
             logger.warning(f"Error reading from cache for user {slack_user_id}: {e}")
             return None
 
-    def _set_in_cache(self, slack_user_id: str, user_info: UserInfo) -> None:
+    def _set_in_cache(self, slack_user_id: str, user_info: dict[str, Any]) -> None:
         """
         Store user info in Redis cache.
 
@@ -109,7 +109,7 @@ class UserService:
         except Exception as e:
             logger.warning(f"Error writing to cache for user {slack_user_id}: {e}")
 
-    def get_user_info(self, slack_user_id: str) -> UserInfo | None:
+    def get_user_info(self, slack_user_id: str) -> dict[str, Any] | None:
         """
         Get user information from cache or database.
 
@@ -135,7 +135,7 @@ class UserService:
         logger.warning(f"User {slack_user_id} not found in cache or database")
         return None
 
-    def _fetch_from_database(self, slack_user_id: str) -> UserInfo | None:
+    def _fetch_from_database(self, slack_user_id: str) -> dict[str, Any] | None:
         """
         Fetch user info from database.
 

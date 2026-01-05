@@ -15,7 +15,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Add content_hash column to metric_records table."""
     # Add content_hash column (MD5 hash of content_snapshot)
     op.add_column(
@@ -31,7 +31,7 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
+def downgrade():
     """Remove content_hash column from metric_records table."""
     op.drop_index("idx_metric_content_hash", table_name="metric_records")
     op.drop_column("metric_records", "content_hash")

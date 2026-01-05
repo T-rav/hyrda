@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Add synced_to_vector column to metric_records."""
     op.add_column(
         "metric_records",
@@ -30,6 +30,6 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
+def downgrade():
     """Remove synced_to_vector column."""
     op.drop_column("metric_records", "synced_to_vector")

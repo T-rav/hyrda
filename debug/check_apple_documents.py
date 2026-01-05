@@ -98,7 +98,7 @@ async def check_apple_documents():
                 similarity = chunk["similarity"]
                 content_preview = chunk["content_preview"]
                 print(
-                    f"   Chunk {i + 1}: Similarity {similarity:.3f} - {content_preview}..."
+                    f"   Chunk {i+1}: Similarity {similarity:.3f} - {content_preview}..."
                 )
 
             if len(chunks) > 3:

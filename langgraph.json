@@ -1,0 +1,12 @@
+{
+  "graphs": {
+    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher",
+    "meddpicc_coach": "./bot/agents/meddpicc_coach/meddpicc_coach.py:meddpicc_coach"
+  },
+  "env": ".env",
+  "dependencies": [
+    "./bot",
+    "langchain-google-genai>=2.0.0"
+  ],
+  "python_version": "3.11"
+}

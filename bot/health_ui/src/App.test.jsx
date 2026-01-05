@@ -6,12 +6,12 @@ import App from './App'
 // Mock API responses
 const mockHealthData = {
   status: 'healthy',
+  uptime_seconds: 3600,
   version: '1.0.0',
   timestamp: '2025-09-24T17:00:00Z'
 }
 
 const mockMetricsData = {
-  uptime_seconds: 3600,  // 1 hour
   memory_usage_mb: 256,
   active_conversations: 5,
   total_requests: 1000
@@ -250,90 +250,6 @@ describe('Health Dashboard App', () => {
       expect(metricsLink).toHaveAttribute('href', '/api/metrics')
       expect(metricsLink).toHaveAttribute('target', '_blank')
       expect(metricsLink).toHaveAttribute('rel', 'noopener noreferrer')
-    })
-  })
-
-  test('displays system uptime from metrics endpoint correctly', async () => {
-    render(<App />)
-
-    await waitFor(() => {
-      // uptime_seconds: 3600 = 1 hour = "1h 0m"
-      expect(screen.getByText('1h 0m')).toBeInTheDocument()
-    })
-  })
-
-  test('uptime shows 0m when metrics are unavailable', async () => {
-    global.fetch = vi.fn().mockImplementation((url) => {
-      if (url.includes('/api/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockHealthData)
-        })
-      }
-      if (url.includes('/api/metrics')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({}) // No uptime_seconds
-        })
-      }
-      if (url.includes('/api/ready')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockReadyData)
-        })
-      }
-      if (url.includes('/api/services/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockServicesData)
-        })
-      }
-      return Promise.reject(new Error('Unknown URL'))
-    })
-
-    render(<App />)
-
-    await waitFor(() => {
-      expect(screen.getByText('0m')).toBeInTheDocument()
-    })
-  })
-
-  test('uptime formats days correctly', async () => {
-    global.fetch = vi.fn().mockImplementation((url) => {
-      if (url.includes('/api/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockHealthData)
-        })
-      }
-      if (url.includes('/api/metrics')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({
-            ...mockMetricsData,
-            uptime_seconds: 90061 // 1 day, 1 hour, 1 minute
-          })
-        })
-      }
-      if (url.includes('/api/ready')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockReadyData)
-        })
-      }
-      if (url.includes('/api/services/health')) {
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve(mockServicesData)
-        })
-      }
-      return Promise.reject(new Error('Unknown URL'))
-    })
-
-    render(<App />)
-
-    await waitFor(() => {
-      expect(screen.getByText('1d 1h 1m')).toBeInTheDocument()
     })
   })
 })

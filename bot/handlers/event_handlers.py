@@ -3,17 +3,14 @@ import traceback
 from typing import Any
 
 from handlers.message_handlers import handle_message
+from services.llm_service import LLMService
 from services.slack_service import SlackService
 from utils.errors import handle_error
 
 logger = logging.getLogger(__name__)
 
 
-async def register_handlers(
-    app: Any,
-    slack_service: SlackService,
-    conversation_cache: Any | None = None,
-) -> None:
+async def register_handlers(app, slack_service, llm_service, conversation_cache=None):
     """Register all event handlers with the Slack app"""
 
     @app.event("assistant_thread_started")
@@ -141,9 +138,10 @@ async def process_message_by_context(
     thread_ts: str | None,
     ts: str,
     slack_service: SlackService,
-    conversation_cache: Any = None,
-    files: list[dict[str, Any]] | None = None,
-) -> None:
+    llm_service: LLMService,
+    conversation_cache=None,
+    files: list[dict] | None = None,
+):
     """Process message based on its context (DM, mention, thread)"""
 
     logger.debug(

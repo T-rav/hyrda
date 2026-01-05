@@ -10,11 +10,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Deep research configuration constants
-MAX_CHUNKS_LOW_EFFORT = 10  # Maximum chunks for low effort research
-MAX_CHUNKS_MEDIUM_EFFORT = 15  # Maximum chunks for medium effort research
-MAX_CHUNKS_HIGH_EFFORT = 20  # Maximum chunks for high effort research
-
 
 class InternalDeepResearchService:
     """
@@ -133,11 +128,7 @@ class InternalDeepResearchService:
             ranked_chunks = self._rank_chunks(all_chunks, query)
 
             # Limit to top chunks (scale with effort)
-            max_chunks = {
-                "low": MAX_CHUNKS_LOW_EFFORT,
-                "medium": MAX_CHUNKS_MEDIUM_EFFORT,
-                "high": MAX_CHUNKS_HIGH_EFFORT,
-            }.get(effort, MAX_CHUNKS_MEDIUM_EFFORT)
+            max_chunks = {"low": 10, "medium": 15, "high": 20}.get(effort, 15)
             final_chunks = ranked_chunks[:max_chunks]
 
             logger.info(
@@ -399,10 +390,7 @@ async def get_internal_deep_research_service() -> InternalDeepResearchService | 
 
 # Factory function
 def create_internal_deep_research_service(
-    llm_service: Any,
-    retrieval_service: Any,
-    vector_service: Any,
-    embedding_service: Any,
+    llm_service, retrieval_service, vector_service, embedding_service
 ) -> InternalDeepResearchService:
     """
     Create internal deep research service instance.

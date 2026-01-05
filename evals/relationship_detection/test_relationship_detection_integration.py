@@ -2,10 +2,11 @@ import os
 from pathlib import Path
 
 import pytest
-from agents.profiler import prompts
-from agents.profiler.tools.internal_search import internal_search_tool
-from agents.profiler.utils import format_research_context
 from dotenv import load_dotenv
+
+from agents.profiler import prompts
+from agents.profiler.utils import format_research_context
+from agents.profiler.tools.internal_search import internal_search_tool
 
 # Load root-level .env so VECTOR_* and LLM keys are available
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -47,9 +48,7 @@ async def test_allcampus_relationship_integration_real_services():
         or "Partner Hub" in result
         or "Archa" in result
         or "case study" in result.lower()
-        or (
-            "allcampus" in result.lower() and len(result) > 500
-        )  # Found substantial AllCampus content
+        or ("allcampus" in result.lower() and len(result) > 500)  # Found substantial AllCampus content
     )
 
     if not has_case_study_data:
@@ -67,14 +66,9 @@ async def test_allcampus_relationship_integration_real_services():
         "AllCampus - OPM Case Study" in result
         or "Partner Hub" in result
         or "Archa" in result
-        or (
-            "AllCampus" in result
-            and ("project" in result.lower() or "completed" in result.lower())
-        )
+        or ("AllCampus" in result and ("project" in result.lower() or "completed" in result.lower()))
     )
-    assert has_project_evidence, (
-        f"Expected project evidence in result but got: {result[:500]}"
-    )
+    assert has_project_evidence, f"Expected project evidence in result but got: {result[:500]}"
 
     # Build context and system prompt to ensure the evidence flows into report generation
     context = await format_research_context(

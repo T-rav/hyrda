@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Add oauth_credentials table for secure, encrypted storage of OAuth tokens."""
     op.create_table(
         "oauth_credentials",
@@ -43,6 +43,6 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
+def downgrade():
     """Remove oauth_credentials table."""
     op.drop_table("oauth_credentials")

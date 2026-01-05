@@ -64,38 +64,39 @@ class GoogleMetadataParser:
     @staticmethod
     def get_permissions_summary(permissions: list[dict]) -> str:
         """
-        Get deduplicated list of all email addresses who can access the file.
+        Get a simple string summary of Google Drive permissions for metadata.
 
         Args:
             permissions: Raw permissions from Google Drive API
 
         Returns:
-            Comma-separated string of unique email addresses or domain names
+            Simple string summary of permissions
         """
         if not permissions:
             return "no_permissions"
 
-        emails = set()  # Use set for automatic deduplication
+        summary_parts = []
+        anyone_access = False
+        user_count = 0
 
         for perm in permissions:
+            role = perm.get("role", "reader")
             perm_type = perm.get("type", "user")
 
             if perm_type == "anyone":
-                return "anyone"  # If public to the world, just return "anyone"
-            elif perm_type == "domain":
-                # Whole organization/domain has access
-                domain = perm.get("domain", "unknown_domain")
-                emails.add(f"domain:{domain}")
+                anyone_access = True
+                summary_parts.append(f"anyone_{role}")
             elif perm_type in ["user", "group"]:
-                email = perm.get("emailAddress")
-                if email:
-                    emails.add(email)
+                user_count += 1
 
-        if emails:
-            # Sort for consistent ordering
-            return ", ".join(sorted(emails))
+        if anyone_access and user_count > 0:
+            return f"public_plus_{user_count}_users"
+        elif anyone_access:
+            return "public_access"
+        elif user_count > 0:
+            return f"private_{user_count}_users"
         else:
-            return "no_emails"
+            return "restricted"
 
     @staticmethod
     def get_owner_emails(owners: list[dict]) -> str:
@@ -138,70 +139,15 @@ class GoogleMetadataParser:
         item["folder_path"] = folder_path
 
         # Process permissions if available
-        # For Shared Drives, use detailed_permissions (from permissions().list() API)
-        # For regular drives, use permissions (from files().list() API)
-        detailed_perms = item.get("detailed_permissions", [])
-        permissions = detailed_perms if detailed_perms else item.get("permissions", [])
-
+        permissions = item.get("permissions", [])
         if permissions:
             item["formatted_permissions"] = self.format_permissions(permissions)
             item["permissions_summary"] = self.get_permissions_summary(permissions)
 
         # Process owners
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         owners = item.get("owners", [])
-        logger.info(f"🔍 METADATA PARSER - File: {item.get('name')}")
-        logger.info(f"   Initial owners: {owners}")
-
         if owners:
-            owner_emails = self.get_owner_emails(owners)
-            item["owner_emails"] = owner_emails
-            logger.info(f"   ✅ Set owner_emails from owners field: {owner_emails}")
-        else:
-            # For Shared Drives, owners field is often empty
-            # Try to extract from detailed_permissions instead
-            detailed_perms = item.get("detailed_permissions", [])
-            logger.info(
-                f"   No owners field, checking detailed_permissions: {len(detailed_perms)} entries"
-            )
-            if detailed_perms:
-                # For Shared Drives: look for owner, organizer, or fileOrganizer roles
-                # These are the "responsible parties" in Shared Drives
-                owner_perms = [
-                    p
-                    for p in detailed_perms
-                    if p.get("role") in ["owner", "organizer", "fileOrganizer"]
-                ]
-                logger.info(f"   Found {len(owner_perms)} owner/organizer permissions")
-                if owner_perms:
-                    logger.info(f"   Owner/organizer perms sample: {owner_perms[:2]}")
-                    # Convert permission entries to owner format
-                    extracted_owners = [
-                        {"emailAddress": p.get("emailAddress", "")}
-                        for p in owner_perms
-                        if p.get("emailAddress")
-                    ]
-                    if extracted_owners:
-                        owner_emails = self.get_owner_emails(extracted_owners)
-                        item["owner_emails"] = owner_emails
-                        # Store extracted owners for consistency
-                        item["owners"] = extracted_owners
-                        logger.info(
-                            f"   ✅ Set owner_emails from detailed_permissions (Shared Drive): {owner_emails}"
-                        )
-                    else:
-                        logger.warning(
-                            "   ⚠️  No email addresses found in owner/organizer permissions"
-                        )
-                else:
-                    logger.warning(
-                        "   ⚠️  No owner/organizer role found in detailed_permissions"
-                    )
-            else:
-                logger.warning("   ⚠️  No detailed_permissions available")
+            item["owner_emails"] = self.get_owner_emails(owners)
 
         return item
 

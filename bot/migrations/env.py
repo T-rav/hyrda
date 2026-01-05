@@ -72,8 +72,6 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section)
-    if configuration is None:
-        raise ValueError("Unable to get configuration section")
     configuration["sqlalchemy.url"] = get_url()
 
     connectable = engine_from_config(

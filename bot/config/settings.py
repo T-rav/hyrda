@@ -206,8 +206,33 @@ class GeminiSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="GEMINI_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
-# Import LangfuseSettings from shared library to avoid duplication
-from shared.config.settings import LangfuseSettings  # noqa: E402
+class LangfuseSettings(BaseSettings):
+    """Langfuse observability settings"""
+
+    enabled: bool = Field(default=True, description="Enable Langfuse tracing")
+    public_key: str = Field(default="", description="Langfuse public key")
+    secret_key: SecretStr = Field(
+        default=SecretStr(""), description="Langfuse secret key"
+    )
+    host: str = Field(
+        default="https://cloud.langfuse.com", description="Langfuse host URL"
+    )
+    debug: bool = Field(default=False, description="Enable Langfuse debug logging")
+
+    # Prompt template settings
+    use_prompt_templates: bool = Field(
+        default=True,
+        description="Use Langfuse prompt templates instead of hardcoded prompts",
+    )
+    system_prompt_template: str = Field(
+        default="System/Default", description="Langfuse template name for system prompt"
+    )
+    prompt_template_version: str | None = Field(
+        default=None,
+        description="Specific prompt template version (uses latest if None)",
+    )
+
+    model_config = ConfigDict(env_prefix="LANGFUSE_")  # type: ignore[assignment,typeddict-unknown-key]
 
 
 class Settings(BaseSettings):

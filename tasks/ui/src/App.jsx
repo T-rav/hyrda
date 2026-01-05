@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
+import React, { useState } from 'react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import './App.css'
 
@@ -17,37 +17,9 @@ function useDocumentTitle(title) {
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
-  const [currentUser, setCurrentUser] = useState(null)
 
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
-
-  // Check authentication on mount to prevent back-button access after logout
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const response = await fetch('https://localhost:6001/api/users/me', {
-          credentials: 'include'
-        })
-        if (!response.ok) {
-          // Not authenticated - redirect to control plane login with return URL
-          console.log('Not authenticated, redirecting to login')
-          const returnUrl = encodeURIComponent(window.location.href)
-          window.location.href = `https://localhost:6001/auth/login?redirect=${returnUrl}`
-          return
-        }
-        // Authenticated - set current user
-        const data = await response.json()
-        setCurrentUser(data)
-      } catch (error) {
-        console.error('Auth check failed:', error)
-        const returnUrl = encodeURIComponent(window.location.href)
-        window.location.href = `https://localhost:6001/auth/login?redirect=${returnUrl}`
-      }
-    }
-
-    verifyAuth()
-  }, [])
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
@@ -56,17 +28,6 @@ function App() {
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type })
     setTimeout(() => setNotification(null), 3000)
-  }
-
-  // Logout handler
-  const handleLogout = () => {
-    // Tasks uses control-plane auth, so POST to control-plane logout endpoint
-    // This will clear the session and redirect to the logout success page
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = 'https://localhost:6001/auth/logout'
-    document.body.appendChild(form)
-    form.submit()
   }
 
   return (
@@ -109,24 +70,6 @@ function App() {
               <Activity size={20} />
               Health
             </a>
-            <div className="logout-dropdown">
-              <button
-                className="nav-link logout-btn"
-                onClick={handleLogout}
-                title="Logout"
-              >
-                <LogOut size={20} />
-                Logout
-              </button>
-              {currentUser && (
-                <div className="dropdown-menu">
-                  <div className="dropdown-item user-email">
-                    <User size={16} />
-                    {currentUser.email}
-                  </div>
-                </div>
-              )}
-            </div>
             <div className="nav-divider"></div>
           </nav>
         </div>

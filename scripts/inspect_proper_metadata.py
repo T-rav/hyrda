@@ -2,7 +2,6 @@
 """
 Check what proper document metadata looks like in Qdrant.
 """
-
 import os
 import sys
 from pathlib import Path
@@ -19,13 +18,13 @@ from qdrant_client import QdrantClient
 def inspect_proper_metadata():
     """Check metadata structure of proper documents."""
     client = QdrantClient(
-        host=os.getenv("VECTOR_HOST", "localhost"),
-        port=int(os.getenv("VECTOR_PORT", 6333)),
-        api_key=os.getenv("VECTOR_API_KEY"),
-        https=True if os.getenv("VECTOR_HOST") != "localhost" else False,
+        host=os.getenv('VECTOR_HOST', 'localhost'),
+        port=int(os.getenv('VECTOR_PORT', 6333)),
+        api_key=os.getenv('VECTOR_API_KEY'),
+        https=True if os.getenv('VECTOR_HOST') != 'localhost' else False
     )
 
-    collection = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
+    collection = os.getenv('VECTOR_COLLECTION_NAME', 'insightmesh-knowledge-base')
 
     print("=" * 100)
     print("PROPER DOCUMENT METADATA STRUCTURE")
@@ -45,14 +44,12 @@ def inspect_proper_metadata():
         print(f"   page_content preview: {metadata.get('page_content', '')[:100]}...")
 
         # Check if this is a malformed document
-        has_file_name = "file_name" in metadata
-        has_source = "source" in metadata
-        has_content = "page_content" in metadata
+        has_file_name = 'file_name' in metadata
+        has_source = 'source' in metadata
+        has_content = 'page_content' in metadata
 
         if not has_file_name or not has_source or not has_content:
-            print(
-                f"   ⚠️  MALFORMED: missing_file_name={not has_file_name}, missing_source={not has_source}, missing_content={not has_content}"
-            )
+            print(f"   ⚠️  MALFORMED: missing_file_name={not has_file_name}, missing_source={not has_source}, missing_content={not has_content}")
 
     # Now specifically check the culprit document
     print("\n" + "=" * 100)
@@ -73,7 +70,7 @@ def inspect_proper_metadata():
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         sys.exit(inspect_proper_metadata())
     except KeyboardInterrupt:

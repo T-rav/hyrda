@@ -7,99 +7,13 @@ Includes adaptive query rewriting for improved retrieval accuracy.
 
 import logging
 import re
+from typing import Any
 
-from bot_types import ContextChunk
 from config.settings import Settings
 
 from .query_rewriter import AdaptiveQueryRewriter
 
 logger = logging.getLogger(__name__)
-
-# Common stop words to filter out from entity extraction
-STOP_WORDS = {
-    # Articles, prepositions, conjunctions
-    "a",
-    "an",
-    "the",
-    "and",
-    "or",
-    "but",
-    "in",
-    "on",
-    "at",
-    "to",
-    "for",
-    "of",
-    "with",
-    "by",
-    # Common verbs
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    # Question words
-    "what",
-    "when",
-    "where",
-    "why",
-    "how",
-    "who",
-    "which",
-    "whose",
-    # Pronouns
-    "i",
-    "you",
-    "he",
-    "she",
-    "it",
-    "we",
-    "they",
-    "them",
-    "this",
-    "that",
-    "these",
-    "those",
-    # Common adjectives/adverbs
-    "any",
-    "some",
-    "all",
-    "many",
-    "much",
-    "more",
-    "most",
-    "very",
-    "really",
-    "quite",
-    # Modal verbs
-    "can",
-    "could",
-    "will",
-    "would",
-    "should",
-    "shall",
-    "may",
-    "might",
-    "must",
-    # Other common filler words
-    "there",
-    "here",
-    "then",
-    "than",
-    "so",
-    "just",
-    "only",
-    "also",
-    "even",
-    "still",
-}
 
 
 class RetrievalService:
@@ -118,11 +32,11 @@ class RetrievalService:
     async def retrieve_context(
         self,
         query: str,
-        vector_service: object,
-        embedding_service: object,
+        vector_service,
+        embedding_service,
         conversation_history: list[dict] | None = None,
         user_id: str | None = None,
-    ) -> list[ContextChunk]:
+    ) -> list[dict[str, Any]]:
         """
         Retrieve relevant context chunks for a query.
 
@@ -228,7 +142,7 @@ class RetrievalService:
         self,
         document_embedding: list[float],
         vector_service,
-    ) -> list[ContextChunk]:
+    ) -> list[dict[str, Any]]:
         """
         Retrieve relevant context chunks using a document's embedding for similarity search.
 
@@ -279,18 +193,104 @@ class RetrievalService:
         Returns:
             Set of entity terms (all significant words from query)
         """
+        # Define comprehensive stop words to filter out
+        stop_words = {
+            # Articles, prepositions, conjunctions
+            "a",
+            "an",
+            "the",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+            "by",
+            # Common verbs
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            # Question words
+            "what",
+            "when",
+            "where",
+            "why",
+            "how",
+            "who",
+            "which",
+            "whose",
+            # Pronouns
+            "i",
+            "you",
+            "he",
+            "she",
+            "it",
+            "we",
+            "they",
+            "them",
+            "this",
+            "that",
+            "these",
+            "those",
+            # Common adjectives/adverbs
+            "any",
+            "some",
+            "all",
+            "many",
+            "much",
+            "more",
+            "most",
+            "very",
+            "really",
+            "quite",
+            # Modal verbs
+            "can",
+            "could",
+            "will",
+            "would",
+            "should",
+            "shall",
+            "may",
+            "might",
+            "must",
+            # Other common filler words
+            "there",
+            "here",
+            "then",
+            "than",
+            "so",
+            "just",
+            "only",
+            "also",
+            "even",
+            "still",
+        }
+
         # Extract all words (2+ characters, alphanumeric)
         words = re.findall(r"\b[a-zA-Z0-9]{2,}\b", query.lower())
 
         # Filter out stop words and keep everything else as entities
-        entities = {word for word in words if word not in STOP_WORDS}
+        entities = {word for word in words if word not in stop_words}
 
         logger.debug(f"Extracted entities from '{query}': {entities}")
         return entities
 
     def _apply_entity_boosting(
-        self, query: str, results: list[ContextChunk]
-    ) -> list[ContextChunk]:
+        self, query: str, results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Apply entity boosting to search results.
 
@@ -354,8 +354,8 @@ class RetrievalService:
             return results
 
     def _apply_diversification_strategy(
-        self, results: list[ContextChunk]
-    ) -> list[ContextChunk]:
+        self, results: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """
         Apply smart similarity-first diversification with automatic document chunk limiting.
 
@@ -378,8 +378,8 @@ class RetrievalService:
         return self._smart_similarity_diversify(results, max_results)
 
     def _smart_similarity_diversify(
-        self, results: list[ContextChunk], max_results: int
-    ) -> list[ContextChunk]:
+        self, results: list[dict[str, Any]], max_results: int
+    ) -> list[dict[str, Any]]:
         """
         Smart similarity-first diversification.
 

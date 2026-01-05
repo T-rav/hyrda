@@ -1,12 +1,4 @@
-"""Job registry for managing different types of scheduled jobs.
-
-Jobs are loaded from two sources:
-1. System tasks (jobs/system/) - Built into image (slack, gdrive)
-2. External tasks (external_tasks/) - Client-provided (metric_sync, portal_sync)
-
-System tasks are always available. External tasks are discovered at runtime
-without rebuilding the Docker image.
-"""
+"""Job registry for managing different types of scheduled jobs."""
 
 import logging
 from typing import Any
@@ -15,7 +7,11 @@ from apscheduler.job import Job
 
 from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
-from task_types import JobExecutionResult, JobSchedule, JobTypeInfo
+
+from .gdrive_ingest import GDriveIngestJob
+from .metric_sync import MetricSyncJob
+from .portal_sync import PortalSyncJob
+from .slack_user_import import SlackUserImportJob
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +21,7 @@ def execute_job_by_type(
     job_params: dict[str, Any],
     triggered_by: str = "scheduler",
     job_id: str = None,
-) -> JobExecutionResult:
+) -> dict[str, Any]:
     """Global executor function that creates and runs jobs by type."""
     import asyncio
     import uuid
@@ -58,18 +54,17 @@ def execute_job_by_type(
         root_logger.setLevel(logging.INFO)
         logger.info(f"📝 File logging enabled for job: {job_type}")
 
-    # Load job class dynamically from external_tasks/
-    from services.external_task_loader import get_external_loader
+    # Direct mapping - simpler than dynamic imports
+    job_classes = {
+        "slack_user_import": SlackUserImportJob,
+        "metric_sync": MetricSyncJob,
+        "portal_sync": PortalSyncJob,
+        "gdrive_ingest": GDriveIngestJob,
+    }
 
-    external_loader = get_external_loader()
-    job_class = external_loader.get_task_class(job_type)
-
+    job_class = job_classes.get(job_type)
     if not job_class:
-        available_tasks = external_loader.list_external_tasks()
-        raise ValueError(
-            f"Unknown job type: {job_type}. "
-            f"Available tasks: {', '.join(available_tasks) if available_tasks else 'none'}"
-        )
+        raise ValueError(f"Unknown job type: {job_type}")
 
     # Create job instance
     settings = TasksSettings()
@@ -138,18 +133,6 @@ def execute_job_by_type(
                         task_run.records_success = job_result.get("records_success")
                         task_run.records_failed = job_result.get("records_failed")
 
-                        # Check if job should be marked as failed despite completing
-                        # Only mark as failed if there were actual errors (not just skipped records)
-                        if (
-                            task_run.records_processed
-                            and task_run.records_processed > 0
-                            and task_run.records_success == 0
-                            and task_run.records_failed
-                            and task_run.records_failed > 0
-                        ):
-                            task_run.status = "failed"
-                            task_run.error_message = f"All {task_run.records_processed} records failed to process"
-
                 session.commit()
 
         return result
@@ -182,22 +165,13 @@ class JobRegistry:
         self.settings = settings
         self.scheduler_service = scheduler_service
 
-        # Load job types from external_tasks/ directory
-        from services.external_task_loader import get_external_loader
-
-        external_loader = get_external_loader()
-        self.job_types = (
-            external_loader._loaded_tasks.copy()
-        )  # Get all discovered tasks
-
-        if self.job_types:
-            logger.info(
-                f"✅ Loaded {len(self.job_types)} job type(s) from external_tasks/"
-            )
-        else:
-            logger.warning(
-                "⚠️ No jobs loaded! Ensure EXTERNAL_TASKS_PATH is set and tasks directory is mounted"
-            )
+        # Job type mapping - starts with built-in jobs
+        self.job_types = {
+            "slack_user_import": SlackUserImportJob,
+            "metric_sync": MetricSyncJob,
+            "portal_sync": PortalSyncJob,
+            "gdrive_ingest": GDriveIngestJob,
+        }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:
         """
@@ -215,7 +189,7 @@ class JobRegistry:
         self.job_types[job_type] = job_class
         logger.info(f"Registered job type: {job_type} ({job_class.JOB_NAME})")
 
-    def get_available_job_types(self) -> list[JobTypeInfo]:
+    def get_available_job_types(self) -> list[dict[str, Any]]:
         """Get available job types with their descriptions."""
         job_types = []
 
@@ -237,7 +211,7 @@ class JobRegistry:
         self,
         job_type: str,
         job_id: str | None = None,
-        schedule: JobSchedule | None = None,
+        schedule: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> Job:
         """Create a new job of the specified type."""

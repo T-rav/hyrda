@@ -5,47 +5,9 @@ import os
 import tempfile
 from unittest.mock import AsyncMock, Mock
 
-# Disable OpenTelemetry tracing during tests
-os.environ["OTEL_TRACES_ENABLED"] = "false"
-
 import pytest
-from prometheus_client import REGISTRY
 
 from config.settings import TasksSettings
-from tests.factories import (
-    FastAPIAppFactory,
-    MockJobRegistryFactory,
-    MockSchedulerFactory,
-)
-
-# Load integration test fixtures (real services, no mocks)
-pytest_plugins = ["tests.integration_conftest"]
-
-
-# Clear Prometheus collectors before each test to avoid duplication
-@pytest.fixture(scope="function", autouse=True)
-def clear_prometheus_registry():
-    """Clear Prometheus registry before each test."""
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        with contextlib.suppress(Exception):
-            REGISTRY.unregister(collector)
-    yield
-
-
-# Reset external task loader before each test to avoid pollution
-@pytest.fixture(scope="function", autouse=True)
-def reset_external_loader():
-    """Reset the global external task loader before each test."""
-    import services.external_task_loader as loader_module
-
-    # Reset the global loader
-    loader_module._external_loader = None
-
-    yield
-
-    # Clean up after test
-    loader_module._external_loader = None
 
 
 @pytest.fixture
@@ -137,58 +99,3 @@ def sample_slack_users():
             "updated": 1234567890,
         },
     ]
-
-
-# Flask app testing fixtures using factories
-
-
-@pytest.fixture
-def mock_scheduler():
-    """Create a mock scheduler instance."""
-    return MockSchedulerFactory.create()
-
-
-@pytest.fixture
-def mock_job_registry():
-    """Create a mock job registry instance."""
-    return MockJobRegistryFactory.create()
-
-
-@pytest.fixture
-def app_factory():
-    """Factory function for creating Flask test apps."""
-    return FastAPIAppFactory.create_test_app
-
-
-@pytest.fixture
-def app(monkeypatch, mock_scheduler, mock_job_registry):
-    """Create a fresh Flask app for each test with mocked services."""
-    # Set OAuth env vars
-    monkeypatch.setenv(
-        "GOOGLE_OAUTH_CLIENT_ID", "test-client-id.apps.googleusercontent.com"
-    )
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_SECRET", "test-client-secret")
-    monkeypatch.setenv("SERVER_BASE_URL", "http://localhost:5001")
-    monkeypatch.setenv("ALLOWED_EMAIL_DOMAIN", "test.com")  # Domain without @ prefix
-    monkeypatch.setenv("TASK_DATABASE_URL", "sqlite:///:memory:")
-    monkeypatch.setenv("DATA_DATABASE_URL", "sqlite:///:memory:")
-
-    # Create app using factory
-    test_app = FastAPIAppFactory.create_test_app(
-        mock_scheduler=mock_scheduler,
-        mock_registry=mock_job_registry,
-    )
-
-    return test_app
-
-
-@pytest.fixture
-def client(app):
-    """Create an authenticated test client."""
-    return FastAPIAppFactory.create_test_client(app, authenticated=True)
-
-
-@pytest.fixture
-def unauthenticated_client(app):
-    """Create an unauthenticated test client."""
-    return FastAPIAppFactory.create_test_client(app, authenticated=False)

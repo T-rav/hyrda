@@ -10,8 +10,6 @@ import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from bot_types import HealthStatus
-
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
@@ -174,7 +172,7 @@ class ServiceContainer:
         self._factories.clear()
         logger.info("Service container closed")
 
-    async def health_check(self) -> HealthStatus:
+    async def health_check(self) -> dict[str, Any]:
         """
         Perform health checks on all registered services.
 

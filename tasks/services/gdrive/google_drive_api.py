@@ -6,20 +6,10 @@ Separated for better organization and testability.
 """
 
 import logging
-import sys
-from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
-# Import OpenTelemetry utilities
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
-from shared.utils.otel_http_client import (
-    SPAN_KIND_CLIENT,
-    create_span,
-    record_exception,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -46,27 +36,21 @@ class GoogleDriveAPI:
         Returns:
             Folder information dictionary or None if error
         """
-        with create_span(
-            "gdrive.api.get_folder_info",
-            attributes={"gdrive.folder_id": folder_id},
-            span_kind=SPAN_KIND_CLIENT,
-        ):
-            try:
-                # Try regular access first
-                folder_info = (
-                    self.service.files()
-                    .get(
-                        fileId=folder_id,
-                        fields="id,name,mimeType,permissions",
-                        supportsAllDrives=True,
-                    )
-                    .execute()
+        try:
+            # Try regular access first
+            folder_info = (
+                self.service.files()
+                .get(
+                    fileId=folder_id,
+                    fields="id,name,mimeType,permissions",
+                    supportsAllDrives=True,
                 )
-                return folder_info
-            except HttpError as e:
-                record_exception(e)
-                logger.error(f"Cannot access folder {folder_id}: {e}")
-                return None
+                .execute()
+            )
+            return folder_info
+        except HttpError as e:
+            logger.error(f"Cannot access folder {folder_id}: {e}")
+            return None
 
     def list_files_in_folder(self, folder_id: str, folder_path: str = "") -> list[dict]:
         """
@@ -79,22 +63,13 @@ class GoogleDriveAPI:
         Returns:
             List of file items
         """
-        with create_span(
-            "gdrive.api.list_files",
-            attributes={
-                "gdrive.folder_id": folder_id,
-                "gdrive.folder_path": folder_path,
-            },
-            span_kind=SPAN_KIND_CLIENT,
-        ):
-            try:
-                # Always use specific query - it works better for Shared Drives
-                # The broad query doesn't reliably return parents field
-                return self._list_files_specific_query(folder_id)
-            except HttpError as e:
-                record_exception(e)
-                logger.error(f"Error listing folder contents: {e}")
-                return []
+        try:
+            # Always use specific query - it works better for Shared Drives
+            # The broad query doesn't reliably return parents field
+            return self._list_files_specific_query(folder_id)
+        except HttpError as e:
+            logger.error(f"Error listing folder contents: {e}")
+            return []
 
     def _list_files_broad_query(self, folder_id: str) -> list[dict]:
         """Use broad query for root folder access"""
@@ -115,20 +90,20 @@ class GoogleDriveAPI:
         # Filter to only files that have our folder_id as parent
         all_files = all_results.get("files", [])
 
-        # Log file parent checking for debugging
-        logger.debug(f"Checking {len(all_files)} files for parent {folder_id}")
+        # DEBUG: Check if files have parents field
+        print(f"🔍 DEBUG: Checking {len(all_files)} files for parent {folder_id}")
         files_with_parents = [f for f in all_files if "parents" in f]
-        logger.debug(f"{len(files_with_parents)} files have 'parents' field")
+        print(f"   {len(files_with_parents)} files have 'parents' field")
 
-        # Log a few examples for debugging
+        # DEBUG: Show a few examples
         for i, f in enumerate(all_files[:3]):
-            logger.debug(
-                f"Example {i + 1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}"
+            print(
+                f"   Example {i + 1}: {f.get('name')} - parents: {f.get('parents', 'MISSING')}, mimeType: {f.get('mimeType')}"
             )
 
         filtered_files = [f for f in all_files if folder_id in f.get("parents", [])]
 
-        # Log what was found for debugging
+        # DEBUG: Log what was found
         folders = [
             f
             for f in filtered_files
@@ -139,19 +114,19 @@ class GoogleDriveAPI:
             for f in filtered_files
             if f.get("mimeType") != "application/vnd.google-apps.folder"
         ]
-        logger.debug(
-            f"Found {len(all_files)} total accessible files, "
+        print(
+            f"DEBUG: Found {len(all_files)} total accessible files, "
             f"{len(filtered_files)} in target folder "
             f"({len(folders)} folders, {len(documents)} documents)"
         )
 
-        # Log the folders found for debugging
+        # DEBUG: List the folders found
         if folders:
-            logger.debug("Folders found:")
+            print("📁 Folders found:")
             for folder in folders:
-                logger.debug(f"- {folder.get('name')} ({folder.get('id')})")
+                print(f"   - {folder.get('name')} ({folder.get('id')})")
         else:
-            logger.debug("No folders found in target folder")
+            print("⚠️ No folders found in target folder!")
 
         return filtered_files
 
@@ -177,9 +152,6 @@ class GoogleDriveAPI:
         """
         Get detailed permissions for a specific file.
 
-        Uses permissions().list() API since files().get() doesn't include permissions
-        for Shared Drive files even when requested with fields="permissions(*)".
-
         Args:
             file_id: Google Drive file ID
 
@@ -187,31 +159,14 @@ class GoogleDriveAPI:
             List of permission dictionaries
         """
         try:
-            # Use permissions.list() API - files.get() doesn't return permissions
-            # for Shared Drive files even with fields="permissions(*)"
-            logger.info(f"🔍 Fetching permissions for file: {file_id}")
-            permissions_response = (
-                self.service.permissions()
-                .list(
-                    fileId=file_id,
-                    fields="permissions(*)",
-                    supportsAllDrives=True,
-                )
+            file_permissions = (
+                self.service.files()
+                .get(fileId=file_id, fields="permissions", supportsAllDrives=True)
                 .execute()
             )
-            perms = permissions_response.get("permissions", [])
-            logger.info(
-                f"✅ permissions().list() returned {len(perms)} permissions for {file_id}"
-            )
-            if perms:
-                logger.info(f"   Sample permission: {perms[0]}")
-            else:
-                logger.warning(
-                    f"   ⚠️ EMPTY permissions list returned by API for {file_id}"
-                )
-            return perms
+            return file_permissions.get("permissions", [])
         except HttpError as e:
-            logger.error(f"❌ Could not fetch detailed permissions for {file_id}: {e}")
+            logger.warning(f"Could not fetch detailed permissions for {file_id}: {e}")
             return []
 
     def download_file_content(self, file_id: str, mime_type: str) -> bytes | None:

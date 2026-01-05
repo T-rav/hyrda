@@ -7,8 +7,7 @@ contextual descriptions for document chunks before embedding.
 
 import asyncio
 import logging
-
-from bot_types import ChunkMetadata
+from typing import Any
 
 from .llm_service import LLMService
 
@@ -24,7 +23,7 @@ class ContextualRetrievalService:
     async def add_context_to_chunks(
         self,
         chunks: list[str],
-        document_metadata: ChunkMetadata,
+        document_metadata: dict[str, Any],
         batch_size: int = 10,
     ) -> list[str]:
         """
@@ -59,7 +58,7 @@ class ContextualRetrievalService:
     async def _process_chunk_batch(
         self,
         chunk_batch: list[str],
-        document_metadata: ChunkMetadata,
+        document_metadata: dict[str, Any],
     ) -> list[str]:
         """Process a batch of chunks in parallel"""
         tasks = [
@@ -85,7 +84,7 @@ class ContextualRetrievalService:
     async def _generate_chunk_context(
         self,
         chunk: str,
-        document_metadata: ChunkMetadata,
+        document_metadata: dict[str, Any],
     ) -> str:
         """Generate contextual description for a single chunk"""
         try:
@@ -125,7 +124,7 @@ Provide only the contextual description without any preamble. The description sh
             logger.error(f"Failed to generate context for chunk: {e}")
             return ""
 
-    def _build_document_context(self, metadata: ChunkMetadata) -> str:
+    def _build_document_context(self, metadata: dict[str, Any]) -> str:
         """Build a concise document context string from metadata"""
         context_parts = []
 

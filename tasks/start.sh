@@ -18,6 +18,6 @@ alembic -c alembic_data.ini upgrade head
 
 echo "✅ Migrations completed successfully"
 
-# Start the FastAPI application with Uvicorn
-echo "🌐 Starting Uvicorn..."
-exec uvicorn app:app --host 0.0.0.0 --port 8081 --workers 4
+# Start the Flask application
+echo "🌐 Starting Flask application..."
+exec python -u /app/app.py

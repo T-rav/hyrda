@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Rename pinecone_* columns to vector_* in metric_records and portal_records."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
@@ -84,7 +84,7 @@ def upgrade() -> None:
         op.create_index("idx_portal_vector_id", "portal_records", ["vector_id"])
 
 
-def downgrade() -> None:
+def downgrade():
     """Rename vector_* columns back to pinecone_* in metric_records and portal_records."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)

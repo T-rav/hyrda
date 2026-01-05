@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-file test-integration test-unit test-ingest test-shared test-dashboard test-rag ingest ingest-check-es lint lint-check typecheck docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-test-rag ci-ui ci-docker pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status db-setup-system librechat-start librechat-logs librechat-restart librechat-stop
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -59,19 +59,14 @@ help:
 	@echo "  test            🧪 Run ALL unit tests across all services (no integration)"
 	@echo "  test-bot-only   Run bot unit tests only (faster)"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
-	@echo "  test-integration Run integration tests only (separate process)"
-	@echo "  test-unit       Run unit tests only (alias for test)"
-	@echo "  test-tasks      Run tasks service tests"
-	@echo "  test-control-plane Run control plane tests"
-	@echo "  test-agent-service Run agent service tests"
-	@echo "  test-shared     Run shared utilities tests"
-	@echo "  test-dashboard  Run dashboard service tests"
+	@echo "  test-integration Run integration tests only"
+	@echo "  test-unit       Run unit tests only"
 	@echo "  test-ingest     Run ingestion service tests"
 	@echo "  ingest          Run document ingestion (use ARGS='--folder-id YOUR_ID')"
 	@echo "  lint            Run linting and formatting"
 	@echo "  lint-check      Check linting without fixing"
 	@echo "  typecheck       Run type checking"
-	@echo "  ci              🚀 Run complete CI pipeline (use -j4 for parallel: make -j4 ci)"
+	@echo "  quality         Run all quality checks"
 	@echo ""
 	@echo "$(GREEN)Docker:$(RESET)"
 	@echo "  docker-build-bot Build single bot Docker image"
@@ -99,14 +94,13 @@ help:
 	@echo "  quality-all     Run all quality checks (Python + React)"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
-	@echo "  db-start         🐳 Start MySQL databases (main docker-compose.yml)"
-	@echo "  db-stop          🛑 Stop MySQL databases"
-	@echo "  db-setup-system  🔧 Setup system database (agent_usage) without destroying data"
-	@echo "  db-migrate       📋 Generate new migration files"
-	@echo "  db-upgrade       ⬆️  Apply pending migrations"
-	@echo "  db-downgrade     ⬇️  Rollback last migration"
-	@echo "  db-reset         🔄 Reset databases (WARNING: destroys data)"
-	@echo "  db-status        📊 Show migration status"
+	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
+	@echo "  db-stop         🛑 Stop MySQL databases"
+	@echo "  db-migrate      📋 Generate new migration files"
+	@echo "  db-upgrade      ⬆️  Apply pending migrations"
+	@echo "  db-downgrade    ⬇️  Rollback last migration"
+	@echo "  db-reset        🔄 Reset databases (WARNING: destroys data)"
+	@echo "  db-status       📊 Show migration status"
 
 $(VENV):
 	@echo "$(BLUE)Creating Python 3.11 virtual environment...$(RESET)"
@@ -154,59 +148,20 @@ run: check-env start-redis
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
 test: $(VENV)
-	@echo "$(BLUE)Running full unit test suite across all services (excluding integration)...$(RESET)"
-	@echo "$(YELLOW)🧪 Bot unit tests...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short
-	@echo ""
-	@echo "$(YELLOW)🎛️  Control plane unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
-	@echo ""
-	@echo "$(YELLOW)🤖 Agent service unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Some agent-service tests skipped$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)⏰ Tasks service unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short --cov-fail-under=0
-	@echo ""
-	@echo "$(YELLOW)🔗 Shared utilities unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Shared tests skipped$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)📊 Dashboard service unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Dashboard tests skipped$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)🔍 RAG service unit tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  RAG tests skipped$(RESET)"
-	@echo ""
-	@echo "$(GREEN)✅ All unit test suites completed!$(RESET)"
-
-test-bot-only: $(VENV)
-	@echo "$(BLUE)Running bot test suite only (excluding integration tests)...$(RESET)"
+	@echo "$(BLUE)Running test suite (excluding integration tests)...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
+
+test-coverage: $(VENV)
+	@echo "$(BLUE)Running tests with coverage (excluding integration tests)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration" && $(PYTHON) -m coverage report
 
 test-file: $(VENV)
 	@echo "$(BLUE)Running specific test file: $(FILE)...$(RESET)"
 	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -v tests/$(FILE)
 
 test-integration: $(VENV)
-	@echo "$(BLUE)Running integration tests across all services...$(RESET)"
-	@echo "$(YELLOW)🧪 Bot integration tests...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m integration -v --tb=short
-	@echo ""
-	@echo "$(YELLOW)🎛️  Control plane integration tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m integration -v --tb=short
-	@echo ""
-	@echo "$(YELLOW)🤖 Agent service integration tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m integration -v --tb=short --cov-fail-under=0 2>/dev/null || echo "$(YELLOW)⚠️  Agent-service integration test failures (pre-existing)$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)⏰ Tasks service integration tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m integration -v --tb=short --cov-fail-under=0
-	@echo ""
-	@echo "$(YELLOW)📊 Dashboard service integration tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest -m integration -v --tb=short 2>/dev/null || echo "$(YELLOW)⚠️  No dashboard integration tests$(RESET)"
-	@echo ""
-	@echo "$(YELLOW)🔍 RAG service integration tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -m integration -v --tb=short 2>/dev/null || echo "$(YELLOW)⚠️  No RAG service integration tests$(RESET)"
-	@echo ""
-	@echo "$(GREEN)✅ All integration test suites completed!$(RESET)"
+	@echo "$(BLUE)Running integration tests...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m integration --maxfail=5 -v
 
 test-unit: $(VENV)
 	@echo "$(BLUE)Running unit tests...$(RESET)"
@@ -218,11 +173,7 @@ test-ingest: $(VENV)
 
 test-tasks: $(VENV)
 	@echo "$(BLUE)Running task service tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0
-
-test-agent-service: $(VENV)
-	@echo "$(BLUE)Running agent service tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)Some agent-service tests skipped due to import errors$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -v --cov-fail-under=0
 
 lint-tasks: $(VENV)
 	@echo "$(BLUE)Running task service linting...$(RESET)"
@@ -302,6 +253,8 @@ typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
 	cd $(BOT_DIR) && $(VENV)/bin/pyright || $(PYTHON) -m pyright
 
+quality: lint-check test
+
 docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
 
@@ -329,7 +282,6 @@ docker-up: check-env
 	cd $(PROJECT_ROOT_DIR) && docker compose up -d
 	@echo "$(GREEN)✅ Core stack started! Services available at:$(RESET)"
 	@echo "$(BLUE)  - 🤖 Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
-	@echo "$(BLUE)  - 💬 LibreChat UI: http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
 	@echo "$(BLUE)  - 📅 Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - 🗄️  Database Admin: http://localhost:8081$(RESET)"
 	@echo "$(BLUE)  - 🔍 Elasticsearch: http://localhost:9200$(RESET)"
@@ -377,31 +329,6 @@ status:
 	@echo "$(YELLOW)📊 Monitoring Stack Containers:$(RESET)"
 	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter "label=com.docker.compose.project=monitoring" 2>/dev/null || echo "$(RED)❌ Monitoring stack not running$(RESET)"
 	@echo ""
-
-# =============================================================================
-# LibreChat Service Management
-# =============================================================================
-librechat-start: check-env
-	@echo "$(BLUE)💬 Starting LibreChat + MongoDB...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose up -d mongodb librechat
-	@echo "$(GREEN)✅ LibreChat started!$(RESET)"
-	@echo "$(BLUE)  - 💬 LibreChat UI: http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
-	@echo "$(BLUE)  - 🗄️  MongoDB: mongodb://localhost:27017$(RESET)"
-
-librechat-logs:
-	@echo "$(BLUE)📋 Showing LibreChat logs (Ctrl+C to exit)...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose logs -f librechat mongodb
-
-librechat-restart:
-	@echo "$(BLUE)🔄 Restarting LibreChat...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose restart librechat mongodb
-	@echo "$(GREEN)✅ LibreChat restarted!$(RESET)"
-
-librechat-stop:
-	@echo "$(BLUE)🛑 Stopping LibreChat...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && docker compose stop librechat mongodb
-	@echo "$(GREEN)✅ LibreChat stopped!$(RESET)"
-
 	@echo "$(YELLOW)📈 All InsightMesh Containers:$(RESET)"
 	@docker ps -a --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" --filter "name=insightmesh" 2>/dev/null || echo "$(RED)❌ No InsightMesh containers found$(RESET)"
 	@echo ""
@@ -449,64 +376,25 @@ ui-dev:
 	@echo "$(YELLOW)Note: Dev server runs on port 5173 by default$(RESET)"
 	cd $(BOT_DIR)/health_ui && npm run dev
 
+# Combined quality check (Python + React)
+quality-all: quality ui-lint ui-test
+	@echo "$(GREEN)✅ All quality checks (Python + React) passed!$(RESET)"
+
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
 	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
-# CI sub-targets (can run in parallel with -j flag)
-ci-lint:
-	@echo "$(BLUE)📝 Linting bot code...$(RESET)"
-	@$(MAKE) lint-check
-
-ci-test-bot: $(VENV)
-	@echo "$(BLUE)🧪 Running bot tests...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v --tb=short
-
-ci-test-control-plane: $(VENV)
-	@echo "$(BLUE)🎛️  Running control plane tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
-
-ci-test-tasks: $(VENV)
-	@echo "$(BLUE)⏰ Running tasks service tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && ENVIRONMENT=development PYTHONPATH=. $(PYTHON) -m pytest -v --tb=short --cov-fail-under=0
-
-ci-test-shared: $(VENV)
-	@echo "$(BLUE)🔗 Running shared utilities tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Shared tests skipped$(RESET)"
-
-ci-test-dashboard: $(VENV)
-	@echo "$(BLUE)📊 Running dashboard service tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  Dashboard tests skipped$(RESET)"
-
-ci-ui: health-ui tasks-ui
-	@echo "$(BLUE)🎨 Running React UI checks...$(RESET)"
-	@cd $(BOT_DIR)/health_ui && npm run lint && npm run test:coverage
-	@cd $(PROJECT_ROOT_DIR)/tasks/ui && npm run lint && npm run test:coverage
-
-ci-docker: health-ui tasks-ui
-	@echo "$(BLUE)🐳 Building Docker images...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
-
-# Main CI target - runs all checks (Docker builds excluded - use separate deployment pipeline)
-# Use 'make ci' for sequential or 'make -j4 ci' for parallel execution
-ci: ci-lint ci-test-bot ci-test-control-plane ci-test-tasks ci-test-shared ci-test-dashboard ci-test-rag ci-ui
-	@echo ""
-	@echo "$(GREEN)✅ ================================$(RESET)"
-	@echo "$(GREEN)✅ ALL CI CHECKS PASSED!$(RESET)"
-	@echo "$(GREEN)✅ ================================$(RESET)"
-	@echo "$(YELLOW)💡 For Docker builds: make ci-docker$(RESET)"
+ci: quality test-coverage ui-lint ui-test docker-build
+	@echo "✅ All CI checks passed (Python + React + Docker)!"
 
 pre-commit:
 	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files
 
 security: $(VENV)
 	@echo "$(BLUE)Running security scan with bandit...$(RESET)"
-	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json \
-		--exclude ./venv,./build,./dist,./.pytest_cache,./.tox,./htmlcov,./__pycache__ \
-		|| $(PYTHON) -m bandit -r . -f txt \
-		--exclude ./venv,./build,./dist,./.pytest_cache,./.tox,./htmlcov,./__pycache__
+	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json || $(PYTHON) -m bandit -r . -f txt
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"
@@ -540,7 +428,6 @@ start: docker-build docker-up docker-monitor
 	@echo ""
 	@echo "$(BLUE)📊 Main Services:$(RESET)"
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
-	@echo "$(BLUE)  - 💬 LibreChat (ChatGPT UI): http://localhost:$${LIBRECHAT_PORT:-3080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 	@echo ""
@@ -685,75 +572,3 @@ db-status: $(VENV)
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
-
-db-setup-system:
-	@echo "$(BLUE)🔧 Setting up system database (insightmesh_system)...$(RESET)"
-	@echo "$(YELLOW)This will create the database and agent_usage table without destroying existing data$(RESET)"
-	@docker exec insightmesh-mysql mysql -ppassword -e "CREATE DATABASE IF NOT EXISTS insightmesh_system CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>/dev/null || true
-	@docker exec insightmesh-mysql mysql -ppassword -e "CREATE USER IF NOT EXISTS 'insightmesh_system'@'%' IDENTIFIED BY 'insightmesh_system_password';" 2>/dev/null || true
-	@docker exec insightmesh-mysql mysql -ppassword -e "GRANT ALL PRIVILEGES ON insightmesh_system.* TO 'insightmesh_system'@'%';" 2>/dev/null || true
-	@docker exec insightmesh-mysql mysql -ppassword -e "FLUSH PRIVILEGES;" 2>/dev/null || true
-	@docker exec insightmesh-mysql mysql -ppassword insightmesh_system -e "\
-		CREATE TABLE IF NOT EXISTS agent_usage ( \
-		    id INT PRIMARY KEY AUTO_INCREMENT, \
-		    agent_name VARCHAR(100) NOT NULL UNIQUE, \
-		    total_invocations INT NOT NULL DEFAULT 0, \
-		    successful_invocations INT NOT NULL DEFAULT 0, \
-		    failed_invocations INT NOT NULL DEFAULT 0, \
-		    first_invocation DATETIME NULL, \
-		    last_invocation DATETIME NULL, \
-		    is_active BOOLEAN NOT NULL DEFAULT 1, \
-		    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, \
-		    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, \
-		    INDEX ix_agent_usage_agent_name (agent_name), \
-		    INDEX ix_agent_usage_is_active (is_active) \
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;" 2>/dev/null || (echo "$(RED)❌ Failed to setup system database$(RESET)" && exit 1)
-	@echo "$(GREEN)✅ System database setup complete!$(RESET)"
-	@echo "$(BLUE)📊 Verifying setup...$(RESET)"
-	@docker exec insightmesh-mysql mysql -ppassword -e "SHOW TABLES FROM insightmesh_system;" 2>/dev/null || echo "$(RED)Failed to verify$(RESET)"
-
-# Control Plane Service Targets
-lint-control-plane: $(VENV)
-	@echo "$(BLUE)🔍 Linting control plane service...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)control_plane && $(PYTHON) -m ruff check . --fix || true
-	cd $(PROJECT_ROOT_DIR)control_plane && $(PYTHON) -m ruff format . || true
-
-control-plane-ui:
-	@echo "$(BLUE)📦 Building React control plane UI...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/control_plane/ui && npm install --no-audit && npm run build
-	@echo "$(GREEN)✅ Control plane UI built!$(RESET)"
-
-test-control-plane: $(VENV)
-	@echo "$(BLUE)🧪 Running control plane tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest -v --cov-fail-under=0 || echo "$(YELLOW)No tests yet$(RESET)"
-
-# Behavior test suite
-test-behaviors: $(VENV)
-	@echo "$(BLUE)🔬 Running behavior test suite...$(RESET)"
-	@echo "$(YELLOW)⚠️  This will take several minutes and tests real integrations$(RESET)"
-	@cd $(PROJECT_ROOT_DIR) && PYTHONPATH=bot:agent-service $(PYTHON) -m pytest tests/behavior/test_behaviors.py -v -s --tb=short
-	@echo "$(GREEN)✅ Behavior tests complete!$(RESET)"
-
-# Help for test targets
-.PHONY: test-behaviors
-
-# LangGraph Studio - Automatic agent discovery and launch
-langgraph-studio:
-	@echo "$(BLUE)🔍 Discovering agents and starting LangGraph Studio...$(RESET)"
-	@./start_langgraph_studio.sh
-
-test-shared: $(VENV)
-	@echo "$(BLUE)Running shared utilities tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)shared && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
-
-test-dashboard: $(VENV)
-	@echo "$(BLUE)Running dashboard service tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=. $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
-
-test-rag: $(VENV)
-	@echo "$(BLUE)Running RAG service tests...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --cov-fail-under=0
-
-ci-test-rag: $(VENV)
-	@echo "$(BLUE)🔍 Running RAG service tests...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.:$(PROJECT_ROOT_DIR) $(PYTHON) -m pytest tests/ -v --tb=short --cov-fail-under=0 || echo "$(YELLOW)⚠️  RAG tests skipped$(RESET)"

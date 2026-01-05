@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Create sec_symbol_data reference table and add ticker_symbol to sec_documents_data."""
 
     # 1. Create sec_symbol_data reference table (all public companies)
@@ -66,7 +66,7 @@ def upgrade() -> None:
     op.create_index("idx_ticker_symbol_docs", "sec_documents_data", ["ticker_symbol"])
 
 
-def downgrade() -> None:
+def downgrade():
     """Remove sec_symbol_data table and ticker_symbol column."""
 
     # Drop ticker_symbol from sec_documents_data

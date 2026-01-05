@@ -1,5 +1,4 @@
 """Just show the output."""
-
 import os
 from dotenv import load_dotenv
 import requests
@@ -21,9 +20,9 @@ response.raise_for_status()
 
 trace = response.json()
 
-trace_output = trace.get("output")
+trace_output = trace.get('output')
 if isinstance(trace_output, dict):
-    output_content = trace_output.get("content", "")
+    output_content = trace_output.get('content', '')
     print(output_content[:2000])  # First 2000 chars
 elif isinstance(trace_output, str):
     print(trace_output[:2000])

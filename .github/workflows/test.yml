@@ -5,9 +5,13 @@ on:
   pull_request:
 
 jobs:
-  ci:
+  python-tests:
     runs-on: ubuntu-latest
-    name: Complete CI Pipeline
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test, task-lint, task-test]
+    name: Python ${{ matrix.task }}
 
     steps:
     - uses: actions/checkout@v4
@@ -20,16 +24,6 @@ jobs:
         cache-dependency-path: |
           bot/pyproject.toml
           tasks/pyproject.toml
-          control_plane/pyproject.toml
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: |
-          tasks/ui/package-lock.json
-          bot/health_ui/package-lock.json
 
     - name: Cache pip packages
       uses: actions/cache@v4
@@ -51,11 +45,23 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e "bot/.[dev,test]"
-        pip install -e "tasks/[test]"
-        pip install -e "control_plane/[test]"
+        # Install project dependencies based on task
+        if [[ "${{ matrix.task }}" == "lint" || "${{ matrix.task }}" == "test" ]]; then
+          pip install -e "bot/.[dev,test]"
+        elif [[ "${{ matrix.task }}" == "task-lint" || "${{ matrix.task }}" == "task-test" ]]; then
+          pip install -e "bot/.[dev,test]"
+          pip install -e "tasks/[test]"
+        fi
 
-    - name: "Run quality checks (parallel: linting + tests + UI, no Docker builds)"
+    - name: Run unified linting and type checking
+      if: matrix.task == 'lint'
+      env:
+        PYTHON: python
+        PIP: pip
+      run: make lint-check
+
+    - name: Run tests with coverage
+      if: matrix.task == 'test'
       env:
         SLACK_BOT_TOKEN: xoxb-test-token-for-ci
         SLACK_APP_TOKEN: xapp-test-token-for-ci
@@ -68,12 +74,95 @@ jobs:
         LOG_LEVEL: WARNING
         PYTHON: python
         PIP: pip
+      run: make test-coverage
+
+    - name: Run task linting
+      if: matrix.task == 'task-lint'
       run: |
-        # Run all quality checks in parallel (skip only ci-docker - Docker image builds belong in deployment pipeline)
-        make ci-lint &
-        make ci-test-bot &
-        make ci-test-control-plane &
-        make ci-test-tasks &
-        make ci-ui &
-        wait
-        echo "✅ All quality checks passed (linting + tests + UI)"
+        cd tasks && python -m ruff check . --no-fix
+
+    - name: Run task tests
+      if: matrix.task == 'task-test'
+      env:
+        ENVIRONMENT: test
+        LOG_LEVEL: WARNING
+        PYTHON: python
+        PIP: pip
+      run: make test-tasks
+
+  react-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [tasks, bot]
+        task: [lint, test, build]
+    name: React ${{ matrix.app }} ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: |
+          tasks/ui/package-lock.json
+          bot/health_ui/package-lock.json
+
+    - name: Install dependencies for tasks UI
+      if: matrix.app == 'tasks'
+      working-directory: tasks/ui
+      run: npm ci
+
+    - name: Install dependencies for bot health UI
+      if: matrix.app == 'bot'
+      working-directory: bot/health_ui
+      run: npm ci
+
+    - name: Run ESLint for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'lint'
+      working-directory: tasks/ui
+      run: npm run lint
+
+    - name: Run ESLint for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'lint'
+      working-directory: bot/health_ui
+      run: npm run lint
+
+    - name: Run tests for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'test'
+      working-directory: tasks/ui
+      run: npm run test:coverage
+
+    - name: Run tests for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'test'
+      working-directory: bot/health_ui
+      run: npm run test:coverage
+
+    - name: Build tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'build'
+      working-directory: tasks/ui
+      run: npm run build
+
+    - name: Build bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'build'
+      working-directory: bot/health_ui
+      run: npm run build
+
+    - name: Upload coverage reports for tasks UI
+      if: matrix.app == 'tasks' && matrix.task == 'test'
+      uses: codecov/codecov-action@v3
+      with:
+        directory: tasks/ui/coverage
+        flags: react-tasks
+        name: react-tasks-coverage
+
+    - name: Upload coverage reports for bot health UI
+      if: matrix.app == 'bot' && matrix.task == 'test'
+      uses: codecov/codecov-action@v3
+      with:
+        directory: bot/health_ui/coverage
+        flags: react-bot
+        name: react-bot-coverage

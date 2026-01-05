@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Add content column to store raw SEC filing text."""
     op.add_column(
         "sec_documents_data",
@@ -25,6 +25,6 @@ def upgrade() -> None:
     )
 
 
-def downgrade() -> None:
+def downgrade():
     """Remove content column from sec_documents_data table."""
     op.drop_column("sec_documents_data", "content")

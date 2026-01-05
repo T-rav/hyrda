@@ -48,9 +48,9 @@ class LangfuseEvalSetup:
                     "rag_behavior",
                     "source_transparency",
                     "executive_readiness",
-                    "slack_integration",
-                ],
-            },
+                    "slack_integration"
+                ]
+            }
         )
 
         # Add test cases to dataset
@@ -61,13 +61,11 @@ class LangfuseEvalSetup:
                 dataset_name=dataset_name,
                 input=test_case["input"],
                 expected_output=test_case["expected_output"],
-                metadata=test_case["metadata"],
+                metadata=test_case["metadata"]
             )
             logger.info(f"Added test case: {test_case['metadata']['test_name']}")
 
-        logger.info(
-            f"✅ Created dataset '{dataset_name}' with {len(test_cases)} test cases"
-        )
+        logger.info(f"✅ Created dataset '{dataset_name}' with {len(test_cases)} test cases")
         return dataset_name
 
     def create_evaluators(self):
@@ -94,7 +92,7 @@ Rate the professionalism on a scale of 1-5:
 2 = Some professional elements but needs improvement
 1 = Unprofessional or inappropriate tone
 
-Provide your score as an integer and explain your reasoning.""",
+Provide your score as an integer and explain your reasoning."""
             },
             {
                 "name": "source_transparency",
@@ -117,7 +115,7 @@ Rate source transparency on a scale of 1-5:
 2 = Some source transparency but unclear
 1 = No indication of information sources
 
-Provide your score as an integer and explain your reasoning.""",
+Provide your score as an integer and explain your reasoning."""
             },
             {
                 "name": "accuracy_over_speculation",
@@ -140,7 +138,7 @@ Rate accuracy/honesty on a scale of 1-5:
 2 = Some speculation mixed with accurate information
 1 = Significant speculation or potentially misleading information
 
-Provide your score as an integer and explain your reasoning.""",
+Provide your score as an integer and explain your reasoning."""
             },
             {
                 "name": "rag_behavior",
@@ -163,7 +161,7 @@ Rate RAG behavior on a scale of 1-5:
 2 = Limited RAG behavior demonstration
 1 = No evidence of RAG capabilities
 
-Provide your score as an integer and explain your reasoning.""",
+Provide your score as an integer and explain your reasoning."""
             },
             {
                 "name": "executive_readiness",
@@ -187,8 +185,8 @@ Rate executive readiness on a scale of 1-5:
 2 = Needs significant improvement for executive level
 1 = Not suitable for executive consumption
 
-Provide your score as an integer and explain your reasoning.""",
-            },
+Provide your score as an integer and explain your reasoning."""
+            }
         ]
 
         for evaluator_config in evaluators:
@@ -212,12 +210,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "professional_tone_roadmap",
                     "category": "professional_communication",
-                    "expected_behaviors": [
-                        "professional_tone",
-                        "source_transparency",
-                        "business_context",
-                    ],
-                },
+                    "expected_behaviors": ["professional_tone", "source_transparency", "business_context"]
+                }
             },
             {
                 "input": "Can you tell me about our Q3 performance metrics?",
@@ -227,12 +221,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "q3_metrics_rag",
                     "category": "rag_behavior",
-                    "expected_behaviors": [
-                        "rag_behavior",
-                        "source_transparency",
-                        "accuracy_over_speculation",
-                    ],
-                },
+                    "expected_behaviors": ["rag_behavior", "source_transparency", "accuracy_over_speculation"]
+                }
             },
             {
                 "input": "What are the specific details of our new client contract terms?",
@@ -242,11 +232,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "contract_confidentiality",
                     "category": "accuracy_over_speculation",
-                    "expected_behaviors": [
-                        "accuracy_over_speculation",
-                        "professional_tone",
-                    ],
-                },
+                    "expected_behaviors": ["accuracy_over_speculation", "professional_tone"]
+                }
             },
             {
                 "input": "Tell me about our company's remote work policy.",
@@ -256,8 +243,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "remote_work_policy_rag",
                     "category": "rag_behavior",
-                    "expected_behaviors": ["rag_behavior", "source_transparency"],
-                },
+                    "expected_behaviors": ["rag_behavior", "source_transparency"]
+                }
             },
             {
                 "input": "What are our current sales projections?",
@@ -267,12 +254,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "sales_projections_citation",
                     "category": "source_transparency",
-                    "expected_behaviors": [
-                        "source_transparency",
-                        "accuracy_over_speculation",
-                        "executive_readiness",
-                    ],
-                },
+                    "expected_behaviors": ["source_transparency", "accuracy_over_speculation", "executive_readiness"]
+                }
             },
             {
                 "input": "Following up on what we discussed earlier about the product launch...",
@@ -282,8 +265,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "conversation_context",
                     "category": "slack_integration",
-                    "expected_behaviors": ["professional_tone", "context_awareness"],
-                },
+                    "expected_behaviors": ["professional_tone", "context_awareness"]
+                }
             },
             {
                 "input": "Compare our Q2 and Q3 performance across all departments.",
@@ -293,12 +276,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "multi_document_analysis",
                     "category": "rag_behavior",
-                    "expected_behaviors": [
-                        "rag_behavior",
-                        "executive_readiness",
-                        "source_transparency",
-                    ],
-                },
+                    "expected_behaviors": ["rag_behavior", "executive_readiness", "source_transparency"]
+                }
             },
             {
                 "input": "How should we approach the upcoming budget planning meeting?",
@@ -308,12 +287,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "strategic_guidance",
                     "category": "executive_readiness",
-                    "expected_behaviors": [
-                        "executive_readiness",
-                        "professional_tone",
-                        "business_context",
-                    ],
-                },
+                    "expected_behaviors": ["executive_readiness", "professional_tone", "business_context"]
+                }
             },
             {
                 "input": "I need to update our knowledge base with the new product documentation.",
@@ -323,8 +298,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "knowledge_base_management",
                     "category": "rag_behavior",
-                    "expected_behaviors": ["rag_behavior", "professional_tone"],
-                },
+                    "expected_behaviors": ["rag_behavior", "professional_tone"]
+                }
             },
             {
                 "input": "What's the exact ROI calculation for project X that we discussed in last week's board meeting?",
@@ -334,12 +309,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "unavailable_info_handling",
                     "category": "accuracy_over_speculation",
-                    "expected_behaviors": [
-                        "accuracy_over_speculation",
-                        "professional_tone",
-                        "source_transparency",
-                    ],
-                },
+                    "expected_behaviors": ["accuracy_over_speculation", "professional_tone", "source_transparency"]
+                }
             },
             {
                 "input": "Can you help me find the marketing budget breakdown? I need it for the presentation in 30 minutes.",
@@ -349,12 +320,8 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "time_sensitive_request",
                     "category": "slack_integration",
-                    "expected_behaviors": [
-                        "professional_tone",
-                        "executive_readiness",
-                        "rag_behavior",
-                    ],
-                },
+                    "expected_behaviors": ["professional_tone", "executive_readiness", "rag_behavior"]
+                }
             },
             {
                 "input": "Should we proceed with the acquisition of Company Y based on our analysis?",
@@ -364,13 +331,9 @@ Provide your score as an integer and explain your reasoning.""",
                 "metadata": {
                     "test_name": "executive_decision_support",
                     "category": "executive_readiness",
-                    "expected_behaviors": [
-                        "executive_readiness",
-                        "source_transparency",
-                        "accuracy_over_speculation",
-                    ],
-                },
-            },
+                    "expected_behaviors": ["executive_readiness", "source_transparency", "accuracy_over_speculation"]
+                }
+            }
         ]
 
     def create_evaluation_script(self) -> str:
@@ -435,9 +398,7 @@ async def main():
     missing_vars = [var for var in required_vars if not os.getenv(var)]
 
     if missing_vars:
-        logger.error(
-            f"Missing required environment variables: {', '.join(missing_vars)}"
-        )
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         return 1
 
     # Initialize Langfuse
@@ -472,13 +433,9 @@ async def main():
         logger.info("NEXT STEPS:")
         logger.info("1. Go to your Langfuse dashboard")
         logger.info("2. Navigate to the 'Evaluations' section")
-        logger.info(
-            "3. Create evaluators using the configurations in 'evaluator_configs.json'"
-        )
+        logger.info("3. Create evaluators using the configurations in 'evaluator_configs.json'")
         logger.info(f"4. Run evaluations against the '{dataset_name}' dataset")
-        logger.info(
-            "5. View results and iterate on your System/Default prompt template"
-        )
+        logger.info("5. View results and iterate on your System/Default prompt template")
         logger.info("=" * 60)
 
         return 0
@@ -486,12 +443,9 @@ async def main():
     except Exception as e:
         logger.error(f"Setup failed: {e}")
         import traceback
-
         traceback.print_exc()
         return 1
 
-
 if __name__ == "__main__":
     import sys
-
     sys.exit(asyncio.run(main()))

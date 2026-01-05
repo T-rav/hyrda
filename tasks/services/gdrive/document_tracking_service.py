@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tasks"))
 from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base, get_data_db_session  # noqa: E402
+from models.base import Base, get_db_session  # noqa: E402
 
 
 class GoogleDriveDocument(Base):
@@ -124,7 +124,7 @@ class DocumentTrackingService:
         """
         new_hash = self.compute_content_hash(content)
 
-        with get_data_db_session() as session:
+        with get_db_session() as session:
             existing_doc = (
                 session.query(GoogleDriveDocument)
                 .filter_by(google_drive_id=google_drive_id)
@@ -174,7 +174,7 @@ class DocumentTrackingService:
         """
         content_hash = self.compute_content_hash(content)
 
-        with get_data_db_session() as session:
+        with get_db_session() as session:
             existing_doc = (
                 session.query(GoogleDriveDocument)
                 .filter_by(google_drive_id=google_drive_id)
@@ -223,7 +223,7 @@ class DocumentTrackingService:
         Returns:
             Dictionary with document info or None if not found
         """
-        with get_data_db_session() as session:
+        with get_db_session() as session:
             doc = (
                 session.query(GoogleDriveDocument)
                 .filter_by(google_drive_id=google_drive_id)

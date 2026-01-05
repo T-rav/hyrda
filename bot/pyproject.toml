@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-slack-bot"
-dynamic = ["version"]
+version = "1.2.6"
 description = "Production-ready AI Slack bot with comprehensive monitoring and RAG capabilities"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
@@ -19,8 +19,6 @@ dependencies = [
 
     # Core async/web
     "aiohttp>=3.8.0",
-    "httpx>=0.27.0",  # For agent-service HTTP client
-    "pybreaker>=1.0.1",  # Circuit breaker pattern for resilience
 
     # Configuration & environment
     "python-dotenv>=1.0.0",
@@ -35,39 +33,43 @@ dependencies = [
 
     # Database & caching
     "redis>=5.0.0",
-    "sqlalchemy>=2.0.0",  # ORM for database models
     "pymysql>=1.1.0",  # MySQL driver for database features
 
-    # LLM dependencies (for basic operations)
+    # RAG and LLM dependencies
     "openai>=1.35.0",
     "anthropic>=0.25.0",
+    "qdrant-client>=1.7.0",
+    "cohere>=5.0.0",  # For cross-encoder reranking
+    "numpy>=1.24.0",
     "langfuse>=3.3.0",
 
-    # RAG dependencies (for vector search)
-    "qdrant-client>=1.7.0",  # Vector database client for RAG
-    "cohere>=5.0.0",  # Used by Qdrant for some operations
+    # LangChain and LangGraph for deep research
+    "langchain-core>=1.0.0",  # Upgraded to 1.0 (stable API)
+    "langchain-community>=0.3.0",
+    "langchain-openai>=0.3.0",  # Compatible with langchain-core 1.0
+    "langchain-qdrant>=0.2.0",  # Qdrant vector store integration (updated)
+    "langchain-google-genai>=2.0.0",  # Google Gemini integration
+    "langgraph>=1.0.0",  # Upgraded to 1.0 (stable API)
+    "langgraph-checkpoint-sqlite>=2.0.0",  # Persistent checkpoint storage
 
     # Slack formatting
     "slackify-markdown>=0.2.0",
 
-    # Document processing (for file attachments)
+    # Document processing
     "PyMuPDF>=1.23.0",  # PDF processing (fitz)
     "python-docx>=0.8.11",  # Word documents
     "openpyxl>=3.1.0",  # Excel files
     "python-pptx>=0.6.21",  # PowerPoint files
     "weasyprint>=60.0",  # PDF generation from HTML/markdown
     "markdown>=3.5.0",  # Markdown to HTML conversion
-    "beautifulsoup4>=4.12.0",  # HTML parsing
-    "tiktoken>=0.5.0",  # Token counting
+    "beautifulsoup4>=4.12.0",  # HTML parsing for SEC filings
+    "tiktoken>=0.5.0",  # Token counting for OpenAI embeddings
 
     # Observability and monitoring
     "prometheus-client>=0.19.0",
-    "opentelemetry-api>=1.20.0",
-    "opentelemetry-sdk>=1.20.0",
-    "opentelemetry-exporter-otlp>=1.20.0",
 
-    # NOTE: Agent execution dependencies (LangChain/LangGraph, Tavily, Qdrant, etc.)
-    # have been moved to agent-service. Bot now calls agent-service via HTTP.
+    # Search and research APIs (direct integrations)
+    "tavily-python>=0.3.0",  # Tavily web search & scrape
 ]
 
 [project.optional-dependencies]
@@ -79,7 +81,6 @@ test = [
     "pytest-mock>=3.12.0",
     "aioresponses>=0.7.4",
     "fakeredis>=2.20.0",
-    "respx>=0.20.0",  # For mocking httpx requests
 ]
 
 # Development tools with exact versions for reproducibility
@@ -88,7 +89,7 @@ dev = [
     "pyright==1.1.390",
     "bandit[toml]==1.8.0",
     "pre-commit==4.0.1",
-    "langgraph-cli[inmem]>=0.1.60",  # Upgraded to latest (includes langgraph-api 0.5.x)
+    "langgraph-cli[inmem]>=0.1.50",  # LangGraph Studio for visual debugging (with in-memory storage)
 ]
 
 # Local embeddings (optional - adds ~2GB of dependencies including PyTorch/CUDA)
@@ -110,9 +111,6 @@ slack-bot = "app:main"
 # Package discovery configuration
 [tool.setuptools]
 packages = ["config", "handlers", "services", "utils", "tests"]
-
-[tool.setuptools.dynamic]
-version = {file = ".version"}
 
 # Ruff configuration
 [tool.ruff]
@@ -207,8 +205,6 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
-    # Suppress PyMuPDF/SWIG warnings (external library, can't fix)
-    "ignore:builtin type.*has no __module__ attribute:DeprecationWarning",
 ]
 
 # Coverage configuration

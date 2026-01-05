@@ -5,7 +5,6 @@ Tests to ensure API endpoints maintain expected contracts and protect against
 dashboard/frontend breaking changes.
 """
 
-from datetime import datetime
 from unittest.mock import Mock, patch
 
 from aiohttp import web
@@ -53,12 +52,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         settings.health_port = 8080
         settings.environment = "test"
 
-        # Mock LLM settings for metrics endpoint
-        llm_settings = Mock()
-        llm_settings.provider = "openai"
-        llm_settings.model = "gpt-4o-mini"
-        settings.llm = llm_settings
-
         # Create health checker
         health_checker = HealthChecker(settings)
 
@@ -89,65 +82,41 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         data = await resp.json()
 
         # Verify required fields exist (contract)
-        required_fields = ["status"]
+        required_fields = ["status", "timestamp", "uptime_seconds", "version"]
         for field in required_fields:
             assert field in data, f"Missing required field: {field}"
 
         # Verify data types (contract)
         assert isinstance(data["status"], str)
+        assert isinstance(data["timestamp"], str)
+        assert isinstance(data["uptime_seconds"], int | float)
+        assert isinstance(data["version"], str)
 
         # Verify expected values
         assert data["status"] in ["healthy", "unhealthy"]
 
     async def test_metrics_endpoint_contract(self):
         """Test /api/metrics returns expected JSON structure for dashboard"""
-        with patch("bot.health.get_metrics_service") as mock_metrics_svc:
-            # Mock metrics service to avoid MagicMock serialization issues
-            mock_metrics = Mock()
-            mock_metrics.enabled = True
-            mock_metrics.get_active_conversation_count.return_value = 0
-            mock_metrics.get_rag_stats.return_value = {
-                "total_queries": 0,
-                "success_rate": 0.0,
-                "miss_rate": 0.0,
-                "hit_rate": 0.0,
-                "avg_chunks": 0.0,
-                "avg_chunks_per_query": 0.0,
-                "documents_used": 0,
-                "total_documents_used": 0,
-                "last_reset": datetime.now(),
-            }
-            mock_metrics.get_agent_stats.return_value = {
-                "total_invocations": 0,
-                "successful_invocations": 0,
-                "failed_invocations": 0,
-                "success_rate": 0.0,
-                "error_rate": 0.0,
-                "by_agent": {},
-                "last_reset": datetime.now(),
-            }
-            mock_metrics_svc.return_value = mock_metrics
+        resp = await self.client.request("GET", "/api/metrics")
+        assert resp.status == 200
+        assert resp.content_type == "application/json"
 
-            resp = await self.client.request("GET", "/api/metrics")
-            assert resp.status == 200
-            assert resp.content_type == "application/json"
+        data = await resp.json()
 
-            data = await resp.json()
+        # Verify metrics structure that dashboard actually receives
+        required_fields = ["uptime_seconds", "start_time", "current_time", "services"]
+        for field in required_fields:
+            assert field in data, f"Missing metrics field: {field}"
 
-            # Verify metrics structure that dashboard actually receives
-            required_fields = ["services"]
-            for field in required_fields:
-                assert field in data, f"Missing metrics field: {field}"
+        # Verify services structure (what dashboard actually gets)
+        services = data["services"]
+        assert isinstance(services, dict)
 
-            # Verify services structure (what dashboard actually gets)
-            services = data["services"]
-            assert isinstance(services, dict)
-
-            # Common service fields that dashboard expects
-            for _service_name, service_info in services.items():
-                if isinstance(service_info, dict):
-                    # Should have at least enabled or available status
-                    assert "enabled" in service_info or "available" in service_info
+        # Common service fields that dashboard expects
+        for _service_name, service_info in services.items():
+            if isinstance(service_info, dict):
+                # Should have at least enabled or available status
+                assert "enabled" in service_info or "available" in service_info
 
     async def test_services_health_contract(self):
         """Test /api/services/health returns expected structure"""

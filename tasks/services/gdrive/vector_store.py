@@ -40,7 +40,7 @@ class QdrantVectorStore:
 
         # Initialize client with URL instead of host/port for better control
         # Explicitly set https=False when not using HTTPS to prevent SSL attempts
-        self.client = QdrantClient(  # type: ignore[call-arg]
+        self.client = QdrantClient(
             url=url,
             api_key=api_key,
             https=use_https,
@@ -56,12 +56,12 @@ class QdrantVectorStore:
             embedding_dimension: Dimension of embeddings (default: 3072 for text-embedding-3-large)
         """
         # Check if collection exists
-        collections = self.client.get_collections().collections  # type: ignore[attr-defined]
+        collections = self.client.get_collections().collections
         collection_exists = any(c.name == self.collection_name for c in collections)
 
         if not collection_exists:
             # Create collection with specified embedding dimension
-            self.client.create_collection(  # type: ignore[attr-defined]
+            self.client.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
                     size=embedding_dimension, distance=Distance.COSINE
@@ -103,7 +103,7 @@ class QdrantVectorStore:
             )
         ]
 
-        self.client.upsert(collection_name=self.collection_name, points=points)  # type: ignore[attr-defined]
+        self.client.upsert(collection_name=self.collection_name, points=points)
 
     async def delete(self, ids: list[str]) -> None:
         """
@@ -112,18 +112,4 @@ class QdrantVectorStore:
         Args:
             ids: List of IDs to delete
         """
-        self.client.delete(collection_name=self.collection_name, points_selector=ids)  # type: ignore[attr-defined]
-
-    async def update_payload(self, point_id: str, payload: dict[str, Any]) -> None:
-        """
-        Update payload (metadata) for an existing point without changing the vector.
-
-        Args:
-            point_id: UUID of the point to update
-            payload: Dictionary of metadata fields to update
-        """
-        self.client.set_payload(  # type: ignore[attr-defined]
-            collection_name=self.collection_name,
-            points=[point_id],
-            payload=payload,
-        )
+        self.client.delete(collection_name=self.collection_name, points_selector=ids)

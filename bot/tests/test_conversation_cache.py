@@ -171,10 +171,8 @@ class RedisFactory:
     @staticmethod
     def create_failing_redis(error: str = "Connection failed") -> AsyncMock:
         """Create a Redis mock that fails connection"""
-        import redis.asyncio as redis
-
         mock_redis = AsyncMock()
-        mock_redis.ping.side_effect = redis.ConnectionError(error)
+        mock_redis.ping.side_effect = Exception(error)
         return mock_redis
 
     @staticmethod

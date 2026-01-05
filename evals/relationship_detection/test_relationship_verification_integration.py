@@ -16,9 +16,11 @@ import os
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
+
+from agents.profiler import prompts
 from agents.profiler.tools.internal_search import internal_search_tool
 from agents.profiler.utils import format_research_context
-from dotenv import load_dotenv
 
 # Load root-level .env
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -45,9 +47,7 @@ async def test_vail_resorts_no_false_positive_real_search():
     if tool is None or getattr(tool, "vector_store", None) is None:
         pytest.skip("Internal search tool not available - skipping integration test")
     if getattr(tool, "llm", None) is None:
-        pytest.skip(
-            "LLM not available for internal_search_tool - skipping integration test"
-        )
+        pytest.skip("LLM not available for internal_search_tool - skipping integration test")
 
     print("\n" + "=" * 80)
     print("INTEGRATION TEST: Vail Resorts Internal Search")
@@ -56,7 +56,7 @@ async def test_vail_resorts_no_false_positive_real_search():
     # Run real internal search for Vail Resorts
     result = await tool._arun("profile Vail Resorts", effort="medium")
 
-    print("\n📋 Internal Search Result:")
+    print(f"\n📋 Internal Search Result:")
     print("=" * 80)
     print(result[:1000] if len(result) > 1000 else result)
     print("=" * 80)
@@ -69,9 +69,7 @@ async def test_vail_resorts_no_false_positive_real_search():
     # Vail should NOT be marked as existing client (unless we actually have a Vail case study)
     if "Relationship status: Existing client" in result:
         # If it claims existing client, verify there's a Vail-specific case study
-        assert "vail" in result.lower() and (
-            "case study" in result.lower() or "project" in result.lower()
-        ), (
+        assert "vail" in result.lower() and ("case study" in result.lower() or "project" in result.lower()), (
             f"If claiming Vail relationship, must have Vail case study. Got:\n{result[:500]}"
         )
         print("✅ Vail has existing relationship (verified by case study)")
@@ -113,9 +111,7 @@ async def test_costco_no_relationship_real_search():
     if tool is None or getattr(tool, "vector_store", None) is None:
         pytest.skip("Internal search tool not available - skipping integration test")
     if getattr(tool, "llm", None) is None:
-        pytest.skip(
-            "LLM not available for internal_search_tool - skipping integration test"
-        )
+        pytest.skip("LLM not available for internal_search_tool - skipping integration test")
 
     print("\n" + "=" * 80)
     print("INTEGRATION TEST: Costco Internal Search")
@@ -124,7 +120,7 @@ async def test_costco_no_relationship_real_search():
     # Run real internal search for Costco
     result = await tool._arun("profile Costco", effort="medium")
 
-    print("\n📋 Internal Search Result:")
+    print(f"\n📋 Internal Search Result:")
     print("=" * 80)
     print(result[:1000] if len(result) > 1000 else result)
     print("=" * 80)
@@ -154,9 +150,7 @@ async def test_allcampus_existing_relationship_real_search():
     if tool is None or getattr(tool, "vector_store", None) is None:
         pytest.skip("Internal search tool not available - skipping integration test")
     if getattr(tool, "llm", None) is None:
-        pytest.skip(
-            "LLM not available for internal_search_tool - skipping integration test"
-        )
+        pytest.skip("LLM not available for internal_search_tool - skipping integration test")
 
     print("\n" + "=" * 80)
     print("INTEGRATION TEST: AllCampus Internal Search")
@@ -165,7 +159,7 @@ async def test_allcampus_existing_relationship_real_search():
     # Run real internal search for AllCampus
     result = await tool._arun("profile AllCampus", effort="medium")
 
-    print("\n📋 Internal Search Result:")
+    print(f"\n📋 Internal Search Result:")
     print("=" * 80)
     print(result[:1000] if len(result) > 1000 else result)
     print("=" * 80)
@@ -216,9 +210,7 @@ async def test_3step_existing_relationship_real_search():
     if tool is None or getattr(tool, "vector_store", None) is None:
         pytest.skip("Internal search tool not available - skipping integration test")
     if getattr(tool, "llm", None) is None:
-        pytest.skip(
-            "LLM not available for internal_search_tool - skipping integration test"
-        )
+        pytest.skip("LLM not available for internal_search_tool - skipping integration test")
 
     print("\n" + "=" * 80)
     print("INTEGRATION TEST: 3Step Internal Search")
@@ -227,14 +219,15 @@ async def test_3step_existing_relationship_real_search():
     # Run real internal search for 3Step
     result = await tool._arun("profile 3Step", effort="medium")
 
-    print("\n📋 Internal Search Result:")
+    print(f"\n📋 Internal Search Result:")
     print("=" * 80)
     print(result[:1000] if len(result) > 1000 else result)
     print("=" * 80)
 
     # Check if 3Step case study exists
-    has_case_study = "3step" in result.lower() and (
-        "case study" in result.lower() or "project" in result.lower()
+    has_case_study = (
+        "3step" in result.lower()
+        and ("case study" in result.lower() or "project" in result.lower())
     )
 
     if not has_case_study:
@@ -262,25 +255,16 @@ if __name__ == "__main__":
         print("=" * 80)
 
         tests = [
-            (
-                "Vail Resorts (No Relationship)",
-                test_vail_resorts_no_false_positive_real_search,
-            ),
+            ("Vail Resorts (No Relationship)", test_vail_resorts_no_false_positive_real_search),
             ("Costco (No Relationship)", test_costco_no_relationship_real_search),
-            (
-                "AllCampus (Existing Relationship)",
-                test_allcampus_existing_relationship_real_search,
-            ),
-            (
-                "3Step (Existing Relationship)",
-                test_3step_existing_relationship_real_search,
-            ),
+            ("AllCampus (Existing Relationship)", test_allcampus_existing_relationship_real_search),
+            ("3Step (Existing Relationship)", test_3step_existing_relationship_real_search),
         ]
 
         for test_name, test_func in tests:
             print(f"\n{'=' * 80}")
             print(f"Running: {test_name}")
-            print("=" * 80)
+            print('=' * 80)
             try:
                 await test_func()
                 print(f"✅ {test_name} PASSED")

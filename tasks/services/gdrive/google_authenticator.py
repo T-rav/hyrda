@@ -5,14 +5,11 @@ Handles Google OAuth2 authentication flow for Google Drive API access.
 Separated from GoogleDriveClient for better separation of concerns.
 """
 
-import logging
 import os
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
-
-logger = logging.getLogger(__name__)
 
 
 class GoogleAuthenticator:
@@ -65,7 +62,7 @@ class GoogleAuthenticator:
         refresh_token = os.getenv("GOOGLE_REFRESH_TOKEN")
 
         if client_id and client_secret and refresh_token:
-            logger.info("Using credentials from environment variables...")
+            print("Using credentials from environment variables...")
             try:
                 creds = Credentials(
                     token=None,
@@ -77,10 +74,10 @@ class GoogleAuthenticator:
                     scopes=self.SCOPES,
                 )
                 creds.refresh(Request())
-                logger.info("✅ Environment credentials authenticated successfully")
+                print("✅ Environment credentials authenticated successfully")
                 return creds
             except Exception as e:
-                logger.error(f"❌ Environment credentials failed: {e}")
+                print(f"❌ Environment credentials failed: {e}")
 
         return None
 
@@ -103,10 +100,10 @@ class GoogleAuthenticator:
         """Try to refresh expired credentials"""
         try:
             creds.refresh(Request())
-            logger.info("✅ Credentials refreshed successfully")
+            print("✅ Credentials refreshed successfully")
             return creds
         except Exception as e:
-            logger.error(f"Error refreshing credentials: {e}")
+            print(f"Error refreshing credentials: {e}")
             return self._run_oauth_flow()
 
     def _run_oauth_flow(self) -> Credentials | None:
@@ -120,25 +117,23 @@ class GoogleAuthenticator:
                 self.credentials_file, self.SCOPES
             )
             creds = flow.run_local_server(port=0)
-            logger.info("✅ OAuth2 flow completed successfully")
+            print("✅ OAuth2 flow completed successfully")
             return creds
         except Exception as e:
-            logger.error(f"Error during OAuth flow: {e}")
+            print(f"Error during OAuth flow: {e}")
             return None
 
     def _print_setup_instructions(self):
         """Print setup instructions for new users"""
-        logger.error("\n❌ No OAuth2 credentials found.")
-        logger.info(
-            "📝 To create a login screen like n8n, we need OAuth2 app credentials."
-        )
-        logger.info("\n🚀 One-time setup:")
-        logger.info("1. Go to: https://console.cloud.google.com/")
-        logger.info(
+        print("\n❌ No OAuth2 credentials found.")
+        print("📝 To create a login screen like n8n, we need OAuth2 app credentials.")
+        print("\n🚀 One-time setup:")
+        print("1. Go to: https://console.cloud.google.com/")
+        print(
             "2. Create project → Enable Google Drive API → Create OAuth2 Desktop credentials"
         )
-        logger.info("3. Download as 'credentials.json' and put it in this folder")
-        logger.info("4. After that, this will work like n8n - just login once!")
+        print("3. Download as 'credentials.json' and put it in this folder")
+        print("4. After that, this will work like n8n - just login once!")
 
     def _save_credentials(self, creds: Credentials) -> bool:
         """Save credentials to token file"""
@@ -149,5 +144,5 @@ class GoogleAuthenticator:
                 token.write(creds.to_json())
             return True
         except Exception as e:
-            logger.error(f"Error saving token: {e}")
+            print(f"Error saving token: {e}")
             return False

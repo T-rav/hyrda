@@ -95,26 +95,18 @@ def fix_langfuse_prompt() -> None:
 
         # Find and replace the relationship section
         import re
-
         relationship_marker = "## Relationships via 8th Light Network"
 
         if relationship_marker not in current_content:
-            print("❌ Error: Could not find relationship section in prompt")
+            print(f"❌ Error: Could not find relationship section in prompt")
             sys.exit(1)
 
         # Find the next section
         relationship_start = current_content.index(relationship_marker)
-        next_section_match = re.search(
-            r"\n## [^R]",
-            current_content[relationship_start + len(relationship_marker) :],
-        )
+        next_section_match = re.search(r'\n## [^R]', current_content[relationship_start + len(relationship_marker):])
 
         if next_section_match:
-            relationship_end = (
-                relationship_start
-                + len(relationship_marker)
-                + next_section_match.start()
-            )
+            relationship_end = relationship_start + len(relationship_marker) + next_section_match.start()
         else:
             relationship_end = len(current_content)
 
@@ -123,28 +115,25 @@ def fix_langfuse_prompt() -> None:
 
         # Replace
         updated_content = (
-            current_content[:relationship_start]
-            + new_relationship_section
-            + current_content[relationship_end:]
+            current_content[:relationship_start] +
+            new_relationship_section +
+            current_content[relationship_end:]
         )
 
-        print("\n📝 Creating new prompt version...")
+        print(f"\n📝 Creating new prompt version...")
         langfuse.create_prompt(
             name=prompt_name,
             prompt=updated_content,
             labels=["relationship-trust-fix"],
         )
 
-        print("✅ Successfully created new prompt version")
-        print(
-            "\n⚠️  IMPORTANT: Go to Langfuse UI and promote this version to production"
-        )
-        print("   The new version trusts internal search relationship status")
+        print(f"✅ Successfully created new prompt version")
+        print(f"\n⚠️  IMPORTANT: Go to Langfuse UI and promote this version to production")
+        print(f"   The new version trusts internal search relationship status")
 
     except Exception as e:
         print(f"\n❌ Error fixing prompt: {e}")
         import traceback
-
         traceback.print_exc()
         sys.exit(1)
 

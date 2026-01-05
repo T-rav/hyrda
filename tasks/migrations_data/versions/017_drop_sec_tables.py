@@ -17,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
+def upgrade():
     """Drop SEC database tables - now using on-demand fetching only."""
     from sqlalchemy import inspect
 
@@ -56,7 +56,7 @@ def upgrade() -> None:
         print("⏭️  sec_symbol_data table does not exist, skipping")
 
 
-def downgrade() -> None:
+def downgrade():
     """Recreate SEC tables if needed (not recommended)."""
     import sqlalchemy as sa
     from sqlalchemy.dialects import mysql

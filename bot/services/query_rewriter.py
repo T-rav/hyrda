@@ -10,13 +10,9 @@ to improve RAG retrieval accuracy. Supports:
 
 import json
 import logging
-from typing import TYPE_CHECKING
+from typing import Any
 
-from bot_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
 from services.langfuse_service import observe
-
-if TYPE_CHECKING:
-    from services.llm_service import LLMService
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +40,7 @@ class AdaptiveQueryRewriter:
         ],
     }
 
-    def __init__(self, llm_service: "LLMService", enable_rewriting: bool = True):
+    def __init__(self, llm_service, enable_rewriting: bool = True):
         """
         Initialize query rewriter.
 
@@ -61,7 +57,7 @@ class AdaptiveQueryRewriter:
         query: str,
         conversation_history: list[dict] | None = None,
         user_id: str | None = None,
-    ) -> QueryRewriteResult:
+    ) -> dict[str, Any]:
         """
         Rewrite query using adaptive strategy based on intent.
 
@@ -163,7 +159,7 @@ class AdaptiveQueryRewriter:
     @observe(as_type="generation", name="intent_classification")
     async def _classify_intent(
         self, query: str, conversation_history: list[dict], user_context: dict | None
-    ) -> QueryIntent:
+    ) -> dict[str, Any]:
         """
         Classify query intent to determine rewriting strategy.
 
@@ -273,7 +269,7 @@ Now classify this query. Return ONLY the JSON object:"""
     @observe(as_type="generation", name="hyde_rewrite")
     async def _hyde_rewrite(
         self, query: str, intent: dict, user_context: dict | None = None
-    ) -> QueryRewriteResult:
+    ) -> dict[str, Any]:
         """
         HyDE (Hypothetical Document Embeddings) rewrite for team allocation queries.
 
@@ -346,7 +342,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
             "strategy": "hyde",
         }
 
-    async def _semantic_rewrite(self, query: str, intent: dict) -> QueryRewriteResult:
+    async def _semantic_rewrite(self, query: str, intent: dict) -> dict[str, Any]:
         """
         Semantic expansion for structured data queries.
 
@@ -390,7 +386,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         return {"query": rewritten, "filters": filters, "strategy": "semantic"}
 
-    async def _expand_query(self, query: str, intent: dict) -> QueryRewriteResult:
+    async def _expand_query(self, query: str, intent: dict) -> dict[str, Any]:
         """
         Simple query expansion for document search.
 
@@ -418,9 +414,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
             "strategy": "expansion",
         }
 
-    async def _lightweight_rewrite(
-        self, query: str, intent: dict
-    ) -> QueryRewriteResult:
+    async def _lightweight_rewrite(self, query: str, intent: dict) -> dict[str, Any]:
         """
         Minimal rewrite for general queries.
 
@@ -456,7 +450,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         return "\n".join(formatted)
 
-    def get_stats(self) -> QueryRewriterStats:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get query rewriter statistics.
 

@@ -30,7 +30,9 @@ class TestOAuthRedirectURI:
 
             # Verify redirect URI construction
             redirect_uri = f"{settings.server_base_url}/api/gdrive/auth/callback"
-            assert redirect_uri == "http://3.133.107.199:5001/api/gdrive/auth/callback"
+            assert (
+                redirect_uri == "http://3.133.107.199:5001/api/gdrive/auth/callback"
+            )
 
     def test_redirect_uri_construction_logic(self):
         """Test the redirect URI construction logic used in endpoints."""
