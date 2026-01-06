@@ -206,6 +206,116 @@ services:
     networks:
       - insightmesh
 
+  # Control Plane - Agent Registry & Management UI
+  control-plane:
+    build:
+      context: .
+      dockerfile: control_plane/Dockerfile
+    image: insightmesh-control-plane:latest
+    container_name: insightmesh-control-plane
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
+      - SECRET_KEY=${CONTROL_PLANE_SECRET_KEY:-dev-secret-key-change-in-prod}
+      - ENVIRONMENT=production
+      - CONTROL_PLANE_PORT=6001
+      - ALLOWED_ORIGINS=http://localhost:3080,http://localhost:8000,http://localhost:8002
+    ports:
+      - "${CONTROL_PLANE_PORT:-6001}:6001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '=== Creating control-plane databases ===' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_security CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        echo '=== Creating control-plane database users ===' &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_security'@'%' IDENTIFIED BY 'insightmesh_security_password';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_security.* TO 'insightmesh_security'@'%';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
+        mysql -h mysql -u root -ppassword --skip-ssl -e 'FLUSH PRIVILEGES;' &&
+        echo '=== Starting control-plane ===' &&
+        uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:6001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "control-plane"
+      component: "agent-registry"
+    networks:
+      - insightmesh
+
+  # Agent Service - LangGraph HTTP API
+  agent-service:
+    build:
+      context: .
+      dockerfile: agent-service/Dockerfile
+    image: insightmesh-agent-service:latest
+    container_name: insightmesh-agent-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CONTROL_PLANE_URL=http://control-plane:6001
+      - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:-dev-agent-service-token}
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - CACHE_REDIS_URL=redis://redis:6379
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
+      - LANGGRAPH_API_KEY=${LANGGRAPH_API_KEY:-}
+      - ENVIRONMENT=production
+      - PORT=8000
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
+    ports:
+      - "${AGENT_SERVICE_PORT:-8000}:8000"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "agent-service"
+      component: "langgraph-api"
+    networks:
+      - insightmesh
+
   # Loki - Log Aggregation Server
   loki:
     image: grafana/loki:latest
