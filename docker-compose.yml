@@ -220,6 +220,7 @@ services:
       - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
       - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
       - SECRET_KEY=${CONTROL_PLANE_SECRET_KEY:-dev-secret-key-change-in-prod}
+      - CACHE_REDIS_URL=redis://redis:6379
       - ENVIRONMENT=production
       - CONTROL_PLANE_PORT=6001
       - ALLOWED_ORIGINS=http://localhost:3080,http://localhost:8000,http://localhost:8002
@@ -227,6 +228,8 @@ services:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:
       mysql:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: >
       sh -c "
