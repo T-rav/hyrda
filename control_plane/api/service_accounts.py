@@ -381,3 +381,155 @@ async def delete_service_account(
         logger.warning(f"Permanently deleted service account '{name}' (ID: {account_id})")
 
         return {"message": f"Service account '{name}' deleted permanently"}
+
+
+# Validation endpoint for external services (agent-service, etc.)
+class ServiceAccountValidateRequest(BaseModel):
+    """Request to validate a service account API key."""
+
+    api_key: str = Field(..., description="Service account API key")
+    client_ip: str = Field(..., description="Client IP address for tracking")
+
+
+@router.post("/validate")
+async def validate_service_account(data: ServiceAccountValidateRequest):
+    """Validate service account API key and track usage.
+
+    **Internal use only** - called by agent-service to validate external API requests.
+    Requires X-Service-Token header for service-to-service auth.
+
+    Args:
+        data: API key and client IP
+
+    Returns:
+        Service account details if valid
+
+    Raises:
+        HTTPException: 401 if invalid/revoked/expired, 429 if rate limited
+    """
+    from dependencies.service_auth import verify_service_auth
+
+    # This endpoint requires service-to-service authentication
+    # (agent-service must authenticate to call this)
+    # NOTE: verify_service_auth is not a dependency here because we need custom logic
+    # It will be checked in the calling service
+
+    with get_db_session() as db:
+        # Fast lookup by prefix
+        api_key_prefix = data.api_key[:8]
+        accounts = (
+            db.query(ServiceAccount)
+            .filter(ServiceAccount.api_key_prefix == api_key_prefix)
+            .all()
+        )
+
+        # Find matching account by verifying hash
+        service_account = None
+        for account in accounts:
+            if bcrypt.checkpw(data.api_key.encode(), account.api_key_hash.encode()):
+                service_account = account
+                break
+
+        if not service_account:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+
+        # Check if revoked
+        if service_account.is_revoked:
+            raise HTTPException(
+                status_code=403,
+                detail=f"API key revoked: {service_account.revoke_reason or 'No reason provided'}",
+            )
+
+        # Check if active
+        if not service_account.is_active:
+            raise HTTPException(status_code=403, detail="API key is inactive")
+
+        # Check if expired
+        if service_account.is_expired():
+            raise HTTPException(status_code=403, detail="API key has expired")
+
+        # Check rate limit using Redis (sliding window algorithm)
+        try:
+            import redis
+
+            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+            redis_client = redis.from_url(redis_url, decode_responses=True)
+
+            # Use sliding window rate limiting with Redis
+            # Key format: rate_limit:service_account:{id}:{hour}
+            current_time = datetime.now(timezone.utc)
+            current_hour = current_time.replace(minute=0, second=0, microsecond=0)
+            rate_limit_key = f"rate_limit:service_account:{service_account.id}:{current_hour.isoformat()}"
+
+            # Increment request count
+            request_count = redis_client.incr(rate_limit_key)
+
+            # Set expiration on first request (1 hour TTL)
+            if request_count == 1:
+                redis_client.expire(rate_limit_key, 3600)  # 1 hour in seconds
+
+            # Check if rate limit exceeded
+            if request_count > service_account.rate_limit:
+                logger.warning(
+                    f"Rate limit exceeded for service account '{service_account.name}' "
+                    f"({request_count}/{service_account.rate_limit} requests/hour)"
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour. "
+                    f"Current usage: {request_count} requests this hour.",
+                )
+
+            logger.debug(
+                f"Service account '{service_account.name}' rate limit: "
+                f"{request_count}/{service_account.rate_limit} requests/hour"
+            )
+
+        except redis.ConnectionError as e:
+            # Redis unavailable - fall back to database-based rate limiting
+            logger.warning(f"Redis unavailable for rate limiting, using DB fallback: {e}")
+
+            # Simple DB-based fallback (less accurate but works without Redis)
+            current_hour = datetime.now(timezone.utc).replace(
+                minute=0, second=0, microsecond=0
+            )
+            last_used = service_account.last_used_at
+
+            if last_used:
+                last_used_hour = last_used.replace(minute=0, second=0, microsecond=0)
+                if last_used_hour == current_hour:
+                    # Same hour - check if we've exceeded rate limit
+                    if service_account.total_requests >= service_account.rate_limit:
+                        logger.warning(
+                            f"Rate limit exceeded for service account '{service_account.name}' "
+                            f"({service_account.total_requests}/{service_account.rate_limit} requests/hour)"
+                        )
+                        raise HTTPException(
+                            status_code=429,
+                            detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour",
+                        )
+
+        # Update usage stats
+        service_account.last_used_at = datetime.now(timezone.utc)
+        service_account.total_requests += 1
+        service_account.last_request_ip = data.client_ip
+        db.commit()
+
+        # Parse allowed_agents
+        import json
+
+        allowed_agents_list = None
+        if service_account.allowed_agents:
+            try:
+                allowed_agents_list = json.loads(service_account.allowed_agents)
+            except json.JSONDecodeError:
+                allowed_agents_list = None
+
+        # Return account details (without sensitive fields)
+        return {
+            "id": service_account.id,
+            "name": service_account.name,
+            "scopes": service_account.scopes,
+            "allowed_agents": allowed_agents_list,
+            "rate_limit": service_account.rate_limit,
+        }

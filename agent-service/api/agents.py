@@ -139,10 +139,12 @@ async def invoke_agent(
 ):
     """Invoke an agent with a query.
 
-    Security:
-    - User requests: MUST include JWT token (Authorization: Bearer <token>)
-    - Service requests: MUST include X-Service-Token header
-    - user_id is NEVER accepted from request body (security!)
+    Security (3 auth methods):
+    1. User requests: MUST include JWT token (Authorization: Bearer <token>)
+    2. External API requests: MUST include service account API key (X-API-Key or Authorization: Bearer sa_...)
+    3. Internal service requests: MUST include X-Service-Token header
+
+    user_id is NEVER accepted from request body (security!)
 
     Args:
         agent_name: Name or alias of the agent to invoke
@@ -167,13 +169,14 @@ async def invoke_agent(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Extract user identity from JWT or service token (NEVER from request body!)
+    # Extract user identity from JWT, service account, or service token (NEVER from request body!)
     user_id = None
     auth_type = None
+    service_account_name = None
 
-    # Try JWT first (user request)
+    # Try JWT first (end user request)
     auth_header = http_request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
+    if auth_header.startswith("Bearer ") and not auth_header[7:].startswith("sa_"):
         try:
             from dependencies.auth import get_current_user
 
@@ -182,10 +185,52 @@ async def invoke_agent(
             auth_type = "jwt"
             logger.info(f"User {user_id} authenticated via JWT")
         except HTTPException:
-            pass  # Not a valid JWT, try service token
+            pass  # Not a valid JWT, try next method
 
-    # Try service token (internal service request)
-    if not user_id:
+    # Try service account API key (external API integration)
+    if not auth_type:
+        from dependencies.service_account_auth import verify_service_account_api_key
+
+        try:
+            service_account = await verify_service_account_api_key(http_request)
+            if service_account:
+                auth_type = "service_account"
+                service_account_name = service_account.name
+
+                # Check if this agent is allowed for this service account
+                if service_account.allowed_agents is not None:
+                    # Specific agents allowed - check if current agent is in list
+                    if primary_name not in service_account.allowed_agents:
+                        logger.warning(
+                            f"Service account '{service_account_name}' attempted to access "
+                            f"unauthorized agent '{primary_name}'"
+                        )
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"Service account not authorized to access agent '{agent_name}'",
+                        )
+
+                # Check if service account has invoke scope
+                if "agents:invoke" not in service_account.scopes:
+                    logger.warning(
+                        f"Service account '{service_account_name}' lacks agents:invoke scope"
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Service account does not have agents:invoke permission",
+                    )
+
+                logger.info(
+                    f"Service account '{service_account_name}' authenticated for agent '{primary_name}'"
+                )
+                # Service accounts don't have user_id
+                user_id = None
+        except HTTPException:
+            # Service account validation failed - re-raise
+            raise
+
+    # Try internal service token (bot, librechat, tasks)
+    if not auth_type:
         from shared.utils.jwt_auth import verify_service_token
 
         service_token = http_request.headers.get("X-Service-Token")
@@ -201,7 +246,7 @@ async def invoke_agent(
             # No valid auth
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required: provide JWT token or service token",
+                detail="Authentication required: provide JWT token, service account API key, or service token",
             )
 
     # Check user permissions if user_id extracted from JWT (user request)
@@ -316,10 +361,12 @@ async def stream_agent(
 ):
     """Invoke an agent with streaming response via HTTP.
 
-    Security:
-    - User requests: MUST include JWT token (Authorization: Bearer <token>)
-    - Service requests: MUST include X-Service-Token header
-    - user_id is NEVER accepted from request body (security!)
+    Security (3 auth methods):
+    1. User requests: MUST include JWT token (Authorization: Bearer <token>)
+    2. External API requests: MUST include service account API key (X-API-Key or Authorization: Bearer sa_...)
+    3. Internal service requests: MUST include X-Service-Token header
+
+    user_id is NEVER accepted from request body (security!)
 
     Args:
         agent_name: Name or alias of the agent to invoke
@@ -344,13 +391,14 @@ async def stream_agent(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    # Extract user identity from JWT or service token (NEVER from request body!)
+    # Extract user identity from JWT, service account, or service token (NEVER from request body!)
     user_id = None
     auth_type = None
+    service_account_name = None
 
-    # Try JWT first (user request)
+    # Try JWT first (end user request)
     auth_header = http_request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
+    if auth_header.startswith("Bearer ") and not auth_header[7:].startswith("sa_"):
         try:
             from dependencies.auth import get_current_user
 
@@ -359,10 +407,49 @@ async def stream_agent(
             auth_type = "jwt"
             logger.info(f"User {user_id} authenticated via JWT for streaming")
         except HTTPException:
-            pass  # Not a valid JWT, try service token
+            pass  # Not a valid JWT, try next method
 
-    # Try service token (internal service request)
-    if not user_id:
+    # Try service account API key (external API integration)
+    if not auth_type:
+        from dependencies.service_account_auth import verify_service_account_api_key
+
+        try:
+            service_account = await verify_service_account_api_key(http_request)
+            if service_account:
+                auth_type = "service_account"
+                service_account_name = service_account.name
+
+                # Check if this agent is allowed for this service account
+                if service_account.allowed_agents is not None:
+                    if primary_name not in service_account.allowed_agents:
+                        logger.warning(
+                            f"Service account '{service_account_name}' attempted to access "
+                            f"unauthorized agent '{primary_name}' (streaming)"
+                        )
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"Service account not authorized to access agent '{agent_name}'",
+                        )
+
+                # Check if service account has invoke scope
+                if "agents:invoke" not in service_account.scopes:
+                    logger.warning(
+                        f"Service account '{service_account_name}' lacks agents:invoke scope (streaming)"
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Service account does not have agents:invoke permission",
+                    )
+
+                logger.info(
+                    f"Service account '{service_account_name}' authenticated for streaming agent '{primary_name}'"
+                )
+                user_id = None
+        except HTTPException:
+            raise
+
+    # Try internal service token (bot, librechat, tasks)
+    if not auth_type:
         from shared.utils.jwt_auth import verify_service_token
 
         service_token = http_request.headers.get("X-Service-Token")
@@ -372,13 +459,11 @@ async def stream_agent(
             auth_type = "service"
             service_name = service_info.get("service", "unknown")
             logger.info(f"Authenticated as internal service for streaming: {service_name}")
-            # Service can optionally forward user context (trusted)
             user_id = http_request.headers.get("X-User-Context")
         else:
-            # No valid auth
             raise HTTPException(
                 status_code=401,
-                detail="Authentication required: provide JWT token or service token",
+                detail="Authentication required: provide JWT token, service account API key, or service token",
             )
 
     # Check user permissions if user_id extracted from JWT (user request)
