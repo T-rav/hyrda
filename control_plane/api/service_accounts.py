@@ -77,6 +77,42 @@ class ServiceAccountCreateResponse(ServiceAccountResponse):
     api_key: str = Field(..., description="API key - SAVE THIS! It won't be shown again")
 
 
+# Helper function to parse service account
+def _parse_service_account(account: ServiceAccount) -> dict:
+    """Parse service account ORM model to dict with JSON fields decoded."""
+    import json
+
+    # Parse allowed_agents from JSON string
+    allowed_agents_list = None
+    if account.allowed_agents:
+        try:
+            allowed_agents_list = json.loads(account.allowed_agents)
+        except json.JSONDecodeError:
+            allowed_agents_list = None
+
+    return {
+        "id": account.id,
+        "name": account.name,
+        "description": account.description,
+        "api_key_prefix": account.api_key_prefix,
+        "scopes": account.scopes,
+        "allowed_agents": allowed_agents_list,
+        "rate_limit": account.rate_limit,
+        "is_active": account.is_active,
+        "is_revoked": account.is_revoked,
+        "created_by": account.created_by,
+        "created_at": account.created_at,
+        "updated_at": account.updated_at,
+        "last_used_at": account.last_used_at,
+        "expires_at": account.expires_at,
+        "total_requests": account.total_requests,
+        "last_request_ip": account.last_request_ip,
+        "revoked_at": account.revoked_at,
+        "revoked_by": account.revoked_by,
+        "revoke_reason": account.revoke_reason,
+    }
+
+
 # Endpoints
 @router.post("", response_model=ServiceAccountCreateResponse)
 async def create_service_account(
@@ -135,37 +171,9 @@ async def create_service_account(
 
         logger.info(f"Created service account '{data.name}' by {admin_email}")
 
-        # Parse allowed_agents JSON before creating response
-        allowed_agents_list = None
-        if service_account.allowed_agents:
-            try:
-                allowed_agents_list = json.loads(service_account.allowed_agents)
-            except json.JSONDecodeError:
-                allowed_agents_list = None
-
-        # Create response dict manually to handle JSON fields
-        response_dict = {
-            "id": service_account.id,
-            "name": service_account.name,
-            "description": service_account.description,
-            "api_key_prefix": service_account.api_key_prefix,
-            "scopes": service_account.scopes,
-            "allowed_agents": allowed_agents_list,
-            "rate_limit": service_account.rate_limit,
-            "is_active": service_account.is_active,
-            "is_revoked": service_account.is_revoked,
-            "created_by": service_account.created_by,
-            "created_at": service_account.created_at,
-            "updated_at": service_account.updated_at,
-            "last_used_at": service_account.last_used_at,
-            "expires_at": service_account.expires_at,
-            "total_requests": service_account.total_requests,
-            "last_request_ip": service_account.last_request_ip,
-            "revoked_at": service_account.revoked_at,
-            "revoked_by": service_account.revoked_by,
-            "revoke_reason": service_account.revoke_reason,
-            "api_key": api_key,  # Only time it's visible
-        }
+        # Parse service account and add API key
+        response_dict = _parse_service_account(service_account)
+        response_dict["api_key"] = api_key  # Only time it's visible
 
         return ServiceAccountCreateResponse(**response_dict)
 
@@ -191,20 +199,8 @@ async def list_service_accounts(
 
         accounts = query.order_by(ServiceAccount.created_at.desc()).all()
 
-        # Parse allowed_agents JSON
-        import json
-
-        result = []
-        for account in accounts:
-            data = ServiceAccountResponse.from_orm(account)
-            if account.allowed_agents:
-                try:
-                    data.allowed_agents = json.loads(account.allowed_agents)
-                except json.JSONDecodeError:
-                    data.allowed_agents = None
-            result.append(data)
-
-        return result
+        # Parse service accounts with JSON fields decoded
+        return [ServiceAccountResponse(**_parse_service_account(account)) for account in accounts]
 
 
 @router.get("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
@@ -229,16 +225,7 @@ async def get_service_account(
         if not account:
             raise HTTPException(status_code=404, detail="Service account not found")
 
-        import json
-
-        data = ServiceAccountResponse.from_orm(account)
-        if account.allowed_agents:
-            try:
-                data.allowed_agents = json.loads(account.allowed_agents)
-            except json.JSONDecodeError:
-                data.allowed_agents = None
-
-        return data
+        return ServiceAccountResponse(**_parse_service_account(account))
 
 
 @router.patch("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
@@ -318,14 +305,7 @@ async def update_service_account(
             except redis.ConnectionError as e:
                 logger.warning(f"Could not invalidate cache for deactivated account {account_id}: {e}")
 
-        response_data = ServiceAccountResponse.from_orm(account)
-        if account.allowed_agents:
-            try:
-                response_data.allowed_agents = json.loads(account.allowed_agents)
-            except json.JSONDecodeError:
-                response_data.allowed_agents = None
-
-        return response_data
+        return ServiceAccountResponse(**_parse_service_account(account))
 
 
 @router.post("/{account_id}/revoke", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
