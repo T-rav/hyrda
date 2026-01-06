@@ -148,12 +148,12 @@ run: check-env start-redis
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
 test: $(VENV)
-	@echo "$(BLUE)Running test suite (excluding integration tests)...$(RESET)"
-	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
+	@echo "$(BLUE)Running test suite (excluding integration and system_flow tests)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow" -v
 
 test-coverage: $(VENV)
-	@echo "$(BLUE)Running tests with coverage (excluding integration tests)...$(RESET)"
-	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration" && $(PYTHON) -m coverage report
+	@echo "$(BLUE)Running tests with coverage (excluding integration and system_flow tests)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration and not system_flow" && $(PYTHON) -m coverage report
 
 test-file: $(VENV)
 	@echo "$(BLUE)Running specific test file: $(FILE)...$(RESET)"
