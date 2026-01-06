@@ -223,7 +223,8 @@ services:
       - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
       - ENVIRONMENT=production
       - CONTROL_PLANE_PORT=6001
-      - ALLOWED_ORIGINS=http://localhost:3080,http://localhost:8000,http://localhost:8002
+      - CONTROL_PLANE_BASE_URL=https://localhost:6001
+      - ALLOWED_ORIGINS=https://localhost:3080,https://localhost:8000,https://localhost:8002,https://localhost:6001
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:
