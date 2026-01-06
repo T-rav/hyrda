@@ -253,7 +253,34 @@ typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
 	cd $(BOT_DIR) && $(VENV)/bin/pyright || $(PYTHON) -m pyright
 
-quality: lint-check test
+quality: lint-check test ui-quality librechat-build
+	@echo "$(GREEN)✅ All quality checks passed!$(RESET)"
+
+# UI Quality Checks
+ui-quality: ui-lint ui-test ui-build
+	@echo "$(GREEN)✅ UI quality checks passed!$(RESET)"
+
+ui-lint:
+	@echo "$(BLUE)Running UI linting...$(RESET)"
+	cd ui && npm run lint
+
+ui-test:
+	@echo "$(BLUE)Running UI tests...$(RESET)"
+	cd ui && npm run test:coverage
+
+ui-build:
+	@echo "$(BLUE)Building UI...$(RESET)"
+	cd ui && npm run build
+
+# LibreChat Build Check
+librechat-build:
+	@echo "$(BLUE)Building LibreChat Docker image...$(RESET)"
+	@if [ -f "docker-compose.librechat.yml" ]; then \
+		docker compose -f docker-compose.librechat.yml build; \
+		echo "$(GREEN)✅ LibreChat build successful!$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  docker-compose.librechat.yml not found, skipping LibreChat build$(RESET)"; \
+	fi
 
 docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
