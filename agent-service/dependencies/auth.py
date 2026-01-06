@@ -14,9 +14,9 @@ from datetime import UTC, datetime
 
 from fastapi import Header, HTTPException, Request
 
-# Add shared directory to path for JWT utilities
+# Add shared directory to path for service auth utilities
 sys.path.insert(0, "/app")
-from shared.utils.jwt_auth import verify_service_token
+from shared.utils.service_auth import verify_service_token
 from shared.utils.request_signing import (
     RequestSigningError,
     extract_and_verify_signature,
