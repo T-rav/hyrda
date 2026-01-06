@@ -200,37 +200,42 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
                   />
                   <div className="checkbox-content">
                     <strong>All Agents</strong>
-                    <small>No restrictions - can access all agents</small>
+                    <small>Can access all non-system agents (system agents like "help" are Slack-only)</small>
                   </div>
                 </label>
-                {agents.map((agent) => (
-                  <label key={agent.name} className="checkbox-card">
-                    <input
-                      type="checkbox"
-                      checked={formData.allowed_agents.includes(agent.name)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            allowed_agents: [...prev.allowed_agents, agent.name],
-                          }))
-                        } else {
-                          setFormData((prev) => ({
-                            ...prev,
-                            allowed_agents: prev.allowed_agents.filter((a) => a !== agent.name),
-                          }))
-                        }
-                      }}
-                      disabled={formData.allowed_agents.length === 0}
-                    />
-                    <div className="checkbox-content">
-                      <strong>{agent.display_name || agent.name}</strong>
-                      {agent.description && <small>{agent.description}</small>}
-                    </div>
-                  </label>
-                ))}
+                {agents
+                  .filter((agent) => !agent.is_system)
+                  .map((agent) => (
+                    <label key={agent.name} className="checkbox-card">
+                      <input
+                        type="checkbox"
+                        checked={formData.allowed_agents.includes(agent.name)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData((prev) => ({
+                              ...prev,
+                              allowed_agents: [...prev.allowed_agents, agent.name],
+                            }))
+                          } else {
+                            setFormData((prev) => ({
+                              ...prev,
+                              allowed_agents: prev.allowed_agents.filter((a) => a !== agent.name),
+                            }))
+                          }
+                        }}
+                        disabled={formData.allowed_agents.length === 0}
+                      />
+                      <div className="checkbox-content">
+                        <strong>{agent.display_name || agent.name}</strong>
+                        {agent.description && <small>{agent.description}</small>}
+                      </div>
+                    </label>
+                  ))}
               </div>
-              <small>Select "All Agents" or choose specific agents this key can access</small>
+              <small>
+                Select "All Agents" or choose specific agents. System agents (like "help") are only
+                available in Slack, not via API keys.
+              </small>
             </div>
 
             {/* Rate Limit */}

@@ -197,6 +197,17 @@ async def invoke_agent(
                 auth_type = "service_account"
                 service_account_name = service_account.name
 
+                # System agents are for Slack users only, not external API integrations
+                if agent_info.get("is_system", False):
+                    logger.warning(
+                        f"Service account '{service_account_name}' attempted to access "
+                        f"system agent '{primary_name}' (forbidden)"
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"System agent '{agent_name}' is only available to Slack users, not API keys",
+                    )
+
                 # Check if this agent is allowed for this service account
                 if service_account.allowed_agents is not None:
                     # Specific agents allowed - check if current agent is in list
@@ -418,6 +429,17 @@ async def stream_agent(
             if service_account:
                 auth_type = "service_account"
                 service_account_name = service_account.name
+
+                # System agents are for Slack users only, not external API integrations
+                if agent_info.get("is_system", False):
+                    logger.warning(
+                        f"Service account '{service_account_name}' attempted to access "
+                        f"system agent '{primary_name}' (forbidden)"
+                    )
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"System agent '{agent_name}' is only available to Slack users, not API keys",
+                    )
 
                 # Check if this agent is allowed for this service account
                 if service_account.allowed_agents is not None:
