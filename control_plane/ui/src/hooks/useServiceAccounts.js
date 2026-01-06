@@ -138,12 +138,9 @@ export function useServiceAccounts(toast) {
 
   /**
    * Delete a service account permanently.
+   * Note: Confirmation dialog is handled by the UI component (ServiceAccountCard)
    */
   const deleteServiceAccount = useCallback(async (accountId, accountName) => {
-    if (!confirm(`Permanently delete "${accountName}"? This cannot be undone. (Prefer revoke for audit trail)`)) {
-      return
-    }
-
     setLoading(true)
     try {
       const response = await fetch(`/api/service-accounts/${accountId}`, {
