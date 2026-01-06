@@ -186,23 +186,51 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
 
             {/* Allowed Agents */}
             <div className="form-group">
-              <label htmlFor="allowed_agents">Allowed Agents</label>
-              <select
-                id="allowed_agents"
-                name="allowed_agents"
-                multiple
-                value={formData.allowed_agents}
-                onChange={handleAgentSelection}
-                className="form-control"
-                size={5}
-              >
+              <label>Allowed Agents</label>
+              <div className="checkbox-grid">
+                <label className="checkbox-card">
+                  <input
+                    type="checkbox"
+                    checked={formData.allowed_agents.length === 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData((prev) => ({ ...prev, allowed_agents: [] }))
+                      }
+                    }}
+                  />
+                  <div className="checkbox-content">
+                    <strong>All Agents</strong>
+                    <small>No restrictions - can access all agents</small>
+                  </div>
+                </label>
                 {agents.map((agent) => (
-                  <option key={agent.name} value={agent.name}>
-                    {agent.display_name || agent.name}
-                  </option>
+                  <label key={agent.name} className="checkbox-card">
+                    <input
+                      type="checkbox"
+                      checked={formData.allowed_agents.includes(agent.name)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            allowed_agents: [...prev.allowed_agents, agent.name],
+                          }))
+                        } else {
+                          setFormData((prev) => ({
+                            ...prev,
+                            allowed_agents: prev.allowed_agents.filter((a) => a !== agent.name),
+                          }))
+                        }
+                      }}
+                      disabled={formData.allowed_agents.length === 0}
+                    />
+                    <div className="checkbox-content">
+                      <strong>{agent.display_name || agent.name}</strong>
+                      {agent.description && <small>{agent.description}</small>}
+                    </div>
+                  </label>
                 ))}
-              </select>
-              <small>Leave empty to allow all agents. Hold Ctrl/Cmd to select multiple.</small>
+              </div>
+              <small>Select "All Agents" or choose specific agents this key can access</small>
             </div>
 
             {/* Rate Limit */}
