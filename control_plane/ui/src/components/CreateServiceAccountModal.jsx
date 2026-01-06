@@ -9,7 +9,6 @@ function CreateServiceAccountModal({ onClose, onCreate, agents, createdApiKey, o
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    scopes: 'agents:read,agents:invoke',
     allowed_agents: [], // Empty = all agents
     rate_limit: 100,
     expires_at: '', // Optional ISO datetime
@@ -19,9 +18,10 @@ function CreateServiceAccountModal({ onClose, onCreate, agents, createdApiKey, o
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Prepare data for API
+    // Prepare data for API - hardcode scopes to agents:invoke
     const data = {
       ...formData,
+      scopes: 'agents:invoke', // Always agents:invoke for now
       allowed_agents: formData.allowed_agents.length > 0 ? formData.allowed_agents : null,
       expires_at: formData.expires_at ? new Date(formData.expires_at).toISOString() : null,
     }
@@ -164,24 +164,6 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
                 rows={3}
                 className="form-control"
               />
-            </div>
-
-            {/* Scopes */}
-            <div className="form-group">
-              <label htmlFor="scopes">
-                Scopes <span className="required">*</span>
-              </label>
-              <input
-                type="text"
-                id="scopes"
-                name="scopes"
-                value={formData.scopes}
-                onChange={handleChange}
-                placeholder="agents:read,agents:invoke"
-                required
-                className="form-control"
-              />
-              <small>Comma-separated permissions (e.g., agents:read,agents:invoke)</small>
             </div>
 
             {/* Allowed Agents */}
