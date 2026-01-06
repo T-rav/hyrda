@@ -267,6 +267,11 @@ async def update_service_account(
         if account.is_revoked:
             raise HTTPException(status_code=400, detail="Cannot update revoked service account")
 
+        # Track if we're deactivating the account
+        was_deactivated = False
+        if data.is_active is not None and not data.is_active and account.is_active:
+            was_deactivated = True
+
         # Update fields
         import json
 
@@ -287,6 +292,29 @@ async def update_service_account(
         db.refresh(account)
 
         logger.info(f"Updated service account '{account.name}' (ID: {account_id})")
+
+        # Invalidate cache if account was deactivated
+        if was_deactivated:
+            try:
+                import redis
+
+                redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+                redis_client = redis.from_url(redis_url, decode_responses=True)
+
+                cache_keys_key = f"service_account:cache_keys:{account_id}"
+                cached_keys = redis_client.smembers(cache_keys_key)
+
+                if cached_keys:
+                    pipeline = redis_client.pipeline()
+                    for key in cached_keys:
+                        pipeline.delete(key)
+                    pipeline.delete(cache_keys_key)
+                    pipeline.execute()
+                    logger.info(
+                        f"Invalidated {len(cached_keys)} cached validation entries for deactivated account {account_id}"
+                    )
+            except redis.ConnectionError as e:
+                logger.warning(f"Could not invalidate cache for deactivated account {account_id}: {e}")
 
         response_data = ServiceAccountResponse.from_orm(account)
         if account.allowed_agents:
@@ -340,6 +368,39 @@ async def revoke_service_account(
 
         logger.warning(f"Revoked service account '{account.name}' by {admin_email}: {reason}")
 
+        # Invalidate all cached validations for this account
+        # We can't compute the exact cache key (don't have plaintext API key)
+        # So we'll store account_id in cache keys we can invalidate
+        try:
+            import redis
+
+            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+            redis_client = redis.from_url(redis_url, decode_responses=True)
+
+            # Clear validation cache using account_id
+            # This is a secondary cache entry we maintain
+            cache_keys_key = f"service_account:cache_keys:{account_id}"
+            cached_keys = redis_client.smembers(cache_keys_key)
+
+            if cached_keys:
+                # Delete all cached validation entries for this account
+                pipeline = redis_client.pipeline()
+                for key in cached_keys:
+                    pipeline.delete(key)
+                pipeline.delete(cache_keys_key)  # Delete the set itself
+                pipeline.execute()
+                logger.info(
+                    f"Invalidated {len(cached_keys)} cached validation entries for revoked account {account_id}"
+                )
+            else:
+                logger.debug(f"No cached validations found for account {account_id}")
+
+        except redis.ConnectionError as e:
+            logger.warning(
+                f"Could not invalidate cache for revoked account {account_id}: {e}. "
+                "Cached validations will expire naturally (60s TTL)."
+            )
+
         import json
 
         response_data = ServiceAccountResponse.from_orm(account)
@@ -380,6 +441,28 @@ async def delete_service_account(
 
         logger.warning(f"Permanently deleted service account '{name}' (ID: {account_id})")
 
+        # Invalidate all cached validations for this account
+        try:
+            import redis
+
+            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+            redis_client = redis.from_url(redis_url, decode_responses=True)
+
+            cache_keys_key = f"service_account:cache_keys:{account_id}"
+            cached_keys = redis_client.smembers(cache_keys_key)
+
+            if cached_keys:
+                pipeline = redis_client.pipeline()
+                for key in cached_keys:
+                    pipeline.delete(key)
+                pipeline.delete(cache_keys_key)
+                pipeline.execute()
+                logger.info(
+                    f"Invalidated {len(cached_keys)} cached validation entries for deleted account {account_id}"
+                )
+        except redis.ConnectionError as e:
+            logger.warning(f"Could not invalidate cache for deleted account {account_id}: {e}")
+
         return {"message": f"Service account '{name}' deleted permanently"}
 
 
@@ -398,6 +481,12 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     **Internal use only** - called by agent-service to validate external API requests.
     Requires X-Service-Token header for service-to-service auth.
 
+    Uses Redis caching to minimize database queries and bcrypt verifications:
+    - Cache key: service_account:validated:{sha256(api_key)}
+    - TTL: 60 seconds (balance between performance and security)
+    - Cache contains: account_id, validation timestamp
+    - Always re-checks: revocation status, expiration, rate limits
+
     Args:
         data: API key and client IP
 
@@ -407,6 +496,8 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     Raises:
         HTTPException: 401 if invalid/revoked/expired, 429 if rate limited
     """
+    import hashlib
+
     from dependencies.service_auth import verify_service_auth
 
     # This endpoint requires service-to-service authentication
@@ -414,103 +505,197 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     # NOTE: verify_service_auth is not a dependency here because we need custom logic
     # It will be checked in the calling service
 
-    with get_db_session() as db:
-        # Fast lookup by prefix
-        api_key_prefix = data.api_key[:8]
-        accounts = (
-            db.query(ServiceAccount)
-            .filter(ServiceAccount.api_key_prefix == api_key_prefix)
-            .all()
+    # Try Redis cache first (avoid expensive bcrypt verification)
+    try:
+        import json
+
+        import redis
+
+        redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+        redis_client = redis.from_url(redis_url, decode_responses=True)
+
+        # Create cache key from API key hash (don't store plaintext key in Redis!)
+        api_key_hash = hashlib.sha256(data.api_key.encode()).hexdigest()
+        cache_key = f"service_account:validated:{api_key_hash}"
+
+        # Check cache
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            logger.debug("Service account validation cache HIT")
+            cached = json.loads(cached_data)
+            account_id = cached["account_id"]
+
+            # Fetch account from DB (still need to check revocation/expiration/rate limits)
+            with get_db_session() as db:
+                service_account = (
+                    db.query(ServiceAccount)
+                    .filter(ServiceAccount.id == account_id)
+                    .first()
+                )
+
+                if not service_account:
+                    # Account was deleted - invalidate cache
+                    redis_client.delete(cache_key)
+                    raise HTTPException(status_code=401, detail="Invalid API key")
+
+                # Continue with validation checks below (after this try block)
+
+        else:
+            logger.debug("Service account validation cache MISS")
+            # Cache miss - do full validation including bcrypt
+            with get_db_session() as db:
+                # Fast lookup by prefix
+                api_key_prefix = data.api_key[:8]
+                accounts = (
+                    db.query(ServiceAccount)
+                    .filter(ServiceAccount.api_key_prefix == api_key_prefix)
+                    .all()
+                )
+
+                # Find matching account by verifying hash (expensive!)
+                service_account = None
+                for account in accounts:
+                    if bcrypt.checkpw(
+                        data.api_key.encode(), account.api_key_hash.encode()
+                    ):
+                        service_account = account
+                        break
+
+                if not service_account:
+                    raise HTTPException(status_code=401, detail="Invalid API key")
+
+                # Cache the validated account_id for 60 seconds
+                try:
+                    redis_client.setex(
+                        cache_key,
+                        60,  # 60 second TTL (short to catch revocations quickly)
+                        json.dumps(
+                            {
+                                "account_id": service_account.id,
+                                "validated_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                        ),
+                    )
+
+                    # Also maintain a set of cache keys for this account
+                    # This allows us to invalidate all caches when account is revoked
+                    cache_keys_set = f"service_account:cache_keys:{service_account.id}"
+                    redis_client.sadd(cache_keys_set, cache_key)
+                    redis_client.expire(cache_keys_set, 3600)  # 1 hour TTL
+
+                    logger.debug(
+                        f"Cached service account validation for account {service_account.id}"
+                    )
+                except redis.RedisError as e:
+                    logger.warning(f"Failed to cache service account validation: {e}")
+
+    except redis.ConnectionError as e:
+        # Redis unavailable - fall back to direct DB lookup
+        logger.warning(f"Redis unavailable for validation caching: {e}")
+        with get_db_session() as db:
+            # Fast lookup by prefix
+            api_key_prefix = data.api_key[:8]
+            accounts = (
+                db.query(ServiceAccount)
+                .filter(ServiceAccount.api_key_prefix == api_key_prefix)
+                .all()
+            )
+
+            # Find matching account by verifying hash
+            service_account = None
+            for account in accounts:
+                if bcrypt.checkpw(data.api_key.encode(), account.api_key_hash.encode()):
+                    service_account = account
+                    break
+
+            if not service_account:
+                raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # At this point, service_account is set from either cache or DB
+    # Now perform security checks (always fresh, never cached)
+
+    # Check if revoked
+    if service_account.is_revoked:
+        raise HTTPException(
+            status_code=403,
+            detail=f"API key revoked: {service_account.revoke_reason or 'No reason provided'}",
         )
 
-        # Find matching account by verifying hash
-        service_account = None
-        for account in accounts:
-            if bcrypt.checkpw(data.api_key.encode(), account.api_key_hash.encode()):
-                service_account = account
-                break
+    # Check if active
+    if not service_account.is_active:
+        raise HTTPException(status_code=403, detail="API key is inactive")
 
-        if not service_account:
-            raise HTTPException(status_code=401, detail="Invalid API key")
+    # Check if expired
+    if service_account.is_expired():
+        raise HTTPException(status_code=403, detail="API key has expired")
 
-        # Check if revoked
-        if service_account.is_revoked:
+    # Check rate limit using Redis (sliding window algorithm)
+    try:
+        import redis
+
+        redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
+        redis_client = redis.from_url(redis_url, decode_responses=True)
+
+        # Use sliding window rate limiting with Redis
+        # Key format: rate_limit:service_account:{id}:{hour}
+        current_time = datetime.now(timezone.utc)
+        current_hour = current_time.replace(minute=0, second=0, microsecond=0)
+        rate_limit_key = f"rate_limit:service_account:{service_account.id}:{current_hour.isoformat()}"
+
+        # Increment request count
+        request_count = redis_client.incr(rate_limit_key)
+
+        # Set expiration on first request (1 hour TTL)
+        if request_count == 1:
+            redis_client.expire(rate_limit_key, 3600)  # 1 hour in seconds
+
+        # Check if rate limit exceeded
+        if request_count > service_account.rate_limit:
+            logger.warning(
+                f"Rate limit exceeded for service account '{service_account.name}' "
+                f"({request_count}/{service_account.rate_limit} requests/hour)"
+            )
             raise HTTPException(
-                status_code=403,
-                detail=f"API key revoked: {service_account.revoke_reason or 'No reason provided'}",
+                status_code=429,
+                detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour. "
+                f"Current usage: {request_count} requests this hour.",
             )
 
-        # Check if active
-        if not service_account.is_active:
-            raise HTTPException(status_code=403, detail="API key is inactive")
+        logger.debug(
+            f"Service account '{service_account.name}' rate limit: "
+            f"{request_count}/{service_account.rate_limit} requests/hour"
+        )
 
-        # Check if expired
-        if service_account.is_expired():
-            raise HTTPException(status_code=403, detail="API key has expired")
+    except redis.ConnectionError as e:
+        # Redis unavailable - fall back to database-based rate limiting
+        logger.warning(f"Redis unavailable for rate limiting, using DB fallback: {e}")
 
-        # Check rate limit using Redis (sliding window algorithm)
-        try:
-            import redis
+        # Simple DB-based fallback (less accurate but works without Redis)
+        current_hour = datetime.now(timezone.utc).replace(
+            minute=0, second=0, microsecond=0
+        )
+        last_used = service_account.last_used_at
 
-            redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
-            redis_client = redis.from_url(redis_url, decode_responses=True)
+        if last_used:
+            last_used_hour = last_used.replace(minute=0, second=0, microsecond=0)
+            if last_used_hour == current_hour:
+                # Same hour - check if we've exceeded rate limit
+                if service_account.total_requests >= service_account.rate_limit:
+                    logger.warning(
+                        f"Rate limit exceeded for service account '{service_account.name}' "
+                        f"({service_account.total_requests}/{service_account.rate_limit} requests/hour)"
+                    )
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour",
+                    )
 
-            # Use sliding window rate limiting with Redis
-            # Key format: rate_limit:service_account:{id}:{hour}
-            current_time = datetime.now(timezone.utc)
-            current_hour = current_time.replace(minute=0, second=0, microsecond=0)
-            rate_limit_key = f"rate_limit:service_account:{service_account.id}:{current_hour.isoformat()}"
-
-            # Increment request count
-            request_count = redis_client.incr(rate_limit_key)
-
-            # Set expiration on first request (1 hour TTL)
-            if request_count == 1:
-                redis_client.expire(rate_limit_key, 3600)  # 1 hour in seconds
-
-            # Check if rate limit exceeded
-            if request_count > service_account.rate_limit:
-                logger.warning(
-                    f"Rate limit exceeded for service account '{service_account.name}' "
-                    f"({request_count}/{service_account.rate_limit} requests/hour)"
-                )
-                raise HTTPException(
-                    status_code=429,
-                    detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour. "
-                    f"Current usage: {request_count} requests this hour.",
-                )
-
-            logger.debug(
-                f"Service account '{service_account.name}' rate limit: "
-                f"{request_count}/{service_account.rate_limit} requests/hour"
-            )
-
-        except redis.ConnectionError as e:
-            # Redis unavailable - fall back to database-based rate limiting
-            logger.warning(f"Redis unavailable for rate limiting, using DB fallback: {e}")
-
-            # Simple DB-based fallback (less accurate but works without Redis)
-            current_hour = datetime.now(timezone.utc).replace(
-                minute=0, second=0, microsecond=0
-            )
-            last_used = service_account.last_used_at
-
-            if last_used:
-                last_used_hour = last_used.replace(minute=0, second=0, microsecond=0)
-                if last_used_hour == current_hour:
-                    # Same hour - check if we've exceeded rate limit
-                    if service_account.total_requests >= service_account.rate_limit:
-                        logger.warning(
-                            f"Rate limit exceeded for service account '{service_account.name}' "
-                            f"({service_account.total_requests}/{service_account.rate_limit} requests/hour)"
-                        )
-                        raise HTTPException(
-                            status_code=429,
-                            detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour",
-                        )
-
-        # Update usage stats
-        service_account.last_used_at = datetime.now(timezone.utc)
+    # Update usage stats (must be in DB context)
+    with get_db_session() as db:
+        # Re-fetch to update
+        account = db.query(ServiceAccount).filter(ServiceAccount.id == service_account.id).first()
+        if account:
+            account.last_used_at = datetime.now(timezone.utc)
         service_account.total_requests += 1
         service_account.last_request_ip = data.client_ip
         db.commit()
