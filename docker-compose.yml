@@ -241,7 +241,7 @@ services:
         sh startup.sh
       "
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request, ssl; urllib.request.urlopen('https://localhost:6001/health', context=ssl._create_unverified_context()).read()"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:6001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -270,6 +270,7 @@ services:
       - .env
     environment:
       - CONTROL_PLANE_URL=https://control-plane:6001
+      - AGENT_SERVICE_URL=https://agent-service:8000
       - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:-dev-agent-service-token}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
@@ -297,7 +298,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()"]
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

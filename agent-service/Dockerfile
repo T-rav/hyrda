@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     gcc \
     curl \
+    ca-certificates \
+    libnss3-tools \
     libgobject-2.0-0 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
@@ -19,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
+
+# Install mkcert for locally-trusted SSL certificates
+RUN curl -sL https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64 \
+    -o /usr/local/bin/mkcert && \
+    chmod +x /usr/local/bin/mkcert
 
 # Set working directory
 WORKDIR /app
@@ -37,8 +44,10 @@ COPY --chown=appuser:appuser ./shared /app/shared
 # Copy version file from project root
 COPY --chown=appuser:appuser .version /app/.version
 
-
 COPY --chown=appuser:appuser ./agent-service /app
+
+# Make startup script executable
+RUN chmod +x /app/startup.sh
 
 # Verify Python version and upgrade pip
 RUN set -eux \
@@ -69,12 +78,12 @@ ENV PYTHONUNBUFFERED=1 \
 # Expose agent service port
 EXPOSE 8000
 
-# Add health check
+# Add health check (HTTPS)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f -k https://localhost:8000/health || exit 1
 
 # Switch to non-root user
 USER appuser
 
-# Run with Gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+# Run startup script (generates SSL certs and starts Gunicorn with HTTPS)
+CMD ["sh", "/app/startup.sh"]
