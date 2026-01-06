@@ -230,15 +230,8 @@ services:
         condition: service_healthy
     command: >
       sh -c "
-        echo '=== Creating control-plane databases ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_security CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        echo '=== Creating control-plane database users ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_security'@'%' IDENTIFIED BY 'insightmesh_security_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_security.* TO 'insightmesh_security'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'FLUSH PRIVILEGES;' &&
+        echo '=== Running control-plane migrations ===' &&
+        alembic upgrade head &&
         echo '=== Starting control-plane ===' &&
         uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4
       "

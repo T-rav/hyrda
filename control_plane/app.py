@@ -206,11 +206,13 @@ def register_routers(app: FastAPI) -> None:
     from api.auth import router as auth_router
     from api.groups import router as groups_router
     from api.health import router as health_router
+    from api.service_accounts import router as service_accounts_router
     from api.users import router as users_router
 
     # Register routers
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(service_accounts_router)
     app.include_router(agents_router)
     app.include_router(groups_router)
     app.include_router(users_router)
