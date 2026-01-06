@@ -9,7 +9,7 @@ function CreateServiceAccountModal({ onClose, onCreate, agents, createdApiKey, o
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    allowed_agents: [], // Empty = all agents
+    allowed_agents: [], // Empty = no agents (not invokeable)
     rate_limit: 100,
     expires_at: '', // Optional ISO datetime
   })
@@ -22,7 +22,7 @@ function CreateServiceAccountModal({ onClose, onCreate, agents, createdApiKey, o
     const data = {
       ...formData,
       scopes: 'agents:invoke', // Always agents:invoke for now
-      allowed_agents: formData.allowed_agents.length > 0 ? formData.allowed_agents : null,
+      allowed_agents: formData.allowed_agents, // Empty array = no access
       expires_at: formData.expires_at ? new Date(formData.expires_at).toISOString() : null,
     }
 
@@ -168,10 +168,24 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
 
             {/* Allowed Agents */}
             <div className="form-group">
-              <label>Allowed Agents</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ margin: 0 }}>Allowed Agents</label>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    const nonSystemAgents = agents.filter((agent) => !agent.is_system)
+                    const allAgentNames = nonSystemAgents.map((agent) => agent.name)
+                    setFormData((prev) => ({ ...prev, allowed_agents: allAgentNames }))
+                  }}
+                  style={{ fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}
+                >
+                  Select All
+                </button>
+              </div>
               {formData.allowed_agents.length === 0 && (
-                <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '0.75rem' }}>
-                  <strong>All agents allowed</strong> - Select specific agents below to restrict access.
+                <div className="alert alert-warning" style={{ marginBottom: '1rem', padding: '0.75rem' }}>
+                  <strong>⚠️ No agents selected</strong> - This API key will not be able to invoke any agents. Click "Select All" above or choose specific agents.
                 </div>
               )}
               <div className="checkbox-grid">
@@ -205,8 +219,8 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
               </div>
               <small>
                 {formData.allowed_agents.length === 0
-                  ? 'No restrictions - this API key can access all non-system agents.'
-                  : `Restricted to ${formData.allowed_agents.length} agent${formData.allowed_agents.length === 1 ? '' : 's'}. Uncheck all to allow all agents.`}
+                  ? 'No agents selected - this API key will be created but cannot invoke anything until agents are granted.'
+                  : `Restricted to ${formData.allowed_agents.length} agent${formData.allowed_agents.length === 1 ? '' : 's'}.`}
               </small>
             </div>
 
