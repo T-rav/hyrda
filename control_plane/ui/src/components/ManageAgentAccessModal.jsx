@@ -58,8 +58,12 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
           {!agent.is_system && (
             <div className="agent-status-section">
               <div className="agent-status-info">
-                <h3>Slack Visibility</h3>
-                <p>Control whether this agent is visible in Slack (API enforcement not implemented yet)</p>
+                <h3>Agent Status</h3>
+                <p>
+                  Disabled agents are hidden from the registry and <strong>cannot be invoked</strong> by
+                  anyone (Slack, API, or service accounts). Use this to temporarily disable agents
+                  without deleting them.
+                </p>
               </div>
               <div className="toggle-switch" onClick={handleToggle}>
                 <input
