@@ -465,3 +465,170 @@ def test_create_service_account_requires_admin(client):
 
     # Should fail without admin authentication
     assert response.status_code in [401, 403]
+
+
+# Test: Service Account Validation Endpoint
+def test_validate_service_account_success(authenticated_client):
+    """Test validating a service account API key."""
+    # Create service account
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={
+            "name": "Validation Test",
+            "scopes": "agents:read,agents:invoke",
+            "rate_limit": 100,
+        },
+    )
+    assert create_response.status_code == 200
+    api_key = create_response.json()["api_key"]
+
+    # Validate the API key
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": api_key, "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Validation Test"
+    assert data["scopes"] == "agents:read,agents:invoke"
+    assert data["rate_limit"] == 100
+    assert data["allowed_agents"] is None  # All agents allowed
+
+
+def test_validate_service_account_invalid_key(authenticated_client):
+    """Test validating an invalid API key."""
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": "sa_invalid_key_12345", "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 401
+    assert "Invalid API key" in response.json()["detail"]
+
+
+def test_validate_service_account_revoked(authenticated_client):
+    """Test validating a revoked API key."""
+    # Create service account
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={"name": "Revoke Test", "scopes": "agents:invoke"},
+    )
+    api_key = create_response.json()["api_key"]
+    account_id = create_response.json()["id"]
+
+    # Revoke it
+    authenticated_client.post(f"/api/service-accounts/{account_id}/revoke")
+
+    # Try to validate
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": api_key, "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 403
+    assert "revoked" in response.json()["detail"].lower()
+
+
+def test_validate_service_account_inactive(authenticated_client):
+    """Test validating an inactive API key."""
+    # Create service account
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={"name": "Inactive Test", "scopes": "agents:invoke"},
+    )
+    api_key = create_response.json()["api_key"]
+    account_id = create_response.json()["id"]
+
+    # Deactivate it
+    authenticated_client.patch(
+        f"/api/service-accounts/{account_id}",
+        json={"is_active": False},
+    )
+
+    # Try to validate
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": api_key, "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 403
+    assert "inactive" in response.json()["detail"].lower()
+
+
+def test_validate_service_account_expired(authenticated_client):
+    """Test validating an expired API key."""
+    from datetime import datetime, timezone, timedelta
+
+    # Create service account with past expiration
+    expires_at = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={
+            "name": "Expired Test",
+            "scopes": "agents:invoke",
+            "expires_at": expires_at,
+        },
+    )
+    api_key = create_response.json()["api_key"]
+
+    # Try to validate
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": api_key, "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 403
+    assert "expired" in response.json()["detail"].lower()
+
+
+def test_validate_service_account_tracks_usage(authenticated_client):
+    """Test that validation tracks usage stats."""
+    # Create service account
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={"name": "Usage Test", "scopes": "agents:invoke"},
+    )
+    api_key = create_response.json()["api_key"]
+    account_id = create_response.json()["id"]
+
+    # Validate multiple times
+    for i in range(3):
+        response = authenticated_client.post(
+            "/api/service-accounts/validate",
+            json={"api_key": api_key, "client_ip": f"192.168.1.{i}"},
+        )
+        assert response.status_code == 200
+
+    # Check usage stats
+    get_response = authenticated_client.get(f"/api/service-accounts/{account_id}")
+    data = get_response.json()
+
+    assert data["total_requests"] >= 3
+    assert data["last_used_at"] is not None
+    assert data["last_request_ip"] is not None
+
+
+def test_validate_service_account_with_allowed_agents(authenticated_client):
+    """Test validation returns allowed_agents list."""
+    # Create service account with specific allowed agents
+    create_response = authenticated_client.post(
+        "/api/service-accounts",
+        json={
+            "name": "Limited Test",
+            "scopes": "agents:invoke",
+            "allowed_agents": ["help", "profile_researcher"],
+        },
+    )
+    api_key = create_response.json()["api_key"]
+
+    # Validate
+    response = authenticated_client.post(
+        "/api/service-accounts/validate",
+        json={"api_key": api_key, "client_ip": "192.168.1.1"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data["allowed_agents"]) == {"help", "profile_researcher"}

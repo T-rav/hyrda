@@ -4,6 +4,7 @@ Allows admin users to create, list, revoke, and manage API keys for external sys
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 
 import bcrypt
@@ -696,9 +697,9 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
         account = db.query(ServiceAccount).filter(ServiceAccount.id == service_account.id).first()
         if account:
             account.last_used_at = datetime.now(timezone.utc)
-        service_account.total_requests += 1
-        service_account.last_request_ip = data.client_ip
-        db.commit()
+            account.total_requests += 1
+            account.last_request_ip = data.client_ip
+            db.commit()
 
         # Parse allowed_agents
         import json
