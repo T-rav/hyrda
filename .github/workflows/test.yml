@@ -193,12 +193,22 @@ jobs:
       working-directory: librechat-custom
       run: npm ci --no-audit
 
+    - name: Install API dependencies
+      if: matrix.task == 'api-test'
+      working-directory: librechat-custom/api
+      run: npm ci --no-audit
+
     - name: Run API tests
       if: matrix.task == 'api-test'
       working-directory: librechat-custom/api
       env:
         NODE_ENV: test
       run: npm run test:ci
+
+    - name: Install client dependencies
+      if: matrix.task == 'client-test'
+      working-directory: librechat-custom/client
+      run: npm ci --no-audit
 
     - name: Run client tests
       if: matrix.task == 'client-test'
