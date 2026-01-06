@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Users, Bot, LogOut, User } from 'lucide-react'
+import { Shield, Users, Bot, LogOut, User, Key } from 'lucide-react'
 import './App.css'
 import AgentsView from './components/AgentsView'
 import UsersView from './components/UsersView'
 import GroupsView from './components/GroupsView'
+import ServiceAccountsView from './components/ServiceAccountsView'
 import Toast from './components/Toast'
 import { useAgents } from './hooks/useAgents'
 import { useUsers } from './hooks/useUsers'
 import { useGroups } from './hooks/useGroups'
 import { usePermissions } from './hooks/usePermissions'
+import { useServiceAccounts } from './hooks/useServiceAccounts'
 import { useToast } from './hooks/useToast'
 
 function App() {
@@ -61,6 +63,20 @@ function App() {
     revokeAgentFromGroup,
   } = usePermissions(toast, fetchAgentDetails, fetchAgents)
 
+  const {
+    serviceAccounts,
+    loading: serviceAccountsLoading,
+    showCreateModal,
+    createdApiKey,
+    setShowCreateModal,
+    setCreatedApiKey,
+    fetchServiceAccounts,
+    createServiceAccount,
+    revokeServiceAccount,
+    deleteServiceAccount,
+    toggleActiveStatus,
+  } = useServiceAccounts(toast)
+
   // Check authentication on mount to prevent back-button access after logout
   // Note: This is NOT aggressive - skips auth paths and let server-side auth handle it
   useEffect(() => {
@@ -97,6 +113,7 @@ function App() {
     fetchAgents()
     fetchGroups()
     fetchUsers()
+    fetchServiceAccounts()
   }, [])
 
   // Logout handler
@@ -147,6 +164,13 @@ function App() {
             >
               <Users size={20} />
               Groups
+            </button>
+            <button
+              className={`nav-link ${activeTab === 'service-accounts' ? 'active' : ''}`}
+              onClick={() => setActiveTab('service-accounts')}
+            >
+              <Key size={20} />
+              API Keys
             </button>
             <div className="logout-dropdown">
               <button
@@ -219,6 +243,22 @@ function App() {
             onRevokeAgent={revokeAgentFromGroup}
             selectedGroup={selectedGroup}
             setSelectedGroup={setSelectedGroup}
+          />
+        )}
+        {activeTab === 'service-accounts' && (
+          <ServiceAccountsView
+            serviceAccounts={serviceAccounts}
+            agents={agents}
+            loading={serviceAccountsLoading}
+            onRefresh={fetchServiceAccounts}
+            showCreateModal={showCreateModal}
+            setShowCreateModal={setShowCreateModal}
+            onCreate={createServiceAccount}
+            onRevoke={revokeServiceAccount}
+            onDelete={deleteServiceAccount}
+            onToggleActive={toggleActiveStatus}
+            createdApiKey={createdApiKey}
+            setCreatedApiKey={setCreatedApiKey}
           />
         )}
       </main>
