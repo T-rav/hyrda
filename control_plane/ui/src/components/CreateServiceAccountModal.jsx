@@ -169,21 +169,12 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
             {/* Allowed Agents */}
             <div className="form-group">
               <label>Allowed Agents</label>
+              {formData.allowed_agents.length === 0 && (
+                <div className="alert alert-info" style={{ marginBottom: '1rem', padding: '0.75rem' }}>
+                  <strong>All agents allowed</strong> - Select specific agents below to restrict access.
+                </div>
+              )}
               <div className="checkbox-grid">
-                <label className="checkbox-card">
-                  <input
-                    type="checkbox"
-                    checked={formData.allowed_agents.length === 0}
-                    onChange={() => {
-                      // Clicking "All Agents" always clears specific selections
-                      setFormData((prev) => ({ ...prev, allowed_agents: [] }))
-                    }}
-                  />
-                  <div className="checkbox-content">
-                    <strong>All Agents</strong>
-                    <small>Unrestricted access to all non-system agents</small>
-                  </div>
-                </label>
                 {agents
                   .filter((agent) => !agent.is_system)
                   .map((agent) => (
@@ -193,18 +184,14 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
                         checked={formData.allowed_agents.includes(agent.name)}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            // Add this agent to the list
                             setFormData((prev) => ({
                               ...prev,
                               allowed_agents: [...prev.allowed_agents, agent.name],
                             }))
                           } else {
-                            // Remove this agent from the list
-                            const newList = formData.allowed_agents.filter((a) => a !== agent.name)
-                            // If list becomes empty, it means "All Agents" by default
                             setFormData((prev) => ({
                               ...prev,
-                              allowed_agents: newList,
+                              allowed_agents: prev.allowed_agents.filter((a) => a !== agent.name),
                             }))
                           }
                         }}
@@ -217,7 +204,9 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
                   ))}
               </div>
               <small>
-                Select specific agents to restrict access, or leave "All Agents" checked for unrestricted access.
+                {formData.allowed_agents.length === 0
+                  ? 'No restrictions - this API key can access all non-system agents.'
+                  : `Restricted to ${formData.allowed_agents.length} agent${formData.allowed_agents.length === 1 ? '' : 's'}. Uncheck all to allow all agents.`}
               </small>
             </div>
 
