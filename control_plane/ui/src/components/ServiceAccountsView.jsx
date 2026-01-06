@@ -26,34 +26,45 @@ function ServiceAccountsView({
     ? serviceAccounts
     : serviceAccounts.filter((account) => !account.is_revoked)
 
+  const hasAccounts = serviceAccounts.length > 0
+
   return (
     <div className="view-container">
-      {/* Header */}
-      <div className="view-header">
-        <div className="view-title">
-          <Key size={28} />
-          <h2>Service Accounts</h2>
-          <span className="badge badge-blue">{filteredAccounts.length}</span>
+      {/* Header - Only show full controls when there are accounts */}
+      {hasAccounts ? (
+        <div className="view-header">
+          <div className="view-title">
+            <Key size={28} />
+            <h2>Service Accounts</h2>
+            <span className="badge badge-blue">{filteredAccounts.length}</span>
+          </div>
+          <div className="view-actions">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={showRevoked}
+                onChange={(e) => setShowRevoked(e.target.checked)}
+              />
+              Show Revoked
+            </label>
+            <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
+              <RefreshCw size={16} className={loading ? 'spin' : ''} />
+              Refresh
+            </button>
+            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+              <Plus size={16} />
+              Create Service Account
+            </button>
+          </div>
         </div>
-        <div className="view-actions">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={showRevoked}
-              onChange={(e) => setShowRevoked(e.target.checked)}
-            />
-            Show Revoked
-          </label>
-          <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
-            <RefreshCw size={16} className={loading ? 'spin' : ''} />
-            Refresh
-          </button>
-          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-            <Plus size={16} />
-            Create Service Account
-          </button>
+      ) : (
+        <div className="view-header">
+          <div className="view-title">
+            <Key size={28} />
+            <h2>Service Accounts</h2>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Empty State */}
       {!loading && filteredAccounts.length === 0 && (
@@ -73,10 +84,10 @@ function ServiceAccountsView({
                 <button
                   className="btn-primary btn-lg"
                   onClick={() => setShowCreateModal(true)}
-                  style={{ marginTop: '1.5rem' }}
+                  style={{ marginTop: '1.25rem' }}
                 >
                   <Plus size={20} />
-                  Create First Service Account
+                  Create Service Account
                 </button>
                 <div className="empty-features">
                   <div className="feature-item">
