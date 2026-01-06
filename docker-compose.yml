@@ -225,6 +225,7 @@ services:
       - CONTROL_PLANE_PORT=6001
       - CONTROL_PLANE_BASE_URL=https://localhost:6001
       - ALLOWED_ORIGINS=https://localhost:3080,https://localhost:8000,https://localhost:8002,https://localhost:6001
+      - AGENT_SERVICE_URL=http://agent-service:8000
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:
