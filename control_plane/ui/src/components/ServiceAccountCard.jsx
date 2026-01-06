@@ -1,20 +1,20 @@
 import React from 'react'
-import { Key, Shield, Ban, Trash2, Calendar, Activity, Users } from 'lucide-react'
+import { Key, Shield, Ban, Trash2, Activity } from 'lucide-react'
 
 /**
  * ServiceAccountCard component displays a single service account.
+ * Styled to match GroupCard design pattern.
  */
 function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
-
   const isExpired = account.expires_at && new Date(account.expires_at) < new Date()
 
   const statusClass = account.is_revoked
-    ? 'status-revoked'
+    ? 'revoked'
     : !account.is_active
-    ? 'status-inactive'
+    ? 'inactive'
     : isExpired
-    ? 'status-expired'
-    : 'status-active'
+    ? 'expired'
+    : 'active'
 
   const statusText = account.is_revoked
     ? 'Revoked'
@@ -24,124 +24,111 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
     ? 'Expired'
     : 'Active'
 
+  const statusStyle = {
+    active: { background: '#ecfdf5', color: '#047857', border: '1px solid #10b981' },
+    inactive: { background: '#fef3c7', color: '#92400e', border: '1px solid #fbbf24' },
+    revoked: { background: '#fee2e2', color: '#991b1b', border: '1px solid #ef4444' },
+    expired: { background: '#f3f4f6', color: '#374151', border: '1px solid #9ca3af' },
+  }
+
   const allowedAgentsDisplay =
     account.allowed_agents === null || account.allowed_agents.length === 0
       ? 'No agents'
       : account.allowed_agents.join(', ')
 
+  const handleDelete = () => {
+    if (
+      window.confirm(
+        `Are you sure you want to permanently delete "${account.name}"? This cannot be undone.`
+      )
+    ) {
+      onDelete(account.id, account.name)
+    }
+  }
+
   return (
-    <div className={`service-account-card ${statusClass}`}>
-      {/* Card Header - Always Visible */}
-      <div className="card-header" style={{ cursor: 'default' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flex: 1 }}>
-          <Key size={24} style={{ flexShrink: 0, marginTop: '0.25rem' }} />
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Name + Status */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{account.name}</h3>
-              <span className={`badge ${statusClass}`}>{statusText}</span>
-            </div>
-
-            {/* API Key Prefix */}
-            <div style={{ marginBottom: '0.5rem' }}>
-              <code style={{
-                fontSize: '0.875rem',
-                background: 'rgba(0,0,0,0.05)',
-                padding: '0.25rem 0.5rem',
-                borderRadius: '0.25rem',
-                fontFamily: 'monospace'
-              }}>
-                {account.api_key_prefix}...
-              </code>
-            </div>
-
-            {/* Description (if exists) */}
-            {account.description && (
-              <p style={{
-                margin: '0.5rem 0',
-                fontSize: '0.875rem',
-                color: '#64748b',
-                lineHeight: 1.5
-              }}>
-                {account.description}
-              </p>
-            )}
-
-            {/* Key Metrics Row */}
-            <div style={{
-              display: 'flex',
-              gap: '1.5rem',
-              fontSize: '0.875rem',
-              color: '#64748b',
-              marginTop: '0.75rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <Activity size={14} />
-                <span>{account.total_requests} requests</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <Shield size={14} />
-                <span>{account.rate_limit}/hour</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <Users size={14} />
-                <span style={{
-                  maxWidth: '300px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }} title={allowedAgentsDisplay}>
-                  {allowedAgentsDisplay}
-                </span>
-              </div>
-              {account.last_used_at && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <Calendar size={14} />
-                  <span>Last used {new Date(account.last_used_at).toLocaleDateString()}</span>
-                </div>
-              )}
-            </div>
+    <div className="service-account-card">
+      <div className="service-account-header">
+        <div>
+          <h3>{account.name}</h3>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+            <span className="stat-badge" style={statusStyle[statusClass]}>
+              {statusText}
+            </span>
+            <code className="api-key-prefix">{account.api_key_prefix}...</code>
           </div>
+        </div>
+        <div className="service-account-stats">
+          <span className="stat-badge">
+            <Activity size={14} />
+            {account.total_requests} requests
+          </span>
+          <span className="stat-badge">
+            <Shield size={14} />
+            {account.rate_limit}/hour
+          </span>
         </div>
       </div>
 
-      {/* Action Buttons - Always Visible */}
-      <div className="card-actions" style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(0,0,0,0.1)', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-        {!account.is_revoked && account.is_active && (
-          <button
-            className="btn-secondary btn-sm"
-            onClick={() => onToggleActive(account.id, true)}
-            title="Deactivate API key"
-          >
-            <Shield size={16} />
-            Deactivate
-          </button>
-        )}
-        {!account.is_revoked && !account.is_active && (
-          <button
-            className="btn-secondary btn-sm"
-            onClick={() => onToggleActive(account.id, false)}
-            title="Activate API key"
-          >
-            <Shield size={16} />
-            Activate
-          </button>
-        )}
-        {!account.is_revoked && (
-          <button
-            className="btn-danger btn-sm"
-            onClick={() => onRevoke(account.id)}
-            title="Revoke API Key (cannot be undone)"
-          >
-            <Ban size={16} />
-            Revoke
-          </button>
-        )}
+      {account.description && <p className="service-account-description">{account.description}</p>}
+
+      <div className="service-account-agents">
+        <span style={{ color: '#64748b', fontSize: '0.875rem', fontWeight: 500 }}>
+          Allowed Agents:
+        </span>
+        <span
+          style={{
+            fontSize: '0.875rem',
+            color: '#1e293b',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={allowedAgentsDisplay}
+        >
+          {allowedAgentsDisplay}
+        </span>
+      </div>
+
+      <div className="service-account-footer">
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {!account.is_revoked && account.is_active && (
+            <button
+              className="btn-link"
+              onClick={() => onToggleActive(account.id, true)}
+              title="Deactivate API key"
+            >
+              <Shield size={16} />
+              Deactivate
+            </button>
+          )}
+          {!account.is_revoked && !account.is_active && (
+            <button
+              className="btn-link"
+              onClick={() => onToggleActive(account.id, false)}
+              title="Activate API key"
+            >
+              <Shield size={16} />
+              Activate
+            </button>
+          )}
+          {!account.is_revoked && (
+            <button
+              className="btn-link"
+              onClick={() => onRevoke(account.id)}
+              title="Revoke API Key (cannot be undone)"
+              style={{ color: '#dc2626' }}
+            >
+              <Ban size={16} />
+              Revoke
+            </button>
+          )}
+        </div>
         <button
-          className="btn-danger btn-sm"
-          onClick={() => onDelete(account.id, account.name)}
+          className="btn-link"
+          onClick={handleDelete}
           title="Delete permanently"
+          style={{ color: '#dc2626' }}
         >
           <Trash2 size={16} />
           Delete

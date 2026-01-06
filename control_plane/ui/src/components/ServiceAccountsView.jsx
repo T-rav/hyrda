@@ -29,16 +29,11 @@ function ServiceAccountsView({
   const hasAccounts = serviceAccounts.length > 0
 
   return (
-    <div className="view-container">
-      {/* Header - Only show full controls when there are accounts */}
-      {hasAccounts ? (
-        <div className="view-header">
-          <div className="view-title">
-            <Key size={28} />
-            <h2>Service Accounts</h2>
-            <span className="badge badge-blue">{filteredAccounts.length}</span>
-          </div>
-          <div className="view-actions">
+    <div className="content-section">
+      <div className="section-header">
+        <h2>Service Accounts ({filteredAccounts.length})</h2>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {hasAccounts && (
             <label className="checkbox-label">
               <input
                 type="checkbox"
@@ -47,24 +42,17 @@ function ServiceAccountsView({
               />
               Show Revoked
             </label>
-            <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
-              <RefreshCw size={16} className={loading ? 'spin' : ''} />
-              Refresh
-            </button>
-            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-              <Plus size={16} />
-              Create Service Account
-            </button>
-          </div>
+          )}
+          <button className="btn-secondary" onClick={onRefresh} disabled={loading}>
+            <RefreshCw size={16} className={loading ? 'spin' : ''} />
+            Refresh
+          </button>
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
+            <Plus size={16} />
+            Create Service Account
+          </button>
         </div>
-      ) : (
-        <div className="view-header">
-          <div className="view-title">
-            <Key size={28} />
-            <h2>Service Accounts</h2>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Empty State */}
       {!loading && filteredAccounts.length === 0 && (
@@ -112,9 +100,9 @@ function ServiceAccountsView({
       {/* Loading State */}
       {loading && <div className="loading">Loading service accounts...</div>}
 
-      {/* Service Accounts Grid */}
+      {/* Service Accounts List */}
       {!loading && filteredAccounts.length > 0 && (
-        <div className="cards-grid">
+        <div className="service-accounts-list">
           {filteredAccounts.map((account) => (
             <ServiceAccountCard
               key={account.id}

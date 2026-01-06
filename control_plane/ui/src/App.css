@@ -1357,3 +1357,90 @@
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   background: #f8fafc;
 }
+
+/* Service Accounts List - Match Groups List Style */
+.service-accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+/* Service Account Card - Match Group Card Style */
+.service-account-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  transition: all 0.2s;
+}
+
+.service-account-card:hover {
+  border-color: #9f7aea;
+  box-shadow: 0 4px 6px -1px rgba(159, 122, 234, 0.2);
+  transform: translateY(-2px);
+}
+
+.service-account-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 0.75rem;
+}
+
+.service-account-header h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.service-account-stats {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.service-account-description {
+  color: #64748b;
+  font-size: 0.875rem;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.5;
+}
+
+.service-account-agents {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 0.75rem;
+}
+
+.service-account-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.api-key-prefix {
+  font-size: 0.8125rem;
+  background: #f8fafc;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  color: #475569;
+  font-family: monospace;
+  border: 1px solid #e2e8f0;
+}
+
+/* Remove old service account card styles */
+.service-account-card.status-active,
+.service-account-card.status-inactive,
+.service-account-card.status-revoked,
+.service-account-card.status-expired {
+  border-left: none;
+  background: white;
+  opacity: 1;
+}
