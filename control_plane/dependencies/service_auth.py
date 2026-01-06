@@ -10,9 +10,9 @@ from typing import Literal
 
 from fastapi import HTTPException, Request
 
-# Import JWT utilities from shared directory
+# Import service authentication utilities from shared directory
 sys.path.insert(0, "/app")
-from shared.utils.jwt_auth import SERVICE_TOKENS
+from shared.utils.service_auth import SERVICE_TOKENS
 
 logger = logging.getLogger(__name__)
 

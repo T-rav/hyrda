@@ -81,7 +81,16 @@ class ServiceAccount(Base):
         """Check if service account is expired."""
         if not self.expires_at:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+
+        # Handle both timezone-aware and timezone-naive datetimes (SQLite compatibility)
+        now = datetime.now(timezone.utc)
+        expires = self.expires_at
+
+        # If expires_at is naive, assume it's UTC
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+
+        return now > expires
 
     def can_access_agent(self, agent_name: str) -> bool:
         """Check if service account can access a specific agent."""

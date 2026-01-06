@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from functools import wraps
 from typing import Any, Callable, Optional
 
-from google.auth.transport.requests import Request
+from fastapi import Request
 from google.oauth2 import id_token
 from google_auth_oauthlib.flow import Flow
 
@@ -140,7 +140,8 @@ def get_flow(redirect_uri: str) -> Flow:
 def verify_token(token: str) -> dict[str, Any]:
     """Verify Google ID token and return user info."""
     try:
-        idinfo = id_token.verify_oauth2_token(token, Request(), GOOGLE_CLIENT_ID)
+        from google.auth.transport.requests import Request as GoogleRequest
+        idinfo = id_token.verify_oauth2_token(token, GoogleRequest(), GOOGLE_CLIENT_ID)
         return idinfo
     except ValueError as e:
         raise AuthError(f"Invalid token: {e}") from e
@@ -167,11 +168,10 @@ class FastAPIAuthMiddleware:
         """Setup auth routes."""
         import secrets
 
-        from fastapi import Request as FastAPIRequest
         from fastapi.responses import JSONResponse, RedirectResponse
 
         @self.app.get(self.login_path)
-        async def auth_login(request: FastAPIRequest) -> RedirectResponse:
+        async def auth_login(request: Request) -> RedirectResponse:
             """Initiate OAuth login."""
             redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
             flow = get_flow(redirect_uri)
@@ -197,7 +197,7 @@ class FastAPIAuthMiddleware:
 
         @self.app.get(self.callback_path)
         async def auth_callback(
-            request: FastAPIRequest,
+            request: Request,
         ) -> RedirectResponse | JSONResponse:
             """Handle OAuth callback."""
             redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
@@ -306,7 +306,7 @@ class FastAPIAuthMiddleware:
                 )
 
         @self.app.post(self.logout_path)
-        async def auth_logout(request: FastAPIRequest) -> JSONResponse:
+        async def auth_logout(request: Request) -> JSONResponse:
             """Handle logout."""
             email = request.session.get("user_email")
             request.session.clear()
@@ -375,7 +375,7 @@ class FastAPIAuthMiddleware:
 
 def fastapi_require_auth(func: Callable) -> Callable:
     """FastAPI dependency for requiring authentication."""
-    from fastapi import HTTPException, Request
+    from fastapi import HTTPException
 
     @wraps(func)
     async def wrapper(request: Request, *args: Any, **kwargs: Any) -> Any:
@@ -399,3 +399,71 @@ def fastapi_require_auth(func: Callable) -> Callable:
         return await func(request, *args, **kwargs)
 
     return wrapper
+
+
+async def require_admin(request: Request) -> dict[str, Any]:
+    """FastAPI dependency that requires admin authentication.
+
+    Use with Depends(require_admin) to protect admin-only endpoints.
+
+    Args:
+        request: FastAPI Request object (injected automatically)
+
+    Returns:
+        dict: User info with email, name, is_admin
+
+    Raises:
+        HTTPException: 401 if not authenticated, 403 if not admin
+
+    Example:
+        @router.post("/admin-endpoint", dependencies=[Depends(require_admin)])
+        async def admin_only_endpoint():
+            pass
+    """
+    from fastapi import HTTPException
+    from models.base import get_db_session
+    from models.user import User
+
+    # Check if user is authenticated
+    if not hasattr(request, "session") or "user_email" not in request.session:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    email = request.session["user_email"]
+
+    # Query user from database
+    with get_db_session() as session:
+        user = session.query(User).filter(User.email == email).first()
+
+        if not user:
+            logger.warning(f"Admin access denied: User not found in database: {email}")
+            raise HTTPException(
+                status_code=403,
+                detail="User not found. Please contact an administrator."
+            )
+
+        if not user.is_admin:
+            logger.warning(f"Admin access denied: User is not admin: {email}")
+            AuditLogger.log_auth_event(
+                "admin_access_denied",
+                email=email,
+                path=str(request.url.path),
+                success=False,
+                error="User is not an administrator"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Administrator access required"
+            )
+
+        # User is admin
+        AuditLogger.log_auth_event(
+            "admin_access_granted",
+            email=email,
+            path=str(request.url.path),
+        )
+
+        return {
+            "email": user.email,
+            "name": user.full_name,
+            "is_admin": user.is_admin
+        }

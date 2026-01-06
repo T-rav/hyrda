@@ -62,6 +62,9 @@ class ServiceAccountResponse(BaseModel):
     expires_at: datetime | None
     total_requests: int
     last_request_ip: str | None
+    revoked_at: datetime | None
+    revoked_by: str | None
+    revoke_reason: str | None
 
     class Config:
         from_attributes = True
@@ -78,7 +81,6 @@ class ServiceAccountCreateResponse(ServiceAccountResponse):
 async def create_service_account(
     data: ServiceAccountCreate,
     request: Request,
-    db: Session = Depends(get_db_session),
 ):
     """Create a new service account and API key.
 
@@ -87,7 +89,6 @@ async def create_service_account(
     Args:
         data: Service account creation request
         request: FastAPI request (for admin user context)
-        db: Database session
 
     Returns:
         ServiceAccount with api_key field populated
@@ -95,52 +96,82 @@ async def create_service_account(
     Raises:
         HTTPException: 400 if name already exists, 403 if not admin
     """
-    # Check if name already exists
-    existing = db.query(ServiceAccount).filter(ServiceAccount.name == data.name).first()
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Service account '{data.name}' already exists")
+    with get_db_session() as db:
+        # Check if name already exists
+        existing = db.query(ServiceAccount).filter(ServiceAccount.name == data.name).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Service account '{data.name}' already exists")
 
-    # Generate API key and hash it
-    api_key = generate_api_key()
-    api_key_hash = bcrypt.hashpw(api_key.encode(), bcrypt.gensalt()).decode()
-    api_key_prefix = api_key[:8]  # First 8 chars for identification
+        # Generate API key and hash it
+        api_key = generate_api_key()
+        api_key_hash = bcrypt.hashpw(api_key.encode(), bcrypt.gensalt()).decode()
+        api_key_prefix = api_key[:8]  # First 8 chars for identification
 
-    # Get admin user from JWT
-    admin_email = request.state.user.get("email", "unknown")
+        # Get admin user from JWT
+        admin_email = request.state.user.get("email", "unknown")
 
-    # Create service account
-    import json
+        # Create service account
+        import json
 
-    service_account = ServiceAccount(
-        name=data.name,
-        description=data.description,
-        api_key_hash=api_key_hash,
-        api_key_prefix=api_key_prefix,
-        scopes=data.scopes,
-        allowed_agents=json.dumps(data.allowed_agents) if data.allowed_agents else None,
-        rate_limit=data.rate_limit,
-        is_active=True,
-        is_revoked=False,
-        created_by=admin_email,
-        expires_at=data.expires_at,
-        total_requests=0,
-    )
+        service_account = ServiceAccount(
+            name=data.name,
+            description=data.description,
+            api_key_hash=api_key_hash,
+            api_key_prefix=api_key_prefix,
+            scopes=data.scopes,
+            allowed_agents=json.dumps(data.allowed_agents) if data.allowed_agents else None,
+            rate_limit=data.rate_limit,
+            is_active=True,
+            is_revoked=False,
+            created_by=admin_email,
+            expires_at=data.expires_at,
+            total_requests=0,
+        )
 
-    db.add(service_account)
-    db.commit()
-    db.refresh(service_account)
+        db.add(service_account)
+        db.commit()
+        db.refresh(service_account)
 
-    logger.info(f"Created service account '{data.name}' by {admin_email}")
+        logger.info(f"Created service account '{data.name}' by {admin_email}")
 
-    # Return response with API key (only time it's visible)
-    response_data = ServiceAccountResponse.from_orm(service_account)
-    return ServiceAccountCreateResponse(**response_data.dict(), api_key=api_key)
+        # Parse allowed_agents JSON before creating response
+        allowed_agents_list = None
+        if service_account.allowed_agents:
+            try:
+                allowed_agents_list = json.loads(service_account.allowed_agents)
+            except json.JSONDecodeError:
+                allowed_agents_list = None
+
+        # Create response dict manually to handle JSON fields
+        response_dict = {
+            "id": service_account.id,
+            "name": service_account.name,
+            "description": service_account.description,
+            "api_key_prefix": service_account.api_key_prefix,
+            "scopes": service_account.scopes,
+            "allowed_agents": allowed_agents_list,
+            "rate_limit": service_account.rate_limit,
+            "is_active": service_account.is_active,
+            "is_revoked": service_account.is_revoked,
+            "created_by": service_account.created_by,
+            "created_at": service_account.created_at,
+            "updated_at": service_account.updated_at,
+            "last_used_at": service_account.last_used_at,
+            "expires_at": service_account.expires_at,
+            "total_requests": service_account.total_requests,
+            "last_request_ip": service_account.last_request_ip,
+            "revoked_at": service_account.revoked_at,
+            "revoked_by": service_account.revoked_by,
+            "revoke_reason": service_account.revoke_reason,
+            "api_key": api_key,  # Only time it's visible
+        }
+
+        return ServiceAccountCreateResponse(**response_dict)
 
 
 @router.get("", response_model=list[ServiceAccountResponse], dependencies=[Depends(require_admin)])
 async def list_service_accounts(
     include_revoked: bool = False,
-    db: Session = Depends(get_db_session),
 ):
     """List all service accounts.
 
@@ -148,37 +179,36 @@ async def list_service_accounts(
 
     Args:
         include_revoked: Include revoked accounts in results
-        db: Database session
 
     Returns:
         List of service accounts
     """
-    query = db.query(ServiceAccount)
-    if not include_revoked:
-        query = query.filter(ServiceAccount.is_revoked == False)
+    with get_db_session() as db:
+        query = db.query(ServiceAccount)
+        if not include_revoked:
+            query = query.filter(ServiceAccount.is_revoked == False)
 
-    accounts = query.order_by(ServiceAccount.created_at.desc()).all()
+        accounts = query.order_by(ServiceAccount.created_at.desc()).all()
 
-    # Parse allowed_agents JSON
-    import json
+        # Parse allowed_agents JSON
+        import json
 
-    result = []
-    for account in accounts:
-        data = ServiceAccountResponse.from_orm(account)
-        if account.allowed_agents:
-            try:
-                data.allowed_agents = json.loads(account.allowed_agents)
-            except json.JSONDecodeError:
-                data.allowed_agents = None
-        result.append(data)
+        result = []
+        for account in accounts:
+            data = ServiceAccountResponse.from_orm(account)
+            if account.allowed_agents:
+                try:
+                    data.allowed_agents = json.loads(account.allowed_agents)
+                except json.JSONDecodeError:
+                    data.allowed_agents = None
+            result.append(data)
 
-    return result
+        return result
 
 
 @router.get("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
 async def get_service_account(
     account_id: int,
-    db: Session = Depends(get_db_session),
 ):
     """Get a specific service account.
 
@@ -186,7 +216,6 @@ async def get_service_account(
 
     Args:
         account_id: Service account ID
-        db: Database session
 
     Returns:
         Service account details
@@ -194,27 +223,27 @@ async def get_service_account(
     Raises:
         HTTPException: 404 if not found
     """
-    account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Service account not found")
+    with get_db_session() as db:
+        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Service account not found")
 
-    import json
+        import json
 
-    data = ServiceAccountResponse.from_orm(account)
-    if account.allowed_agents:
-        try:
-            data.allowed_agents = json.loads(account.allowed_agents)
-        except json.JSONDecodeError:
-            data.allowed_agents = None
+        data = ServiceAccountResponse.from_orm(account)
+        if account.allowed_agents:
+            try:
+                data.allowed_agents = json.loads(account.allowed_agents)
+            except json.JSONDecodeError:
+                data.allowed_agents = None
 
-    return data
+        return data
 
 
 @router.patch("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
 async def update_service_account(
     account_id: int,
     data: ServiceAccountUpdate,
-    db: Session = Depends(get_db_session),
 ):
     """Update a service account.
 
@@ -223,7 +252,6 @@ async def update_service_account(
     Args:
         account_id: Service account ID
         data: Fields to update
-        db: Database session
 
     Returns:
         Updated service account
@@ -231,42 +259,43 @@ async def update_service_account(
     Raises:
         HTTPException: 404 if not found, 400 if revoked
     """
-    account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Service account not found")
+    with get_db_session() as db:
+        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Service account not found")
 
-    if account.is_revoked:
-        raise HTTPException(status_code=400, detail="Cannot update revoked service account")
+        if account.is_revoked:
+            raise HTTPException(status_code=400, detail="Cannot update revoked service account")
 
-    # Update fields
-    import json
+        # Update fields
+        import json
 
-    if data.description is not None:
-        account.description = data.description
-    if data.scopes is not None:
-        account.scopes = data.scopes
-    if data.allowed_agents is not None:
-        account.allowed_agents = json.dumps(data.allowed_agents) if data.allowed_agents else None
-    if data.rate_limit is not None:
-        account.rate_limit = data.rate_limit
-    if data.is_active is not None:
-        account.is_active = data.is_active
-    if data.expires_at is not None:
-        account.expires_at = data.expires_at
+        if data.description is not None:
+            account.description = data.description
+        if data.scopes is not None:
+            account.scopes = data.scopes
+        if data.allowed_agents is not None:
+            account.allowed_agents = json.dumps(data.allowed_agents) if data.allowed_agents else None
+        if data.rate_limit is not None:
+            account.rate_limit = data.rate_limit
+        if data.is_active is not None:
+            account.is_active = data.is_active
+        if data.expires_at is not None:
+            account.expires_at = data.expires_at
 
-    db.commit()
-    db.refresh(account)
+        db.commit()
+        db.refresh(account)
 
-    logger.info(f"Updated service account '{account.name}' (ID: {account_id})")
+        logger.info(f"Updated service account '{account.name}' (ID: {account_id})")
 
-    response_data = ServiceAccountResponse.from_orm(account)
-    if account.allowed_agents:
-        try:
-            response_data.allowed_agents = json.loads(account.allowed_agents)
-        except json.JSONDecodeError:
-            response_data.allowed_agents = None
+        response_data = ServiceAccountResponse.from_orm(account)
+        if account.allowed_agents:
+            try:
+                response_data.allowed_agents = json.loads(account.allowed_agents)
+            except json.JSONDecodeError:
+                response_data.allowed_agents = None
 
-    return response_data
+        return response_data
 
 
 @router.post("/{account_id}/revoke", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
@@ -274,7 +303,6 @@ async def revoke_service_account(
     account_id: int,
     reason: str = "Revoked by admin",
     request: Request = None,
-    db: Session = Depends(get_db_session),
 ):
     """Revoke a service account (cannot be undone).
 
@@ -284,7 +312,6 @@ async def revoke_service_account(
         account_id: Service account ID
         reason: Reason for revocation
         request: FastAPI request (for admin user)
-        db: Database session
 
     Returns:
         Revoked service account
@@ -292,42 +319,42 @@ async def revoke_service_account(
     Raises:
         HTTPException: 404 if not found, 400 if already revoked
     """
-    account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Service account not found")
+    with get_db_session() as db:
+        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Service account not found")
 
-    if account.is_revoked:
-        raise HTTPException(status_code=400, detail="Service account already revoked")
+        if account.is_revoked:
+            raise HTTPException(status_code=400, detail="Service account already revoked")
 
-    # Revoke
-    admin_email = request.state.user.get("email", "unknown") if request else "unknown"
-    account.is_revoked = True
-    account.is_active = False
-    account.revoked_at = datetime.now(timezone.utc)
-    account.revoked_by = admin_email
-    account.revoke_reason = reason
+        # Revoke
+        admin_email = request.state.user.get("email", "unknown") if request else "unknown"
+        account.is_revoked = True
+        account.is_active = False
+        account.revoked_at = datetime.now(timezone.utc)
+        account.revoked_by = admin_email
+        account.revoke_reason = reason
 
-    db.commit()
-    db.refresh(account)
+        db.commit()
+        db.refresh(account)
 
-    logger.warning(f"Revoked service account '{account.name}' by {admin_email}: {reason}")
+        logger.warning(f"Revoked service account '{account.name}' by {admin_email}: {reason}")
 
-    import json
+        import json
 
-    response_data = ServiceAccountResponse.from_orm(account)
-    if account.allowed_agents:
-        try:
-            response_data.allowed_agents = json.loads(account.allowed_agents)
-        except json.JSONDecodeError:
-            response_data.allowed_agents = None
+        response_data = ServiceAccountResponse.from_orm(account)
+        if account.allowed_agents:
+            try:
+                response_data.allowed_agents = json.loads(account.allowed_agents)
+            except json.JSONDecodeError:
+                response_data.allowed_agents = None
 
-    return response_data
+        return response_data
 
 
 @router.delete("/{account_id}", dependencies=[Depends(require_admin)])
 async def delete_service_account(
     account_id: int,
-    db: Session = Depends(get_db_session),
 ):
     """Permanently delete a service account.
 
@@ -335,7 +362,6 @@ async def delete_service_account(
 
     Args:
         account_id: Service account ID
-        db: Database session
 
     Returns:
         Success message
@@ -343,14 +369,15 @@ async def delete_service_account(
     Raises:
         HTTPException: 404 if not found
     """
-    account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
-    if not account:
-        raise HTTPException(status_code=404, detail="Service account not found")
+    with get_db_session() as db:
+        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        if not account:
+            raise HTTPException(status_code=404, detail="Service account not found")
 
-    name = account.name
-    db.delete(account)
-    db.commit()
+        name = account.name
+        db.delete(account)
+        db.commit()
 
-    logger.warning(f"Permanently deleted service account '{name}' (ID: {account_id})")
+        logger.warning(f"Permanently deleted service account '{name}' (ID: {account_id})")
 
-    return {"message": f"Service account '{name}' deleted permanently"}
+        return {"message": f"Service account '{name}' deleted permanently"}
