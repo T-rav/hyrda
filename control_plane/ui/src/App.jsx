@@ -14,7 +14,32 @@ import { useServiceAccounts } from './hooks/useServiceAccounts'
 import { useToast } from './hooks/useToast'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('agents')
+  // Get initial tab from URL path
+  const getTabFromPath = () => {
+    const path = window.location.pathname
+    if (path === '/users') return 'users'
+    if (path === '/groups') return 'groups'
+    if (path === '/service-accounts') return 'service-accounts'
+    return 'agents' // default
+  }
+
+  const [activeTab, setActiveTab] = useState(getTabFromPath())
+
+  // Update URL when tab changes
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    const path = tab === 'agents' ? '/' : `/${tab}`
+    window.history.pushState({}, '', path)
+  }
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setActiveTab(getTabFromPath())
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   // Toast notifications
   const toast = useToast()
@@ -146,28 +171,28 @@ function App() {
           <nav className="header-nav">
             <button
               className={`nav-link ${activeTab === 'agents' ? 'active' : ''}`}
-              onClick={() => setActiveTab('agents')}
+              onClick={() => handleTabChange('agents')}
             >
               <Bot size={20} />
               Agents
             </button>
             <button
               className={`nav-link ${activeTab === 'users' ? 'active' : ''}`}
-              onClick={() => setActiveTab('users')}
+              onClick={() => handleTabChange('users')}
             >
               <Users size={20} />
               Users
             </button>
             <button
               className={`nav-link ${activeTab === 'groups' ? 'active' : ''}`}
-              onClick={() => setActiveTab('groups')}
+              onClick={() => handleTabChange('groups')}
             >
               <Users size={20} />
               Groups
             </button>
             <button
               className={`nav-link ${activeTab === 'service-accounts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('service-accounts')}
+              onClick={() => handleTabChange('service-accounts')}
             >
               <Key size={20} />
               API Keys
