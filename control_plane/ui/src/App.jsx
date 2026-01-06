@@ -275,7 +275,7 @@ function App() {
             serviceAccounts={serviceAccounts}
             agents={agents}
             loading={serviceAccountsLoading}
-            onRefresh={fetchServiceAccounts}
+            onRefresh={() => fetchServiceAccounts()}
             showCreateModal={showCreateModal}
             setShowCreateModal={setShowCreateModal}
             onCreate={createServiceAccount}
