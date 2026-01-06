@@ -58,5 +58,5 @@ EXPOSE 6001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request, ssl; urllib.request.urlopen('https://localhost:6001/health', context=ssl._create_unverified_context())"
 
-# Run FastAPI app with Uvicorn
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "6001", "--workers", "4"]
+# Run FastAPI app with Uvicorn with SSL
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "6001", "--workers", "4", "--ssl-keyfile", "ssl/localhost.key", "--ssl-certfile", "ssl/localhost.crt"]

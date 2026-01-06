@@ -236,10 +236,10 @@ services:
         echo '=== Running control-plane migrations ===' &&
         alembic upgrade head &&
         echo '=== Starting control-plane ===' &&
-        uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4
+        uvicorn app:app --host 0.0.0.0 --port 6001 --workers 4 --ssl-keyfile ssl/localhost.key --ssl-certfile ssl/localhost.crt
       "
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6001/health').read()"]
+      test: ["CMD", "python", "-c", "import urllib.request, ssl; urllib.request.urlopen('https://localhost:6001/health', context=ssl._create_unverified_context()).read()"]
       interval: 30s
       timeout: 10s
       retries: 3
