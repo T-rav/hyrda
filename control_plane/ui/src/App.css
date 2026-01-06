@@ -1301,3 +1301,59 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Service Account Card Styling */
+.service-account-card {
+  background: white;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.service-account-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.service-account-card .card-header {
+  padding: 1rem;
+  background: white;
+}
+
+.service-account-card .card-actions {
+  background: #f8fafc;
+}
+
+/* Status-specific colors */
+.service-account-card.status-active {
+  border-left: 4px solid #10b981;
+}
+
+.service-account-card.status-inactive {
+  border-left: 4px solid #f59e0b;
+  background: #fefce8;
+}
+
+.service-account-card.status-revoked {
+  border-left: 4px solid #ef4444;
+  background: #fef2f2;
+  opacity: 0.9;
+}
+
+.service-account-card.status-expired {
+  border-left: 4px solid #6b7280;
+  background: #f9fafb;
+}
+
+/* Badge sizing for card */
+.service-account-card .badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.625rem;
+}
+
+/* Expanded detail section */
+.service-account-card .card-body {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  background: #f8fafc;
+}

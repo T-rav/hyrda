@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Key, Shield, Ban, Trash2, Edit, Calendar, Activity } from 'lucide-react'
+import { Key, Shield, Ban, Trash2, Calendar, Activity, ChevronDown, ChevronUp, Users } from 'lucide-react'
 
 /**
  * ServiceAccountCard component displays a single service account.
@@ -25,44 +25,128 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
     ? 'Expired'
     : 'Active'
 
+  const allowedAgentsText =
+    account.allowed_agents === null || account.allowed_agents.length === 0
+      ? 'No agents'
+      : account.allowed_agents.length === 1
+      ? '1 agent'
+      : `${account.allowed_agents.length} agents`
+
   return (
-    <div className={`card ${statusClass}`}>
-      <div className="card-header" onClick={() => setExpanded(!expanded)}>
-        <div className="card-title">
-          <Key size={20} />
-          <h3>{account.name}</h3>
-          <span className={`badge ${statusClass}`}>{statusText}</span>
+    <div className={`service-account-card ${statusClass}`}>
+      {/* Collapsed Header - Always Visible */}
+      <div className="card-header" onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', flex: 1 }}>
+          <Key size={24} style={{ flexShrink: 0, marginTop: '0.25rem' }} />
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Name + Status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>{account.name}</h3>
+              <span className={`badge ${statusClass}`}>{statusText}</span>
+            </div>
+
+            {/* API Key Prefix */}
+            <div style={{ marginBottom: '0.5rem' }}>
+              <code style={{
+                fontSize: '0.875rem',
+                background: 'rgba(0,0,0,0.05)',
+                padding: '0.25rem 0.5rem',
+                borderRadius: '0.25rem',
+                fontFamily: 'monospace'
+              }}>
+                {account.api_key_prefix}...
+              </code>
+            </div>
+
+            {/* Description (if exists) */}
+            {account.description && (
+              <p style={{
+                margin: '0.5rem 0',
+                fontSize: '0.875rem',
+                color: '#64748b',
+                lineHeight: 1.5
+              }}>
+                {account.description}
+              </p>
+            )}
+
+            {/* Key Metrics Row */}
+            <div style={{
+              display: 'flex',
+              gap: '1.5rem',
+              fontSize: '0.875rem',
+              color: '#64748b',
+              marginTop: '0.75rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Activity size={14} />
+                <span>{account.total_requests} requests</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Shield size={14} />
+                <span>{account.rate_limit}/hour</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <Users size={14} />
+                <span>{allowedAgentsText}</span>
+              </div>
+              {account.last_used_at && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                  <Calendar size={14} />
+                  <span>Last used {new Date(account.last_used_at).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Expand/Collapse Indicator */}
+          <div style={{ flexShrink: 0, marginTop: '0.25rem' }}>
+            {expanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
         </div>
-        <div className="card-actions" onClick={(e) => e.stopPropagation()}>
-          {!account.is_revoked && (
-            <button
-              className="btn-secondary btn-sm"
-              onClick={() => onToggleActive(account.id, account.is_active)}
-              title={account.is_active ? 'Deactivate' : 'Activate'}
-            >
-              <Shield size={16} />
-              {account.is_active ? 'Deactivate' : 'Activate'}
-            </button>
-          )}
-          {!account.is_revoked && (
-            <button
-              className="btn-danger btn-sm"
-              onClick={() => onRevoke(account.id)}
-              title="Revoke API Key"
-            >
-              <Ban size={16} />
-              Revoke
-            </button>
-          )}
+      </div>
+
+      {/* Action Buttons - Always Visible */}
+      <div className="card-actions" style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(0,0,0,0.1)', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+        {!account.is_revoked && account.is_active && (
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => onToggleActive(account.id, true)}
+            title="Deactivate API key"
+          >
+            <Shield size={16} />
+            Deactivate
+          </button>
+        )}
+        {!account.is_revoked && !account.is_active && (
+          <button
+            className="btn-secondary btn-sm"
+            onClick={() => onToggleActive(account.id, false)}
+            title="Activate API key"
+          >
+            <Shield size={16} />
+            Activate
+          </button>
+        )}
+        {!account.is_revoked && (
           <button
             className="btn-danger btn-sm"
-            onClick={() => onDelete(account.id, account.name)}
-            title="Delete permanently"
+            onClick={() => onRevoke(account.id)}
+            title="Revoke API Key (cannot be undone)"
           >
-            <Trash2 size={16} />
-            Delete
+            <Ban size={16} />
+            Revoke
           </button>
-        </div>
+        )}
+        <button
+          className="btn-danger btn-sm"
+          onClick={() => onDelete(account.id, account.name)}
+          title="Delete permanently"
+        >
+          <Trash2 size={16} />
+          Delete
+        </button>
       </div>
 
       {expanded && (
