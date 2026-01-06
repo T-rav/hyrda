@@ -404,14 +404,38 @@ async def revoke_service_account(
 
         import json
 
-        response_data = ServiceAccountResponse.from_orm(account)
+        # Parse allowed_agents before creating Pydantic model
+        allowed_agents_parsed = None
         if account.allowed_agents:
             try:
-                response_data.allowed_agents = json.loads(account.allowed_agents)
+                allowed_agents_parsed = json.loads(account.allowed_agents)
             except json.JSONDecodeError:
-                response_data.allowed_agents = None
+                allowed_agents_parsed = None
 
-        return response_data
+        # Create response dict with parsed values
+        response_dict = {
+            "id": account.id,
+            "name": account.name,
+            "description": account.description,
+            "api_key_prefix": account.api_key_prefix,
+            "scopes": account.scopes,
+            "allowed_agents": allowed_agents_parsed,
+            "rate_limit": account.rate_limit,
+            "is_active": account.is_active,
+            "is_revoked": account.is_revoked,
+            "created_by": account.created_by,
+            "last_used_at": account.last_used_at,
+            "expires_at": account.expires_at,
+            "created_at": account.created_at,
+            "updated_at": account.updated_at,
+            "revoked_at": account.revoked_at,
+            "revoked_by": account.revoked_by,
+            "revoke_reason": account.revoke_reason,
+            "total_requests": account.total_requests,
+            "last_request_ip": account.last_request_ip,
+        }
+
+        return ServiceAccountResponse(**response_dict)
 
 
 @router.delete("/{account_id}", dependencies=[Depends(require_admin)])

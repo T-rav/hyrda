@@ -43,11 +43,12 @@ repos:
       - id: check-merge-conflict
       # Check YAML syntax
       - id: check-yaml
-        exclude: ^docker-compose.*\.yml$  # Docker compose has some extended syntax
+        exclude: ^(docker-compose.*\.yml|librechat-custom/)  # Docker compose and helm templates
       # Check TOML syntax
       - id: check-toml
       # Check JSON syntax
       - id: check-json
+        exclude: ^librechat-custom/  # Helm templates and jsconfig with comments
       # Check for large files
       - id: check-added-large-files
         args: [--maxkb=1000]
