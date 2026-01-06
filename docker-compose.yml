@@ -267,7 +267,7 @@ services:
     env_file:
       - .env
     environment:
-      - CONTROL_PLANE_URL=http://control-plane:6001
+      - CONTROL_PLANE_URL=https://control-plane:6001
       - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:-dev-agent-service-token}
       - LLM_API_KEY=${LLM_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}

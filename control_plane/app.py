@@ -141,7 +141,7 @@ def create_app() -> FastAPI:
 
     # Add security middleware
     app.add_middleware(SecurityHeadersMiddleware)
-    app.add_middleware(HTTPSRedirectMiddleware)
+    # Note: HTTPSRedirectMiddleware not needed - uvicorn enforces HTTPS via SSL flags
 
     # Enable CORS - restrict to specific origins
     allowed_origins = os.getenv(
