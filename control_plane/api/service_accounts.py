@@ -78,10 +78,10 @@ class ServiceAccountCreateResponse(ServiceAccountResponse):
 
 
 # Endpoints
-@router.post("", response_model=ServiceAccountCreateResponse, dependencies=[Depends(require_admin)])
+@router.post("", response_model=ServiceAccountCreateResponse)
 async def create_service_account(
     data: ServiceAccountCreate,
-    request: Request,
+    admin_user: dict = Depends(require_admin),
 ):
     """Create a new service account and API key.
 
@@ -89,7 +89,7 @@ async def create_service_account(
 
     Args:
         data: Service account creation request
-        request: FastAPI request (for admin user context)
+        admin_user: Authenticated admin user (injected by require_admin dependency)
 
     Returns:
         ServiceAccount with api_key field populated
@@ -108,8 +108,8 @@ async def create_service_account(
         api_key_hash = bcrypt.hashpw(api_key.encode(), bcrypt.gensalt()).decode()
         api_key_prefix = api_key[:8]  # First 8 chars for identification
 
-        # Get admin user from JWT
-        admin_email = request.state.user.get("email", "unknown")
+        # Get admin user email
+        admin_email = admin_user.get("email", "unknown")
 
         # Create service account
         import json
@@ -120,7 +120,7 @@ async def create_service_account(
             api_key_hash=api_key_hash,
             api_key_prefix=api_key_prefix,
             scopes=data.scopes,
-            allowed_agents=json.dumps(data.allowed_agents) if data.allowed_agents else None,
+            allowed_agents=json.dumps(data.allowed_agents) if data.allowed_agents is not None else None,
             rate_limit=data.rate_limit,
             is_active=True,
             is_revoked=False,
@@ -281,7 +281,8 @@ async def update_service_account(
         if data.scopes is not None:
             account.scopes = data.scopes
         if data.allowed_agents is not None:
-            account.allowed_agents = json.dumps(data.allowed_agents) if data.allowed_agents else None
+            # Empty array = no access, None = no change
+            account.allowed_agents = json.dumps(data.allowed_agents)
         if data.rate_limit is not None:
             account.rate_limit = data.rate_limit
         if data.is_active is not None:

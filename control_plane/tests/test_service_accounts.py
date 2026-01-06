@@ -169,6 +169,29 @@ def test_create_service_account_with_allowed_agents(authenticated_client):
     assert set(data["allowed_agents"]) == {"profile_researcher", "meddic_coach"}
 
 
+def test_create_service_account_with_empty_agents_array(authenticated_client):
+    """Test creating service account with empty agents array = no access."""
+    response = authenticated_client.post(
+        "/api/service-accounts",
+        json={
+            "name": "No Access Account",
+            "scopes": "agents:invoke",
+            "allowed_agents": [],  # Empty array = cannot invoke any agents
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["allowed_agents"] == []  # Should return empty array
+
+    # Verify the model denies access to all agents
+    with get_db_session() as session:
+        account = session.query(ServiceAccount).filter_by(name="No Access Account").first()
+        assert account is not None
+        assert account.can_access_agent("profile_researcher") is False
+        assert account.can_access_agent("any_agent") is False
+
+
 def test_create_service_account_with_expiration(authenticated_client):
     """Test creating service account with expiration date."""
     from datetime import datetime, timezone, timedelta
