@@ -308,11 +308,11 @@ async def update_service_account(
         return ServiceAccountResponse(**_parse_service_account(account))
 
 
-@router.post("/{account_id}/revoke", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
+@router.post("/{account_id}/revoke", response_model=ServiceAccountResponse)
 async def revoke_service_account(
     account_id: int,
     reason: str = "Revoked by admin",
-    request: Request = None,
+    admin_user: dict = Depends(require_admin),
 ):
     """Revoke a service account (cannot be undone).
 
@@ -321,7 +321,7 @@ async def revoke_service_account(
     Args:
         account_id: Service account ID
         reason: Reason for revocation
-        request: FastAPI request (for admin user)
+        admin_user: Authenticated admin user (injected by require_admin dependency)
 
     Returns:
         Revoked service account
@@ -338,7 +338,7 @@ async def revoke_service_account(
             raise HTTPException(status_code=400, detail="Service account already revoked")
 
         # Revoke
-        admin_email = request.state.user.get("email", "unknown") if request else "unknown"
+        admin_email = admin_user.get("email", "unknown")
         account.is_revoked = True
         account.is_active = False
         account.revoked_at = datetime.now(timezone.utc)
