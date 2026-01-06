@@ -32,7 +32,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-libmysqlclient-dev \
     pkg-config \
     openssl \
+    curl \
+    ca-certificates \
+    libnss3-tools \
     && rm -rf /var/lib/apt/lists/*
+
+# Install mkcert for locally-trusted SSL certificates (optional but recommended)
+RUN curl -sL https://github.com/FiloSottile/mkcert/releases/download/v1.4.4/mkcert-v1.4.4-linux-amd64 \
+    -o /usr/local/bin/mkcert && \
+    chmod +x /usr/local/bin/mkcert
 
 # Copy shared library first
 COPY shared/ /app/shared/
