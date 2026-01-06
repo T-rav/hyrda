@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { Key, Shield, Ban, Trash2, Activity } from 'lucide-react'
+import ConfirmDialog from './ConfirmDialog'
 
 /**
  * ServiceAccountCard component displays a single service account.
  * Styled to match GroupCard design pattern.
  */
 function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
+  const [showRevokeDialog, setShowRevokeDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+
   const isExpired = account.expires_at && new Date(account.expires_at) < new Date()
 
   const statusClass = account.is_revoked
@@ -35,16 +39,6 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
     account.allowed_agents === null || account.allowed_agents.length === 0
       ? 'No agents'
       : account.allowed_agents.join(', ')
-
-  const handleDelete = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to permanently delete "${account.name}"? This cannot be undone.`
-      )
-    ) {
-      onDelete(account.id, account.name)
-    }
-  }
 
   return (
     <div className="service-account-card">
@@ -115,8 +109,8 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
           {!account.is_revoked && (
             <button
               className="btn-link"
-              onClick={() => onRevoke(account.id)}
-              title="Revoke API Key (cannot be undone)"
+              onClick={() => setShowRevokeDialog(true)}
+              title="Revoke API key and remove service account"
               style={{ color: '#dc2626' }}
             >
               <Ban size={16} />
@@ -126,7 +120,7 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
         </div>
         <button
           className="btn-link"
-          onClick={handleDelete}
+          onClick={() => setShowDeleteDialog(true)}
           title="Delete permanently"
           style={{ color: '#dc2626' }}
         >
@@ -134,6 +128,28 @@ function ServiceAccountCard({ account, onRevoke, onDelete, onToggleActive }) {
           Delete
         </button>
       </div>
+
+      {/* Revoke Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showRevokeDialog}
+        onClose={() => setShowRevokeDialog(false)}
+        onConfirm={() => onRevoke(account.id)}
+        title="Revoke Service Account"
+        message={`Are you sure you want to revoke "${account.name}"? The API key will immediately stop working and the service account will be permanently removed.`}
+        confirmText="Revoke"
+        confirmStyle="danger"
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={() => onDelete(account.id, account.name)}
+        title="Delete Service Account"
+        message={`Are you sure you want to permanently delete "${account.name}"? This will remove all records from the database and cannot be undone.`}
+        confirmText="Delete"
+        confirmStyle="danger"
+      />
     </div>
   )
 }
