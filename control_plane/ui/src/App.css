@@ -544,6 +544,18 @@
   padding: 1.5rem;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
+  max-height: calc(90vh - 200px);
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  background: white;
 }
 
 .form-group {
@@ -1110,7 +1122,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 0.75rem;
-  max-height: 300px;
+  max-height: 250px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0.5rem;
