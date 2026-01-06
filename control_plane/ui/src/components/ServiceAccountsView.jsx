@@ -55,34 +55,46 @@ function ServiceAccountsView({
         </div>
       </div>
 
-      {/* Info Banner */}
-      <div className="alert alert-info">
-        <AlertCircle size={20} />
-        <div>
-          <strong>Service Accounts for External Integrations</strong>
-          <p>
-            Create API keys for external systems (HubSpot, Salesforce, custom apps) to call agents
-            via HTTP. Separate from internal service-to-service tokens.
-          </p>
-        </div>
-      </div>
-
       {/* Empty State */}
       {!loading && filteredAccounts.length === 0 && (
-        <div className="empty-state">
-          <Key size={48} className="empty-icon" />
-          <h3>No Service Accounts</h3>
-          <p>
-            {showRevoked
-              ? 'No revoked service accounts found.'
-              : 'Create a service account to allow external systems to authenticate with API keys.'}
-          </p>
-          {!showRevoked && (
-            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-              <Plus size={16} />
-              Create First Service Account
-            </button>
-          )}
+        <div className="service-accounts-empty">
+          <div className="empty-card">
+            <div className="empty-icon-wrapper">
+              <Key size={64} strokeWidth={1.5} />
+            </div>
+            <h3>No Service Accounts Yet</h3>
+            <p className="empty-description">
+              {showRevoked
+                ? 'No revoked service accounts found.'
+                : 'Service accounts allow external systems like HubSpot, Salesforce, or custom apps to call agents via API keys.'}
+            </p>
+            {!showRevoked && (
+              <>
+                <button
+                  className="btn-primary btn-lg"
+                  onClick={() => setShowCreateModal(true)}
+                  style={{ marginTop: '1.5rem' }}
+                >
+                  <Plus size={20} />
+                  Create First Service Account
+                </button>
+                <div className="empty-features">
+                  <div className="feature-item">
+                    <span className="feature-icon">🔐</span>
+                    <span>Secure API authentication</span>
+                  </div>
+                  <div className="feature-item">
+                    <span className="feature-icon">⚡</span>
+                    <span>Per-agent access control</span>
+                  </div>
+                  <div className="feature-item">
+                    <span className="feature-icon">📊</span>
+                    <span>Usage tracking & rate limits</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
