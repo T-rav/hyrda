@@ -216,3 +216,6 @@ tasks/supervisord.pid
 bot/data/
 .langgraph_api/
 security-report.json
+
+# SSL certificates (auto-generated)
+control_plane/ssl/

@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     default-mysql-client \
     default-libmysqlclient-dev \
     pkg-config \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy shared library first
@@ -58,5 +59,5 @@ EXPOSE 6001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request, ssl; urllib.request.urlopen('https://localhost:6001/health', context=ssl._create_unverified_context())"
 
-# Run FastAPI app with Uvicorn with SSL
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "6001", "--workers", "4", "--ssl-keyfile", "ssl/localhost.key", "--ssl-certfile", "ssl/localhost.crt"]
+# Run startup script (generates SSL certs if missing, then starts uvicorn)
+CMD ["sh", "startup.sh"]
