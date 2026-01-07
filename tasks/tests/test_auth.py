@@ -74,6 +74,14 @@ def unauth_client(auth_app):
 
 
 @pytest.fixture
+def client(auth_app):
+    """Default client (unauthenticated) for auth tests."""
+    from fastapi.testclient import TestClient
+
+    return TestClient(auth_app)
+
+
+@pytest.fixture
 def mock_oauth_env():
     """Mock OAuth environment variables."""
     env_vars = {

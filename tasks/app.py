@@ -138,9 +138,9 @@ def create_app() -> FastAPI:
     # Add tracing middleware (must be early in chain)
     app.add_middleware(TracingMiddleware, service_name="tasks")
 
-    # Add Prometheus metrics middleware (skip in tests to avoid CollectorRegistry duplication)
+    # Add Prometheus metrics middleware (skip in tests/dev to avoid CollectorRegistry duplication)
     environment = os.getenv("ENVIRONMENT", "production")
-    if environment != "test":
+    if environment not in ("test", "development"):
         app.add_middleware(PrometheusMetricsMiddleware, service_name="tasks")
 
     # Add security headers middleware
@@ -163,8 +163,8 @@ def create_app() -> FastAPI:
     # Register API routers (all routes from api/* modules)
     register_routers(app)
 
-    # Prometheus metrics endpoint (skip in tests)
-    if environment != "test":
+    # Prometheus metrics endpoint (skip in tests/dev)
+    if environment not in ("test", "development"):
         app.get("/metrics")(create_metrics_endpoint())
 
     logger.info("Tasks FastAPI application initialized on port 5001")
