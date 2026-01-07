@@ -7,8 +7,7 @@ import time
 os.environ["OTEL_TRACES_ENABLED"] = "false"
 os.environ["LLM_API_KEY"] = "test-api-key-for-testing"
 if not os.getenv("RAG_SERVICE_TOKEN"):
-    # ggignore: test token only, not a real secret
-    os.environ["RAG_SERVICE_TOKEN"] = "test-rag-service-token-172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"
+    os.environ["RAG_SERVICE_TOKEN"] = "test-rag-service-token-172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"  # ggignore
 
 # Now safe to import after environment is configured
 import pytest
