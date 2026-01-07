@@ -261,16 +261,16 @@ ui-quality: ui-lint ui-test ui-build
 	@echo "$(GREEN)✅ UI quality checks passed!$(RESET)"
 
 ui-lint:
-	@echo "$(BLUE)Running UI linting...$(RESET)"
-	cd ui && npm run lint
+	@echo "$(BLUE)Linting React Health UI...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run lint
 
 ui-test:
-	@echo "$(BLUE)Running UI tests...$(RESET)"
-	cd ui && npm run test:coverage
+	@echo "$(BLUE)Running React Health UI tests...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm test -- --run
 
 ui-build:
-	@echo "$(BLUE)Building UI...$(RESET)"
-	cd ui && npm run build
+	@echo "$(BLUE)Building React Health UI...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm install --no-audit && npm run build
 
 # LibreChat Build Check
 librechat-build:
