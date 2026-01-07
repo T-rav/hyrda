@@ -59,5 +59,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Copy supervisor configuration
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Use supervisor to manage both nginx and Flask
+# Use supervisor to manage both nginx and FastAPI
 CMD ["/usr/bin/supervisord"]

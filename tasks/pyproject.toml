@@ -16,10 +16,10 @@ dependencies = [
     # Core scheduling
     "apscheduler>=3.10.4",
 
-    # Web UI
-    "flask>=3.0.0",
-    "flask-cors>=4.0.0",
-    "gunicorn>=21.0.0",  # WSGI server for production
+    # Web framework (migrated from Flask to FastAPI for consistency)
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",  # ASGI server for production
+    "jinja2>=3.1.0",  # Template rendering for OAuth pages
 
     # Time zones
     "tzlocal>=5.2",

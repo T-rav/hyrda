@@ -1,6 +1,8 @@
 """Configuration settings for the tasks service."""
 
-from pydantic import Field
+import os
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +23,33 @@ class TasksSettings(BaseSettings):
         default="dev-secret-key-change-in-production", alias="SECRET_KEY"
     )
     flask_env: str = Field(default="production", alias="FLASK_ENV")
+
+    @field_validator("secret_key")
+    @classmethod
+    def validate_secret_key_in_production(cls, v: str) -> str:
+        """Validate that SECRET_KEY is not default value in production."""
+        environment = os.getenv("ENVIRONMENT")
+        # Only enforce in production - if ENVIRONMENT not set, assume development
+        if environment != "production":
+            return v
+
+        # Check for various default/placeholder values
+        default_patterns = [
+            "dev-secret",
+            "change-in-production",
+            "change-in-prod",
+            "test-secret",
+            "your-secret-here",
+        ]
+        is_default_key = any(pattern in v.lower() for pattern in default_patterns)
+
+        if is_default_key:
+            raise ValueError(
+                "SECRET_KEY must be set to a secure value in production. "
+                "Current value appears to be a default/placeholder key."
+            )
+
+        return v
 
     # Database configuration
     task_database_url: str = Field(
