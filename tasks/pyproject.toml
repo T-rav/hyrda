@@ -169,7 +169,6 @@ omit = [
     "services/gdrive/*",  # Optional Google Drive services
     # Optional integrations
     "jobs/portal_sync.py",  # Optional feature - Portal sync job
-    "jobs/slack_user_import.py",  # Optional feature - Slack user import job
     "jobs/metric_sync.py",  # Optional feature - Metrics sync job
     "services/portal_client.py",  # Optional feature - Portal API client
     "services/metric_client.py",  # Optional feature - Metrics API client
