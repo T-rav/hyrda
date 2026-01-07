@@ -328,7 +328,6 @@ class TestTokenAwareBatchCreation:
         assert len(batches[0]) == 2048
 
 
-@pytest.mark.skip(reason="embeddings dimension parameter handling incomplete")
 class TestEmbedBatchMethod:
     """Test embed_batch method for generating embeddings."""
 
@@ -390,6 +389,7 @@ class TestEmbedBatchMethod:
         assert result == []
         assert "All texts were empty after filtering" in caplog.text
 
+    @pytest.mark.skip(reason="dimensions parameter not yet implemented in embed_batch")
     def test_embed_batch_single_text_small_batch(self, service):
         """Test embedding single text that fits in one batch."""
         # Arrange
@@ -534,6 +534,7 @@ class TestEmbedBatchMethod:
             call_args = mock_client.embeddings.create.call_args
             assert call_args.kwargs["model"] == "text-embedding-3-large"
 
+    @pytest.mark.skip(reason="dimensions parameter not yet implemented in embed_batch")
     def test_embed_batch_uses_3072_dimensions(self, service):
         """Test that embeddings request 3072 dimensions."""
         # Arrange
