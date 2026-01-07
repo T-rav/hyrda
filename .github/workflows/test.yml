@@ -166,7 +166,7 @@ jobs:
 
     - name: Upload Trivy results as artifact
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: trivy-security-scan-results
         path: trivy-tasks.sarif
