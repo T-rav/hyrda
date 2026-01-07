@@ -21,29 +21,32 @@ jobs:
       with:
         python-version: "3.11"
         cache: 'pip'
-        cache-dependency-path: pyproject.toml
+        cache-dependency-path: tasks/pyproject.toml
 
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('tasks/pyproject.toml') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
     - name: Install Python dependencies
+      working-directory: tasks
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev,test]"
 
     - name: Run linting and type checking
       if: matrix.task == 'lint'
+      working-directory: tasks
       run: |
         python -m ruff check . --no-fix
         python -m ruff format --check .
 
     - name: Run tests with coverage
       if: matrix.task == 'test'
+      working-directory: tasks
       env:
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
@@ -70,32 +73,32 @@ jobs:
       with:
         node-version: '20'
         cache: 'npm'
-        cache-dependency-path: ui/package-lock.json
+        cache-dependency-path: tasks/ui/package-lock.json
 
     - name: Install dependencies
-      working-directory: ui
+      working-directory: tasks/ui
       run: npm ci
 
     - name: Run ESLint
       if: matrix.task == 'lint'
-      working-directory: ui
+      working-directory: tasks/ui
       run: npm run lint
 
     - name: Run tests
       if: matrix.task == 'test'
-      working-directory: ui
+      working-directory: tasks/ui
       run: npm run test:coverage
 
     - name: Build UI
       if: matrix.task == 'build'
-      working-directory: ui
+      working-directory: tasks/ui
       run: npm run build
 
     - name: Upload coverage reports
       if: matrix.task == 'test'
       uses: codecov/codecov-action@v3
       with:
-        directory: ui/coverage
+        directory: tasks/ui/coverage
         flags: react-ui
         name: tasks-ui-coverage
 
@@ -129,7 +132,7 @@ jobs:
 
     - name: Build Tasks Service Docker image
       run: |
-        docker build -t ai-slack-bot-tasks:latest .
+        docker build -f tasks/Dockerfile -t ai-slack-bot-tasks:latest .
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
