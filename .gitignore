@@ -222,3 +222,4 @@ security-report.json
 control_plane/ssl/
 agent-service/ssl/
 tasks/ssl/
+.ssl/

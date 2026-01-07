@@ -267,15 +267,38 @@ async def auth_callback(request: Request):
         )
 
         # Create response with JWT token as HTTP-only cookie
+        logger.info(f"Redirecting to: {redirect_url}")
+
+        # Add JWT token to redirect URL if redirecting to a different port (e.g., tasks service)
+        # Browsers don't share cookies across different ports, so we pass the token in URL
+        from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+
+        parsed_url = urlparse(redirect_url)
+        if parsed_url.netloc and ':5001' in parsed_url.netloc:
+            # Redirecting to tasks service - add token as query param
+            query_params = parse_qs(parsed_url.query)
+            query_params['token'] = [jwt_token]
+            new_query = urlencode(query_params, doseq=True)
+            redirect_url = urlunparse((
+                parsed_url.scheme,
+                parsed_url.netloc,
+                parsed_url.path,
+                parsed_url.params,
+                new_query,
+                parsed_url.fragment
+            ))
+            logger.info(f"Added token to redirect URL for cross-port auth")
+
         response = RedirectResponse(url=redirect_url, status_code=302)
         response.set_cookie(
             key="access_token",
             value=jwt_token,
             httponly=True,  # Prevent XSS attacks
-            secure=os.getenv("ENVIRONMENT") == "production",  # HTTPS only in prod
+            secure=False,  # Allow over HTTP for local dev
             samesite="lax",  # CSRF protection
             max_age=86400,  # 24 hours (matches JWT expiration)
         )
+        logger.info(f"Set cookie for {email}")
 
         return response
 

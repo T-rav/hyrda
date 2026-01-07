@@ -8,6 +8,20 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    // Check if there's a token in URL (from OAuth redirect)
+    const urlParams = new URLSearchParams(window.location.search)
+    const tokenFromUrl = urlParams.get('token')
+
+    if (tokenFromUrl) {
+      // Set the token as a cookie
+      document.cookie = `access_token=${tokenFromUrl}; path=/; max-age=86400; samesite=lax`
+
+      // Remove token from URL
+      urlParams.delete('token')
+      const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '')
+      window.history.replaceState({}, '', newUrl)
+    }
+
     checkAuth()
   }, [])
 

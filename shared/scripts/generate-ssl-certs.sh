@@ -38,8 +38,15 @@ if [ ! -f "${KEY_FILE}" ] || [ ! -f "${CERT_FILE}" ]; then
         mkcert ${DOMAINS}
 
         # Rename to standard names
-        mv *.pem cert.pem 2>/dev/null || true
+        # Rename key file first
         mv *-key.pem key.pem 2>/dev/null || true
+
+        # Rename cert file (but NOT key.pem which was just created)
+        for f in *.pem; do
+            if [ "$f" != "key.pem" ]; then
+                mv "$f" cert.pem 2>/dev/null && break
+            fi
+        done
 
         cd ..
         echo "✅ Locally-trusted SSL certificates generated for ${SERVICE_NAME} (no browser warnings!)"

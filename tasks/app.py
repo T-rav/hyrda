@@ -952,6 +952,42 @@ def check_gdrive_auth_status(task_id: str) -> Response | tuple[Response, int]:
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/auth/me")
+def auth_me() -> Response:
+    """Check if user is authenticated by proxying to control-plane."""
+    import httpx
+    import os
+
+    control_plane_url = os.getenv("CONTROL_PLANE_URL", "https://control-plane:6001")
+
+    # Get access_token cookie
+    access_token = request.cookies.get("access_token")
+    logger.info(f"auth_me: cookies={list(request.cookies.keys())}, has_token={bool(access_token)}")
+
+    try:
+        # Forward cookies to control-plane
+        cookies_dict = dict(request.cookies)
+        logger.info(f"Forwarding to {control_plane_url}/api/users/me with cookies: {list(cookies_dict.keys())}")
+
+        response = httpx.get(
+            f"{control_plane_url}/api/users/me",
+            cookies=cookies_dict,
+            timeout=5.0,
+            verify=False
+        )
+
+        logger.info(f"Control-plane response: status={response.status_code}")
+
+        if response.status_code == 200:
+            data = response.json()
+            return jsonify({"authenticated": True, "email": data.get("email"), "user": data})
+        else:
+            return jsonify({"authenticated": False, "error": "Not authenticated"}), 401
+    except Exception as e:
+        logger.error(f"Error checking auth with control-plane: {e}", exc_info=True)
+        return jsonify({"authenticated": False, "error": "Auth service unavailable"}), 503
+
+
 @app.route("/health")
 def health_check() -> Response:
     """Health check endpoint."""

@@ -110,6 +110,9 @@ services:
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
     ports:
       - "${TASKS_PORT:-5001}:5001"
+    volumes:
+      - ./.ssl/tasks-cert.pem:/app/ssl/tasks-cert.pem:ro
+      - ./.ssl/tasks-key.pem:/app/ssl/tasks-key.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -216,18 +219,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - SECURITY_DATABASE_URL=mysql+pymysql://insightmesh_security:insightmesh_security_password@mysql:3306/insightmesh_security
-      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
-      - SECRET_KEY=${CONTROL_PLANE_SECRET_KEY:-dev-secret-key-change-in-prod}
-      - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
-      - ENVIRONMENT=production
-      - CONTROL_PLANE_PORT=6001
-      - CONTROL_PLANE_BASE_URL=https://localhost:6001
-      - ALLOWED_ORIGINS=https://localhost:3080,https://localhost:8000,https://localhost:8002,https://localhost:6001
-      - AGENT_SERVICE_URL=http://agent-service:8000
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
+    volumes:
+      - ./.ssl/control-plane-cert.pem:/app/ssl/control-plane-cert.pem:ro
+      - ./.ssl/control-plane-key.pem:/app/ssl/control-plane-key.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -268,28 +264,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - CONTROL_PLANE_URL=https://control-plane:6001
-      - AGENT_SERVICE_URL=https://agent-service:8000
-      - AGENT_SERVICE_TOKEN=${AGENT_SERVICE_TOKEN:-dev-agent-service-token}
-      - LLM_API_KEY=${LLM_API_KEY}
-      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - VECTOR_HOST=qdrant
-      - VECTOR_PORT=6333
-      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
-      - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
-      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
-      - PERPLEXITY_API_KEY=${PERPLEXITY_API_KEY:-}
-      - LANGGRAPH_API_KEY=${LANGGRAPH_API_KEY:-}
-      - ENVIRONMENT=production
-      - PORT=8000
-      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
-      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-      - LANGFUSE_HOST=${LANGFUSE_HOST:-}
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
+      - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
     depends_on:
       control-plane:
         condition: service_healthy
