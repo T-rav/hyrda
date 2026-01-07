@@ -7,7 +7,6 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
@@ -112,7 +111,9 @@ def register_routers(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    settings = get_settings()  # Will raise ValueError if SECRET_KEY invalid in production
+    settings = (
+        get_settings()
+    )  # Will raise ValueError if SECRET_KEY invalid in production
 
     # Determine environment for middleware configuration
     environment = os.getenv("ENVIRONMENT", "production")

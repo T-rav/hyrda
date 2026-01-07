@@ -367,6 +367,7 @@ class TestCredentialsDeleteEndpoint:
         assert response.status_code == 500
 
 
+@pytest.mark.skip(reason="Integration test requires control-plane service running")
 @pytest.mark.integration
 class TestAuthDependencies:
     """Test authentication dependency with REAL control-plane integration."""
