@@ -158,7 +158,15 @@ jobs:
 
     - name: Upload Trivy results to GitHub Security
       if: always()
+      continue-on-error: true  # Don't fail if Code Scanning is not enabled
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-tasks.sarif'
         category: 'docker-tasks'
+
+    - name: Upload Trivy results as artifact
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: trivy-security-scan-results
+        path: trivy-tasks.sarif
