@@ -100,12 +100,15 @@ def sample_file_info():
 @pytest.fixture
 def orchestrator(mock_google_drive_client, mock_document_tracker):
     """Create orchestrator instance with mocked dependencies."""
-    with patch(
-        "services.gdrive.ingestion_orchestrator.GoogleDriveClient",
-        return_value=mock_google_drive_client,
-    ), patch(
-        "services.gdrive.ingestion_orchestrator.DocumentTrackingService",
-        return_value=mock_document_tracker,
+    with (
+        patch(
+            "services.gdrive.ingestion_orchestrator.GoogleDriveClient",
+            return_value=mock_google_drive_client,
+        ),
+        patch(
+            "services.gdrive.ingestion_orchestrator.DocumentTrackingService",
+            return_value=mock_document_tracker,
+        ),
     ):
         return IngestionOrchestrator()
 
@@ -134,10 +137,11 @@ class TestIngestionOrchestratorInit:
     def test_init_with_credentials(self):
         """Test initialization with credential files."""
         # Arrange & Act
-        with patch(
-            "services.gdrive.ingestion_orchestrator.GoogleDriveClient"
-        ) as mock_client_class, patch(
-            "services.gdrive.ingestion_orchestrator.DocumentTrackingService"
+        with (
+            patch(
+                "services.gdrive.ingestion_orchestrator.GoogleDriveClient"
+            ) as mock_client_class,
+            patch("services.gdrive.ingestion_orchestrator.DocumentTrackingService"),
         ):
             IngestionOrchestrator(
                 credentials_file="creds.json", token_file="token.json"

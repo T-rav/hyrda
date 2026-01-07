@@ -4,10 +4,9 @@ import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from fastapi import HTTPException
 
 # Add project root to path for shared module imports
 project_root = Path(__file__).parent.parent.parent
@@ -468,8 +467,7 @@ class TestAuthDependencies:
                 )
         except Exception as e:
             pytest.fail(
-                f"❌ Cannot reach control-plane at {control_plane_url}!\n"
-                f"Error: {e}"
+                f"❌ Cannot reach control-plane at {control_plane_url}!\nError: {e}"
             )
 
         # Make request WITHOUT authentication

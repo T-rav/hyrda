@@ -588,9 +588,7 @@ class TestTasksAPIContracts:
             with patch("app.get_db_session") as mock_get_session:
                 # Mock database session with no metadata found
                 mock_session = MagicMock()
-                mock_session.query.return_value.filter.return_value.first.return_value = (
-                    None
-                )
+                mock_session.query.return_value.filter.return_value.first.return_value = None
                 mock_get_session.return_value.__enter__.return_value = mock_session
                 mock_get_session.return_value.__exit__.return_value = None
 

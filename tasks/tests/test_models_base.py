@@ -1,16 +1,6 @@
 """Tests for database models base functionality."""
 
-import contextlib
-
 import pytest
-from sqlalchemy.orm import Session
-
-from models.base import (
-    get_data_db_session,
-    get_db_session,
-    init_data_db,
-    init_db,
-)
 
 
 @pytest.fixture(autouse=True)

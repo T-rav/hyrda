@@ -4,7 +4,6 @@ Tests that critical operations (delete, pause, resume) re-verify admin status
 from the database, not just from JWT token claims.
 """
 
-import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -112,7 +111,9 @@ class TestDatabaseAdminVerification:
             import httpx
 
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(side_effect=httpx.RequestError("Connection failed"))
+            mock_client.get = AsyncMock(
+                side_effect=httpx.RequestError("Connection failed")
+            )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
@@ -129,11 +130,10 @@ class TestDatabaseAdminVerification:
         # Arrange - Mock authenticated admin user
         mock_request = Mock()
 
-        with patch(
-            "dependencies.auth.get_current_user"
-        ) as mock_get_user, patch(
-            "dependencies.auth.verify_admin_from_database"
-        ) as mock_verify:
+        with (
+            patch("dependencies.auth.get_current_user") as mock_get_user,
+            patch("dependencies.auth.verify_admin_from_database") as mock_verify,
+        ):
             mock_get_user.return_value = {
                 "email": "admin@8thlight.com",
                 "name": "Admin User",
@@ -154,11 +154,10 @@ class TestDatabaseAdminVerification:
         # Arrange - Mock authenticated non-admin user
         mock_request = Mock()
 
-        with patch(
-            "dependencies.auth.get_current_user"
-        ) as mock_get_user, patch(
-            "dependencies.auth.verify_admin_from_database"
-        ) as mock_verify:
+        with (
+            patch("dependencies.auth.get_current_user") as mock_get_user,
+            patch("dependencies.auth.verify_admin_from_database") as mock_verify,
+        ):
             mock_get_user.return_value = {
                 "email": "user@8thlight.com",
                 "name": "Regular User",
@@ -183,11 +182,10 @@ class TestDatabaseAdminVerification:
         # Arrange - User has JWT with is_admin=true, but DB says is_admin=false
         mock_request = Mock()
 
-        with patch(
-            "dependencies.auth.get_current_user"
-        ) as mock_get_user, patch(
-            "dependencies.auth.verify_admin_from_database"
-        ) as mock_verify:
+        with (
+            patch("dependencies.auth.get_current_user") as mock_get_user,
+            patch("dependencies.auth.verify_admin_from_database") as mock_verify,
+        ):
             # JWT token claims user is admin
             mock_get_user.return_value = {
                 "email": "former-admin@8thlight.com",
@@ -211,11 +209,10 @@ class TestDatabaseAdminVerification:
         # Arrange - Control-plane is down
         mock_request = Mock()
 
-        with patch(
-            "dependencies.auth.get_current_user"
-        ) as mock_get_user, patch(
-            "dependencies.auth.verify_admin_from_database"
-        ) as mock_verify:
+        with (
+            patch("dependencies.auth.get_current_user") as mock_get_user,
+            patch("dependencies.auth.verify_admin_from_database") as mock_verify,
+        ):
             mock_get_user.return_value = {
                 "email": "admin@8thlight.com",
                 "name": "Admin User",
@@ -241,9 +238,9 @@ class TestJWTExpiry:
         from shared.utils.jwt_auth import JWT_EXPIRATION_HOURS
 
         # Assert
-        assert (
-            JWT_EXPIRATION_HOURS == 4
-        ), f"JWT expiry should be 4 hours for security, not {JWT_EXPIRATION_HOURS}"
+        assert JWT_EXPIRATION_HOURS == 4, (
+            f"JWT expiry should be 4 hours for security, not {JWT_EXPIRATION_HOURS}"
+        )
 
     def test_jwt_token_contains_expiry_4_hours_from_now(self):
         """Test that generated JWT tokens expire in 4 hours."""
@@ -252,10 +249,7 @@ class TestJWTExpiry:
         # Import from shared module (already in path via PYTHONPATH)
         from shared.utils.jwt_auth import create_access_token, verify_token
 
-        # Arrange
-        now = datetime.now(UTC)
-
-        # Act
+        # Arrange & Act
         token = create_access_token(
             user_email="test@8thlight.com",
             user_name="Test User",
@@ -268,4 +262,6 @@ class TestJWTExpiry:
 
         # Token should expire 4 hours from issuance
         expected_expiry = iat + timedelta(hours=4)
-        assert abs((exp - expected_expiry).total_seconds()) < 2  # Allow 2 second variance
+        assert (
+            abs((exp - expected_expiry).total_seconds()) < 2
+        )  # Allow 2 second variance

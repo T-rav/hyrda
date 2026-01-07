@@ -221,6 +221,8 @@ class FastAPIAppFactory:
                 }
 
             test_app.dependency_overrides[get_current_user] = mock_get_current_user
-            test_app.dependency_overrides[require_admin_from_database] = mock_require_admin
+            test_app.dependency_overrides[require_admin_from_database] = (
+                mock_require_admin
+            )
 
         return client

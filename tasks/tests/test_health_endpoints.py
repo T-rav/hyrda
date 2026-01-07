@@ -3,15 +3,15 @@
 These tests verify that health endpoints work correctly for Docker healthchecks.
 """
 
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock
 
 
 @pytest.fixture
 def client(monkeypatch):
     """Create test client for FastAPI app with test configuration."""
-    import os
 
     # Set test database URLs to avoid MySQL connection
     monkeypatch.setenv("TASK_DATABASE_URL", "sqlite:///:memory:")

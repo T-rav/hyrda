@@ -136,9 +136,12 @@ class TestOpenAIEmbeddingsClientLoading:
     def test_get_client_raises_import_error_when_openai_not_installed(self, service):
         """Test that ImportError is raised when openai package is not installed."""
         # Act & Assert
-        with patch.dict("sys.modules", {"openai": None}), pytest.raises(
-            ImportError,
-            match="openai package not installed. Run: pip install openai",
+        with (
+            patch.dict("sys.modules", {"openai": None}),
+            pytest.raises(
+                ImportError,
+                match="openai package not installed. Run: pip install openai",
+            ),
         ):
             service._get_client()
 
