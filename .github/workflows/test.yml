@@ -127,6 +127,19 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Set up Node.js for UI build
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: tasks/ui/package-lock.json
+
+    - name: Build Tasks UI
+      working-directory: tasks/ui
+      run: |
+        npm ci
+        npm run build
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
