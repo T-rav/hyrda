@@ -84,10 +84,7 @@ class GDriveIngestJob(BaseJob):
             from models.base import get_db_session
             from models.oauth_credential import OAuthCredential
             from services.encryption_service import get_encryption_service
-            from services.gdrive.embedding_provider import OpenAIEmbeddingProvider
             from services.gdrive.ingestion_orchestrator import IngestionOrchestrator
-            from services.gdrive.llm_wrapper import SimpleLLMService
-            from services.gdrive.vector_store import QdrantVectorStore
 
             encryption_service = get_encryption_service()
 
@@ -194,13 +191,13 @@ class GDriveIngestJob(BaseJob):
                 import os
 
                 # Initialize embedding provider
-                embedding_provider = OpenAIEmbeddingProvider(
+                embedding_provider = OpenAIEmbeddingProvider(  # noqa: F821
                     api_key=os.getenv("EMBEDDING_API_KEY"),
                     model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
                 )
 
                 # Initialize vector store
-                vector_store = QdrantVectorStore(
+                vector_store = QdrantVectorStore(  # noqa: F821
                     host=os.getenv("VECTOR_HOST", "localhost"),
                     port=int(os.getenv("VECTOR_PORT", "6333")),
                     collection_name=os.getenv(
@@ -221,7 +218,7 @@ class GDriveIngestJob(BaseJob):
                     == "true"
                 )
                 if enable_contextual and os.getenv("LLM_API_KEY"):
-                    llm_service = SimpleLLMService(
+                    llm_service = SimpleLLMService(  # noqa: F821
                         api_key=os.getenv("LLM_API_KEY"),
                         model=os.getenv("LLM_MODEL", "gpt-4o"),
                     )
