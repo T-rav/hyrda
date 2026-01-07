@@ -125,7 +125,7 @@ class TestSchedulerService:
         service.start()
 
         # Add a job first
-        job = service.add_job(
+        service.add_job(
             func="builtins:print",
             trigger="interval",
             job_id="test_job_modify",

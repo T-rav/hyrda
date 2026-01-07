@@ -39,13 +39,13 @@ class TestInitDb:
 
     def test_init_db_creates_engine(self):
         """Test that init_db creates engine and session factory."""
-        from models.base import _SessionLocal, _engine, init_db
+        from models.base import _engine, _SessionLocal, init_db
 
         database_url = "sqlite:///:memory:"
         init_db(database_url)
 
         # Import again after init
-        from models.base import _SessionLocal, _engine
+        from models.base import _engine, _SessionLocal
 
         assert _engine is not None
         assert _SessionLocal is not None
@@ -59,7 +59,7 @@ class TestInitDb:
         init_data_db(database_url)
 
         # Import again after init
-        from models.base import _DataSessionLocal, _data_engine
+        from models.base import _data_engine, _DataSessionLocal
 
         assert _data_engine is not None
         assert _DataSessionLocal is not None
@@ -73,7 +73,6 @@ class TestGetDbSession:
         """Test that get_db_session initializes database lazily."""
         from unittest.mock import Mock
 
-        from config.settings import get_settings
         from models.base import get_db_session
 
         # Mock settings
@@ -89,7 +88,6 @@ class TestGetDbSession:
         """Test that database session closes on context exit."""
         from unittest.mock import Mock
 
-        from config.settings import get_settings
         from models.base import get_db_session, init_db
 
         # Mock settings
@@ -102,7 +100,6 @@ class TestGetDbSession:
 
         # Get session
         with get_db_session() as session:
-            session_id = id(session)
             assert not session.is_active or session.is_active  # Session is usable
 
         # After context, session should be closed
@@ -112,7 +109,6 @@ class TestGetDbSession:
         """Test that get_data_db_session initializes data database lazily."""
         from unittest.mock import Mock
 
-        from config.settings import get_settings
         from models.base import get_data_db_session
 
         # Mock settings
@@ -128,7 +124,6 @@ class TestGetDbSession:
         """Test that data database session closes on context exit."""
         from unittest.mock import Mock
 
-        from config.settings import get_settings
         from models.base import get_data_db_session, init_data_db
 
         # Mock settings
@@ -141,7 +136,6 @@ class TestGetDbSession:
 
         # Get session
         with get_data_db_session() as session:
-            session_id = id(session)
             assert not session.is_active or session.is_active  # Session is usable
 
         # After context, session should be closed
