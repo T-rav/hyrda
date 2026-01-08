@@ -1,83 +1,110 @@
-name: insightmesh
+name: librechat
 
 services:
+  # MongoDB for LibreChat user data
+  librechat-mongodb:
+    image: mongo:latest
+    container_name: librechat-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - librechat_mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${LIBRECHAT_MONGO_PASSWORD:-librechat_mongo_pass}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - insightmesh
+      - librechat
+
+  # LibreChat UI
   librechat:
-    build:
-      context: ./librechat-custom
-      dockerfile: Dockerfile
-    image: insightmesh-librechat:latest
-    container_name: insightmesh-librechat
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: librechat
     restart: unless-stopped
     ports:
       - "3080:3080"
+    depends_on:
+      librechat-mongodb:
+        condition: service_healthy
+    env_file:
+      - .env
     environment:
+      # MongoDB Configuration
+      - MONGO_URI=mongodb://admin:${LIBRECHAT_MONGO_PASSWORD:-librechat_mongo_pass}@librechat-mongodb:27017/LibreChat?authSource=admin
+
+      # App Configuration
       - HOST=0.0.0.0
       - PORT=3080
-      - MONGO_URI=mongodb://insightmesh-mongodb:27017/librechat
-      - MEILI_HOST=http://meilisearch:7700
-      # JWT Secrets for authentication
-      # SECURITY: In production, these MUST be set via environment variables
-      # Generate with: openssl rand -base64 32
-      # The validation script will prevent startup with default values in production
-      - JWT_SECRET=${JWT_SECRET:-insightmesh-librechat-jwt-secret-change-in-production}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-insightmesh-librechat-refresh-secret-change-in-production}
-      - ENVIRONMENT=${ENVIRONMENT:-development}
-      # API Keys
-      - OPENAI_API_KEY=${LIBRECHAT_SERVICE_TOKEN}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      # InsightMesh Service Configuration
-      - RAG_SERVICE_URL=http://insightmesh-rag-service:8002
-      - AGENT_SERVICE_URL=http://insightmesh-control-plane:5002
-      - LIBRECHAT_SERVICE_TOKEN=${LIBRECHAT_SERVICE_TOKEN}
-      # Social Login Configuration
-      - ALLOW_SOCIAL_LOGIN=true
-      - DOMAIN_CLIENT=${SERVER_BASE_URL:-http://localhost:3080}
-      - DOMAIN_SERVER=${SERVER_BASE_URL:-http://localhost:3080}
-      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
-      - GOOGLE_CALLBACK_URL=${SERVER_BASE_URL:-http://localhost:3080}/oauth/google/callback
+      - DOMAIN_CLIENT=${LIBRECHAT_DOMAIN_CLIENT:-http://localhost:3080}
+      - DOMAIN_SERVER=${LIBRECHAT_DOMAIN_SERVER:-http://localhost:3080}
+
+      # Session & Security
+      - JWT_SECRET=${LIBRECHAT_JWT_SECRET:-}
+      - JWT_REFRESH_SECRET=${LIBRECHAT_JWT_REFRESH_SECRET:-}
+      - CREDS_KEY=${LIBRECHAT_CREDS_KEY:-}
+      - CREDS_IV=${LIBRECHAT_CREDS_IV:-}
+
+      # OAuth Configuration (Google for InsightMesh SSO)
+      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
+      - GOOGLE_CALLBACK_URL=${LIBRECHAT_DOMAIN_SERVER:-http://localhost:3080}/oauth/google/callback
+
+      # InsightMesh RAG Service Integration
+      - RAG_API_URL=http://insightmesh-rag-service:8002
+      - AGENT_SERVICE_URL=http://insightmesh-agent-service:8000
+      - CONTROL_PLANE_URL=http://insightmesh-control-plane:6001
+
+      # LLM Provider Configuration (inherit from main .env)
+      - ANTHROPIC_API_KEY=${LLM_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # Feature Flags
+      - ALLOW_REGISTRATION=${LIBRECHAT_ALLOW_REGISTRATION:-true}
+      - ALLOW_UNVERIFIED_EMAIL_LOGIN=${LIBRECHAT_ALLOW_UNVERIFIED_EMAIL_LOGIN:-true}
+      - ALLOW_SOCIAL_LOGIN=${LIBRECHAT_ALLOW_SOCIAL_LOGIN:-true}
+
     volumes:
-      - ./librechat/librechat.yaml:/app/librechat.yaml:ro
       - librechat_data:/app/client/public/images
+      - librechat_logs:/app/api/logs
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3080/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3080/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    depends_on:
-      meilisearch:
-        condition: service_started
     networks:
       - insightmesh
+      - librechat
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
     labels:
       logging: "promtail"
       service: "librechat"
       component: "ui"
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.5
-    container_name: insightmesh-meilisearch
-    restart: unless-stopped
-    volumes:
-      - meilisearch_data:/meili_data
-    environment:
-      - MEILI_NO_ANALYTICS=true
-      - MEILI_ENV=production
-    networks:
-      - insightmesh
-    labels:
-      logging: "promtail"
-      service: "meilisearch"
-      component: "search"
-
 volumes:
+  librechat_mongodb_data:
+    driver: local
   librechat_data:
     driver: local
-  meilisearch_data:
+  librechat_logs:
     driver: local
 
 networks:
+  librechat:
+    name: librechat
+    driver: bridge
   insightmesh:
-    name: insightmesh
     external: true
+    name: insightmesh
