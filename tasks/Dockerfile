@@ -5,6 +5,7 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    ca-certificates \
     default-mysql-client \
     nginx \
     supervisor \
@@ -20,6 +21,10 @@ RUN useradd -m -u 1000 appuser
 # Create logs and cache directories with proper permissions
 RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
+
+# Trust all self-signed certificates for inter-service communication
+COPY .ssl/*-cert.pem /usr/local/share/ca-certificates/
+RUN update-ca-certificates
 
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .

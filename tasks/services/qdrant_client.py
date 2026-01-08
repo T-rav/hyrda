@@ -32,15 +32,12 @@ class QdrantClient:
             from qdrant_client.models import Distance, VectorParams
 
             # Initialize Qdrant client with HTTPS support
-            # Accept self-signed certificates in development environment
-            environment = os.getenv("ENVIRONMENT", "development")
-
+            # Self-signed certificates are trusted via system CA store
             if self.api_key:
                 self.client = QdrantSDK(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
-                    verify=environment != "development",  # Accept self-signed certs in dev
                 )
             else:
                 self.client = QdrantSDK(
@@ -48,7 +45,6 @@ class QdrantClient:
                     port=self.port,
                     timeout=60,
                     https=True,
-                    verify=environment != "development",  # Accept self-signed certs in dev
                 )
 
             # Create collection if it doesn't exist

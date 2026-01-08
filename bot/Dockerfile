@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     gcc \
     curl \
+    ca-certificates \
     default-mysql-client \
     libgobject-2.0-0 \
     libpango-1.0-0 \
@@ -30,6 +31,10 @@ RUN useradd -m -u 1000 appuser
 # Create logs directory with proper permissions
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
+
+# Trust all self-signed certificates for inter-service communication
+COPY .ssl/*-cert.pem /usr/local/share/ca-certificates/
+RUN update-ca-certificates
 
 # Copy shared utilities and bot code from project root (build context is project root)
 COPY --chown=appuser:appuser shared/ /app/../shared/

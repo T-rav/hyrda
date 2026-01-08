@@ -54,15 +54,12 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # Accept self-signed certificates in development environment
-            environment = os.getenv("ENVIRONMENT", "development")
-
+            # Self-signed certificates are trusted via system CA store
             if self.api_key:
                 self.client = QdrantClient(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
-                    verify=environment != "development",  # Accept self-signed certs in dev
                 )
             else:
                 self.client = QdrantClient(
@@ -70,7 +67,6 @@ class QdrantVectorStore(VectorStore):
                     port=self.port,
                     timeout=60,
                     https=True,
-                    verify=environment != "development",  # Accept self-signed certs in dev
                 )
 
             # Create collection if it doesn't exist

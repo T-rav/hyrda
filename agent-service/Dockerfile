@@ -37,6 +37,10 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
+# Trust all self-signed certificates for inter-service communication
+COPY .ssl/*-cert.pem /usr/local/share/ca-certificates/
+RUN update-ca-certificates
+
 # Copy shared library first
 COPY --chown=appuser:appuser ./shared /app/shared
 

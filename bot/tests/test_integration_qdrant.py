@@ -23,7 +23,7 @@ def qdrant_client():
     api_key = os.getenv("VECTOR_API_KEY")
 
     # Create client (synchronous for Qdrant SDK)
-    # Use HTTPS with self-signed certificate (development environment)
+    # Use HTTPS - self-signed certificates trusted via system CA store
     client = QdrantClient(
         host=host,
         port=port,
@@ -31,7 +31,6 @@ def qdrant_client():
         timeout=10.0,
         prefer_grpc=False,  # Use REST API
         https=True,  # Qdrant running on HTTPS
-        verify=False,  # Accept self-signed certificates in development
     )
 
     try:

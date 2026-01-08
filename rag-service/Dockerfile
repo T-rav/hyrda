@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     gcc \
     curl \
+    ca-certificates \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -22,6 +23,10 @@ RUN useradd -m -u 1000 appuser
 # Create logs directory with proper permissions
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
+
+# Trust all self-signed certificates for inter-service communication
+COPY .ssl/*-cert.pem /usr/local/share/ca-certificates/
+RUN update-ca-certificates
 
 # Copy shared library first (required for common utilities)
 COPY --chown=appuser:appuser ./shared /app/shared
