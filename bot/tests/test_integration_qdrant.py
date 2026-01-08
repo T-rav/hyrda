@@ -12,7 +12,7 @@ import pytest
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
+pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
