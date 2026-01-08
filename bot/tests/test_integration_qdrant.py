@@ -22,16 +22,35 @@ def qdrant_client():
     port = int(os.getenv("VECTOR_PORT", "6333"))
     api_key = os.getenv("VECTOR_API_KEY")
 
-    # Create client (synchronous for Qdrant SDK)
-    # Use HTTPS - self-signed certificates trusted via system CA store
-    client = QdrantClient(
-        host=host,
-        port=port,
-        api_key=api_key,
-        timeout=10.0,
-        prefer_grpc=False,  # Use REST API
-        https=True,  # Qdrant running on HTTPS
+    # Path to Qdrant certificate for SSL validation
+    # This allows tests to run without system-level certificate trust
+    cert_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        ".ssl",
+        "qdrant-cert.pem",
     )
+
+    # Create client (synchronous for Qdrant SDK)
+    # Use HTTPS with certificate validation via cert file
+    if os.path.exists(cert_path):
+        # Use certificate file for validation (development/testing)
+        client = QdrantClient(
+            url=f"https://{host}:{port}",
+            api_key=api_key,
+            timeout=10.0,
+            prefer_grpc=False,  # Use REST API
+            verify=cert_path,  # Validate against certificate file
+        )
+    else:
+        # Fallback to system CA store (CI/production)
+        client = QdrantClient(
+            host=host,
+            port=port,
+            api_key=api_key,
+            timeout=10.0,
+            prefer_grpc=False,  # Use REST API
+            https=True,
+        )
 
     try:
         yield client

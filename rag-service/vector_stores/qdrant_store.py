@@ -58,12 +58,23 @@ class QdrantVectorStore(VectorStore):
                 raise ImportError("qdrant-client package is required for Qdrant vector store")
 
             # Initialize Qdrant client with HTTPS support
-            # Self-signed certificates are trusted via system CA store
+            # Check for certificate path (development) or use system CA store (production/Docker)
+            cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
+
+            # Determine SSL verification strategy
+            if cert_path and os.path.exists(cert_path):
+                # Use certificate file for validation (development/testing)
+                verify = cert_path
+            else:
+                # Use system CA store (Docker/production)
+                verify = True
+
             if self.api_key:
                 self.client = QdrantClient(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=DEFAULT_QDRANT_TIMEOUT,
+                    verify=verify,
                 )
             else:
                 self.client = QdrantClient(
@@ -71,6 +82,7 @@ class QdrantVectorStore(VectorStore):
                     port=self.port,
                     timeout=DEFAULT_QDRANT_TIMEOUT,
                     https=True,
+                    verify=verify,
                 )
 
             # Create collection if it doesn't exist
