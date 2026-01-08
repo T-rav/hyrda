@@ -24,6 +24,9 @@ RUN mkdir -p /app/logs /app/.edgar && \
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
 
+# Copy shared utilities (needed for middleware, auth, etc.)
+COPY --chown=appuser:appuser ./shared /app/shared
+
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .

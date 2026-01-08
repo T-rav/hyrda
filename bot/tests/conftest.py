@@ -317,3 +317,53 @@ def mock_external_apis():
         mock_session.return_value.__aenter__.return_value.post.return_value.__aenter__.return_value = mock_response
 
         yield mock_session
+
+
+# ==============================================================================
+# Integration Test Fixtures (shared across all integration tests)
+# ==============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_integration_test_environment():
+    """Set up integration test environment variables."""
+    # Service token for service-to-service auth (generic)
+    if not os.getenv("SERVICE_TOKEN"):
+        os.environ["SERVICE_TOKEN"] = (
+            "172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"
+        )
+
+    # Bot service token for agent API calls
+    if not os.getenv("BOT_SERVICE_TOKEN"):
+        os.environ["BOT_SERVICE_TOKEN"] = (
+            "bot-service-secret-token-d6af3373b190375c81f3753d55ac601496255ac5a9a49e78a33e6139cffea58d"
+        )
+
+
+@pytest.fixture
+def service_urls() -> dict[str, str]:
+    """Service URLs for integration testing.
+
+    Uses localhost URLs for tests running on host machine against Docker services.
+    """
+    return {
+        "bot": os.getenv("BOT_SERVICE_URL", "http://localhost:8080"),
+        "rag_service": os.getenv("RAG_SERVICE_URL", "http://localhost:8002"),
+        "agent_service": os.getenv("AGENT_SERVICE_URL", "https://localhost:8000"),
+        "control_plane": os.getenv("CONTROL_PLANE_URL", "https://localhost:6001"),
+        "tasks": os.getenv("TASKS_SERVICE_URL", "https://localhost:5001"),
+    }
+
+
+@pytest.fixture
+async def http_client():
+    """Base HTTP client without authentication for integration tests.
+
+    Configured with verify=False to accept self-signed SSL certificates.
+    """
+    import httpx
+
+    async with httpx.AsyncClient(
+        timeout=30.0, follow_redirects=False, verify=False
+    ) as client:
+        yield client

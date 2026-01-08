@@ -15,30 +15,7 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
-
-# ============================================================================
-# Test Fixtures
-# ============================================================================
-
-
-@pytest.fixture
-def service_urls():
-    """Service URLs for integration testing."""
-    return {
-        "bot": os.getenv("BOT_SERVICE_URL", "http://localhost:8080"),
-        "rag_service": os.getenv("RAG_SERVICE_URL", "http://localhost:8002"),
-        "agent_service": os.getenv("AGENT_SERVICE_URL", "https://localhost:8000"),
-        "control_plane": os.getenv("CONTROL_PLANE_URL", "https://localhost:6001"),
-        "tasks": os.getenv("TASKS_SERVICE_URL", "https://localhost:5001"),
-    }
-
-
-@pytest.fixture
-async def http_client():
-    """Unauthenticated HTTP client - for testing that endpoints require auth."""
-    async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-        yield client
-
+# Test fixtures (service_urls, http_client) now in conftest.py
 
 # ============================================================================
 # Health Check Tests - STRICT
@@ -189,9 +166,10 @@ async def test_agent_service_list_with_service_token(http_client, service_urls):
     When: GET /api/agents
     Then: MUST return 200 (or test FAILS)
     """
-    service_token = os.getenv("SERVICE_TOKEN")
+    # Use BOT_SERVICE_TOKEN since bot service typically calls agent endpoints
+    service_token = os.getenv("BOT_SERVICE_TOKEN")
     if not service_token:
-        pytest.skip("SERVICE_TOKEN not configured")
+        pytest.skip("BOT_SERVICE_TOKEN not configured")
 
     agents_url = f"{service_urls['agent_service']}/api/agents"
     headers = {"X-Service-Token": service_token}
