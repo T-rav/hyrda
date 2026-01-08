@@ -1,7 +1,8 @@
 """Unit tests for service account authentication dependency."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import HTTPException, Request
 
 from dependencies.service_account_auth import (
@@ -82,17 +83,16 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_httpx_response
-                )
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_httpx_response
+            )
 
-                result = await verify_service_account_api_key(mock_request)
+            result = await verify_service_account_api_key(mock_request)
 
-                assert result is not None
-                assert result.name == "Test Account"
-                assert "agents:invoke" in result.scopes
+            assert result is not None
+            assert result.name == "Test Account"
+            assert "agents:invoke" in result.scopes
 
     async def test_extracts_from_authorization_bearer(self, mock_request, mock_httpx_response):
         """Test extracting API key from Authorization: Bearer header."""
@@ -104,16 +104,15 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_httpx_response
-                )
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_httpx_response
+            )
 
-                result = await verify_service_account_api_key(mock_request)
+            result = await verify_service_account_api_key(mock_request)
 
-                assert result is not None
-                assert result.name == "Test Account"
+            assert result is not None
+            assert result.name == "Test Account"
 
     async def test_401_raises_http_exception(self, mock_request):
         """Test that 401 from control-plane raises HTTPException."""
@@ -129,17 +128,16 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
-                with pytest.raises(HTTPException) as exc_info:
-                    await verify_service_account_api_key(mock_request)
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_service_account_api_key(mock_request)
 
-                assert exc_info.value.status_code == 401
-                assert "Invalid API key" in exc_info.value.detail
+            assert exc_info.value.status_code == 401
+            assert "Invalid API key" in exc_info.value.detail
 
     async def test_403_raises_http_exception(self, mock_request):
         """Test that 403 from control-plane raises HTTPException."""
@@ -155,17 +153,16 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
-                with pytest.raises(HTTPException) as exc_info:
-                    await verify_service_account_api_key(mock_request)
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_service_account_api_key(mock_request)
 
-                assert exc_info.value.status_code == 403
-                assert "revoked" in exc_info.value.detail.lower()
+            assert exc_info.value.status_code == 403
+            assert "revoked" in exc_info.value.detail.lower()
 
     async def test_429_raises_http_exception(self, mock_request):
         """Test that 429 from control-plane raises HTTPException."""
@@ -181,16 +178,15 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    return_value=mock_response
-                )
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
-                with pytest.raises(HTTPException) as exc_info:
-                    await verify_service_account_api_key(mock_request)
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_service_account_api_key(mock_request)
 
-                assert exc_info.value.status_code == 429
+            assert exc_info.value.status_code == 429
 
     async def test_missing_control_plane_url_raises_500(self, mock_request):
         """Test that missing CONTROL_PLANE_URL raises 500."""
@@ -213,19 +209,18 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                import httpx
+        ), patch("httpx.AsyncClient") as mock_client:
+            import httpx
 
-                mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-                    side_effect=httpx.RequestError("Connection failed")
-                )
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=httpx.RequestError("Connection failed")
+            )
 
-                with pytest.raises(HTTPException) as exc_info:
-                    await verify_service_account_api_key(mock_request)
+            with pytest.raises(HTTPException) as exc_info:
+                await verify_service_account_api_key(mock_request)
 
-                assert exc_info.value.status_code == 503
-                assert "unavailable" in exc_info.value.detail
+            assert exc_info.value.status_code == 503
+            assert "unavailable" in exc_info.value.detail
 
     async def test_includes_client_ip_in_request(self, mock_request, mock_httpx_response):
         """Test that client IP is included in validation request."""
@@ -238,13 +233,12 @@ class TestVerifyServiceAccountApiKey:
                 "CONTROL_PLANE_URL": "http://control-plane:6001",
                 "AGENT_SERVICE_TOKEN": "test-token",
             },
-        ):
-            with patch("httpx.AsyncClient") as mock_client:
-                mock_post = AsyncMock(return_value=mock_httpx_response)
-                mock_client.return_value.__aenter__.return_value.post = mock_post
+        ), patch("httpx.AsyncClient") as mock_client:
+            mock_post = AsyncMock(return_value=mock_httpx_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
 
-                await verify_service_account_api_key(mock_request)
+            await verify_service_account_api_key(mock_request)
 
-                # Verify client IP was included in request
-                call_args = mock_post.call_args
-                assert call_args.kwargs["json"]["client_ip"] == "10.0.0.5"
+            # Verify client IP was included in request
+            call_args = mock_post.call_args
+            assert call_args.kwargs["json"]["client_ip"] == "10.0.0.5"

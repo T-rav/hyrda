@@ -32,6 +32,7 @@ class LLMServiceProtocol(Protocol):
 
         Returns:
             Generated response text or None if generation fails
+
         """
         ...
 
@@ -53,6 +54,7 @@ class LLMServiceProtocol(Protocol):
 
         Returns:
             RAG-enhanced response or None if generation fails
+
         """
         ...
 
@@ -66,5 +68,6 @@ class LLMServiceProtocol(Protocol):
 
         Returns:
             Dict containing health status information
+
         """
         ...

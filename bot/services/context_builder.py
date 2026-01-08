@@ -34,6 +34,7 @@ class ContextBuilder:
         Returns:
             Tuple of (final_system_message, messages_for_llm)
             final_system_message can be None if no system message or context provided
+
         """
         final_system_message = system_message
 
@@ -129,6 +130,7 @@ class ContextBuilder:
 
         Returns:
             Human-readable summary string
+
         """
         if not context_chunks:
             return "No context retrieved"
@@ -168,6 +170,7 @@ class ContextBuilder:
 
         Returns:
             Quality metrics dictionary
+
         """
         if not context_chunks:
             return {

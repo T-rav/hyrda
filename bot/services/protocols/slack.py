@@ -31,6 +31,7 @@ class SlackServiceProtocol(Protocol):
 
         Returns:
             Message timestamp or None if sending fails
+
         """
         ...
 
@@ -46,6 +47,7 @@ class SlackServiceProtocol(Protocol):
 
         Returns:
             Tuple of (messages list, is_in_thread boolean)
+
         """
         ...
 
@@ -61,6 +63,7 @@ class SlackServiceProtocol(Protocol):
 
         Returns:
             Message timestamp or None if sending fails
+
         """
         ...
 

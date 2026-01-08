@@ -1,6 +1,5 @@
 """Tests for idempotency key support."""
 
-import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock
 
@@ -9,7 +8,6 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from utils.idempotency import (
-    DEFAULT_TTL_HOURS,
     MAX_IDEMPOTENCY_KEYS,
     _cleanup_expired_keys,
     _idempotency_cache,

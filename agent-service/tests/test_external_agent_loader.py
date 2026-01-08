@@ -26,7 +26,6 @@ def reset_external_loader_singleton():
     import services.external_agent_loader as loader_module
 
     # Save original state
-    original_loader = loader_module._external_loader
 
     yield
 

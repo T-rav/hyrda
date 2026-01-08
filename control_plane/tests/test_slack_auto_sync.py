@@ -10,7 +10,7 @@ Tests verify:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock, call
+from unittest.mock import Mock, patch, MagicMock
 import sys
 import os
 from pathlib import Path
@@ -71,7 +71,6 @@ class TestFirstUserAsAdmin:
         # Simulate OAuth callback logic
         email = "first@8thlight.com"
         is_admin = False
-        user_id = None
 
         with get_db_session() as db_session:
             user = db_session.query(User).filter(User.email == email).first()
@@ -112,7 +111,6 @@ class TestFirstUserAsAdmin:
         # Simulate OAuth callback logic for second user
         email = "second@8thlight.com"
         is_admin = False
-        user_id = None
 
         with get_db_session() as db_session:
             user = db_session.query(User).filter(User.email == email).first()

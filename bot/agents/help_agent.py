@@ -37,6 +37,7 @@ class HelpAgent(BaseAgent):
 
         Returns:
             Result dict with response text listing all agents
+
         """
         if not self.validate_context(context):
             return {

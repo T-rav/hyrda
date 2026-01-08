@@ -74,6 +74,7 @@ class MeddicAgent(BaseAgent):
 
         Returns:
             Result dict with structured MEDDPICC analysis and coaching
+
         """
         if not self.validate_context(context):
             return {

@@ -160,7 +160,7 @@ def test_web_search_deep_search_bypasses_cache():
         mock_tavily.return_value = ["Deep Result 1"]
 
         # Execute deep search
-        result = tool._run("test query", "deep")
+        tool._run("test query", "deep")
 
         # Should call API directly (no cache check)
         mock_tavily.assert_called_once()

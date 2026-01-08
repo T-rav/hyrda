@@ -32,6 +32,7 @@ class BaseService(ABC):
 
         Args:
             service_name: Optional service name override for logging
+
         """
         self._service_name = service_name or self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__module__)
@@ -122,6 +123,7 @@ class BaseService(ABC):
             HealthCheckResponse containing health status information
 
         Override this method in subclasses for service-specific health checks.
+
         """
         status = "healthy" if self._initialized and not self._closed else "unhealthy"
 
@@ -138,6 +140,7 @@ class BaseService(ABC):
 
         Raises:
             RuntimeError: If the service is closed
+
         """
         if self._closed:
             raise RuntimeError(f"Service {self._service_name} is closed")
@@ -152,6 +155,7 @@ class BaseService(ABC):
         Args:
             operation: Operation name
             **metadata: Additional metadata to log
+
         """
         self.logger.info(
             f"{self._service_name} - {operation}",
@@ -166,6 +170,7 @@ class BaseService(ABC):
             operation: Operation that failed
             error: Exception that occurred
             **metadata: Additional metadata to log
+
         """
         self.logger.error(
             f"{self._service_name} - {operation} failed: {error}",
@@ -216,6 +221,7 @@ class ManagedService(BaseService):
         Args:
             name: Dependency name
             service: Service instance
+
         """
         self._dependencies[name] = service
 
@@ -231,6 +237,7 @@ class ManagedService(BaseService):
 
         Raises:
             KeyError: If dependency is not found
+
         """
         if name not in self._dependencies:
             raise KeyError(f"Dependency '{name}' not found in {self._service_name}")

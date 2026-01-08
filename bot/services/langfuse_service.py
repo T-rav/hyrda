@@ -103,6 +103,7 @@ class LangfuseService:
             error: Error message if call failed
             prompt_template_name: Name of the Langfuse prompt template used
             prompt_template_version: Version of the prompt template used
+
         """
         if not self.enabled:
             return
@@ -170,6 +171,7 @@ class LangfuseService:
             query: Search query
             results: Retrieved documents/chunks
             metadata: Additional metadata
+
         """
         if not self.enabled:
             return
@@ -268,6 +270,7 @@ class LangfuseService:
             tool_input: Input parameters to the tool
             tool_output: Output/results from the tool
             metadata: Additional metadata
+
         """
         if not self.enabled:
             return
@@ -317,6 +320,7 @@ class LangfuseService:
             success_count: Number of successfully ingested chunks
             error_count: Number of failed chunks
             metadata: Additional metadata
+
         """
         if not self.enabled:
             return
@@ -400,6 +404,7 @@ class LangfuseService:
             conversation_id: Conversation ID
             query: User query
             metadata: Additional metadata
+
         """
         if not self.enabled or not self.client:
             return None
@@ -438,6 +443,7 @@ class LangfuseService:
             user_id: Slack user ID
             conversation_id: Conversation/thread ID for session grouping
             metadata: Additional metadata
+
         """
         if not self.enabled or not self.client:
             return
@@ -477,6 +483,7 @@ class LangfuseService:
             user_message: User's message
             bot_response: Bot's response
             metadata: Additional metadata
+
         """
         if not self.enabled or not self.client:
             return
@@ -526,6 +533,7 @@ class LangfuseService:
             value: Score value (typically 0-1 or 1-5)
             comment: Optional comment about the score
             metadata: Additional metadata
+
         """
         if not self.enabled:
             return
@@ -560,6 +568,7 @@ class LangfuseService:
 
         Returns:
             The prompt template string or None if not found/failed
+
         """
         if not self.enabled or not self.client:
             logger.warning("Langfuse not enabled - cannot fetch prompt template")
@@ -599,6 +608,7 @@ class LangfuseService:
             - total_interactions: Total number of observations (LLM calls, RAG, tools, etc)
             - unique_sessions: Number of unique conversation threads
             - start_date: The start date used for the query
+
         """
         if not self.enabled or not self.settings.public_key:
             return {

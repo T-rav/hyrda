@@ -25,7 +25,6 @@ from shared.middleware.prometheus_metrics import (
 )
 from shared.middleware.redis_session import RedisSessionMiddleware
 from shared.middleware.security import (
-    HTTPSRedirectMiddleware,
     SecurityHeadersMiddleware,
 )
 from shared.middleware.tracing import TracingMiddleware

@@ -35,6 +35,7 @@ async def final_report_generation(
 
     Returns:
         Dict with final_report and executive_summary
+
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     notes = state.get("notes", [])

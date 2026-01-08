@@ -59,6 +59,7 @@ class CircuitBreaker:
         failure_threshold: Number of failures before opening circuit
         recovery_timeout: Seconds to wait before trying half-open
         success_threshold: Successes needed in half-open to close circuit
+
     """
 
     def __init__(
@@ -159,6 +160,7 @@ class AgentClient:
 
         Args:
             base_url: Base URL of agent-service (defaults to Docker service name)
+
         """
         self.base_url = base_url.rstrip("/")
         # Reduced timeout from 5min to 30s to fail fast
@@ -210,6 +212,7 @@ class AgentClient:
         Raises:
             AgentClientError: If agent execution fails
             CircuitBreakerError: If circuit breaker is open
+
         """
         # Wrap with circuit breaker
         wrapped_func = self.circuit_breaker.call(self._invoke_agent_internal)
@@ -230,6 +233,7 @@ class AgentClient:
 
         Raises:
             AgentClientError: If agent execution fails
+
         """
         url = f"{self.base_url}/api/agents/{agent_name}/invoke"
         logger.info(f"Calling agent-service: {url}")
@@ -341,6 +345,7 @@ class AgentClient:
 
         Raises:
             AgentClientError: If request fails
+
         """
         url = f"{self.base_url}/api/agents"
 
@@ -371,6 +376,7 @@ class AgentClient:
 
         Raises:
             AgentClientError: If agent execution fails
+
         """
         url = f"{self.base_url}/api/agents/{agent_name}/stream"
         logger.info(f"Streaming agent-service: {url}")
@@ -419,6 +425,7 @@ class AgentClient:
 
         Returns:
             Dictionary with circuit breaker state and metrics
+
         """
         return {
             "state": self.circuit_breaker.state.value,
@@ -438,6 +445,7 @@ class AgentClient:
 
         Returns:
             Serializable context dictionary
+
         """
         serializable = {}
 
@@ -473,6 +481,7 @@ def get_agent_client() -> AgentClient:
 
     Returns:
         AgentClient instance
+
     """
     global _agent_client  # noqa: PLW0603
 

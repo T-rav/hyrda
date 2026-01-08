@@ -36,6 +36,7 @@ class ContextualRetrievalService:
 
         Returns:
             List of contextualized chunks with prepended context
+
         """
         if not chunks:
             return []

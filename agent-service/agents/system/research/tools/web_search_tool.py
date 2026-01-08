@@ -4,6 +4,7 @@ Better than OpenAI/Gemini research with multi-source search and dual caching.
 Automatically caches all search results to Redis (fast) + MinIO (persistent).
 """
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -211,12 +212,10 @@ class EnhancedWebSearchTool(BaseTool):
                         logger.info(f"✅ MinIO cache hit for: {query[:50]}...")
                         # Re-cache in Redis for fast access
                         if self.redis_client:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self.redis_client.setex(
                                     cache_key, self.redis_ttl, str(content)
                                 )
-                            except Exception:
-                                pass
                         return str(content)
             except Exception as e:
                 logger.warning(f"MinIO cache check failed: {e}")

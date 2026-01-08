@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,7 @@ class InternalSearchTool(BaseTool):
     qdrant_client: Any  # Direct Qdrant client (REQUIRED)
     vector_collection: str  # Qdrant collection name (REQUIRED)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def __init__(
         self,
@@ -79,6 +78,7 @@ class InternalSearchTool(BaseTool):
             qdrant_client: Direct Qdrant client (REQUIRED)
             vector_collection: Qdrant collection name (REQUIRED)
             **kwargs: Additional BaseTool arguments
+
         """
         # If qdrant_client or vector_collection not provided, lazy-load from environment
         if qdrant_client is None or vector_collection is None:
@@ -183,6 +183,7 @@ class InternalSearchTool(BaseTool):
         Returns:
             List of tuples: [(doc_dict, score), ...]
             where doc_dict has 'page_content' and 'metadata' keys (LangChain-compatible format)
+
         """
         # If qdrant_client not initialized, return empty results
         if not self.qdrant_client:
@@ -240,6 +241,7 @@ class InternalSearchTool(BaseTool):
 
         Returns:
             Formatted search results with citations
+
         """
         # Check if components are available
         if not all([self.qdrant_client, self.llm, self.embeddings]):
@@ -625,6 +627,7 @@ class InternalSearchTool(BaseTool):
 
         Returns:
             Rewritten query optimized for internal knowledge retrieval
+
         """
         try:
             # Extract company/client names from original query to preserve them
@@ -689,6 +692,7 @@ Now rewrite: "{sub_query}"
 
         Returns:
             List of sub-queries
+
         """
         # Extract company name if present
         import re
@@ -771,6 +775,7 @@ Return ONLY the JSON array, no explanation."""
 
         Returns:
             Synthesized summary
+
         """
         if not docs:
             return "No relevant information found."
@@ -1064,6 +1069,7 @@ Keep your response focused and informative (2-3 paragraphs)."""
 
         Returns:
             Formatted result string
+
         """
         result_text = f"# Internal Knowledge Base Search\n\n{summary}\n\n"
 
@@ -1136,6 +1142,7 @@ def internal_search_tool(
 
     Returns:
         Configured InternalSearchTool or None if unavailable
+
     """
     try:
         # Require both qdrant_client and vector_collection or neither (for lazy-loading from env)

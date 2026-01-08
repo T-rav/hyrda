@@ -21,6 +21,7 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
 
     Returns:
         System prompt with user context
+
     """
     prompt_service = get_prompt_service()
     base_prompt = ""

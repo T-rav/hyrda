@@ -138,6 +138,7 @@ class ServiceFactory:
 
         Returns:
             Service instance
+
         """
         return await self.container.get(service_type)
 
@@ -159,6 +160,7 @@ async def create_service_factory(settings: Settings) -> ServiceFactory:
 
     Returns:
         Initialized service factory
+
     """
     from services.container import get_container
 

@@ -8,9 +8,9 @@ These tests verify that the planner prompt:
 """
 
 import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
@@ -114,7 +114,7 @@ class TestPlannerPromptBehavior:
 
         with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                result = await create_research_plan(state)
+                await create_research_plan(state)
 
                 # Verify prompt included query and depth
                 assert captured_prompt is not None
@@ -138,7 +138,7 @@ class TestPlannerPromptBehavior:
 
         with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                result = await create_research_plan(state)
+                await create_research_plan(state)
 
                 # Verify prompt requests structured format
                 assert captured_prompt is not None
@@ -164,7 +164,7 @@ class TestPlannerPromptBehavior:
 
         with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                result = await create_research_plan(state)
+                await create_research_plan(state)
 
                 # Verify example doesn't bias toward companies
                 assert captured_prompt is not None

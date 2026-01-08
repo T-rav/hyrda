@@ -116,6 +116,7 @@ async def run_source_selection(
 
     Returns:
         Dict with selected_indices and reasoning
+
     """
     import re
 
@@ -187,6 +188,7 @@ async def evaluate_selection(
 
     Returns:
         (passed, errors, metrics) tuple
+
     """
     errors = []
     metrics = {}

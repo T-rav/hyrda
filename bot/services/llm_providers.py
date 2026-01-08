@@ -41,6 +41,7 @@ class LLMProvider(ABC):
 
         Returns:
             String response, or dict with tool_calls if tools were used
+
         """
         pass
 

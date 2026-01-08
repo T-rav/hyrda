@@ -47,6 +47,7 @@ def get_security_db_session(database_url: str | None = None):
 
     Yields:
         Database session for security database
+
     """
     global _SecuritySessionLocal  # noqa: PLW0602
 

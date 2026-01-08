@@ -8,9 +8,8 @@ import os
 from datetime import datetime, timezone
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from models import ServiceAccount, get_db_session
 from models.service_account import generate_api_key
@@ -195,7 +194,7 @@ async def list_service_accounts(
     with get_db_session() as db:
         query = db.query(ServiceAccount)
         if not include_revoked:
-            query = query.filter(ServiceAccount.is_revoked == False)
+            query = query.filter(not ServiceAccount.is_revoked)
 
         accounts = query.order_by(ServiceAccount.created_at.desc()).all()
 
@@ -504,7 +503,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     """
     import hashlib
 
-    from dependencies.service_auth import verify_service_auth
 
     # This endpoint requires service-to-service authentication
     # (agent-service must authenticate to call this)

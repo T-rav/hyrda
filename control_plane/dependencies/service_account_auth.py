@@ -11,7 +11,6 @@ Validates API keys from external integrations and enforces:
 
 import logging
 from datetime import datetime, timezone
-from functools import lru_cache
 
 import bcrypt
 from fastapi import Depends, Header, HTTPException, Request

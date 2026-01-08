@@ -30,6 +30,7 @@ class RAGClient:
 
         Args:
             base_url: Base URL of rag-service (defaults to Docker service name)
+
         """
         self.base_url = base_url.rstrip("/")
         # Increased timeout for long-running agents (profile, research, etc.)
@@ -54,6 +55,7 @@ class RAGClient:
 
         Returns:
             Tuple of (patterns, pattern_map) where pattern_map is {pattern: agent_name}
+
         """
         import time
 
@@ -127,6 +129,7 @@ class RAGClient:
 
         Returns:
             List of regex patterns that trigger agent routing
+
         """
         import time
 
@@ -228,6 +231,7 @@ class RAGClient:
 
         Raises:
             RAGClientError: If request fails
+
         """
         url = f"{self.base_url}/api/v1/chat/completions"
 
@@ -320,6 +324,7 @@ class RAGClient:
 
         Raises:
             RAGClientError: If the request fails
+
         """
         url = f"{self.base_url}/api/v1/chat/completions"
 
@@ -416,6 +421,7 @@ def get_rag_client() -> RAGClient:
 
     Returns:
         RAGClient instance
+
     """
     global _rag_client  # noqa: PLW0603
 

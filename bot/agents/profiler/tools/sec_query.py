@@ -75,6 +75,7 @@ class SECQueryTool(BaseTool):
             llm: LangChain ChatModel for query rewriting
             openai_api_key: OpenAI API key for embeddings
             **kwargs: Additional BaseTool arguments
+
         """
         kwargs["llm"] = llm
         kwargs["openai_api_key"] = openai_api_key
@@ -124,6 +125,7 @@ class SECQueryTool(BaseTool):
 
         Returns:
             Formatted search results with sources
+
         """
         try:
             # Validate query

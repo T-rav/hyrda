@@ -27,6 +27,7 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
 
     Returns:
         Extracted text content from the PDF
+
     """
     from services.embedding import chunk_text
 
@@ -78,6 +79,7 @@ async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
 
     Returns:
         Extracted text content
+
     """
     if not PYMUPDF_AVAILABLE:
         logger.warning("PyMuPDF not available - cannot extract PDF text")

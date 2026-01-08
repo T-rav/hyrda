@@ -25,15 +25,12 @@ control_plane_dir = Path(__file__).parent.parent
 if str(control_plane_dir) not in sys.path:
     sys.path.insert(0, str(control_plane_dir))
 
-import time
 import pytest
 import redis
-import bcrypt
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from models.base import get_db_session, Base
 from models import ServiceAccount
-from models.service_account import generate_api_key
 
 # Create tables
 with get_db_session() as session:

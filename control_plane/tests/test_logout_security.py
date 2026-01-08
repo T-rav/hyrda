@@ -9,7 +9,7 @@ Tests verify:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 import sys
 import os
 from pathlib import Path
@@ -81,8 +81,6 @@ class TestLogoutCookieDeletion:
     ):
         """Logout should delete cookie with matching parameters."""
         from fastapi import Request
-        from fastapi.responses import JSONResponse
-        from unittest.mock import AsyncMock
 
         # Mock request with session and cookie
         mock_request = MagicMock(spec=Request)
@@ -104,7 +102,7 @@ class TestLogoutCookieDeletion:
             # Call logout (it's async, so we need to handle that)
             import asyncio
 
-            result = asyncio.run(logout(mock_request))
+            asyncio.run(logout(mock_request))
 
             # Verify delete_cookie was called with correct parameters
             mock_response.delete_cookie.assert_called_once_with(
@@ -118,7 +116,6 @@ class TestLogoutCookieDeletion:
     def test_logout_clears_session(self, mock_revoke_token, mock_oauth_env):
         """Logout should clear session data."""
         from fastapi import Request
-        from unittest.mock import AsyncMock
 
         mock_request = MagicMock(spec=Request)
         # Make session a MagicMock so we can track clear() calls

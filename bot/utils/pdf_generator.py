@@ -33,6 +33,7 @@ def markdown_to_pdf(
 
     Returns:
         BytesIO containing the PDF, or None if generation fails
+
     """
     try:
         # Convert markdown to HTML
@@ -84,6 +85,7 @@ def _build_html_document(
 
     Returns:
         Complete HTML document string
+
     """
     # Get CSS based on style
     css = _get_css_for_style(style)
@@ -128,6 +130,7 @@ def _build_metadata_section(metadata: dict[str, Any]) -> str:
 
     Returns:
         HTML string for metadata section
+
     """
     if not metadata:
         return ""
@@ -164,6 +167,7 @@ def _get_css_for_style(style: str) -> str:
 
     Returns:
         CSS string
+
     """
     # Base styles (common to all presets)
     base_css = """
@@ -417,6 +421,7 @@ def get_pdf_filename(title: str, profile_type: str = "profile") -> str:
 
     Returns:
         Safe filename string
+
     """
     # Clean title for filename
     safe_title = "".join(

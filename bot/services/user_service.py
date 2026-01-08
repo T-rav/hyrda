@@ -42,6 +42,7 @@ class UserService:
         Args:
             redis_client: Optional Redis client for caching
             database_url: Database connection URL
+
         """
         self.redis_client = redis_client
         self._session_factory = None
@@ -71,6 +72,7 @@ class UserService:
 
         Returns:
             Cached user info or None if not in cache
+
         """
         if not self.redis_client:
             return None
@@ -97,6 +99,7 @@ class UserService:
         Args:
             slack_user_id: The Slack user ID
             user_info: User information to cache
+
         """
         if not self.redis_client:
             return
@@ -118,6 +121,7 @@ class UserService:
 
         Returns:
             Dictionary with user info or None if not found
+
         """
         # Try cache first
         cached_info = self._get_from_cache(slack_user_id)
@@ -144,6 +148,7 @@ class UserService:
 
         Returns:
             User info dictionary or None if not found
+
         """
         if not self._session_factory:
             logger.warning("Database not configured, cannot fetch user info")
@@ -178,6 +183,7 @@ class UserService:
 
         Args:
             slack_user_id: The Slack user ID to invalidate
+
         """
         if not self.redis_client:
             return
@@ -205,6 +211,7 @@ def get_user_service(redis_client=None, database_url: str | None = None) -> User
 
     Returns:
         UserService instance
+
     """
     global _user_service  # noqa: PLW0603
     if _user_service is None:

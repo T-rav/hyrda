@@ -84,6 +84,7 @@ class LLMService:
 
         Returns:
             Generated response or None if failed
+
         """
         metrics_service = get_metrics_service()
         start_time = time.time()
@@ -184,6 +185,7 @@ class LLMService:
 
         Returns:
             Tuple of (success_count, error_count)
+
         """
         try:
             return await self.rag_service.ingest_documents(documents)
@@ -215,6 +217,7 @@ async def create_llm_service(llm_settings) -> LLMService:
 
     Returns:
         Initialized LLMService instance
+
     """
     # Create a minimal settings object with just the LLM settings
     # This is needed for contextual retrieval functionality

@@ -45,6 +45,7 @@ class TavilyClient:
 
         Returns:
             List of search results with title, url, content (snippet)
+
         """
         if not self.session:
             await self.initialize()
@@ -94,6 +95,7 @@ class TavilyClient:
 
         Returns:
             Dict with success, url, title, content (markdown)
+
         """
         if not self.session:
             await self.initialize()
@@ -163,6 +165,7 @@ class PerplexityClient:
 
         Returns:
             Dict with answer, sources, success
+
         """
         if not self.session:
             await self.initialize()
@@ -314,6 +317,7 @@ def get_tool_definitions(include_deep_research: bool = False) -> list[dict[str, 
         List of tool definitions for function calling
         - Regular chat: web_search + scrape_url (Tavily only)
         - LangGraph agents: web_search + scrape_url + deep_research (Tavily + Perplexity)
+
     """
     tools = [
         {

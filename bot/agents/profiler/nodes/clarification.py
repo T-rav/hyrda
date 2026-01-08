@@ -31,6 +31,7 @@ async def clarify_with_user(
 
     Returns:
         Command to proceed to write_research_brief or END with question
+
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
 

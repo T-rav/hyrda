@@ -22,6 +22,7 @@ class ThreadTrackingService:
 
         Args:
             redis_url: Redis connection URL
+
         """
         self.redis_url = redis_url
         self.redis_client = None
@@ -67,6 +68,7 @@ class ThreadTrackingService:
 
         Returns:
             True if successfully tracked
+
         """
         redis_client = await self._get_redis_client()
 
@@ -95,6 +97,7 @@ class ThreadTrackingService:
 
         Returns:
             Agent name if tracked, None otherwise
+
         """
         redis_client = await self._get_redis_client()
 
@@ -123,6 +126,7 @@ class ThreadTrackingService:
 
         Returns:
             True if thread was tracked and cleared
+
         """
         redis_client = await self._get_redis_client()
         cleared = False
@@ -165,6 +169,7 @@ def get_thread_tracking(redis_url: str | None = None) -> ThreadTrackingService:
 
     Returns:
         ThreadTrackingService instance
+
     """
     global _thread_tracking  # noqa: PLW0603
     if _thread_tracking is None:

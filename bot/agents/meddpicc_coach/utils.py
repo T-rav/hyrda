@@ -18,6 +18,7 @@ async def parse_pdf_bytes(pdf_bytes: bytes) -> str:
 
     Returns:
         Extracted text content
+
     """
     try:
         import PyPDF2
@@ -52,6 +53,7 @@ async def parse_docx_bytes(docx_bytes: bytes) -> str:
 
     Returns:
         Extracted text content
+
     """
     try:
         import docx
@@ -87,6 +89,7 @@ async def parse_document(file_content: bytes, filename: str) -> tuple[str, str]:
 
     Returns:
         Tuple of (parsed_content, file_type)
+
     """
     filename_lower = filename.lower()
 
@@ -117,6 +120,7 @@ async def download_slack_file(file_url: str, token: str) -> bytes | None:
 
     Returns:
         File content as bytes, or None if download fails
+
     """
     try:
         import aiohttp
@@ -149,6 +153,7 @@ async def process_slack_files(files: list[dict[str, Any]], token: str) -> str:
 
     Returns:
         Combined parsed content from all files
+
     """
     parsed_parts = []
 

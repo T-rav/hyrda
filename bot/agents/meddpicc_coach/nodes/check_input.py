@@ -34,6 +34,7 @@ async def check_input_completeness(
 
     Returns:
         Dict with needs_clarification flag and optional clarification message
+
     """
     query = state["query"]  # type: ignore[typeddict-item]
 
@@ -165,6 +166,7 @@ async def _generate_clarification_message(query: str) -> str:
 
     Returns:
         Dynamic clarification message with targeted questions
+
     """
     from pydantic import BaseModel, Field
 

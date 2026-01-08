@@ -47,6 +47,7 @@ class BaseAgent(ABC):
             Result dict with:
                 - response: Response text to send to user
                 - metadata: Optional metadata dict
+
         """
         pass
 
@@ -58,6 +59,7 @@ class BaseAgent(ABC):
 
         Returns:
             True if valid, False otherwise
+
         """
         required_fields = ["user_id", "channel", "slack_service"]
 
@@ -73,6 +75,7 @@ class BaseAgent(ABC):
 
         Returns:
             Dict with name, aliases, and description
+
         """
         return {
             "name": self.name,

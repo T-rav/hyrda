@@ -107,6 +107,7 @@ class RAGService:
 
         Returns:
             Tuple of (success_count, error_count)
+
         """
         if not self.vector_store:
             raise RuntimeError("Vector store not initialized")
@@ -229,6 +230,7 @@ class RAGService:
 
         Returns:
             Generated response with citations if RAG was used
+
         """
         context_chunks = []
 
@@ -522,6 +524,7 @@ class RAGService:
 
         Returns:
             Final response after executing tools
+
         """
         tavily_client = get_tavily_client()
         perplexity_client = get_perplexity_client()
@@ -831,6 +834,7 @@ class RAGService:
 
             if result["success"]:
                 print(result["content"])  # Formatted answer with citations
+
         """
         if not self.internal_deep_research:
             logger.warning("Internal deep research service not available")
@@ -920,6 +924,7 @@ class RAGService:
 
         Returns:
             Formatted string with summary and citations
+
         """
         if not chunks:
             return "No relevant information found in internal knowledge base."

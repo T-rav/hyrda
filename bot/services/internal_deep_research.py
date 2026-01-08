@@ -36,6 +36,7 @@ class InternalDeepResearchService:
             vector_service: Vector database service
             embedding_service: Embedding service
             enable_query_rewriting: Whether to use adaptive query rewriting
+
         """
         self.llm_service = llm_service
         self.retrieval_service = retrieval_service
@@ -68,6 +69,7 @@ class InternalDeepResearchService:
                 - summary: Synthesized summary of findings
                 - unique_documents: Number of unique documents found
                 - total_chunks: Total number of chunks retrieved
+
         """
         if not self.vector_service:
             logger.warning("Vector service not available for internal deep research")
@@ -174,6 +176,7 @@ class InternalDeepResearchService:
 
         Returns:
             List of sub-queries covering different aspects
+
         """
         prompt = f"""You are a research query planner. Break down this complex research query into {num_queries} DIVERSE sub-queries that will help retrieve comprehensive information from an internal knowledge base.
 
@@ -227,6 +230,7 @@ Return ONLY the JSON array, no explanation."""
 
         Returns:
             Unique identifier string
+
         """
         content = chunk.get("content", "")
         file_name = chunk.get("metadata", {}).get("file_name", "")
@@ -244,6 +248,7 @@ Return ONLY the JSON array, no explanation."""
 
         Returns:
             Sorted list of chunks (highest relevance first)
+
         """
         # Sort by similarity score (already included from retrieval)
         return sorted(chunks, key=lambda x: x.get("similarity", 0), reverse=True)
@@ -261,6 +266,7 @@ Return ONLY the JSON array, no explanation."""
 
         Returns:
             Synthesized summary of findings
+
         """
         if not chunks:
             return "No relevant information found in internal knowledge base."
@@ -315,6 +321,7 @@ class _InternalDeepResearchServiceSingleton:
 
         Returns:
             Initialized InternalDeepResearchService or None if services unavailable
+
         """
         if cls._instance is not None:
             return cls._instance
@@ -384,6 +391,7 @@ async def get_internal_deep_research_service() -> InternalDeepResearchService | 
 
     Returns:
         Initialized InternalDeepResearchService or None if services unavailable
+
     """
     return await _InternalDeepResearchServiceSingleton.get_instance()
 
@@ -403,6 +411,7 @@ def create_internal_deep_research_service(
 
     Returns:
         Initialized InternalDeepResearchService
+
     """
     return InternalDeepResearchService(
         llm_service=llm_service,

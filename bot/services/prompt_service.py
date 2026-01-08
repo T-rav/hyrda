@@ -49,6 +49,7 @@ class PromptService:
 
         Returns:
             The system prompt string
+
         """
         # Return cached version unless force refresh
         if self._cached_system_prompt and not force_refresh:
@@ -75,6 +76,7 @@ class PromptService:
 
         Returns:
             The prompt string from Langfuse or None if failed
+
         """
         try:
             langfuse_service = get_langfuse_service()
@@ -116,6 +118,7 @@ class PromptService:
 
         Returns:
             The prompt string or fallback
+
         """
         cache_key = f"{template_name}:{version or 'latest'}"
 
@@ -159,6 +162,7 @@ class PromptService:
 
         Returns:
             Dictionary with prompt configuration details
+
         """
         return {
             "langfuse_enabled": self.langfuse_settings.enabled,

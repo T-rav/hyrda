@@ -135,7 +135,7 @@ class TestAgentAPIServiceTokenAuth:
         mock_request.headers = {}
 
         with patch("api.agents.agent_client") as mock_agent_client:
-            with patch("shared.utils.jwt_auth.verify_service_token") as mock_verify:
+            with patch("shared.utils.jwt_auth.verify_service_token"):
                 # Mock agent discovery
                 mock_agent_client.discover_agent = AsyncMock(
                     return_value={"agent_name": "profile", "enabled": True}
@@ -181,7 +181,7 @@ class TestAgentAPIServiceTokenAuth:
                 mock_agent_client.stream_agent_execution = mock_stream
 
                 # Call endpoint
-                response = await stream_agent(
+                await stream_agent(
                     agent_name="profile",
                     request=AgentInvokeRequest(query="test company", context={}),
                     http_request=mock_request,

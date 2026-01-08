@@ -46,7 +46,7 @@ def reset_agent_cache():
 def ensure_external_agents_path():
     """Ensure external_agents is accessible in sys.path for all tests."""
     # Save original path
-    original_path = sys.path.copy()
+    sys.path.copy()
 
     # Ensure project root is in path
     if _PROJECT_ROOT not in sys.path:

@@ -38,6 +38,7 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
 
     Returns:
         Combined text content from all processed files
+
     """
     if not files:
         return ""

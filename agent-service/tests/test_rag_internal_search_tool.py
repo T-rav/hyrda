@@ -1,7 +1,8 @@
 """Tests for RAGInternalSearchTool."""
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from agents.system.research.tools.rag_internal_search import RAGInternalSearchTool
 

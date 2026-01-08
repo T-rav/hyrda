@@ -39,6 +39,7 @@ async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
 
     Returns:
         Extracted text content
+
     """
     if not PYTHON_DOCX_AVAILABLE:
         logger.warning("python-docx not available")
@@ -79,6 +80,7 @@ async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
 
     Returns:
         Extracted text content
+
     """
     if not OPENPYXL_AVAILABLE:
         logger.warning("openpyxl not available")
@@ -116,6 +118,7 @@ async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) ->
 
     Returns:
         Extracted text content
+
     """
     if not PYTHON_PPTX_AVAILABLE:
         logger.warning("python-pptx not available")
@@ -155,6 +158,7 @@ async def extract_office_text(content: bytes, file_name: str, file_type: str) ->
 
     Returns:
         Extracted text content
+
     """
     content_stream = io.BytesIO(content)
 

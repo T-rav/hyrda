@@ -43,6 +43,7 @@ class MeddpiccAgentState(TypedDict, total=False):
         original_analysis: The complete analysis for reference in follow-ups
         conversation_history: Full conversation history with role/content dicts
         conversation_summary: Semantic summary of older conversation messages
+
     """
 
     query: str

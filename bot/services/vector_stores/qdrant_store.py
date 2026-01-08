@@ -274,6 +274,7 @@ class QdrantVectorStore(VectorStore):
 
         Returns:
             Diversified list of documents with variety across different files
+
         """
         if not documents or limit <= 0:
             return []

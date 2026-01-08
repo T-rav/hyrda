@@ -29,7 +29,7 @@ if str(control_plane_dir) not in sys.path:
 
 # Import models and create tables
 from models.base import Base, get_db_session
-from models import ServiceAccount, User
+from models import ServiceAccount
 
 with get_db_session() as session:
     Base.metadata.create_all(session.bind)
@@ -390,7 +390,6 @@ def test_delete_service_account(authenticated_client):
 def test_service_account_is_expired():
     """Test ServiceAccount.is_expired() method."""
     from datetime import datetime, timezone, timedelta
-    from models.service_account import generate_api_key
 
     with get_db_session() as session:
         # Create expired account

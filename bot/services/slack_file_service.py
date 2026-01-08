@@ -28,6 +28,7 @@ class SlackFileService:
 
         Returns:
             File content as bytes, or None if download fails
+
         """
         try:
             # Get the private download URL
@@ -73,6 +74,7 @@ class SlackFileService:
 
         Returns:
             Dictionary with extracted metadata
+
         """
         return {
             "file_id": file_info.get("id"),
@@ -95,6 +97,7 @@ class SlackFileService:
 
         Returns:
             True if file can be processed for text content
+
         """
         mimetype = file_info.get("mimetype", "").lower()
         filetype = file_info.get("filetype", "").lower()

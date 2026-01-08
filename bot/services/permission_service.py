@@ -30,6 +30,7 @@ class PermissionService:
         Args:
             redis_client: Optional Redis client for caching
             database_url: Optional database URL for DB connection
+
         """
         self.redis_client = redis_client
         self.database_url = database_url
@@ -43,6 +44,7 @@ class PermissionService:
 
         Returns:
             Cache key string
+
         """
         return f"permission:{agent_name}:{user_id}"
 
@@ -57,6 +59,7 @@ class PermissionService:
 
         Returns:
             Cached permission dict or None if not found
+
         """
         if not self.redis_client:
             return None
@@ -82,6 +85,7 @@ class PermissionService:
             user_id: Slack user ID
             agent_name: Agent name
             permission_data: Permission result to cache
+
         """
         if not self.redis_client:
             return
@@ -105,6 +109,7 @@ class PermissionService:
         Args:
             user_id: Optional user ID to invalidate (None = all users)
             agent_name: Optional agent name to invalidate (None = all agents)
+
         """
         if not self.redis_client:
             return
@@ -143,6 +148,7 @@ class PermissionService:
 
         Returns:
             (allowed: bool, reason: str) tuple
+
         """
         # 1. Check cache first
         cached = self._get_from_cache(user_id, agent_name)
@@ -170,6 +176,7 @@ class PermissionService:
 
         Returns:
             (allowed: bool, reason: str) tuple
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -305,6 +312,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -357,6 +365,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -407,6 +416,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -450,6 +460,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -508,6 +519,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -549,6 +561,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -610,6 +623,7 @@ class PermissionService:
 
         Returns:
             True if successful, False otherwise
+
         """
         try:
             with get_security_db_session(self.database_url) as session:
@@ -647,6 +661,7 @@ class PermissionService:
         Args:
             session: Database session
             group_name: Group name
+
         """
         # Get all users in group
         user_groups = (
@@ -679,6 +694,7 @@ def get_permission_service(
 
     Returns:
         PermissionService instance
+
     """
     global _permission_service  # noqa: PLW0603
 

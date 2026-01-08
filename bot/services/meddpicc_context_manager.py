@@ -38,6 +38,7 @@ class MeddpiccContextManager:
             keep_recent: Messages to keep in full during compression (from CONVERSATION_KEEP_RECENT)
             summarize_threshold: Context usage % to trigger compression (from CONVERSATION_SUMMARIZE_THRESHOLD, e.g., 0.80)
             model_context_window: Model's max context tokens (from CONVERSATION_MODEL_CONTEXT_WINDOW)
+
         """
         # Load from settings if not provided
         if (
@@ -88,6 +89,7 @@ class MeddpiccContextManager:
 
         Returns:
             Updated conversation history
+
         """
         if not conversation_history:
             conversation_history = []
@@ -111,6 +113,7 @@ class MeddpiccContextManager:
 
         Returns:
             True if compression needed
+
         """
         # Check message count
         if len(conversation_history) > self.max_messages:
@@ -151,6 +154,7 @@ class MeddpiccContextManager:
             Tuple of (compressed_history, new_summary)
             - compressed_history: Recent messages only
             - new_summary: Summary of older messages + previous summary
+
         """
         if len(conversation_history) <= self.keep_recent:
             return conversation_history, existing_summary or ""
@@ -232,6 +236,7 @@ Summary:"""
 
         Returns:
             Enhanced prompt with full context
+
         """
         context_parts = []
 
@@ -290,6 +295,7 @@ Summary:"""
             - conversation_history: Updated history
             - conversation_summary: Updated summary
             - enhanced_query: Query with full context
+
         """
         # Add current message
         history = self.add_message(conversation_history or [], role, query)

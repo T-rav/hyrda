@@ -34,6 +34,7 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
 
     Returns:
         Dict mapping agent names/aliases to agent metadata
+
     """
     global _cached_agents, _cache_timestamp  # noqa: PLW0603
 
@@ -142,6 +143,7 @@ def route_command(text: str) -> tuple[AgentInfo | None, str, str | None]:
         - agent_info: Dict with agent metadata, or None if not found
         - query: Parsed query text
         - primary_name: Primary name of agent (resolves aliases)
+
     """
     import re
 

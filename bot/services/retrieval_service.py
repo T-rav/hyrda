@@ -51,6 +51,7 @@ class RetrievalService:
 
         Returns:
             List of relevant context chunks with metadata
+
         """
         if not vector_service:
             logger.info("No vector service available, returning empty context")
@@ -152,6 +153,7 @@ class RetrievalService:
 
         Returns:
             List of relevant chunks found using document similarity
+
         """
         try:
             logger.info("🔍 Retrieving context using document embedding similarity")
@@ -192,6 +194,7 @@ class RetrievalService:
 
         Returns:
             Set of entity terms (all significant words from query)
+
         """
         # Define comprehensive stop words to filter out
         stop_words = {
@@ -300,6 +303,7 @@ class RetrievalService:
 
         Returns:
             Results with entity boosting applied
+
         """
         try:
             # Extract entities from query
@@ -368,6 +372,7 @@ class RetrievalService:
 
         Returns:
             Diversified results
+
         """
         if not results:
             return []
@@ -392,6 +397,7 @@ class RetrievalService:
 
         Returns:
             Diversified results
+
         """
         if not results:
             return []

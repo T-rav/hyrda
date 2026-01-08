@@ -26,6 +26,7 @@ async def coaching_insights(
 
     Returns:
         Dict with updated state containing coaching_insights and final_response
+
     """
     meddpicc_breakdown = state.get("meddpicc_breakdown", "")
     logger.info("Generating coaching insights")

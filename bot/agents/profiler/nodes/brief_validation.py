@@ -209,6 +209,7 @@ def count_questions_in_brief(brief: str) -> int:
 
     Returns:
         Number of questions found
+
     """
     # Count lines ending with '?'
     lines = brief.split("\n")
@@ -233,6 +234,7 @@ async def validate_research_brief(
 
     Returns:
         Dict with brief_passes_validation, brief_revision_instructions
+
     """
     research_brief = state.get("research_brief", "")
     focus_area = state.get("focus_area", "")
@@ -386,6 +388,7 @@ def research_brief_router(state: ProfileAgentState) -> str:
 
     Returns:
         "proceed" to continue to research_supervisor, or "revise" to loop back
+
     """
     brief_passes = state.get("brief_passes_validation", False)
     max_revisions = state.get("brief_max_revisions_exceeded", False)

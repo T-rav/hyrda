@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
 from utils.auth import (
     AuditLogger,
     get_flow,
@@ -287,7 +287,7 @@ async def auth_callback(request: Request):
                 new_query,
                 parsed_url.fragment
             ))
-            logger.info(f"Added token to redirect URL for cross-port auth")
+            logger.info("Added token to redirect URL for cross-port auth")
 
         response = RedirectResponse(url=redirect_url, status_code=302)
         response.set_cookie(

@@ -33,6 +33,7 @@ async def research_sec_filings(
 
     Returns:
         Dictionary with relevant excerpts from SEC filings
+
     """
     logger.info(f"Researching SEC filings for {company_identifier}")
     logger.info(f"Query: {research_query}")
@@ -111,6 +112,7 @@ def format_sec_research_results(results: dict[str, Any]) -> str:
 
     Returns:
         Formatted string for LLM context
+
     """
     if not results.get("success"):
         return f"❌ SEC research failed: {results.get('error', 'Unknown error')}"

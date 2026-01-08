@@ -483,6 +483,7 @@ def assert_valid_http_response(response, expected_codes=None):
     Args:
         response: HTTP response object
         expected_codes: List of expected status codes (default: 2xx)
+
     """
     if expected_codes is None:
         expected_codes = range(200, 300)
@@ -500,6 +501,7 @@ def assert_json_contains_keys(data, required_keys):
     Args:
         data: Dictionary or JSON response
         required_keys: List of required key names
+
     """
     if not isinstance(data, dict):
         try:

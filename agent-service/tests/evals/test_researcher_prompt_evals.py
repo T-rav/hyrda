@@ -7,15 +7,15 @@ These tests verify that the researcher prompt guides the LLM to:
 4. Make appropriate tool calls based on the task
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
 from agents.system.research.nodes.researcher import researcher
-from agents.system.research.state import ResearchTask, ResearcherState
+from agents.system.research.state import ResearcherState, ResearchTask
 
 
 def create_research_task(

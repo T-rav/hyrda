@@ -42,6 +42,7 @@ class TitleInjectionService:
 
         Returns:
             List of enhanced texts with title injection
+
         """
         enhanced_texts = []
 

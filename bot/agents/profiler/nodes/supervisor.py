@@ -39,6 +39,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
 
     Returns:
         Command to proceed to supervisor_tools or END
+
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     research_iterations = state.get("research_iterations", 0)
@@ -154,6 +155,7 @@ async def supervisor_tools(
 
     Returns:
         Command to return to supervisor or END
+
     """
     from agents.profiler.nodes.graph_builder import build_researcher_subgraph
 
@@ -344,6 +346,7 @@ async def execute_researcher(
 
     Returns:
         Dict with tool_result, compressed_research, and raw_notes
+
     """
     try:
         result = await researcher_graph.ainvoke(
