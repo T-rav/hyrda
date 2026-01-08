@@ -209,6 +209,41 @@ services:
     networks:
       - insightmesh
 
+  # RAG Service - Vector Search & Knowledge Base
+  rag-service:
+    build:
+      context: .
+      dockerfile: rag-service/Dockerfile
+    image: insightmesh-rag-service:latest
+    container_name: insightmesh-rag-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${RAG_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "rag-service"
+      component: "vector-search"
+    networks:
+      - insightmesh
+
   # Control Plane - Agent Registry & Management UI
   control-plane:
     build:

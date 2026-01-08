@@ -22,7 +22,7 @@ import pytest
 def service_urls():
     """Service URLs for integration testing."""
     return {
-        "agent_service": os.getenv("AGENT_SERVICE_URL", "http://localhost:8000"),
+        "agent_service": os.getenv("AGENT_SERVICE_URL", "https://localhost:8000"),
         "control_plane": os.getenv("CONTROL_PLANE_URL", "http://localhost:6001"),
     }
 
