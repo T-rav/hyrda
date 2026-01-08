@@ -65,10 +65,14 @@ services:
       - ANTHROPIC_API_KEY=${LLM_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
-      # Feature Flags
-      - ALLOW_REGISTRATION=${LIBRECHAT_ALLOW_REGISTRATION:-true}
-      - ALLOW_UNVERIFIED_EMAIL_LOGIN=${LIBRECHAT_ALLOW_UNVERIFIED_EMAIL_LOGIN:-true}
-      - ALLOW_SOCIAL_LOGIN=${LIBRECHAT_ALLOW_SOCIAL_LOGIN:-true}
+      # Feature Flags - OAuth only, no email/password login
+      - ALLOW_REGISTRATION=false
+      - ALLOW_EMAIL_LOGIN=false
+      - ALLOW_SOCIAL_LOGIN=true
+
+      # Domain Restrictions - Only allow 8thlight.com emails
+      - DOMAIN_WHITELIST=8thlight.com
+      - ALLOW_EMAIL_WHITELIST=true
 
     volumes:
       - librechat_data:/app/client/public/images
