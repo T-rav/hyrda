@@ -23,7 +23,16 @@ def qdrant_client():
     api_key = os.getenv("VECTOR_API_KEY")
 
     # Create client (synchronous for Qdrant SDK)
-    client = QdrantClient(host=host, port=port, api_key=api_key, timeout=10.0)
+    # Use HTTPS with self-signed certificate (development environment)
+    client = QdrantClient(
+        host=host,
+        port=port,
+        api_key=api_key,
+        timeout=10.0,
+        prefer_grpc=False,  # Use REST API
+        https=True,  # Qdrant running on HTTPS
+        verify=False,  # Accept self-signed certificates in development
+    )
 
     try:
         yield client
@@ -149,11 +158,11 @@ def test_vector_insert_and_search(qdrant_client):
         )
 
         # Search for similar vectors
-        results = qdrant_client.search(
+        results = qdrant_client.query_points(
             collection_name=test_collection,
-            query_vector=test_vector,
+            query=test_vector,
             limit=1,
-        )
+        ).points
 
         assert len(results) == 1, "Vector search returned no results"
         assert results[0].id == 1, "Vector search returned wrong result"
@@ -273,9 +282,9 @@ def test_qdrant_search_performance(qdrant_client):
     import time
 
     start = time.time()
-    results = qdrant_client.search(
-        collection_name=test_collection, query_vector=query_vector, limit=5
-    )
+    results = qdrant_client.query_points(
+        collection_name=test_collection, query=query_vector, limit=5
+    ).points
     duration_ms = (time.time() - start) * 1000
 
     assert duration_ms < 500, f"Search too slow: {duration_ms:.1f}ms (expected < 500ms)"

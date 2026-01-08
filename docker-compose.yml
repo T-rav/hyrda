@@ -55,15 +55,20 @@ services:
     container_name: insightmesh-qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"  # REST API + Dashboard
+      - "6333:6333"  # REST API + Dashboard (HTTPS)
       - "6334:6334"  # gRPC API
     volumes:
       - qdrant_data:/qdrant/storage
+      - ./.ssl/qdrant-cert.pem:/qdrant/tls/cert.pem:ro
+      - ./.ssl/qdrant-key.pem:/qdrant/tls/key.pem:ro
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__API_KEY=${VECTOR_API_KEY:-}  # Set in .env for security
+      - QDRANT__SERVICE__ENABLE_TLS=true
+      - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
+      - QDRANT__TLS__KEY=/qdrant/tls/key.pem
     healthcheck:
-      test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
