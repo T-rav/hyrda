@@ -31,15 +31,25 @@ class QdrantClient:
             from qdrant_client import QdrantClient as QdrantSDK
             from qdrant_client.models import Distance, VectorParams
 
-            # Use http:// URL to avoid SSL when using API key in local Docker setup
+            # Initialize Qdrant client with HTTPS support
+            # Accept self-signed certificates in development environment
+            environment = os.getenv("ENVIRONMENT", "development")
+
             if self.api_key:
                 self.client = QdrantSDK(
-                    url=f"http://{self.host}:{self.port}",
+                    url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
+                    verify=environment != "development",  # Accept self-signed certs in dev
                 )
             else:
-                self.client = QdrantSDK(host=self.host, port=self.port, timeout=60)
+                self.client = QdrantSDK(
+                    host=self.host,
+                    port=self.port,
+                    timeout=60,
+                    https=True,
+                    verify=environment != "development",  # Accept self-signed certs in dev
+                )
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
