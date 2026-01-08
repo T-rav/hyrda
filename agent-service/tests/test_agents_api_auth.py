@@ -230,7 +230,7 @@ class TestSharedJWTAuthServiceTokens:
         """Test that SERVICE_TOKENS includes rag service."""
         import sys
         sys.path.insert(0, "/app")
-        from shared.utils.jwt_auth import SERVICE_TOKENS
+        from shared.utils.service_auth import SERVICE_TOKENS
 
         # Verify all service tokens are registered
         assert "rag" in SERVICE_TOKENS
@@ -252,11 +252,11 @@ class TestSharedJWTAuthServiceTokens:
             # Reimport to pick up new env var
             import importlib
 
-            from shared.utils import jwt_auth
-            importlib.reload(jwt_auth)
+            from shared.utils import service_auth
+            importlib.reload(service_auth)
 
             # Verify token
-            service_info = jwt_auth.verify_service_token(test_rag_token)
+            service_info = service_auth.verify_service_token(test_rag_token)
 
             assert service_info is not None
             assert service_info["service"] == "rag"
@@ -265,7 +265,7 @@ class TestSharedJWTAuthServiceTokens:
         """Test that verify_service_token rejects invalid tokens."""
         import sys
         sys.path.insert(0, "/app")
-        from shared.utils.jwt_auth import verify_service_token
+        from shared.utils.service_auth import verify_service_token
 
         # Try invalid token
         service_info = verify_service_token("invalid-token-xyz")

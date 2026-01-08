@@ -242,7 +242,7 @@ async def invoke_agent(
 
     # Try internal service token (bot, librechat, tasks)
     if not auth_type:
-        from shared.utils.jwt_auth import verify_service_token
+        from shared.utils.service_auth import verify_service_token
 
         service_token = http_request.headers.get("X-Service-Token")
         service_info = verify_service_token(service_token) if service_token else None
@@ -472,7 +472,7 @@ async def stream_agent(
 
     # Try internal service token (bot, librechat, tasks)
     if not auth_type:
-        from shared.utils.jwt_auth import verify_service_token
+        from shared.utils.service_auth import verify_service_token
 
         service_token = http_request.headers.get("X-Service-Token")
         service_info = verify_service_token(service_token) if service_token else None
