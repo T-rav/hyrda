@@ -66,9 +66,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
       # Feature Flags - OAuth only, no email/password login
-      - ALLOW_REGISTRATION=false
+      - ALLOW_REGISTRATION=true
       - ALLOW_EMAIL_LOGIN=false
       - ALLOW_SOCIAL_LOGIN=true
+      - ALLOW_SOCIAL_REGISTRATION=true
 
       # Domain Restrictions - Only allow 8thlight.com emails
       - DOMAIN_WHITELIST=8thlight.com
