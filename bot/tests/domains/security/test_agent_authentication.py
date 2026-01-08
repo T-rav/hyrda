@@ -184,13 +184,13 @@ async def test_agent_invoke_with_service_token_succeeds(http_client, service_url
     """
     SECURITY TEST - Service token must work for internal calls.
 
-    Given: Valid SERVICE_TOKEN in X-Service-Token header
+    Given: Valid BOT_SERVICE_TOKEN in X-Service-Token header
     When: POST /api/agents/{agent_name}/invoke
     Then: MUST return 200/403/404/500 (not 401)
     """
-    service_token = os.getenv("SERVICE_TOKEN")
+    service_token = os.getenv("BOT_SERVICE_TOKEN")
     if not service_token:
-        pytest.skip("SERVICE_TOKEN not configured")
+        pytest.skip("BOT_SERVICE_TOKEN not configured")
 
     invoke_url = f"{service_urls['agent_service']}/api/agents/help/invoke"
     payload = {"query": "test query"}
