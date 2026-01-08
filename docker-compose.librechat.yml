@@ -52,9 +52,8 @@ services:
       - CREDS_IV=${LIBRECHAT_CREDS_IV:-}
 
       # OAuth Configuration (Google for InsightMesh SSO)
-      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID:-}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET:-}
-      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL:-http://localhost:3080/oauth/google/callback}
+      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
 
       # InsightMesh RAG Service Integration
       - RAG_API_URL=http://insightmesh-rag-service:8002
