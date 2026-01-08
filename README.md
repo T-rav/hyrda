@@ -57,7 +57,18 @@ cd insightmesh
 cp .env.example .env
 ```
 
-### 2. **Set Up Your Environment**
+### 2. **Generate and Trust SSL Certificates**
+```bash
+# Generate self-signed certificates for HTTPS services
+./scripts/setup-ssl.sh
+
+# Trust certificates locally (macOS only - one-time setup)
+./scripts/trust-local-certs.sh
+```
+
+> **Note**: Docker containers automatically trust certificates during build. Local trust is only needed for running tests or CLI tools on macOS. See [docs/SSL_SETUP.md](docs/SSL_SETUP.md) for details.
+
+### 3. **Set Up Your Environment**
 Edit `.env` with your credentials:
 
 ```bash
@@ -91,7 +102,7 @@ LANGFUSE_PUBLIC_KEY=pk_lf_your_public_key_here
 LANGFUSE_SECRET_KEY=sk_lf_your_secret_key_here
 ```
 
-### 3. **Start Services with Docker Compose**
+### 4. **Start Services with Docker Compose**
 ```bash
 # Start full stack: bot + Qdrant + Redis + MySQL
 docker compose up -d
@@ -103,7 +114,7 @@ docker compose ps
 docker logs -f insightmesh-bot
 ```
 
-### 4. **Set Up Document Ingestion (via Tasks Service)**
+### 5. **Set Up Document Ingestion (via Tasks Service)**
 
 **Workflow**: Update .env → Authenticate → Create Scheduled Task
 
