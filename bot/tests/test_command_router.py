@@ -1,4 +1,4 @@
-"""Tests for CommandRouter."""
+"""Tests for CommandRouter (HTTP-based architecture)."""
 
 import os
 import sys
@@ -6,137 +6,137 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from agents.router import CommandRouter
-from tests.agent_test_utils import AgentRegistryMockFactory, TestAgentFactory
 
 
 class TestCommandRouter:
     """Tests for CommandRouter"""
 
-    def test_parse_command_valid(self):
-        """Test parsing valid commands"""
-        registry = AgentRegistryMockFactory.create_empty()
-        profile_agent = TestAgentFactory.create_simple_agent(name="profile")
-        registry.register("profile", profile_agent, [])
-        router = CommandRouter(registry)
+    def test_route_research_agent_with_at_symbol(self):
+        """Test routing to research agent with @ prefix"""
+        router = CommandRouter()
 
-        command, query = router.parse_command("-profile tell me about Charlotte")
-        assert command == "profile"
-        assert query == "tell me about Charlotte"
-
-    def test_parse_command_no_query(self):
-        """Test parsing command without query"""
-        registry = AgentRegistryMockFactory.create_empty()
-        agents_agent = TestAgentFactory.create_simple_agent(name="agents")
-        registry.register("agents", agents_agent, [])
-        router = CommandRouter(registry)
-
-        command, query = router.parse_command("-agents")
-        assert command == "agents"
-        assert query == ""
-
-    def test_parse_command_case_insensitive(self):
-        """Test that command parsing is case-insensitive"""
-        registry = AgentRegistryMockFactory.create_empty()
-        profile_agent = TestAgentFactory.create_simple_agent(name="profile")
-        registry.register("profile", profile_agent, [])
-        router = CommandRouter(registry)
-
-        command, query = router.parse_command("-PROFILE test")
-        assert command == "profile"
-        assert query == "test"
-
-    def test_parse_command_invalid(self):
-        """Test parsing invalid commands"""
-        registry = AgentRegistryMockFactory.create_empty()
-        router = CommandRouter(registry)
-
-        command, query = router.parse_command("not a command")
-        assert command is None
-        assert query == ""
-
-    def test_route_to_registered_agent(self):
-        """Test routing to a registered agent"""
-        registry = AgentRegistryMockFactory.create_empty()
-        test_agent = TestAgentFactory.create_simple_agent(name="test")
-        registry.register("test", test_agent, [])
-
-        router = CommandRouter(registry)
-        agent_info, query, primary_name = router.route("-test hello world")
+        agent_info, query, primary_name = router.route("@research tell me about AI")
 
         assert agent_info is not None
-        assert agent_info["agent_class"] == test_agent
-        assert query == "hello world"
-        assert primary_name == "test"
+        assert agent_info["name"] == "research"
+        assert query == "tell me about ai"
+        assert primary_name == "research"
 
-    def test_route_to_agent_via_alias(self):
+    def test_route_research_agent_with_colon(self):
+        """Test routing to research agent with colon format"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("research: what is ML?")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "research"
+        assert query == "what is ml?"
+        assert primary_name == "research"
+
+    def test_route_research_agent_without_prefix(self):
+        """Test routing to research agent without special prefix"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("research latest trends")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "research"
+        assert query == "latest trends"
+        assert primary_name == "research"
+
+    def test_route_via_alias(self):
         """Test routing to agent via alias"""
-        registry = AgentRegistryMockFactory.create_empty()
-        test_agent = TestAgentFactory.create_agent_with_aliases(
-            name="test", aliases=["t"]
-        )
-        registry.register("test", test_agent, ["t"])
+        router = CommandRouter()
 
-        router = CommandRouter(registry)
-        agent_info, query, primary_name = router.route("-t hello")
+        agent_info, query, primary_name = router.route("@investigate deep dive topic")
 
         assert agent_info is not None
-        assert agent_info["agent_class"] == test_agent
-        assert query == "hello"
-        assert primary_name == "test"  # Resolves to primary name
+        assert agent_info["name"] == "research"  # Resolves to primary name
+        assert query == "deep dive topic"
+        assert primary_name == "research"
 
-    def test_route_unregistered_command(self):
-        """Test routing unregistered command returns None"""
-        registry = AgentRegistryMockFactory.create_empty()
-        router = CommandRouter(registry)
+    def test_route_profile_agent(self):
+        """Test routing to profile agent"""
+        router = CommandRouter()
 
-        agent_info, query, primary_name = router.route("-unknown test")
-
-        assert agent_info is None
-        assert query == ""  # Empty since command not registered
-        assert primary_name is None
-
-    def test_route_invalid_command(self):
-        """Test routing invalid command returns None"""
-        registry = AgentRegistryMockFactory.create_empty()
-        router = CommandRouter(registry)
-
-        agent_info, query, primary_name = router.route("not a command")
-
-        assert agent_info is None
-        assert query == ""
-        assert primary_name is None
-
-    def test_parse_command_without_dash(self):
-        """Test that commands work without dash prefix"""
-        registry = AgentRegistryMockFactory.create_empty()
-        profile_agent = TestAgentFactory.create_simple_agent(name="profile")
-        registry.register("profile", profile_agent, [])
-        router = CommandRouter(registry)
-
-        command, query = router.parse_command("profile tell me about Charlotte")
-        assert command == "profile"
-        assert query == "tell me about Charlotte"
-
-    def test_route_without_dash(self):
-        """Test routing commands without dash prefix"""
-        registry = AgentRegistryMockFactory.create_empty()
-        test_agent = TestAgentFactory.create_simple_agent(name="test")
-        registry.register("test", test_agent, [])
-
-        router = CommandRouter(registry)
-        agent_info, query, primary_name = router.route("test hello world")
+        agent_info, query, primary_name = router.route("@profile company analysis")
 
         assert agent_info is not None
-        assert agent_info["agent_class"] == test_agent
-        assert query == "hello world"
-        assert primary_name == "test"
+        assert agent_info["name"] == "profile"
+        assert query == "company analysis"
+        assert primary_name == "profile"
 
-    def test_list_available_commands(self):
-        """Test listing available commands"""
-        registry = AgentRegistryMockFactory.create_with_agents(agent_count=2)
-        router = CommandRouter(registry)
+    def test_route_meddic_agent(self):
+        """Test routing to meddic agent"""
+        router = CommandRouter()
 
-        commands = router.list_available_commands()
-        assert len(commands) == 2
-        assert "test0" in commands
-        assert "test1" in commands
+        agent_info, query, primary_name = router.route("@meddic deal review")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "meddic"
+        assert query == "deal review"
+        assert primary_name == "meddic"
+
+    def test_route_help_agent(self):
+        """Test routing to help agent"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("@help list agents")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "help"
+        assert query == "list agents"
+        assert primary_name == "help"
+
+    def test_route_case_insensitive(self):
+        """Test that routing is case-insensitive"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("@RESEARCH test query")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "research"
+        assert query == "test query"
+        assert primary_name == "research"
+
+    def test_route_unrecognized_command_returns_none(self):
+        """Test that unrecognized commands return None"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("@unknown command")
+
+        assert agent_info is None
+        assert query == "@unknown command"  # Returns original text
+        assert primary_name is None
+
+    def test_route_no_command_returns_none(self):
+        """Test that regular text returns None (no agent routing)"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("Just regular text")
+
+        assert agent_info is None
+        assert query == "Just regular text"  # Returns original text unchanged
+        assert primary_name is None
+
+    def test_alias_company_profile_maps_to_profile(self):
+        """Test that 'company profile' alias maps to profile agent"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("company profile: acme corp")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "profile"
+        assert query == "acme corp"
+        assert primary_name == "profile"
+
+    def test_alias_medic_maps_to_meddic(self):
+        """Test that 'medic' alias maps to meddic agent"""
+        router = CommandRouter()
+
+        agent_info, query, primary_name = router.route("@medic deal analysis")
+
+        assert agent_info is not None
+        assert agent_info["name"] == "meddic"
+        assert query == "deal analysis"
+        assert primary_name == "meddic"
