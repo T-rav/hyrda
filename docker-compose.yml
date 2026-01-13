@@ -191,6 +191,8 @@ services:
       - ENVIRONMENT=production
     ports:
       - "${HEALTH_PORT:-8080}:8080"
+    volumes:
+      - ./.ssl/qdrant-cert.pem:/app/ssl/qdrant-cert.pem:ro
     depends_on:
       mysql:
         condition: service_healthy

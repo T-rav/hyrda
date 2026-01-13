@@ -54,13 +54,18 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # Check for certificate path (development) or use system CA store (production/Docker)
-            cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
+            # Check for certificate in mounted location (Docker) or env var (development)
+            cert_path = os.getenv(
+                "QDRANT_CERT_PATH", "/app/ssl/qdrant-cert.pem"
+            )  # Default to mounted cert
 
-            # Determine SSL verification strategy:
-            # - Use cert file if available (development/testing)
-            # - Disable verification for self-signed certs (Docker/internal services)
-            verify = cert_path if cert_path and os.path.exists(cert_path) else False
+            # Use cert for SSL verification if it exists
+            # Certs are generated outside and mounted into containers
+            verify = cert_path if os.path.exists(cert_path) else True
+            if not os.path.exists(cert_path):
+                logger.warning(
+                    f"Qdrant cert not found at {cert_path}, using system CA store"
+                )
 
             if self.api_key:
                 self.client = QdrantClient(
