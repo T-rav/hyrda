@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 def test_web_search_caches_to_both_redis_and_minio():
     """Test that web search results are cached to both Redis and MinIO."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 
@@ -42,7 +42,7 @@ def test_web_search_caches_to_both_redis_and_minio():
 
 def test_web_search_redis_cache_hit():
     """Test that Redis cache is checked first and returns cached results."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 
@@ -72,7 +72,7 @@ def test_web_search_redis_cache_hit():
 
 def test_web_search_minio_fallback():
     """Test that MinIO is used as fallback when Redis misses."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 
@@ -109,7 +109,7 @@ def test_web_search_minio_fallback():
 
 def test_web_search_dual_cache_miss():
     """Test that both caches miss triggers fresh API call."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 
@@ -147,7 +147,7 @@ def test_web_search_dual_cache_miss():
 
 def test_web_search_deep_search_bypasses_cache():
     """Test that deep search always fetches fresh data."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 
@@ -174,7 +174,7 @@ def test_web_search_deep_search_bypasses_cache():
 
 def test_web_search_cache_key_generation():
     """Test that cache keys are generated consistently."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool()
 
@@ -197,7 +197,7 @@ def test_web_search_cache_key_generation():
 
 def test_web_search_graceful_degradation():
     """Test that search works with only one cache layer available."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     # Only Redis available
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
@@ -233,7 +233,7 @@ def test_web_search_graceful_degradation():
 
 def test_web_search_handles_cache_errors_gracefully():
     """Test that cache errors don't break search functionality."""
-    from agents.system.research.tools.web_search_tool import EnhancedWebSearchTool
+    from agents.research.tools.web_search_tool import EnhancedWebSearchTool
 
     tool = EnhancedWebSearchTool(tavily_api_key="test-key")
 

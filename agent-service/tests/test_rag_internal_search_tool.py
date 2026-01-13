@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from agents.system.research.tools.rag_internal_search import RAGInternalSearchTool
+from agents.research.tools.rag_internal_search import RAGInternalSearchTool
 
 
 @pytest.fixture
