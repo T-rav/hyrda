@@ -15,9 +15,9 @@ from slack_sdk.web.async_client import AsyncWebClient
 
 # Initialize OpenTelemetry for distributed tracing
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from agents import agent_registry  # Import to register agents
 from shared.utils.otel_tracing import get_tracer
 
-from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker

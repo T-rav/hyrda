@@ -55,7 +55,7 @@ async def invoke_research_agent(request: EmbeddedAgentRequest):
 
     try:
         # Import and instantiate agent
-        from agents.system.research.agent_wrapper import ResearchAgentWrapper
+        from agents.research.agent_wrapper import ResearchAgentWrapper
 
         wrapper = ResearchAgentWrapper()
 
@@ -86,7 +86,7 @@ async def stream_research_agent(request: EmbeddedAgentRequest):
     async def event_generator():
         """Generate SSE events from agent execution."""
         try:
-            from agents.system.research.agent_wrapper import ResearchAgentWrapper
+            from agents.research.agent_wrapper import ResearchAgentWrapper
 
             wrapper = ResearchAgentWrapper()
 

@@ -47,7 +47,6 @@ def get_app_version() -> str:
 # Import agents after logging is configured
 from agents import agent_registry  # noqa: E402
 from api import agents_router  # noqa: E402
-from api.embedded_agents import router as embedded_agents_router  # noqa: E402
 
 
 @asynccontextmanager
@@ -109,8 +108,7 @@ app.add_middleware(
 # Include routers
 app.include_router(
     agents_router, prefix="/api"
-)  # Public API (RBAC, delegates to AgentClient)
-app.include_router(embedded_agents_router)  # Execution API (runs actual agent code)
+)  # Auth/routing layer - validates auth, invokes embedded LangGraph or proxies to cloud
 
 
 @app.get("/health")

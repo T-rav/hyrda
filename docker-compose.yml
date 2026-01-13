@@ -307,6 +307,7 @@ services:
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
+      - ./custom_agents:/app/custom_agents:ro
       - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
       - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
     depends_on:
