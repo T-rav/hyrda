@@ -6,6 +6,7 @@ with persistent checkpointing for conversation continuity.
 
 import logging
 
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -138,18 +139,15 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
     # Follow-up handler loops back to END for more questions
     coach_builder.add_edge("followup_handler", END)
 
-    # Compile with optional checkpointer
-    # - LangGraph Studio: calls with no checkpointer (uses platform persistence)
-    # - Bot code: calls with MemorySaver() for local state persistence
-    if checkpointer:
-        compiled = coach_builder.compile(checkpointer=checkpointer)
+    # Compile with SQLite checkpointer for state persistence
+    # Use in-memory SQLite by default for conversation continuity
+    if checkpointer is None:
+        checkpointer = SqliteSaver.from_conn_string(":memory:")
+        logger.info("MEDDPICC coach graph compiled with default SQLite checkpointer")
+    else:
         logger.info(
             f"MEDDPICC coach graph compiled with checkpointer: {type(checkpointer).__name__}"
         )
-    else:
-        compiled = coach_builder.compile()
-        logger.info(
-            "MEDDPICC coach graph compiled without checkpointer (platform persistence)"
-        )
+    compiled = coach_builder.compile(checkpointer=checkpointer)
 
     return compiled

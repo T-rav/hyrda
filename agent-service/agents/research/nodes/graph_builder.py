@@ -5,6 +5,7 @@ Builds LangGraph workflow with research planning, task execution, synthesis, and
 
 import logging
 
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -69,8 +70,10 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     # Tools loop back to researcher
     researcher_builder.add_edge("researcher_tools", "researcher")
 
-    # High recursion limit for deep research
-    return researcher_builder.compile({"recursion_limit": 100})
+    # Compile with SQLite checkpointer for state persistence
+    # Note: recursion_limit is configured at runtime in invoke/stream config
+    checkpointer = SqliteSaver.from_conn_string(":memory:")
+    return researcher_builder.compile(checkpointer=checkpointer)
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -93,9 +96,10 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Add edges
     supervisor_builder.add_edge(START, "supervisor")
 
-    # Compile with increased recursion limit
-    # Supervisor can loop many times for complex research plans
-    return supervisor_builder.compile({"recursion_limit": 100})
+    # Compile with SQLite checkpointer for state persistence
+    # Note: recursion_limit is configured at runtime in invoke/stream config
+    checkpointer = SqliteSaver.from_conn_string(":memory:")
+    return supervisor_builder.compile(checkpointer=checkpointer)
 
 
 def build_research_agent(checkpointer=None) -> CompiledStateGraph:
@@ -146,11 +150,10 @@ def build_research_agent(checkpointer=None) -> CompiledStateGraph:
         },
     )
 
-    # Compile and return
-    if checkpointer:
-        return research_builder.compile(checkpointer=checkpointer)
-    else:
-        return research_builder.compile()
+    # Compile with SQLite checkpointer for state persistence
+    if checkpointer is None:
+        checkpointer = SqliteSaver.from_conn_string(":memory:")
+    return research_builder.compile(checkpointer=checkpointer)
 
 
 logger.info("Research agent graph builder loaded")
