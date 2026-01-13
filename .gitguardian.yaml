@@ -11,7 +11,11 @@ paths-ignore:
   - "**/.env.test"
   - "**/fixtures/**"
 
-# Optionally, you can also ignore specific patterns
-# matches-ignore:
-#   - name: "Test tokens"
-#     match: "test-.*-token"
+# Ignore test token patterns
+matches-ignore:
+  - name: "Test service tokens"
+    match: "test-.*-service-token-[a-f0-9]{64}"
+  - name: "Test API keys"
+    match: "test-api-key.*"
+  - name: "Test tokens"
+    match: "test-.*-token"
