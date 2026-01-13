@@ -37,11 +37,11 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Trust all self-signed certificates for inter-service communication (optional)
-# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
+# Trust all self-signed certificates for inter-service communication
+# Copy .ssl directory (may be empty in CI) and install CA certificate
 COPY .ssl /tmp/.ssl/
-RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
-        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
+RUN if [ -f /tmp/.ssl/mkcert-ca.crt ]; then \
+        cp /tmp/.ssl/mkcert-ca.crt /usr/local/share/ca-certificates/ && \
         update-ca-certificates; \
     fi
 
@@ -81,7 +81,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     ENVIRONMENT=production \
-    LOG_LEVEL=INFO
+    LOG_LEVEL=INFO \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose agent service port
 EXPOSE 8000
