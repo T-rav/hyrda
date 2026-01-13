@@ -37,9 +37,13 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Trust all self-signed certificates for inter-service communication
-COPY .ssl/*-cert.pem /usr/local/share/ca-certificates/
-RUN update-ca-certificates
+# Trust all self-signed certificates for inter-service communication (optional)
+# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
+COPY .ssl /tmp/.ssl/
+RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
+        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
+        update-ca-certificates; \
+    fi
 
 # Copy shared library first
 COPY --chown=appuser:appuser ./shared /app/shared

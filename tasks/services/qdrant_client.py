@@ -36,12 +36,8 @@ class QdrantClient:
             cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
 
             # Determine SSL verification strategy
-            if cert_path and os.path.exists(cert_path):
-                # Use certificate file for validation (development/testing)
-                verify = cert_path
-            else:
-                # Use system CA store (Docker/production)
-                verify = True
+            # Use certificate file for validation (development/testing) or system CA store (Docker/production)
+            verify = cert_path if cert_path and os.path.exists(cert_path) else True
 
             if self.api_key:
                 self.client = QdrantSDK(
