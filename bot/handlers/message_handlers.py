@@ -35,7 +35,6 @@ except ImportError:
 
 from agents.registry import agent_registry
 from agents.router import command_router
-
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.langfuse_service import get_langfuse_service
@@ -464,19 +463,23 @@ async def handle_bot_command(
         logger.error(f"Error posting thinking message: {e}")
 
     try:
-        # Instantiate and run agent
-        agent_class = agent_info["agent_class"]
-        agent = agent_class()
+        # Call agent-service via HTTP (agents no longer local)
+        from services.agent_client import get_agent_client
 
-        # Build context for agent
+        agent_client = get_agent_client()
+
+        # Build context for agent with thread_id for checkpointing
+        # Note: Only serializable data can be passed over HTTP
+        # Generate thread_id from Slack thread for persistent checkpointing
+        thread_id = (
+            f"slack_{channel}_{thread_ts}" if thread_ts else f"slack_{channel}_dm"
+        )
+
         context = {
+            "thread_id": thread_id,  # CRITICAL: For SQLite checkpointing across restarts
             "user_id": user_id,
             "channel": channel,
             "thread_ts": thread_ts,
-            "thinking_ts": thinking_message_ts,  # Pass thinking indicator timestamp
-            "slack_service": slack_service,
-            "llm_service": llm_service,
-            "conversation_cache": conversation_cache,  # For caching agent-generated docs
         }
 
         # Add file information if available
@@ -486,8 +489,11 @@ async def handle_bot_command(
             context["files"] = files
             context["file_names"] = [f.get("name", "unknown") for f in files]
 
-        # Execute agent
-        result = await agent.run(query, context)
+        # Execute agent via HTTP
+        logger.info(
+            f"Calling agent-service for '{primary_name}' with thread_id={thread_id}"
+        )
+        result = await agent_client.invoke(primary_name, query, context)
         response = result.get("response", "No response from agent")
         metadata = result.get("metadata", {})
 
