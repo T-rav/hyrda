@@ -61,11 +61,11 @@ class QdrantVectorStore(VectorStore):
 
             # Use cert for SSL verification if it exists
             # Certs are generated outside and mounted into containers
-            verify = cert_path if os.path.exists(cert_path) else True
-            if not os.path.exists(cert_path):
-                logger.warning(
-                    f"Qdrant cert not found at {cert_path}, using system CA store"
-                )
+            # TODO: Regenerate cert with hostname "qdrant" for Docker service
+            verify = False  # Temporarily disable until certs regenerated with correct hostname
+            logger.warning(
+                "Qdrant SSL verification disabled - regenerate cert with hostname 'qdrant'"
+            )
 
             if self.api_key:
                 self.client = QdrantClient(
