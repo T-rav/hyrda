@@ -191,6 +191,11 @@ class AgentClient:
         self, agent: dict, query: str, context: dict
     ) -> dict[str, Any]:
         """Invoke embedded agent directly (not via HTTP to avoid recursion)."""
+        import os
+        from pathlib import Path
+
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
         agent_name = agent["agent_name"]
 
         logger.info(f"Invoking embedded agent '{agent_name}' directly")
@@ -206,8 +211,24 @@ class AgentClient:
             if hasattr(agent_instance, "ainvoke") and not hasattr(
                 agent_instance, "run"
             ):
-                # LangGraph graph - invoke with state dict
-                result = await agent_instance.ainvoke({"query": query, **context})
+                # LangGraph graph - invoke with persistent SQLite checkpointer
+                checkpoint_dir = Path("/app/data/checkpoints")
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint_path = str(checkpoint_dir / "agent_checkpoints.db")
+
+                # Get thread_id from context (default to agent_name if not provided)
+                thread_id = context.get("thread_id", f"{agent_name}_default")
+
+                # Use AsyncSqliteSaver for persistent state across restarts
+                async with AsyncSqliteSaver.from_conn_string(
+                    checkpoint_path
+                ) as checkpointer:
+                    config = {"configurable": {"thread_id": thread_id}}
+                    result = await agent_instance.ainvoke(
+                        {"query": query, **context},
+                        config=config,
+                        checkpointer=checkpointer,
+                    )
             else:
                 # Regular agent with invoke/run methods
                 result = await agent_instance.invoke(query, context)
@@ -253,6 +274,12 @@ class AgentClient:
         self, agent: dict, query: str, context: dict
     ) -> AsyncGenerator[str, None]:
         """Stream embedded agent directly (not via HTTP to avoid recursion)."""
+        import json
+        import time
+        from pathlib import Path
+
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
         agent_name = agent["agent_name"]
 
         logger.info(f"Streaming embedded agent '{agent_name}' directly")
@@ -271,45 +298,59 @@ class AgentClient:
                 # LangGraph graph - stream with debug mode to track node start/end
                 logger.info("Streaming LangGraph agent with stream_mode='debug'")
 
+                # Setup persistent SQLite checkpointer
+                checkpoint_dir = Path("/app/data/checkpoints")
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                checkpoint_path = str(checkpoint_dir / "agent_checkpoints.db")
+
+                # Get thread_id from context (default to agent_name if not provided)
+                thread_id = context.get("thread_id", f"{agent_name}_default")
+
                 # Track node execution timing and counts
-                import json
-                import time
                 node_start_times = {}
                 node_execution_counts = {}  # Track how many times each node has run
 
-                async for event in agent_instance.astream(
-                    {"query": query, **context},
-                    stream_mode="debug"  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
-                ):
-                    logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
+                # Use AsyncSqliteSaver for persistent state across restarts
+                async with AsyncSqliteSaver.from_conn_string(
+                    checkpoint_path
+                ) as checkpointer:
+                    config = {"configurable": {"thread_id": thread_id}}
 
-                    # Debug mode yields events with type, timestamp, and payload
-                    if isinstance(event, dict):
-                        event_type = event.get("type")
-                        payload = event.get("payload", {})
-                        node_name = payload.get("name")
+                    async for event in agent_instance.astream(
+                        {"query": query, **context},
+                        stream_mode="debug",  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
+                        config=config,
+                        checkpointer=checkpointer,
+                    ):
+                        logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
 
-                        # Skip internal nodes
-                        if node_name and node_name.startswith("__"):
-                            continue
+                        # Debug mode yields events with type, timestamp, and payload
+                        if isinstance(event, dict):
+                            event_type = event.get("type")
+                            payload = event.get("payload", {})
+                            node_name = payload.get("name")
 
-                        current_time = time.time()
-                        formatted_name = node_name.replace("_", " ").title() if node_name else ""
+                            # Skip internal nodes
+                            if node_name and node_name.startswith("__"):
+                                continue
 
-                        if event_type == "task" and node_name:
-                            # Node is STARTING
-                            node_start_times[node_name] = current_time
+                            current_time = time.time()
+                            formatted_name = node_name.replace("_", " ").title() if node_name else ""
 
-                            # Track execution count
-                            node_execution_counts[node_name] = node_execution_counts.get(node_name, 0) + 1
-                            execution_count = node_execution_counts[node_name]
+                            if event_type == "task" and node_name:
+                                # Node is STARTING
+                                node_start_times[node_name] = current_time
 
-                            logger.info(f"⏳ Node starting: {node_name} (attempt {execution_count})")
+                                # Track execution count
+                                node_execution_counts[node_name] = node_execution_counts.get(node_name, 0) + 1
+                                execution_count = node_execution_counts[node_name]
 
-                            # Append count if node has run before
-                            display_name = formatted_name
-                            if execution_count > 1:
-                                display_name = f"{formatted_name} ({execution_count})"
+                                logger.info(f"⏳ Node starting: {node_name} (attempt {execution_count})")
+
+                                # Append count if node has run before
+                                display_name = formatted_name
+                                if execution_count > 1:
+                                    display_name = f"{formatted_name} ({execution_count})"
 
                             # Emit started status
                             status = {
