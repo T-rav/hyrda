@@ -489,13 +489,38 @@ async def handle_bot_command(
             context["files"] = files
             context["file_names"] = [f.get("name", "unknown") for f in files]
 
-        # Execute agent via HTTP
+        # Execute agent via HTTP with streaming for live status updates
         logger.info(
-            f"Calling agent-service for '{primary_name}' with thread_id={thread_id}"
+            f"Streaming agent-service for '{primary_name}' with thread_id={thread_id}"
         )
-        result = await agent_client.invoke(primary_name, query, context)
-        response = result.get("response", "No response from agent")
-        metadata = result.get("metadata", {})
+
+        response = ""
+        metadata = {}
+
+        async for event in agent_client.stream(primary_name, query, context):
+            phase = event.get("phase")
+            step = event.get("step")
+
+            # Update status message in place
+            if phase and thinking_message_ts:
+                if phase == "running" and step:
+                    # Format status: "⏳ Running: Step Name"
+                    status_text = f"⏳ *Running:* {step}"
+                    try:
+                        await slack_service.update_message(
+                            channel, thinking_message_ts, status_text
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update status message: {e}")
+
+                elif phase == "completed":
+                    # Agent completed, we'll delete thinking message and post response
+                    pass
+
+            # Final response with full agent output
+            if "response" in event:
+                response = event.get("response", "")
+                metadata = event.get("metadata", {})
 
         # Track this thread for future continuity (if we have a thread_ts)
         # Agent tracking and LangGraph checkpointing use SAME thread_id (thread_ts)

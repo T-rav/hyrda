@@ -1,7 +1,9 @@
 """HTTP client for calling agent-service API."""
 
+import json
 import logging
 import os
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
@@ -82,6 +84,72 @@ class AgentClient:
                 raise
             except Exception as e:
                 logger.error(f"Error invoking agent '{agent_name}': {e}")
+                raise
+
+    async def stream(
+        self, agent_name: str, query: str, context: dict[str, Any] = None
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream agent execution with live status updates.
+
+        Args:
+            agent_name: Name of agent to stream
+            query: User query
+            context: Context dict (must include thread_id for checkpointing)
+
+        Yields:
+            Status dicts with {"phase": "...", "step": "...", "message": "..."}
+            Final dict with {"response": "...", "metadata": {...}}
+
+        Raises:
+            httpx.HTTPError: If agent streaming fails
+        """
+        context = context or {}
+
+        logger.info(
+            f"Streaming agent '{agent_name}' via HTTP with thread_id={context.get('thread_id')}"
+        )
+
+        payload = {"query": query, "context": context}
+
+        headers = {
+            "X-Service-Token": self.service_token,
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+
+        # Use 30 minute timeout for long-running agents
+        timeout = httpx.Timeout(1800.0, connect=30.0)
+
+        # Use HTTPS with verify=False for internal services (they use self-signed certs)
+        # Security: Internal service-to-service calls within Docker network
+        async with httpx.AsyncClient(verify=False, timeout=timeout) as client:  # nosec B501
+            try:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/agents/{agent_name}/stream",
+                    json=payload,
+                    headers=headers,
+                ) as response:
+                    response.raise_for_status()
+
+                    # Parse Server-Sent Events (SSE)
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:]  # Remove "data: " prefix
+                            try:
+                                data = json.loads(data_str)
+                                yield data
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse SSE data: {data_str}")
+                                continue
+
+            except httpx.HTTPStatusError as e:
+                logger.error(
+                    f"Agent streaming failed: {e.response.status_code} - {e.response.text}"
+                )
+                raise
+            except Exception as e:
+                logger.error(f"Error streaming agent '{agent_name}': {e}")
                 raise
 
 
