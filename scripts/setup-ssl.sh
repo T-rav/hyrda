@@ -45,6 +45,11 @@ echo "📜 Generating certificate for tasks (localhost:5001)..."
 mkcert -cert-file tasks-cert.pem -key-file tasks-key.pem \
     localhost 127.0.0.1 ::1 tasks
 
+# Generate certificates for qdrant
+echo "📜 Generating certificate for qdrant (localhost:6333)..."
+mkcert -cert-file qdrant-cert.pem -key-file qdrant-key.pem \
+    localhost 127.0.0.1 ::1 qdrant
+
 cd - > /dev/null
 
 echo ""
@@ -54,6 +59,7 @@ echo "Certificates are stored in: $SSL_DIR"
 echo "  - control-plane: control-plane-cert.pem, control-plane-key.pem"
 echo "  - agent-service: agent-service-cert.pem, agent-service-key.pem"
 echo "  - tasks: tasks-cert.pem, tasks-key.pem"
+echo "  - qdrant: qdrant-cert.pem, qdrant-key.pem"
 echo ""
 echo "These certificates are signed by your local mkcert CA and will be trusted by your browser."
 echo ""
