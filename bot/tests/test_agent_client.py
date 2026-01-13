@@ -38,7 +38,7 @@ _record_exception_patcher = patch(
 _create_span_patcher.start()
 _record_exception_patcher.start()
 
-from bot.services.agent_client import AgentClient, AgentClientError, get_agent_client
+from bot.services.agent_client import AgentClient, get_agent_client
 
 
 # TDD Factory Patterns for AgentClient Testing
@@ -215,7 +215,7 @@ class TestAgentClientInitialization:
 
 
 class TestAgentClientInvokeAgent:
-    """Test AgentClient.invoke_agent() method"""
+    """Test AgentClient.invoke() method"""
 
     @pytest.mark.asyncio
     async def test_invoke_agent_success(self):
@@ -229,7 +229,7 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_successful_client(response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            result = await client.invoke_agent(agent_name, query, context)
+            result = await client.invoke(agent_name, query, context)
 
             assert result["response"] == "Agent response text"
             assert result["metadata"]["agent"] == "profile"
@@ -247,8 +247,8 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_successful_client(response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.invoke_agent(agent_name, query, context)
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await client.invoke(agent_name, query, context)
 
             assert "not found" in str(exc_info.value).lower()
             assert agent_name in str(exc_info.value)
@@ -265,8 +265,8 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_successful_client(response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.invoke_agent(agent_name, query, context)
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await client.invoke(agent_name, query, context)
 
             assert "failed" in str(exc_info.value).lower()
             assert "500" in str(exc_info.value)
@@ -282,8 +282,8 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_timeout_client()
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.invoke_agent(agent_name, query, context)
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await client.invoke(agent_name, query, context)
 
             assert "timed out" in str(exc_info.value).lower()
 
@@ -298,8 +298,8 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_connection_error_client()
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.invoke_agent(agent_name, query, context)
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await client.invoke(agent_name, query, context)
 
             assert "unable to connect" in str(exc_info.value).lower()
 
@@ -314,8 +314,8 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_generic_error_client()
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.invoke_agent(agent_name, query, context)
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await client.invoke(agent_name, query, context)
 
             assert "failed" in str(exc_info.value).lower()
 
@@ -332,7 +332,7 @@ class TestAgentClientInvokeAgent:
         mock_client = MockHttpClientFactory.create_successful_client(response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            await client.invoke_agent(agent_name, query, context)
+            await client.invoke(agent_name, query, context)
 
             # Verify URL construction
             expected_url = f"{base_url}/api/agents/{agent_name}/invoke"
@@ -341,145 +341,8 @@ class TestAgentClientInvokeAgent:
             assert call_args[0][0] == expected_url
 
 
-class TestAgentClientListAgents:
-    """Test AgentClient.list_agents() method"""
-
-    @pytest.mark.asyncio
-    async def test_list_agents_success(self):
-        """Test successful agent listing"""
-        client = AgentClient()
-
-        response = HttpResponseFactory.create_successful_list_response(agent_count=3)
-        mock_client = MockHttpClientFactory.create_successful_client(response)
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            agents = await client.list_agents()
-
-            assert isinstance(agents, list)
-            assert len(agents) == 3
-            assert agents[0]["name"] == "help"
-            assert agents[1]["name"] == "profile"
-            assert agents[2]["name"] == "meddic"
-
-    @pytest.mark.asyncio
-    async def test_list_agents_empty(self):
-        """Test listing agents when none available"""
-        client = AgentClient()
-
-        response = HttpResponseFactory.create_successful_list_response(agent_count=0)
-        mock_client = MockHttpClientFactory.create_successful_client(response)
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            agents = await client.list_agents()
-
-            assert isinstance(agents, list)
-            assert len(agents) == 0
-
-    @pytest.mark.asyncio
-    async def test_list_agents_error(self):
-        """Test agent listing with error"""
-        client = AgentClient()
-
-        response = HttpResponseFactory.create_failed_list_response()
-        mock_client = MockHttpClientFactory.create_successful_client(response)
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.list_agents()
-
-            assert "failed to list agents" in str(exc_info.value).lower()
-
-    @pytest.mark.asyncio
-    async def test_list_agents_exception(self):
-        """Test agent listing with exception"""
-        client = AgentClient()
-
-        mock_client = MockHttpClientFactory.create_generic_error_client()
-        # Override get method for list operation
-        mock_client.get = AsyncMock(side_effect=Exception("Network error"))
-
-        with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(AgentClientError) as exc_info:
-                await client.list_agents()
-
-            assert "failed to list agents" in str(exc_info.value).lower()
-
-
-class TestAgentClientContextPreparation:
-    """Test AgentClient._prepare_context() method"""
-
-    def test_prepare_context_keeps_serializable(self):
-        """Test that serializable values are kept"""
-        client = AgentClient()
-        context = AgentClientTestDataFactory.create_serializable_context()
-
-        result = client._prepare_context(context)
-
-        assert result["user_id"] == "U123"
-        assert result["channel"] == "C456"
-        assert result["thread_ts"] == "1234.5678"
-        assert result["is_dm"] is False
-        assert result["count"] == 42
-        assert result["ratio"] == 3.14
-        assert result["items"] == ["a", "b", "c"]
-        assert result["nested"]["key"] == "value"
-
-    def test_prepare_context_filters_services(self):
-        """Test that service instances are filtered out"""
-        client = AgentClient()
-        context = AgentClientTestDataFactory.create_mixed_context()
-
-        result = client._prepare_context(context)
-
-        # Serializable values kept
-        assert result["user_id"] == "U123"
-        assert result["channel"] == "C456"
-        assert result["count"] == 42
-
-        # Service instances filtered out
-        assert "slack_service" not in result
-        assert "llm_service" not in result
-        assert "conversation_cache" not in result
-
-    def test_prepare_context_empty(self):
-        """Test context preparation with empty context"""
-        client = AgentClient()
-        context = {}
-
-        result = client._prepare_context(context)
-
-        assert result == {}
-
-    def test_prepare_context_only_services(self):
-        """Test context with only service instances"""
-        client = AgentClient()
-        context = {
-            "slack_service": Mock(),
-            "llm_service": Mock(),
-            "conversation_cache": Mock(),
-        }
-
-        result = client._prepare_context(context)
-
-        assert result == {}
-
-    def test_prepare_context_types(self):
-        """Test that all basic Python types are preserved"""
-        client = AgentClient()
-        context = {
-            "string": "value",
-            "int": 123,
-            "float": 45.67,
-            "bool_true": True,
-            "bool_false": False,
-            "none": None,
-            "list": [1, 2, 3],
-            "dict": {"nested": "value"},
-        }
-
-        result = client._prepare_context(context)
-
-        assert result == context
+# Tests removed: list_agents() and _prepare_context() methods no longer exist
+# These methods were removed as part of the HTTP agent client refactor
 
 
 class TestGetAgentClient:
@@ -540,19 +403,4 @@ class TestGetAgentClient:
         module._agent_client = None
 
 
-class TestAgentClientError:
-    """Test AgentClientError exception"""
-
-    def test_agent_client_error_message(self):
-        """Test that AgentClientError can be raised with message"""
-        error_message = "Test error message"
-
-        with pytest.raises(AgentClientError) as exc_info:
-            raise AgentClientError(error_message)
-
-        assert str(exc_info.value) == error_message
-
-    def test_agent_client_error_inheritance(self):
-        """Test that AgentClientError is an Exception"""
-        error = AgentClientError("test")
-        assert isinstance(error, Exception)
+# httpx.HTTPError tests removed - using standard httpx exceptions
