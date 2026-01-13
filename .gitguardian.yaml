@@ -1,0 +1,17 @@
+# GitGuardian configuration
+version: 2
+
+# Exclude test files and fixtures from secret scanning
+paths-ignore:
+  - "**/tests/**"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/conftest.py"
+  - "**/.env.example"
+  - "**/.env.test"
+  - "**/fixtures/**"
+
+# Optionally, you can also ignore specific patterns
+# matches-ignore:
+#   - name: "Test tokens"
+#     match: "test-.*-token"
