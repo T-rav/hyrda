@@ -327,7 +327,12 @@ docker-logs:
 
 docker-restart: docker-down docker-up
 
-docker-build: health-ui tasks-ui
+# Setup SSL certificates (checks if exist, generates if needed)
+setup-ssl:
+	@echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"
+	@bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh
+
+docker-build: health-ui tasks-ui setup-ssl
 	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"

@@ -28,36 +28,68 @@ echo "✅ mkcert is installed and CA is trusted"
 # Create SSL directory
 SSL_DIR="$(dirname "$0")/../.ssl"
 mkdir -p "$SSL_DIR"
+cd "$SSL_DIR"
+
+# Track if any certs were generated
+CERTS_GENERATED=false
 
 # Generate certificates for control-plane
-echo "📜 Generating certificate for control-plane (localhost:6001)..."
-cd "$SSL_DIR"
-mkcert -cert-file control-plane-cert.pem -key-file control-plane-key.pem \
-    localhost 127.0.0.1 ::1 control-plane
+if [ ! -f "control-plane-cert.pem" ] || [ ! -f "control-plane-key.pem" ]; then
+    echo "📜 Generating certificate for control-plane (localhost:6001)..."
+    mkcert -cert-file control-plane-cert.pem -key-file control-plane-key.pem \
+        localhost 127.0.0.1 ::1 control-plane
+    CERTS_GENERATED=true
+else
+    echo "✅ control-plane certificate already exists, skipping..."
+fi
 
 # Generate certificates for agent-service
-echo "📜 Generating certificate for agent-service (localhost:8000)..."
-mkcert -cert-file agent-service-cert.pem -key-file agent-service-key.pem \
-    localhost 127.0.0.1 ::1 agent-service
+if [ ! -f "agent-service-cert.pem" ] || [ ! -f "agent-service-key.pem" ]; then
+    echo "📜 Generating certificate for agent-service (localhost:8000)..."
+    mkcert -cert-file agent-service-cert.pem -key-file agent-service-key.pem \
+        localhost 127.0.0.1 ::1 agent-service
+    CERTS_GENERATED=true
+else
+    echo "✅ agent-service certificate already exists, skipping..."
+fi
 
 # Generate certificates for tasks service
-echo "📜 Generating certificate for tasks (localhost:5001)..."
-mkcert -cert-file tasks-cert.pem -key-file tasks-key.pem \
-    localhost 127.0.0.1 ::1 tasks
+if [ ! -f "tasks-cert.pem" ] || [ ! -f "tasks-key.pem" ]; then
+    echo "📜 Generating certificate for tasks (localhost:5001)..."
+    mkcert -cert-file tasks-cert.pem -key-file tasks-key.pem \
+        localhost 127.0.0.1 ::1 tasks
+    CERTS_GENERATED=true
+else
+    echo "✅ tasks certificate already exists, skipping..."
+fi
 
 # Generate certificates for qdrant
-echo "📜 Generating certificate for qdrant (localhost:6333)..."
-mkcert -cert-file qdrant-cert.pem -key-file qdrant-key.pem \
-    localhost 127.0.0.1 ::1 qdrant
+if [ ! -f "qdrant-cert.pem" ] || [ ! -f "qdrant-key.pem" ]; then
+    echo "📜 Generating certificate for qdrant (localhost:6333)..."
+    mkcert -cert-file qdrant-cert.pem -key-file qdrant-key.pem \
+        localhost 127.0.0.1 ::1 qdrant
+    CERTS_GENERATED=true
+else
+    echo "✅ qdrant certificate already exists, skipping..."
+fi
 
 # Copy mkcert CA certificate for Docker containers
-echo "📜 Copying mkcert CA certificate for container trust..."
-cp "$(mkcert -CAROOT)/rootCA.pem" mkcert-ca.crt
+if [ ! -f "mkcert-ca.crt" ]; then
+    echo "📜 Copying mkcert CA certificate for container trust..."
+    cp "$(mkcert -CAROOT)/rootCA.pem" mkcert-ca.crt
+    CERTS_GENERATED=true
+else
+    echo "✅ mkcert CA certificate already exists, skipping..."
+fi
 
 cd - > /dev/null
 
 echo ""
-echo "✅ SSL certificates generated successfully!"
+if [ "$CERTS_GENERATED" = true ]; then
+    echo "✅ SSL certificates generated successfully!"
+else
+    echo "✅ SSL certificates already exist, no generation needed!"
+fi
 echo ""
 echo "Certificates are stored in: $SSL_DIR"
 echo "  - control-plane: control-plane-cert.pem, control-plane-key.pem"
