@@ -1,6 +1,8 @@
 {
+  "dependencies": [".", ".."],
   "graphs": {
     "profile": "profiler.nodes.graph_builder:build_profile_researcher",
     "meddic": "meddpicc_coach.nodes.graph_builder:build_meddpicc_coach"
-  }
+  },
+  "env": "../.env"
 }
