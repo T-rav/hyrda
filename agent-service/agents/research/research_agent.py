@@ -11,6 +11,6 @@ from .nodes.graph_builder import build_research_agent
 logger = logging.getLogger(__name__)
 
 # Create the main graph instance (no checkpointer for production/Studio)
-research_agent = build_research_agent(checkpointer=None)
+research_agent = build_research_agent()
 
 logger.info("Research agent graph compiled successfully")

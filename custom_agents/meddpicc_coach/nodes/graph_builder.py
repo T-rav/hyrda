@@ -25,7 +25,7 @@ from meddpicc_coach.state import (
 logger = logging.getLogger(__name__)
 
 
-def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
+def build_meddpicc_coach(config: dict = None) -> CompiledStateGraph:
     """Build and compile the MEDDPICC coach graph.
 
     Workflow with Q&A branch and follow-up questions:
@@ -34,6 +34,9 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
         - If no notes: qa_collector (loops until all questions answered) → parse_notes
         - If has notes: parse_notes
         - parse_notes → meddpicc_analysis → coaching_insights → END
+
+    Args:
+        config: Optional LangGraph config dict (ignored - API manages checkpointing)
 
     Returns:
         Compiled MEDDPICC coach graph
@@ -139,13 +142,6 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
     # Follow-up handler loops back to END for more questions
     coach_builder.add_edge("followup_handler", END)
 
-    # Compile with optional checkpointer - LangGraph API handles persistence automatically
-    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
-    if checkpointer is not None:
-        logger.info(
-            f"MEDDPICC coach graph compiled with checkpointer: {type(checkpointer).__name__}"
-        )
-    else:
-        logger.info("MEDDPICC coach graph compiled without checkpointer (LangGraph API manages persistence)")
-
-    return coach_builder.compile(checkpointer=checkpointer)
+    # Compile without checkpointer - LangGraph API handles persistence automatically
+    logger.info("MEDDPICC coach graph compiled without checkpointer (LangGraph API manages persistence)")
+    return coach_builder.compile()

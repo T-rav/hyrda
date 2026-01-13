@@ -95,7 +95,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     return supervisor_builder.compile()
 
 
-def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
+def build_profile_researcher(config: dict = None) -> CompiledStateGraph:
     """Build and compile the main profile researcher graph.
 
     The main graph orchestrates the entire deep research process:
@@ -107,7 +107,7 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
     6. quality_control: Validate final report (with revision loop)
 
     Args:
-        checkpointer: Optional checkpointer for state persistence (MemorySaver, etc.)
+        config: Optional LangGraph config dict (ignored - API manages checkpointing)
 
     Returns:
         Compiled profile researcher graph
@@ -161,6 +161,5 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
         },
     )
 
-    # Compile with optional checkpointer - LangGraph API handles persistence automatically
-    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
-    return profile_builder.compile(checkpointer=checkpointer)
+    # Compile without checkpointer - LangGraph API handles persistence automatically
+    return profile_builder.compile()

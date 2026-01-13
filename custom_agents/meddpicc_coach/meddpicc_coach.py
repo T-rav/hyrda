@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Create the main graph instance WITHOUT checkpointer
 # LangGraph Studio will use platform persistence
-meddpicc_coach = build_meddpicc_coach(checkpointer=None)
+meddpicc_coach = build_meddpicc_coach()
 
 logger.info(
     "MEDDPICC coach graph compiled successfully (no checkpointer for LangGraph Studio)"

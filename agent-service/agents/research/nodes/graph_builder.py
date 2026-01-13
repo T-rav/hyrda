@@ -100,7 +100,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     return supervisor_builder.compile()
 
 
-def build_research_agent(checkpointer=None) -> CompiledStateGraph:
+def build_research_agent(config: dict = None) -> CompiledStateGraph:
     """Build main research agent graph.
 
     The main graph orchestrates:
@@ -110,7 +110,7 @@ def build_research_agent(checkpointer=None) -> CompiledStateGraph:
     4. quality_control: Validate report with revision loop
 
     Args:
-        checkpointer: Optional checkpointer for state persistence
+        config: Optional LangGraph config dict (ignored - API manages checkpointing)
 
     Returns:
         Compiled research agent graph
@@ -148,9 +148,8 @@ def build_research_agent(checkpointer=None) -> CompiledStateGraph:
         },
     )
 
-    # Compile with optional checkpointer - LangGraph API handles persistence automatically
-    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
-    return research_builder.compile(checkpointer=checkpointer)
+    # Compile without checkpointer - LangGraph API handles persistence automatically
+    return research_builder.compile()
 
 
 logger.info("Research agent graph builder loaded")

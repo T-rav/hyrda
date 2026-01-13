@@ -62,7 +62,7 @@ class MeddicAgent(BaseAgent):
             logger.info("✅ Initialized singleton MemorySaver checkpointer")
 
         if not hasattr(self, "graph") or self.graph is None:
-            self.graph = build_meddpicc_coach(checkpointer=_checkpointer)
+            self.graph = build_meddpicc_coach()
             logger.info("✅ Built MEDDPICC graph with singleton checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:

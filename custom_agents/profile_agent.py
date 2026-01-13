@@ -104,7 +104,7 @@ class ProfileAgent(BaseAgent):
             logger.info("✅ Initialized singleton MemorySaver checkpointer")
 
         # Build graph with checkpointer
-        self.graph = build_profile_researcher(checkpointer=_checkpointer)
+        self.graph = build_profile_researcher()
 
         # Set module-level variable for test mocking compatibility
         profile_researcher = self.graph
