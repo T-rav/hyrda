@@ -4,7 +4,7 @@ import os
 # Set environment variables BEFORE imports (critical for jwt_auth module initialization)
 os.environ["OTEL_TRACES_ENABLED"] = "false"
 if not os.getenv("AGENT_SERVICE_TOKEN"):
-    os.environ["AGENT_SERVICE_TOKEN"] = "test-agent-service-token-172b784535a9c8548b9a6f62c257e6410db2cb022e80a4fe31e7b6c3b0f06128"
+    os.environ["AGENT_SERVICE_TOKEN"] = "fake-test-token-for-testing-only"
 
 # Set CONTROL_PLANE_URL to localhost for integration tests
 if not os.getenv("CONTROL_PLANE_URL"):

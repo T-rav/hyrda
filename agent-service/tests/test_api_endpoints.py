@@ -15,7 +15,7 @@ from app import app
 client = TestClient(app)
 
 # Auth headers for authenticated requests
-AGENT_SERVICE_TOKEN = os.getenv("AGENT_SERVICE_TOKEN", "test-agent-service-token")
+AGENT_SERVICE_TOKEN = os.getenv("AGENT_SERVICE_TOKEN", "fake-test-token-for-testing-only")
 AUTH_HEADERS = {"X-Service-Token": AGENT_SERVICE_TOKEN}
 
 # Mark all tests in this module as integration tests
