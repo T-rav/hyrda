@@ -59,8 +59,8 @@ class QdrantVectorStore(VectorStore):
 
             # Determine SSL verification strategy:
             # - Use cert file if available (development/testing)
-            # - Use system CA store otherwise (Docker/production)
-            verify = cert_path if cert_path and os.path.exists(cert_path) else True
+            # - Disable verification for self-signed certs (Docker/internal services)
+            verify = cert_path if cert_path and os.path.exists(cert_path) else False
 
             if self.api_key:
                 self.client = QdrantClient(

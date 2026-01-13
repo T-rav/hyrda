@@ -26,9 +26,10 @@ from health import HealthChecker
 get_tracer("bot")
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
+from services.llm_service import LLMService
 from services.metrics_service import initialize_metrics_service
 from services.prompt_service import initialize_prompt_service
-from services.search_clients import close_search_clients
+from services.search_clients import close_search_clients, initialize_search_clients
 from services.slack_service import SlackService
 from utils.logging import configure_logging
 
@@ -74,9 +75,8 @@ def create_app():
     agent_names = [agent["name"] for agent in registered_agents]
     logger.info(f"Registered {len(agent_names)} agents: {', '.join(agent_names)}")
 
-    # LLM service no longer needed - bot calls agent-service HTTP API
-    # All LLM/RAG functionality lives in agent-service
-    llm_service = None  # Keep variable for backward compatibility
+    # Create LLM service
+    llm_service = LLMService(settings)
 
     return app, slack_service, llm_service, conversation_cache, metrics_service
 
@@ -140,13 +140,22 @@ async def run():
         )
         settings = Settings()
 
-        # LLM service no longer needed - bot calls agent-service HTTP API
-        # All LLM, RAG, and search functionality is in agent-service
-        logger.info("✅ Bot configured for HTTP-based agent calls (no local LLM/RAG)")
+        # Initialize LLM service (includes RAG)
+        await llm_service.initialize()
+        logger.info("LLM service initialized")
+
+        # Initialize search clients (Tavily + Perplexity)
+        await initialize_search_clients(
+            tavily_api_key=settings.search.tavily_api_key,
+            perplexity_api_key=settings.search.perplexity_api_key,
+        )
+        logger.info("✅ Search clients initialized (Tavily + Perplexity)")
 
         # Start health check server
         langfuse_service = get_langfuse_service()
-        # LLM service removed - langfuse_service may be None (that's OK)
+        # If global langfuse service is None, get it directly from LLM service
+        if langfuse_service is None:
+            langfuse_service = llm_service.langfuse_service
         health_checker = HealthChecker(settings, conversation_cache, langfuse_service)
         health_port = int(os.getenv("HEALTH_PORT", "8080"))
         await health_checker.start_server(health_port)
