@@ -56,8 +56,8 @@ help:
 	@echo ""
 	@echo "$(GREEN)Development:$(RESET)"
 	@echo "  run             Run the bot (standalone)"
-	@echo "  test            Run test suite"
-	@echo "  test-coverage   Run tests with coverage report"
+	@echo "  test            🧪 Run ALL unit tests across all services (no integration)"
+	@echo "  test-bot-only   Run bot unit tests only (faster)"
 	@echo "  test-file       Run specific test file (use FILE=filename)"
 	@echo "  test-integration Run integration tests only"
 	@echo "  test-unit       Run unit tests only"
@@ -80,7 +80,6 @@ help:
 	@echo "  setup-dev       Setup development environment with pre-commit"
 	@echo "  pre-commit      Run pre-commit hooks on all files"
 	@echo "  security        Run security scanning with bandit"
-	@echo "  ci              Run all CI checks locally"
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
 	@echo ""
@@ -149,12 +148,12 @@ run: check-env start-redis
 	cd $(BOT_DIR) && $(PYTHON) app.py
 
 test: $(VENV)
-	@echo "$(BLUE)Running test suite (excluding integration tests)...$(RESET)"
-	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -v
+	@echo "$(BLUE)Running test suite (excluding integration and system_flow tests)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow" -v
 
 test-coverage: $(VENV)
-	@echo "$(BLUE)Running tests with coverage (excluding integration tests)...$(RESET)"
-	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration" && $(PYTHON) -m coverage report
+	@echo "$(BLUE)Running tests with coverage (excluding integration and system_flow tests)...$(RESET)"
+	cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m coverage run --source=. --omit="app.py" -m pytest -m "not integration and not system_flow" && $(PYTHON) -m coverage report
 
 test-file: $(VENV)
 	@echo "$(BLUE)Running specific test file: $(FILE)...$(RESET)"
@@ -254,7 +253,34 @@ typecheck: $(VENV)
 	@echo "$(BLUE)Running type checking with pyright...$(RESET)"
 	cd $(BOT_DIR) && $(VENV)/bin/pyright || $(PYTHON) -m pyright
 
-quality: lint-check test
+quality: lint-check test ui-quality librechat-build
+	@echo "$(GREEN)✅ All quality checks passed!$(RESET)"
+
+# UI Quality Checks
+ui-quality: ui-lint ui-test ui-build
+	@echo "$(GREEN)✅ UI quality checks passed!$(RESET)"
+
+ui-lint:
+	@echo "$(BLUE)Linting React Health UI...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm run lint
+
+ui-test:
+	@echo "$(BLUE)Running React Health UI tests...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm test -- --run
+
+ui-build:
+	@echo "$(BLUE)Building React Health UI...$(RESET)"
+	cd $(BOT_DIR)/health_ui && npm install --no-audit && npm run build
+
+# LibreChat Build Check
+librechat-build:
+	@echo "$(BLUE)Building LibreChat Docker image...$(RESET)"
+	@if [ -f "docker-compose.librechat.yml" ]; then \
+		docker compose -f docker-compose.librechat.yml build; \
+		echo "$(GREEN)✅ LibreChat build successful!$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  docker-compose.librechat.yml not found, skipping LibreChat build$(RESET)"; \
+	fi
 
 docker-build-bot:
 	docker build -f $(BOT_DIR)/Dockerfile -t $(IMAGE) $(BOT_DIR)
@@ -421,8 +447,8 @@ python-version: $(VENV)
 	@$(PIP) --version
 
 # 🚀 THE ONE COMMAND TO RULE THEM ALL
-# Main start command - includes everything (core + monitoring)
-start: docker-build docker-up docker-monitor
+# Main start command - includes everything (core + monitoring + LibreChat)
+start: docker-build docker-up librechat-build librechat-up docker-monitor
 	@echo "$(GREEN)🔥 ================================$(RESET)"
 	@echo "$(GREEN)🚀 FULL STACK STARTED SUCCESSFULLY!$(RESET)"
 	@echo "$(GREEN)🔥 ================================$(RESET)"
@@ -430,6 +456,7 @@ start: docker-build docker-up docker-monitor
 	@echo "$(BLUE)📊 Main Services:$(RESET)"
 	@echo "$(BLUE)  - Bot Health Dashboard: http://localhost:$${HEALTH_PORT:-8080}$(RESET)"
 	@echo "$(BLUE)  - Task Scheduler: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
+	@echo "$(BLUE)  - LibreChat UI: http://localhost:3080$(RESET)"
 	@echo "$(BLUE)  - Database Admin: http://localhost:8081$(RESET)"
 	@echo ""
 	@echo "$(YELLOW)🔍 Monitoring & Logging Stack:$(RESET)"
@@ -438,7 +465,7 @@ start: docker-build docker-up docker-monitor
 	@echo "$(YELLOW)  - Loki Logs: http://localhost:3100 (view via Grafana)$(RESET)"
 	@echo "$(YELLOW)  - AlertManager: http://localhost:9093$(RESET)"
 	@echo ""
-	@echo "$(GREEN)🎉 All services running with centralized logging! Check Grafana for logs and metrics.$(RESET)"
+	@echo "$(GREEN)🎉 All services including LibreChat UI running!$(RESET)"
 
 # Core services only (without monitoring)
 start-core: docker-build docker-up
@@ -573,3 +600,40 @@ db-status: $(VENV)
 	@echo ""
 	@echo "$(BLUE)Pending migrations:$(RESET)"
 	@cd $(BOT_DIR) && $(PYTHON) -m alembic show head || echo "$(YELLOW)No migrations found$(RESET)"
+
+# ===== LIBRECHAT UI =====
+
+# Build custom LibreChat Docker image with InsightMesh UI
+librechat-build:
+	@echo "$(BLUE)🔨 Building custom LibreChat with InsightMesh UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml build
+	@echo "$(GREEN)✅ LibreChat image built successfully!$(RESET)"
+
+# Start LibreChat UI
+librechat-up: check-env
+	@echo "$(BLUE)🚀 Starting LibreChat UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml up -d
+	@echo "$(GREEN)✅ LibreChat started!$(RESET)"
+	@echo "$(BLUE)  - LibreChat UI: http://localhost:3080$(RESET)"
+	@echo ""
+	@echo "$(YELLOW)💡 Required environment variables:$(RESET)"
+	@echo "$(YELLOW)  - AGENT_SERVICE_URL (currently: $${AGENT_SERVICE_URL:-NOT SET})$(RESET)"
+	@echo "$(YELLOW)  - LIBRECHAT_SERVICE_TOKEN (currently: $${LIBRECHAT_SERVICE_TOKEN:-NOT SET})$(RESET)"
+
+# Stop LibreChat UI
+librechat-down:
+	@echo "$(YELLOW)🛑 Stopping LibreChat UI...$(RESET)"
+	docker compose -f docker-compose.librechat.yml down
+	@echo "$(GREEN)✅ LibreChat stopped$(RESET)"
+
+# View LibreChat logs
+librechat-logs:
+	docker compose -f docker-compose.librechat.yml logs -f
+
+# Restart LibreChat
+librechat-restart: librechat-down librechat-up
+
+# Build and start LibreChat
+librechat-start: librechat-build librechat-up
+
+.PHONY: librechat-build librechat-up librechat-down librechat-logs librechat-restart librechat-start

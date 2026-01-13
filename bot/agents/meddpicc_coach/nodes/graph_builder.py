@@ -36,6 +36,7 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
 
     Returns:
         Compiled MEDDPICC coach graph
+
     """
     # Build graph with explicit input/output schemas
     coach_builder = StateGraph(

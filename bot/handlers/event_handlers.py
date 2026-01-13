@@ -1,5 +1,6 @@
 import logging
 import traceback
+from typing import Any
 
 from handlers.message_handlers import handle_message
 from services.llm_service import LLMService
@@ -13,7 +14,9 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
     """Register all event handlers with the Slack app"""
 
     @app.event("assistant_thread_started")
-    async def handle_assistant_thread_started(body, client):
+    async def handle_assistant_thread_started(
+        body: dict[str, Any], client: Any
+    ) -> None:
         """Handle the event when a user starts an AI assistant thread"""
         logger.info("Assistant thread started")
         try:
@@ -33,7 +36,7 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
             logger.error(f"Error handling assistant thread started: {e}")
 
     @app.event("app_mention")
-    async def handle_mention(body, client):
+    async def handle_mention(body: dict[str, Any], client: Any) -> None:
         """Handle when the bot is mentioned in a channel"""
         logger.info("Received app mention")
         try:
@@ -58,7 +61,6 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 text=text,
                 user_id=user_id,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
                 files=body["event"].get("files", []),
@@ -75,7 +77,7 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
             )
 
     @app.event("message")
-    async def handle_message_event(body, client):
+    async def handle_message_event(body: dict[str, Any], client: Any) -> None:
         """Handle all message events including those in threads"""
         logger.info("Received message event")
         try:
@@ -118,7 +120,6 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 thread_ts=thread_ts,
                 ts=ts,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 conversation_cache=conversation_cache,
                 files=files,
             )
@@ -154,7 +155,6 @@ async def process_message_by_context(
             text=text,
             user_id=user_id,
             slack_service=slack_service,
-            llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,  # Use thread_ts if in thread, otherwise ts
             files=files,
@@ -174,7 +174,6 @@ async def process_message_by_context(
             text=clean_text,
             user_id=user_id,
             slack_service=slack_service,
-            llm_service=llm_service,
             channel=channel,
             thread_ts=thread_ts or ts,
             files=files,
@@ -197,7 +196,6 @@ async def process_message_by_context(
                     text=text,
                     user_id=user_id,
                     slack_service=slack_service,
-                    llm_service=llm_service,
                     channel=channel,
                     thread_ts=thread_ts,
                     files=files,
@@ -212,7 +210,6 @@ async def process_message_by_context(
                 text=text,
                 user_id=user_id,
                 slack_service=slack_service,
-                llm_service=llm_service,
                 channel=channel,
                 thread_ts=thread_ts,
                 files=files,

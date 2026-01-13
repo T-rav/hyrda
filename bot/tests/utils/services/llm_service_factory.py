@@ -38,6 +38,7 @@ class LLMServiceFactory:
 
         Returns:
             MagicMock LLM service with configured side effect
+
         """
         service = MagicMock()
         service.get_response = AsyncMock(side_effect=side_effect)
@@ -54,6 +55,7 @@ class LLMServiceFactory:
 
         Returns:
             MagicMock LLM service that raises the specified error
+
         """
         service = MagicMock()
         service.get_response = AsyncMock(side_effect=error)

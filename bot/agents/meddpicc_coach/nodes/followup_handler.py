@@ -28,6 +28,7 @@ async def followup_handler(
 
     Returns:
         Dict with updated state containing final_response
+
     """
     query = state.get("query", "").strip()
     original_analysis = state.get("original_analysis", "")

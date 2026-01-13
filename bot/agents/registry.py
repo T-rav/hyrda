@@ -31,6 +31,7 @@ class AgentRegistry:
             name: Primary name for the agent (e.g., "profile", "meddic")
             agent_class: The agent class to instantiate
             aliases: Optional list of aliases (e.g., ["medic"] for "meddic")
+
         """
         name_lower = name.lower()
         aliases = aliases or []
@@ -66,6 +67,7 @@ class AgentRegistry:
 
         Returns:
             Agent info dict with 'agent_class' and metadata, or None if not found
+
         """
         return self._agents.get(name.lower())
 
@@ -74,6 +76,7 @@ class AgentRegistry:
 
         Returns:
             List of agent info dicts with name, agent_class, and aliases
+
         """
         return [
             {
@@ -93,6 +96,7 @@ class AgentRegistry:
 
         Returns:
             True if registered, False otherwise
+
         """
         return name.lower() in self._agents
 
@@ -104,6 +108,7 @@ class AgentRegistry:
 
         Returns:
             Primary name if found, None otherwise
+
         """
         info = self.get(name)
         if not info:

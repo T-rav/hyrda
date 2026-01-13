@@ -24,6 +24,7 @@ def think_tool(reflection: str) -> str:
 
     Returns:
         Confirmation message
+
     """
     logger.info(f"Researcher reflection: {reflection[:100]}...")
     return f"Reflection recorded: {reflection}"
@@ -67,6 +68,7 @@ def internal_search_tool():
 
     Returns:
         InternalSearchTool singleton instance or None if not available
+
     """
     return _InternalSearchToolSingleton.get_instance()
 
@@ -111,6 +113,7 @@ def sec_query_tool():
 
     Returns:
         SECQueryTool singleton instance or None if not available
+
     """
     return _SECQueryToolSingleton.get_instance()
 
@@ -126,6 +129,7 @@ async def search_tool(
 
     Returns:
         List of search tools (always includes web_search/scrape_url, adds deep_research if enabled)
+
     """
     from services.search_clients import get_tavily_client, get_tool_definitions
 
@@ -160,6 +164,7 @@ def is_token_limit_exceeded(exception: Exception, model_name: str) -> bool:
 
     Returns:
         True if token limit error, False otherwise
+
     """
     error_msg = str(exception).lower()
 
@@ -198,6 +203,7 @@ def remove_up_to_last_ai_message(messages: list) -> list:
 
     Returns:
         Truncated message list
+
     """
     # Find last AI message
     last_ai_index = -1
@@ -228,6 +234,7 @@ def get_api_key_for_model(model_name: str, config: RunnableConfig) -> str | None
 
     Returns:
         API key string or None
+
     """
     # Model name format: "provider:model" or just "model"
     provider = model_name.split(":")[0].lower() if ":" in model_name else "openai"
@@ -263,6 +270,7 @@ async def format_research_context(
 
     Returns:
         Formatted context string with global source numbering
+
     """
     import re
 
@@ -634,6 +642,7 @@ async def extract_company_from_url(url: str) -> str | None:
         "https://www.costco.com" → "Costco"
         "https://stripe.com" → "Stripe"
         "www.tesla.com" → "Tesla"
+
     """
     import re
 
@@ -734,6 +743,7 @@ async def detect_profile_type(query: str, llm_service: Any = None) -> str:
     Examples:
         "profile Travis Frisinger" -> "employee"
         "profile Acme Corporation" -> "company"
+
     """
     import json
 
@@ -836,6 +846,7 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
         "what are stripe's product strategy" -> "product strategy and roadmap"
         "profile vail resorts and highlight how https://example.com/case-study applies" ->
             "How [case study summary] applies to their business needs"
+
     """
     import json
     import re
@@ -996,6 +1007,7 @@ def create_system_message(prompt: str, **kwargs: Any) -> SystemMessage:
 
     Returns:
         SystemMessage instance
+
     """
     # Only format if kwargs are provided, otherwise use prompt as-is
     formatted_prompt = prompt.format(**kwargs) if kwargs else prompt
@@ -1010,6 +1022,7 @@ def create_human_message(content: str) -> HumanMessage:
 
     Returns:
         HumanMessage instance
+
     """
     return HumanMessage(content=content)
 
@@ -1022,6 +1035,7 @@ def estimate_tokens(text: str) -> int:
 
     Returns:
         Estimated token count (chars / 4)
+
     """
     return len(str(text)) // 4
 
@@ -1040,6 +1054,7 @@ def compress_message_if_needed(
 
     Returns:
         Message content (compressed if needed)
+
     """
     # Extract content from message
     if hasattr(message, "content"):
@@ -1108,6 +1123,7 @@ def select_messages_within_budget(
 
     Returns:
         Formatted string of selected messages within budget
+
     """
     # Start from most recent messages (they're usually most relevant)
     selected = []

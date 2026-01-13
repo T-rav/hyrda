@@ -25,6 +25,7 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
 
     Returns:
         Dict with compressed_research (full notes) and raw_notes
+
     """
     research_topic = state["research_topic"]
     messages = state["researcher_messages"]

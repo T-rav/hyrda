@@ -77,6 +77,7 @@ class ProfileConfiguration(BaseModel):
 
         Returns:
             ProfileConfiguration instance with merged settings
+
         """
         # Start with defaults
         settings = {}
@@ -115,5 +116,6 @@ class ProfileConfiguration(BaseModel):
 
         Returns:
             ProfileConfiguration instance
+
         """
         return cls.from_runnable_config(None)

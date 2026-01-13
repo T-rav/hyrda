@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logged Out - InsightMesh Control Plane</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .logout-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            max-width: 440px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        @keyframes scaleIn {
+            from {
+                transform: scale(0);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #1a202c;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .message {
+            font-size: 16px;
+            color: #718096;
+            margin-bottom: 32px;
+            line-height: 1.5;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .info-box {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 32px;
+            text-align: left;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: start;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .info-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-icon {
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            color: #667eea;
+            font-size: 16px;
+        }
+
+        .info-text {
+            font-size: 14px;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+
+        .footer {
+            margin-top: 32px;
+            font-size: 13px;
+            color: #a0aec0;
+        }
+
+        @media (max-width: 480px) {
+            .logout-container {
+                padding: 32px 24px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .message {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="logout-container">
+        <div class="success-icon">✓</div>
+        <h1>Successfully Logged Out</h1>
+        <p class="message">You've been securely logged out of InsightMesh Control Plane. Your session has been terminated and cookies have been cleared.</p>
+
+        <a href="/auth/login" class="btn-primary">
+            <span>Sign In Again</span>
+            <span>→</span>
+        </a>
+
+        <div class="info-box">
+            <div class="info-item">
+                <div class="info-icon">🔒</div>
+                <div class="info-text">Your session token has been revoked and removed from the server</div>
+            </div>
+            <div class="info-item">
+                <div class="info-icon">🍪</div>
+                <div class="info-text">Authentication cookies have been cleared from your browser</div>
+            </div>
+            <div class="info-item">
+                <div class="info-icon">✨</div>
+                <div class="info-text">You can safely close this tab or sign in again</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Thank you for using InsightMesh
+        </div>
+    </div>
+</body>
+</html>

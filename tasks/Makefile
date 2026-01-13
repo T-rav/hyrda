@@ -1,5 +1,10 @@
 # AI Slack Bot - Tasks Service Makefile
 
+# Virtual environment settings
+VENV := ../venv
+PYTHON := $(VENV)/bin/python
+PIP := $(VENV)/bin/pip
+
 # Coverage configuration (centralized)
 COVERAGE_MIN = 70
 COVERAGE_ARGS = --cov=. --cov-fail-under=$(COVERAGE_MIN) --cov-report=term-missing --cov-report=html:htmlcov
@@ -27,31 +32,32 @@ help:
 
 # Installation
 install:
-	pip install -e .
+	$(PIP) install -e .
 
 install-dev:
-	pip install -e ".[dev,test]"
+	$(PIP) install -e ".[dev,test]"
 
 # Testing
 test:
-	python3 -m pytest tests/ -v $(COVERAGE_ARGS)
+	$(PYTHON) -m pytest tests/ -v $(COVERAGE_ARGS)
 
 test-coverage:
-	python3 -m pytest tests/ -v $(COVERAGE_ARGS)
+	$(PYTHON) -m pytest tests/ -v $(COVERAGE_ARGS)
 
 # Code Quality - Unified tooling
 lint:
-	python3 -m ruff format .
-	python3 -m ruff check --fix .
+	$(PYTHON) -m ruff format .
+	$(PYTHON) -m ruff check --fix .
 	@echo "Running UI linting..."
 	cd ui && npm run lint --if-present 2>/dev/null || echo "UI linting skipped (npm not available or no lint script)"
 
 lint-check:
-	python3 -m ruff format --check .
-	python3 -m ruff check .
-	python3 -m pyright .
+	@echo "Running linting checks (matches CI exactly)..."
+	$(PYTHON) -m ruff check . --no-fix
+	$(PYTHON) -m ruff format --check .
 	@echo "Running UI lint check..."
 	cd ui && npm run lint --if-present 2>/dev/null || echo "UI lint check skipped (npm not available or no lint script)"
+	@echo "✅ All linting checks passed!"
 
 ui-lint:
 	cd ui && npm run lint
@@ -64,7 +70,7 @@ ui-test:
 
 # Legacy type checking (use lint-check instead)
 typecheck:
-	python3 -m pyright .
+	$(PYTHON) -m pyright .
 
 # Complete quality pipeline
 quality: lint-check test

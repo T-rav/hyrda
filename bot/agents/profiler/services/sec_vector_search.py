@@ -26,6 +26,7 @@ class SECInMemoryVectorSearch:
         Args:
             openai_api_key: OpenAI API key for embeddings
             embedding_model: Embedding model to use
+
         """
         self.client = AsyncOpenAI(api_key=openai_api_key)
         self.embedding_model = embedding_model
@@ -56,6 +57,7 @@ class SECInMemoryVectorSearch:
 
         Returns:
             Validated chunk (truncated if over token limit)
+
         """
         tokens = self.encoder.encode(chunk)
         token_count = len(tokens)
@@ -83,6 +85,7 @@ class SECInMemoryVectorSearch:
         Args:
             chunks: Text chunks from filing
             filing_metadata: Metadata about the filing (type, date, etc.)
+
         """
         logger.info(f"Validating and generating embeddings for {len(chunks)} chunks...")
 
@@ -145,6 +148,7 @@ class SECInMemoryVectorSearch:
 
         Returns:
             List of relevant chunks with metadata and scores
+
         """
         if not self.embeddings:
             logger.warning("No chunks in index")

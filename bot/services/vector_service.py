@@ -17,5 +17,6 @@ def create_vector_store(settings: VectorSettings) -> VectorStore:
 
     Returns:
         Initialized Qdrant vector store instance
+
     """
     return QdrantVectorStore(settings)

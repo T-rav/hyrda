@@ -38,6 +38,7 @@ class MeddpiccConfiguration(BaseModel):
 
         Returns:
             MeddpiccConfiguration instance with merged settings
+
         """
         # Start with defaults
         settings = {}
@@ -70,5 +71,6 @@ class MeddpiccConfiguration(BaseModel):
 
         Returns:
             MeddpiccConfiguration instance
+
         """
         return cls.from_runnable_config(None)

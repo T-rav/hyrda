@@ -29,6 +29,7 @@ class RAGServiceProtocol(Protocol):
 
         Returns:
             Generated response or None if generation fails
+
         """
         ...
 
@@ -42,6 +43,7 @@ class RAGServiceProtocol(Protocol):
 
         Returns:
             Number of documents successfully ingested
+
         """
         ...
 
@@ -59,6 +61,7 @@ class RAGServiceProtocol(Protocol):
 
         Returns:
             List of relevant document chunks with metadata
+
         """
         ...
 

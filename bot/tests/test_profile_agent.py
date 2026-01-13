@@ -22,6 +22,7 @@ def create_mock_aget_state(state_values):
 
     Returns:
         Async mock function that returns a state snapshot
+
     """
 
     async def mock_aget_state(config):

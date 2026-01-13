@@ -21,6 +21,7 @@ class MetricsServiceProtocol(Protocol):
             endpoint: API endpoint or service method called
             user_id: Optional user identifier
             **metadata: Additional metadata to record
+
         """
         ...
 
@@ -35,6 +36,7 @@ class MetricsServiceProtocol(Protocol):
             duration_ms: Duration in milliseconds
             success: Whether the operation succeeded
             **metadata: Additional metadata
+
         """
         ...
 
@@ -48,6 +50,7 @@ class MetricsServiceProtocol(Protocol):
             operation: Name of the operation that failed
             error_type: Type of error that occurred
             **metadata: Additional metadata
+
         """
         ...
 
@@ -57,6 +60,7 @@ class MetricsServiceProtocol(Protocol):
 
         Returns:
             Dict containing usage statistics
+
         """
         ...
 
@@ -66,6 +70,7 @@ class MetricsServiceProtocol(Protocol):
 
         Returns:
             Dict containing performance statistics
+
         """
         ...
 

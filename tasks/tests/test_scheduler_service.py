@@ -109,3 +109,70 @@ class TestSchedulerService:
 
         with pytest.raises(RuntimeError):
             service.modify_job("nonexistent", name="test")
+
+    def test_get_job_when_not_initialized(self, test_settings):
+        """Test get_job returns None when scheduler not initialized."""
+        service = SchedulerService(test_settings)
+        service.scheduler = None  # Simulate uninitialized scheduler
+
+        job = service.get_job("any_job_id")
+        assert job is None
+
+    def test_modify_job_success(self, test_settings):
+        """Test successful job modification."""
+        test_settings.task_database_url = "sqlite:///:memory:"
+        service = SchedulerService(test_settings)
+        service.start()
+
+        # Add a job first
+        service.add_job(
+            func="builtins:print",
+            trigger="interval",
+            job_id="test_job_modify",
+            seconds=10,
+            args=["original"],
+        )
+
+        # Modify the job (modify name which is a valid modifiable attribute)
+        modified_job = service.modify_job("test_job_modify", name="modified_name")
+        assert modified_job.id == "test_job_modify"
+        assert modified_job.name == "modified_name"
+
+        # Cleanup
+        service.shutdown(wait=False)
+
+    def test_get_job_info_with_serialization(self, test_settings):
+        """Test get_job_info serializes job data correctly."""
+        test_settings.task_database_url = "sqlite:///:memory:"
+        service = SchedulerService(test_settings)
+        service.start()
+
+        # Add job with various argument types (print accepts *args, **kwargs)
+        service.add_job(
+            func="builtins:print",
+            trigger="interval",
+            job_id="test_job_serialize",
+            seconds=10,
+            args=["string_arg", 123, 45.6, True, None],
+        )
+
+        # Get job info
+        job_info = service.get_job_info("test_job_serialize")
+
+        assert job_info is not None
+        assert job_info["id"] == "test_job_serialize"
+        assert job_info["name"] is not None
+        assert "func" in job_info
+        assert "trigger" in job_info
+        assert "args" in job_info
+        assert "kwargs" in job_info
+
+        # Verify serialization of different types in args
+        assert "string_arg" in job_info["args"]
+        assert 123 in job_info["args"]
+        assert 45.6 in job_info["args"]
+        assert True in job_info["args"]
+        assert None in job_info["args"]
+
+        # Cleanup
+        service.shutdown(wait=False)

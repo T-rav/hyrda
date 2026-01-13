@@ -22,6 +22,7 @@ class CommandRouter:
 
         Args:
             registry: AgentRegistry instance (defaults to global registry)
+
         """
         self.registry = registry or agent_registry
 
@@ -40,6 +41,7 @@ class CommandRouter:
         Returns:
             Tuple of (command_name, query) or (None, "") if no command found
             Only returns a match if the command is registered
+
         """
         # Match pattern: optional dash + command + rest of text
         match = re.match(r"^-?(\w+)\s*(.*)", text.strip(), re.IGNORECASE)
@@ -67,6 +69,7 @@ class CommandRouter:
             - agent_info: Dict with agent_class and metadata, or None if not found
             - query: Parsed query text
             - primary_name: Primary name of agent (resolves aliases)
+
         """
         command_name, query = self.parse_command(text)
 
@@ -92,6 +95,7 @@ class CommandRouter:
 
         Returns:
             List of command names (primary names only)
+
         """
         agents = self.registry.list_agents()
         return [agent["name"] for agent in agents]

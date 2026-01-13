@@ -21,6 +21,7 @@ class VectorServiceProtocol(Protocol):
 
         Returns:
             Number of documents successfully added
+
         """
         ...
 
@@ -42,6 +43,7 @@ class VectorServiceProtocol(Protocol):
 
         Returns:
             List of similar documents with metadata and scores
+
         """
         ...
 
@@ -55,6 +57,7 @@ class VectorServiceProtocol(Protocol):
 
         Returns:
             Number of documents successfully deleted
+
         """
         ...
 

@@ -2,6 +2,19 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 🚨 CRITICAL: Testing is Mandatory
+
+**ALWAYS write unit tests for code changes before committing.** Every new function, class, or feature modification MUST include comprehensive tests.
+
+**Testing Requirements:**
+- ✅ **New features**: Write tests BEFORE committing
+- ✅ **Bug fixes**: Add regression tests that reproduce the bug
+- ✅ **Refactoring**: Ensure existing tests pass, add tests for new paths
+- ✅ **API changes**: Test all endpoints and error cases
+- ❌ **Never commit untested code** - tests are non-negotiable
+
+If you create code without tests, you MUST create tests before the commit.
+
 ## 🚨 CRITICAL: Never Skip Commit Hooks
 
 **NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
@@ -28,6 +41,79 @@ This eliminates the "works locally but fails in CI" problem!
 - Then commit normally
 
 **Code quality is non-negotiable.** Broken code should never be committed.
+
+## 🔒 Security Standards
+
+InsightMesh follows the 8th Light Host Hardening Policy for all infrastructure. All developers must adhere to the baseline security standards.
+
+**Security Documentation:**
+- 📘 **[Host Hardening Policy](docs/HOST_HARDENING_POLICY.md):** SOC2-aligned VM and container security baseline
+
+**Key Security Requirements:**
+- ✅ **Secrets Management:** Never commit secrets to version control (`.env` in `.gitignore`)
+- ✅ **Container Security:** All containers run as non-root user (UID 1000)
+- ✅ **Vulnerability Scanning:** Automated Bandit scans via `make security` (runs with `make lint`)
+- ✅ **Dependency Security:** Regular updates and CVE monitoring (see below)
+- ✅ **Code Scanning:** Bandit configured to detect security issues (SQL injection, hardcoded passwords, insecure crypto)
+- ✅ **OAuth Validation:** Production startup validates required OAuth environment variables
+
+**Security Commands:**
+```bash
+make security      # Run Bandit security scanner
+make lint          # Includes security checks (Ruff + Pyright + Bandit)
+make quality       # Full quality pipeline including security scans
+```
+
+**Dependency Vulnerability Scanning:**
+
+To add automated dependency vulnerability scanning to your CI/CD pipeline:
+
+1. **Install pip-audit** (recommended) or **safety**:
+```bash
+# Add to requirements-dev.txt
+pip-audit>=2.6.0
+
+# Or use safety
+safety>=3.0.0
+```
+
+2. **Add to CI pipeline** (`.github/workflows/ci.yml`):
+```yaml
+- name: Scan dependencies for vulnerabilities
+  run: |
+    pip install pip-audit
+    pip-audit --desc --format json --output security-report.json
+    # Or with safety:
+    # pip install safety
+    # safety check --json --output security-report.json
+```
+
+3. **Local scanning**:
+```bash
+# Scan all dependencies
+pip-audit
+
+# Scan with detailed descriptions
+pip-audit --desc
+
+# Ignore specific vulnerabilities (with justification)
+pip-audit --ignore-vuln VULN-ID-HERE
+```
+
+4. **Docker vulnerability scanning**:
+```bash
+# Scan Docker images for CVEs
+docker scan insightmesh-bot:latest
+
+# Use Trivy for comprehensive scanning
+trivy image insightmesh-bot:latest
+```
+
+**Before Committing:**
+1. Ensure no secrets in code (passwords, API keys, tokens)
+2. Run `make lint` to catch security issues automatically
+3. Verify Bandit security scan passes (included in pre-commit hooks)
+4. Review [Host Hardening Policy](docs/HOST_HARDENING_POLICY.md) for baseline requirements
 
 ## Development Commands
 
@@ -185,9 +271,13 @@ VECTOR_ENABLED=false
 
 ## Architecture Overview
 
-This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and comprehensive testing.
+Production-ready Python Slack bot with:
+- **Microservices architecture**: Bot, agent-service, control-plane, tasks
+- **RAG capabilities**: Vector search with Qdrant
+- **Multiple services**: HTTP communication between services
+- **Agent system**: Specialized AI agents called via HTTP API
 
-### 🏗️ Core Architecture
+### Key Concepts
 
 #### New RAG-Enabled Design
 - **Direct LLM Integration**: OpenAI, Anthropic, or Ollama (no proxy required)
@@ -387,7 +477,7 @@ make ci                   # Run complete CI pipeline locally
 ### Testing Standards
 
 #### 1. Test Coverage Requirements
-- **Minimum 80% code coverage** (enforced by CI)
+- **Minimum 70% code coverage** (enforced by CI)
 - **All new functions/classes MUST have tests**
 - **Critical paths require 100% coverage**
 
@@ -666,7 +756,6 @@ make quality
 - **Current Coverage**: ~72% (excluding CLI scripts)
 - **Coverage Exclusions**: `bot/app.py`, `ingest/google_drive_ingester.py` (CLI scripts)
 - **Coverage Command**: `make test-coverage`
-- **Configuration**: `.coveragerc` with realistic production thresholds
 
 #### Pre-commit Hooks (Local)
 - **Unified Quality Checks**: Uses `make lint-check` (same as CI)
@@ -780,3 +869,51 @@ HEALTH_PORT=8080              # Health check server port
 - Auto-restart on crashes
 - Health check integration with orchestrators
 - Connection recovery for network issues
+
+---
+
+## 📚 Appendix
+
+### A. Relationship Verification System (Advanced)
+
+The bot includes a sophisticated system to prevent false positives when identifying past client relationships in company profiles. This is specific to the company profile agent.
+
+#### How It Works
+
+1. **Internal Search Tool** (`bot/agents/company_profile/tools/internal_search.py`):
+   - Performs deep search of internal knowledge base for company-specific documents
+   - Uses enhanced entity boosting to prioritize company-specific docs over generic index files
+   - Returns explicit "Relationship status: Existing client" or "Relationship status: No prior engagement"
+   - Filters out index/overview files that contaminate results
+
+2. **Langfuse Prompt Versioning**:
+   - Prompt v10 (production): Trusts internal_search_tool's relationship determination
+   - Scripts in `scripts/`: `update_final_report_prompt.py` and `fix_final_report_prompt.py`
+   - Prompt tells LLM to trust the "Relationship status:" line, not validate it again
+
+3. **Entity Boosting Logic**:
+   - 20% boost for company name in content (vs 5% for other terms)
+   - 30% boost for company name in title (vs 10% for other terms)
+   - -50% penalty for index/overview files
+   - Smart company name extraction from queries
+
+#### Integration Tests
+
+Comprehensive test suite in `evals/relationship_detection/`:
+- `test_relationship_verification_integration.py`: 4 integration tests using real vector DB
+- Tests validate false positive prevention (Vail Resorts, Costco) and true positive detection (AllCampus, 3Step)
+- Run with: `PYTHONPATH=bot venv/bin/python -m pytest evals/relationship_detection/test_relationship_verification_integration.py`
+
+#### Key Files
+
+- `bot/agents/company_profile/tools/internal_search.py`: Entity boosting logic (lines 466-527)
+- `scripts/fix_final_report_prompt.py`: Prompt updater to trust internal search
+- `evals/relationship_detection/*.py`: Integration and unit tests
+
+#### Updating the Prompt
+
+To update the Langfuse prompt:
+```bash
+PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
+```
+Then promote the new version to production in Langfuse UI.

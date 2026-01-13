@@ -24,6 +24,7 @@ def extract_urls(text: str) -> list[str]:
 
     Returns:
         List of URLs found in text
+
     """
     # URL regex pattern
     url_pattern = r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
@@ -39,6 +40,7 @@ async def scrape_urls(urls: list[str]) -> tuple[str, list[str]]:
 
     Returns:
         Tuple of (scraped_content, successful_sources)
+
     """
     from services.search_clients import get_tavily_client
 
@@ -87,6 +89,7 @@ async def parse_notes(
 
     Returns:
         Dict with updated state containing raw_notes, scraped_content, sources
+
     """
     query = state.get("query", "")
 

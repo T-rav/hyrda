@@ -16,10 +16,11 @@ dependencies = [
     # Core scheduling
     "apscheduler>=3.10.4",
 
-    # Web UI
-    "flask>=3.0.0",
-    "flask-cors>=4.0.0",
-    "gunicorn>=21.0.0",  # WSGI server for production
+    # Web framework (migrated from Flask to FastAPI for consistency)
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",  # ASGI server for production
+    "jinja2>=3.1.0",  # Template rendering for OAuth pages
+    "itsdangerous>=2.1.0",  # Required by Starlette SessionMiddleware
 
     # Time zones
     "tzlocal>=5.2",
@@ -78,6 +79,7 @@ test = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.12.0",
+    "fastapi>=0.115.0",  # Required by test factories
 ]
 
 # Development tools
@@ -160,7 +162,18 @@ omit = [
     "*/__pycache__/*",
     "*/migrations/*",
     "setup.py",
-    "app.py",  # Flask entry point - difficult to test without integration tests
+    "app.py",  # FastAPI entry point - tested via API endpoints
+    "run_metric_sync.py",  # CLI script
+    # Optional Google Drive integration (complex external service integration)
+    "api/gdrive.py",  # Optional feature - Google Drive OAuth and ingestion APIs
+    "jobs/gdrive_ingest.py",  # Optional feature - Google Drive ingestion job
+    "services/gdrive/*",  # Optional Google Drive services
+    # Optional integrations
+    "jobs/portal_sync.py",  # Optional feature - Portal sync job
+    "jobs/metric_sync.py",  # Optional feature - Metrics sync job
+    "services/portal_client.py",  # Optional feature - Portal API client
+    "services/metric_client.py",  # Optional feature - Metrics API client
+    "jobs/system/*",  # System job implementations tested via job_registry tests
 ]
 
 [tool.coverage.report]

@@ -305,6 +305,7 @@ def get_user_system_prompt(user_id: str | None = None) -> str:
 
     Returns:
         System prompt with user context
+
     """
     prompt_service = get_prompt_service()
     base_prompt = ""
@@ -378,6 +379,7 @@ async def handle_bot_command(
 
     Returns:
         True if bot command was handled, False otherwise
+
     """
     # Debug: Log what text we're receiving
     logger.info(
@@ -571,6 +573,7 @@ async def handle_message(
 
     Args:
         message_ts: Message timestamp - used as unique conversation ID when not in thread
+
     """
     start_time = time.time()
 

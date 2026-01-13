@@ -41,6 +41,7 @@ def format_duration(seconds: float) -> str:
 
     Returns:
         Formatted duration string
+
     """
     if seconds < 60:
         return f"{seconds:.1f}s"
@@ -119,6 +120,7 @@ class ProfileAgent(BaseAgent):
 
         Returns:
             Result dict with comprehensive profile report and metadata
+
         """
         if not self.validate_context(context):
             return {

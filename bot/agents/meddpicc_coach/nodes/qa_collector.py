@@ -57,6 +57,7 @@ async def qa_collector(state: MeddpiccAgentState, config: RunnableConfig) -> dic
 
     Returns:
         Dict with updated state
+
     """
     query = state.get("query", "").strip()
     question_mode = state.get("question_mode", False)

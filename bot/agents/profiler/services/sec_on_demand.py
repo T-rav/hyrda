@@ -25,6 +25,7 @@ class SECOnDemandFetcher:
 
         Args:
             user_agent: User-Agent header (required by SEC)
+
         """
         self.base_url = "https://data.sec.gov"
         self.archive_url = "https://www.sec.gov/Archives/edgar/data"
@@ -49,6 +50,7 @@ class SECOnDemandFetcher:
 
         Returns:
             Dictionary with filing contents and metadata
+
         """
         # Look up CIK if ticker provided
         if not ticker_or_cik.isdigit():
@@ -210,6 +212,7 @@ class SECOnDemandFetcher:
 
         Returns:
             CIK string zero-padded to 10 digits, or None if not found
+
         """
         url = "https://www.sec.gov/files/company_tickers.json"
 
@@ -267,6 +270,7 @@ class SECOnDemandFetcher:
 
         Returns:
             List of text chunks
+
         """
         chunks = []
         start = 0

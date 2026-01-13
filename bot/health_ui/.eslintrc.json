@@ -1,0 +1,14 @@
+{
+  "extends": ["react-app", "react-app/jest"],
+  "rules": {
+    "no-console": ["warn", { "allow": ["error", "warn"] }]
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.js", "**/*.test.jsx", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ]
+}

@@ -37,6 +37,7 @@ class ConversationManager:
             keep_recent: Messages to keep when summarizing (default: 4)
             summarize_threshold: Context usage % to trigger summarization (default: 0.75)
             model_context_window: Model's max context tokens (default: 128k for GPT-4o)
+
         """
         self.llm_provider = llm_provider
         self.max_messages = max_messages
@@ -65,6 +66,7 @@ class ConversationManager:
 
         Returns:
             True if summarization needed
+
         """
         # Check message count threshold
         if len(messages) > self.max_messages:
@@ -105,6 +107,7 @@ class ConversationManager:
 
         Returns:
             Estimated token count
+
         """
         total_chars = sum(len(msg.get("content", "")) for msg in messages)
         return int(total_chars / 4)  # 4 chars per token approximation
@@ -125,6 +128,7 @@ class ConversationManager:
 
         Returns:
             Tuple of (updated_system_message, managed_messages)
+
         """
         # Short conversation: no summarization needed
         if not self.should_summarize(messages, system_message, existing_summary):
@@ -174,6 +178,7 @@ class ConversationManager:
 
         Returns:
             Summary text
+
         """
         if not messages:
             return existing_summary or ""
@@ -238,6 +243,7 @@ Summary:"""
 
         Returns:
             Formatted conversation text
+
         """
         formatted = []
         for msg in messages:
@@ -264,6 +270,7 @@ Summary:"""
 
         Returns:
             Combined system message
+
         """
         base = base_system or ""
 
@@ -296,6 +303,7 @@ The summary above provides context from earlier in this conversation. Continue n
 
         Returns:
             Messages to cache
+
         """
         # We only cache recent messages + summary
         # Summary is stored separately in cache
@@ -312,6 +320,7 @@ def estimate_message_tokens(messages: list[dict[str, str]]) -> int:
 
     Returns:
         Estimated token count
+
     """
     total_chars = sum(len(msg.get("content", "")) for msg in messages)
     return int(total_chars / 4)  # Rough approximation
@@ -329,5 +338,6 @@ def should_trigger_summarization(
 
     Returns:
         True if summarization needed
+
     """
     return len(messages) > max_messages

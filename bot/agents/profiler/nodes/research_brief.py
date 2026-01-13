@@ -30,6 +30,7 @@ async def write_research_brief(
 
     Returns:
         Dict with research_brief, profile_type, and supervisor_messages
+
     """
     query = state["query"]
 

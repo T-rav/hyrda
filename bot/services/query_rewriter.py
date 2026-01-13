@@ -47,6 +47,7 @@ class AdaptiveQueryRewriter:
         Args:
             llm_service: LLM service for query rewriting
             enable_rewriting: Whether to enable query rewriting (default: True)
+
         """
         self.llm_service = llm_service
         self.enable_rewriting = enable_rewriting
@@ -73,6 +74,7 @@ class AdaptiveQueryRewriter:
                 - filters: Metadata filters to apply
                 - strategy: Strategy used ("hyde", "semantic", "passthrough")
                 - intent: Classified intent information
+
         """
         if not self.enable_rewriting:
             return {
@@ -139,6 +141,7 @@ class AdaptiveQueryRewriter:
 
         Returns:
             Dictionary with user info or None
+
         """
         try:
             from services.user_service import get_user_service
@@ -170,6 +173,7 @@ class AdaptiveQueryRewriter:
 
         Returns:
             Dictionary with intent classification
+
         """
         # Format recent conversation history (last 3 messages)
         history_context = self._format_history(conversation_history[-3:])
@@ -283,6 +287,7 @@ Now classify this query. Return ONLY the JSON object:"""
 
         Returns:
             Rewrite result with hypothetical employee record
+
         """
         entities = intent.get("entities", [])
         entity_context = f" for {entities[0]}" if entities else ""
@@ -354,6 +359,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         Returns:
             Rewrite result with expanded query
+
         """
         entities = intent.get("entities", [])
         entity_str = " ".join(entities)
@@ -398,6 +404,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         Returns:
             Rewrite result with expanded query
+
         """
         entities = intent.get("entities", [])
         entity_str = " ".join(entities)
@@ -426,6 +433,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         Returns:
             Passthrough result
+
         """
         return {"query": query, "filters": {}, "strategy": "passthrough"}
 
@@ -438,6 +446,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         Returns:
             Formatted history string
+
         """
         if not history:
             return "(No recent context)"
@@ -456,6 +465,7 @@ Make it specific to the query context. Use realistic names, dates, and project n
 
         Returns:
             Dictionary with rewriter status
+
         """
         return {
             "enabled": self.enable_rewriting,

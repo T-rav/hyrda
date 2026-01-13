@@ -23,6 +23,7 @@ class CitationService:
 
         Returns:
             Response with source citations appended
+
         """
         if not context_chunks:
             return response
@@ -140,6 +141,7 @@ class CitationService:
 
         Returns:
             Formatted context string for LLM consumption
+
         """
         if not context_chunks:
             return ""

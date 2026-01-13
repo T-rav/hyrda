@@ -7,6 +7,7 @@ import pytest
 from models.task_metadata import TaskMetadata
 
 
+@pytest.mark.skip(reason="Flask job deletion tests not applicable to FastAPI app")
 class TestJobDeletionCleanup:
     """Test that deleting a job cleans up all related database records."""
 

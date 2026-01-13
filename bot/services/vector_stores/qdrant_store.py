@@ -7,6 +7,7 @@ Handles Qdrant-specific vector database operations.
 import asyncio
 import hashlib
 import logging
+import os
 import uuid
 from typing import Any
 
@@ -52,16 +53,30 @@ class QdrantVectorStore(VectorStore):
                     "qdrant-client package is required for Qdrant vector store"
                 )
 
-            # Initialize Qdrant client
-            # Use http:// URL to avoid SSL when using API key in local Docker setup
+            # Initialize Qdrant client with HTTPS support
+            # Check for certificate path (development) or use system CA store (production/Docker)
+            cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
+
+            # Determine SSL verification strategy:
+            # - Use cert file if available (development/testing)
+            # - Use system CA store otherwise (Docker/production)
+            verify = cert_path if cert_path and os.path.exists(cert_path) else True
+
             if self.api_key:
                 self.client = QdrantClient(
-                    url=f"http://{self.host}:{self.port}",
+                    url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
+                    verify=verify,
                 )
             else:
-                self.client = QdrantClient(host=self.host, port=self.port, timeout=60)
+                self.client = QdrantClient(
+                    host=self.host,
+                    port=self.port,
+                    timeout=60,
+                    https=True,
+                    verify=verify,
+                )
 
             # Create collection if it doesn't exist
             collections = await asyncio.get_event_loop().run_in_executor(
@@ -274,6 +289,7 @@ class QdrantVectorStore(VectorStore):
 
         Returns:
             Diversified list of documents with variety across different files
+
         """
         if not documents or limit <= 0:
             return []

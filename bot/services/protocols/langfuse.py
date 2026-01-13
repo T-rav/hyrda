@@ -32,6 +32,7 @@ class LangfuseServiceProtocol(Protocol):
             metadata: Additional metadata
             user_id: Optional user identifier
             session_id: Optional session identifier
+
         """
         ...
 
@@ -52,6 +53,7 @@ class LangfuseServiceProtocol(Protocol):
             metadata: Additional metadata
             user_id: Optional user identifier
             session_id: Optional session identifier
+
         """
         ...
 
@@ -73,6 +75,7 @@ class LangfuseServiceProtocol(Protocol):
 
         Returns:
             Trace ID
+
         """
         ...
 
@@ -84,6 +87,7 @@ class LangfuseServiceProtocol(Protocol):
             trace_id: Trace ID to end
             output: Final output
             **metadata: Additional metadata
+
         """
         ...
 

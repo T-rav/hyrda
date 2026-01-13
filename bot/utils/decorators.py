@@ -35,6 +35,7 @@ def handle_service_errors(
         async def get_documents(self, query: str) -> list:
             # Implementation that might raise exceptions
             return documents
+
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T | Any]:
@@ -120,6 +121,7 @@ def retry_on_failure(
         async def make_api_call(self) -> dict:
             # API call that might fail
             return response
+
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
@@ -205,6 +207,7 @@ def measure_performance(operation_name: str | None = None):
         async def search_documents(self, query: str) -> list:
             # Search implementation
             return results
+
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
@@ -288,6 +291,7 @@ def circuit_breaker(
         async def call_external_api(self) -> dict:
             # External API call
             return response
+
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:

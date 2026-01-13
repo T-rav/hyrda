@@ -33,6 +33,7 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
 
     Returns:
         Command to proceed to researcher_tools or compress_research
+
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     tool_call_iterations = state.get("tool_call_iterations", 0)
@@ -171,6 +172,7 @@ async def researcher_tools(
 
     Returns:
         Command to return to researcher or proceed to compression
+
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
     messages = state["researcher_messages"]

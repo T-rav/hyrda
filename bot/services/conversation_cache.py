@@ -163,6 +163,7 @@ class ConversationCache:
 
         Returns:
             tuple: (document_content, document_filename) or (None, None) if not found
+
         """
         document_key = self._get_document_key(thread_ts)
 
@@ -205,6 +206,7 @@ class ConversationCache:
 
         Returns:
             True if summary was stored successfully
+
         """
         redis_client = await self._get_redis_client()
         if not redis_client:
@@ -295,6 +297,7 @@ class ConversationCache:
 
         Returns:
             Summary text or None if not found
+
         """
         summary_key = (
             self._get_summary_key(thread_ts, version)
@@ -337,6 +340,7 @@ class ConversationCache:
 
         Returns:
             Dictionary with metadata (version, token_count, message_count, etc.) or None
+
         """
         summary_key = (
             self._get_summary_key(thread_ts, version)
@@ -377,6 +381,7 @@ class ConversationCache:
 
         Returns:
             Dictionary with version history or None
+
         """
         history_key = self._get_summary_history_key(thread_ts)
 
@@ -543,6 +548,7 @@ class ConversationCache:
 
         Returns:
             True if stored successfully, False otherwise
+
         """
         redis_client = await self._get_redis_client()
         if not redis_client:
@@ -583,6 +589,7 @@ class ConversationCache:
 
         Returns:
             Thread type string ('profile', 'meddic', 'general') or None if not set
+
         """
         redis_client = await self._get_redis_client()
         if not redis_client:

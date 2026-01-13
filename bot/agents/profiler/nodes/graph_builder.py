@@ -45,6 +45,7 @@ def build_researcher_subgraph() -> CompiledStateGraph:
 
     Returns:
         Compiled researcher subgraph
+
     """
     researcher_builder = StateGraph(
         ResearcherState, output_schema=ResearcherOutputState
@@ -75,6 +76,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
 
     Returns:
         Compiled supervisor subgraph
+
     """
     supervisor_builder = StateGraph(SupervisorState)
 
@@ -106,6 +108,7 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
 
     Returns:
         Compiled profile researcher graph
+
     """
     # Build supervisor subgraph
     supervisor_subgraph = build_supervisor_subgraph()

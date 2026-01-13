@@ -3,17 +3,27 @@ import contextlib
 import logging
 import os
 import signal
+import sys
 import traceback
+from pathlib import Path
 
 from dotenv import load_dotenv
 from slack_bolt.adapter.socket_mode.aiohttp import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
+from slack_sdk.web.async_client import AsyncWebClient
+
+# Initialize OpenTelemetry for distributed tracing
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared.utils.otel_tracing import get_tracer
 
 from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
+
+# Initialize OTel tracer for bot service
+get_tracer("bot")
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
@@ -71,17 +81,25 @@ def create_app():
     return app, slack_service, llm_service, conversation_cache, metrics_service
 
 
-async def maintain_presence(client: WebClient):
-    """Keep the bot's presence status active"""
-    while True:
-        try:
-            await client.users_setPresence(presence="auto")  # type: ignore[misc]
-            logger.debug("Updated bot presence status")
-        except Exception as e:
-            logger.error(f"Error updating presence: {e}")
+async def maintain_presence(client: AsyncWebClient | WebClient) -> None:
+    """Keep the bot's presence status active.
 
-        # Sleep for 5 minutes
-        await asyncio.sleep(300)
+    Uses asyncio.CancelledError to enable graceful shutdown without waiting
+    for the full 5-minute sleep interval.
+    """
+    try:
+        while True:
+            try:
+                await client.users_setPresence(presence="auto")  # type: ignore[misc]
+                logger.debug("Updated bot presence status")
+            except Exception as e:
+                logger.error(f"Error updating presence: {e}")
+
+            # Sleep for 5 minutes, but allow cancellation
+            await asyncio.sleep(300)
+    except asyncio.CancelledError:
+        logger.info("Presence maintenance task cancelled, shutting down gracefully")
+        raise  # Re-raise to properly cancel the task
 
 
 def signal_handler(signum, _):
@@ -205,11 +223,12 @@ async def run():
             except Exception as e:
                 logger.error(f"Error closing socket handler: {e}")
 
-        if llm_service:
-            try:
-                await llm_service.close()
-            except Exception as e:
-                logger.error(f"Error closing LLM service: {e}")
+        # Close search clients
+        try:
+            await close_search_clients()
+            logger.info("Search clients closed")
+        except Exception as e:
+            logger.error(f"Error closing search clients: {e}")
 
         # Close search clients
         try:

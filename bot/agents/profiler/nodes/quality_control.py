@@ -135,6 +135,7 @@ def extract_citations_from_report(report: str) -> list[int]:
 
     Returns:
         Sorted list of unique citation numbers found
+
     """
     # Find all [N] citations in the report
     citations = re.findall(r"\[(\d+)\]", report)
@@ -150,6 +151,7 @@ def count_sources_in_section(report: str) -> int:
 
     Returns:
         Number of sources listed (0 if section missing)
+
     """
     # Find ## Sources section
     sources_match = re.search(r"## Sources\s*\n(.*)", report, re.DOTALL)
@@ -182,6 +184,7 @@ async def quality_control_node(
 
     Returns:
         Dict with passes_quality, revision_prompt, and updated final_report (if needed)
+
     """
     final_report = state.get("final_report", "")
     revision_count = state.get("revision_count", 0)
@@ -337,6 +340,7 @@ def quality_control_router(state: ProfileAgentState) -> str:
 
     Returns:
         "end" to finish the workflow, or "revise" to loop back to final_report_generation
+
     """
     passes_quality = state.get("passes_quality", False)
     max_revisions_exceeded = state.get("max_revisions_exceeded", False)

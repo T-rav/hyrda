@@ -47,6 +47,7 @@ class ServiceContainer:
                 LLMService,
                 lambda: LLMService(settings, rag_service, metrics_service)
             )
+
         """
         if self._closed:
             raise RuntimeError("Cannot register factories on closed container")
@@ -61,6 +62,7 @@ class ServiceContainer:
         Args:
             service_type: The service type/interface
             instance: The service instance
+
         """
         if self._closed:
             raise RuntimeError("Cannot register services on closed container")
@@ -81,6 +83,7 @@ class ServiceContainer:
         Raises:
             ValueError: If no factory is registered for the service type
             RuntimeError: If the container is closed
+
         """
         if self._closed:
             raise RuntimeError("Cannot get services from closed container")
@@ -178,6 +181,7 @@ class ServiceContainer:
 
         Returns:
             Dict containing health status of all services
+
         """
         health_status = {
             "container": "healthy",
@@ -211,6 +215,7 @@ class ServiceContainer:
 
         Returns:
             Dict mapping service names to their status
+
         """
         result = {}
 
@@ -236,6 +241,7 @@ def get_container() -> ServiceContainer:
 
     Returns:
         The global ServiceContainer instance
+
     """
     global _container  # noqa: PLW0603
     if _container is None:

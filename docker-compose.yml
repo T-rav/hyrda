@@ -55,15 +55,20 @@ services:
     container_name: insightmesh-qdrant
     restart: unless-stopped
     ports:
-      - "6333:6333"  # REST API + Dashboard
+      - "6333:6333"  # REST API + Dashboard (HTTPS)
       - "6334:6334"  # gRPC API
     volumes:
       - qdrant_data:/qdrant/storage
+      - ./.ssl/qdrant-cert.pem:/qdrant/tls/cert.pem:ro
+      - ./.ssl/qdrant-key.pem:/qdrant/tls/key.pem:ro
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__API_KEY=${VECTOR_API_KEY:-}  # Set in .env for security
+      - QDRANT__SERVICE__ENABLE_TLS=true
+      - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
+      - QDRANT__TLS__KEY=/qdrant/tls/key.pem
     healthcheck:
-      test: ["CMD-SHELL", "timeout 3s bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -110,6 +115,9 @@ services:
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
     ports:
       - "${TASKS_PORT:-5001}:5001"
+    volumes:
+      - ./.ssl/tasks-cert.pem:/app/ssl/tasks-cert.pem:ro
+      - ./.ssl/tasks-key.pem:/app/ssl/tasks-key.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -167,8 +175,8 @@ services:
   # AI Slack Bot Service
   bot:
     build:
-      context: ./bot
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: bot/Dockerfile
     image: insightmesh-bot:latest
     container_name: insightmesh-bot
     restart: unless-stopped
@@ -179,7 +187,7 @@ services:
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
-      - CACHE_REDIS_URL=redis://redis:6379
+      - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
       - ENVIRONMENT=production
     ports:
       - "${HEALTH_PORT:-8080}:8080"
@@ -203,6 +211,126 @@ services:
       logging: "promtail"
       service: "bot"
       component: "slack-bot"
+    networks:
+      - insightmesh
+
+  # RAG Service - Vector Search & Knowledge Base
+  rag-service:
+    build:
+      context: .
+      dockerfile: rag-service/Dockerfile
+    image: insightmesh-rag-service:latest
+    container_name: insightmesh-rag-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${RAG_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "rag-service"
+      component: "vector-search"
+    networks:
+      - insightmesh
+
+  # Control Plane - Agent Registry & Management UI
+  control-plane:
+    build:
+      context: .
+      dockerfile: control_plane/Dockerfile
+    image: insightmesh-control-plane:latest
+    container_name: insightmesh-control-plane
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${CONTROL_PLANE_PORT:-6001}:6001"
+    volumes:
+      - ./.ssl/control-plane-cert.pem:/app/ssl/control-plane-cert.pem:ro
+      - ./.ssl/control-plane-key.pem:/app/ssl/control-plane-key.pem:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '=== Running control-plane migrations ===' &&
+        alembic upgrade head &&
+        echo '=== Starting control-plane ===' &&
+        sh startup.sh
+      "
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:6001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "control-plane"
+      component: "agent-registry"
+    networks:
+      - insightmesh
+
+  # Agent Service - LangGraph HTTP API
+  agent-service:
+    build:
+      context: .
+      dockerfile: agent-service/Dockerfile
+    image: insightmesh-agent-service:latest
+    container_name: insightmesh-agent-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${AGENT_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
+      - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "agent-service"
+      component: "langgraph-api"
     networks:
       - insightmesh
 

@@ -5,6 +5,7 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
+    ca-certificates \
     default-mysql-client \
     nginx \
     supervisor \
@@ -21,8 +22,19 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
+# Trust all self-signed certificates for inter-service communication (optional)
+# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
+COPY .ssl /tmp/.ssl/
+RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
+        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
+        update-ca-certificates; \
+    fi
+
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
+
+# Copy shared utilities (needed for middleware, auth, etc.)
+COPY --chown=appuser:appuser ./shared /app/shared
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
@@ -54,10 +66,10 @@ EXPOSE 5001
 
 # Add health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5001/health || exit 1
+    CMD curl -f -k https://localhost:5001/health || exit 1
 
 # Copy supervisor configuration
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Use supervisor to manage both nginx and Flask
+# Use supervisor to manage both nginx and FastAPI
 CMD ["/usr/bin/supervisord"]

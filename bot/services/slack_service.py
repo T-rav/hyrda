@@ -34,6 +34,7 @@ class SlackService:
 
         Returns:
             Response dict with 'ts' key for the message timestamp, or None on error
+
         """
         try:
             response = await self.client.chat_postMessage(  # type: ignore[misc]
@@ -65,6 +66,7 @@ class SlackService:
 
         Returns:
             Response dict, or None on error
+
         """
         try:
             response = await self.client.chat_update(  # type: ignore[misc]
@@ -185,6 +187,7 @@ class SlackService:
 
         Returns:
             Response dict with file info, or None on error
+
         """
         try:
             logger.info(f"Uploading file '{filename}' to channel {channel}")

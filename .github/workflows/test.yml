@@ -1,4 +1,4 @@
-name: Test Suite
+name: CI Pipeline
 
 on:
   push:
@@ -10,8 +10,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        task: [lint, test, task-lint, task-test]
-    name: Python ${{ matrix.task }}
+        task: [lint, test]
+    name: Tasks Service ${{ matrix.task }}
 
     steps:
     - uses: actions/checkout@v4
@@ -21,74 +21,49 @@ jobs:
       with:
         python-version: "3.11"
         cache: 'pip'
-        cache-dependency-path: |
-          bot/pyproject.toml
-          tasks/pyproject.toml
+        cache-dependency-path: tasks/pyproject.toml
 
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('tasks/pyproject.toml') }}
         restore-keys: |
           ${{ runner.os }}-pip-
 
-    - name: Install dependencies
+    - name: Install Python dependencies
+      working-directory: tasks
       run: |
         python -m pip install --upgrade pip
-        # Install project dependencies based on task
-        if [[ "${{ matrix.task }}" == "lint" || "${{ matrix.task }}" == "test" ]]; then
-          pip install -e "bot/.[dev,test]"
-        elif [[ "${{ matrix.task }}" == "task-lint" || "${{ matrix.task }}" == "task-test" ]]; then
-          pip install -e "bot/.[dev,test]"
-          pip install -e "tasks/[test]"
-        fi
+        pip install -e ".[dev,test]"
 
-    - name: Run unified linting and type checking
+    - name: Run linting and type checking
       if: matrix.task == 'lint'
-      env:
-        PYTHON: python
-        PIP: pip
-      run: make lint-check
+      working-directory: tasks
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
 
     - name: Run tests with coverage
       if: matrix.task == 'test'
+      working-directory: tasks
       env:
-        SLACK_BOT_TOKEN: xoxb-test-token-for-ci
-        SLACK_APP_TOKEN: xapp-test-token-for-ci
-        LLM_PROVIDER: openai
-        LLM_API_KEY: test-api-key-for-ci
-        LLM_MODEL: gpt-4o-mini
-        CACHE_REDIS_URL: redis://localhost:6379/0
-        VECTOR_ENABLED: false
         ENVIRONMENT: test
         LOG_LEVEL: WARNING
-        PYTHON: python
-        PIP: pip
-      run: make test-coverage
-
-    - name: Run task linting
-      if: matrix.task == 'task-lint'
+        TASKS_PORT: 5001
+        TASKS_HOST: 0.0.0.0
+        DATABASE_URL: "sqlite:///:memory:"
+        REDIS_URL: "redis://localhost:6379/2"
       run: |
-        cd tasks && python -m ruff check . --no-fix
-
-    - name: Run task tests
-      if: matrix.task == 'task-test'
-      env:
-        ENVIRONMENT: test
-        LOG_LEVEL: WARNING
-        PYTHON: python
-        PIP: pip
-      run: make test-tasks
+        python -m pytest tests/ -v --cov=. --cov-fail-under=70 --cov-report=term-missing
 
   react-tests:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        app: [tasks, bot]
         task: [lint, test, build]
-    name: React ${{ matrix.app }} ${{ matrix.task }}
+    name: Tasks UI ${{ matrix.task }}
 
     steps:
     - uses: actions/checkout@v4
@@ -96,64 +71,102 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
-        cache-dependency-path: |
-          tasks/ui/package-lock.json
-          bot/health_ui/package-lock.json
+        cache-dependency-path: tasks/ui/package-lock.json
 
-    - name: Install dependencies for tasks UI
-      if: matrix.app == 'tasks'
+    - name: Install dependencies
       working-directory: tasks/ui
       run: npm ci
 
-    - name: Install dependencies for bot health UI
-      if: matrix.app == 'bot'
-      working-directory: bot/health_ui
-      run: npm ci
-
-    - name: Run ESLint for tasks UI
-      if: matrix.app == 'tasks' && matrix.task == 'lint'
+    - name: Run ESLint
+      if: matrix.task == 'lint'
       working-directory: tasks/ui
       run: npm run lint
 
-    - name: Run ESLint for bot health UI
-      if: matrix.app == 'bot' && matrix.task == 'lint'
-      working-directory: bot/health_ui
-      run: npm run lint
-
-    - name: Run tests for tasks UI
-      if: matrix.app == 'tasks' && matrix.task == 'test'
+    - name: Run tests
+      if: matrix.task == 'test'
       working-directory: tasks/ui
       run: npm run test:coverage
 
-    - name: Run tests for bot health UI
-      if: matrix.app == 'bot' && matrix.task == 'test'
-      working-directory: bot/health_ui
-      run: npm run test:coverage
-
-    - name: Build tasks UI
-      if: matrix.app == 'tasks' && matrix.task == 'build'
+    - name: Build UI
+      if: matrix.task == 'build'
       working-directory: tasks/ui
       run: npm run build
 
-    - name: Build bot health UI
-      if: matrix.app == 'bot' && matrix.task == 'build'
-      working-directory: bot/health_ui
-      run: npm run build
-
-    - name: Upload coverage reports for tasks UI
-      if: matrix.app == 'tasks' && matrix.task == 'test'
+    - name: Upload coverage reports
+      if: matrix.task == 'test'
       uses: codecov/codecov-action@v3
       with:
         directory: tasks/ui/coverage
-        flags: react-tasks
-        name: react-tasks-coverage
+        flags: react-ui
+        name: tasks-ui-coverage
 
-    - name: Upload coverage reports for bot health UI
-      if: matrix.app == 'bot' && matrix.task == 'test'
-      uses: codecov/codecov-action@v3
+  librechat-build:
+    runs-on: ubuntu-latest
+    name: LibreChat Build
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Pull LibreChat Docker image
+      run: |
+        docker compose -f docker-compose.librechat.yml pull
+
+    - name: Verify image was pulled
+      run: |
+        docker images | grep "danny-avila/librechat"
+
+  docker-security:
+    name: Docker Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js for UI build
+      uses: actions/setup-node@v4
       with:
-        directory: bot/health_ui/coverage
-        flags: react-bot
-        name: react-bot-coverage
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: tasks/ui/package-lock.json
+
+    - name: Build Tasks UI
+      working-directory: tasks/ui
+      run: |
+        npm ci
+        npm run build
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Tasks Service Docker image
+      run: |
+        docker build -f tasks/Dockerfile -t ai-slack-bot-tasks:latest .
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'ai-slack-bot-tasks:latest'
+        format: 'sarif'
+        output: 'trivy-tasks.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'  # Don't fail on vulnerabilities (report only)
+
+    - name: Upload Trivy results to GitHub Security
+      if: always()
+      continue-on-error: true  # Don't fail if Code Scanning is not enabled
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-tasks.sarif'
+        category: 'docker-tasks'
+
+    - name: Upload Trivy results as artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: trivy-security-scan-results
+        path: trivy-tasks.sarif

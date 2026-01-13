@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     gcc \
     curl \
+    ca-certificates \
     default-mysql-client \
     libgobject-2.0-0 \
     libpango-1.0-0 \
@@ -31,8 +32,17 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Copy application code first (needed for pyproject.toml to work)
-COPY --chown=appuser:appuser . .
+# Trust all self-signed certificates for inter-service communication (optional)
+# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
+COPY .ssl /tmp/.ssl/
+RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
+        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
+        update-ca-certificates; \
+    fi
+
+# Copy shared utilities and bot code from project root (build context is project root)
+COPY --chown=appuser:appuser shared/ /app/../shared/
+COPY --chown=appuser:appuser bot/ /app/
 
 # Verify Python version and upgrade pip
 RUN set -eux \

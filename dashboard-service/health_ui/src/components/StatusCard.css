@@ -1,0 +1,127 @@
+.status-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.status-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.status-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.status-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.status-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.status-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-card-title h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.title-icon {
+  color: #667eea;
+  display: flex;
+  align-items: center;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-icon.healthy {
+  color: #10b981;
+}
+
+.status-icon.unhealthy {
+  color: #ef4444;
+}
+
+.status-icon.disabled {
+  color: #f59e0b;
+}
+
+.status-icon.unknown {
+  color: #6b7280;
+}
+
+.status-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-text.healthy {
+  color: #10b981;
+}
+
+.status-text.unhealthy {
+  color: #ef4444;
+}
+
+.status-text.disabled {
+  color: #f59e0b;
+}
+
+.status-text.unknown {
+  color: #6b7280;
+}
+
+.status-card-details {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 0.75rem;
+}
+
+.status-card-details p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .status-card {
+    padding: 1rem;
+  }
+
+  .status-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .status-indicator {
+    align-self: flex-end;
+  }
+}

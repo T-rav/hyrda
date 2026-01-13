@@ -30,6 +30,7 @@ class EnhancedChunkProcessor:
 
         Returns:
             List of processed documents with enhanced content
+
         """
         processed_docs = []
 

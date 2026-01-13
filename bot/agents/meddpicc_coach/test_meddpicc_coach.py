@@ -129,6 +129,7 @@ async def test_agent(notes: str, test_name: str):
     Args:
         notes: Sales call notes to analyze
         test_name: Name of the test for logging
+
     """
     print(f"\n{'=' * 80}")
     print(f"TEST: {test_name}")

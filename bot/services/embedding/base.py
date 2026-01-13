@@ -24,6 +24,7 @@ class EmbeddingProvider(ABC):
 
         Returns:
             List of embedding vectors
+
         """
         pass
 
@@ -37,6 +38,7 @@ class EmbeddingProvider(ABC):
 
         Returns:
             Embedding vector
+
         """
         pass
 

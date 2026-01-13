@@ -70,6 +70,7 @@ class ProfileAgentState(_ProfileAgentStateRequired, total=False):
         brief_revision_prompt: Specific instructions for brief revision
         brief_max_revisions_exceeded: Flag indicating max brief revision limit reached
         brief_revision_instructions: Validation instructions for brief revision
+
     """
 
     messages: Annotated[list[MessageLikeRepresentation], add_messages]
