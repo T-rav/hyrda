@@ -67,12 +67,13 @@ services:
       - QDRANT__SERVICE__ENABLE_TLS=true
       - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
       - QDRANT__TLS__KEY=/qdrant/tls/key.pem
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+    # Healthcheck disabled - Qdrant image doesn't include curl
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -122,7 +123,7 @@ services:
       mysql:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     command: >
       sh -c "
         echo '=== Creating databases ===' &&
@@ -197,7 +198,7 @@ services:
       mysql:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     command: >
@@ -230,7 +231,7 @@ services:
       - "${RAG_SERVICE_PORT:-8002}:8002"
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     healthcheck:
@@ -317,7 +318,7 @@ services:
       control-plane:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_healthy
     healthcheck:

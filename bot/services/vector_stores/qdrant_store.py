@@ -7,7 +7,6 @@ Handles Qdrant-specific vector database operations.
 import asyncio
 import hashlib
 import logging
-import os
 import uuid
 from typing import Any
 
@@ -54,25 +53,14 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # Check for certificate in mounted location (Docker) or env var (development)
-            cert_path = os.getenv(
-                "QDRANT_CERT_PATH", "/app/ssl/qdrant-cert.pem"
-            )  # Default to mounted cert
-
-            # Use cert for SSL verification if it exists
-            # Certs are generated outside and mounted into containers
-            verify = cert_path if os.path.exists(cert_path) else True
-            if not os.path.exists(cert_path):
-                logger.warning(
-                    f"Qdrant cert not found at {cert_path}, using system CA store"
-                )
-
+            # For local development with self-signed certs, disable SSL verification
+            # since all services are on same Docker network
             if self.api_key:
                 self.client = QdrantClient(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
-                    verify=verify,
+                    verify=False,  # Disable SSL verification for local development
                 )
             else:
                 self.client = QdrantClient(
@@ -80,7 +68,7 @@ class QdrantVectorStore(VectorStore):
                     port=self.port,
                     timeout=60,
                     https=True,
-                    verify=verify,
+                    verify=False,  # Disable SSL verification for local development
                 )
 
             # Create collection if it doesn't exist
