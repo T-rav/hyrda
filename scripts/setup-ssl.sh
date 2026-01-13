@@ -50,6 +50,10 @@ echo "📜 Generating certificate for qdrant (localhost:6333)..."
 mkcert -cert-file qdrant-cert.pem -key-file qdrant-key.pem \
     localhost 127.0.0.1 ::1 qdrant
 
+# Copy mkcert CA certificate for Docker containers
+echo "📜 Copying mkcert CA certificate for container trust..."
+cp "$(mkcert -CAROOT)/rootCA.pem" mkcert-ca.crt
+
 cd - > /dev/null
 
 echo ""
@@ -60,6 +64,8 @@ echo "  - control-plane: control-plane-cert.pem, control-plane-key.pem"
 echo "  - agent-service: agent-service-cert.pem, agent-service-key.pem"
 echo "  - tasks: tasks-cert.pem, tasks-key.pem"
 echo "  - qdrant: qdrant-cert.pem, qdrant-key.pem"
+echo "  - mkcert CA: mkcert-ca.crt (for Docker container trust)"
 echo ""
 echo "These certificates are signed by your local mkcert CA and will be trusted by your browser."
+echo "The mkcert-ca.crt file will be installed in Docker containers for SSL verification."
 echo ""

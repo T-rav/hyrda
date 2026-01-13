@@ -53,14 +53,13 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # For local development with self-signed certs, disable SSL verification
-            # since all services are on same Docker network
+            # SSL verification enabled - mkcert CA is trusted in container
             if self.api_key:
                 self.client = QdrantClient(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
-                    verify=False,  # Disable SSL verification for local development
+                    verify=True,  # SSL verification enabled
                 )
             else:
                 self.client = QdrantClient(
@@ -68,7 +67,7 @@ class QdrantVectorStore(VectorStore):
                     port=self.port,
                     timeout=60,
                     https=True,
-                    verify=False,  # Disable SSL verification for local development
+                    verify=True,  # SSL verification enabled
                 )
 
             # Create collection if it doesn't exist
