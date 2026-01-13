@@ -5,7 +5,7 @@ Builds LangGraph workflow with research planning, task execution, synthesis, and
 
 import logging
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -70,10 +70,9 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     # Tools loop back to researcher
     researcher_builder.add_edge("researcher_tools", "researcher")
 
-    # Compile with SQLite checkpointer for state persistence
+    # Compile without checkpointer - LangGraph API handles persistence automatically
     # Note: recursion_limit is configured at runtime in invoke/stream config
-    checkpointer = SqliteSaver.from_conn_string(":memory:")
-    return researcher_builder.compile(checkpointer=checkpointer)
+    return researcher_builder.compile()
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -96,10 +95,9 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Add edges
     supervisor_builder.add_edge(START, "supervisor")
 
-    # Compile with SQLite checkpointer for state persistence
+    # Compile without checkpointer - LangGraph API handles persistence automatically
     # Note: recursion_limit is configured at runtime in invoke/stream config
-    checkpointer = SqliteSaver.from_conn_string(":memory:")
-    return supervisor_builder.compile(checkpointer=checkpointer)
+    return supervisor_builder.compile()
 
 
 def build_research_agent(checkpointer=None) -> CompiledStateGraph:
@@ -150,9 +148,8 @@ def build_research_agent(checkpointer=None) -> CompiledStateGraph:
         },
     )
 
-    # Compile with SQLite checkpointer for state persistence
-    if checkpointer is None:
-        checkpointer = SqliteSaver.from_conn_string(":memory:")
+    # Compile with optional checkpointer - LangGraph API handles persistence automatically
+    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
     return research_builder.compile(checkpointer=checkpointer)
 
 

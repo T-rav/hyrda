@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from langgraph.types import Command
 
-from agents.profiler.nodes.clarification import clarify_with_user
-from agents.profiler.state import ProfileAgentState
+from profiler.nodes.clarification import clarify_with_user
+from profiler.state import ProfileAgentState
 
 
 @pytest.mark.asyncio

@@ -5,25 +5,25 @@ Builds and compiles the LangGraph workflows for researcher, supervisor, and main
 
 import logging
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.profiler.nodes.brief_validation import (
+from profiler.nodes.brief_validation import (
     research_brief_router,
     validate_research_brief,
 )
-from agents.profiler.nodes.clarification import clarify_with_user
-from agents.profiler.nodes.compression import compress_research
-from agents.profiler.nodes.final_report import final_report_generation
-from agents.profiler.nodes.quality_control import (
+from profiler.nodes.clarification import clarify_with_user
+from profiler.nodes.compression import compress_research
+from profiler.nodes.final_report import final_report_generation
+from profiler.nodes.quality_control import (
     quality_control_node,
     quality_control_router,
 )
-from agents.profiler.nodes.research_brief import write_research_brief
-from agents.profiler.nodes.researcher import researcher, researcher_tools
-from agents.profiler.nodes.supervisor import supervisor, supervisor_tools
-from agents.profiler.state import (
+from profiler.nodes.research_brief import write_research_brief
+from profiler.nodes.researcher import researcher, researcher_tools
+from profiler.nodes.supervisor import supervisor, supervisor_tools
+from profiler.state import (
     ProfileAgentInputState,
     ProfileAgentOutputState,
     ProfileAgentState,
@@ -64,8 +64,8 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     # Compile with increased recursion limit
     # Researcher can loop many times (researcher -> researcher_tools -> researcher)
     # Default limit of 25 is too low for deep research tasks
-    checkpointer = SqliteSaver.from_conn_string(":memory:")
-    return researcher_builder.compile(checkpointer=checkpointer)
+    # Compile without checkpointer - LangGraph API handles persistence automatically
+    return researcher_builder.compile()
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -91,8 +91,8 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
 
     # Compile with increased recursion limit
     # Supervisor can loop many times for complex research briefs
-    checkpointer = SqliteSaver.from_conn_string(":memory:")
-    return supervisor_builder.compile(checkpointer=checkpointer)
+    # Compile without checkpointer - LangGraph API handles persistence automatically
+    return supervisor_builder.compile()
 
 
 def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
@@ -161,8 +161,6 @@ def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
         },
     )
 
-    # Compile and return with checkpointer if provided
-    # Use SQLite checkpointer for state persistence
-    if checkpointer is None:
-        checkpointer = SqliteSaver.from_conn_string(":memory:")
+    # Compile with optional checkpointer - LangGraph API handles persistence automatically
+    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
     return profile_builder.compile(checkpointer=checkpointer)

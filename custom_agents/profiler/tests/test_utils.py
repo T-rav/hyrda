@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from agents.profiler.utils import extract_company_from_url
+from profiler.utils import extract_company_from_url
 
 
 @pytest.mark.asyncio

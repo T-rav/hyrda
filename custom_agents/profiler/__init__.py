@@ -4,8 +4,8 @@ LangGraph-based deep research system for generating comprehensive
 company and employee profiles.
 """
 
-from agents.profiler.configuration import ProfileConfiguration, SearchAPI
-from agents.profiler.state import (
+from profiler.configuration import ProfileConfiguration, SearchAPI
+from profiler.state import (
     ClarifyWithUser,
     ConductResearch,
     ProfileAgentInputState,

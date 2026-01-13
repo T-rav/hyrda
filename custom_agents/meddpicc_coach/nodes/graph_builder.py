@@ -6,17 +6,17 @@ with persistent checkpointing for conversation continuity.
 
 import logging
 
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.meddpicc_coach.nodes.check_input import check_input_completeness
-from agents.meddpicc_coach.nodes.coaching_insights import coaching_insights
-from agents.meddpicc_coach.nodes.followup_handler import followup_handler
-from agents.meddpicc_coach.nodes.meddpicc_analysis import meddpicc_analysis
-from agents.meddpicc_coach.nodes.parse_notes import parse_notes
-from agents.meddpicc_coach.nodes.qa_collector import qa_collector
-from agents.meddpicc_coach.state import (
+from meddpicc_coach.nodes.check_input import check_input_completeness
+from meddpicc_coach.nodes.coaching_insights import coaching_insights
+from meddpicc_coach.nodes.followup_handler import followup_handler
+from meddpicc_coach.nodes.meddpicc_analysis import meddpicc_analysis
+from meddpicc_coach.nodes.parse_notes import parse_notes
+from meddpicc_coach.nodes.qa_collector import qa_collector
+from meddpicc_coach.state import (
     MeddpiccAgentInputState,
     MeddpiccAgentOutputState,
     MeddpiccAgentState,
@@ -139,15 +139,13 @@ def build_meddpicc_coach(checkpointer=None) -> CompiledStateGraph:
     # Follow-up handler loops back to END for more questions
     coach_builder.add_edge("followup_handler", END)
 
-    # Compile with SQLite checkpointer for state persistence
-    # Use in-memory SQLite by default for conversation continuity
-    if checkpointer is None:
-        checkpointer = SqliteSaver.from_conn_string(":memory:")
-        logger.info("MEDDPICC coach graph compiled with default SQLite checkpointer")
-    else:
+    # Compile with optional checkpointer - LangGraph API handles persistence automatically
+    # For standalone usage, checkpointer can be provided; for LangGraph server, use None
+    if checkpointer is not None:
         logger.info(
             f"MEDDPICC coach graph compiled with checkpointer: {type(checkpointer).__name__}"
         )
-    compiled = coach_builder.compile(checkpointer=checkpointer)
+    else:
+        logger.info("MEDDPICC coach graph compiled without checkpointer (LangGraph API manages persistence)")
 
-    return compiled
+    return coach_builder.compile(checkpointer=checkpointer)

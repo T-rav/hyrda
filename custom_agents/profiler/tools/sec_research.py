@@ -7,8 +7,8 @@ No persistence - all processing happens in-memory.
 import logging
 from typing import Any
 
-from agents.profiler.services.sec_on_demand import SECOnDemandFetcher
-from agents.profiler.services.sec_vector_search import SECInMemoryVectorSearch
+from profiler.services.sec_on_demand import SECOnDemandFetcher
+from profiler.services.sec_vector_search import SECInMemoryVectorSearch
 
 logger = logging.getLogger(__name__)
 

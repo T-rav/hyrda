@@ -10,8 +10,8 @@ import re
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
-from agents.meddpicc_coach import prompts
-from agents.meddpicc_coach.state import MeddpiccAgentState
+from meddpicc_coach import prompts
+from meddpicc_coach.state import MeddpiccAgentState
 
 logger = logging.getLogger(__name__)
 

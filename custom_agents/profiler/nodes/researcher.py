@@ -10,10 +10,10 @@ from datetime import datetime
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 
-from agents.profiler import prompts
-from agents.profiler.configuration import ProfileConfiguration
-from agents.profiler.state import ResearcherState
-from agents.profiler.utils import (
+from profiler import prompts
+from profiler.configuration import ProfileConfiguration
+from profiler.state import ResearcherState
+from profiler.utils import (
     create_system_message,
     internal_search_tool,
     search_tool,

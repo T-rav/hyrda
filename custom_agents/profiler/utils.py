@@ -43,7 +43,7 @@ class _InternalSearchToolSingleton:
             return cls._instance
 
         try:
-            from agents.profiler.tools import InternalSearchTool
+            from profiler.tools import InternalSearchTool
 
             cls._instance = InternalSearchTool()
             logger.info("Internal search tool singleton initialized")
@@ -83,7 +83,7 @@ class _SECQueryToolSingleton:
         """Get or create singleton instance."""
         if cls._instance is None:
             try:
-                from agents.profiler.tools.sec_query import SECQueryTool
+                from profiler.tools.sec_query import SECQueryTool
 
                 cls._instance = SECQueryTool()
                 logger.info("Initialized sec_query tool singleton")
