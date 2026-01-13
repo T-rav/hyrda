@@ -112,13 +112,13 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build LibreChat Docker image
+    - name: Pull LibreChat Docker image
       run: |
-        docker compose -f docker-compose.librechat.yml build
+        docker compose -f docker-compose.librechat.yml pull
 
-    - name: Verify image was created
+    - name: Verify image was pulled
       run: |
-        docker images | grep insightmesh-librechat
+        docker images | grep "danny-avila/librechat"
 
   docker-security:
     name: Docker Security Scanning
