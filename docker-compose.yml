@@ -185,6 +185,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
+      - CONTROL_PLANE_URL=${CONTROL_PLANE_URL:-http://control-plane:6001}
       - VECTOR_ENABLED=false
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
@@ -197,6 +198,8 @@ services:
       - ./.ssl/qdrant-cert.pem:/app/ssl/qdrant-cert.pem:ro
     depends_on:
       mysql:
+        condition: service_healthy
+      control-plane:
         condition: service_healthy
       qdrant:
         condition: service_started

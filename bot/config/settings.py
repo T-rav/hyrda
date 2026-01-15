@@ -242,6 +242,10 @@ class Settings(BaseSettings):
         default="development",
         description="Application environment (development, staging, production)",
     )
+    control_plane_url: str = Field(
+        default="http://control-plane:6001",
+        description="Control plane service URL for agent discovery",
+    )
     slack: SlackSettings = Field(default_factory=SlackSettings)  # type: ignore[arg-type]
     llm: LLMSettings = Field(default_factory=LLMSettings)  # type: ignore[arg-type]
     agent: AgentSettings = Field(default_factory=AgentSettings)

@@ -52,10 +52,10 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
         from config.settings import Settings
 
         settings = Settings()
-        agent_service_url = settings.agent_service_url or "http://agent_service:8000"
+        control_plane_url = settings.control_plane_url
 
         response = requests.get(
-            f"{agent_service_url}/api/agents", timeout=AGENT_SERVICE_TIMEOUT
+            f"{control_plane_url}/api/agents", timeout=AGENT_SERVICE_TIMEOUT
         )
         if response.status_code == 200:
             data = response.json()
