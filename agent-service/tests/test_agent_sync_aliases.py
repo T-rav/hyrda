@@ -3,7 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, mock_open
 
 import pytest
 
@@ -22,25 +22,17 @@ class TestAgentDiscoveryFromLangGraph:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(config, f)
-            temp_path = Path(f.name)
+        config_json = json.dumps(config)
 
-        try:
-            with patch('services.agent_sync.Path') as mock_path:
-                mock_path.return_value.parent.parent = temp_path.parent
-                mock_path.return_value.exists.return_value = True
+        with patch('builtins.open', mock_open(read_data=config_json)):
+            with patch('pathlib.Path.exists', return_value=True):
+                agents = _discover_agents_from_langgraph()
 
-                # Mock open to return our temp file
-                with patch('builtins.open', lambda *args, **kwargs: open(temp_path, *args, **kwargs)):
-                    agents = _discover_agents_from_langgraph()
-
-                assert len(agents) == 2
-                assert agents[0]["name"] == "test_agent"
-                assert agents[0]["aliases"] == []  # No aliases in simple format
-                assert agents[0]["display_name"] == "Test Agent"
-        finally:
-            temp_path.unlink()
+        assert len(agents) == 2
+        assert agents[0]["name"] == "test_agent"
+        assert agents[0]["aliases"] == []  # No aliases in simple format
+        assert agents[0]["display_name"] == "Test Agent"
+        assert agents[0]["is_system"] is False
 
     def test_discover_agents_extended_format_with_aliases(self):
         """Should parse extended format with metadata including aliases."""
@@ -65,28 +57,20 @@ class TestAgentDiscoveryFromLangGraph:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(config, f)
-            temp_path = Path(f.name)
+        config_json = json.dumps(config)
 
-        try:
-            with patch('services.agent_sync.Path') as mock_path:
-                mock_path.return_value.parent.parent = temp_path.parent
-                mock_path.return_value.exists.return_value = True
+        with patch('builtins.open', mock_open(read_data=config_json)):
+            with patch('pathlib.Path.exists', return_value=True):
+                agents = _discover_agents_from_langgraph()
 
-                with patch('builtins.open', lambda *args, **kwargs: open(temp_path, *args, **kwargs)):
-                    agents = _discover_agents_from_langgraph()
+        assert len(agents) == 2
 
-                assert len(agents) == 2
+        profile = next(a for a in agents if a["name"] == "profile")
+        assert profile["display_name"] == "Company Profile"
+        assert profile["aliases"] == ["profile", "company profile", "-profile"]
 
-                profile = next(a for a in agents if a["name"] == "profile")
-                assert profile["display_name"] == "Company Profile"
-                assert profile["aliases"] == ["profile", "company profile", "-profile"]
-
-                meddic = next(a for a in agents if a["name"] == "meddic")
-                assert meddic["aliases"] == ["meddic", "medic", "meddpicc"]
-        finally:
-            temp_path.unlink()
+        meddic = next(a for a in agents if a["name"] == "meddic")
+        assert meddic["aliases"] == ["meddic", "medic", "meddpicc"]
 
     def test_discover_agents_help_is_system(self):
         """Help agent should always be marked as system agent."""
@@ -102,23 +86,15 @@ class TestAgentDiscoveryFromLangGraph:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(config, f)
-            temp_path = Path(f.name)
+        config_json = json.dumps(config)
 
-        try:
-            with patch('services.agent_sync.Path') as mock_path:
-                mock_path.return_value.parent.parent = temp_path.parent
-                mock_path.return_value.exists.return_value = True
+        with patch('builtins.open', mock_open(read_data=config_json)):
+            with patch('pathlib.Path.exists', return_value=True):
+                agents = _discover_agents_from_langgraph()
 
-                with patch('builtins.open', lambda *args, **kwargs: open(temp_path, *args, **kwargs)):
-                    agents = _discover_agents_from_langgraph()
-
-                assert len(agents) == 1
-                assert agents[0]["is_system"] is True
-
-        finally:
-            temp_path.unlink()
+        assert len(agents) == 1
+        assert agents[0]["is_system"] is True
+        assert agents[0]["name"] == "help"
 
     def test_discover_agents_mixed_formats(self):
         """Should handle mixed simple and extended formats."""
@@ -134,27 +110,19 @@ class TestAgentDiscoveryFromLangGraph:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(config, f)
-            temp_path = Path(f.name)
+        config_json = json.dumps(config)
 
-        try:
-            with patch('services.agent_sync.Path') as mock_path:
-                mock_path.return_value.parent.parent = temp_path.parent
-                mock_path.return_value.exists.return_value = True
+        with patch('builtins.open', mock_open(read_data=config_json)):
+            with patch('pathlib.Path.exists', return_value=True):
+                agents = _discover_agents_from_langgraph()
 
-                with patch('builtins.open', lambda *args, **kwargs: open(temp_path, *args, **kwargs)):
-                    agents = _discover_agents_from_langgraph()
+        assert len(agents) == 2
 
-                assert len(agents) == 2
+        simple = next(a for a in agents if a["name"] == "simple_agent")
+        assert simple["aliases"] == []
 
-                simple = next(a for a in agents if a["name"] == "simple_agent")
-                assert simple["aliases"] == []
-
-                extended = next(a for a in agents if a["name"] == "extended_agent")
-                assert extended["aliases"] == ["ext", "extended"]
-        finally:
-            temp_path.unlink()
+        extended = next(a for a in agents if a["name"] == "extended_agent")
+        assert extended["aliases"] == ["ext", "extended"]
 
     def test_discover_agents_empty_aliases(self):
         """Should handle agents with empty aliases list."""
@@ -169,19 +137,18 @@ class TestAgentDiscoveryFromLangGraph:
             }
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(config, f)
-            temp_path = Path(f.name)
+        config_json = json.dumps(config)
 
-        try:
-            with patch('services.agent_sync.Path') as mock_path:
-                mock_path.return_value.parent.parent = temp_path.parent
-                mock_path.return_value.exists.return_value = True
+        with patch('builtins.open', mock_open(read_data=config_json)):
+            with patch('pathlib.Path.exists', return_value=True):
+                agents = _discover_agents_from_langgraph()
 
-                with patch('builtins.open', lambda *args, **kwargs: open(temp_path, *args, **kwargs)):
-                    agents = _discover_agents_from_langgraph()
+        assert len(agents) == 1
+        assert agents[0]["aliases"] == []
 
-                assert len(agents) == 1
-                assert agents[0]["aliases"] == []
-        finally:
-            temp_path.unlink()
+    def test_discover_agents_file_not_found(self):
+        """Should return empty list when langgraph.json not found."""
+        with patch('pathlib.Path.exists', return_value=False):
+            agents = _discover_agents_from_langgraph()
+
+        assert agents == []
