@@ -3,7 +3,7 @@
   "graphs": {
     "profile": "profiler.nodes.graph_builder:build_profile_researcher",
     "meddic": "meddpicc_coach.nodes.graph_builder:build_meddpicc_coach",
-    "qualifier": "qualifier.nodes.graph_builder:build_lead_qualifier"
+    "lead_qualifier": "lead_qualifier.nodes.graph_builder:build_lead_qualifier"
   },
   "env": "../.env"
 }

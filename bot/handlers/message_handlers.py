@@ -33,8 +33,6 @@ try:
 except ImportError:
     PYTHON_PPTX_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
-from agents.registry import agent_registry
-from agents.router import command_router
 from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.langfuse_service import get_langfuse_service
@@ -414,8 +412,10 @@ async def handle_bot_command(
             f"🔗 Thread {thread_ts} belongs to agent '{agent_name}' - routing automatically"
         )
 
-        # Get agent info from registry
-        agent_info = agent_registry.get(agent_name)
+        # Get agent info from dynamic registry (queries control-plane)
+        from services.agent_registry import get_agent_info
+
+        agent_info = get_agent_info(agent_name)
         if agent_info:
             primary_name = agent_name
             query = text  # Use full text as query (no command prefix needed)
@@ -438,8 +438,10 @@ async def handle_bot_command(
 
         logger.info(f"Cleaned text for routing: '{clean_text}'")
 
-        # Use router to parse and route command
-        agent_info, query, primary_name = command_router.route(clean_text)
+        # Use router to parse and route command (queries dynamic registry from control-plane)
+        from services.agent_registry import route_command
+
+        agent_info, query, primary_name = route_command(clean_text)
 
     # Debug: Log router results
     logger.info(
