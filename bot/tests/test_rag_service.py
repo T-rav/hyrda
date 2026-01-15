@@ -263,6 +263,42 @@ class TestRAGService:
             await rag_service.initialize()
 
     @pytest.mark.asyncio
+    async def test_initialization_with_vector_disabled(self):
+        """Test initialization succeeds when vector store is disabled (None)"""
+        # Create settings with vector disabled
+        settings = Settings(
+            embedding=EmbeddingSettings(
+                provider="openai",
+                model="text-embedding-ada-002",
+                api_key=SecretStr("test-key"),
+            ),
+            llm=LLMSettings(
+                provider="openai",
+                model="gpt-4",
+                api_key=SecretStr("test-key"),
+            ),
+            vector=VectorSettings(
+                enabled=False,  # Vector disabled
+                provider="qdrant",
+                host="localhost",
+                port=6333,
+            ),
+        )
+
+        with (
+            patch("bot.services.rag_service.create_vector_store", return_value=None),
+            patch("bot.services.rag_service.create_embedding_provider"),
+            patch("bot.services.rag_service.create_llm_provider"),
+        ):
+            rag_service = RAGService(settings)
+
+            # Should not raise an error even though vector_store is None
+            await rag_service.initialize()
+
+            # Verify vector_store is None
+            assert rag_service.vector_store is None
+
+    @pytest.mark.asyncio
     async def test_ingest_documents_success(self, rag_service):
         """Test successful document ingestion"""
         # Set up embedding provider and vector store mocks

@@ -185,6 +185,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
+      - VECTOR_ENABLED=false
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
