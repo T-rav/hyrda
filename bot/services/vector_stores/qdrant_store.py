@@ -7,6 +7,8 @@ Handles Qdrant-specific vector database operations.
 import asyncio
 import hashlib
 import logging
+import os
+import ssl
 import uuid
 from typing import Any
 
@@ -53,13 +55,37 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # SSL verification enabled - mkcert CA is trusted in container
+            # Check for certificate path or use mkcert CA for local development
+            cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
+
+            # Try to find mkcert CA certificate for local development
+            if not cert_path:
+                # Look for mkcert CA in .ssl directory (local development)
+                ca_cert_path = os.path.join(
+                    os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    ),
+                    ".ssl",
+                    "mkcert-ca.crt",
+                )
+                if os.path.exists(ca_cert_path):
+                    cert_path = ca_cert_path
+
+            # Determine SSL verification strategy
+            if cert_path and os.path.exists(cert_path):
+                # Use SSL context with CA certificate for proper validation
+                verify = ssl.create_default_context(cafile=cert_path)
+            else:
+                # Fallback: disable SSL verification for local dev without cert
+                # In production with proper certificates, this should be True
+                verify = os.getenv("QDRANT_VERIFY_SSL", "false").lower() == "true"
+
             if self.api_key:
                 self.client = QdrantClient(
                     url=f"https://{self.host}:{self.port}",
                     api_key=self.api_key,
                     timeout=60,
-                    verify=True,  # SSL verification enabled
+                    verify=verify,
                 )
             else:
                 self.client = QdrantClient(
@@ -67,7 +93,7 @@ class QdrantVectorStore(VectorStore):
                     port=self.port,
                     timeout=60,
                     https=True,
-                    verify=True,  # SSL verification enabled
+                    verify=verify,
                 )
 
             # Create collection if it doesn't exist

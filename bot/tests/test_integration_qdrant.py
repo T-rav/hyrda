@@ -7,6 +7,7 @@ Run with: pytest -v -m integration bot/tests/test_integration_qdrant.py
 """
 
 import os
+import ssl
 
 import pytest
 from qdrant_client import QdrantClient
@@ -22,35 +23,29 @@ def qdrant_client():
     port = int(os.getenv("VECTOR_PORT", "6333"))
     api_key = os.getenv("VECTOR_API_KEY")
 
-    # Path to Qdrant certificate for SSL validation
-    # This allows tests to run without system-level certificate trust
-    cert_path = os.path.join(
+    # Path to CA certificate for SSL validation
+    # The mkcert CA signs all local certificates
+    ca_cert_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         ".ssl",
-        "qdrant-cert.pem",
+        "mkcert-ca.crt",
     )
 
-    # Create client (synchronous for Qdrant SDK)
-    # Use HTTPS with certificate validation via cert file
-    if os.path.exists(cert_path):
-        # Use certificate file for validation (development/testing)
+    # Create SSL context with mkcert CA certificate
+    if os.path.exists(ca_cert_path):
+        ssl_context = ssl.create_default_context(cafile=ca_cert_path)
+        # Create client with proper SSL context
         client = QdrantClient(
             url=f"https://{host}:{port}",
             api_key=api_key,
             timeout=10.0,
             prefer_grpc=False,  # Use REST API
-            verify=cert_path,  # Validate against certificate file
+            https=True,
+            verify=ssl_context,  # Use SSL context with mkcert CA
         )
     else:
-        # Fallback to system CA store (CI/production)
-        client = QdrantClient(
-            host=host,
-            port=port,
-            api_key=api_key,
-            timeout=10.0,
-            prefer_grpc=False,  # Use REST API
-            https=True,
-        )
+        # Fallback if CA cert not found
+        raise FileNotFoundError(f"mkcert CA certificate not found at {ca_cert_path}")
 
     try:
         yield client
