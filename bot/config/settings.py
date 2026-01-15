@@ -246,6 +246,10 @@ class Settings(BaseSettings):
         default="http://control-plane:6001",
         description="Control plane service URL for agent discovery",
     )
+    rag_service_url: str = Field(
+        default="http://rag-service:8002",
+        description="RAG service URL for LLM and retrieval operations",
+    )
     slack: SlackSettings = Field(default_factory=SlackSettings)  # type: ignore[arg-type]
     llm: LLMSettings = Field(default_factory=LLMSettings)  # type: ignore[arg-type]
     agent: AgentSettings = Field(default_factory=AgentSettings)
