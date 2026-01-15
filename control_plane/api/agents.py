@@ -202,9 +202,15 @@ async def register_agent(
                 # Check for conflict: non-deleted agent with same name
                 if agent and not agent.is_deleted:
                     # Update existing active agent
+                    # NOTE: Preserve admin-customized aliases (don't overwrite with agent defaults)
                     agent.display_name = display_name
                     agent.description = description
-                    agent.set_aliases(aliases)
+                    # Only update aliases if admin hasn't customized them
+                    if not agent.aliases_customized:
+                        agent.set_aliases(aliases)
+                        logger.info(f"Updated agent '{agent_name}' aliases from agent registration")
+                    else:
+                        logger.info(f"Preserved customized aliases for agent '{agent_name}'")
                     agent.is_system = is_system
                     agent.endpoint_url = endpoint_url
                     logger.info(f"Updated agent '{agent_name}' in database")
@@ -216,7 +222,9 @@ async def register_agent(
                     agent.is_slack_visible = True  # Default to visible in Slack
                     agent.display_name = display_name
                     agent.description = description
+                    # Reset aliases on reactivation (agent was deleted, start fresh)
                     agent.set_aliases(aliases)
+                    agent.aliases_customized = False
                     agent.is_system = is_system
                     agent.endpoint_url = endpoint_url
                     logger.info(f"Reactivated deleted agent '{agent_name}'")
@@ -499,6 +507,86 @@ async def toggle_agent_slack_visibility(
         raise
     except Exception as e:
         logger.error(f"Error toggling agent Slack visibility: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
+
+
+@router.put("/{agent_name}/aliases")
+async def update_agent_aliases(
+    agent_name: str, request: Request, admin_check: None = Depends(require_admin)
+) -> dict[str, Any]:
+    """Update agent aliases (admin-only, preserves overrides on agent re-registration).
+
+    Request body:
+        {"aliases": ["alias1", "alias2", "alias3"]}
+
+    This sets aliases_customized=True, preventing future agent registrations
+    from overwriting these admin-edited aliases.
+    """
+    try:
+        data = await request.json()
+        aliases = data.get("aliases", [])
+
+        # Validate aliases
+        if not isinstance(aliases, list):
+            raise HTTPException(
+                status_code=400,
+                detail=validation_error("aliases must be a list", field="aliases"),
+            )
+
+        # Validate each alias (alphanumeric, spaces, hyphens, underscores)
+        import re
+
+        for alias in aliases:
+            if not isinstance(alias, str) or not re.match(r"^[\w\s-]+$", alias):
+                raise HTTPException(
+                    status_code=400,
+                    detail=validation_error(
+                        f"Invalid alias '{alias}' - must contain only letters, numbers, spaces, hyphens, underscores",
+                        field="aliases",
+                    ),
+                )
+
+        with get_db_session() as session:
+            agent_metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
+
+            if not agent_metadata:
+                raise HTTPException(
+                    status_code=404, detail=not_found_error("Agent", agent_name)
+                )
+
+            # Update aliases and mark as customized
+            agent_metadata.set_aliases(aliases)
+            agent_metadata.aliases_customized = True
+            session.commit()
+
+            logger.info(
+                f"Admin updated aliases for agent '{agent_name}': {aliases}"
+            )
+
+            # Audit log
+            log_agent_action(
+                AuditAction.AGENT_UPDATE,
+                agent_name,
+                {"aliases": aliases, "aliases_customized": True},
+            )
+
+            return {
+                "success": True,
+                "agent_name": agent_name,
+                "aliases": aliases,
+                "aliases_customized": True,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating agent aliases: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
         )

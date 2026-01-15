@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 def _discover_agents_from_langgraph() -> list[dict]:
     """Discover agents from merged langgraph.json.
 
+    Supports two formats:
+    1. Simple: "agent_name": "module.path:function"
+    2. Extended: "agent_name": {"graph": "module.path:function", "metadata": {...}}
+
     Returns:
         List of agent metadata dicts with name, display_name, aliases, description, is_system
     """
@@ -37,23 +41,37 @@ def _discover_agents_from_langgraph() -> list[dict]:
         graphs = config.get("graphs", {})
         agents = []
 
-        for agent_name in graphs.keys():
-            # All agents default to is_system=False unless explicitly marked
-            # Only system agents (like "help") should be marked is_system=True
+        for agent_name, agent_config in graphs.items():
+            # Parse agent config (supports both string and dict formats)
+            if isinstance(agent_config, str):
+                # Simple format: "agent_name": "module:function"
+                metadata = {}
+            elif isinstance(agent_config, dict):
+                # Extended format: "agent_name": {"graph": "...", "metadata": {...}}
+                metadata = agent_config.get("metadata", {})
+            else:
+                logger.warning(f"Invalid config format for agent '{agent_name}', skipping")
+                continue
+
+            # Build agent data with defaults
             agent_data = {
                 "name": agent_name,
-                "display_name": agent_name.replace("_", " ").title(),
-                "description": f"Agent for {agent_name}",
-                "aliases": [],
+                "display_name": metadata.get("display_name", agent_name.replace("_", " ").title()),
+                "description": metadata.get("description", f"Agent for {agent_name}"),
+                "aliases": metadata.get("aliases", []),
                 "is_system": False,  # Default: can be disabled by admins
             }
 
             # Special case: "help" is always a system agent
             if agent_name == "help":
                 agent_data["is_system"] = True
-                agent_data["display_name"] = "Help Agent"
-                agent_data["description"] = "List available bot agents and their aliases"
-                agent_data["aliases"] = ["agents"]
+                # Use metadata if provided, otherwise use defaults
+                if not metadata.get("display_name"):
+                    agent_data["display_name"] = "Help Agent"
+                if not metadata.get("description"):
+                    agent_data["description"] = "List available bot agents and their aliases"
+                if not metadata.get("aliases"):
+                    agent_data["aliases"] = ["help", "agents"]
 
             agents.append(agent_data)
 

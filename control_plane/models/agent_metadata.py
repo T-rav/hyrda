@@ -45,6 +45,9 @@ class AgentMetadata(Base):
     is_deleted = Column(
         Boolean, nullable=False, default=False
     )  # Soft delete - hide from active agents list
+    aliases_customized = Column(
+        Boolean, nullable=False, default=False
+    )  # Track if admin edited aliases (preserve on agent re-registration)
 
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=func.now())
