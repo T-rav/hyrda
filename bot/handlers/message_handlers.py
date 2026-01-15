@@ -446,8 +446,42 @@ async def handle_bot_command(
         f"Router results: agent_info={agent_info is not None}, primary_name={primary_name}, query='{query}'"
     )
 
-    # If no agent found, return False (not handled)
+    # If no agent found, check if it exists but is disabled/not-slack-visible
     if not agent_info or not primary_name:
+        logger.info("No agent found in enabled registry, checking availability...")
+
+        # Try to extract attempted agent name from text for better error messages
+        import re
+
+        # Try to parse command name from text (matches patterns like "-agent", "agent:", "@agent")
+        attempted_command = None
+        match = re.match(r"^[@-]?(\w+)[\s:].*", clean_text.strip(), re.IGNORECASE)
+        if match:
+            attempted_command = match.group(1).lower()
+            logger.info(f"Extracted attempted command: '{attempted_command}'")
+
+            # Check if agent exists but is unavailable
+            from services.agent_registry import check_agent_availability
+
+            availability = check_agent_availability(attempted_command)
+            if availability:
+                # Agent exists but is not available in Slack
+                error_msg = f"❌ Agent `{attempted_command}` is not available.\n\n{availability['reason']}"
+                logger.info(
+                    f"Agent '{attempted_command}' exists but unavailable: {availability['reason']}"
+                )
+
+                try:
+                    await slack_service.send_message(
+                        channel=channel,
+                        text=error_msg,
+                        thread_ts=thread_ts,
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending unavailable agent message: {e}")
+
+                return True  # Message handled (error sent)
+
         logger.info("No agent found, returning False")
         return False
 
