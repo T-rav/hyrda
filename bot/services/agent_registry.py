@@ -62,11 +62,17 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
             agents = data.get("agents", [])
 
             # Build registry dict mapping names/aliases to agent info
-            # Only include enabled agents (is_public=true)
+            # Only include agents that are enabled AND visible in Slack
             registry = {}
             for agent in agents:
-                # Skip disabled agents
-                if not agent.get("is_public", False):
+                # Skip disabled or non-Slack-visible agents
+                # System agents are always enabled, so check is_enabled for non-system agents
+                is_enabled = agent.get("is_enabled", False)
+                is_slack_visible = agent.get("is_slack_visible", False)
+                is_system = agent.get("is_system", False)
+
+                # Agent must be enabled (or be a system agent) AND visible in Slack
+                if not ((is_system or is_enabled) and is_slack_visible):
                     continue
                 name = agent["name"]
                 aliases = agent.get("aliases", [])
