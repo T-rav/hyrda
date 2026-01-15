@@ -13,7 +13,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from rag_types import QueryIntent, QueryRewriteResult, QueryRewriterStats
-
 from services.langfuse_service import observe
 
 if TYPE_CHECKING:

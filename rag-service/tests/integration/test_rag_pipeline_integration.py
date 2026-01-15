@@ -4,14 +4,14 @@ RAG Pipeline Integration Tests - Fixed and Working
 Tests real RAG pipeline behaviors with proper mocking of external dependencies.
 """
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 from config.settings import Settings
+from services.context_builder import ContextBuilder
 from services.rag_service import RAGService
 from services.retrieval_service import RetrievalService
-from services.context_builder import ContextBuilder
-
 
 pytestmark = pytest.mark.integration
 

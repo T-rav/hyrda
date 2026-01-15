@@ -4,11 +4,12 @@ Comprehensive tests for retrieval service.
 Tests entity extraction, boosting, and diversification logic.
 """
 
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
 
 from config.settings import Settings
-from services.retrieval_service import RetrievalService, STOP_WORDS
+from services.retrieval_service import STOP_WORDS, RetrievalService
 
 
 class TestRetrievalServiceBasics:

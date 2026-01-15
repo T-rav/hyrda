@@ -1,9 +1,8 @@
 """Tests for RAG service application lifespan and startup."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi.testclient import TestClient
+import pytest
 
 
 class TestAppLifespan:
@@ -12,8 +11,9 @@ class TestAppLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_initializes_search_clients(self):
         """Test that lifespan initializes search clients (Tavily, Perplexity)."""
-        from app import lifespan
         from fastapi import FastAPI
+
+        from app import lifespan
 
         mock_app = FastAPI()
 
@@ -51,8 +51,9 @@ class TestAppLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_handles_search_client_init_failure(self):
         """Test that lifespan handles search client initialization failures gracefully."""
-        from app import lifespan
         from fastapi import FastAPI
+
+        from app import lifespan
 
         mock_app = FastAPI()
 
@@ -85,8 +86,9 @@ class TestAppLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_search_clients(self):
         """Test that lifespan cleans up search clients on shutdown."""
-        from app import lifespan
         from fastapi import FastAPI
+
+        from app import lifespan
 
         mock_app = FastAPI()
 
@@ -116,8 +118,9 @@ class TestAppLifespan:
     @pytest.mark.asyncio
     async def test_lifespan_initializes_vector_store(self):
         """Test that lifespan initializes vector store when enabled."""
-        from app import lifespan
         from fastapi import FastAPI
+
+        from app import lifespan
 
         mock_app = FastAPI()
 
@@ -154,8 +157,9 @@ class TestAppVersion:
 
     def test_get_app_version_returns_version(self):
         """Test that get_app_version returns version from .version file."""
-        from app import get_app_version
         from pathlib import Path
+
+        from app import get_app_version
 
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "read_text", return_value="1.1.0\n"):
@@ -164,8 +168,9 @@ class TestAppVersion:
 
     def test_get_app_version_returns_default_when_file_missing(self):
         """Test that get_app_version returns default when .version file missing."""
-        from app import get_app_version
         from pathlib import Path
+
+        from app import get_app_version
 
         with patch.object(Path, "exists", return_value=False):
             version = get_app_version()
@@ -173,8 +178,9 @@ class TestAppVersion:
 
     def test_get_app_version_handles_read_error(self):
         """Test that get_app_version handles file read errors."""
-        from app import get_app_version
         from pathlib import Path
+
+        from app import get_app_version
 
         with patch.object(Path, "exists", return_value=True):
             with patch.object(Path, "read_text", side_effect=Exception("Read error")):
@@ -195,8 +201,8 @@ class TestAppCreation:
 
     def test_app_has_cors_middleware(self):
         """Test that app has CORS middleware configured."""
+
         from app import app
-        from fastapi.middleware.cors import CORSMiddleware
 
         # Check that CORS middleware is in the middleware stack
         middleware_types = [type(m) for m in app.user_middleware]

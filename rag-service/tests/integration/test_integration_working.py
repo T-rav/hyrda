@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 from app import app
 from services.context_builder import ContextBuilder
 
-
 # Mark all tests in this file as integration tests
 pytestmark = pytest.mark.integration
 
