@@ -590,3 +590,85 @@ async def update_agent_aliases(
         raise HTTPException(
             status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
         )
+
+
+@router.get("/{agent_name}/alias-conflicts")
+async def check_alias_conflicts(agent_name: str) -> dict[str, Any]:
+    """Check if agent's aliases conflict with other agents.
+
+    Returns list of conflicts where this agent's aliases are used by other agents.
+    Helps admins detect and resolve alias conflicts.
+    """
+    try:
+        with get_db_session() as session:
+            # Get this agent
+            agent = (
+                session.query(AgentMetadata)
+                .filter(
+                    AgentMetadata.agent_name == agent_name,
+                    ~AgentMetadata.is_deleted,
+                )
+                .first()
+            )
+
+            if not agent:
+                raise HTTPException(
+                    status_code=404, detail=not_found_error("Agent", agent_name)
+                )
+
+            this_agent_aliases = set(agent.get_aliases())
+            if not this_agent_aliases:
+                return {
+                    "agent_name": agent_name,
+                    "aliases": [],
+                    "conflicts": [],
+                }
+
+            # Get all other active agents
+            other_agents = (
+                session.query(AgentMetadata)
+                .filter(
+                    AgentMetadata.agent_name != agent_name,
+                    ~AgentMetadata.is_deleted,
+                )
+                .all()
+            )
+
+            conflicts = []
+            for other_agent in other_agents:
+                other_aliases = set(other_agent.get_aliases())
+
+                # Check for overlapping aliases
+                overlapping = this_agent_aliases & other_aliases
+                if overlapping:
+                    conflicts.append({
+                        "conflicting_agent": other_agent.agent_name,
+                        "conflicting_aliases": list(overlapping),
+                        "is_enabled": other_agent.is_enabled,
+                        "is_slack_visible": other_agent.is_slack_visible,
+                    })
+
+                # Check if this agent's aliases conflict with other agent's primary name
+                if other_agent.agent_name in this_agent_aliases:
+                    conflicts.append({
+                        "conflicting_agent": other_agent.agent_name,
+                        "conflicting_aliases": [other_agent.agent_name],
+                        "conflict_type": "primary_name",
+                        "is_enabled": other_agent.is_enabled,
+                        "is_slack_visible": other_agent.is_slack_visible,
+                    })
+
+            return {
+                "agent_name": agent_name,
+                "aliases": list(this_agent_aliases),
+                "conflicts": conflicts,
+                "has_conflicts": len(conflicts) > 0,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking alias conflicts: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
