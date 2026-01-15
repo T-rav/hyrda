@@ -35,6 +35,12 @@ class AgentRegistry:
                 "description": "List available agents and help",
                 "aliases": ["help", "agents"],
             },
+            "qualifier": {
+                "name": "qualifier",
+                "display_name": "Lead Qualifier",
+                "description": "Score and qualify HubSpot leads",
+                "aliases": ["qualifier", "qualify", "score lead"],
+            },
         }
 
     def list_agents(self) -> list[dict]:

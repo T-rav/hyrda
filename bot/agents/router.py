@@ -17,6 +17,7 @@ class CommandRouter:
             "profile": ["profile", "company profile", "research company"],
             "meddic": ["meddic", "medic", "meddpicc", "deal analysis"],
             "help": ["help", "agents", "list agents"],
+            "qualifier": ["qualifier", "qualify", "score lead", "qualify lead"],
         }
 
         # Reverse map: alias -> primary name
