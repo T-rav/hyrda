@@ -70,6 +70,7 @@ class LLMService:
         document_content: str | None = None,
         document_filename: str | None = None,
         conversation_cache: "ConversationCache | None" = None,
+        system_message: str | None = None,
     ) -> str | None:
         """Get response from LLM with optional RAG enhancement.
 
@@ -82,6 +83,7 @@ class LLMService:
             document_content: Content of uploaded document for context
             document_filename: Name of uploaded document
             conversation_cache: Optional conversation cache for summary management
+            system_message: Custom system prompt (overrides default/user-specific prompt)
 
         Returns:
             Generated response or None if failed
@@ -104,15 +106,16 @@ class LLMService:
         start_time = time.time()
 
         try:
-            # Get system prompt from prompt service
-            from services.prompt_service import get_prompt_service
+            # Use provided system_message, or get from prompt service
+            if system_message is None:
+                from services.prompt_service import get_prompt_service
 
-            prompt_service = get_prompt_service()
-            system_message = (
-                prompt_service.get_system_prompt(user_id)
-                if prompt_service
-                else "You are a helpful AI assistant."
-            )
+                prompt_service = get_prompt_service()
+                system_message = (
+                    prompt_service.get_system_prompt(user_id)
+                    if prompt_service
+                    else "You are a helpful AI assistant."
+                )
 
             # Use provided current_query or extract from messages
             if current_query:
