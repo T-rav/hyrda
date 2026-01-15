@@ -138,8 +138,10 @@ app.add_middleware(
 
 # Import and include routers after app is created
 from api.rag import router as rag_router  # noqa: E402
+from api.retrieve import router as retrieve_router  # noqa: E402
 
 app.include_router(rag_router, prefix="/api")
+app.include_router(retrieve_router, prefix="/api")
 
 
 @app.get("/health")
