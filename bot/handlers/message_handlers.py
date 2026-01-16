@@ -629,6 +629,241 @@ async def _send_agent_response(
 
 
 # ============================================================================
+# Helper functions for handle_message (refactored for maintainability)
+# ============================================================================
+
+
+def _determine_conversation_id(
+    channel: str, thread_ts: str | None, message_ts: str | None
+) -> str:
+    """Determine unique conversation ID from Slack context.
+
+    Args:
+        channel: Channel ID
+        thread_ts: Thread timestamp
+        message_ts: Message timestamp
+
+    Returns:
+        Unique conversation ID
+
+    Raises:
+        ValueError: If conversation ID cannot be determined
+    """
+    is_dm = channel.startswith("D")
+
+    if thread_ts:
+        return thread_ts  # Threaded conversation
+    elif is_dm:
+        return channel  # DM conversation (channel is unique per user)
+    elif message_ts:
+        return message_ts  # Non-threaded mention (each is separate)
+    else:
+        raise ValueError("Must provide thread_ts or message_ts for non-DM messages")
+
+
+def _record_message_metrics(
+    metrics_service,
+    user_id: str,
+    channel: str,
+    text: str,
+    conversation_id: str,
+    thread_ts: str | None,
+) -> None:
+    """Record message processing metrics.
+
+    Args:
+        metrics_service: Metrics service instance
+        user_id: User ID
+        channel: Channel ID
+        text: Message text
+        conversation_id: Conversation ID
+        thread_ts: Thread timestamp
+    """
+    if not metrics_service:
+        return
+
+    metrics_service.record_message_processed(
+        user_id=user_id, channel_type="dm" if channel.startswith("D") else "channel"
+    )
+
+    metrics_service.record_conversation_activity(conversation_id)
+
+    # Categorize query type for metrics
+    query_category = "question"  # Default
+    if text.lower().startswith(("run ", "execute ", "start ")):
+        query_category = "command"
+    elif thread_ts:  # In a thread, likely continuing conversation
+        query_category = "conversation"
+
+    has_context = bool(thread_ts)
+    metrics_service.record_query_type(query_category, has_context)
+
+
+async def _get_or_store_document_content(
+    conversation_cache,
+    thread_ts: str | None,
+    document_content: str,
+    document_filename: str | None,
+) -> tuple[str, str | None]:
+    """Get cached document or store new one.
+
+    Args:
+        conversation_cache: Conversation cache instance
+        thread_ts: Thread timestamp
+        document_content: Current document content
+        document_filename: Current document filename
+
+    Returns:
+        Tuple of (document_content, document_filename)
+    """
+    if not thread_ts or not conversation_cache:
+        return document_content, document_filename
+
+    # Store new document if provided
+    if document_content:
+        await conversation_cache.store_document_content(
+            thread_ts, document_content, document_filename or "unknown"
+        )
+        return document_content, document_filename
+
+    # Retrieve cached document if no new document
+    stored_content, stored_filename = await conversation_cache.get_document_content(
+        thread_ts
+    )
+    if stored_content:
+        logger.info(
+            f"Retrieved previously stored document for thread {thread_ts}: {stored_filename}"
+        )
+        return stored_content, stored_filename
+
+    return document_content, document_filename
+
+
+async def _add_document_reference_to_cache(
+    conversation_cache,
+    thread_ts: str | None,
+    document_content: str,
+    files: list[dict] | None,
+) -> None:
+    """Add document reference summary to conversation cache.
+
+    Args:
+        conversation_cache: Conversation cache instance
+        thread_ts: Thread timestamp
+        document_content: Document content
+        files: File list
+    """
+    if not (document_content and conversation_cache and thread_ts):
+        return
+
+    # Create concise summary for chat history
+    file_names = [f.get("name", "unknown") for f in files] if files else ["document"]
+    file_summary = f"[User shared {len(file_names)} file(s): {', '.join(file_names)} - content processed and analyzed]"
+
+    document_message = {
+        "role": "user",
+        "content": file_summary,
+    }
+    await conversation_cache.update_conversation(
+        thread_ts, document_message, is_bot_message=False
+    )
+    logger.info(
+        f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
+    )
+
+
+async def _determine_rag_usage(
+    conversation_cache, thread_ts: str | None
+) -> tuple[bool, str | None]:
+    """Determine whether to use RAG based on thread type.
+
+    Profile threads disable RAG to avoid retrieving irrelevant documents.
+
+    Args:
+        conversation_cache: Conversation cache instance
+        thread_ts: Thread timestamp
+
+    Returns:
+        Tuple of (use_rag, thread_type)
+    """
+    thread_type = None
+    if thread_ts and conversation_cache:
+        thread_type = await conversation_cache.get_thread_type(thread_ts)
+        logger.info(
+            f"Thread {thread_ts}: type={thread_type}, has_cache={conversation_cache is not None}"
+        )
+
+    is_profile_thread = thread_type == "profile"
+    use_rag = not is_profile_thread
+
+    if is_profile_thread:
+        logger.info(f"✅ Disabling RAG for profile thread {thread_ts}")
+    else:
+        logger.info(
+            f"📚 RAG enabled for thread {thread_ts} (thread_type={thread_type})"
+        )
+
+    return use_rag, thread_type
+
+
+async def _send_llm_response(
+    response: str,
+    thinking_message_ts: str | None,
+    slack_service: SlackService,
+    channel: str,
+    thread_ts: str | None,
+    user_id: str,
+    text: str,
+    conversation_id: str,
+) -> None:
+    """Clean up thinking indicator and send formatted response.
+
+    Args:
+        response: LLM response text
+        thinking_message_ts: Thinking message to delete
+        slack_service: Slack service
+        channel: Channel ID
+        thread_ts: Thread timestamp
+        user_id: User ID
+        text: Original user message
+        conversation_id: Conversation ID
+    """
+    # Clean up thinking message
+    if thinking_message_ts:
+        try:
+            await slack_service.delete_thinking_indicator(channel, thinking_message_ts)
+        except Exception as e:
+            logger.warning(f"Error deleting thinking message: {e}")
+
+    # Format and send response
+    if response:
+        formatted_response = await MessageFormatter.format_message(response)
+        await slack_service.send_message(
+            channel=channel, text=formatted_response, thread_ts=thread_ts
+        )
+    else:
+        response = "I apologize, but I couldn't generate a response. Please try again."
+        await slack_service.send_message(
+            channel=channel,
+            text=response,
+            thread_ts=thread_ts,
+        )
+
+    # Record conversation turn in Langfuse
+    langfuse_service = get_langfuse_service()
+    if langfuse_service:
+        try:
+            langfuse_service.trace_conversation(
+                user_id=user_id,
+                conversation_id=conversation_id,
+                user_message=text,
+                bot_response=response or "",
+            )
+        except Exception as e:
+            logger.warning(f"Error tracing conversation turn to Langfuse: {e}")
+
+
+# ============================================================================
 # Main command handler (now much cleaner!)
 # ============================================================================
 
@@ -778,31 +1013,23 @@ async def handle_message(
     conversation_cache=None,
     message_ts: str | None = None,
 ):
-    """Handle an incoming message from Slack
+    """Handle an incoming message from Slack.
 
     Args:
+        text: Message text
+        user_id: Slack user ID
+        slack_service: Slack service instance
+        llm_service: LLM service instance
+        channel: Channel ID
+        thread_ts: Thread timestamp (optional)
+        files: Attached files (optional)
+        conversation_cache: Conversation cache instance (optional)
         message_ts: Message timestamp - used as unique conversation ID when not in thread
-
     """
     start_time = time.time()
 
-    # Unique conversation ID logic:
-    # 1. Thread in channel: thread_ts (groups all messages in that thread)
-    # 2. DM conversation: channel ID (unique per user DM, like "D0123ABCD")
-    # 3. Non-threaded @ mention: message_ts (each mention is separate conversation)
-    #
-    # For DMs, channel ID is stable across the conversation (NOT reused across users)
-    # For channels, NEVER use raw channel ID (it's reused) - always need thread_ts or message_ts
-    is_dm = channel.startswith("D")
-
-    if thread_ts:
-        conversation_id = thread_ts  # Threaded conversation
-    elif is_dm:
-        conversation_id = channel  # DM conversation (channel is unique per user)
-    elif message_ts:
-        conversation_id = message_ts  # Non-threaded mention (each is separate)
-    else:
-        raise ValueError("Must provide thread_ts or message_ts for non-DM messages")
+    # Determine unique conversation ID
+    conversation_id = _determine_conversation_id(channel, thread_ts, message_ts)
 
     logger.info(
         "Processing user message",
@@ -817,35 +1044,16 @@ async def handle_message(
         },
     )
 
-    # Record message processing metric
+    # Record message processing metrics
     metrics_service = get_metrics_service()
-    if metrics_service:
-        metrics_service.record_message_processed(
-            user_id=user_id, channel_type="dm" if channel.startswith("D") else "channel"
-        )
-
-        # Track active conversations with proper conversation ID
-        # Use thread_ts for threaded conversations, message_ts for standalone, channel as fallback
-        # This matches the conversation_id used by LLM service for Langfuse tracing
-        metrics_service.record_conversation_activity(conversation_id)
-
-        # Categorize query type for metrics
-        query_category = "question"  # Default
-        if text.lower().startswith(("run ", "execute ", "start ")):
-            query_category = "command"
-        elif thread_ts:  # In a thread, likely continuing conversation
-            query_category = "conversation"
-
-        has_context = bool(thread_ts)  # Has conversation context
-        metrics_service.record_query_type(query_category, has_context)
+    _record_message_metrics(
+        metrics_service, user_id, channel, text, conversation_id, thread_ts
+    )
 
     # For tracking the thinking indicator message
     thinking_message_ts = None
 
     try:
-        # Show typing indicator (skip if method doesn't exist)
-        # Note: Typing indicators are handled by Slack automatically in most cases
-
         # Process file attachments first (needed for both bot commands and LLM)
         document_content = ""
         document_filename = None
@@ -882,33 +1090,16 @@ async def handle_message(
 
         # Regular LLM response handling
         try:
-            # First send thinking message
             thinking_message_ts = await slack_service.send_thinking_indicator(
                 channel, thread_ts
             )
         except Exception as e:
             logger.error(f"Error posting thinking message: {e}")
 
-        # File attachments already processed earlier (lines 491-499)
-
-        # Store document content in conversation cache for future reference
-        if conversation_cache and thread_ts and document_content:
-            await conversation_cache.store_document_content(
-                thread_ts, document_content, document_filename or "unknown"
-            )
-
-        # If no files in current message but we're in a thread, check for previously stored documents
-        elif thread_ts and conversation_cache:
-            (
-                stored_content,
-                stored_filename,
-            ) = await conversation_cache.get_document_content(thread_ts)
-            if stored_content:
-                document_content = stored_content
-                document_filename = stored_filename
-                logger.info(
-                    f"Retrieved previously stored document for thread {thread_ts}: {stored_filename}"
-                )
+        # Store or retrieve document content from cache
+        document_content, document_filename = await _get_or_store_document_content(
+            conversation_cache, thread_ts, document_content, document_filename
+        )
 
         # Get the thread history for context
         history, should_use_thread_context = await slack_service.get_thread_history(
@@ -920,103 +1111,42 @@ async def handle_message(
                 f"Using thread context with {len(history)} messages for response generation"
             )
 
-        # Add document reference to cache if present and cache is available
-        if document_content and conversation_cache and thread_ts:
-            # Create a concise summary for chat history instead of full content
-            file_names = (
-                [f.get("name", "unknown") for f in files] if files else ["document"]
-            )
-            file_summary = f"[User shared {len(file_names)} file(s): {', '.join(file_names)} - content processed and analyzed]"
+        # Add document reference to cache
+        await _add_document_reference_to_cache(
+            conversation_cache, thread_ts, document_content, files
+        )
 
-            document_message = {
-                "role": "user",
-                "content": file_summary,
-            }
-            await conversation_cache.update_conversation(
-                thread_ts, document_message, is_bot_message=False
-            )
-            logger.info(
-                f"Added document reference to conversation cache for thread {thread_ts}: {file_names}"
-            )
-
-        # Generate response using LLM service with document-aware RAG
-        # Check if this is a profile thread (explicit thread type metadata)
-        # Profile threads should disable RAG to avoid retrieving irrelevant documents
-        # from the vector store. Profile reports are self-contained and should be the
-        # sole source of truth for follow-up questions.
-        # For user-uploaded documents, keep RAG enabled to supplement with knowledge base.
-        thread_type = None
-        if thread_ts and conversation_cache:
-            thread_type = await conversation_cache.get_thread_type(thread_ts)
-            logger.info(
-                f"Thread {thread_ts}: type={thread_type}, has_cache={conversation_cache is not None}"
-            )
-
-        is_profile_thread = thread_type == "profile"
-        use_rag = not is_profile_thread
+        # Determine whether to use RAG based on thread type
+        use_rag, thread_type = await _determine_rag_usage(conversation_cache, thread_ts)
 
         logger.info(
-            f"Thread {thread_ts}: is_profile_thread={is_profile_thread}, use_rag={use_rag}, "
+            f"Thread {thread_ts}: thread_type={thread_type}, use_rag={use_rag}, "
             f"has_document={document_content is not None}"
         )
 
-        if is_profile_thread:
-            logger.info(
-                f"✅ Disabling RAG for profile thread {thread_ts} (document: {document_filename})"
-            )
-        else:
-            logger.info(
-                f"📚 RAG enabled for thread {thread_ts} (thread_type={thread_type})"
-            )
-
+        # Generate response using LLM service with document-aware RAG
         response = await llm_service.get_response(
             messages=history,
             user_id=user_id,
             current_query=text,
             document_content=document_content if document_content else None,
             document_filename=document_filename,
-            conversation_id=conversation_id,  # Use thread_ts for conversation ID
-            conversation_cache=conversation_cache,  # Pass cache for summary management
-            use_rag=use_rag,  # Disable RAG only for profile reports
+            conversation_id=conversation_id,
+            conversation_cache=conversation_cache,
+            use_rag=use_rag,
         )
 
-        # Clean up thinking message
-        if thinking_message_ts:
-            try:
-                await slack_service.delete_thinking_indicator(
-                    channel, thinking_message_ts
-                )
-            except Exception as e:
-                logger.warning(f"Error deleting thinking message: {e}")
-
-        # Format and send the response
-        if response:
-            formatted_response = await MessageFormatter.format_message(response)
-            await slack_service.send_message(
-                channel=channel, text=formatted_response, thread_ts=thread_ts
-            )
-        else:
-            response = (
-                "I apologize, but I couldn't generate a response. Please try again."
-            )
-            await slack_service.send_message(
-                channel=channel,
-                text=response,
-                thread_ts=thread_ts,
-            )
-
-        # Record conversation turn in Langfuse for lifetime stats
-        langfuse_service = get_langfuse_service()
-        if langfuse_service:
-            try:
-                langfuse_service.trace_conversation(
-                    user_id=user_id,
-                    conversation_id=conversation_id,
-                    user_message=text,
-                    bot_response=response or "",
-                )
-            except Exception as e:
-                logger.warning(f"Error tracing conversation turn to Langfuse: {e}")
+        # Send formatted response and clean up thinking indicator
+        await _send_llm_response(
+            response,
+            thinking_message_ts,
+            slack_service,
+            channel,
+            thread_ts,
+            user_id,
+            text,
+            conversation_id,
+        )
 
         # Record successful request timing
         if metrics_service:
