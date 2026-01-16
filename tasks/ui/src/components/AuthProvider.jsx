@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { logError } from '../utils/logger'
 
 const AuthContext = createContext(null)
 
@@ -52,7 +53,7 @@ export function AuthProvider({ children }) {
         setError('Failed to check authentication')
       }
     } catch (err) {
-      console.error('Auth check failed:', err)
+      logError('Auth check failed:', err)
       setError(err.message)
     } finally {
       setLoading(false)
@@ -71,7 +72,7 @@ export function AuthProvider({ children }) {
       const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || 'https://localhost:6001'
       window.location.href = `${controlPlaneUrl}/auth/login?redirect=${encodeURIComponent(currentUrl)}`
     } catch (err) {
-      console.error('Logout failed:', err)
+      logError('Logout failed:', err)
       setError(err.message)
     }
   }

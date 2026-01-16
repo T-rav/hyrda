@@ -59,7 +59,7 @@ function TasksList({ onError, setLoading }) {
 
     // Show result message (in real app, you'd use a toast system)
     if (result) {
-      console.log(result.message)
+      // Success - result.message contains success info
     }
   }
 
