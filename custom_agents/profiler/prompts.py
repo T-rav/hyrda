@@ -486,8 +486,15 @@ Answer the investigative questions above by:
      - "CompanyX" → finds past projects, client info, case studies
      - "Tesla partnerships" → finds any Tesla-related work or documentation
      - "React projects" → finds past React engagements
-   - **Returns:** Existing client data, project details, relationships, past work
-   - **IMPORTANT:** If you find existing relationship data, include it prominently in your research!
+   - **Parameters:**
+     * `max_chunks`: Number of document chunks to retrieve (1-20, default: 10)
+     * `similarity_threshold`: Minimum relevance score (0.0-1.0, default: 0.7)
+   - **Returns:** Raw document chunks with relationship status, source documents, and relevance scores
+   - **IMPORTANT - HOW TO USE RESULTS:**
+     * Tool returns document excerpts (chunks), NOT synthesized answers
+     * YOU must read the chunks, extract key facts, and synthesize findings
+     * Look for "Relationship status" field to see if we have prior engagement
+     * If you find existing relationship data, include it prominently in your research!
 
 2. **sec_query**: Search SEC filings (10-K, 8-K) for PUBLIC companies on-demand (FREE - use for official data)
    - Fetches and searches latest SEC Edgar filings on-demand (no pre-indexing needed)
@@ -550,7 +557,7 @@ Answer the investigative questions above by:
 - Done ✓
 
 **GOOD approach** (investigative, BD-focused, cost-conscious, checks internal first):
-- **STEP 1 - CHECK INTERNAL FIRST:** internal_search_tool: "CompanyX" → Found existing client! Past projects with CRM/OPM work!
+- **STEP 1 - CHECK INTERNAL FIRST:** internal_search_tool: "CompanyX" → Received 5 document chunks. Reading them... "Relationship status: Existing client". Found Document 1 mentions CRM project, Document 2 mentions OPM work! Synthesizing: We have existing relationship with past CRM/OPM projects.
 - Think: "We have an existing relationship! I need to include this prominently. Now what additional external context do I need?"
 - **STEP 2 - CHECK SEC FILINGS (if public):** sec_query: "CompanyX strategic priorities and risks" → Found 10-K with product roadmap delays, technical debt concerns in risk factors!
 - Think: "Official SEC filing shows they're worried about technical debt and scaling challenges - perfect consulting opportunity signal!"

@@ -64,8 +64,12 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
 1. **internal_search_tool** - ALWAYS START HERE
    - Search our internal knowledge base for existing information
    - Check for relevant documents, policies, past work, and historical context
-   - Use this to understand what we already know about the topic
-   - **Effort levels:** "low" (quick), "medium" (balanced), "high" (comprehensive)
+   - Returns raw document chunks that you need to analyze and synthesize
+   - **IMPORTANT**: The tool returns formatted document excerpts, NOT synthesized answers
+   - Your job: Read the chunks, extract key information, and synthesize into coherent findings
+   - Parameters:
+     * `max_chunks`: Number of chunks to retrieve (1-20, default: 10)
+     * `similarity_threshold`: Minimum relevance score (0.0-1.0, default: 0.7)
 
 2. **sec_query** - For public company financial data (if relevant)
    - SEC filings: 10-K (annual reports), 8-K (material events), 10-Q (quarterly)
@@ -78,9 +82,18 @@ async def researcher(state: ResearcherState) -> dict[str, Any]:
    - Use when internal data is insufficient or outdated
    - **Search types:** "standard" (quick results) or "deep" (comprehensive analysis)
 
+**How to Handle Tool Results:**
+
+When internal_search_tool returns results:
+- It provides document chunks with "Relationship status", source documents, and relevance scores
+- You must READ and SYNTHESIZE these chunks yourself
+- Extract key facts, identify patterns, and create coherent narrative
+- Cite which documents your findings came from
+
 **Research Best Practices:**
 
 - **Start internal:** Always check internal knowledge base before going external
+- **Synthesize chunks:** Read all document excerpts and combine insights into clear findings
 - **Cross-reference:** When internal sources mention related topics/entities, search for those too
 - **Combine sources:** Synthesize internal and external information for complete picture
 - **Cite clearly:** Distinguish between internal sources, SEC filings, and web sources
