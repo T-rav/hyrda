@@ -33,11 +33,13 @@ RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
 # Trust all self-signed certificates for inter-service communication
-# Copy .ssl directory (may be empty in CI) and install CA certificate + service certs
-COPY .ssl /tmp/.ssl/
+# Only copy CA certificate (not private keys) for development mTLS
+# Private keys are mounted as volumes at runtime via docker-compose.yml
+COPY --chown=root:root .ssl/mkcert-ca.crt* /tmp/.ssl/ 2>/dev/null || true
 RUN if [ -f /tmp/.ssl/mkcert-ca.crt ]; then \
         cp /tmp/.ssl/mkcert-ca.crt /usr/local/share/ca-certificates/ && \
-        update-ca-certificates; \
+        update-ca-certificates && \
+        rm -rf /tmp/.ssl; \
     fi
 
 # Copy shared utilities and bot code from project root (build context is project root)

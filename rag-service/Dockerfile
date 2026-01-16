@@ -25,11 +25,15 @@ RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
 # Trust all self-signed certificates for inter-service communication (optional)
-# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
-COPY .ssl /tmp/.ssl/
-RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
-        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
-        update-ca-certificates; \
+# Only copy public certificates (not private keys) for development mTLS
+# Private keys are mounted as volumes at runtime via docker-compose.yml
+RUN mkdir -p /tmp/.ssl
+COPY .ssl/*.crt /tmp/.ssl/ 2>/dev/null || true
+COPY .ssl/*-cert.pem /tmp/.ssl/ 2>/dev/null || true
+RUN if [ -n "$(ls -A /tmp/.ssl 2>/dev/null)" ]; then \
+        cp /tmp/.ssl/* /usr/local/share/ca-certificates/ 2>/dev/null || true && \
+        update-ca-certificates && \
+        rm -rf /tmp/.ssl; \
     fi
 
 # Copy shared library first (required for common utilities)
