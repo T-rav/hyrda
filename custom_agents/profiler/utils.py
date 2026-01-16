@@ -43,9 +43,9 @@ class _InternalSearchToolSingleton:
             return cls._instance
 
         try:
-            from profiler.tools import InternalSearchTool
+            from profiler.tools import InternalSearchToolHTTP
 
-            cls._instance = InternalSearchTool()
+            cls._instance = InternalSearchToolHTTP()
             logger.info("Internal search tool singleton initialized")
             return cls._instance
         except Exception as e:

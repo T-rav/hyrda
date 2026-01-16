@@ -11,7 +11,7 @@ from config.settings import Settings
 from ..state import ResearcherState
 from ..tools import (
     EnhancedWebSearchTool,
-    RAGInternalSearchTool,  # New: RAG service-based (portable)
+    InternalSearchToolHTTP,  # HTTP-based retrieval via rag-service
     SECQueryTool,
 )
 
@@ -19,9 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Initialize tools at module level to avoid blocking I/O in async context
 # Tool __init__ methods do network calls (Redis, Tavily) which are blocking
-# Note: RAGInternalSearchTool lazy-loads RAG service, avoiding blocking I/O here
 _RESEARCH_TOOLS = [
-    RAGInternalSearchTool(),  # New: Uses RAG service (portable, no direct Qdrant access)
+    InternalSearchToolHTTP(),  # HTTP-based internal search via rag-service
     SECQueryTool(),  # Redis client initialization (blocking)
     EnhancedWebSearchTool(),  # Tavily client initialization (blocking)
 ]
