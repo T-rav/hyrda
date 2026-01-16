@@ -104,28 +104,28 @@ class HealthChecker:
             }
         )
 
-    async def readiness_check(self, request):
-        """Readiness check - can the service handle requests?"""
-        checks = {}
-        all_healthy = True
+    def _check_llm_api(self) -> tuple[dict, bool]:
+        """Check LLM API connectivity.
 
-        # Check LLM API connectivity
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
         try:
-            # Skip actual HTTP check for now, just validate settings
-            checks["llm_api"] = {
-                "status": "healthy"
-                if self.settings.llm.api_key.get_secret_value()
-                else "unhealthy",
+            has_api_key = bool(self.settings.llm.api_key.get_secret_value())
+            return {
+                "status": "healthy" if has_api_key else "unhealthy",
                 "provider": self.settings.llm.provider,
                 "model": self.settings.llm.model,
-            }
-            if not self.settings.llm.api_key.get_secret_value():
-                all_healthy = False
+            }, has_api_key
         except Exception as e:
-            checks["llm_api"] = {"status": "unhealthy", "error": str(e)}
-            all_healthy = False
+            return {"status": "unhealthy", "error": str(e)}, False
 
-        # Check if we have required environment variables
+    def _check_configuration(self) -> tuple[dict, bool]:
+        """Check required environment variables.
+
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
         required_vars = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "LLM_API_KEY"]
         missing_vars = []
 
@@ -142,78 +142,53 @@ class HealthChecker:
             ):
                 missing_vars.append(var)
 
-        checks["configuration"] = {
+        return {
             "status": "healthy" if not missing_vars else "unhealthy",
             "missing_variables": ", ".join(missing_vars) if missing_vars else "none",
-        }
+        }, not bool(missing_vars)
 
-        if missing_vars:
-            all_healthy = False
+    async def _check_cache(self) -> tuple[dict, bool]:
+        """Check cache connectivity.
 
-        # Check cache connectivity
-        if self.conversation_cache:
-            try:
-                cache_stats = await self.conversation_cache.get_cache_stats()
-                if cache_stats.get("status") == "available":
-                    checks["cache"] = {
-                        "status": "healthy",
-                        "memory_used": cache_stats.get("memory_used", "unknown"),
-                        "cached_conversations": cache_stats.get(
-                            "cached_conversations", 0
-                        ),
-                        "redis_url": cache_stats.get("redis_url", "unknown"),
-                    }
-                elif cache_stats.get("status") == "unavailable":
-                    checks["cache"] = {
-                        "status": "unhealthy",
-                        "message": f"Configured but Redis unavailable at {cache_stats.get('redis_url', 'unknown')}",
-                        "error": "Redis connection failed",
-                    }
-                    all_healthy = False
-                else:
-                    checks["cache"] = {
-                        "status": "unhealthy",
-                        "error": cache_stats.get("error", "Unknown cache error"),
-                    }
-                    all_healthy = False
-            except Exception as e:
-                checks["cache"] = {"status": "unhealthy", "error": str(e)}
-                all_healthy = False
-        else:
-            checks["cache"] = {
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
+        if not self.conversation_cache:
+            return {
                 "status": "disabled",
                 "message": "Cache service not configured - using Slack API only",
-            }
+            }, True
 
-        # Check Langfuse connectivity
-        if self.langfuse_service:
-            if self.langfuse_service.enabled and self.langfuse_service.client:
-                checks["langfuse"] = {
+        try:
+            cache_stats = await self.conversation_cache.get_cache_stats()
+            if cache_stats.get("status") == "available":
+                return {
                     "status": "healthy",
-                    "enabled": True,
-                    "client_initialized": True,
-                    "configured": True,
-                    "host": self.langfuse_service.settings.host,
-                }
-            elif self.langfuse_service.enabled:
-                checks["langfuse"] = {
+                    "memory_used": cache_stats.get("memory_used", "unknown"),
+                    "cached_conversations": cache_stats.get("cached_conversations", 0),
+                    "redis_url": cache_stats.get("redis_url", "unknown"),
+                }, True
+            elif cache_stats.get("status") == "unavailable":
+                return {
                     "status": "unhealthy",
-                    "enabled": False,  # Service disabled due to initialization failure
-                    "configured": True,
-                    "message": "Enabled but client failed to initialize - check credentials and host",
-                    "host": self.langfuse_service.settings.host,
-                }
-                all_healthy = False
+                    "message": f"Configured but Redis unavailable at {cache_stats.get('redis_url', 'unknown')}",
+                    "error": "Redis connection failed",
+                }, False
             else:
-                checks["langfuse"] = {
-                    "status": "disabled",
-                    "enabled": False,
-                    "configured": True,
-                    "message": "Configured but disabled (check LANGFUSE_ENABLED or credentials)",
-                    "host": self.langfuse_service.settings.host,
-                }
-        else:
-            # Check if langfuse package is available
+                return {
+                    "status": "unhealthy",
+                    "error": cache_stats.get("error", "Unknown cache error"),
+                }, False
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}, False
+
+    def _check_langfuse(self) -> tuple[dict, bool]:
+        """Check Langfuse connectivity.
+
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
+        if not self.langfuse_service:
             try:
                 import langfuse  # noqa: F401  # type: ignore[reportMissingImports,reportUnusedImport]
 
@@ -223,19 +198,50 @@ class HealthChecker:
                 langfuse_available = False
                 message = "Langfuse package not installed (pip install langfuse)"
 
-            checks["langfuse"] = {
+            return {
                 "status": "disabled",
                 "enabled": False,
                 "configured": False,
                 "package_available": langfuse_available,
                 "message": message,
-            }
+            }, True
 
-        # Check metrics service
+        if self.langfuse_service.enabled and self.langfuse_service.client:
+            return {
+                "status": "healthy",
+                "enabled": True,
+                "client_initialized": True,
+                "configured": True,
+                "host": self.langfuse_service.settings.host,
+            }, True
+        elif self.langfuse_service.enabled:
+            return {
+                "status": "unhealthy",
+                "enabled": False,
+                "configured": True,
+                "message": "Enabled but client failed to initialize - check credentials and host",
+                "host": self.langfuse_service.settings.host,
+            }, False
+        else:
+            return {
+                "status": "disabled",
+                "enabled": False,
+                "configured": True,
+                "message": "Configured but disabled (check LANGFUSE_ENABLED or credentials)",
+                "host": self.langfuse_service.settings.host,
+            }, True
+
+    def _check_metrics_service(self) -> tuple[dict, bool]:
+        """Check metrics service status.
+
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
         metrics_service = get_metrics_service()
+
         if metrics_service and metrics_service.enabled:
             active_conversations = metrics_service.get_active_conversation_count()
-            checks["metrics"] = {
+            return {
                 "status": "healthy",
                 "enabled": True,
                 "prometheus_available": True,
@@ -245,16 +251,15 @@ class HealthChecker:
                     "prometheus": "/api/prometheus",
                 },
                 "description": "Prometheus metrics collection active",
-            }
+            }, True
         elif metrics_service and not metrics_service.enabled:
-            checks["metrics"] = {
+            return {
                 "status": "disabled",
                 "enabled": False,
                 "prometheus_available": True,
                 "message": "Metrics service available but disabled",
-            }
+            }, True
         else:
-            # Check if prometheus client is actually available
             try:
                 import prometheus_client  # noqa: F401  # type: ignore[reportMissingImports,reportUnusedImport]
 
@@ -264,17 +269,24 @@ class HealthChecker:
                 prometheus_available = False
                 message = "Prometheus client not available - install prometheus-client package"
 
-            checks["metrics"] = {
+            return {
                 "status": "disabled",
                 "enabled": False,
                 "prometheus_available": prometheus_available,
                 "message": message,
-            }
+            }, True
 
-        # Add RAG service check
+    def _check_rag_service(self) -> tuple[dict, bool]:
+        """Check RAG service status.
+
+        Returns:
+            tuple: (check_result dict, is_healthy bool)
+        """
+        metrics_service = get_metrics_service()
+
         if metrics_service and metrics_service.enabled:
             rag_stats = metrics_service.get_rag_stats()
-            checks["rag"] = {
+            return {
                 "status": "healthy",
                 "total_queries": rag_stats["total_queries"],
                 "success_rate": rag_stats["success_rate"],
@@ -282,12 +294,40 @@ class HealthChecker:
                 "avg_chunks": rag_stats["avg_chunks_per_query"],
                 "documents_used": rag_stats["total_documents_used"],
                 "description": "RAG query performance tracking",
-            }
+            }, True
         else:
-            checks["rag"] = {
+            return {
                 "status": "disabled",
                 "message": "RAG metrics require metrics service to be enabled",
-            }
+            }, True
+
+    async def readiness_check(self, request):
+        """Readiness check - can the service handle requests?
+
+        Orchestrates multiple health checks and returns aggregate status.
+        Each check returns (result dict, is_healthy bool).
+        """
+        checks = {}
+        all_healthy = True
+
+        # Run all health checks
+        checks["llm_api"], is_healthy = self._check_llm_api()
+        all_healthy = all_healthy and is_healthy
+
+        checks["configuration"], is_healthy = self._check_configuration()
+        all_healthy = all_healthy and is_healthy
+
+        checks["cache"], is_healthy = await self._check_cache()
+        all_healthy = all_healthy and is_healthy
+
+        checks["langfuse"], is_healthy = self._check_langfuse()
+        all_healthy = all_healthy and is_healthy
+
+        checks["metrics"], is_healthy = self._check_metrics_service()
+        all_healthy = all_healthy and is_healthy
+
+        checks["rag"], is_healthy = self._check_rag_service()
+        all_healthy = all_healthy and is_healthy
 
         response_data = {
             "status": "ready" if all_healthy else "not_ready",
