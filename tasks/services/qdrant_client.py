@@ -42,7 +42,7 @@ class QdrantClient:
                 ca_cert_path = os.path.join(
                     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".ssl",
-                    "mkcert-ca.crt"
+                    "mkcert-ca.crt",
                 )
                 if os.path.exists(ca_cert_path):
                     cert_path = ca_cert_path
