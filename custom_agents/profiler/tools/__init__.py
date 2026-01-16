@@ -1,5 +1,5 @@
 """Tools for company profile research agents."""
 
-from profiler.tools.internal_search import InternalSearchTool
+from profiler.tools.internal_search_http import InternalSearchToolHTTP
 
-__all__ = ["InternalSearchTool"]
+__all__ = ["InternalSearchToolHTTP"]

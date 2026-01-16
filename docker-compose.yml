@@ -309,6 +309,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
+      - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
@@ -319,8 +322,8 @@ services:
     depends_on:
       control-plane:
         condition: service_healthy
-      qdrant:
-        condition: service_started
+      rag-service:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
