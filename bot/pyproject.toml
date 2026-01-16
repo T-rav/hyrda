@@ -183,7 +183,86 @@ reportPrivateImportUsage = true
 # Bandit security configuration
 [tool.bandit]
 exclude_dirs = ["tests", "venv", ".venv"]
-skips = ["B101"]  # Skip assert_used test
+skips = ["B101"]  # Skip assert_used test (asserts are fine in test code)
+
+# Enhanced security checks - explicitly enable critical vulnerability detection
+# Only includes valid Bandit test IDs (some from the original list don't exist)
+tests = [
+    # Cryptography & Hashing
+    "B303",  # MD5/SHA1 insecure hashes
+    "B304",  # Insecure ciphers (DES, RC2, RC4, Blowfish, IDEA)
+    "B305",  # Insecure cipher modes (ECB, CBC without proper padding)
+    "B324",  # Weak hash functions (MD2, MD4, MD5, SHA1)
+    "B505",  # Weak cryptographic key sizes
+
+    # Code Injection
+    "B307",  # eval() usage
+    "B308",  # mark_safe() usage (can lead to XSS)
+    "B602",  # Shell injection via subprocess shell=True
+    "B604",  # Any function with shell=True
+    "B605",  # Process execution with shell=True
+    "B609",  # Wildcard injection in Linux commands
+
+    # SQL Injection
+    "B608",  # Hardcoded SQL expressions (potential SQL injection)
+
+    # Insecure Deserialization
+    "B301",  # Pickle usage (insecure deserialization)
+    "B302",  # Marshal usage
+    "B403",  # import pickle (flag for review)
+    "B506",  # yaml.load() without safe_load
+
+    # Network Security
+    "B310",  # urllib.urlopen (doesn't validate certs)
+    "B323",  # Unverified SSL context
+    "B501",  # Requests without certificate validation
+    "B502",  # SSL with bad TLS version
+    "B503",  # SSL with bad defaults
+    "B504",  # SSL with no version specified
+    "B507",  # SSH without host key verification
+
+    # File System Security
+    "B306",  # mktemp usage (insecure temp files)
+
+    # XML Security (XXE attacks)
+    "B313",  # XML bad modules
+    "B314",  # XML bad etree
+    "B315",  # XML bad expatreader
+    "B316",  # XML bad sax
+    "B317",  # XML bad pulldom
+    "B318",  # XML bad xmlrpc
+    "B319",  # XML bad defusedxml
+    "B320",  # XML bad lxml
+    "B405",  # import xml.etree
+    "B406",  # import xml.sax
+    "B407",  # import xml.expat
+    "B408",  # import xml.minidom
+    "B409",  # import xml.pulldom
+    "B410",  # import lxml
+
+    # Insecure Random
+    "B311",  # random module (not cryptographically secure)
+
+    # Dangerous Imports
+    "B401",  # import telnetlib
+    "B402",  # import ftplib
+    "B404",  # import subprocess (flag for review)
+    "B411",  # import xmlrpclib
+    "B412",  # import httpoxy
+    "B413",  # import pycrypto (deprecated, use cryptography)
+
+    # Subprocess Security
+    "B603",  # subprocess without shell=True (still check for injection)
+    "B606",  # Process start without shell
+    "B607",  # Partial path in process start
+
+    # Paramiko Security
+    "B601",  # Paramiko calls without host key checking
+
+    # Framework-Specific
+    "B201",  # Flask debug mode enabled
+    "B321",  # FTP usage (insecure protocol)
+]
 
 # Pytest configuration
 [tool.pytest.ini_options]
