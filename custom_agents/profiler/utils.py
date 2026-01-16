@@ -43,7 +43,7 @@ class _InternalSearchToolSingleton:
             return cls._instance
 
         try:
-            from profiler.tools import InternalSearchToolHTTP
+            from shared.tools import InternalSearchToolHTTP
 
             cls._instance = InternalSearchToolHTTP()
             logger.info("Internal search tool singleton initialized")

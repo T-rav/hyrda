@@ -2,7 +2,7 @@
 HTTP-based internal search tool for agents.
 
 This version uses rag-service's /api/v1/retrieve endpoint instead of direct Qdrant access.
-Provides the same interface as the original internal_search.py but with centralized vector access.
+Provides centralized vector access for all agents.
 """
 
 import logging
@@ -84,15 +84,19 @@ class InternalSearchToolHTTP(BaseTool):
         try:
             logger.info(f"🔍 Internal search (HTTP): {query[:100]}...")
 
-            # Import retrieval client
-            from services.retrieval_client import get_retrieval_client
+            # Get retrieval client
+            from shared.clients import (
+                RetrievalAuthError,
+                RetrievalConnectionError,
+                RetrievalServiceError,
+                RetrievalTimeoutError,
+                get_retrieval_client,
+            )
 
             retrieval_client = get_retrieval_client()
 
             # Build system message with permissions if available
-            system_message = None
-            if self.user_permissions:
-                system_message = self._build_permission_context(self.user_permissions)
+            system_message = self._build_permission_context()
 
             # Call retrieval API
             chunks = await retrieval_client.retrieve(
@@ -101,7 +105,7 @@ class InternalSearchToolHTTP(BaseTool):
                 system_message=system_message,
                 max_chunks=max_chunks,
                 similarity_threshold=similarity_threshold,
-                enable_query_rewriting=True,  # Enable for better results
+                enable_query_rewriting=True,
             )
 
             if not chunks:
@@ -117,36 +121,75 @@ class InternalSearchToolHTTP(BaseTool):
 
             return formatted_result
 
+        except RetrievalAuthError as e:
+            logger.error(f"Authentication failed: {e}")
+            return (
+                "Internal search authentication failed. "
+                "Please check RAG_SERVICE_TOKEN configuration."
+            )
+        except RetrievalTimeoutError as e:
+            logger.error(f"Request timed out: {e}")
+            return (
+                f"Internal search timed out after {e.timeout_seconds}s. "
+                "The service may be overloaded. Please try again."
+            )
+        except RetrievalConnectionError as e:
+            logger.error(f"Connection error: {e}")
+            return (
+                f"Cannot connect to retrieval service at {e.base_url}. "
+                "Please check that rag-service is running."
+            )
+        except RetrievalServiceError as e:
+            logger.error(f"Service error: {e}")
+            return (
+                f"Retrieval service returned error {e.status_code}: {e.detail}"
+            )
         except Exception as e:
-            logger.error(f"Internal search failed: {e}")
+            logger.error(f"Unexpected internal search error: {e}")
             return f"Internal search error: {str(e)}"
 
     def _run(self, query: str, max_chunks: int = 10, similarity_threshold: float = 0.7) -> str:
         """Sync wrapper - not implemented (use async version)."""
         return "Internal search requires async execution. Use ainvoke() instead."
 
-    def _build_permission_context(self, permissions: dict[str, Any]) -> str:
+    def _build_permission_context(self) -> str | None:
         """Build system message with user permissions."""
+        if not self.user_permissions:
+            return None
+
         lines = []
 
-        if user := permissions.get("user_id"):
+        if user := self.user_permissions.get("user_id"):
             lines.append(f"User: {user}")
 
-        if role := permissions.get("role"):
+        if role := self.user_permissions.get("role"):
             lines.append(f"Role: {role}")
 
-        if projects := permissions.get("projects"):
+        if projects := self.user_permissions.get("projects"):
             lines.append(f"Accessible Projects: {', '.join(projects)}")
 
-        if clearance := permissions.get("clearance"):
+        if clearance := self.user_permissions.get("clearance"):
             lines.append(f"Clearance Level: {clearance}")
 
         return "\n".join(lines) if lines else None
 
     def _format_results(self, chunks: list[dict[str, Any]], query: str) -> str:
         """Format retrieved chunks as structured text."""
-        # Group chunks by source document
+        docs_by_source = self._group_by_source(chunks)
+        has_relationship = self._detect_relationship(chunks)
+
+        parts = [
+            self._format_relationship_status(has_relationship),
+            self._format_summary(query, chunks, docs_by_source),
+            self._format_documents(docs_by_source),
+        ]
+
+        return "\n".join(parts)
+
+    def _group_by_source(self, chunks: list[dict[str, Any]]) -> dict[str, list[dict]]:
+        """Group chunks by source document."""
         docs_by_source = {}
+
         for chunk in chunks:
             metadata = chunk.get("metadata", {})
             source = metadata.get("file_name", "Unknown")
@@ -162,25 +205,27 @@ class InternalSearchToolHTTP(BaseTool):
                 }
             )
 
-        # Check if we found relationship information
-        has_relationship = self._detect_relationship(chunks)
+        return docs_by_source
 
-        # Build formatted output
+    def _format_relationship_status(self, has_relationship: bool) -> str:
+        """Format relationship status header."""
+        if has_relationship:
+            return "Relationship status: Existing client\n"
+        return "Relationship status: No prior engagement found\n"
+
+    def _format_summary(
+        self, query: str, chunks: list[dict], docs_by_source: dict
+    ) -> str:
+        """Format search summary."""
+        return (
+            f"Internal search results for: {query}\n"
+            f"Found {len(chunks)} relevant chunks from {len(docs_by_source)} documents\n"
+        )
+
+    def _format_documents(self, docs_by_source: dict[str, list[dict]]) -> str:
+        """Format document results."""
         lines = []
 
-        # Add relationship status
-        if has_relationship:
-            lines.append("Relationship status: Existing client")
-            lines.append("")
-        else:
-            lines.append("Relationship status: No prior engagement found")
-            lines.append("")
-
-        lines.append(f"Internal search results for: {query}")
-        lines.append(f"Found {len(chunks)} relevant chunks from {len(docs_by_source)} documents")
-        lines.append("")
-
-        # Format each document
         for doc_num, (source, doc_chunks) in enumerate(docs_by_source.items(), 1):
             lines.append(f"[Document {doc_num}: {source}]")
 
