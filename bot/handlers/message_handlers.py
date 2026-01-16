@@ -33,7 +33,6 @@ try:
 except ImportError:
     PYTHON_PPTX_AVAILABLE = False  # type: ignore[reportConstantRedefinition]
 
-from handlers.agent_processes import get_agent_blocks, run_agent_process
 from services.formatting import MessageFormatter
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService
@@ -738,77 +737,6 @@ async def handle_message(
 
         if handled:
             return
-
-        # Handle agent process commands
-        if text.strip().lower().startswith("start "):
-            agent_process_name = text.strip().lower()[6:]
-            if agent_process_name:
-                logger.info(f"Starting agent process: {agent_process_name}")
-
-                try:
-                    # First send thinking message
-                    thinking_message_ts = await slack_service.send_thinking_indicator(
-                        channel, thread_ts
-                    )
-
-                    # Run the agent process
-                    result = await run_agent_process(process_id=agent_process_name)
-
-                    # Clean up thinking message before sending response
-                    if thinking_message_ts:
-                        try:
-                            await slack_service.delete_thinking_indicator(
-                                channel, thinking_message_ts
-                            )
-                            thinking_message_ts = None
-                        except Exception as e:
-                            logger.warning(f"Error deleting thinking message: {e}")
-
-                    # Send response with agent blocks
-                    response_text = result.data or "Process started"
-                    formatted_response = await MessageFormatter.format_message(
-                        response_text
-                    )
-                    agent_blocks = get_agent_blocks(result=result, user_id=user_id)
-
-                    await slack_service.send_message(
-                        channel=channel,
-                        text=formatted_response,
-                        blocks=agent_blocks,
-                        thread_ts=thread_ts,
-                    )
-
-                    # Record agent process conversation turn in Langfuse for lifetime stats
-                    langfuse_service = get_langfuse_service()
-                    if langfuse_service:
-                        try:
-                            langfuse_service.trace_conversation(
-                                user_id=user_id,
-                                conversation_id=conversation_id,
-                                user_message=text,  # Original "start X" command
-                                bot_response=response_text,
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                f"Error tracing agent process turn to Langfuse: {e}"
-                            )
-
-                except Exception as e:
-                    # Clean up thinking message on error
-                    if thinking_message_ts:
-                        with contextlib.suppress(Exception):
-                            await slack_service.delete_thinking_indicator(
-                                channel, thinking_message_ts
-                            )
-
-                    logger.error(f"Agent process failed: {e}")
-                    error_response = (
-                        f"❌ Agent process '{agent_process_name}' failed: {str(e)}"
-                    )
-                    await slack_service.send_message(
-                        channel=channel, text=error_response, thread_ts=thread_ts
-                    )
-                return
 
         # Regular LLM response handling
         try:
