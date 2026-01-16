@@ -6,11 +6,17 @@ direct Qdrant dependencies. All retrieval goes through rag-service's
 /api/v1/retrieve endpoint.
 """
 
+import json
 import logging
 import os
+import sys
 from typing import Any
 
 import httpx
+
+# Add shared directory to path
+sys.path.insert(0, "/app")
+from shared.utils.request_signing import add_signature_headers
 
 logger = logging.getLogger(__name__)
 
@@ -92,18 +98,25 @@ class RetrievalClient:
         if conversation_history:
             payload["conversation_history"] = conversation_history
 
+        # Prepare headers
         headers = {
             "Content-Type": "application/json",
             "X-Service-Token": self.service_token,
             "X-User-Email": user_id or "agent@system",
         }
 
+        # Convert payload to JSON string for signing
+        payload_json = json.dumps(payload)
+
+        # Add HMAC signature headers
+        headers = add_signature_headers(headers, self.service_token, payload_json)
+
         logger.debug(
             f"Retrieving chunks: query='{query[:50]}...', max_chunks={max_chunks}"
         )
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, json=payload, headers=headers)
+            response = await client.post(url, content=payload_json, headers=headers)
             response.raise_for_status()
 
             data = response.json()

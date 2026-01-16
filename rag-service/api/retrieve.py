@@ -21,9 +21,12 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from config.settings import get_settings
 from dependencies.auth import require_service_auth
-from services.retrieval_service import get_retrieval_service
+from providers.embedding.factory import create_embedding_provider
 from services.langfuse_service import get_langfuse_service
+from services.retrieval_service import get_retrieval_service
+from services.vector_service import create_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +140,11 @@ async def retrieve_chunks(
     )
 
     try:
+        # Get services
+        settings = get_settings()
         retrieval_service = get_retrieval_service()
+        vector_store = create_vector_store(settings.vector)
+        embedding_service = create_embedding_provider(settings.embedding)
 
         # Get langfuse for tracing
         langfuse_service = get_langfuse_service()
@@ -156,15 +163,23 @@ async def retrieve_chunks(
                 },
             )
 
-        # Perform retrieval
-        chunks = await retrieval_service.retrieve(
+        # Perform retrieval using retrieve_context
+        context_chunks = await retrieval_service.retrieve_context(
             query=request.query,
+            vector_service=vector_store,
+            embedding_service=embedding_service,
             conversation_history=request.conversation_history,
-            max_chunks=request.max_chunks,
-            similarity_threshold=request.similarity_threshold,
-            metadata_filters=request.filters,
-            enable_query_rewriting=request.enable_query_rewriting,
+            user_id=request.user_id,
         )
+
+        # Convert ContextChunk objects to dicts for response
+        chunks = []
+        for context_chunk in context_chunks:
+            chunks.append({
+                "content": context_chunk.content,
+                "similarity": context_chunk.similarity,
+                "metadata": context_chunk.metadata,
+            })
 
         # Build response metadata
         unique_sources = set()
