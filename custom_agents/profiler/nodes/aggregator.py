@@ -64,6 +64,12 @@ def aggregator(state: SupervisorState, config: RunnableConfig) -> Command[str]:
             f"Research complete. Processed {len(completed_groups)} question groups, "
             f"gathered {len(notes)} research notes."
         )
+        logger.info(f"AGGREGATOR ENDING: Returning {len(notes)} notes and {len(raw_notes)} raw_notes to parent graph")
+        if notes:
+            logger.info(f"First note preview: {notes[0][:200]}...")
+        if raw_notes:
+            logger.info(f"First raw note preview: {raw_notes[0][:200]}...")
+
         # Return the accumulated research data to parent graph via output schema
         return Command(
             goto="__end__",

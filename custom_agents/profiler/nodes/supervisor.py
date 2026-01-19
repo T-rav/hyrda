@@ -98,8 +98,10 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
     focus_area = state.get("focus_area", "")
     completed_groups = list(state.get("completed_groups", []))
 
-    logger.info(f"Supervisor called with research_brief length: {len(research_brief)}")
+    logger.info("=" * 80)
+    logger.info(f"SUPERVISOR NODE CALLED - research_brief length: {len(research_brief)}")
     logger.info(f"Supervisor state keys: {list(state.keys())}")
+    logger.info("=" * 80)
 
     # Validate research_brief exists
     if not research_brief:

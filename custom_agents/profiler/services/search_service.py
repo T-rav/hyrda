@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 def get_tavily_client():
     """Get Tavily client for web search."""
     api_key = os.getenv("TAVILY_API_KEY")
+    logger.info(f"get_tavily_client called - API key: {'SET (' + api_key[:10] + '...)' if api_key else 'NOT SET'}")
     if not api_key:
         logger.warning("TAVILY_API_KEY not set - search tools will not be available")
         return None
@@ -41,8 +42,11 @@ def get_perplexity_client():
     return {"api_key": api_key, "model": "llama-3.1-sonar-large-128k-online"}
 
 
-def get_tool_definitions(tavily_client):
+def get_tool_definitions(include_deep_research: bool = True):
     """Get LangChain tool definitions for search.
+
+    Args:
+        include_deep_research: Whether to include Perplexity deep_research tool
 
     Returns:
         List of LangChain tools (web_search, scrape_url, deep_research if available)
@@ -52,11 +56,15 @@ def get_tool_definitions(tavily_client):
 
     tools = []
 
+    # Get Tavily client
+    tavily_client = get_tavily_client()
+
     if tavily_client:
-        # Web search tool
+        # Web search tool - use API key directly
+        tavily_api_key = os.getenv("TAVILY_API_KEY")
         web_search = TavilySearchResults(
             max_results=5,
-            api_wrapper=tavily_client,
+            api_key=tavily_api_key,
             name="web_search",
             description="Search the web for current information. Returns snippets and URLs.",
         )
@@ -85,7 +93,7 @@ def get_tool_definitions(tavily_client):
 
     # Check for Perplexity deep research
     perplexity_key = os.getenv("PERPLEXITY_API_KEY")
-    if perplexity_key:
+    if perplexity_key and include_deep_research:
 
         @tool
         async def deep_research(query: str) -> str:

@@ -32,7 +32,10 @@ def prepare_research(state: SupervisorState, config: RunnableConfig) -> dict:
     # Parse into question groups
     all_question_groups = parse_research_brief_into_groups(research_brief, max_groups=12)
 
-    logger.info(f"Prepared {len(all_question_groups)} question groups for research")
+    logger.info("=" * 80)
+    logger.info(f"PREPARE_RESEARCH: Prepared {len(all_question_groups)} question groups")
+    logger.info("=" * 80)
+    print(f"[PREPARE_RESEARCH] Created {len(all_question_groups)} question groups", flush=True)
 
     return {
         "all_question_groups": all_question_groups,

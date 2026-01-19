@@ -131,9 +131,7 @@ async def search_tool(
         List of search tools (always includes web_search/scrape_url, adds deep_research if enabled)
 
     """
-    from profiler.services.search_service import get_tavily_client, get_tool_definitions
-
-    tavily_client = get_tavily_client()
+    from profiler.services.search_service import get_tool_definitions
 
     # Determine if we should include deep_research based on settings
     if perplexity_enabled:
@@ -142,9 +140,6 @@ async def search_tool(
             "Research tools: Using full toolkit (web_search, scrape_url, deep_research)"
         )
     else:
-        if not tavily_client:
-            logger.warning("No search client available for profile research")
-            return []
         # Deep research not available: Only Tavily tools
         logger.info(
             "Research tools: Using exploration tools only (web_search, scrape_url)"
@@ -152,6 +147,11 @@ async def search_tool(
 
     # Get tool definitions
     tools = get_tool_definitions(include_deep_research=perplexity_enabled)
+
+    if not tools:
+        logger.warning("No search tools available for profile research")
+        return []
+
     return tools
 
 

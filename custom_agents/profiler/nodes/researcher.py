@@ -35,6 +35,12 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
         Command to proceed to researcher_tools or compress_research
 
     """
+    # DEBUG: Check if environment variables are available
+    import os
+    tavily_key = os.getenv("TAVILY_API_KEY")
+    llm_key = os.getenv("LLM_API_KEY")
+    logger.info(f"DEBUG ENV CHECK - TAVILY_API_KEY: {'SET' if tavily_key else 'NOT SET'}, LLM_API_KEY: {'SET' if llm_key else 'NOT SET'}")
+
     configuration = ProfileConfiguration.from_runnable_config(config)
     tool_call_iterations = state.get("tool_call_iterations", 0)
     research_topic = state["research_topic"]
