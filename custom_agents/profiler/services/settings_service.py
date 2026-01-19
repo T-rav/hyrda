@@ -19,11 +19,22 @@ class LLMSettings:
         self.api_url = os.getenv("LLM_API_URL", "")
 
 
+class SearchSettings:
+    """Search configuration from environment."""
+
+    def __init__(self):
+        self.search_provider = os.getenv("SEARCH_PROVIDER", "tavily")
+        self.tavily_api_key = os.getenv("TAVILY_API_KEY", "")
+        self.perplexity_enabled = os.getenv("PERPLEXITY_ENABLED", "false").lower() == "true"
+        self.perplexity_api_key = os.getenv("PERPLEXITY_API_KEY", "")
+
+
 class Settings:
     """Lightweight settings for custom agents."""
 
     def __init__(self):
         self.llm = LLMSettings()
+        self.search = SearchSettings()
 
 
 def get_settings() -> Settings:

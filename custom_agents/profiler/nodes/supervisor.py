@@ -6,9 +6,9 @@ Uses LangGraph's Send() pattern to launch parallel researchers.
 import logging
 import re
 
+import asyncio
+
 from langchain_core.runnables import RunnableConfig
-from langgraph.constants import Send
-from langgraph.types import Command
 
 from profiler.configuration import ProfileConfiguration
 from profiler.state import SupervisorState
@@ -79,17 +79,18 @@ def parse_research_brief_into_groups(
     return question_groups
 
 
-def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
-    """Supervisor node - parses brief and sends parallel research tasks.
+async def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
+    """Supervisor node - runs parallel research tasks using asyncio.gather().
 
     Args:
         state: Current supervisor state
         config: Runtime configuration
 
     Returns:
-        Dict with "send" key containing Send() list for parallel execution, or empty dict
+        Dict with accumulated research notes and updated state
 
     """
+    from profiler.nodes.graph_builder import build_researcher_subgraph
     configuration = ProfileConfiguration.from_runnable_config(config)
     research_iterations = state.get("research_iterations", 0)
     research_brief = state.get("research_brief", "")
@@ -103,7 +104,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
     # Validate research_brief exists
     if not research_brief:
         logger.error("research_brief is missing or empty in supervisor state")
-        return {"send": [], "supervisor_debug": "no_research_brief"}
+        return {}  # supervisor_debug: "no_research_brief"}
 
     logger.info(f"Supervisor iteration {research_iterations}")
 
@@ -112,7 +113,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
         logger.info(
             f"Max supervisor iterations ({configuration.max_researcher_iterations}) reached"
         )
-        return {"send": [], "supervisor_debug": "max_iterations_reached"}
+        return {}  # supervisor_debug: "max_iterations_reached"}
 
     # Get question groups (prepared by prepare_research node)
     all_question_groups = state.get("all_question_groups", [])
@@ -121,7 +122,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
 
     if not all_question_groups:
         logger.error("all_question_groups not found - prepare_research should have set this")
-        return {"send": [], "supervisor_debug": "no_question_groups"}
+        return {}  # supervisor_debug: "no_question_groups"}
 
     # Select question groups for this iteration
     remaining_groups = [g for g in all_question_groups if g not in completed_groups]
@@ -129,7 +130,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
 
     if not remaining_groups:
         logger.info("All question groups completed")
-        return {"send": [], "supervisor_debug": "no_remaining_groups"}
+        return {}  # supervisor_debug: "no_remaining_groups"}
 
     # Take up to max_concurrent_research_units groups for this iteration
     groups_this_iteration = remaining_groups[: configuration.max_concurrent_research_units]
@@ -138,21 +139,54 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
         f"({len(remaining_groups)} remaining)"
     )
 
-    # Create Send() commands for parallel execution
-    sends = []
+    # Build researcher subgraph once
+    researcher_graph = build_researcher_subgraph()
+
+    # Run researchers in parallel with asyncio.gather()
+    tasks = []
     for idx, question_group in enumerate(groups_this_iteration):
-        sends.append(
-            Send(
-                "research_assistant",
-                {
-                    "question_group": question_group,
-                    "profile_type": profile_type,
-                    "focus_area": focus_area,
-                    "task_id": f"research_{research_iterations}_{idx}",
-                },
-            )
+        task = researcher_graph.ainvoke(
+            {
+                "research_topic": question_group,
+                "profile_type": profile_type,
+                "focus_area": focus_area,
+            },
+            config,
         )
+        tasks.append(task)
 
-    logger.info(f"Dispatching {len(sends)} parallel Send() commands to research_assistant")
+    logger.info(f"Executing {len(tasks)} parallel research tasks with asyncio.gather()")
 
-    return {"send": sends}
+    # Execute all research tasks in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Accumulate results
+    all_notes = []
+    all_raw_notes = []
+    completed_this_iteration = []
+
+    for idx, result in enumerate(results):
+        if isinstance(result, Exception):
+            logger.error(f"Research task {idx} failed: {result}")
+            continue
+
+        compressed = result.get("compressed_research", "")
+        raw = result.get("raw_notes", [])
+
+        if compressed:
+            all_notes.append(compressed)
+        if raw:
+            all_raw_notes.extend(raw)
+
+        completed_this_iteration.append(groups_this_iteration[idx])
+
+    logger.info(
+        f"Completed {len(completed_this_iteration)} research tasks, "
+        f"collected {len(all_notes)} notes, {len(all_raw_notes)} raw notes"
+    )
+
+    return {
+        "notes": all_notes,
+        "raw_notes": all_raw_notes,
+        "completed_groups": completed_this_iteration,
+    }

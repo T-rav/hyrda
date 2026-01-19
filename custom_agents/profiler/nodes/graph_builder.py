@@ -22,7 +22,6 @@ from profiler.nodes.quality_control import (
 from profiler.nodes.research_brief import write_research_brief
 from profiler.nodes.aggregator import aggregator
 from profiler.nodes.prepare_research import prepare_research
-from profiler.nodes.research_assistant import research_assistant
 from profiler.nodes.researcher import researcher, researcher_tools
 from profiler.nodes.supervisor import supervisor
 from profiler.state import (
@@ -88,17 +87,13 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Add nodes
     supervisor_builder.add_node("prepare_research", prepare_research)
     supervisor_builder.add_node("supervisor", supervisor)
-    supervisor_builder.add_node("research_assistant", research_assistant)
     supervisor_builder.add_node("aggregator", aggregator)
 
     # Flow
     supervisor_builder.add_edge(START, "prepare_research")
     supervisor_builder.add_edge("prepare_research", "supervisor")
-    # supervisor returns {"send": [...]}, LangGraph dispatches to research_assistant nodes
-    # research_assistant nodes complete and return state (accumulated by reducers)
-    # After ALL Send() tasks complete, supervisor's edge to aggregator is followed
+    # supervisor uses asyncio.gather() to run researchers in parallel, then routes to aggregator
     supervisor_builder.add_edge("supervisor", "aggregator")
-    # NO EDGE from research_assistant - it's invoked via Send() and returns state
     # aggregator uses Command(goto=...) to route back to supervisor (loop) or __end__
 
     # Compile without checkpointer - LangGraph API handles persistence automatically

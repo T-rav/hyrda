@@ -22,6 +22,11 @@ async def test_supervisor():
     # Build the supervisor subgraph
     supervisor_graph = build_supervisor_subgraph()
 
+    # Print graph structure
+    print("\n===== GRAPH STRUCTURE =====")
+    print(f"Nodes: {list(supervisor_graph.nodes.keys())}")
+    print()
+
     # Create a simple test research brief
     test_brief = """
 ## Company Overview
