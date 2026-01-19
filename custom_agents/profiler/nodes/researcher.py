@@ -186,6 +186,8 @@ async def researcher_tools(
         return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
     tool_calls = last_message.tool_calls
+    logger.info(f"researcher_tools: Processing {len(tool_calls)} tool calls: {[tc.get('name') for tc in tool_calls]}")
+    logger.info(f"Current raw_notes count: {len(raw_notes)}")
 
     # Check for ResearchComplete signal
     for tool_call in tool_calls:
@@ -470,6 +472,10 @@ async def researcher_tools(
     messages.extend(tool_results)
 
     # Continue researching
+    logger.info(f"Tool execution complete. Collected {len(raw_notes)} raw notes total")
+    if raw_notes:
+        logger.info(f"Latest raw note length: {len(raw_notes[-1])} chars")
+
     return Command(
         goto="researcher",
         update={"researcher_messages": messages, "raw_notes": raw_notes},
