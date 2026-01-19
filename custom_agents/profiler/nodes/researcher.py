@@ -199,7 +199,10 @@ async def researcher_tools(
         return Command(goto="compress_research", update={"raw_notes": raw_notes})
 
     # Execute tools
-    from services.search_clients import get_perplexity_client, get_tavily_client
+    from profiler.services.search_service import (
+        get_perplexity_client,
+        get_tavily_client,
+    )
 
     tavily_client = get_tavily_client()
     perplexity_client = get_perplexity_client()

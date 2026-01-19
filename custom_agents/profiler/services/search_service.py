@@ -28,6 +28,19 @@ def get_tavily_client():
         return None
 
 
+def get_perplexity_client():
+    """Get Perplexity client for deep research.
+
+    Returns:
+        dict with api_key if available, None otherwise
+    """
+    api_key = os.getenv("PERPLEXITY_API_KEY")
+    if not api_key:
+        return None
+
+    return {"api_key": api_key, "model": "llama-3.1-sonar-large-128k-online"}
+
+
 def get_tool_definitions(tavily_client):
     """Get LangChain tool definitions for search.
 

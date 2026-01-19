@@ -865,7 +865,7 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
         url_summaries = []
         if urls:
             logger.info(f"Found {len(urls)} URL(s) in query, scraping for context...")
-            from services.search_clients import get_tavily_client
+            from profiler.services.search_service import get_tavily_client
 
             tavily_client = get_tavily_client()
             if tavily_client:
