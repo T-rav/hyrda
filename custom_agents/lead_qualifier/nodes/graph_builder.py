@@ -26,11 +26,11 @@ def build_lead_qualifier() -> StateGraph:
     5. Synthesize Qualification (final score + summary)
     """
     # Create graph with input/output schemas
+    # Note: config_schema removed - we use from_runnable_config() in nodes instead
     workflow = StateGraph(
         QualifierState,
         input_schema=QualifierInput,
         output_schema=QualifierOutput,
-        config_schema=QualifierConfiguration,
     )
 
     # Add nodes
