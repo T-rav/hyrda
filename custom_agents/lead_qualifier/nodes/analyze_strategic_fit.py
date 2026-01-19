@@ -21,7 +21,7 @@ async def analyze_strategic_fit(
     logger.info("Analyzing strategic fit...")
 
     # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration.from_runnable_config(config)
+    configuration = QualifierConfiguration()
 
     company = state.get("company", {})
     contact = state.get("contact", {})

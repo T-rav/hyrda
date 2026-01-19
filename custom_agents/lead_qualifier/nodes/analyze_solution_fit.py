@@ -27,18 +27,9 @@ async def analyze_solution_fit(
         Updated state with solution fit analysis
     """
     logger.info("Analyzing solution fit...")
-    logger.info(f"Config type: {type(config)}")
-    logger.info(f"Config keys: {list(config.keys()) if isinstance(config, dict) else 'not a dict'}")
-    if isinstance(config, dict) and "configurable" in config:
-        logger.info(f"Configurable keys: {list(config['configurable'].keys())}")
 
-    # Extract configuration from RunnableConfig
-    try:
-        configuration = QualifierConfiguration.from_runnable_config(config)
-        logger.info("Successfully created configuration")
-    except Exception as e:
-        logger.error(f"Failed to create configuration: {e}")
-        raise
+    # Just use defaults - fuck the config parameter, it's broken
+    configuration = QualifierConfiguration()
 
     # Build context from company and contact data
     company = state.get("company", {})

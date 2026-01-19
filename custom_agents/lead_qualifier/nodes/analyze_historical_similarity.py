@@ -21,7 +21,7 @@ async def analyze_historical_similarity(
     logger.info("Analyzing historical similarity...")
 
     # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration.from_runnable_config(config)
+    configuration = QualifierConfiguration()
 
     company = state.get("company", {})
     similar_clients = state.get("similar_clients", [])

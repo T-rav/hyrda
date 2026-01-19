@@ -21,7 +21,7 @@ async def synthesize_qualification(
     logger.info("Synthesizing qualification assessment...")
 
     # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration.from_runnable_config(config)
+    configuration = QualifierConfiguration()
 
     # Calculate total score
     solution_fit = state.get("solution_fit_score", 0)
