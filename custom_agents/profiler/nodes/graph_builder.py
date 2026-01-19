@@ -91,10 +91,14 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Flow
     supervisor_builder.add_edge(START, "prepare_research")
     supervisor_builder.add_edge("prepare_research", "supervisor")
-    # When supervisor returns Send(), LangGraph automatically routes to research_assistant (parallel)
+    # supervisor returns either:
+    #   - {"send": [Send(...), ...]} for dynamic parallel fan-out
+    #   - {} empty dict when no more work
+    # In both cases, after Send() processing (or immediately if empty), flow continues to aggregator
+    supervisor_builder.add_edge("supervisor", "aggregator")
     # All research_assistants automatically route to aggregator after parallel execution
     supervisor_builder.add_edge("research_assistant", "aggregator")
-    # aggregator uses Command to route to supervisor or __end__
+    # aggregator uses Command(goto=...) to route to supervisor (loop) or __end__
 
     # Compile without checkpointer - LangGraph API handles persistence automatically
     return supervisor_builder.compile()

@@ -8,6 +8,7 @@ import re
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.constants import Send
+from langgraph.types import Command
 
 from profiler.configuration import ProfileConfiguration
 from profiler.state import SupervisorState
@@ -78,7 +79,7 @@ def parse_research_brief_into_groups(
     return question_groups
 
 
-def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | dict:
+def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
     """Supervisor node - parses brief and sends parallel research tasks.
 
     Args:
@@ -86,7 +87,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | d
         config: Runtime configuration
 
     Returns:
-        List of Send() commands to launch parallel researchers, or dict to update state
+        Dict with "send" key containing Send() list for parallel execution, or empty dict
 
     """
     configuration = ProfileConfiguration.from_runnable_config(config)
@@ -99,7 +100,7 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | d
     # Validate research_brief exists
     if not research_brief:
         logger.error("research_brief is missing or empty in supervisor state")
-        return {"error": "research brief not found"}
+        return {}
 
     logger.info(f"Supervisor iteration {research_iterations}")
 
@@ -108,20 +109,20 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | d
         logger.info(
             f"Max supervisor iterations ({configuration.max_researcher_iterations}) reached"
         )
-        return {}  # End - no more work
+        return {}
 
     # Get question groups (prepared by prepare_research node)
     all_question_groups = state.get("all_question_groups", [])
     if not all_question_groups:
         logger.error("all_question_groups not found - prepare_research should have set this")
-        return {}  # End
+        return {}
 
     # Select question groups for this iteration
     remaining_groups = [g for g in all_question_groups if g not in completed_groups]
 
     if not remaining_groups:
         logger.info("All question groups completed")
-        return {}  # End
+        return {}
 
     # Take up to max_concurrent_research_units groups for this iteration
     groups_this_iteration = remaining_groups[: configuration.max_concurrent_research_units]
@@ -147,4 +148,4 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | d
 
     logger.info(f"Dispatching {len(sends)} parallel Send() commands to research_assistant")
 
-    return sends
+    return {"send": sends}
