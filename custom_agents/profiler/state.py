@@ -158,6 +158,14 @@ class ResearcherOutputState(TypedDict):
     raw_notes: list[str]
 
 
+# Output state from supervisor subgraph
+class SupervisorOutputState(TypedDict):
+    """Output from supervisor subgraph passed back to main profile agent."""
+
+    notes: list[str]  # All research notes
+    raw_notes: list[str]  # All raw research data
+
+
 # Input state for main graph - only query is required
 class ProfileAgentInputState(TypedDict):
     """Input to the profile agent graph.

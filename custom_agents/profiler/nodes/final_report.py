@@ -57,9 +57,9 @@ async def final_report_generation(
         return {"final_report": "No research findings available to generate report."}
 
     # Use LangChain with Gemini or OpenAI
-    from config.settings import Settings
+    from profiler.services.settings_service import get_settings
 
-    settings = Settings()
+    settings = get_settings()
 
     # Check if Gemini is enabled for final report generation
     llm = None

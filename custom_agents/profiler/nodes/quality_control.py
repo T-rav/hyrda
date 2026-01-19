@@ -11,7 +11,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from profiler.state import ProfileAgentState
-from config.settings import Settings
+from profiler.services.settings_service import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ async def quality_control_node(
 
     # Initialize LLM judge
     try:
-        settings = Settings()
+        settings = get_settings()
         judge_llm = ChatOpenAI(
             model="gpt-4o",  # Use GPT-4o for accurate validation (no hallucinations)
             api_key=settings.llm.api_key,

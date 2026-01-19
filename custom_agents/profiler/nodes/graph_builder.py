@@ -31,6 +31,7 @@ from profiler.state import (
     ProfileAgentState,
     ResearcherOutputState,
     ResearcherState,
+    SupervisorOutputState,
     SupervisorState,
 )
 
@@ -80,7 +81,9 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
         Compiled supervisor subgraph
 
     """
-    supervisor_builder = StateGraph(SupervisorState)
+    supervisor_builder = StateGraph(
+        SupervisorState, output_schema=SupervisorOutputState
+    )
 
     # Add nodes
     supervisor_builder.add_node("prepare_research", prepare_research)
@@ -91,11 +94,11 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Flow
     supervisor_builder.add_edge(START, "prepare_research")
     supervisor_builder.add_edge("prepare_research", "supervisor")
-    # supervisor returns {"send": [Send(...), ...]} for parallel fan-out OR {} when no work
-    # LangGraph waits for all Send() tasks to complete before following this edge
-    supervisor_builder.add_edge("supervisor", "aggregator")
-    # Each research_assistant routes to aggregator after completion
+    # When supervisor dispatches Send(), all research_assistants complete before continuing
+    # Each research_assistant routes to aggregator
     supervisor_builder.add_edge("research_assistant", "aggregator")
+    # supervisor also has edge to aggregator for when no Send() is dispatched
+    supervisor_builder.add_edge("supervisor", "aggregator")
     # aggregator uses Command(goto=...) to route to supervisor (loop) or __end__
 
     # Compile without checkpointer - LangGraph API handles persistence automatically

@@ -38,4 +38,5 @@ def prepare_research(state: SupervisorState, config: RunnableConfig) -> dict:
         "all_question_groups": all_question_groups,
         "research_iterations": 0,
         "completed_groups": [],
+        "prepare_research_debug": f"prepared_{len(all_question_groups)}_groups",
     }

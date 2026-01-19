@@ -36,10 +36,12 @@ def aggregator(state: SupervisorState, config: RunnableConfig) -> Command[str]:
     completed_groups = state.get("completed_groups", [])
     research_iterations = state.get("research_iterations", 0)
 
+    logger.info(f"Aggregator called! State keys: {list(state.keys())}")
     logger.info(
         f"Aggregator: {len(completed_groups)}/{len(all_question_groups)} groups completed, "
         f"{len(notes)} research notes collected"
     )
+    logger.info(f"All question groups: {len(all_question_groups)}")
 
     # Determine if we should continue
     remaining_groups = [g for g in all_question_groups if g not in completed_groups]

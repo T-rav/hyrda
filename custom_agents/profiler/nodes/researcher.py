@@ -51,9 +51,9 @@ async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[
     # Use LangChain ChatOpenAI directly
     from langchain_openai import ChatOpenAI
 
-    from config.settings import Settings
+    from profiler.services.settings_service import get_settings
 
-    settings = Settings()
+    settings = get_settings()
     llm = ChatOpenAI(
         model=settings.llm.model,
         api_key=settings.llm.api_key,
