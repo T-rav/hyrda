@@ -150,6 +150,8 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
                 "research_topic": question_group,
                 "profile_type": profile_type,
                 "focus_area": focus_area,
+                "researcher_messages": [],  # Initialize empty message list
+                "tool_call_iterations": 0,  # Initialize iteration counter
             },
             config,
         )

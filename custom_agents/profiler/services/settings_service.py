@@ -29,12 +29,22 @@ class SearchSettings:
         self.perplexity_api_key = os.getenv("PERPLEXITY_API_KEY", "")
 
 
+class GeminiSettings:
+    """Gemini configuration from environment."""
+
+    def __init__(self):
+        self.enabled = os.getenv("GEMINI_ENABLED", "false").lower() == "true"
+        self.api_key = os.getenv("GEMINI_API_KEY", "")
+        self.model = os.getenv("GEMINI_MODEL", "gemini-pro")
+
+
 class Settings:
     """Lightweight settings for custom agents."""
 
     def __init__(self):
         self.llm = LLMSettings()
         self.search = SearchSettings()
+        self.gemini = GeminiSettings()
 
 
 def get_settings() -> Settings:

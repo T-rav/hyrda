@@ -2,11 +2,17 @@
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
 # Add custom_agents to path
 sys.path.insert(0, str(Path(__file__).parent / "custom_agents"))
+
+# Set dummy API keys for testing (tools won't actually work but graph will execute)
+os.environ.setdefault("OPENAI_API_KEY", "test-key")
+os.environ.setdefault("LLM_API_KEY", "test-key")
+os.environ.setdefault("TAVILY_API_KEY", "test-key")
 
 # Setup logging to see all debug output
 logging.basicConfig(
