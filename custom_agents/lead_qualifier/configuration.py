@@ -3,10 +3,13 @@
 import os
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class QualifierConfiguration(BaseModel):
+    """Configuration for the Lead Qualifier agent."""
+
+    model_config = ConfigDict(extra="ignore")  # Pydantic v2 syntax
     """Configuration for the Lead Qualifier agent.
 
     Attributes:
@@ -49,11 +52,6 @@ class QualifierConfiguration(BaseModel):
     # Search configuration
     vector_search_limit: int = 10
     similarity_threshold: float = 0.7
-
-    class Config:
-        """Pydantic config."""
-
-        extra = "ignore"  # Ignore extra fields from LangGraph
 
     @classmethod
     def from_runnable_config(
