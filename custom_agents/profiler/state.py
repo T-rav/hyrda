@@ -12,6 +12,19 @@ from pydantic import BaseModel
 from typing_extensions import TypedDict
 
 
+def add_lists(left: list | None, right: list | None) -> list:
+    """Reducer to concatenate lists from parallel executions."""
+    if left is None:
+        left = []
+    if right is None:
+        right = []
+    if not isinstance(left, list):
+        left = [left]
+    if not isinstance(right, list):
+        right = [right]
+    return left + right
+
+
 # Structured output models for research workflow
 class ConductResearch(BaseModel):
     """Tool for supervisor to delegate research to sub-researchers."""
@@ -106,13 +119,18 @@ class SupervisorState(TypedDict, total=False):
 
     supervisor_messages: list[MessageLikeRepresentation]
     research_brief: str
-    notes: list[str]
+    notes: Annotated[list[str], add_lists]  # Accumulate from parallel researchers
     research_iterations: int
-    raw_notes: list[str]
+    raw_notes: Annotated[list[str], add_lists]  # Accumulate from parallel researchers
     profile_type: str
     focus_area: str
     all_question_groups: list[str]  # All question groups parsed from brief
-    completed_groups: list[str]  # Question groups already researched
+    completed_groups: Annotated[list[str], add_lists]  # Accumulate completed groups
+    # Fields for Send() to research_assistant
+    question_group: str  # Individual question group for a researcher
+    task_id: str  # Unique task identifier
+    # Fields from research_assistant results
+    compressed_research: str  # Result from single research_assistant
 
 
 # Individual researcher state

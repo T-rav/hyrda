@@ -1,18 +1,13 @@
 """Supervisor node for deterministic parallel research workflow.
 
-Parses research brief into question groups and launches parallel researchers
-without LLM tool calling - fully deterministic parallelization.
+Uses LangGraph's Send() pattern to launch parallel researchers.
 """
 
-import asyncio
 import logging
 import re
-from typing import Any
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.graph import END
-from langgraph.graph.state import CompiledStateGraph
-from langgraph.types import Command
+from langgraph.constants import Send
 
 from profiler.configuration import ProfileConfiguration
 from profiler.state import SupervisorState
@@ -83,24 +78,20 @@ def parse_research_brief_into_groups(
     return question_groups
 
 
-async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[str]:
-    """Supervisor node - deterministically launches parallel researchers.
+def supervisor(state: SupervisorState, config: RunnableConfig) -> list[Send] | dict:
+    """Supervisor node - parses brief and sends parallel research tasks.
 
     Args:
         state: Current supervisor state
         config: Runtime configuration
 
     Returns:
-        Command to END
+        List of Send() commands to launch parallel researchers, or dict to update state
 
     """
-    from profiler.nodes.graph_builder import build_researcher_subgraph
-
     configuration = ProfileConfiguration.from_runnable_config(config)
     research_iterations = state.get("research_iterations", 0)
     research_brief = state.get("research_brief", "")
-    notes = list(state.get("notes", []))
-    raw_notes = list(state.get("raw_notes", []))
     profile_type = state.get("profile_type", "company")
     focus_area = state.get("focus_area", "")
     completed_groups = list(state.get("completed_groups", []))
@@ -108,10 +99,7 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
     # Validate research_brief exists
     if not research_brief:
         logger.error("research_brief is missing or empty in supervisor state")
-        return Command(
-            goto=END,
-            update={"final_report": "Error: research brief not found in state"},
-        )
+        return {"error": "research brief not found"}
 
     logger.info(f"Supervisor iteration {research_iterations}")
 
@@ -120,27 +108,20 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         logger.info(
             f"Max supervisor iterations ({configuration.max_researcher_iterations}) reached"
         )
-        return Command(goto=END, update={})
+        return {}  # End - no more work
 
-    # Parse research brief into question groups (only on first iteration)
-    if research_iterations == 0:
-        all_question_groups = parse_research_brief_into_groups(
-            research_brief, max_groups=12
-        )
-        logger.info(f"Total question groups identified: {len(all_question_groups)}")
-    else:
-        # On follow-up iterations, use stored groups
-        all_question_groups = state.get("all_question_groups", [])
-        if not all_question_groups:
-            logger.info("No remaining question groups - research complete")
-            return Command(goto=END, update={})
+    # Get question groups (prepared by prepare_research node)
+    all_question_groups = state.get("all_question_groups", [])
+    if not all_question_groups:
+        logger.error("all_question_groups not found - prepare_research should have set this")
+        return {}  # End
 
     # Select question groups for this iteration
     remaining_groups = [g for g in all_question_groups if g not in completed_groups]
 
     if not remaining_groups:
         logger.info("All question groups completed")
-        return Command(goto=END, update={})
+        return {}  # End
 
     # Take up to max_concurrent_research_units groups for this iteration
     groups_this_iteration = remaining_groups[: configuration.max_concurrent_research_units]
@@ -149,122 +130,21 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[
         f"({len(remaining_groups)} remaining)"
     )
 
-    # Build researcher subgraph
-    researcher_graph = build_researcher_subgraph()
-
-    # Create tasks for parallel execution
-    research_tasks = []
+    # Create Send() commands for parallel execution
+    sends = []
     for idx, question_group in enumerate(groups_this_iteration):
-        task = execute_researcher(
-            researcher_graph,
-            question_group,
-            profile_type,
-            focus_area,
-            f"research_{research_iterations}_{idx}",
-            config,
-        )
-        research_tasks.append(task)
-
-    # Execute in parallel
-    logger.info(f"Launching {len(research_tasks)} researchers in parallel")
-    research_results = await asyncio.gather(*research_tasks)
-
-    # Process results
-    for result in research_results:
-        if result["compressed_research"]:
-            notes.append(result["compressed_research"])
-        if result["raw_notes"]:
-            raw_notes.extend(result["raw_notes"])
-
-    # Mark groups as completed
-    completed_groups.extend(groups_this_iteration)
-
-    # Determine if we should continue
-    remaining_after_this = [g for g in all_question_groups if g not in completed_groups]
-
-    if remaining_after_this and research_iterations + 1 < configuration.max_researcher_iterations:
-        # More groups to process, continue
-        logger.info(
-            f"Completed {len(completed_groups)}/{len(all_question_groups)} groups. "
-            f"Continuing to next iteration."
-        )
-        return Command(
-            goto="supervisor",
-            update={
-                "research_iterations": research_iterations + 1,
-                "notes": notes,
-                "raw_notes": raw_notes,
-                "completed_groups": completed_groups,
-                "all_question_groups": all_question_groups,
-            },
-        )
-    else:
-        # All done
-        logger.info(
-            f"Research complete. Processed {len(completed_groups)} question groups, "
-            f"gathered {len(notes)} research notes."
-        )
-        return Command(
-            goto=END,
-            update={
-                "notes": notes,
-                "raw_notes": raw_notes,
-                "completed_groups": completed_groups,
-            },
+        sends.append(
+            Send(
+                "research_assistant",
+                {
+                    "question_group": question_group,
+                    "profile_type": profile_type,
+                    "focus_area": focus_area,
+                    "task_id": f"research_{research_iterations}_{idx}",
+                },
+            )
         )
 
+    logger.info(f"Dispatching {len(sends)} parallel Send() commands to research_assistant")
 
-async def execute_researcher(
-    researcher_graph: CompiledStateGraph,
-    research_topic: str,
-    profile_type: str,
-    focus_area: str,
-    task_id: str,
-    config: RunnableConfig,
-) -> dict[str, Any]:
-    """Execute a single researcher task.
-
-    Args:
-        researcher_graph: Compiled researcher subgraph
-        research_topic: Research questions for this researcher
-        profile_type: Type of profile
-        focus_area: Optional focus area
-        task_id: Unique task identifier
-        config: Runtime configuration
-
-    Returns:
-        Dict with compressed_research and raw_notes
-
-    """
-    logger.info(f"Researcher {task_id} starting: {research_topic[:100]}...")
-
-    try:
-        # Invoke researcher subgraph
-        result = await researcher_graph.ainvoke(
-            {
-                "research_topic": research_topic,
-                "profile_type": profile_type,
-                "focus_area": focus_area,
-            },
-            config,
-        )
-
-        compressed = result.get("compressed_research", "")
-        raw = result.get("raw_notes", [])
-
-        logger.info(
-            f"Researcher {task_id} completed: "
-            f"{len(compressed)} chars compressed, {len(raw)} raw notes"
-        )
-
-        return {
-            "compressed_research": compressed,
-            "raw_notes": raw,
-        }
-
-    except Exception as e:
-        logger.error(f"Researcher {task_id} failed: {e}")
-        return {
-            "compressed_research": f"Research failed: {str(e)}",
-            "raw_notes": [],
-        }
+    return sends

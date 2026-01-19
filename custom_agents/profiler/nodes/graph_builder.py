@@ -20,6 +20,9 @@ from profiler.nodes.quality_control import (
     quality_control_router,
 )
 from profiler.nodes.research_brief import write_research_brief
+from profiler.nodes.aggregator import aggregator
+from profiler.nodes.prepare_research import prepare_research
+from profiler.nodes.research_assistant import research_assistant
 from profiler.nodes.researcher import researcher, researcher_tools
 from profiler.nodes.supervisor import supervisor
 from profiler.state import (
@@ -70,8 +73,8 @@ def build_researcher_subgraph() -> CompiledStateGraph:
 def build_supervisor_subgraph() -> CompiledStateGraph:
     """Build and compile the supervisor subgraph.
 
-    The supervisor subgraph coordinates multiple researchers in parallel.
-    It deterministically parses the research brief and launches parallel researchers.
+    The supervisor subgraph coordinates multiple researchers in parallel using Send().
+    Flow: prepare_research → supervisor → [research_assistant, ...] → aggregator → supervisor | END
 
     Returns:
         Compiled supervisor subgraph
@@ -79,11 +82,19 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     """
     supervisor_builder = StateGraph(SupervisorState)
 
-    # Add supervisor node
+    # Add nodes
+    supervisor_builder.add_node("prepare_research", prepare_research)
     supervisor_builder.add_node("supervisor", supervisor)
+    supervisor_builder.add_node("research_assistant", research_assistant)
+    supervisor_builder.add_node("aggregator", aggregator)
 
-    # Supervisor controls its own routing (to itself for more iterations or END)
-    supervisor_builder.add_edge(START, "supervisor")
+    # Flow
+    supervisor_builder.add_edge(START, "prepare_research")
+    supervisor_builder.add_edge("prepare_research", "supervisor")
+    # When supervisor returns Send(), LangGraph automatically routes to research_assistant (parallel)
+    # All research_assistants automatically route to aggregator after parallel execution
+    supervisor_builder.add_edge("research_assistant", "aggregator")
+    # aggregator uses Command to route to supervisor or __end__
 
     # Compile without checkpointer - LangGraph API handles persistence automatically
     return supervisor_builder.compile()

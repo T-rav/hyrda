@@ -1,0 +1,64 @@
+"""Aggregator node for collecting parallel research results.
+
+Collects results from parallel research_assistant invocations.
+"""
+
+import logging
+
+from langchain_core.runnables import RunnableConfig
+from langgraph.types import Command
+
+from profiler.configuration import ProfileConfiguration
+from profiler.state import SupervisorState
+
+logger = logging.getLogger(__name__)
+
+
+def aggregator(state: SupervisorState, config: RunnableConfig) -> Command[str]:
+    """Aggregate results from parallel research assistants.
+
+    The reducer has already accumulated notes/raw_notes from all parallel executions.
+    This node just checks progress and decides whether to continue or end.
+
+    Args:
+        state: State with accumulated results from research_assistants
+        config: Runtime configuration
+
+    Returns:
+        Command to continue to supervisor or end
+
+    """
+    configuration = ProfileConfiguration.from_runnable_config(config)
+
+    # Get progress tracking (already updated by reducer)
+    notes = state.get("notes", [])
+    all_question_groups = state.get("all_question_groups", [])
+    completed_groups = state.get("completed_groups", [])
+    research_iterations = state.get("research_iterations", 0)
+
+    logger.info(
+        f"Aggregator: {len(completed_groups)}/{len(all_question_groups)} groups completed, "
+        f"{len(notes)} research notes collected"
+    )
+
+    # Determine if we should continue
+    remaining_groups = [g for g in all_question_groups if g not in completed_groups]
+
+    if remaining_groups and research_iterations + 1 < configuration.max_researcher_iterations:
+        # More work to do, continue to supervisor
+        logger.info(
+            f"{len(remaining_groups)} groups remaining. Continuing to next iteration."
+        )
+        return Command(
+            goto="supervisor",
+            update={
+                "research_iterations": research_iterations + 1,
+            },
+        )
+    else:
+        # All done, end supervision
+        logger.info(
+            f"Research complete. Processed {len(completed_groups)} question groups, "
+            f"gathered {len(notes)} research notes."
+        )
+        return Command(goto="__end__")
