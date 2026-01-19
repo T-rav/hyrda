@@ -74,7 +74,13 @@ class QualifierConfiguration(BaseModel):
 
         # Override from RunnableConfig if provided
         if config and "configurable" in config:
-            # Pydantic will automatically filter extra fields with Config.extra = "ignore"
-            kwargs.update(config["configurable"])
+            configurable = config["configurable"]
+            # Get valid field names from the model
+            valid_fields = set(cls.model_fields.keys())
+            # Only include fields that are actually defined in the model
+            user_config = {
+                k: v for k, v in configurable.items() if k in valid_fields
+            }
+            kwargs.update(user_config)
 
         return cls(**kwargs)
