@@ -28,6 +28,8 @@ async def research_assistant(
         Dict with compressed_research and raw_notes to be aggregated
 
     """
+    logger.info("!!! RESEARCH_ASSISTANT CALLED !!!")
+
     from profiler.nodes.graph_builder import build_researcher_subgraph
 
     question_group = state.get("question_group", "")

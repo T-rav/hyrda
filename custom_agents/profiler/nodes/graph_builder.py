@@ -94,12 +94,12 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     # Flow
     supervisor_builder.add_edge(START, "prepare_research")
     supervisor_builder.add_edge("prepare_research", "supervisor")
-    # When supervisor dispatches Send(), all research_assistants complete before continuing
-    # Each research_assistant routes to aggregator
-    supervisor_builder.add_edge("research_assistant", "aggregator")
-    # supervisor also has edge to aggregator for when no Send() is dispatched
+    # supervisor returns {"send": [...]}, LangGraph dispatches to research_assistant nodes
+    # research_assistant nodes complete and return state (accumulated by reducers)
+    # After ALL Send() tasks complete, supervisor's edge to aggregator is followed
     supervisor_builder.add_edge("supervisor", "aggregator")
-    # aggregator uses Command(goto=...) to route to supervisor (loop) or __end__
+    # NO EDGE from research_assistant - it's invoked via Send() and returns state
+    # aggregator uses Command(goto=...) to route back to supervisor (loop) or __end__
 
     # Compile without checkpointer - LangGraph API handles persistence automatically
     return supervisor_builder.compile()
