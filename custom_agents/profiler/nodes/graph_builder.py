@@ -5,7 +5,6 @@ Builds and compiles the LangGraph workflows for researcher, supervisor, and main
 
 import logging
 
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -22,7 +21,7 @@ from profiler.nodes.quality_control import (
 )
 from profiler.nodes.research_brief import write_research_brief
 from profiler.nodes.researcher import researcher, researcher_tools
-from profiler.nodes.supervisor import supervisor, supervisor_tools
+from profiler.nodes.supervisor import supervisor
 from profiler.state import (
     ProfileAgentInputState,
     ProfileAgentOutputState,
@@ -72,9 +71,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     """Build and compile the supervisor subgraph.
 
     The supervisor subgraph coordinates multiple researchers in parallel.
-    It consists of:
-    - supervisor: Delegates research tasks using ConductResearch tool
-    - supervisor_tools: Executes tool calls and launches researchers
+    It deterministically parses the research brief and launches parallel researchers.
 
     Returns:
         Compiled supervisor subgraph
@@ -82,20 +79,17 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
     """
     supervisor_builder = StateGraph(SupervisorState)
 
-    # Add nodes
+    # Add supervisor node
     supervisor_builder.add_node("supervisor", supervisor)
-    supervisor_builder.add_node("supervisor_tools", supervisor_tools)
 
-    # Add edges
+    # Supervisor controls its own routing (to itself for more iterations or END)
     supervisor_builder.add_edge(START, "supervisor")
 
-    # Compile with increased recursion limit
-    # Supervisor can loop many times for complex research briefs
     # Compile without checkpointer - LangGraph API handles persistence automatically
     return supervisor_builder.compile()
 
 
-def build_profile_researcher(config: dict = None) -> CompiledStateGraph:
+def build_profile_researcher(config: dict | None = None) -> CompiledStateGraph:
     """Build and compile the main profile researcher graph.
 
     The main graph orchestrates the entire deep research process:

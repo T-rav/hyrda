@@ -111,6 +111,8 @@ class SupervisorState(TypedDict, total=False):
     raw_notes: list[str]
     profile_type: str
     focus_area: str
+    all_question_groups: list[str]  # All question groups parsed from brief
+    completed_groups: list[str]  # Question groups already researched
 
 
 # Individual researcher state
