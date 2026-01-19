@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from ..configuration import QualifierConfiguration
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 async def analyze_solution_fit(
-    state: QualifierState, config: QualifierConfiguration
+    state: QualifierState, config: RunnableConfig
 ) -> dict[str, Any]:
     """Analyze how well the company fits 8th Light's service offerings.
 
@@ -26,6 +27,9 @@ async def analyze_solution_fit(
         Updated state with solution fit analysis
     """
     logger.info("Analyzing solution fit...")
+
+    # Extract configuration from RunnableConfig
+    configuration = QualifierConfiguration(**(config.get("configurable", {})))
 
     # Build context from company and contact data
     company = state.get("company", {})
@@ -53,7 +57,7 @@ QUERY/CONTEXT:
 """
 
     # Call LLM for analysis
-    llm = ChatOpenAI(model=config.model, temperature=config.temperature)
+    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
 
     messages = [
         SystemMessage(content=SOLUTION_FIT_PROMPT),

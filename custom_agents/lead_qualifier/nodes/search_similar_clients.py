@@ -3,14 +3,15 @@
 import logging
 from typing import Any
 
-from ..configuration import QualifierConfiguration
+from langchain_core.runnables import RunnableConfig
+
 from ..state import QualifierState
 
 logger = logging.getLogger(__name__)
 
 
 async def search_similar_clients(
-    state: QualifierState, config: QualifierConfiguration
+    state: QualifierState, config: RunnableConfig
 ) -> dict[str, Any]:
     """Search internal knowledge base for similar past clients/projects.
 

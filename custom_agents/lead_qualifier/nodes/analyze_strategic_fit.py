@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from ..configuration import QualifierConfiguration
@@ -14,10 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 async def analyze_strategic_fit(
-    state: QualifierState, config: QualifierConfiguration
+    state: QualifierState, config: RunnableConfig
 ) -> dict[str, Any]:
     """Analyze strategic fit and organizational readiness."""
     logger.info("Analyzing strategic fit...")
+
+    # Extract configuration from RunnableConfig
+    configuration = QualifierConfiguration(**(config.get("configurable", {})))
 
     company = state.get("company", {})
     contact = state.get("contact", {})
@@ -29,7 +33,7 @@ LIFECYCLE STAGE: {contact.get('lifecycle_stage')}
 HUBSPOT SCORE: {contact.get('hubspot_lead_score')}
 """
 
-    llm = ChatOpenAI(model=config.model, temperature=config.temperature)
+    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
     messages = [SystemMessage(content=STRATEGIC_FIT_PROMPT), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 

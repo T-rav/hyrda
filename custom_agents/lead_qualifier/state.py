@@ -1,6 +1,8 @@
 """State definitions for Lead Qualifier agent."""
 
-from typing import Any, Literal, TypedDict
+from typing import Any, Literal
+
+from typing_extensions import TypedDict
 
 
 class CompanyData(TypedDict, total=False):

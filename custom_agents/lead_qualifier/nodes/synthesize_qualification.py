@@ -4,6 +4,7 @@ import logging
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from ..configuration import QualifierConfiguration
@@ -14,10 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 async def synthesize_qualification(
-    state: QualifierState, config: QualifierConfiguration
+    state: QualifierState, config: RunnableConfig
 ) -> dict[str, Any]:
     """Synthesize final qualification score and summary."""
     logger.info("Synthesizing qualification assessment...")
+
+    # Extract configuration from RunnableConfig
+    configuration = QualifierConfiguration(**(config.get("configurable", {})))
 
     # Calculate total score
     solution_fit = state.get("solution_fit_score", 0)
@@ -29,9 +33,9 @@ async def synthesize_qualification(
     qualification_score = min(100, int((total_score / 90) * 100))
 
     # Determine tier
-    if qualification_score >= config.high_tier_threshold:
+    if qualification_score >= configuration.high_tier_threshold:
         fit_tier: Literal["High", "Medium", "Low"] = "High"
-    elif qualification_score >= config.medium_tier_threshold:
+    elif qualification_score >= configuration.medium_tier_threshold:
         fit_tier = "Medium"
     else:
         fit_tier = "Low"
@@ -60,7 +64,7 @@ RECOMMENDED SOLUTIONS: {state.get('recommended_solution', [])}
 RISK FLAGS: {state.get('risk_flags', [])}
 """
 
-    llm = ChatOpenAI(model=config.model, temperature=config.temperature)
+    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
     messages = [SystemMessage(content=prompt_filled), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 

@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 
 from ..configuration import QualifierConfiguration
@@ -14,10 +15,13 @@ logger = logging.getLogger(__name__)
 
 
 async def analyze_historical_similarity(
-    state: QualifierState, config: QualifierConfiguration
+    state: QualifierState, config: RunnableConfig
 ) -> dict[str, Any]:
     """Analyze how closely prospect matches past successful clients."""
     logger.info("Analyzing historical similarity...")
+
+    # Extract configuration from RunnableConfig
+    configuration = QualifierConfiguration(**(config.get("configurable", {})))
 
     company = state.get("company", {})
     similar_clients = state.get("similar_clients", [])
@@ -34,7 +38,7 @@ SIMILAR PAST PROJECTS:
 {_format_list(similar_projects)}
 """
 
-    llm = ChatOpenAI(model=config.model, temperature=config.temperature)
+    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
     messages = [SystemMessage(content=HISTORICAL_SIMILARITY_PROMPT), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 
