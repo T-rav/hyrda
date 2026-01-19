@@ -65,13 +65,19 @@ class QualifierConfiguration(BaseModel):
         Returns:
             QualifierConfiguration instance with merged settings
         """
-        # Simple approach - just return defaults, ignore all RunnableConfig
-        # This works around the langgraph_auth_user issue
-        kwargs = {}
+        # Start with defaults
+        settings = {}
 
-        # Only override from environment
+        # Override with environment variables if present
         if model := os.getenv("LLM_MODEL"):
-            kwargs["model"] = model
+            settings["model"] = model
 
-        # Return instance with defaults (ignore RunnableConfig entirely for now)
-        return cls(**kwargs) if kwargs else cls()
+        # Override with runtime config if present
+        # CRITICAL: Only include keys that are actual model fields
+        if config and "configurable" in config:
+            configurable = config["configurable"]
+            for key, value in configurable.items():
+                if key in cls.model_fields:
+                    settings[key] = value
+
+        return cls(**settings)
