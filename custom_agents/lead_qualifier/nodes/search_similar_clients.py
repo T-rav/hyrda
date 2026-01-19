@@ -36,18 +36,23 @@ async def search_similar_clients(
 
         # Get RAG service URL from environment
         rag_service_url = os.getenv("RAG_SERVICE_URL", "http://localhost:8002")
+        # If URL uses Docker service name, replace with localhost for local dev
+        if "rag-service" in rag_service_url or "rag_service" in rag_service_url:
+            rag_service_url = "http://127.0.0.1:8002"
+            logger.info(f"Using localhost instead of Docker service name: {rag_service_url}")
+
         service_token = os.getenv("BOT_SERVICE_TOKEN", "")
 
         if not service_token:
             logger.warning("BOT_SERVICE_TOKEN not set - using fallback data")
             raise Exception("No service token")
 
-        # Call RAG service to search for similar content
+        # Call RAG service retrieve endpoint to search for similar content
         async with httpx.AsyncClient(timeout=15.0) as http_client:
-            rag_url = f"{rag_service_url}/api/v1/search"
+            rag_url = f"{rag_service_url}/api/v1/retrieve"
             search_payload = {
                 "query": search_query,
-                "limit": 10,
+                "max_chunks": 10,
                 "similarity_threshold": 0.6
             }
 
@@ -56,18 +61,18 @@ async def search_similar_clients(
                 "Content-Type": "application/json"
             }
 
-            logger.info(f"Calling RAG service: {search_query[:80]}...")
+            logger.info(f"Calling RAG service retrieve: {search_query[:80]}...")
             response = await http_client.post(rag_url, json=search_payload, headers=headers)
 
             if response.status_code == 200:
-                results = response.json().get("results", [])
-                logger.info(f"RAG service returned {len(results)} similar documents")
+                chunks = response.json().get("chunks", [])
+                logger.info(f"RAG service returned {len(chunks)} chunks")
 
-                # Extract client/project info from results
-                for result in results[:10]:  # Limit to top 10
-                    score = result.get("similarity", 0)
-                    content = result.get("content", "")
-                    metadata = result.get("metadata", {})
+                # Extract client/project info from chunks
+                for chunk in chunks[:10]:  # Limit to top 10
+                    score = chunk.get("similarity", 0)
+                    content = chunk.get("content", "")
+                    metadata = chunk.get("metadata", {})
                     file_name = metadata.get("file_name", "Unknown Document")
 
                     content_preview = content[:200]
