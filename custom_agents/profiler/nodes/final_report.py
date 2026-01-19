@@ -12,6 +12,7 @@ from langchain_core.runnables import RunnableConfig
 from profiler import prompts
 from profiler.configuration import ProfileConfiguration
 from profiler.state import ProfileAgentState
+from profiler.services.prompt_service import get_prompt_service
 from profiler.utils import (
     create_human_message,
     create_system_message,
@@ -19,7 +20,6 @@ from profiler.utils import (
     is_token_limit_exceeded,
     remove_up_to_last_ai_message,
 )
-from services.prompt_service import get_prompt_service
 
 logger = logging.getLogger(__name__)
 
@@ -121,33 +121,20 @@ async def final_report_generation(
     else:
         focus_guidance = ""
 
-    # Get prompt from Langfuse (required - no local fallback)
-    # Select prompt based on profile type
-    prompt_service = get_prompt_service()
-    if not prompt_service:
-        raise RuntimeError("PromptService not available - required for profile agent")
-
+    # Try to get prompt from Langfuse, fall back to local prompts
     if profile_type == "employee":
         prompt_name = "Profiler/Person/FinalReport"
+        local_fallback = prompts.employee_final_report_generation_prompt_template
     else:
         prompt_name = "CompanyProfiler/Final_Report_Generation"
+        local_fallback = prompts.final_report_generation_prompt
 
-    logger.info(f"Fetching {profile_type} prompt from Langfuse: {prompt_name}")
-    prompt_template = prompt_service.get_custom_prompt(
+    # Try Langfuse first
+    prompt_service = get_prompt_service()
+    prompt_template = prompt_service.get_prompt(
         template_name=prompt_name,
-        fallback=None,  # Force error if Langfuse prompt not found
+        fallback=local_fallback,
     )
-
-    if not prompt_template:
-        logger.error(
-            f"Langfuse prompt '{prompt_name}' not found. "
-            "Check: (1) Prompt exists in Langfuse, (2) Prompt is published/active, "
-            "(3) Langfuse settings are correct (LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST)"
-        )
-        raise RuntimeError(
-            f"Langfuse prompt '{prompt_name}' not found. "
-            "Profile agent requires Langfuse prompts - local fallbacks are not allowed."
-        )
 
     system_prompt = prompt_template.format(
         profile_type=profile_type,
