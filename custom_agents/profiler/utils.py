@@ -131,7 +131,7 @@ async def search_tool(
         List of search tools (always includes web_search/scrape_url, adds deep_research if enabled)
 
     """
-    from services.search_clients import get_tavily_client, get_tool_definitions
+    from profiler.services.search_service import get_tavily_client, get_tool_definitions
 
     tavily_client = get_tavily_client()
 
