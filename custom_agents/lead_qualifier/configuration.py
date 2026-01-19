@@ -3,13 +3,10 @@
 import os
 
 from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 
 class QualifierConfiguration(BaseModel):
-    """Configuration for the Lead Qualifier agent."""
-
-    model_config = ConfigDict(extra="ignore")  # Pydantic v2 syntax
     """Configuration for the Lead Qualifier agent.
 
     Attributes:
