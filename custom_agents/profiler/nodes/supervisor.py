@@ -175,6 +175,10 @@ async def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
         compressed = result.get("compressed_research", "")
         raw = result.get("raw_notes", [])
 
+        logger.info(f"Task {idx} result: compressed={len(compressed)} chars, raw_notes={len(raw)} items")
+        if raw:
+            logger.info(f"Raw notes sample: {raw[0][:200] if raw else 'empty'}...")
+
         if compressed:
             all_notes.append(compressed)
         if raw:

@@ -34,6 +34,9 @@ async def compress_research(state: ResearcherState, config: RunnableConfig) -> d
     logger.info(
         f"Preserving full research notes for: {research_topic[:50]}... (no compression)"
     )
+    logger.info(f"Compression input: {len(messages)} messages, {len(raw_notes)} raw_notes")
+    if raw_notes:
+        logger.info(f"First raw note sample: {raw_notes[0][:200]}...")
 
     # Extract tool outputs from messages (the actual research findings)
     research_content = []
