@@ -65,7 +65,7 @@ class QualifierConfiguration(BaseModel):
         Returns:
             QualifierConfiguration instance with merged settings
         """
-        # Start with defaults
+        # Start with defaults - use model_validate to leverage ConfigDict(extra="ignore")
         kwargs = {}
 
         # Override from environment
@@ -74,13 +74,7 @@ class QualifierConfiguration(BaseModel):
 
         # Override from RunnableConfig if provided
         if config and "configurable" in config:
-            configurable = config["configurable"]
-            # Get valid field names from the model
-            valid_fields = set(cls.model_fields.keys())
-            # Only include fields that are actually defined in the model
-            user_config = {
-                k: v for k, v in configurable.items() if k in valid_fields
-            }
-            kwargs.update(user_config)
+            kwargs.update(config["configurable"])
 
-        return cls(**kwargs)
+        # Use model_validate which respects ConfigDict(extra="ignore")
+        return cls.model_validate(kwargs)
