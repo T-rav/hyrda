@@ -29,7 +29,7 @@ async def analyze_solution_fit(
     logger.info("Analyzing solution fit...")
 
     # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration(**(config.get("configurable", {})))
+    configuration = QualifierConfiguration.from_runnable_config(config)
 
     # Build context from company and contact data
     company = state.get("company", {})

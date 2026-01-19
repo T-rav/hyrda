@@ -1,6 +1,9 @@
 """Configuration for Lead Qualifier agent."""
 
+import os
 from dataclasses import dataclass, field
+
+from langchain_core.runnables import RunnableConfig
 
 
 @dataclass(kw_only=True)
@@ -47,3 +50,35 @@ class QualifierConfiguration:
     # Search configuration
     vector_search_limit: int = 10
     similarity_threshold: float = 0.7
+
+    @classmethod
+    def from_runnable_config(
+        cls, config: RunnableConfig | None = None
+    ) -> "QualifierConfiguration":
+        """Load configuration from environment variables or RunnableConfig.
+
+        Args:
+            config: Optional RunnableConfig from LangGraph
+
+        Returns:
+            QualifierConfiguration instance with merged settings
+        """
+        # Start with defaults
+        kwargs = {}
+
+        # Override from environment
+        if model := os.getenv("LLM_MODEL"):
+            kwargs["model"] = model
+
+        # Override from RunnableConfig if provided
+        if config and "configurable" in config:
+            configurable = config["configurable"]
+            # Filter out internal LangGraph keys
+            user_config = {
+                k: v
+                for k, v in configurable.items()
+                if not k.startswith("__") and not k.startswith("_")
+            }
+            kwargs.update(user_config)
+
+        return cls(**kwargs)
