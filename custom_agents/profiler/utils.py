@@ -336,9 +336,9 @@ async def format_research_context(
 
         from langchain_openai import ChatOpenAI
 
-        from config.settings import Settings
+        from profiler.services.settings_service import get_settings
 
-        settings = Settings()
+        settings = get_settings()
 
         # Identify premium sources (deep research from Perplexity, internal knowledge base)
         deep_research_indices = []
@@ -749,11 +749,11 @@ async def detect_profile_type(query: str, llm_service: Any = None) -> str:
 
     from langchain_openai import ChatOpenAI
 
-    from config.settings import Settings
+    from profiler.services.settings_service import get_settings
 
     # Create LLM service if not provided
     if llm_service is None:
-        settings = Settings()
+        settings = get_settings()
         llm_service = ChatOpenAI(
             model=settings.llm.model,
             api_key=settings.llm.api_key,
@@ -853,10 +853,10 @@ async def extract_focus_area(query: str, llm_service: Any = None) -> str:
 
     from langchain_openai import ChatOpenAI
 
-    from config.settings import Settings
+    from profiler.services.settings_service import get_settings
 
     try:
-        settings = Settings()
+        settings = get_settings()
 
         # Step 1: Extract and scrape URLs from query
         url_pattern = re.compile(r"https?://[^\s]+")
