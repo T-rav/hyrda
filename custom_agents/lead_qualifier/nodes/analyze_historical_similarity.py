@@ -20,8 +20,12 @@ async def analyze_historical_similarity(
     """Analyze how closely prospect matches past successful clients."""
     logger.info("Analyzing historical similarity...")
 
-    # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration()
+    # Load configuration from env/runtime config
+    configuration = QualifierConfiguration.from_runnable_config(config)
+
+    # Load LLM settings
+    from config.settings import LLMSettings
+    llm_settings = LLMSettings()
 
     company = state.get("company", {})
     similar_clients = state.get("similar_clients", [])
@@ -38,7 +42,11 @@ SIMILAR PAST PROJECTS:
 {_format_list(similar_projects)}
 """
 
-    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
+    llm = ChatOpenAI(  # type: ignore[call-arg]
+        model=configuration.model,
+        temperature=configuration.temperature,
+        api_key=llm_settings.api_key.get_secret_value(),
+    )
     messages = [SystemMessage(content=HISTORICAL_SIMILARITY_PROMPT), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 

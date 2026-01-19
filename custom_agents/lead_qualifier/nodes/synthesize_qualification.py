@@ -20,8 +20,12 @@ async def synthesize_qualification(
     """Synthesize final qualification score and summary."""
     logger.info("Synthesizing qualification assessment...")
 
-    # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration()
+    # Load configuration from env/runtime config
+    configuration = QualifierConfiguration.from_runnable_config(config)
+
+    # Load LLM settings
+    from config.settings import LLMSettings
+    llm_settings = LLMSettings()
 
     # Calculate total score
     solution_fit = state.get("solution_fit_score", 0)
@@ -64,7 +68,11 @@ RECOMMENDED SOLUTIONS: {state.get('recommended_solution', [])}
 RISK FLAGS: {state.get('risk_flags', [])}
 """
 
-    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
+    llm = ChatOpenAI(  # type: ignore[call-arg]
+        model=configuration.model,
+        temperature=configuration.temperature,
+        api_key=llm_settings.api_key.get_secret_value(),
+    )
     messages = [SystemMessage(content=prompt_filled), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 

@@ -28,8 +28,12 @@ async def analyze_solution_fit(
     """
     logger.info("Analyzing solution fit...")
 
-    # Just use defaults - fuck the config parameter, it's broken
-    configuration = QualifierConfiguration()
+    # Load configuration from env/runtime config
+    configuration = QualifierConfiguration.from_runnable_config(config)
+
+    # Load LLM settings
+    from config.settings import LLMSettings
+    llm_settings = LLMSettings()
 
     # Build context from company and contact data
     company = state.get("company", {})
@@ -57,7 +61,11 @@ QUERY/CONTEXT:
 """
 
     # Call LLM for analysis
-    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
+    llm = ChatOpenAI(  # type: ignore[call-arg]
+        model=configuration.model,
+        temperature=configuration.temperature,
+        api_key=llm_settings.api_key.get_secret_value(),
+    )
 
     messages = [
         SystemMessage(content=SOLUTION_FIT_PROMPT),

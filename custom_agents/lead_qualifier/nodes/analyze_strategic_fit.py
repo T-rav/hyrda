@@ -20,8 +20,12 @@ async def analyze_strategic_fit(
     """Analyze strategic fit and organizational readiness."""
     logger.info("Analyzing strategic fit...")
 
-    # Extract configuration from RunnableConfig
-    configuration = QualifierConfiguration()
+    # Load configuration from env/runtime config
+    configuration = QualifierConfiguration.from_runnable_config(config)
+
+    # Load LLM settings
+    from config.settings import LLMSettings
+    llm_settings = LLMSettings()
 
     company = state.get("company", {})
     contact = state.get("contact", {})
@@ -33,7 +37,11 @@ LIFECYCLE STAGE: {contact.get('lifecycle_stage')}
 HUBSPOT SCORE: {contact.get('hubspot_lead_score')}
 """
 
-    llm = ChatOpenAI(model=configuration.model, temperature=configuration.temperature)
+    llm = ChatOpenAI(  # type: ignore[call-arg]
+        model=configuration.model,
+        temperature=configuration.temperature,
+        api_key=llm_settings.api_key.get_secret_value(),
+    )
     messages = [SystemMessage(content=STRATEGIC_FIT_PROMPT), HumanMessage(content=context)]
     response = await llm.ainvoke(messages)
 
