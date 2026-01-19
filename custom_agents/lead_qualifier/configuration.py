@@ -1,13 +1,12 @@
 """Configuration for Lead Qualifier agent."""
 
 import os
-from dataclasses import dataclass, field
 
 from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, Field
 
 
-@dataclass(kw_only=True)
-class QualifierConfiguration:
+class QualifierConfiguration(BaseModel):
     """Configuration for the Lead Qualifier agent.
 
     Attributes:
@@ -35,7 +34,7 @@ class QualifierConfiguration:
     medium_tier_threshold: int = 50
 
     # Service categories (8th Light offerings)
-    service_categories: list[str] = field(
+    service_categories: list[str] = Field(
         default_factory=lambda: [
             "Platform Modernization",
             "Custom Product Development",
@@ -50,6 +49,11 @@ class QualifierConfiguration:
     # Search configuration
     vector_search_limit: int = 10
     similarity_threshold: float = 0.7
+
+    class Config:
+        """Pydantic config."""
+
+        extra = "ignore"  # Ignore extra fields from LangGraph
 
     @classmethod
     def from_runnable_config(
@@ -72,15 +76,7 @@ class QualifierConfiguration:
 
         # Override from RunnableConfig if provided
         if config and "configurable" in config:
-            configurable = config["configurable"]
-            # Filter out internal LangGraph keys
-            user_config = {
-                k: v
-                for k, v in configurable.items()
-                if not k.startswith("__")
-                and not k.startswith("_")
-                and not k.startswith("langgraph")
-            }
-            kwargs.update(user_config)
+            # Pydantic will automatically filter extra fields with Config.extra = "ignore"
+            kwargs.update(config["configurable"])
 
         return cls(**kwargs)
