@@ -32,6 +32,7 @@ def aggregator(state: SupervisorState, config: RunnableConfig) -> Command[str]:
 
     # Get progress tracking (already updated by reducer)
     notes = state.get("notes", [])
+    raw_notes = state.get("raw_notes", [])
     all_question_groups = state.get("all_question_groups", [])
     completed_groups = state.get("completed_groups", [])
     research_iterations = state.get("research_iterations", 0)
@@ -58,9 +59,16 @@ def aggregator(state: SupervisorState, config: RunnableConfig) -> Command[str]:
             },
         )
     else:
-        # All done, end supervision
+        # All done, end supervision - return notes and raw_notes to parent graph
         logger.info(
             f"Research complete. Processed {len(completed_groups)} question groups, "
             f"gathered {len(notes)} research notes."
         )
-        return Command(goto="__end__")
+        # Return the accumulated research data to parent graph via output schema
+        return Command(
+            goto="__end__",
+            update={
+                "notes": notes,
+                "raw_notes": raw_notes,
+            }
+        )
