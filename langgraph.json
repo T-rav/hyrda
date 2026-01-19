@@ -1,12 +1,31 @@
 {
+  "dependencies": [".", "custom_agents"],
   "graphs": {
-    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher",
-    "meddpicc_coach": "./bot/agents/meddpicc_coach/meddpicc_coach.py:meddpicc_coach"
+    "profile": {
+      "graph": "custom_agents.profiler.nodes.graph_builder:build_profile_researcher",
+      "metadata": {
+        "display_name": "Company Profile",
+        "description": "Generate comprehensive company profiles through deep research (supports specific focus areas like 'AI needs', 'DevOps practices', etc.)",
+        "aliases": ["-profile", "profile", "company profile"]
+      }
+    },
+    "meddic": {
+      "graph": "custom_agents.meddpicc_coach.nodes.graph_builder:build_meddpicc_coach",
+      "metadata": {
+        "display_name": "MEDDIC Coach",
+        "description": "MEDDPICC sales qualification and coaching - transforms sales notes into structured analysis with coaching insights",
+        "aliases": ["meddic", "medic", "meddpicc", "deal analysis"]
+      }
+    },
+    "lead_qualifier": {
+      "graph": "custom_agents.lead_qualifier.nodes.graph_builder:build_lead_qualifier",
+      "metadata": {
+        "display_name": "Lead Qualifier",
+        "description": "Score and qualify HubSpot leads based on Solution Fit (0-40), Strategic Fit (0-25), and Historical Similarity (0-25)",
+        "aliases": ["lead_qualifier", "qualifier", "qualify", "score lead"]
+      }
+    }
   },
   "env": ".env",
-  "dependencies": [
-    "./bot",
-    "langchain-google-genai>=2.0.0"
-  ],
   "python_version": "3.11"
 }
