@@ -1,12 +1,11 @@
 """Configuration for Lead Qualifier agent."""
 
 import os
-
-from langchain_core.runnables import RunnableConfig
-from pydantic import BaseModel, Field
+from dataclasses import dataclass, field
 
 
-class QualifierConfiguration(BaseModel):
+@dataclass
+class QualifierConfiguration:
     """Configuration for the Lead Qualifier agent.
 
     Attributes:
@@ -34,7 +33,7 @@ class QualifierConfiguration(BaseModel):
     medium_tier_threshold: int = 50
 
     # Service categories (8th Light offerings)
-    service_categories: list[str] = Field(
+    service_categories: list[str] = field(
         default_factory=lambda: [
             "Platform Modernization",
             "Custom Product Development",
@@ -49,32 +48,3 @@ class QualifierConfiguration(BaseModel):
     # Search configuration
     vector_search_limit: int = 10
     similarity_threshold: float = 0.7
-
-    @classmethod
-    def from_runnable_config(
-        cls, config: RunnableConfig | None = None
-    ) -> "QualifierConfiguration":
-        """Load configuration from environment variables or RunnableConfig.
-
-        Args:
-            config: Optional RunnableConfig from LangGraph
-
-        Returns:
-            QualifierConfiguration instance with merged settings
-        """
-        # Start with defaults
-        settings = {}
-
-        # Override with environment variables if present
-        if model := os.getenv("LLM_MODEL"):
-            settings["model"] = model
-
-        # Override with runtime config if present
-        # CRITICAL: Only include keys that are actual model fields
-        if config and "configurable" in config:
-            configurable = config["configurable"]
-            for key, value in configurable.items():
-                if key in cls.model_fields:
-                    settings[key] = value
-
-        return cls(**settings)
