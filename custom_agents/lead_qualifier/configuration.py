@@ -77,7 +77,9 @@ class QualifierConfiguration:
             user_config = {
                 k: v
                 for k, v in configurable.items()
-                if not k.startswith("__") and not k.startswith("_")
+                if not k.startswith("__")
+                and not k.startswith("_")
+                and not k.startswith("langgraph")
             }
             kwargs.update(user_config)
 
