@@ -97,10 +97,13 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
     focus_area = state.get("focus_area", "")
     completed_groups = list(state.get("completed_groups", []))
 
+    logger.info(f"Supervisor called with research_brief length: {len(research_brief)}")
+    logger.info(f"Supervisor state keys: {list(state.keys())}")
+
     # Validate research_brief exists
     if not research_brief:
         logger.error("research_brief is missing or empty in supervisor state")
-        return {}
+        return {"send": [], "supervisor_debug": "no_research_brief"}
 
     logger.info(f"Supervisor iteration {research_iterations}")
 
@@ -109,20 +112,24 @@ def supervisor(state: SupervisorState, config: RunnableConfig) -> dict:
         logger.info(
             f"Max supervisor iterations ({configuration.max_researcher_iterations}) reached"
         )
-        return {}
+        return {"send": [], "supervisor_debug": "max_iterations_reached"}
 
     # Get question groups (prepared by prepare_research node)
     all_question_groups = state.get("all_question_groups", [])
+    logger.info(f"Supervisor found {len(all_question_groups)} question groups")
+    logger.info(f"Completed groups: {len(completed_groups)}")
+
     if not all_question_groups:
         logger.error("all_question_groups not found - prepare_research should have set this")
-        return {}
+        return {"send": [], "supervisor_debug": "no_question_groups"}
 
     # Select question groups for this iteration
     remaining_groups = [g for g in all_question_groups if g not in completed_groups]
+    logger.info(f"Remaining groups: {len(remaining_groups)}")
 
     if not remaining_groups:
         logger.info("All question groups completed")
-        return {}
+        return {"send": [], "supervisor_debug": "no_remaining_groups"}
 
     # Take up to max_concurrent_research_units groups for this iteration
     groups_this_iteration = remaining_groups[: configuration.max_concurrent_research_units]
