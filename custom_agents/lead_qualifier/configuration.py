@@ -65,16 +65,13 @@ class QualifierConfiguration(BaseModel):
         Returns:
             QualifierConfiguration instance with merged settings
         """
-        # Start with defaults - use model_validate to leverage ConfigDict(extra="ignore")
+        # Simple approach - just return defaults, ignore all RunnableConfig
+        # This works around the langgraph_auth_user issue
         kwargs = {}
 
-        # Override from environment
+        # Only override from environment
         if model := os.getenv("LLM_MODEL"):
             kwargs["model"] = model
 
-        # Override from RunnableConfig if provided
-        if config and "configurable" in config:
-            kwargs.update(config["configurable"])
-
-        # Use model_validate which respects ConfigDict(extra="ignore")
-        return cls.model_validate(kwargs)
+        # Return instance with defaults (ignore RunnableConfig entirely for now)
+        return cls(**kwargs) if kwargs else cls()
