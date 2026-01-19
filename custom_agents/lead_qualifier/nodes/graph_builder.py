@@ -4,7 +4,6 @@ import logging
 
 from langgraph.graph import END, START, StateGraph
 
-from ..configuration import QualifierConfiguration
 from ..state import QualifierInput, QualifierOutput, QualifierState
 from .analyze_historical_similarity import analyze_historical_similarity
 from .analyze_solution_fit import analyze_solution_fit
