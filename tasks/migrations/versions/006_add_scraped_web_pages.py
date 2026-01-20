@@ -23,8 +23,8 @@ def upgrade():
         # Primary key
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         # URL identifiers
-        sa.Column("url", sa.String(2048), nullable=False, unique=True),
-        sa.Column("url_hash", sa.String(64), nullable=False),
+        sa.Column("url", sa.Text, nullable=False),  # Use TEXT to avoid index length issues
+        sa.Column("url_hash", sa.String(64), nullable=False, unique=True),  # Hash is unique constraint
         # Page info
         sa.Column("page_title", sa.String(512), nullable=True),
         sa.Column("website_domain", sa.String(255), nullable=False),
