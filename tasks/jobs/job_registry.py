@@ -12,6 +12,7 @@ from .gdrive_ingest import GDriveIngestJob
 from .metric_sync import MetricSyncJob
 from .portal_sync import PortalSyncJob
 from .slack_user_import import SlackUserImportJob
+from .website_scrape import WebsiteScrapeJob
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ def execute_job_by_type(
         "metric_sync": MetricSyncJob,
         "portal_sync": PortalSyncJob,
         "gdrive_ingest": GDriveIngestJob,
+        "website_scrape": WebsiteScrapeJob,
     }
 
     job_class = job_classes.get(job_type)
@@ -171,6 +173,7 @@ class JobRegistry:
             "metric_sync": MetricSyncJob,
             "portal_sync": PortalSyncJob,
             "gdrive_ingest": GDriveIngestJob,
+            "website_scrape": WebsiteScrapeJob,
         }
 
     def register_job_type(self, job_type: str, job_class: type) -> None:
