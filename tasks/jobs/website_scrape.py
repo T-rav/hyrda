@@ -26,6 +26,7 @@ class WebsiteScrapeJob(BaseJob):
         "include_patterns",
         "exclude_patterns",
         "metadata",
+        "force_rescrape",  # Force rescrape even if content hasn't changed
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
@@ -170,6 +171,11 @@ class WebsiteScrapeJob(BaseJob):
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the website scraping job."""
+        # Import tracking service
+        from services.web_page_tracking_service import WebPageTrackingService
+
+        tracking_service = WebPageTrackingService()
+
         # Get job parameters
         website_url = self.params.get("website_url")
         sitemap_url = self.params.get("sitemap_url")
@@ -177,6 +183,7 @@ class WebsiteScrapeJob(BaseJob):
         include_patterns = self.params.get("include_patterns", [])
         exclude_patterns = self.params.get("exclude_patterns", [])
         metadata = self.params.get("metadata", {})
+        force_rescrape = self.params.get("force_rescrape", False)
 
         # Determine sitemap URL (try common locations if not provided)
         if not sitemap_url:
@@ -218,11 +225,21 @@ class WebsiteScrapeJob(BaseJob):
             logger.info(f"Limiting to {max_pages} pages (found {len(urls)})")
             urls = urls[:max_pages]
 
-        # Scrape all pages
+        # Check for pages to scrape vs skip
+        domain = tracking_service.extract_domain(website_url)
         scraped_pages = []
+        skipped_count = 0
         failed_count = 0
 
         for i, url in enumerate(urls, 1):
+            # Check if page needs rescraping
+            if not force_rescrape:
+                needs_rescrape, existing_uuid = tracking_service.check_page_needs_rescrape(url)
+                if not needs_rescrape:
+                    logger.info(f"Skipping unchanged page {i}/{len(urls)}: {url}")
+                    skipped_count += 1
+                    continue
+
             logger.info(f"Scraping page {i}/{len(urls)}: {url}")
             page_data = await self._scrape_page(url)
 
@@ -232,8 +249,34 @@ class WebsiteScrapeJob(BaseJob):
                 failed_count += 1
 
         logger.info(
-            f"Scraped {len(scraped_pages)} pages successfully, {failed_count} failed"
+            f"Scraped {len(scraped_pages)} new/changed pages, "
+            f"skipped {skipped_count} unchanged, {failed_count} failed"
         )
+
+        # Detect removed pages (in DB but not in sitemap)
+        removed_count = 0
+        if not force_rescrape:
+            logger.info(f"Checking for removed pages on {domain}...")
+            existing_pages = tracking_service.get_pages_by_domain(domain)
+            sitemap_urls_set = set(urls)
+
+            for existing_page in existing_pages:
+                if existing_page["url"] not in sitemap_urls_set:
+                    logger.info(f"Page removed from sitemap: {existing_page['url']}")
+                    # Mark as removed (will be deleted from vector DB below)
+                    tracking_service.record_page_scrape(
+                        url=existing_page["url"],
+                        page_title=existing_page.get("page_title"),
+                        content="",  # Empty content for removed page
+                        vector_uuid=existing_page.get("vector_uuid", ""),
+                        chunk_count=0,
+                        status="removed",
+                        error_message="Page no longer in sitemap"
+                    )
+                    removed_count += 1
+
+            if removed_count > 0:
+                logger.info(f"Marked {removed_count} pages as removed")
 
         # Index into RAG system
         from services.rag_client import RAGIngestClient
@@ -243,9 +286,12 @@ class WebsiteScrapeJob(BaseJob):
             service_token=self.settings.bot_service_token,
         )
 
-        # Prepare documents for ingestion
+        # Prepare documents for ingestion and track them
         documents = []
         for page in scraped_pages:
+            # Generate deterministic UUID for this page
+            vector_uuid = tracking_service.generate_base_uuid(page["url"])
+
             # Add custom metadata
             doc_metadata = {
                 "source": "website_scrape",
@@ -253,6 +299,7 @@ class WebsiteScrapeJob(BaseJob):
                 "title": page["title"],
                 "description": page["description"],
                 "website": website_url,
+                "vector_uuid": vector_uuid,
                 **metadata,  # Include any custom metadata from job params
             }
 
@@ -267,19 +314,40 @@ class WebsiteScrapeJob(BaseJob):
             f"{ingest_result.get('error_count', 0)} errors"
         )
 
+        # Record successful scrapes in tracking table
+        for i, page in enumerate(scraped_pages):
+            try:
+                vector_uuid = documents[i]["metadata"]["vector_uuid"]
+                tracking_service.record_page_scrape(
+                    url=page["url"],
+                    page_title=page["title"],
+                    content=page["content"],
+                    vector_uuid=vector_uuid,
+                    chunk_count=1,  # Single chunk for now (RAG service handles chunking)
+                    metadata=documents[i]["metadata"],
+                    status="success",
+                )
+            except Exception as tracking_error:
+                logger.warning(f"Failed to record tracking for {page['url']}: {tracking_error}")
+                # Don't fail entire job on tracking errors
+
         # Return result summary
         return {
             "success": True,
-            "message": f"Successfully scraped and indexed {len(scraped_pages)} pages",
+            "message": f"Scraped {len(scraped_pages)} new/changed pages, skipped {skipped_count} unchanged, removed {removed_count} obsolete",
             "website_url": website_url,
             "sitemap_url": sitemap_url,
             "pages_scraped": len(scraped_pages),
+            "pages_skipped": skipped_count,
+            "pages_removed": removed_count,
             "pages_failed": failed_count,
             "pages_indexed": ingest_result.get("success_count", 0),
             "index_errors": ingest_result.get("error_count", 0),
+            "force_rescrape": force_rescrape,
             "details": {
-                "total_urls_found": len(urls),
-                "urls_filtered": len(urls) - len(scraped_pages) - failed_count,
-                "sample_pages": [page["url"] for page in scraped_pages[:5]],
+                "total_urls_in_sitemap": len(urls),
+                "urls_filtered_out": len(urls) - len(scraped_pages) - skipped_count - failed_count,
+                "sample_scraped": [page["url"] for page in scraped_pages[:5]],
+                "change_detection_enabled": not force_rescrape,
             },
         }
