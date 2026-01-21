@@ -240,7 +240,7 @@ class WebsiteScrapeJob(BaseJob):
         Returns:
             List of discovered page URLs
         """
-        from crawlee.beautifulsoup_crawler import (
+        from crawlee.crawlers import (
             BeautifulSoupCrawler,
             BeautifulSoupCrawlingContext,
         )
@@ -283,16 +283,28 @@ class WebsiteScrapeJob(BaseJob):
             request_handler=request_handler,
         )
 
-        # Add custom headers if OAuth token provided
+        # Add OAuth headers using pre-navigation hook if needed
         if auth_headers:
-            # Crawlee will use these headers for all requests
-            crawler._http_client.headers.update(auth_headers)
-
-        # Run the crawler
-        try:
-            await crawler.run([start_url])
-        except Exception as e:
-            logger.error(f"Crawler error: {e}")
+            # Use add_requests with custom headers
+            await crawler.add_requests(
+                [
+                    {
+                        "url": start_url,
+                        "headers": auth_headers,
+                    }
+                ]
+            )
+            # Run crawler (requests already added)
+            try:
+                await crawler.run()
+            except Exception as e:
+                logger.error(f"Crawler error: {e}")
+        else:
+            # Run crawler without auth headers
+            try:
+                await crawler.run([start_url])
+            except Exception as e:
+                logger.error(f"Crawler error: {e}")
 
         logger.info(f"Crawling complete: discovered {len(discovered_urls)} pages")
         return discovered_urls
