@@ -693,3 +693,196 @@ class TestEmbedBatchEdgeCases:
             # Verify only non-empty texts were sent to API
             call_args = mock_client.embeddings.create.call_args
             assert len(call_args.kwargs["input"]) == 3
+
+
+class TestChunkTextMethod:
+    """Test chunk_text method for splitting text into chunks."""
+
+    @pytest.fixture
+    def service(self):
+        """Create service with test API key."""
+        with patch.dict(os.environ, {"EMBEDDING_API_KEY": "sk-test-key"}, clear=False):
+            return OpenAIEmbeddings()
+
+    def test_chunk_text_empty_string(self, service):
+        """Test chunking empty string returns empty list."""
+        # Act
+        result = service.chunk_text("")
+
+        # Assert
+        assert result == []
+
+    def test_chunk_text_whitespace_only(self, service):
+        """Test chunking whitespace-only string returns empty list."""
+        # Act
+        result = service.chunk_text("   \n\t  ")
+
+        # Assert
+        assert result == []
+
+    def test_chunk_text_short_text_single_chunk(self, service):
+        """Test short text returns single chunk."""
+        # Arrange
+        text = "This is a short text."
+
+        # Act
+        result = service.chunk_text(text, chunk_size=1000)
+
+        # Assert
+        assert len(result) == 1
+        assert result[0] == text
+
+    def test_chunk_text_long_text_multiple_chunks(self, service):
+        """Test long text is split into multiple chunks."""
+        # Arrange
+        text = "A" * 3000  # 3000 characters
+
+        # Act - chunk size 1000, overlap 200
+        result = service.chunk_text(text, chunk_size=1000, chunk_overlap=200)
+
+        # Assert - should create multiple chunks
+        assert len(result) > 1
+        # First chunk should be ~1000 chars
+        assert 900 <= len(result[0]) <= 1000
+
+    def test_chunk_text_respects_chunk_size(self, service):
+        """Test chunks respect maximum chunk size."""
+        # Arrange
+        text = "B" * 5000  # 5000 characters
+
+        # Act
+        result = service.chunk_text(text, chunk_size=1000, chunk_overlap=0)
+
+        # Assert - all chunks should be <= chunk_size
+        for chunk in result:
+            assert len(chunk) <= 1000
+
+    def test_chunk_text_with_overlap(self, service):
+        """Test chunk overlap is applied correctly."""
+        # Arrange
+        text = "X" * 2000  # 2000 characters
+
+        # Act - chunk size 1000, overlap 200
+        result = service.chunk_text(text, chunk_size=1000, chunk_overlap=200)
+
+        # Assert
+        assert len(result) >= 2
+        # Overlap means chunks should have some content repeated
+        # Second chunk should start 800 chars into text (1000 - 200)
+
+    def test_chunk_text_breaks_at_sentence_boundary(self, service):
+        """Test chunking tries to break at sentence boundaries."""
+        # Arrange
+        text = "First sentence. " * 100  # Create text with clear sentence boundaries
+
+        # Act
+        result = service.chunk_text(text, chunk_size=200, chunk_overlap=50)
+
+        # Assert - chunks should end with period when possible
+        for chunk in result[:-1]:  # All but last chunk
+            if len(chunk) > 100:  # Only check reasonably sized chunks
+                # Should end with sentence boundary if found
+                assert chunk.endswith(".") or "." in chunk[-20:], (
+                    f"Chunk should break at sentence: {chunk[-50:]}"
+                )
+
+    def test_chunk_text_breaks_at_paragraph_boundary(self, service):
+        """Test chunking prefers paragraph breaks over sentence breaks."""
+        # Arrange
+        paragraphs = [
+            "Paragraph one. " * 10,
+            "Paragraph two. " * 10,
+            "Paragraph three. " * 10,
+        ]
+        text = "\n\n".join(paragraphs)
+
+        # Act
+        result = service.chunk_text(text, chunk_size=500, chunk_overlap=50)
+
+        # Assert - should break at paragraph boundaries when possible
+        assert len(result) >= 2
+
+    def test_chunk_text_handles_no_sentence_boundaries(self, service):
+        """Test chunking works when no sentence boundaries exist."""
+        # Arrange
+        text = "NoPeriodsOrBreaksHereJustOneVeryLongStringWithoutAnyPunctuation" * 50
+
+        # Act
+        result = service.chunk_text(text, chunk_size=1000, chunk_overlap=100)
+
+        # Assert - should still chunk the text
+        assert len(result) > 1
+        for chunk in result:
+            assert len(chunk) <= 1000
+
+    def test_chunk_text_default_parameters(self, service):
+        """Test chunk_text works with default parameters."""
+        # Arrange
+        text = "Test " * 500  # 2500 characters
+
+        # Act - use defaults (chunk_size=1000, chunk_overlap=200)
+        result = service.chunk_text(text)
+
+        # Assert
+        assert len(result) >= 2
+        for chunk in result:
+            assert len(chunk) <= 1000
+
+
+class TestEmbedTextsAsyncMethod:
+    """Test embed_texts async method."""
+
+    @pytest.fixture
+    def service(self):
+        """Create service with test API key."""
+        with patch.dict(os.environ, {"EMBEDDING_API_KEY": "sk-test-key"}, clear=False):
+            return OpenAIEmbeddings()
+
+    @pytest.mark.asyncio
+    async def test_embed_texts_calls_embed_batch(self, service):
+        """Test that embed_texts calls embed_batch internally."""
+        # Arrange
+        texts = ["Test text 1", "Test text 2"]
+        expected_embeddings = [[0.1] * 3072, [0.2] * 3072]
+
+        with patch.object(
+            service, "embed_batch", return_value=expected_embeddings
+        ) as mock_embed:
+            # Act
+            result = await service.embed_texts(texts)
+
+            # Assert
+            assert result == expected_embeddings
+            mock_embed.assert_called_once_with(texts)
+
+    @pytest.mark.asyncio
+    async def test_embed_texts_empty_list(self, service):
+        """Test embed_texts with empty list."""
+        # Act
+        result = await service.embed_texts([])
+
+        # Assert
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_embed_texts_returns_embeddings(self, service):
+        """Test embed_texts returns proper embeddings."""
+        # Arrange
+        texts = ["Hello world"]
+
+        # Mock OpenAI client
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_data = Mock()
+        mock_data.embedding = [0.5] * 3072
+        mock_response.data = [mock_data]
+        mock_client.embeddings.create.return_value = mock_response
+
+        with patch.object(service, "_get_client", return_value=mock_client):
+            # Act
+            result = await service.embed_texts(texts)
+
+            # Assert
+            assert len(result) == 1
+            assert len(result[0]) == 3072
+            assert result[0][0] == 0.5

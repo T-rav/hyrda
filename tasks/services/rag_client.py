@@ -23,9 +23,7 @@ class RAGIngestClient:
         self.service_token = service_token
         self.timeout = httpx.Timeout(300.0, connect=10.0)  # 5 minutes for ingestion
 
-    async def ingest_documents(
-        self, documents: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    async def ingest_documents(self, documents: list[dict[str, Any]]) -> dict[str, Any]:
         """Ingest documents into RAG system via rag-service API.
 
         Args:
@@ -63,9 +61,7 @@ class RAGIngestClient:
                 )
 
                 if response.status_code == 401:
-                    raise RAGIngestError(
-                        "Authentication failed - check service token"
-                    )
+                    raise RAGIngestError("Authentication failed - check service token")
 
                 if response.status_code == 404:
                     # /api/v1/ingest endpoint doesn't exist - try calling vector service directly
@@ -101,9 +97,7 @@ class RAGIngestClient:
             logger.error(f"Error calling RAG service: {e}", exc_info=True)
             raise RAGIngestError(f"RAG service error: {str(e)}") from e
 
-    async def _ingest_direct(
-        self, documents: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+    async def _ingest_direct(self, documents: list[dict[str, Any]]) -> dict[str, Any]:
         """Fall back to direct vector database ingestion.
 
         Args:

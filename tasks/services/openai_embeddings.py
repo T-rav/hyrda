@@ -92,6 +92,60 @@ class OpenAIEmbeddings:
 
         return batches
 
+    def chunk_text(
+        self, text: str, chunk_size: int = 1000, chunk_overlap: int = 200
+    ) -> list[str]:
+        """
+        Split text into chunks for embedding.
+
+        Args:
+            text: Text to chunk
+            chunk_size: Size of each chunk in characters
+            chunk_overlap: Overlap between chunks
+
+        Returns:
+            List of text chunks
+        """
+        if not text or not text.strip():
+            return []
+
+        chunks = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            end = start + chunk_size
+            chunk = text[start:end]
+
+            # Try to break at sentence boundary
+            if end < text_len:
+                # Look for sentence endings
+                last_period = chunk.rfind(". ")
+                last_newline = chunk.rfind("\n\n")
+                break_point = max(last_period, last_newline)
+
+                if break_point > chunk_size // 2:  # Only if reasonable
+                    chunk = text[start : start + break_point + 1]
+                    end = start + break_point + 1
+
+            chunks.append(chunk.strip())
+            start = end - chunk_overlap
+
+        return chunks
+
+    async def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """
+        Generate embeddings for texts (async version).
+
+        Args:
+            texts: List of text strings to embed
+
+        Returns:
+            List of embedding vectors
+        """
+        # Call synchronous embed_batch (OpenAI SDK handles async internally)
+        return self.embed_batch(texts)
+
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """
         Generate embeddings for a batch of texts.

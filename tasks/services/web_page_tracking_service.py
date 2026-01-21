@@ -25,20 +25,30 @@ class ScrapedWebPage(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # URL identifier (unique)
-    url: Mapped[str] = mapped_column(String(2048), nullable=False, unique=True, index=True)
-    url_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)  # SHA-256 of URL
+    url: Mapped[str] = mapped_column(
+        String(2048), nullable=False, unique=True, index=True
+    )
+    url_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, index=True
+    )  # SHA-256 of URL
 
     # Page info
     page_title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     website_domain: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     # Content tracking
-    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)  # SHA-256 of content
+    content_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False
+    )  # SHA-256 of content
     content_length: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # HTTP metadata
-    last_modified: Mapped[str | None] = mapped_column(String(100), nullable=True)  # HTTP Last-Modified header
-    etag: Mapped[str | None] = mapped_column(String(255), nullable=True)  # HTTP ETag header
+    last_modified: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # HTTP Last-Modified header
+    etag: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # HTTP ETag header
 
     # Vector database tracking
     vector_uuid: Mapped[str] = mapped_column(String(36), nullable=False)
@@ -130,6 +140,7 @@ class WebPageTrackingService:
             Domain name (e.g., 'example.com')
         """
         from urllib.parse import urlparse
+
         parsed = urlparse(url)
         return parsed.netloc
 
@@ -152,9 +163,7 @@ class WebPageTrackingService:
 
         with get_db_session() as session:
             existing_page = (
-                session.query(ScrapedWebPage)
-                .filter_by(url_hash=url_hash)
-                .first()
+                session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
             )
 
             if not existing_page:
@@ -205,9 +214,7 @@ class WebPageTrackingService:
 
         with get_db_session() as session:
             existing_page = (
-                session.query(ScrapedWebPage)
-                .filter_by(url_hash=url_hash)
-                .first()
+                session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
             )
 
             if existing_page:
@@ -258,11 +265,7 @@ class WebPageTrackingService:
         url_hash = self.compute_url_hash(url)
 
         with get_db_session() as session:
-            page = (
-                session.query(ScrapedWebPage)
-                .filter_by(url_hash=url_hash)
-                .first()
-            )
+            page = session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
 
             if not page:
                 return None

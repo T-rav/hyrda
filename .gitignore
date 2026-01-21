@@ -223,3 +223,7 @@ control_plane/ssl/
 agent-service/ssl/
 tasks/ssl/
 .ssl/
+
+# Vector database volumes (Milvus, Qdrant)
+dx/milvus/volumes/
+dx/qdrant/volumes/
