@@ -120,6 +120,221 @@ class TestWebsiteScrapeJobValidation:
         assert hasattr(job, "OPTIONAL_PARAMS")
         assert hasattr(job, "params")
 
+    def test_optional_credential_id(self, mock_settings, mock_clients):
+        """Test job accepts optional credential_id parameter for OAuth."""
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://example.com",
+            credential_id="test_credential",
+        )
+        assert job.params["credential_id"] == "test_credential"
+
+
+class TestWebsiteScrapeJobOAuthAuthentication:
+    """Test OAuth authentication for authenticated sites."""
+
+    @pytest.mark.asyncio
+    async def test_loads_oauth_credential(self, mock_settings, mock_clients):
+        """Test OAuth credential is loaded when credential_id is provided."""
+        from datetime import UTC, datetime
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        # Mock the database session and credential
+        with (
+            patch("models.base.get_db_session") as mock_db_session,
+            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
+        ):
+            # Setup mock credential
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            # Setup mock database
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            mock_token_data = {
+                "token": "test_access_token",
+                "expiry": datetime.now(UTC).isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption.return_value = mock_encryption_service
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify credential was loaded
+            mock_encryption_service.decrypt.assert_called_once()
+            mock_session.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_auth_headers_passed_to_fetch_sitemap(self, mock_settings, mock_clients):
+        """Test authentication headers are passed to _fetch_sitemap."""
+        from datetime import UTC, datetime
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        with (
+            patch("models.base.get_db_session") as mock_db_session,
+            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(
+                job, "_fetch_sitemap", new=AsyncMock(return_value=[])
+            ) as mock_fetch,
+        ):
+            # Setup mock credential
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            mock_token_data = {
+                "token": "test_access_token",
+                "expiry": datetime.now(UTC).isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption.return_value = mock_encryption_service
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify auth headers were passed to _fetch_sitemap
+            mock_fetch.assert_called()
+            call_args = mock_fetch.call_args
+            auth_headers = call_args[0][1] if len(call_args[0]) > 1 else {}
+            assert "Authorization" in auth_headers
+            assert auth_headers["Authorization"] == "Bearer test_access_token"
+
+    @pytest.mark.asyncio
+    async def test_credential_not_found_raises_error(self, mock_settings, mock_clients):
+        """Test error when credential_id not found in database."""
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="nonexistent_cred",
+        )
+
+        with (
+            patch("models.base.get_db_session") as mock_db_session,
+            patch("services.encryption_service.get_encryption_service"),
+            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+        ):
+            # Setup mock database with no credential found
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = None
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Execute job should raise error
+            with pytest.raises(ValueError, match="OAuth credential loading failed"):
+                await job._execute_job()
+
+    @pytest.mark.asyncio
+    async def test_token_refresh_when_expired(self, mock_settings, mock_clients):
+        """Test token is refreshed when expired."""
+        from datetime import UTC, datetime, timedelta
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        with (
+            patch("models.base.get_db_session") as mock_db_session,
+            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch("google.oauth2.credentials.Credentials") as mock_creds_class,
+            patch("google.auth.transport.requests.Request"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
+        ):
+            # Setup mock credential with expired token
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            expired_time = datetime.now(UTC) - timedelta(hours=1)
+            mock_token_data = {
+                "token": "old_access_token",
+                "refresh_token": "refresh_token",
+                "expiry": expired_time.isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption_service.encrypt.return_value = "new_encrypted_token"
+            mock_encryption.return_value = mock_encryption_service
+
+            # Setup mock credentials refresh
+            mock_creds = Mock()
+            new_token_data = {
+                "token": "new_access_token",
+                "refresh_token": "refresh_token",
+                "expiry": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+            mock_creds.to_json.return_value = json.dumps(new_token_data)
+            mock_creds_class.from_authorized_user_info.return_value = mock_creds
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify token was refreshed
+            mock_creds.refresh.assert_called_once()
+            mock_encryption_service.encrypt.assert_called()
+
 
 class TestWebsiteScrapeJobURLFiltering:
     """Test URL filtering logic."""
