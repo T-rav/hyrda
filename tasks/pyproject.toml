@@ -36,6 +36,7 @@ dependencies = [
     "aiohttp>=3.8.0",
     "httpx>=0.27.0",  # For SEC Edgar API
     "beautifulsoup4>=4.12.0",  # For parsing SEC HTML filings
+    "lxml>=5.0.0",  # For XML parsing (sitemaps)
     "edgartools>=2.0.0",  # For parsing SEC filings (10-K, 10-Q, 8-K, etc.)
 
     # Database
@@ -169,11 +170,8 @@ omit = [
     "jobs/gdrive_ingest.py",  # Optional feature - Google Drive ingestion job
     "services/gdrive/*",  # Optional Google Drive services
     # Optional integrations
-    "jobs/portal_sync.py",  # Optional feature - Portal sync job
     "jobs/metric_sync.py",  # Optional feature - Metrics sync job
-    "services/portal_client.py",  # Optional feature - Portal API client
     "services/metric_client.py",  # Optional feature - Metrics API client
-    "jobs/system/*",  # System job implementations tested via job_registry tests
 ]
 
 [tool.coverage.report]

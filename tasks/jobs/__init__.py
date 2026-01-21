@@ -8,14 +8,14 @@ from .base_job import BaseJob
 from .gdrive_ingest import GDriveIngestJob
 from .job_registry import JobRegistry
 from .metric_sync import MetricSyncJob
-from .portal_sync import PortalSyncJob
 from .slack_user_import import SlackUserImportJob
+from .website_scrape import WebsiteScrapeJob
 
 __all__ = [
     "BaseJob",
     "GDriveIngestJob",
     "JobRegistry",
     "MetricSyncJob",
-    "PortalSyncJob",
     "SlackUserImportJob",
+    "WebsiteScrapeJob",
 ]
