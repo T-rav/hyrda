@@ -1027,7 +1027,7 @@ class TestIngestionOrchestratorEdgeCases:
         files = [file1, file2, file3]
 
         # Setup mocks
-        def download_side_effect(file_id, mime_type):
+        def download_side_effect(file_id, mime_type, filename):
             if file_id == "file2":
                 return None
             return "Content"
