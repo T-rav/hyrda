@@ -120,6 +120,334 @@ class TestWebsiteScrapeJobValidation:
         assert hasattr(job, "OPTIONAL_PARAMS")
         assert hasattr(job, "params")
 
+    def test_optional_credential_id(self, mock_settings, mock_clients):
+        """Test job accepts optional credential_id parameter for OAuth."""
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://example.com",
+            credential_id="test_credential",
+        )
+        assert job.params["credential_id"] == "test_credential"
+
+
+class TestWebsiteScrapeJobOAuthAuthentication:
+    """Test OAuth authentication for authenticated sites."""
+
+    @pytest.mark.asyncio
+    async def test_loads_oauth_credential(self, mock_settings, mock_clients):
+        """Test OAuth credential is loaded when credential_id is provided."""
+        from datetime import UTC, datetime
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        # Mock the database session and credential
+        with (
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
+            patch.object(
+                job,
+                "_crawl_site",
+                new=AsyncMock(
+                    return_value=["https://sites.google.com/example/site/page1"]
+                ),
+            ),
+            patch.object(
+                job,
+                "_scrape_page",
+                new=AsyncMock(
+                    return_value={
+                        "content": "test content",
+                        "url": "https://sites.google.com/example/site/page1",
+                        "title": "Test Page",
+                        "description": "Test description",
+                        "length": 12,
+                    }
+                ),
+            ),
+            patch.object(job.embedding_client, "chunk_text", return_value=["chunk1"]),
+            patch.object(job.embedding_client, "embed_batch", return_value=[[0.1]]),
+            patch.object(job.vector_client, "upsert_with_namespace", new=AsyncMock()),
+        ):
+            # Setup mock credential
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            # Setup mock database
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            mock_token_data = {
+                "token": "test_access_token",
+                "expiry": datetime.now(UTC).isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption.return_value = mock_encryption_service
+
+            # Setup mock tracking service
+            mock_tracking_instance = Mock()
+            mock_tracking_instance.check_page_needs_rescrape.return_value = (
+                True,
+                None,
+            )
+            mock_tracking_instance.generate_base_uuid.return_value = (
+                "12345678-1234-5678-1234-567812345678"
+            )
+            mock_tracking_instance.record_page_scrape.return_value = None
+            mock_tracking_instance.extract_domain.return_value = "example.site"
+            mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking.return_value = mock_tracking_instance
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify credential was loaded
+            mock_encryption_service.decrypt.assert_called_once()
+            mock_session.commit.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_auth_headers_passed_to_fetch_sitemap(
+        self, mock_settings, mock_clients
+    ):
+        """Test authentication headers are passed to _fetch_sitemap."""
+        from datetime import UTC, datetime
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        with (
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(
+                job, "_fetch_sitemap", new=AsyncMock(return_value=[])
+            ) as mock_fetch,
+            patch.object(
+                job,
+                "_crawl_site",
+                new=AsyncMock(
+                    return_value=["https://sites.google.com/example/site/page1"]
+                ),
+            ),
+            patch.object(
+                job,
+                "_scrape_page",
+                new=AsyncMock(
+                    return_value={
+                        "content": "test content",
+                        "url": "https://sites.google.com/example/site/page1",
+                        "title": "Test Page",
+                        "description": "Test description",
+                        "length": 12,
+                    }
+                ),
+            ),
+            patch.object(job.embedding_client, "chunk_text", return_value=["chunk1"]),
+            patch.object(job.embedding_client, "embed_batch", return_value=[[0.1]]),
+            patch.object(job.vector_client, "upsert_with_namespace", new=AsyncMock()),
+        ):
+            # Setup mock credential
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            mock_token_data = {
+                "token": "test_access_token",
+                "expiry": datetime.now(UTC).isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption.return_value = mock_encryption_service
+
+            # Setup mock tracking service
+            mock_tracking_instance = Mock()
+            mock_tracking_instance.check_page_needs_rescrape.return_value = (
+                True,
+                None,
+            )
+            mock_tracking_instance.generate_base_uuid.return_value = (
+                "12345678-1234-5678-1234-567812345678"
+            )
+            mock_tracking_instance.record_page_scrape.return_value = None
+            mock_tracking_instance.extract_domain.return_value = "example.site"
+            mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking.return_value = mock_tracking_instance
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify auth headers were passed to _fetch_sitemap
+            mock_fetch.assert_called()
+            call_args = mock_fetch.call_args
+            auth_headers = call_args[0][1] if len(call_args[0]) > 1 else {}
+            assert "Authorization" in auth_headers
+            assert auth_headers["Authorization"] == "Bearer test_access_token"
+
+    @pytest.mark.asyncio
+    async def test_credential_not_found_raises_error(self, mock_settings, mock_clients):
+        """Test error when credential_id not found in database."""
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="nonexistent_cred",
+        )
+
+        with (
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service"),
+            patch("jobs.website_scrape.WebPageTrackingService"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+        ):
+            # Setup mock database with no credential found
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = None
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Execute job should raise error
+            with pytest.raises(ValueError, match="OAuth credential loading failed"):
+                await job._execute_job()
+
+    @pytest.mark.asyncio
+    async def test_token_refresh_when_expired(self, mock_settings, mock_clients):
+        """Test token is refreshed when expired."""
+        from datetime import UTC, datetime, timedelta
+
+        job = WebsiteScrapeJob(
+            mock_settings,
+            website_url="https://sites.google.com/example/site",
+            credential_id="test_cred",
+        )
+
+        with (
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
+            patch("jobs.website_scrape.Credentials") as mock_creds_class,
+            patch("jobs.website_scrape.Request"),
+            patch.object(job.vector_client, "initialize", new=AsyncMock()),
+            patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
+            patch.object(
+                job,
+                "_crawl_site",
+                new=AsyncMock(
+                    return_value=["https://sites.google.com/example/site/page1"]
+                ),
+            ),
+            patch.object(
+                job,
+                "_scrape_page",
+                new=AsyncMock(
+                    return_value={
+                        "content": "test content",
+                        "url": "https://sites.google.com/example/site/page1",
+                        "title": "Test Page",
+                        "description": "Test description",
+                        "length": 12,
+                    }
+                ),
+            ),
+            patch.object(job.embedding_client, "chunk_text", return_value=["chunk1"]),
+            patch.object(job.embedding_client, "embed_batch", return_value=[[0.1]]),
+            patch.object(job.vector_client, "upsert_with_namespace", new=AsyncMock()),
+        ):
+            # Setup mock credential with expired token
+            mock_credential = Mock()
+            mock_credential.credential_id = "test_cred"
+            mock_credential.encrypted_token = "encrypted_token"
+            mock_credential.last_used_at = datetime.now(UTC)
+
+            mock_query = Mock()
+            mock_query.filter.return_value.first.return_value = mock_credential
+            mock_session = Mock()
+            mock_session.query.return_value = mock_query
+            mock_session.__enter__ = Mock(return_value=mock_session)
+            mock_session.__exit__ = Mock(return_value=False)
+            mock_db_session.return_value = mock_session
+
+            # Setup mock encryption
+            mock_encryption_service = Mock()
+            expired_time = datetime.now(UTC) - timedelta(hours=1)
+            mock_token_data = {
+                "token": "old_access_token",
+                "refresh_token": "refresh_token",
+                "expiry": expired_time.isoformat(),
+            }
+            import json
+
+            mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
+            mock_encryption_service.encrypt.return_value = "new_encrypted_token"
+            mock_encryption.return_value = mock_encryption_service
+
+            # Setup mock credentials refresh
+            mock_creds = Mock()
+            new_token_data = {
+                "token": "new_access_token",
+                "refresh_token": "refresh_token",
+                "expiry": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+                "token_uri": "https://oauth2.googleapis.com/token",
+            }
+            mock_creds.to_json.return_value = json.dumps(new_token_data)
+            mock_creds_class.from_authorized_user_info.return_value = mock_creds
+
+            # Setup mock tracking service
+            mock_tracking_instance = Mock()
+            mock_tracking_instance.check_page_needs_rescrape.return_value = (
+                True,
+                None,
+            )
+            mock_tracking_instance.generate_base_uuid.return_value = (
+                "12345678-1234-5678-1234-567812345678"
+            )
+            mock_tracking_instance.record_page_scrape.return_value = None
+            mock_tracking_instance.extract_domain.return_value = "example.site"
+            mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking.return_value = mock_tracking_instance
+
+            # Execute job
+            await job._execute_job()
+
+            # Verify token was refreshed
+            mock_creds.refresh.assert_called_once()
+            mock_encryption_service.encrypt.assert_called()
+
 
 class TestWebsiteScrapeJobURLFiltering:
     """Test URL filtering logic."""

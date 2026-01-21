@@ -1,15 +1,26 @@
 """Website scraping and indexing job for scheduled RAG updates."""
 
+import contextlib
+import json
 import logging
+import ssl
+import uuid as uuid_lib
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 from config.settings import TasksSettings
+from models.base import get_db_session
+from models.oauth_credential import OAuthCredential
+from services.encryption_service import get_encryption_service
 from services.openai_embeddings import OpenAIEmbeddings
 from services.qdrant_client import QdrantClient
+from services.web_page_tracking_service import WebPageTrackingService
 
 from .base_job import BaseJob
 
@@ -31,6 +42,7 @@ class WebsiteScrapeJob(BaseJob):
         "exclude_patterns",
         "metadata",
         "force_rescrape",  # Force rescrape even if content hasn't changed
+        "credential_id",  # OAuth credential for authenticated scraping (e.g. Google Sites)
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
@@ -49,16 +61,33 @@ class WebsiteScrapeJob(BaseJob):
 
         # Validate website_url format
         website_url = self.params.get("website_url")
-        if not website_url.startswith(("http://", "https://")):
+        if not website_url or not website_url.startswith(("http://", "https://")):
             raise ValueError("website_url must start with http:// or https://")
 
         return True
 
-    async def _fetch_sitemap(self, sitemap_url: str) -> list[str]:
+    def _create_ssl_context(self) -> ssl.SSLContext:
+        """Create SSL context with proper certificate validation.
+
+        Handles differences between Linux and macOS certificate paths.
+        """
+        ssl_context = ssl.create_default_context()
+
+        # Try to load system CA bundle (Linux path)
+        # If it fails (e.g., on macOS), fall back to default system certs
+        with contextlib.suppress(FileNotFoundError, PermissionError):
+            ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+
+        return ssl_context
+
+    async def _fetch_sitemap(
+        self, sitemap_url: str, auth_headers: dict[str, str] | None = None
+    ) -> list[str]:
         """Fetch and parse sitemap.xml to get list of URLs.
 
         Args:
             sitemap_url: URL to sitemap.xml
+            auth_headers: Optional authentication headers (e.g. OAuth Bearer token)
 
         Returns:
             List of page URLs from sitemap
@@ -66,12 +95,14 @@ class WebsiteScrapeJob(BaseJob):
         logger.info(f"Fetching sitemap from: {sitemap_url}")
 
         # Use system CA bundle for SSL verification
-        import ssl
+        ssl_context = self._create_ssl_context()
 
-        ssl_context = ssl.create_default_context()
-        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+        # Include auth headers if provided
+        headers = auth_headers or {}
 
-        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, verify=ssl_context, headers=headers
+        ) as client:
             try:
                 response = await client.get(sitemap_url, follow_redirects=True)
                 response.raise_for_status()
@@ -94,7 +125,9 @@ class WebsiteScrapeJob(BaseJob):
                 if child_loc:
                     child_sitemap_url = child_loc.text.strip()
                     logger.debug(f"Fetching child sitemap: {child_sitemap_url}")
-                    child_urls = await self._fetch_sitemap(child_sitemap_url)
+                    child_urls = await self._fetch_sitemap(
+                        child_sitemap_url, auth_headers
+                    )
                     urls.extend(child_urls)
         else:
             # This is a regular sitemap with content URLs
@@ -110,11 +143,14 @@ class WebsiteScrapeJob(BaseJob):
         logger.info(f"Found {len(urls)} content URLs in sitemap")
         return urls
 
-    async def _scrape_page(self, url: str) -> dict[str, Any] | None:
+    async def _scrape_page(
+        self, url: str, auth_headers: dict[str, str] | None = None
+    ) -> dict[str, Any] | None:
         """Scrape a single page and extract text content.
 
         Args:
             url: URL to scrape
+            auth_headers: Optional authentication headers (e.g. OAuth Bearer token)
 
         Returns:
             Dict with content and metadata, or None if failed
@@ -122,12 +158,14 @@ class WebsiteScrapeJob(BaseJob):
         logger.debug(f"Scraping page: {url}")
 
         # Use system CA bundle for SSL verification
-        import ssl
+        ssl_context = self._create_ssl_context()
 
-        ssl_context = ssl.create_default_context()
-        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+        # Include auth headers if provided
+        headers = auth_headers or {}
 
-        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
+        async with httpx.AsyncClient(
+            timeout=30.0, verify=ssl_context, headers=headers
+        ) as client:
             try:
                 response = await client.get(url, follow_redirects=True)
                 response.raise_for_status()
@@ -199,11 +237,100 @@ class WebsiteScrapeJob(BaseJob):
 
         return filtered
 
+    async def _crawl_site(
+        self,
+        start_url: str,
+        max_pages: int | None,
+        include_patterns: list[str],
+        exclude_patterns: list[str],
+        auth_headers: dict[str, str] | None = None,
+    ) -> list[str]:
+        """Crawl website by following internal links (fallback when no sitemap).
+
+        Uses Crawlee library for robust web crawling with automatic link discovery.
+
+        Args:
+            start_url: Starting URL to crawl from
+            max_pages: Maximum number of pages to discover (None = unlimited)
+            include_patterns: URL patterns to include
+            exclude_patterns: URL patterns to exclude
+            auth_headers: Optional authentication headers
+
+        Returns:
+            List of discovered page URLs
+        """
+        # Import Crawlee only when needed (avoids import at top level)
+        from crawlee.crawlers import (  # noqa: PLC0415
+            BeautifulSoupCrawler,
+            BeautifulSoupCrawlingContext,
+        )
+
+        logger.info(f"No sitemap found, crawling site starting from: {start_url}")
+
+        # Track discovered URLs
+        discovered_urls = []
+
+        async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
+            """Handle each crawled page."""
+            url = context.request.url
+
+            # Apply include/exclude patterns
+            if include_patterns and not any(
+                pattern in url for pattern in include_patterns
+            ):
+                logger.debug(f"Skipping (no match): {url}")
+                return
+
+            if exclude_patterns and any(pattern in url for pattern in exclude_patterns):
+                logger.debug(f"Skipping (excluded): {url}")
+                return
+
+            # Add to discovered list
+            discovered_urls.append(url)
+            logger.debug(
+                f"Discovered: {url} ({len(discovered_urls)}/{max_pages or 'unlimited'})"
+            )
+
+            # Enqueue links from this page (Crawlee handles deduplication)
+            await context.enqueue_links(
+                strategy="same-domain",  # Only follow links on same domain
+            )
+
+        # Create crawler with custom configuration
+        crawler = BeautifulSoupCrawler(
+            max_requests_per_crawl=max_pages,  # Limit total pages
+            max_request_retries=2,
+            request_handler=request_handler,
+        )
+
+        # Add OAuth headers using pre-navigation hook if needed
+        if auth_headers:
+            # Use add_requests with custom headers
+            await crawler.add_requests(
+                [
+                    {
+                        "url": start_url,
+                        "headers": auth_headers,
+                    }
+                ]
+            )
+            # Run crawler (requests already added)
+            try:
+                await crawler.run()
+            except Exception as e:
+                logger.error(f"Crawler error: {e}")
+        else:
+            # Run crawler without auth headers
+            try:
+                await crawler.run([start_url])
+            except Exception as e:
+                logger.error(f"Crawler error: {e}")
+
+        logger.info(f"Crawling complete: discovered {len(discovered_urls)} pages")
+        return discovered_urls
+
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the website scraping job."""
-        # Import tracking service
-        from services.web_page_tracking_service import WebPageTrackingService
-
         tracking_service = WebPageTrackingService()
 
         # Initialize vector client before use
@@ -218,6 +345,96 @@ class WebsiteScrapeJob(BaseJob):
         exclude_patterns = self.params.get("exclude_patterns", [])
         metadata = self.params.get("metadata", {})
         force_rescrape = self.params.get("force_rescrape", False)
+        credential_id = self.params.get("credential_id")
+
+        # Load OAuth credential if provided (for authenticated scraping)
+        auth_headers = {}
+        if credential_id:
+            logger.info(f"Loading OAuth credential: {credential_id}")
+            try:
+                encryption_service = get_encryption_service()
+
+                with get_db_session() as db_session:
+                    credential = (
+                        db_session.query(OAuthCredential)
+                        .filter(OAuthCredential.credential_id == credential_id)
+                        .first()
+                    )
+
+                    if not credential:
+                        raise FileNotFoundError(
+                            f"Credential not found in database: {credential_id}"
+                        )
+
+                    # Decrypt token
+                    token_json = encryption_service.decrypt(credential.encrypted_token)
+
+                    # Check if token needs refresh
+                    token_data = json.loads(token_json)
+                    should_refresh = False
+
+                    # Check token expiry
+                    if token_data.get("expiry"):
+                        try:
+                            expiry = datetime.fromisoformat(
+                                token_data["expiry"].replace("Z", "+00:00")
+                            )
+                            now = datetime.now(UTC)
+                            # Refresh if expired or expiring within 5 minutes
+                            if expiry <= now + timedelta(minutes=5):
+                                should_refresh = True
+                                logger.info(
+                                    f"Token expired or expiring soon for {credential_id}, refreshing..."
+                                )
+                        except Exception as e:
+                            logger.warning(f"Could not parse token expiry: {e}")
+
+                    # Refresh token if needed
+                    if should_refresh and token_data.get("refresh_token"):
+                        try:
+                            creds = Credentials.from_authorized_user_info(token_data)
+                            creds.refresh(Request())
+
+                            # Update token in database
+                            new_token_json = creds.to_json()
+                            new_encrypted_token = encryption_service.encrypt(
+                                new_token_json
+                            )
+
+                            new_token_data = json.loads(new_token_json)
+                            new_token_metadata = {
+                                "scopes": new_token_data.get("scopes", []),
+                                "token_uri": new_token_data.get("token_uri"),
+                                "expiry": new_token_data.get("expiry"),
+                            }
+
+                            credential.encrypted_token = new_encrypted_token
+                            credential.token_metadata = new_token_metadata
+                            logger.info(
+                                f"Token refreshed successfully for {credential_id}"
+                            )
+
+                            # Use the new token
+                            token_json = new_token_json
+                        except Exception as e:
+                            logger.error(f"Token refresh failed: {e}")
+
+                    # Update last_used_at
+                    credential.last_used_at = datetime.now(UTC)
+                    db_session.commit()
+
+                # Extract access token for Authorization header
+                token_data = json.loads(token_json)
+                access_token = token_data.get("token")
+                if access_token:
+                    auth_headers = {"Authorization": f"Bearer {access_token}"}
+                    logger.info("OAuth authentication enabled for scraping")
+                else:
+                    logger.warning("No access token found in credential")
+
+            except Exception as e:
+                logger.error(f"Failed to load OAuth credential: {e}")
+                raise ValueError(f"OAuth credential loading failed: {e}") from e
 
         # Determine sitemap URL (try common locations if not provided)
         if not sitemap_url:
@@ -231,19 +448,33 @@ class WebsiteScrapeJob(BaseJob):
         )
 
         # Fetch sitemap URLs
-        urls = await self._fetch_sitemap(sitemap_url)
+        urls = await self._fetch_sitemap(sitemap_url, auth_headers)
 
         if not urls:
             # Try alternative sitemap locations
             logger.info("No URLs found in sitemap.xml, trying /sitemap_index.xml...")
             alternative_url = f"{website_url.rstrip('/')}/sitemap_index.xml"
-            urls = await self._fetch_sitemap(alternative_url)
+            urls = await self._fetch_sitemap(alternative_url, auth_headers)
 
+        # If no sitemap found, fall back to manual crawling
         if not urls:
-            raise ValueError(
-                f"No URLs found in sitemap. Tried {sitemap_url}. "
-                "Please verify sitemap exists or provide sitemap_url parameter."
+            logger.info(
+                "No sitemap found, falling back to manual site crawling from base URL"
             )
+            # website_url is guaranteed to be a string by validate_params()
+            urls = await self._crawl_site(
+                start_url=str(website_url),
+                max_pages=max_pages,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                auth_headers=auth_headers,
+            )
+
+            if not urls:
+                raise ValueError(
+                    f"No pages discovered. Could not find sitemap at {sitemap_url} "
+                    f"and manual crawling from {website_url} found no pages."
+                )
 
         # Filter URLs
         if include_patterns or exclude_patterns:
@@ -279,7 +510,7 @@ class WebsiteScrapeJob(BaseJob):
                     continue
 
             logger.info(f"Scraping page {i}/{len(urls)}: {url}")
-            page_data = await self._scrape_page(url)
+            page_data = await self._scrape_page(url, auth_headers)
 
             if page_data:
                 scraped_pages.append(page_data)
@@ -364,8 +595,6 @@ class WebsiteScrapeJob(BaseJob):
                 metadata_list.append(doc_metadata)
 
                 # Generate unique ID for this chunk
-                import uuid as uuid_lib
-
                 chunk_id = str(uuid_lib.uuid5(uuid_lib.UUID(vector_uuid), f"chunk_{i}"))
                 vector_ids.append(chunk_id)
 
