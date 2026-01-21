@@ -244,11 +244,36 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             patch(
                 "services.encryption_service.get_encryption_service"
             ) as mock_encryption,
-            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch(
+                "services.web_page_tracking_service.WebPageTrackingService"
+            ) as mock_tracking,
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(
                 job, "_fetch_sitemap", new=AsyncMock(return_value=[])
             ) as mock_fetch,
+            patch.object(
+                job,
+                "_crawl_site",
+                new=AsyncMock(
+                    return_value=["https://sites.google.com/example/site/page1"]
+                ),
+            ),
+            patch.object(
+                job,
+                "_scrape_page",
+                new=AsyncMock(
+                    return_value={
+                        "content": "test content",
+                        "url": "https://sites.google.com/example/site/page1",
+                        "title": "Test Page",
+                        "description": "Test description",
+                        "length": 12,
+                    }
+                ),
+            ),
+            patch.object(job.embedding_client, "chunk_text", return_value=["chunk1"]),
+            patch.object(job.embedding_client, "embed_batch", return_value=[[0.1]]),
+            patch.object(job.vector_client, "upsert_with_namespace", new=AsyncMock()),
         ):
             # Setup mock credential
             mock_credential = Mock()
@@ -274,6 +299,20 @@ class TestWebsiteScrapeJobOAuthAuthentication:
 
             mock_encryption_service.decrypt.return_value = json.dumps(mock_token_data)
             mock_encryption.return_value = mock_encryption_service
+
+            # Setup mock tracking service
+            mock_tracking_instance = Mock()
+            mock_tracking_instance.check_page_needs_rescrape.return_value = (
+                True,
+                None,
+            )
+            mock_tracking_instance.generate_base_uuid.return_value = (
+                "12345678-1234-5678-1234-567812345678"
+            )
+            mock_tracking_instance.record_page_scrape.return_value = None
+            mock_tracking_instance.extract_domain.return_value = "example.site"
+            mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking.return_value = mock_tracking_instance
 
             # Execute job
             await job._execute_job()
@@ -329,11 +368,36 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             patch(
                 "services.encryption_service.get_encryption_service"
             ) as mock_encryption,
-            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch(
+                "services.web_page_tracking_service.WebPageTrackingService"
+            ) as mock_tracking,
             patch("google.oauth2.credentials.Credentials") as mock_creds_class,
             patch("google.auth.transport.requests.Request"),
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
+            patch.object(
+                job,
+                "_crawl_site",
+                new=AsyncMock(
+                    return_value=["https://sites.google.com/example/site/page1"]
+                ),
+            ),
+            patch.object(
+                job,
+                "_scrape_page",
+                new=AsyncMock(
+                    return_value={
+                        "content": "test content",
+                        "url": "https://sites.google.com/example/site/page1",
+                        "title": "Test Page",
+                        "description": "Test description",
+                        "length": 12,
+                    }
+                ),
+            ),
+            patch.object(job.embedding_client, "chunk_text", return_value=["chunk1"]),
+            patch.object(job.embedding_client, "embed_batch", return_value=[[0.1]]),
+            patch.object(job.vector_client, "upsert_with_namespace", new=AsyncMock()),
         ):
             # Setup mock credential with expired token
             mock_credential = Mock()
@@ -374,6 +438,20 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             }
             mock_creds.to_json.return_value = json.dumps(new_token_data)
             mock_creds_class.from_authorized_user_info.return_value = mock_creds
+
+            # Setup mock tracking service
+            mock_tracking_instance = Mock()
+            mock_tracking_instance.check_page_needs_rescrape.return_value = (
+                True,
+                None,
+            )
+            mock_tracking_instance.generate_base_uuid.return_value = (
+                "12345678-1234-5678-1234-567812345678"
+            )
+            mock_tracking_instance.record_page_scrape.return_value = None
+            mock_tracking_instance.extract_domain.return_value = "example.site"
+            mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking.return_value = mock_tracking_instance
 
             # Execute job
             await job._execute_job()

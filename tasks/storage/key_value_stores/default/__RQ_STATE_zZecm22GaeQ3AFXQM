@@ -1,0 +1,12 @@
+{
+  "sequence_counter": 1,
+  "forefront_sequence_counter": 0,
+  "forefront_requests": {},
+  "regular_requests": {
+    "https://example.com": 0
+  },
+  "in_progress_requests": [],
+  "handled_requests": [
+    "https://example.com"
+  ]
+}
