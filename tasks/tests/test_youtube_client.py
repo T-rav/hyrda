@@ -26,9 +26,11 @@ class TestYouTubeClientInitialization:
 
     def test_requires_openai_key(self):
         """Test that OpenAI API key is required."""
-        with patch("os.getenv", return_value=None):
-            with pytest.raises(ValueError, match="OpenAI API key is required"):
-                YouTubeClient()
+        with (
+            patch("os.getenv", return_value=None),
+            pytest.raises(ValueError, match="OpenAI API key is required"),
+        ):
+            YouTubeClient()
 
     def test_accepts_openai_key_param(self):
         """Test initialization with explicit API key."""
@@ -47,11 +49,13 @@ class TestYouTubeClientGetChannelInfo:
 
     def test_get_channel_info_success(self, youtube_client):
         """Test successful channel info retrieval."""
-        mock_output = json.dumps({
-            "channel_id": "UC123",
-            "channel": "Test Channel",
-            "channel_url": "https://youtube.com/@test",
-        })
+        mock_output = json.dumps(
+            {
+                "channel_id": "UC123",
+                "channel": "Test Channel",
+                "channel_url": "https://youtube.com/@test",
+            }
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=mock_output + "\n")
@@ -84,10 +88,12 @@ class TestYouTubeClientListChannelVideos:
 
     def test_list_channel_videos_success(self, youtube_client):
         """Test successful video listing."""
-        mock_output = "\n".join([
-            json.dumps({"id": "video1", "title": "Video 1", "url": "url1"}),
-            json.dumps({"id": "video2", "title": "Video 2", "url": "url2"}),
-        ])
+        mock_output = "\n".join(
+            [
+                json.dumps({"id": "video1", "title": "Video 1", "url": "url1"}),
+                json.dumps({"id": "video2", "title": "Video 2", "url": "url2"}),
+            ]
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=mock_output + "\n")
@@ -111,19 +117,23 @@ class TestYouTubeClientListChannelVideos:
 
     def test_list_channel_videos_filters_by_type(self, youtube_client):
         """Test video type filtering."""
-        mock_list_output = json.dumps({"id": "video1", "title": "Video 1", "url": "url1"})
-        mock_info_output = json.dumps({
-            "id": "video1",
-            "title": "Video 1",
-            "duration": 45,  # Short video
-            "channel_id": "UC123",
-            "channel": "Test",
-            "upload_date": "20240101",
-            "view_count": 1000,
-            "like_count": 100,
-            "comment_count": 10,
-            "thumbnail": "thumb.jpg",
-        })
+        mock_list_output = json.dumps(
+            {"id": "video1", "title": "Video 1", "url": "url1"}
+        )
+        mock_info_output = json.dumps(
+            {
+                "id": "video1",
+                "title": "Video 1",
+                "duration": 45,  # Short video
+                "channel_id": "UC123",
+                "channel": "Test",
+                "upload_date": "20240101",
+                "view_count": 1000,
+                "like_count": 100,
+                "comment_count": 10,
+                "thumbnail": "thumb.jpg",
+            }
+        )
 
         with patch("subprocess.run") as mock_run:
             # First call: list videos, second call: get video info
@@ -157,19 +167,21 @@ class TestYouTubeClientGetVideoInfo:
 
     def test_get_video_info_success(self, youtube_client):
         """Test successful video info retrieval."""
-        mock_output = json.dumps({
-            "id": "video123",
-            "title": "Test Video",
-            "description": "Test description",
-            "channel_id": "UC123",
-            "channel": "Test Channel",
-            "upload_date": "20240115",
-            "duration": 1800,
-            "view_count": 5000,
-            "like_count": 500,
-            "comment_count": 50,
-            "thumbnail": "thumb.jpg",
-        })
+        mock_output = json.dumps(
+            {
+                "id": "video123",
+                "title": "Test Video",
+                "description": "Test description",
+                "channel_id": "UC123",
+                "channel": "Test Channel",
+                "upload_date": "20240115",
+                "duration": 1800,
+                "view_count": 5000,
+                "like_count": 500,
+                "comment_count": 50,
+                "thumbnail": "thumb.jpg",
+            }
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=mock_output)
@@ -192,18 +204,20 @@ class TestYouTubeClientGetVideoInfo:
 
     def test_get_video_info_classifies_short(self, youtube_client):
         """Test short video classification."""
-        mock_output = json.dumps({
-            "id": "short123",
-            "title": "Short Video",
-            "duration": 45,  # Under 60 seconds
-            "channel_id": "UC123",
-            "channel": "Test",
-            "upload_date": "20240101",
-            "view_count": 1000,
-            "like_count": 100,
-            "comment_count": 10,
-            "thumbnail": "thumb.jpg",
-        })
+        mock_output = json.dumps(
+            {
+                "id": "short123",
+                "title": "Short Video",
+                "duration": 45,  # Under 60 seconds
+                "channel_id": "UC123",
+                "channel": "Test",
+                "upload_date": "20240101",
+                "view_count": 1000,
+                "like_count": 100,
+                "comment_count": 10,
+                "thumbnail": "thumb.jpg",
+            }
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=mock_output)
@@ -214,19 +228,21 @@ class TestYouTubeClientGetVideoInfo:
 
     def test_get_video_info_classifies_podcast(self, youtube_client):
         """Test podcast video classification."""
-        mock_output = json.dumps({
-            "id": "podcast123",
-            "title": "Podcast Episode 1",
-            "description": "This is a podcast interview",
-            "duration": 3600,
-            "channel_id": "UC123",
-            "channel": "Test",
-            "upload_date": "20240101",
-            "view_count": 1000,
-            "like_count": 100,
-            "comment_count": 10,
-            "thumbnail": "thumb.jpg",
-        })
+        mock_output = json.dumps(
+            {
+                "id": "podcast123",
+                "title": "Podcast Episode 1",
+                "description": "This is a podcast interview",
+                "duration": 3600,
+                "channel_id": "UC123",
+                "channel": "Test",
+                "upload_date": "20240101",
+                "view_count": 1000,
+                "like_count": 100,
+                "comment_count": 10,
+                "thumbnail": "thumb.jpg",
+            }
+        )
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout=mock_output)
@@ -250,7 +266,7 @@ class TestYouTubeClientDownloadAudio:
 
     def test_download_audio_success(self, youtube_client):
         """Test successful audio download."""
-        with patch("subprocess.run") as mock_run, patch("os.listdir") as mock_listdir:
+        with patch("subprocess.run") as mock_run:
             mock_run.return_value = Mock(stdout="Destination: /tmp/video123.m4a\n")
 
             result = youtube_client.download_audio(
@@ -411,7 +427,9 @@ class TestYouTubeClientGetVideoInfoWithTranscript:
         }
 
         with (
-            patch.object(youtube_client, "get_video_info", return_value=mock_video_info),
+            patch.object(
+                youtube_client, "get_video_info", return_value=mock_video_info
+            ),
             patch.object(
                 youtube_client,
                 "get_video_transcript",
@@ -436,7 +454,9 @@ class TestYouTubeClientGetVideoInfoWithTranscript:
         mock_video_info = {"video_id": "video123", "title": "Test Video"}
 
         with (
-            patch.object(youtube_client, "get_video_info", return_value=mock_video_info),
+            patch.object(
+                youtube_client, "get_video_info", return_value=mock_video_info
+            ),
             patch.object(
                 youtube_client, "get_video_transcript", return_value=(None, None)
             ),
