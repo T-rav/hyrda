@@ -147,7 +147,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
         # Mock the database session and credential
         with (
             patch("models.base.get_db_session") as mock_db_session,
-            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch(
+                "services.encryption_service.get_encryption_service"
+            ) as mock_encryption,
             patch("services.web_page_tracking_service.WebPageTrackingService"),
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
@@ -186,7 +188,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             mock_session.commit.assert_called()
 
     @pytest.mark.asyncio
-    async def test_auth_headers_passed_to_fetch_sitemap(self, mock_settings, mock_clients):
+    async def test_auth_headers_passed_to_fetch_sitemap(
+        self, mock_settings, mock_clients
+    ):
         """Test authentication headers are passed to _fetch_sitemap."""
         from datetime import UTC, datetime
 
@@ -198,7 +202,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
 
         with (
             patch("models.base.get_db_session") as mock_db_session,
-            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch(
+                "services.encryption_service.get_encryption_service"
+            ) as mock_encryption,
             patch("services.web_page_tracking_service.WebPageTrackingService"),
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(
@@ -281,7 +287,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
 
         with (
             patch("models.base.get_db_session") as mock_db_session,
-            patch("services.encryption_service.get_encryption_service") as mock_encryption,
+            patch(
+                "services.encryption_service.get_encryption_service"
+            ) as mock_encryption,
             patch("services.web_page_tracking_service.WebPageTrackingService"),
             patch("google.oauth2.credentials.Credentials") as mock_creds_class,
             patch("google.auth.transport.requests.Request"),

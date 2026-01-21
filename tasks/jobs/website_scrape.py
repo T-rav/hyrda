@@ -218,6 +218,85 @@ class WebsiteScrapeJob(BaseJob):
 
         return filtered
 
+    async def _crawl_site(
+        self,
+        start_url: str,
+        max_pages: int | None,
+        include_patterns: list[str],
+        exclude_patterns: list[str],
+        auth_headers: dict[str, str] | None = None,
+    ) -> list[str]:
+        """Crawl website by following internal links (fallback when no sitemap).
+
+        Uses Crawlee library for robust web crawling with automatic link discovery.
+
+        Args:
+            start_url: Starting URL to crawl from
+            max_pages: Maximum number of pages to discover (None = unlimited)
+            include_patterns: URL patterns to include
+            exclude_patterns: URL patterns to exclude
+            auth_headers: Optional authentication headers
+
+        Returns:
+            List of discovered page URLs
+        """
+        from crawlee.beautifulsoup_crawler import (
+            BeautifulSoupCrawler,
+            BeautifulSoupCrawlingContext,
+        )
+
+        logger.info(f"No sitemap found, crawling site starting from: {start_url}")
+
+        # Track discovered URLs
+        discovered_urls = []
+
+        async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
+            """Handle each crawled page."""
+            url = context.request.url
+
+            # Apply include/exclude patterns
+            if include_patterns and not any(
+                pattern in url for pattern in include_patterns
+            ):
+                logger.debug(f"Skipping (no match): {url}")
+                return
+
+            if exclude_patterns and any(pattern in url for pattern in exclude_patterns):
+                logger.debug(f"Skipping (excluded): {url}")
+                return
+
+            # Add to discovered list
+            discovered_urls.append(url)
+            logger.debug(
+                f"Discovered: {url} ({len(discovered_urls)}/{max_pages or 'unlimited'})"
+            )
+
+            # Enqueue links from this page (Crawlee handles deduplication)
+            await context.enqueue_links(
+                strategy="same-domain",  # Only follow links on same domain
+            )
+
+        # Create crawler with custom configuration
+        crawler = BeautifulSoupCrawler(
+            max_requests_per_crawl=max_pages,  # Limit total pages
+            max_request_retries=2,
+            request_handler=request_handler,
+        )
+
+        # Add custom headers if OAuth token provided
+        if auth_headers:
+            # Crawlee will use these headers for all requests
+            crawler._http_client.headers.update(auth_headers)
+
+        # Run the crawler
+        try:
+            await crawler.run([start_url])
+        except Exception as e:
+            logger.error(f"Crawler error: {e}")
+
+        logger.info(f"Crawling complete: discovered {len(discovered_urls)} pages")
+        return discovered_urls
+
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the website scraping job."""
         # Import tracking service
@@ -358,11 +437,25 @@ class WebsiteScrapeJob(BaseJob):
             alternative_url = f"{website_url.rstrip('/')}/sitemap_index.xml"
             urls = await self._fetch_sitemap(alternative_url, auth_headers)
 
+        # If no sitemap found, fall back to manual crawling
         if not urls:
-            raise ValueError(
-                f"No URLs found in sitemap. Tried {sitemap_url}. "
-                "Please verify sitemap exists or provide sitemap_url parameter."
+            logger.info(
+                "No sitemap found, falling back to manual site crawling from base URL"
             )
+            # website_url is guaranteed to be a string by validate_params()
+            urls = await self._crawl_site(
+                start_url=str(website_url),
+                max_pages=max_pages,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                auth_headers=auth_headers,
+            )
+
+            if not urls:
+                raise ValueError(
+                    f"No pages discovered. Could not find sitemap at {sitemap_url} "
+                    f"and manual crawling from {website_url} found no pages."
+                )
 
         # Filter URLs
         if include_patterns or exclude_patterns:
