@@ -59,7 +59,10 @@ ENV PYTHONUNBUFFERED=1 \
     ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     HOME=/app \
-    EDGAR_LOCAL_DATA_DIR=/app/.edgar
+    EDGAR_LOCAL_DATA_DIR=/app/.edgar \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose nginx port
 EXPOSE 5001
