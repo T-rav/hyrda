@@ -146,13 +146,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
 
         # Mock the database session and credential
         with (
-            patch("models.base.get_db_session") as mock_db_session,
-            patch(
-                "services.encryption_service.get_encryption_service"
-            ) as mock_encryption,
-            patch(
-                "services.web_page_tracking_service.WebPageTrackingService"
-            ) as mock_tracking,
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
             patch.object(
@@ -240,13 +236,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
         )
 
         with (
-            patch("models.base.get_db_session") as mock_db_session,
-            patch(
-                "services.encryption_service.get_encryption_service"
-            ) as mock_encryption,
-            patch(
-                "services.web_page_tracking_service.WebPageTrackingService"
-            ) as mock_tracking,
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(
                 job, "_fetch_sitemap", new=AsyncMock(return_value=[])
@@ -334,9 +326,9 @@ class TestWebsiteScrapeJobOAuthAuthentication:
         )
 
         with (
-            patch("models.base.get_db_session") as mock_db_session,
-            patch("services.encryption_service.get_encryption_service"),
-            patch("services.web_page_tracking_service.WebPageTrackingService"),
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service"),
+            patch("jobs.website_scrape.WebPageTrackingService"),
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
         ):
             # Setup mock database with no credential found
@@ -364,15 +356,11 @@ class TestWebsiteScrapeJobOAuthAuthentication:
         )
 
         with (
-            patch("models.base.get_db_session") as mock_db_session,
-            patch(
-                "services.encryption_service.get_encryption_service"
-            ) as mock_encryption,
-            patch(
-                "services.web_page_tracking_service.WebPageTrackingService"
-            ) as mock_tracking,
-            patch("google.oauth2.credentials.Credentials") as mock_creds_class,
-            patch("google.auth.transport.requests.Request"),
+            patch("jobs.website_scrape.get_db_session") as mock_db_session,
+            patch("jobs.website_scrape.get_encryption_service") as mock_encryption,
+            patch("jobs.website_scrape.WebPageTrackingService") as mock_tracking,
+            patch("jobs.website_scrape.Credentials") as mock_creds_class,
+            patch("jobs.website_scrape.Request"),
             patch.object(job.vector_client, "initialize", new=AsyncMock()),
             patch.object(job, "_fetch_sitemap", new=AsyncMock(return_value=[])),
             patch.object(

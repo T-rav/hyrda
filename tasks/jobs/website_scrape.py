@@ -1,15 +1,26 @@
 """Website scraping and indexing job for scheduled RAG updates."""
 
+import contextlib
+import json
 import logging
+import ssl
+import uuid as uuid_lib
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 
 from config.settings import TasksSettings
+from models.base import get_db_session
+from models.oauth_credential import OAuthCredential
+from services.encryption_service import get_encryption_service
 from services.openai_embeddings import OpenAIEmbeddings
 from services.qdrant_client import QdrantClient
+from services.web_page_tracking_service import WebPageTrackingService
 
 from .base_job import BaseJob
 
@@ -50,10 +61,24 @@ class WebsiteScrapeJob(BaseJob):
 
         # Validate website_url format
         website_url = self.params.get("website_url")
-        if not website_url.startswith(("http://", "https://")):
+        if not website_url or not website_url.startswith(("http://", "https://")):
             raise ValueError("website_url must start with http:// or https://")
 
         return True
+
+    def _create_ssl_context(self) -> ssl.SSLContext:
+        """Create SSL context with proper certificate validation.
+
+        Handles differences between Linux and macOS certificate paths.
+        """
+        ssl_context = ssl.create_default_context()
+
+        # Try to load system CA bundle (Linux path)
+        # If it fails (e.g., on macOS), fall back to default system certs
+        with contextlib.suppress(FileNotFoundError, PermissionError):
+            ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+
+        return ssl_context
 
     async def _fetch_sitemap(
         self, sitemap_url: str, auth_headers: dict[str, str] | None = None
@@ -70,10 +95,7 @@ class WebsiteScrapeJob(BaseJob):
         logger.info(f"Fetching sitemap from: {sitemap_url}")
 
         # Use system CA bundle for SSL verification
-        import ssl
-
-        ssl_context = ssl.create_default_context()
-        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+        ssl_context = self._create_ssl_context()
 
         # Include auth headers if provided
         headers = auth_headers or {}
@@ -136,10 +158,7 @@ class WebsiteScrapeJob(BaseJob):
         logger.debug(f"Scraping page: {url}")
 
         # Use system CA bundle for SSL verification
-        import ssl
-
-        ssl_context = ssl.create_default_context()
-        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+        ssl_context = self._create_ssl_context()
 
         # Include auth headers if provided
         headers = auth_headers or {}
@@ -240,7 +259,8 @@ class WebsiteScrapeJob(BaseJob):
         Returns:
             List of discovered page URLs
         """
-        from crawlee.crawlers import (
+        # Import Crawlee only when needed (avoids import at top level)
+        from crawlee.crawlers import (  # noqa: PLC0415
             BeautifulSoupCrawler,
             BeautifulSoupCrawlingContext,
         )
@@ -311,9 +331,6 @@ class WebsiteScrapeJob(BaseJob):
 
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the website scraping job."""
-        # Import tracking service
-        from services.web_page_tracking_service import WebPageTrackingService
-
         tracking_service = WebPageTrackingService()
 
         # Initialize vector client before use
@@ -335,10 +352,6 @@ class WebsiteScrapeJob(BaseJob):
         if credential_id:
             logger.info(f"Loading OAuth credential: {credential_id}")
             try:
-                from models.base import get_db_session
-                from models.oauth_credential import OAuthCredential
-                from services.encryption_service import get_encryption_service
-
                 encryption_service = get_encryption_service()
 
                 with get_db_session() as db_session:
@@ -357,12 +370,6 @@ class WebsiteScrapeJob(BaseJob):
                     token_json = encryption_service.decrypt(credential.encrypted_token)
 
                     # Check if token needs refresh
-                    import json
-                    from datetime import UTC, datetime, timedelta
-
-                    from google.auth.transport.requests import Request
-                    from google.oauth2.credentials import Credentials
-
                     token_data = json.loads(token_json)
                     should_refresh = False
 
@@ -588,8 +595,6 @@ class WebsiteScrapeJob(BaseJob):
                 metadata_list.append(doc_metadata)
 
                 # Generate unique ID for this chunk
-                import uuid as uuid_lib
-
                 chunk_id = str(uuid_lib.uuid5(uuid_lib.UUID(vector_uuid), f"chunk_{i}"))
                 vector_ids.append(chunk_id)
 
