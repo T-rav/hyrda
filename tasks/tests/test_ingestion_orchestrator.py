@@ -148,7 +148,7 @@ class TestIngestionOrchestratorInit:
             )
 
             # Assert
-            mock_client_class.assert_called_once_with("creds.json", "token.json")
+            mock_client_class.assert_called_once_with("creds.json", "token.json", None)
 
 
 class TestIngestionOrchestratorAuthentication:
@@ -283,7 +283,7 @@ class TestIngestionOrchestratorIngestFiles:
         assert error == 0
         assert skipped == 0
         mock_google_drive_client.download_file_content.assert_called_once_with(
-            "file123", "application/pdf"
+            "file123", "application/pdf", "test_document.pdf"
         )
         mock_embedding_service.chunk_text.assert_called_once()
         mock_embedding_service.embed_texts.assert_called_once()
