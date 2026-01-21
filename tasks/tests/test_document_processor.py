@@ -248,9 +248,7 @@ class TestDocumentProcessorAudioTranscription:
             # Mock OpenAI to raise an error
             mock_client = Mock()
             mock_openai.return_value = mock_client
-            mock_client.audio.transcriptions.create.side_effect = Exception(
-                "API error"
-            )
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
 
             result = processor_with_openai_key.extract_text(
                 audio_content, "audio/mpeg", "test.mp3"
@@ -281,15 +279,15 @@ class TestDocumentProcessorAudioTranscription:
         """Test temporary files are cleaned up after successful transcription."""
         audio_content = b"mock audio data"
 
-        with patch("openai.OpenAI"):
-            with patch("os.unlink") as mock_unlink:
-                with patch("builtins.open", MagicMock()):
-                    processor_with_openai_key._transcribe_audio(
-                        audio_content, "test.mp3"
-                    )
+        with (
+            patch("openai.OpenAI"),
+            patch("os.unlink") as mock_unlink,
+            patch("builtins.open", MagicMock()),
+        ):
+            processor_with_openai_key._transcribe_audio(audio_content, "test.mp3")
 
-                    # Verify temp file was deleted
-                    assert mock_unlink.called
+            # Verify temp file was deleted
+            assert mock_unlink.called
 
     def test_cleans_up_temp_files_on_error(self, processor_with_openai_key):
         """Test temporary files are cleaned up even on errors."""
@@ -298,18 +296,16 @@ class TestDocumentProcessorAudioTranscription:
         with patch("openai.OpenAI") as mock_openai:
             mock_client = Mock()
             mock_openai.return_value = mock_client
-            mock_client.audio.transcriptions.create.side_effect = Exception(
-                "API error"
-            )
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
 
-            with patch("os.unlink") as mock_unlink:
-                with patch("os.path.exists", return_value=True):
-                    processor_with_openai_key._transcribe_audio(
-                        audio_content, "test.mp3"
-                    )
+            with (
+                patch("os.unlink") as mock_unlink,
+                patch("os.path.exists", return_value=True),
+            ):
+                processor_with_openai_key._transcribe_audio(audio_content, "test.mp3")
 
-                    # Verify temp file was deleted even after error
-                    assert mock_unlink.called
+                # Verify temp file was deleted even after error
+                assert mock_unlink.called
 
     def test_supports_multiple_audio_formats(self, processor_with_openai_key):
         """Test support for various audio MIME types."""
@@ -374,9 +370,7 @@ class TestDocumentProcessorVideoTranscription:
         with patch("openai.OpenAI") as mock_openai:
             mock_client = Mock()
             mock_openai.return_value = mock_client
-            mock_client.audio.transcriptions.create.side_effect = Exception(
-                "API error"
-            )
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
 
             result = processor_with_openai_key.extract_text(
                 video_content, "video/mp4", "test.mp4"
@@ -413,15 +407,15 @@ class TestDocumentProcessorVideoTranscription:
         """Test temporary video files are cleaned up."""
         video_content = b"mock video data"
 
-        with patch("openai.OpenAI"):
-            with patch("os.unlink") as mock_unlink:
-                with patch("builtins.open", MagicMock()):
-                    processor_with_openai_key._transcribe_video(
-                        video_content, "test.mp4"
-                    )
+        with (
+            patch("openai.OpenAI"),
+            patch("os.unlink") as mock_unlink,
+            patch("builtins.open", MagicMock()),
+        ):
+            processor_with_openai_key._transcribe_video(video_content, "test.mp4")
 
-                    # Verify temp file was deleted
-                    assert mock_unlink.called
+            # Verify temp file was deleted
+            assert mock_unlink.called
 
 
 class TestDocumentProcessorMimeTypeDetection:
