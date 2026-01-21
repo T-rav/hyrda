@@ -10,6 +10,7 @@ from .job_registry import JobRegistry
 from .metric_sync import MetricSyncJob
 from .slack_user_import import SlackUserImportJob
 from .website_scrape import WebsiteScrapeJob
+from .youtube_ingest import YouTubeIngestJob
 
 __all__ = [
     "BaseJob",
@@ -18,4 +19,5 @@ __all__ = [
     "MetricSyncJob",
     "SlackUserImportJob",
     "WebsiteScrapeJob",
+    "YouTubeIngestJob",
 ]

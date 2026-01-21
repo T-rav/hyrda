@@ -68,22 +68,17 @@ class TestYouTubeTrackingServiceReindexCheck:
 
     def test_check_new_video_needs_reindex(self, tracking_service):
         """Test checking a new video that doesn't exist in database."""
-        with patch("services.youtube.youtube_tracking_service.get_data_db_session"):
-            with patch(
-                "services.youtube.youtube_tracking_service.get_data_db_session"
-            ) as mock_session:
-                mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = (
-                    None
-                )
+        with patch(
+            "services.youtube.youtube_tracking_service.get_data_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = None
 
-                needs_reindex, existing_uuid = (
-                    tracking_service.check_video_needs_reindex(
-                        "new_video_id", "New transcript"
-                    )
-                )
+            needs_reindex, existing_uuid = tracking_service.check_video_needs_reindex(
+                "new_video_id", "New transcript"
+            )
 
-                assert needs_reindex is True
-                assert existing_uuid is None
+            assert needs_reindex is True
+            assert existing_uuid is None
 
     def test_check_unchanged_video_skips_reindex(self, tracking_service):
         """Test that unchanged video is skipped."""
@@ -97,9 +92,7 @@ class TestYouTubeTrackingServiceReindexCheck:
         with patch(
             "services.youtube.youtube_tracking_service.get_data_db_session"
         ) as mock_session:
-            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = (
-                mock_video
-            )
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = mock_video
 
             needs_reindex, existing_uuid = tracking_service.check_video_needs_reindex(
                 "existing_video_id", transcript
@@ -122,9 +115,7 @@ class TestYouTubeTrackingServiceReindexCheck:
         with patch(
             "services.youtube.youtube_tracking_service.get_data_db_session"
         ) as mock_session:
-            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = (
-                mock_video
-            )
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = mock_video
 
             needs_reindex, existing_uuid = tracking_service.check_video_needs_reindex(
                 "existing_video_id", new_transcript

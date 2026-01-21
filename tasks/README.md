@@ -8,6 +8,9 @@ A standalone APScheduler WebUI service for managing scheduled tasks in the Insig
 - **Multiple Job Types**:
   - Slack User Import: Synchronize Slack users to database
   - Metrics Collection: System and usage metrics aggregation
+  - YouTube Channel Ingestion: Ingest videos from YouTube channels with audio transcription
+  - Google Drive Ingestion: Ingest documents from Google Drive folders
+  - Website Scraping: Scrape and index web pages for RAG
 - **Flexible Scheduling**: Support for interval, cron, and one-time jobs
 - **Real-time Monitoring**: Live job status updates and execution history
 - **RESTful API**: Complete API for programmatic job management
@@ -89,6 +92,71 @@ Collects and aggregates system metrics from various sources.
 **Schedule Examples:**
 - Every 15 minutes: `{"trigger": "interval", "minutes": 15}`
 - Hourly: `{"trigger": "interval", "hours": 1}`
+
+### YouTube Channel Ingestion
+
+Ingests videos from YouTube channels into the RAG system with audio download and transcription.
+
+**Parameters:**
+- `channel_url` (required): YouTube channel URL (e.g., `https://www.youtube.com/@8thLightInc`)
+- `include_videos` (optional): Include regular videos (default: true)
+- `include_shorts` (optional): Include YouTube Shorts (default: false)
+- `include_podcasts` (optional): Include podcast episodes (default: false)
+- `max_videos` (optional): Maximum number of videos to process (default: all)
+- `metadata` (optional): Custom metadata to attach to all videos
+
+**Features:**
+- Downloads audio using yt-dlp
+- Transcribes using OpenAI Whisper API
+- Chunks transcripts and generates embeddings
+- Stores in Qdrant vector database
+- Tracks processed videos to skip unchanged content
+- Supports videos, shorts, and podcasts
+
+**Environment Requirements:**
+```bash
+# Required API keys
+YOUTUBE_API_KEY=your-youtube-api-key
+OPENAI_API_KEY=your-openai-api-key
+
+# Vector database (Qdrant)
+VECTOR_HOST=localhost
+VECTOR_PORT=6333
+
+# Embedding service
+EMBEDDING_PROVIDER=openai
+EMBEDDING_API_KEY=your-openai-api-key
+```
+
+**Schedule Examples:**
+- Daily at 3 AM: `{"trigger": "cron", "hour": 3, "minute": 0}`
+- Every 6 hours: `{"trigger": "interval", "hours": 6}`
+
+**Example API Call:**
+```bash
+curl -X POST http://localhost:5001/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job_type": "youtube_ingest",
+    "job_id": "daily_youtube_sync",
+    "schedule": {
+      "trigger": "cron",
+      "hour": 3,
+      "minute": 0
+    },
+    "parameters": {
+      "channel_url": "https://www.youtube.com/@8thLightInc",
+      "include_videos": true,
+      "include_shorts": false,
+      "include_podcasts": true,
+      "max_videos": 50,
+      "metadata": {
+        "source": "8th_light",
+        "content_type": "technical"
+      }
+    }
+  }'
+```
 
 ## API Endpoints
 
