@@ -45,10 +45,13 @@ dependencies = [
     "cryptography>=41.0.0",  # Required for MySQL auth methods
     "alembic>=1.13.0",
 
-    # Google Drive API (for scheduled ingestion)
+    # Google APIs (for scheduled ingestion)
     "google-api-python-client>=2.0.0",
     "google-auth-httplib2>=0.1.0",
     "google-auth-oauthlib>=1.0.0",
+
+    # YouTube API (for video ingestion)
+    "youtube-transcript-api>=0.6.0",
 
     # Document processing (for Google Drive ingestion)
     "PyMuPDF>=1.23.0",  # PDF processing (fitz)
