@@ -176,10 +176,16 @@ class GDriveIngestJob(BaseJob):
                 token_file = f.name
 
             try:
+                # Get OpenAI API key for audio/video transcription
+                import os
+
+                openai_api_key = os.getenv("OPENAI_API_KEY")
+
                 # Initialize orchestrator with temporary token file
                 orchestrator = IngestionOrchestrator(
                     credentials_file=None,  # Not used - OAuth handled by env vars
                     token_file=token_file,
+                    openai_api_key=openai_api_key,
                 )
 
                 # Authenticate with Google Drive
@@ -189,41 +195,21 @@ class GDriveIngestJob(BaseJob):
 
                 # Initialize vector and embedding services using environment variables
                 logger.info("Initializing vector database and embedding service...")
-                import os
+                from services.openai_embeddings import OpenAIEmbeddings
+                from services.qdrant_client import QdrantClient
 
-                # Initialize embedding provider
-                embedding_provider = OpenAIEmbeddingProvider(  # noqa: F821
-                    api_key=os.getenv("EMBEDDING_API_KEY"),
-                    model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-                )
+                # Initialize embedding provider (reads from env vars)
+                embedding_provider = OpenAIEmbeddings()
 
-                # Initialize vector store
-                vector_store = QdrantVectorStore(  # noqa: F821
-                    host=os.getenv("VECTOR_HOST", "localhost"),
-                    port=int(os.getenv("VECTOR_PORT", "6333")),
-                    collection_name=os.getenv(
-                        "VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base"
-                    ),
-                    api_key=os.getenv("VECTOR_API_KEY"),
-                    use_https=os.getenv("VECTOR_USE_HTTPS", "false").lower() == "true",
-                )
-
-                await vector_store.initialize(
-                    embedding_dimension=embedding_provider.get_dimension()
-                )
+                # Initialize vector store (reads from env vars)
+                vector_store = QdrantClient()
+                await vector_store.initialize()
 
                 # Initialize LLM service for contextual retrieval if enabled
+                # Note: Contextual retrieval is currently disabled as SimpleLLMService
+                # is not implemented in the tasks service yet
                 llm_service = None
-                enable_contextual = (
-                    os.getenv("RAG_ENABLE_CONTEXTUAL_RETRIEVAL", "false").lower()
-                    == "true"
-                )
-                if enable_contextual and os.getenv("LLM_API_KEY"):
-                    llm_service = SimpleLLMService(  # noqa: F821
-                        api_key=os.getenv("LLM_API_KEY"),
-                        model=os.getenv("LLM_MODEL", "gpt-4o"),
-                    )
-                    logger.info("Contextual retrieval enabled")
+                logger.info("Contextual retrieval not available in tasks service")
 
                 # Set services in orchestrator
                 orchestrator.set_services(

@@ -177,6 +177,29 @@ class GoogleMetadataParser:
             "text/markdown",
             "text/csv",
             "application/json",
+            # Audio files (transcribed via OpenAI Whisper)
+            "audio/mpeg",  # mp3
+            "audio/mp3",
+            "audio/wav",
+            "audio/x-wav",
+            "audio/wave",
+            "audio/mp4",  # m4a
+            "audio/x-m4a",
+            "audio/aac",
+            "audio/ogg",
+            "audio/flac",
+            "audio/webm",
+            # Video files (audio extracted and transcribed via OpenAI Whisper)
+            "video/mp4",
+            "video/quicktime",  # mov
+            "video/x-msvideo",  # avi
+            "video/x-matroska",  # mkv
+            "video/webm",
         ]
 
-        return mime_type in supported_types or mime_type.startswith("text/")
+        return (
+            mime_type in supported_types
+            or mime_type.startswith("text/")
+            or mime_type.startswith("audio/")
+            or mime_type.startswith("video/")
+        )

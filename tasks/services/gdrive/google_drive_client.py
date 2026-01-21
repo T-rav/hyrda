@@ -23,7 +23,10 @@ class GoogleDriveClient:
     """Main orchestrator for Google Drive operations."""
 
     def __init__(
-        self, credentials_file: str | None = None, token_file: str | None = None
+        self,
+        credentials_file: str | None = None,
+        token_file: str | None = None,
+        openai_api_key: str | None = None,
     ):
         """
         Initialize the Google Drive client.
@@ -31,11 +34,12 @@ class GoogleDriveClient:
         Args:
             credentials_file: Path to Google OAuth2 credentials JSON file
             token_file: Path to store/retrieve OAuth2 token
+            openai_api_key: OpenAI API key for audio/video transcription (optional)
         """
         self.authenticator = GoogleAuthenticator(credentials_file, token_file)
         self.api_service = None
         self.metadata_parser = GoogleMetadataParser()
-        self.document_processor = DocumentProcessor()
+        self.document_processor = DocumentProcessor(openai_api_key=openai_api_key)
 
     def authenticate(self) -> bool:
         """
@@ -145,13 +149,16 @@ class GoogleDriveClient:
 
         return files
 
-    def download_file_content(self, file_id: str, mime_type: str) -> str | None:  # noqa: PLR0911
+    def download_file_content(  # noqa: PLR0911
+        self, file_id: str, mime_type: str, filename: str = "file"
+    ) -> str | None:
         """
         Download the content of a file from Google Drive and extract text.
 
         Args:
             file_id: Google Drive file ID
             mime_type: MIME type of the file
+            filename: Original filename (used for audio/video transcription)
 
         Returns:
             File content as string, or None if failed
@@ -180,7 +187,9 @@ class GoogleDriveClient:
                         return raw_content.decode("latin-1", errors="ignore")
                 else:
                     # Use document processor for other file types
-                    return self.document_processor.extract_text(raw_content, mime_type)
+                    return self.document_processor.extract_text(
+                        raw_content, mime_type, filename
+                    )
             else:
                 return str(raw_content)
 
