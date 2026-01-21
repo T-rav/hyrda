@@ -2,12 +2,14 @@
 
 import logging
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
 from config.settings import TasksSettings
+from services.openai_embeddings import OpenAIEmbeddings
+from services.qdrant_client import QdrantClient
 
 from .base_job import BaseJob
 
@@ -18,7 +20,9 @@ class WebsiteScrapeJob(BaseJob):
     """Job to scrape a website using sitemap and index into RAG system."""
 
     JOB_NAME = "Website Scraping"
-    JOB_DESCRIPTION = "Scrape website content using sitemap.xml and index into RAG system for Q&A"
+    JOB_DESCRIPTION = (
+        "Scrape website content using sitemap.xml and index into RAG system for Q&A"
+    )
     REQUIRED_PARAMS = ["website_url"]
     OPTIONAL_PARAMS = [
         "sitemap_url",
@@ -32,6 +36,11 @@ class WebsiteScrapeJob(BaseJob):
     def __init__(self, settings: TasksSettings, **kwargs: Any):
         """Initialize the website scraping job."""
         super().__init__(settings, **kwargs)
+
+        # Initialize embedding and vector clients for direct Qdrant access
+        self.embedding_client = OpenAIEmbeddings()
+        self.vector_client = QdrantClient()
+
         self.validate_params()
 
     def validate_params(self) -> bool:
@@ -56,7 +65,13 @@ class WebsiteScrapeJob(BaseJob):
         """
         logger.info(f"Fetching sitemap from: {sitemap_url}")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # Use system CA bundle for SSL verification
+        import ssl
+
+        ssl_context = ssl.create_default_context()
+        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+
+        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
             try:
                 response = await client.get(sitemap_url, follow_redirects=True)
                 response.raise_for_status()
@@ -68,22 +83,31 @@ class WebsiteScrapeJob(BaseJob):
         soup = BeautifulSoup(response.content, "xml")
         urls = []
 
-        # Handle standard sitemap format
-        for loc in soup.find_all("loc"):
-            url = loc.text.strip()
-            if url:
-                urls.append(url)
+        # Check if this is a sitemap index (contains <sitemap> tags)
+        sitemap_tags = soup.find_all("sitemap")
 
-        # Handle sitemap index (sitemap of sitemaps)
-        if not urls and soup.find_all("sitemap"):
-            logger.info("Found sitemap index, fetching child sitemaps...")
-            for sitemap_tag in soup.find_all("sitemap"):
+        if sitemap_tags:
+            # This is a sitemap index - recursively fetch child sitemaps
+            logger.info(f"Found sitemap index with {len(sitemap_tags)} child sitemaps")
+            for sitemap_tag in sitemap_tags:
                 child_loc = sitemap_tag.find("loc")
                 if child_loc:
-                    child_urls = await self._fetch_sitemap(child_loc.text.strip())
+                    child_sitemap_url = child_loc.text.strip()
+                    logger.debug(f"Fetching child sitemap: {child_sitemap_url}")
+                    child_urls = await self._fetch_sitemap(child_sitemap_url)
                     urls.extend(child_urls)
+        else:
+            # This is a regular sitemap with content URLs
+            for loc in soup.find_all("loc"):
+                url = loc.text.strip()
+                if url:
+                    # Filter out sitemap XML files - only keep actual content pages
+                    if not url.endswith(".xml"):
+                        urls.append(url)
+                    else:
+                        logger.debug(f"Skipping sitemap file: {url}")
 
-        logger.info(f"Found {len(urls)} URLs in sitemap")
+        logger.info(f"Found {len(urls)} content URLs in sitemap")
         return urls
 
     async def _scrape_page(self, url: str) -> dict[str, Any] | None:
@@ -97,7 +121,13 @@ class WebsiteScrapeJob(BaseJob):
         """
         logger.debug(f"Scraping page: {url}")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # Use system CA bundle for SSL verification
+        import ssl
+
+        ssl_context = ssl.create_default_context()
+        ssl_context.load_verify_locations("/etc/ssl/certs/ca-certificates.crt")
+
+        async with httpx.AsyncClient(timeout=30.0, verify=ssl_context) as client:
             try:
                 response = await client.get(url, follow_redirects=True)
                 response.raise_for_status()
@@ -176,10 +206,14 @@ class WebsiteScrapeJob(BaseJob):
 
         tracking_service = WebPageTrackingService()
 
+        # Initialize vector client before use
+        logger.info("Initializing vector database connection...")
+        await self.vector_client.initialize()
+
         # Get job parameters
         website_url = self.params.get("website_url")
         sitemap_url = self.params.get("sitemap_url")
-        max_pages = self.params.get("max_pages", 100)
+        max_pages = self.params.get("max_pages", None)  # None = unlimited
         include_patterns = self.params.get("include_patterns", [])
         exclude_patterns = self.params.get("exclude_patterns", [])
         metadata = self.params.get("metadata", {})
@@ -193,7 +227,7 @@ class WebsiteScrapeJob(BaseJob):
 
         logger.info(
             f"Starting website scraping: url={website_url}, "
-            f"sitemap={sitemap_url}, max_pages={max_pages}"
+            f"sitemap={sitemap_url}, max_pages={max_pages or 'unlimited'}"
         )
 
         # Fetch sitemap URLs
@@ -220,10 +254,12 @@ class WebsiteScrapeJob(BaseJob):
                 f"(include={include_patterns}, exclude={exclude_patterns})"
             )
 
-        # Limit number of pages
-        if len(urls) > max_pages:
+        # Limit number of pages (if max_pages is specified)
+        if max_pages is not None and len(urls) > max_pages:
             logger.info(f"Limiting to {max_pages} pages (found {len(urls)})")
             urls = urls[:max_pages]
+        else:
+            logger.info(f"Processing all {len(urls)} URLs from sitemap (no limit)")
 
         # Check for pages to scrape vs skip
         domain = tracking_service.extract_domain(website_url)
@@ -234,7 +270,9 @@ class WebsiteScrapeJob(BaseJob):
         for i, url in enumerate(urls, 1):
             # Check if page needs rescraping
             if not force_rescrape:
-                needs_rescrape, existing_uuid = tracking_service.check_page_needs_rescrape(url)
+                needs_rescrape, existing_uuid = (
+                    tracking_service.check_page_needs_rescrape(url)
+                )
                 if not needs_rescrape:
                     logger.info(f"Skipping unchanged page {i}/{len(urls)}: {url}")
                     skipped_count += 1
@@ -271,64 +309,107 @@ class WebsiteScrapeJob(BaseJob):
                         vector_uuid=existing_page.get("vector_uuid", ""),
                         chunk_count=0,
                         status="removed",
-                        error_message="Page no longer in sitemap"
+                        error_message="Page no longer in sitemap",
                     )
                     removed_count += 1
 
             if removed_count > 0:
                 logger.info(f"Marked {removed_count} pages as removed")
 
-        # Index into RAG system
-        from services.rag_client import RAGIngestClient
+        # Index into Qdrant (direct vector database access like other jobs)
+        texts = []
+        metadata_list = []
+        vector_ids = []
+        page_chunk_counts = []  # Track chunks per page for recording
 
-        rag_client = RAGIngestClient(
-            base_url=self.settings.rag_service_url,
-            service_token=self.settings.bot_service_token,
-        )
-
-        # Prepare documents for ingestion and track them
-        documents = []
         for page in scraped_pages:
             # Generate deterministic UUID for this page
             vector_uuid = tracking_service.generate_base_uuid(page["url"])
 
-            # Add custom metadata
-            doc_metadata = {
-                "source": "website_scrape",
-                "url": page["url"],
-                "title": page["title"],
-                "description": page["description"],
-                "website": website_url,
-                "vector_uuid": vector_uuid,
-                **metadata,  # Include any custom metadata from job params
-            }
+            # Chunk the content to avoid token limit errors
+            # Using same settings as Google Drive ingestion
+            chunks = self.embedding_client.chunk_text(
+                page["content"], chunk_size=2000, chunk_overlap=200
+            )
 
-            documents.append({"content": page["content"], "metadata": doc_metadata})
+            # If content is empty or very small, create at least one chunk
+            if not chunks:
+                chunks = [page["content"] or ""]
 
-        # Ingest documents
-        logger.info(f"Ingesting {len(documents)} documents into RAG system...")
-        ingest_result = await rag_client.ingest_documents(documents)
+            page_chunk_counts.append(len(chunks))
+            logger.debug(
+                f"Split {page['url']} into {len(chunks)} chunks "
+                f"({len(page['content'])} chars)"
+            )
+
+            # Create a chunk for each piece of content
+            for i, chunk in enumerate(chunks):
+                # Add page title/URL context to each chunk
+                chunk_with_context = f"[{page['title']}]\n{page['url']}\n\n{chunk}"
+
+                # Add chunk metadata
+                doc_metadata = {
+                    "source": "website_scrape",
+                    "url": page["url"],
+                    "title": page["title"],
+                    "description": page["description"],
+                    "website": website_url,
+                    "vector_uuid": vector_uuid,
+                    "chunk_index": i,
+                    "total_chunks": len(chunks),
+                    **metadata,  # Include any custom metadata from job params
+                }
+
+                texts.append(chunk_with_context)
+                metadata_list.append(doc_metadata)
+
+                # Generate unique ID for this chunk
+                import uuid as uuid_lib
+
+                chunk_id = str(uuid_lib.uuid5(uuid_lib.UUID(vector_uuid), f"chunk_{i}"))
+                vector_ids.append(chunk_id)
+
+        # Generate embeddings and upsert to Qdrant
+        logger.info(
+            f"Generating embeddings for {len(texts)} chunks from {len(scraped_pages)} pages..."
+        )
+        embeddings = self.embedding_client.embed_batch(texts)
+
+        logger.info(f"Upserting {len(texts)} documents to Qdrant...")
+        await self.vector_client.upsert_with_namespace(
+            texts, embeddings, metadata_list, namespace="website_scrape"
+        )
+
+        success_count = len(texts)
+        error_count = 0
 
         logger.info(
-            f"Ingestion complete: {ingest_result.get('success_count', 0)} success, "
-            f"{ingest_result.get('error_count', 0)} errors"
+            f"Ingestion complete: {success_count} success, {error_count} errors"
         )
 
         # Record successful scrapes in tracking table
         for i, page in enumerate(scraped_pages):
             try:
-                vector_uuid = documents[i]["metadata"]["vector_uuid"]
+                vector_uuid = tracking_service.generate_base_uuid(page["url"])
                 tracking_service.record_page_scrape(
                     url=page["url"],
                     page_title=page["title"],
                     content=page["content"],
                     vector_uuid=vector_uuid,
-                    chunk_count=1,  # Single chunk for now (RAG service handles chunking)
-                    metadata=documents[i]["metadata"],
+                    chunk_count=page_chunk_counts[i],  # Actual chunk count
+                    metadata={
+                        "source": "website_scrape",
+                        "url": page["url"],
+                        "title": page["title"],
+                        "description": page["description"],
+                        "website": website_url,
+                    },
                     status="success",
                 )
             except Exception as tracking_error:
-                logger.warning(f"Failed to record tracking for {page['url']}: {tracking_error}")
+                logger.warning(
+                    f"Failed to record tracking for {page['url']}: {tracking_error}"
+                )
                 # Don't fail entire job on tracking errors
 
         # Return result summary
@@ -341,12 +422,15 @@ class WebsiteScrapeJob(BaseJob):
             "pages_skipped": skipped_count,
             "pages_removed": removed_count,
             "pages_failed": failed_count,
-            "pages_indexed": ingest_result.get("success_count", 0),
-            "index_errors": ingest_result.get("error_count", 0),
+            "pages_indexed": success_count,
+            "index_errors": error_count,
             "force_rescrape": force_rescrape,
             "details": {
                 "total_urls_in_sitemap": len(urls),
-                "urls_filtered_out": len(urls) - len(scraped_pages) - skipped_count - failed_count,
+                "urls_filtered_out": len(urls)
+                - len(scraped_pages)
+                - skipped_count
+                - failed_count,
                 "sample_scraped": [page["url"] for page in scraped_pages[:5]],
                 "change_detection_enabled": not force_rescrape,
             },
