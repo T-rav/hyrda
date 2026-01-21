@@ -1,43 +1,50 @@
 """
 YouTube Client Service
 
-Handles interaction with YouTube Data API v3 and transcript fetching.
+Handles interaction with YouTube Data API v3, audio download, and transcription.
 """
 
+import json
 import logging
 import os
 import re
+import subprocess
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from googleapiclient.discovery import build
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api._errors import (
-    NoTranscriptFound,
-    TranscriptsDisabled,
-    VideoUnavailable,
-)
 
 logger = logging.getLogger(__name__)
 
 
 class YouTubeClient:
-    """Client for fetching YouTube channel videos and transcripts."""
+    """Client for fetching YouTube channel videos, downloading audio, and transcribing."""
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(
+        self, youtube_api_key: str | None = None, openai_api_key: str | None = None
+    ):
         """
         Initialize YouTube client.
 
         Args:
-            api_key: YouTube Data API v3 key. If None, reads from YOUTUBE_API_KEY env var.
+            youtube_api_key: YouTube Data API v3 key. If None, reads from YOUTUBE_API_KEY env var.
+            openai_api_key: OpenAI API key for Whisper transcription. If None, reads from OPENAI_API_KEY env var.
         """
-        self.api_key = api_key or os.getenv("YOUTUBE_API_KEY")
-        if not self.api_key:
+        self.youtube_api_key = youtube_api_key or os.getenv("YOUTUBE_API_KEY")
+        if not self.youtube_api_key:
             raise ValueError(
                 "YouTube API key is required. Set YOUTUBE_API_KEY environment variable."
             )
 
-        self.youtube = build("youtube", "v3", developerKey=self.api_key)
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        if not self.openai_api_key:
+            raise ValueError(
+                "OpenAI API key is required for transcription. Set OPENAI_API_KEY environment variable."
+            )
+
+        self.youtube = build("youtube", "v3", developerKey=self.youtube_api_key)
 
     def extract_channel_id_from_url(self, url: str) -> tuple[str | None, str | None]:
         """
@@ -291,50 +298,128 @@ class YouTubeClient:
         except Exception:
             return None
 
+    def download_audio(
+        self, video_url: str, output_path: str | None = None
+    ) -> str | None:
+        """
+        Download audio from YouTube video using yt-dlp.
+
+        Args:
+            video_url: YouTube video URL
+            output_path: Output directory (default: temp directory)
+
+        Returns:
+            Path to downloaded audio file, or None if download fails
+        """
+        if output_path is None:
+            output_path = tempfile.mkdtemp()
+
+        try:
+            # Use yt-dlp to download audio only
+            command = [
+                "yt-dlp",
+                "-x",  # Extract audio
+                "--audio-format",
+                "m4a",  # Audio format
+                "--output",
+                os.path.join(output_path, "%(id)s.%(ext)s"),  # Use video ID as filename
+                "--format",
+                "bestaudio",
+                "-N",
+                "4",  # Use 4 connections
+                video_url,
+            ]
+
+            result = subprocess.run(
+                command, check=True, capture_output=True, text=True
+            )
+
+            # Extract file path from yt-dlp output
+            file_path_match = re.search(r"Destination:\s+(.*\.m4a)", result.stdout)
+            if file_path_match:
+                return file_path_match.group(1)
+
+            # If not found, try to find the file in output directory
+            for file in os.listdir(output_path):
+                if file.endswith(".m4a"):
+                    return os.path.join(output_path, file)
+
+            logger.error("Audio file not found after download")
+            return None
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error downloading audio from {video_url}: {e.stderr}")
+            return None
+        except Exception as e:
+            logger.error(f"Error downloading audio: {e}")
+            return None
+
+    def transcribe_audio(self, audio_file_path: str) -> str | None:
+        """
+        Transcribe audio file using OpenAI Whisper API.
+
+        Args:
+            audio_file_path: Path to audio file
+
+        Returns:
+            Transcribed text, or None if transcription fails
+        """
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=self.openai_api_key)
+
+            with open(audio_file_path, "rb") as audio_file:
+                logger.debug(f"Transcribing audio file: {audio_file_path}")
+                transcription = client.audio.transcriptions.create(
+                    model="whisper-1", file=audio_file, response_format="text"
+                )
+
+            return transcription if transcription.strip() else None
+
+        except Exception as e:
+            logger.error(f"Error transcribing audio file: {e}")
+            return None
+
     def get_video_transcript(
-        self, video_id: str, preferred_languages: list[str] | None = None
+        self, video_id: str, cleanup: bool = True
     ) -> tuple[str | None, str | None]:
         """
-        Get transcript for a YouTube video.
+        Download video audio and transcribe it.
 
         Args:
             video_id: YouTube video ID
-            preferred_languages: List of preferred language codes (e.g., ['en', 'es'])
+            cleanup: Whether to delete downloaded audio file after transcription
 
         Returns:
-            Tuple of (transcript_text, language_code) or (None, None) if not available
+            Tuple of (transcript_text, 'en') or (None, None) if transcription fails
         """
-        if preferred_languages is None:
-            preferred_languages = ["en"]
+        video_url = f"https://www.youtube.com/watch?v={video_id}"
 
         try:
-            # Try to get transcript in preferred languages
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            # Download audio
+            audio_path = self.download_audio(video_url)
+            if not audio_path:
+                return (None, None)
 
-            # Try manual transcripts first (higher quality)
-            try:
-                transcript = transcript_list.find_manually_created_transcript(
-                    preferred_languages
-                )
-                transcript_data = transcript.fetch()
-                language = transcript.language_code
-            except NoTranscriptFound:
-                # Fall back to auto-generated transcripts
-                transcript = transcript_list.find_generated_transcript(
-                    preferred_languages
-                )
-                transcript_data = transcript.fetch()
-                language = transcript.language_code
+            # Transcribe audio
+            transcript = self.transcribe_audio(audio_path)
 
-            # Combine transcript segments
-            full_transcript = " ".join([segment["text"] for segment in transcript_data])
-            return (full_transcript, language)
+            # Cleanup audio file
+            if cleanup and audio_path and os.path.exists(audio_path):
+                try:
+                    os.unlink(audio_path)
+                    # Also try to clean up temp directory if empty
+                    temp_dir = os.path.dirname(audio_path)
+                    if os.path.exists(temp_dir) and not os.listdir(temp_dir):
+                        os.rmdir(temp_dir)
+                except Exception as e:
+                    logger.warning(f"Failed to cleanup audio file: {e}")
 
-        except (TranscriptsDisabled, NoTranscriptFound, VideoUnavailable) as e:
-            logger.warning(f"Transcript not available for video {video_id}: {e}")
-            return (None, None)
+            return (transcript, "en" if transcript else None)
+
         except Exception as e:
-            logger.error(f"Error fetching transcript for video {video_id}: {e}")
+            logger.error(f"Error getting transcript for video {video_id}: {e}")
             return (None, None)
 
     def get_video_info_with_transcript(

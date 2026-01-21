@@ -51,7 +51,7 @@ dependencies = [
     "google-auth-oauthlib>=1.0.0",
 
     # YouTube API (for video ingestion)
-    "youtube-transcript-api>=0.6.0",
+    "yt-dlp>=2024.0.0",  # YouTube audio download
 
     # Document processing (for Google Drive ingestion)
     "PyMuPDF>=1.23.0",  # PDF processing (fitz)
