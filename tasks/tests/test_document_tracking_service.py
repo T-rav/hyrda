@@ -33,8 +33,7 @@ class TestDocumentTrackingServiceIntegration:
         """Test that service connects to insightmesh_data database."""
         # This test verifies the fix - should not raise an error
         needs_reindex, uuid = self.service.check_document_needs_reindex(
-            google_drive_id=self.test_google_drive_id,
-            content="test content"
+            google_drive_id=self.test_google_drive_id, content="test content"
         )
 
         # New document should need indexing
@@ -61,7 +60,7 @@ class TestDocumentTrackingServiceIntegration:
         # Verify document was recorded
         needs_reindex, existing_uuid = self.service.check_document_needs_reindex(
             google_drive_id=self.test_google_drive_id,
-            content="test content for hashing"
+            content="test content for hashing",
         )
 
         # Same content should not need reindexing
@@ -86,7 +85,7 @@ class TestDocumentTrackingServiceIntegration:
         # Check with different content
         needs_reindex, existing_uuid = self.service.check_document_needs_reindex(
             google_drive_id=self.test_google_drive_id,
-            content="modified content"  # Different content
+            content="modified content",  # Different content
         )
 
         # Changed content should trigger reindex
@@ -114,9 +113,13 @@ class TestDocumentTrackingServiceIntegration:
         from services.gdrive.document_tracking_service import GoogleDriveDocument
 
         with get_data_db_session() as session:
-            doc = session.query(GoogleDriveDocument).filter(
-                GoogleDriveDocument.google_drive_id == self.test_google_drive_id
-            ).first()
+            doc = (
+                session.query(GoogleDriveDocument)
+                .filter(
+                    GoogleDriveDocument.google_drive_id == self.test_google_drive_id
+                )
+                .first()
+            )
 
             assert doc is not None
             assert doc.ingestion_status == "failed"
