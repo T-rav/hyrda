@@ -19,7 +19,10 @@ class IngestionOrchestrator:
     """Main orchestrator for the document ingestion process."""
 
     def __init__(
-        self, credentials_file: str | None = None, token_file: str | None = None
+        self,
+        credentials_file: str | None = None,
+        token_file: str | None = None,
+        openai_api_key: str | None = None,
     ):
         """
         Initialize the ingestion orchestrator.
@@ -27,8 +30,11 @@ class IngestionOrchestrator:
         Args:
             credentials_file: Path to Google OAuth2 credentials JSON file
             token_file: Path to store/retrieve OAuth2 token
+            openai_api_key: OpenAI API key for audio/video transcription (optional)
         """
-        self.google_drive_client = GoogleDriveClient(credentials_file, token_file)
+        self.google_drive_client = GoogleDriveClient(
+            credentials_file, token_file, openai_api_key
+        )
         self.document_tracker = DocumentTrackingService()
         self.vector_service = None
         self.embedding_service = None
@@ -108,7 +114,7 @@ class IngestionOrchestrator:
 
                 # Download file content
                 content = self.google_drive_client.download_file_content(
-                    file_info["id"], file_info["mimeType"]
+                    file_info["id"], file_info["mimeType"], file_info["name"]
                 )
                 if not content:
                     print(f"Failed to download: {file_info['name']}")

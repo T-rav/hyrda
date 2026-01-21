@@ -169,6 +169,7 @@ docker logs -f insightmesh-bot      # Bot logs
 # Also ensure these are configured:
 # - Vector database (Qdrant): VECTOR_HOST, VECTOR_PORT
 # - Embedding service: EMBEDDING_PROVIDER, EMBEDDING_API_KEY
+# - OpenAI API key (for audio/video transcription): OPENAI_API_KEY
 
 # 2. Authenticate Google Drive (saves OAuth credential to database):
 open http://localhost:5001/api/gdrive/auth
@@ -186,7 +187,9 @@ open http://localhost:5001
 #    - Optional: Add custom metadata for all documents
 
 # Supported Formats:
-# PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
+# - Documents: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
+# - Audio: MP3, WAV, M4A, AAC, OGG, FLAC, WebM (transcribed via OpenAI Whisper)
+# - Video: MP4, MOV, AVI, MKV, WebM (audio extracted and transcribed via OpenAI Whisper)
 # Includes comprehensive metadata: file paths, permissions, owners, sharing settings
 ```
 

@@ -1,5 +1,7 @@
 """Tests for document processor service."""
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 
 from services.gdrive.document_processor import DocumentProcessor
@@ -9,6 +11,12 @@ from services.gdrive.document_processor import DocumentProcessor
 def processor():
     """Create document processor instance."""
     return DocumentProcessor()
+
+
+@pytest.fixture
+def processor_with_openai_key():
+    """Create document processor with OpenAI API key."""
+    return DocumentProcessor(openai_api_key="test-key-123")
 
 
 class TestDocumentProcessorTextExtraction:
@@ -193,3 +201,270 @@ class TestDocumentProcessorPerformance:
 
         # Should process 20KB text in under 1 second
         assert duration < 1.0
+
+
+class TestDocumentProcessorAudioTranscription:
+    """Test audio transcription functionality."""
+
+    def test_transcribes_audio_with_api_key(self, processor_with_openai_key):
+        """Test audio transcription when API key is configured."""
+        audio_content = b"mock audio data"
+        mock_transcript = "This is transcribed audio text"
+
+        with patch("openai.OpenAI") as mock_openai:
+            # Mock OpenAI client
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+
+            # Mock transcription response
+            mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+            # Test transcription
+            result = processor_with_openai_key.extract_text(
+                audio_content, "audio/mpeg", "test.mp3"
+            )
+
+            # Verify OpenAI was called correctly
+            mock_openai.assert_called_once_with(api_key="test-key-123")
+            mock_client.audio.transcriptions.create.assert_called_once()
+
+            # Verify result
+            assert result == mock_transcript
+
+    def test_skips_audio_without_api_key(self, processor):
+        """Test audio transcription skips when API key not configured."""
+        audio_content = b"mock audio data"
+
+        result = processor.extract_text(audio_content, "audio/mpeg", "test.mp3")
+
+        # Should return None when API key not configured
+        assert result is None
+
+    def test_handles_audio_transcription_errors(self, processor_with_openai_key):
+        """Test error handling during audio transcription."""
+        audio_content = b"mock audio data"
+
+        with patch("openai.OpenAI") as mock_openai:
+            # Mock OpenAI to raise an error
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
+
+            result = processor_with_openai_key.extract_text(
+                audio_content, "audio/mpeg", "test.mp3"
+            )
+
+            # Should return None on error
+            assert result is None
+
+    def test_handles_empty_audio_transcription(self, processor_with_openai_key):
+        """Test handling of empty transcription results."""
+        audio_content = b"mock audio data"
+
+        with patch("openai.OpenAI") as mock_openai:
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+
+            # Mock empty transcription
+            mock_client.audio.transcriptions.create.return_value = "   "
+
+            result = processor_with_openai_key.extract_text(
+                audio_content, "audio/mpeg", "test.mp3"
+            )
+
+            # Should return None for empty/whitespace-only transcriptions
+            assert result is None
+
+    def test_cleans_up_temp_files_on_success(self, processor_with_openai_key):
+        """Test temporary files are cleaned up after successful transcription."""
+        audio_content = b"mock audio data"
+
+        with (
+            patch("openai.OpenAI"),
+            patch("os.unlink") as mock_unlink,
+            patch("builtins.open", MagicMock()),
+        ):
+            processor_with_openai_key._transcribe_audio(audio_content, "test.mp3")
+
+            # Verify temp file was deleted
+            assert mock_unlink.called
+
+    def test_cleans_up_temp_files_on_error(self, processor_with_openai_key):
+        """Test temporary files are cleaned up even on errors."""
+        audio_content = b"mock audio data"
+
+        with patch("openai.OpenAI") as mock_openai:
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
+
+            with (
+                patch("os.unlink") as mock_unlink,
+                patch("os.path.exists", return_value=True),
+            ):
+                processor_with_openai_key._transcribe_audio(audio_content, "test.mp3")
+
+                # Verify temp file was deleted even after error
+                assert mock_unlink.called
+
+    def test_supports_multiple_audio_formats(self, processor_with_openai_key):
+        """Test support for various audio MIME types."""
+        audio_formats = [
+            ("audio/mpeg", "test.mp3"),
+            ("audio/wav", "test.wav"),
+            ("audio/mp4", "test.m4a"),
+            ("audio/aac", "test.aac"),
+            ("audio/ogg", "test.ogg"),
+            ("audio/flac", "test.flac"),
+            ("audio/webm", "test.webm"),
+        ]
+
+        for mime_type, filename in audio_formats:
+            with patch("openai.OpenAI") as mock_openai:
+                mock_client = Mock()
+                mock_openai.return_value = mock_client
+                mock_client.audio.transcriptions.create.return_value = (
+                    f"Transcribed {filename}"
+                )
+
+                result = processor_with_openai_key.extract_text(
+                    b"audio data", mime_type, filename
+                )
+
+                assert result == f"Transcribed {filename}"
+
+
+class TestDocumentProcessorVideoTranscription:
+    """Test video transcription functionality."""
+
+    def test_transcribes_video_with_api_key(self, processor_with_openai_key):
+        """Test video transcription when API key is configured."""
+        video_content = b"mock video data"
+        mock_transcript = "This is transcribed video audio"
+
+        with patch("openai.OpenAI") as mock_openai:
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+            mock_client.audio.transcriptions.create.return_value = mock_transcript
+
+            result = processor_with_openai_key.extract_text(
+                video_content, "video/mp4", "test.mp4"
+            )
+
+            # Verify result
+            assert result == mock_transcript
+
+    def test_skips_video_without_api_key(self, processor):
+        """Test video transcription skips when API key not configured."""
+        video_content = b"mock video data"
+
+        result = processor.extract_text(video_content, "video/mp4", "test.mp4")
+
+        # Should return None when API key not configured
+        assert result is None
+
+    def test_handles_video_transcription_errors(self, processor_with_openai_key):
+        """Test error handling during video transcription."""
+        video_content = b"mock video data"
+
+        with patch("openai.OpenAI") as mock_openai:
+            mock_client = Mock()
+            mock_openai.return_value = mock_client
+            mock_client.audio.transcriptions.create.side_effect = Exception("API error")
+
+            result = processor_with_openai_key.extract_text(
+                video_content, "video/mp4", "test.mp4"
+            )
+
+            # Should return None on error
+            assert result is None
+
+    def test_supports_multiple_video_formats(self, processor_with_openai_key):
+        """Test support for various video MIME types."""
+        video_formats = [
+            ("video/mp4", "test.mp4"),
+            ("video/quicktime", "test.mov"),
+            ("video/x-msvideo", "test.avi"),
+            ("video/x-matroska", "test.mkv"),
+            ("video/webm", "test.webm"),
+        ]
+
+        for mime_type, filename in video_formats:
+            with patch("openai.OpenAI") as mock_openai:
+                mock_client = Mock()
+                mock_openai.return_value = mock_client
+                mock_client.audio.transcriptions.create.return_value = (
+                    f"Transcribed {filename}"
+                )
+
+                result = processor_with_openai_key.extract_text(
+                    b"video data", mime_type, filename
+                )
+
+                assert result == f"Transcribed {filename}"
+
+    def test_cleans_up_video_temp_files(self, processor_with_openai_key):
+        """Test temporary video files are cleaned up."""
+        video_content = b"mock video data"
+
+        with (
+            patch("openai.OpenAI"),
+            patch("os.unlink") as mock_unlink,
+            patch("builtins.open", MagicMock()),
+        ):
+            processor_with_openai_key._transcribe_video(video_content, "test.mp4")
+
+            # Verify temp file was deleted
+            assert mock_unlink.called
+
+
+class TestDocumentProcessorMimeTypeDetection:
+    """Test MIME type detection for audio/video files."""
+
+    def test_detects_audio_mime_types(self, processor_with_openai_key):
+        """Test detection of audio MIME types."""
+        audio_types = processor_with_openai_key.AUDIO_MIME_TYPES
+
+        # Verify expected audio types are recognized
+        assert "audio/mpeg" in audio_types
+        assert "audio/wav" in audio_types
+        assert "audio/mp4" in audio_types
+
+    def test_detects_video_mime_types(self, processor_with_openai_key):
+        """Test detection of video MIME types."""
+        video_types = processor_with_openai_key.VIDEO_MIME_TYPES
+
+        # Verify expected video types are recognized
+        assert "video/mp4" in video_types
+        assert "video/quicktime" in video_types
+        assert "video/webm" in video_types
+
+    def test_routes_audio_to_transcription(self, processor_with_openai_key):
+        """Test that audio MIME types route to transcription."""
+        with patch(
+            "services.gdrive.document_processor.DocumentProcessor._transcribe_audio"
+        ) as mock_transcribe:
+            mock_transcribe.return_value = "transcribed"
+
+            result = processor_with_openai_key.extract_text(
+                b"audio", "audio/mpeg", "test.mp3"
+            )
+
+            # Verify _transcribe_audio was called
+            mock_transcribe.assert_called_once()
+            assert result == "transcribed"
+
+    def test_routes_video_to_transcription(self, processor_with_openai_key):
+        """Test that video MIME types route to transcription."""
+        with patch(
+            "services.gdrive.document_processor.DocumentProcessor._transcribe_video"
+        ) as mock_transcribe:
+            mock_transcribe.return_value = "transcribed"
+
+            result = processor_with_openai_key.extract_text(
+                b"video", "video/mp4", "test.mp4"
+            )
+
+            # Verify _transcribe_video was called
+            mock_transcribe.assert_called_once()
+            assert result == "transcribed"

@@ -6,8 +6,12 @@ Handles text extraction from various document formats including:
 - Microsoft Office documents (.docx, .xlsx, .pptx)
 - Google Workspace documents (handled by Google Drive API export)
 - Text files
+- Audio files (.mp3, .wav, .m4a, .aac, .ogg, .flac, .webm) - transcribed using OpenAI Whisper
+- Video files (.mp4, .mov, .avi, .mkv, .webm) - audio extracted and transcribed
 """
 
+import os
+import tempfile
 from io import BytesIO
 
 # Document processing libraries
@@ -20,13 +24,49 @@ from pptx import Presentation  # python-pptx for PowerPoint
 class DocumentProcessor:
     """Service for extracting text content from various document formats."""
 
-    def extract_text(self, content: bytes, mime_type: str) -> str | None:
+    # Audio MIME types supported for transcription
+    AUDIO_MIME_TYPES = {
+        "audio/mpeg",  # mp3
+        "audio/mp3",  # mp3
+        "audio/wav",  # wav
+        "audio/x-wav",  # wav
+        "audio/wave",  # wav
+        "audio/mp4",  # m4a
+        "audio/x-m4a",  # m4a
+        "audio/aac",  # aac
+        "audio/ogg",  # ogg
+        "audio/flac",  # flac
+        "audio/webm",  # webm
+    }
+
+    # Video MIME types supported for transcription
+    VIDEO_MIME_TYPES = {
+        "video/mp4",  # mp4
+        "video/quicktime",  # mov
+        "video/x-msvideo",  # avi
+        "video/x-matroska",  # mkv
+        "video/webm",  # webm
+    }
+
+    def __init__(self, openai_api_key: str | None = None):
+        """
+        Initialize document processor.
+
+        Args:
+            openai_api_key: OpenAI API key for transcription. If None, reads from OPENAI_API_KEY env var.
+        """
+        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+
+    def extract_text(  # noqa: PLR0911
+        self, content: bytes, mime_type: str, filename: str = "file"
+    ) -> str | None:
         """
         Extract text from document bytes based on MIME type.
 
         Args:
             content: Document content as bytes
             mime_type: MIME type of the document
+            filename: Original filename (used for audio/video transcription)
 
         Returns:
             Extracted text content, or None if extraction fails
@@ -50,6 +90,10 @@ class DocumentProcessor:
             return self._extract_pptx_text(content)
         elif mime_type.startswith("text/"):
             return self._extract_text_content(content)
+        elif mime_type in self.AUDIO_MIME_TYPES:
+            return self._transcribe_audio(content, filename)
+        elif mime_type in self.VIDEO_MIME_TYPES:
+            return self._transcribe_video(content, filename)
         else:
             print(f"Unsupported MIME type for text extraction: {mime_type}")
             return None
@@ -232,4 +276,110 @@ class DocumentProcessor:
 
         except Exception as e:
             print(f"Error extracting PowerPoint presentation text: {e}")
+            return None
+
+    def _transcribe_audio(self, audio_content: bytes, filename: str) -> str | None:
+        """
+        Transcribe audio content to text using OpenAI Whisper API.
+
+        Args:
+            audio_content: Audio file content as bytes
+            filename: Original filename (used to determine extension)
+
+        Returns:
+            Transcribed text content, or None if transcription fails
+        """
+        if not self.openai_api_key:
+            print("OpenAI API key not configured - skipping audio transcription")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=self.openai_api_key)
+
+            # Determine file extension from filename
+            file_ext = filename.split(".")[-1] if "." in filename else "mp3"
+
+            # Create temporary file for audio content
+            # (Whisper API requires a file-like object with a name attribute)
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{file_ext}", delete=False
+            ) as temp_file:
+                temp_file.write(audio_content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Transcribe audio using Whisper API
+                with open(temp_file_path, "rb") as audio_file:
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1", file=audio_file, response_format="text"
+                    )
+
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+
+                return transcript if transcript.strip() else None
+
+            except Exception as e:
+                # Clean up temporary file on error
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                raise e
+
+        except Exception as e:
+            print(f"Error transcribing audio: {e}")
+            return None
+
+    def _transcribe_video(self, video_content: bytes, filename: str) -> str | None:
+        """
+        Transcribe video content to text by extracting audio and using OpenAI Whisper API.
+
+        Args:
+            video_content: Video file content as bytes
+            filename: Original filename (used to determine extension)
+
+        Returns:
+            Transcribed text content, or None if transcription fails
+        """
+        if not self.openai_api_key:
+            print("OpenAI API key not configured - skipping video transcription")
+            return None
+
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(api_key=self.openai_api_key)
+
+            # Determine file extension from filename
+            file_ext = filename.split(".")[-1] if "." in filename else "mp4"
+
+            # Create temporary file for video content
+            # Note: For video files, Whisper API will extract audio automatically
+            with tempfile.NamedTemporaryFile(
+                suffix=f".{file_ext}", delete=False
+            ) as temp_file:
+                temp_file.write(video_content)
+                temp_file_path = temp_file.name
+
+            try:
+                # Transcribe video (Whisper API handles audio extraction)
+                with open(temp_file_path, "rb") as video_file:
+                    transcript = client.audio.transcriptions.create(
+                        model="whisper-1", file=video_file, response_format="text"
+                    )
+
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+
+                return transcript if transcript.strip() else None
+
+            except Exception as e:
+                # Clean up temporary file on error
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+                raise e
+
+        except Exception as e:
+            print(f"Error transcribing video: {e}")
             return None
