@@ -1,43 +1,9 @@
 """Comprehensive tests for Task Runs API (api/task_runs.py)."""
 
-import os
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def app():
-    """Get the FastAPI app instance for testing."""
-    os.environ.setdefault("TASK_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("DATA_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("SERVER_BASE_URL", "http://localhost:5001")
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-sessions")
-    os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
-
-    from app import app as fastapi_app
-
-    return fastapi_app
-
-
-@pytest.fixture
-def authenticated_client(app):
-    """Create authenticated test client."""
-    from dependencies.auth import get_current_user
-
-    async def override_get_current_user():
-        return {
-            "email": "user@8thlight.com",
-            "name": "Test User",
-            "picture": "https://example.com/photo.jpg",
-        }
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
 
 
 def create_mock_task_run(
