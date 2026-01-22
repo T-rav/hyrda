@@ -56,9 +56,10 @@ class TestRetryLogicIntegration:
             # Track when each attempt happens
             def track_attempt(*args, **kwargs):
                 attempt_times.append(time.time())
-                return None  # Fail each attempt
 
-            mock_youtube_client.get_video_info_with_transcript.side_effect = track_attempt
+            mock_youtube_client.get_video_info_with_transcript.side_effect = (
+                track_attempt
+            )
 
             # Setup vector store
             mock_qdrant = AsyncMock()
@@ -68,17 +69,24 @@ class TestRetryLogicIntegration:
             await job._execute_job()
 
             # Verify timing between attempts follows exponential backoff
-            assert len(attempt_times) == 5, f"Expected 5 attempts, got {len(attempt_times)}"
+            assert len(attempt_times) == 5, (
+                f"Expected 5 attempts, got {len(attempt_times)}"
+            )
 
             # Calculate delays between attempts
-            delays = [attempt_times[i] - attempt_times[i-1] for i in range(1, len(attempt_times))]
+            delays = [
+                attempt_times[i] - attempt_times[i - 1]
+                for i in range(1, len(attempt_times))
+            ]
 
             # Delays should be approximately 2s, 4s, 8s, 16s (with some tolerance)
             expected_delays = [2, 4, 8, 16]
-            for i, (actual, expected) in enumerate(zip(delays, expected_delays)):
+            for i, (actual, expected) in enumerate(
+                zip(delays, expected_delays, strict=False)
+            ):
                 # Allow 0.5s tolerance for execution time
                 assert expected - 0.5 <= actual <= expected + 0.5, (
-                    f"Delay {i+1}: expected ~{expected}s, got {actual:.2f}s"
+                    f"Delay {i + 1}: expected ~{expected}s, got {actual:.2f}s"
                 )
 
             # Total time should be approximately 30 seconds (2+4+8+16)
@@ -100,7 +108,9 @@ class TestRetryLogicIntegration:
             patch("os.getenv", return_value="test-key"),
             patch("services.youtube.YouTubeClient") as mock_youtube_client_class,
             patch("services.youtube.YouTubeTrackingService") as mock_tracking_class,
-            patch("services.openai_embeddings.OpenAIEmbeddings") as mock_embeddings_class,
+            patch(
+                "services.openai_embeddings.OpenAIEmbeddings"
+            ) as mock_embeddings_class,
             patch("services.qdrant_client.QdrantClient") as mock_qdrant_class,
         ):
             mock_youtube_client = Mock()
@@ -167,8 +177,8 @@ class TestJobExecutionUnderLoad:
     @pytest.mark.asyncio
     async def test_multiple_jobs_concurrent_execution(self):
         """Test that multiple jobs can execute concurrently without blocking."""
-        from services.scheduler_service import SchedulerService
         from config.settings import TasksSettings
+        from services.scheduler_service import SchedulerService
 
         settings = TasksSettings()
         scheduler_service = SchedulerService(settings)
@@ -176,6 +186,7 @@ class TestJobExecutionUnderLoad:
         # Mock a simple job that takes 2 seconds
         async def mock_job_execution():
             import asyncio
+
             await asyncio.sleep(2)
             return {"status": "success"}
 
@@ -184,12 +195,8 @@ class TestJobExecutionUnderLoad:
 
         try:
             # Submit multiple jobs concurrently
-            start_time = time.time()
-
             # In real ThreadPoolExecutor with 20 threads, 10 jobs should run in parallel
             # Taking ~2 seconds total, not 20 seconds sequential
-            job_count = 10
-
             # Simulate concurrent job submission
             # (In reality, this would be APScheduler triggering jobs)
             # For integration test, we verify the thread pool exists and can handle load

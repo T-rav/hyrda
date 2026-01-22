@@ -5,6 +5,7 @@ Uses yt-dlp for all operations - no YouTube Data API required!
 Only requires OpenAI API key for Whisper transcription.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -415,7 +416,7 @@ class YouTubeClient:
                 transcriptions = []
                 for i, chunk_path in enumerate(chunk_paths):
                     logger.debug(
-                        f"Transcribing chunk {i+1}/{len(chunk_paths)}: {chunk_path}"
+                        f"Transcribing chunk {i + 1}/{len(chunk_paths)}: {chunk_path}"
                     )
                     with open(chunk_path, "rb") as audio_file:
                         transcription = client.audio.transcriptions.create(
@@ -426,10 +427,8 @@ class YouTubeClient:
 
                     # Clean up chunk file if it's not the original
                     if chunk_path != audio_file_path:
-                        try:
+                        with contextlib.suppress(Exception):
                             os.remove(chunk_path)
-                        except Exception:
-                            pass
 
                 # Assemble transcriptions
                 full_transcript = " ".join(transcriptions)
