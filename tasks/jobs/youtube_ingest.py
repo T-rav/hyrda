@@ -1,6 +1,7 @@
 """YouTube channel ingestion job for scheduled RAG updates."""
 
 import logging
+import time
 from typing import Any
 
 from config.settings import TasksSettings
@@ -113,114 +114,145 @@ class YouTubeIngestJob(BaseJob):
             skipped_count = 0
 
             for video in videos:
-                try:
-                    video_id = video["video_id"]
-                    video_title = video["title"]
+                video_id = video["video_id"]
+                video_title = video["title"]
+                max_attempts = 5
+                attempt = 0
+                success = False
 
-                    logger.info(f"Processing: {video_title}")
+                while attempt < max_attempts and not success:
+                    try:
+                        attempt += 1
+                        if attempt > 1:
+                            backoff_seconds = 2 ** (attempt - 1)
+                            logger.info(
+                                f"Retry attempt {attempt}/{max_attempts} for {video_title} "
+                                f"(waiting {backoff_seconds}s)"
+                            )
+                            time.sleep(backoff_seconds)
 
-                    # Get video transcript (download audio + transcribe)
-                    video_with_transcript = (
-                        youtube_client.get_video_info_with_transcript(video_id)
-                    )
+                        logger.info(f"Processing: {video_title}")
 
-                    if not video_with_transcript or not video_with_transcript.get(
-                        "transcript"
-                    ):
-                        logger.warning(f"Skipping {video_title} - transcription failed")
-                        error_count += 1
-                        continue
+                        # Get video transcript (download audio + transcribe)
+                        video_with_transcript = (
+                            youtube_client.get_video_info_with_transcript(video_id)
+                        )
 
-                    transcript = video_with_transcript["transcript"]
+                        if not video_with_transcript or not video_with_transcript.get(
+                            "transcript"
+                        ):
+                            logger.warning(
+                                f"Skipping {video_title} - transcription failed "
+                                f"(attempt {attempt}/{max_attempts})"
+                            )
+                            if attempt >= max_attempts:
+                                error_count += 1
+                                break
+                            continue
 
-                    # Check if video needs reindexing
-                    needs_reindex, existing_uuid = (
-                        tracking_service.check_video_needs_reindex(video_id, transcript)
-                    )
+                        transcript = video_with_transcript["transcript"]
 
-                    if not needs_reindex:
-                        logger.info(f"⏭️  Skipping (unchanged): {video_title}")
-                        skipped_count += 1
-                        continue
+                        # Check if video needs reindexing
+                        needs_reindex, existing_uuid = (
+                            tracking_service.check_video_needs_reindex(
+                                video_id, transcript
+                            )
+                        )
 
-                    if existing_uuid:
-                        logger.info(f"🔄 Transcript changed, reindexing: {video_title}")
+                        if not needs_reindex:
+                            logger.info(f"⏭️  Skipping (unchanged): {video_title}")
+                            skipped_count += 1
+                            success = True  # Mark as success to exit retry loop
+                            break
 
-                    # Generate or reuse UUID
-                    base_uuid = existing_uuid or tracking_service.generate_base_uuid(
-                        video_id
-                    )
+                        if existing_uuid:
+                            logger.info(f"🔄 Transcript changed, reindexing: {video_title}")
 
-                    # Chunk transcript
-                    chunks = embedding_provider.chunk_text(
-                        transcript, chunk_size=512, chunk_overlap=50
-                    )
+                        # Generate or reuse UUID
+                        base_uuid = existing_uuid or tracking_service.generate_base_uuid(
+                            video_id
+                        )
 
-                    # Create metadata for each chunk
-                    chunk_metadata_list = []
-                    for i, _chunk in enumerate(chunks):
-                        chunk_metadata = {
-                            "youtube_video_id": video_id,
-                            "video_title": video_title,
-                            "channel_id": channel_info["channel_id"],
-                            "channel_name": channel_info["channel_name"],
-                            "video_type": video_with_transcript["video_type"],
-                            "duration_seconds": video_with_transcript[
-                                "duration_seconds"
-                            ],
-                            "published_at": video_with_transcript[
-                                "published_at"
-                            ].isoformat()
-                            if video_with_transcript.get("published_at")
-                            else None,
-                            "view_count": video_with_transcript["view_count"],
-                            "chunk_index": i,
-                            "chunk_count": len(chunks),
-                            "video_url": f"https://www.youtube.com/watch?v={video_id}",
-                            "namespace": "youtube",
-                            **metadata,
-                        }
-                        chunk_metadata_list.append(chunk_metadata)
+                        # Chunk transcript
+                        chunks = embedding_provider.chunk_text(
+                            transcript, chunk_size=512, chunk_overlap=50
+                        )
 
-                    # Embed chunks
-                    embeddings = embedding_provider.embed_texts(chunks)
+                        # Create metadata for each chunk
+                        chunk_metadata_list = []
+                        for i, _chunk in enumerate(chunks):
+                            chunk_metadata = {
+                                "youtube_video_id": video_id,
+                                "video_title": video_title,
+                                "channel_id": channel_info["channel_id"],
+                                "channel_name": channel_info["channel_name"],
+                                "video_type": video_with_transcript["video_type"],
+                                "duration_seconds": video_with_transcript[
+                                    "duration_seconds"
+                                ],
+                                "published_at": video_with_transcript[
+                                    "published_at"
+                                ].isoformat()
+                                if video_with_transcript.get("published_at")
+                                else None,
+                                "view_count": video_with_transcript["view_count"],
+                                "chunk_index": i,
+                                "chunk_count": len(chunks),
+                                "video_url": f"https://www.youtube.com/watch?v={video_id}",
+                                "namespace": "youtube",
+                                **metadata,
+                            }
+                            chunk_metadata_list.append(chunk_metadata)
 
-                    # Create chunk IDs
-                    chunk_ids = [f"{base_uuid}_{i}" for i in range(len(chunks))]
+                        # Embed chunks
+                        embeddings = await embedding_provider.embed_texts(chunks)
 
-                    # Upsert to vector store
-                    await vector_store.upsert(
-                        ids=chunk_ids,
-                        vectors=embeddings,
-                        metadata=chunk_metadata_list,
-                    )
+                        # Create chunk IDs (stored in metadata for tracking)
+                        chunk_ids = [f"{base_uuid}_{i}" for i in range(len(chunks))]
 
-                    # Record ingestion in tracking database
-                    tracking_service.record_video_ingestion(
-                        youtube_video_id=video_id,
-                        video_title=video_title,
-                        channel_id=channel_info["channel_id"],
-                        channel_name=channel_info["channel_name"],
-                        video_type=video_with_transcript["video_type"],
-                        transcript=transcript,
-                        vector_uuid=base_uuid,
-                        chunk_count=len(chunks),
-                        duration_seconds=video_with_transcript["duration_seconds"],
-                        published_at=video_with_transcript.get("published_at"),
-                        view_count=video_with_transcript["view_count"],
-                        transcript_language="en",
-                        metadata=chunk_metadata_list[0],
-                    )
+                        # Add chunk_id to metadata for each chunk
+                        for i, meta in enumerate(chunk_metadata_list):
+                            meta["chunk_id"] = chunk_ids[i]
 
-                    success_count += 1
-                    logger.info(f"✅ Ingested: {video_title} ({len(chunks)} chunks)")
+                        # Upsert to vector store
+                        await vector_store.upsert_with_namespace(
+                            texts=chunks,
+                            embeddings=embeddings,
+                            metadata=chunk_metadata_list,
+                            namespace="youtube",
+                        )
 
-                except Exception as e:
-                    logger.error(
-                        f"Error processing video {video.get('title', 'unknown')}: {e}"
-                    )
-                    error_count += 1
-                    continue
+                        # Record ingestion in tracking database
+                        tracking_service.record_video_ingestion(
+                            youtube_video_id=video_id,
+                            video_title=video_title,
+                            channel_id=channel_info["channel_id"],
+                            channel_name=channel_info["channel_name"],
+                            video_type=video_with_transcript["video_type"],
+                            transcript=transcript,
+                            vector_uuid=base_uuid,
+                            chunk_count=len(chunks),
+                            duration_seconds=video_with_transcript["duration_seconds"],
+                            published_at=video_with_transcript.get("published_at"),
+                            view_count=video_with_transcript["view_count"],
+                            transcript_language="en",
+                            metadata=chunk_metadata_list[0],
+                        )
+
+                        success_count += 1
+                        logger.info(f"✅ Ingested: {video_title} ({len(chunks)} chunks)")
+                        success = True  # Mark as success to exit retry loop
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error processing video {video_title} "
+                            f"(attempt {attempt}/{max_attempts}): {e}"
+                        )
+                        if attempt >= max_attempts:
+                            logger.error(
+                                f"❌ Failed after {max_attempts} attempts: {video_title}"
+                            )
+                            error_count += 1
 
             processed_count = success_count + error_count + skipped_count
 

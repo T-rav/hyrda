@@ -9,6 +9,7 @@ import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import redis
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,16 +78,60 @@ async def lifespan(app: FastAPI):
     app.state.scheduler_service = scheduler_service
     app.state.job_registry = job_registry
 
-    # Start scheduler
-    scheduler_service.start()
-    logger.info("Tasks service initialized - scheduler started")
+    # Use Redis distributed lock to ensure only ONE worker starts the scheduler
+    # This prevents duplicate job execution in multi-worker setups
+    redis_client = None
+    scheduler_lock = None
+    is_scheduler_worker = False
+
+    try:
+        # Connect to Redis
+        redis_url = os.getenv("CACHE_REDIS_URL", "redis://redis:6379")
+        redis_client = redis.from_url(redis_url, decode_responses=True)
+
+        # Try to acquire distributed lock (expires after 10 minutes if worker dies)
+        scheduler_lock = redis_client.set(
+            "insightmesh:scheduler:lock",
+            f"worker_{os.getpid()}",
+            nx=True,  # Only set if doesn't exist
+            ex=600,  # Expire after 10 minutes
+        )
+
+        if scheduler_lock:
+            is_scheduler_worker = True
+            logger.info(
+                f"✅ Acquired Redis scheduler lock (PID {os.getpid()}) - "
+                "this worker will run scheduled jobs"
+            )
+
+            # Start scheduler only in this worker
+            scheduler_service.start()
+            logger.info("Tasks service initialized - scheduler started")
+        else:
+            logger.info("⏭️ Scheduler already running in another worker - skipping")
+            is_scheduler_worker = False
+
+    except Exception as e:
+        logger.error(f"Failed to acquire Redis lock: {e}")
+        logger.info("⚠️ Starting scheduler anyway as fallback")
+        scheduler_service.start()
+        is_scheduler_worker = True
 
     yield
 
     # Shutdown
-    if scheduler_service:
+    # Stop scheduler (only in scheduler worker)
+    if is_scheduler_worker and scheduler_service:
         scheduler_service.shutdown()
         logger.info("Tasks service shutting down - scheduler stopped")
+
+    # Release Redis lock
+    if redis_client and scheduler_lock:
+        try:
+            redis_client.delete("insightmesh:scheduler:lock")
+            logger.info("Released Redis scheduler lock")
+        except Exception:
+            pass
 
 
 def register_routers(app: FastAPI) -> None:
