@@ -1,15 +1,21 @@
-"""Tests for OAuth credential management API (api/credentials.py)."""
+"""Tests for OAuth credential management API (api/credentials.py).
 
-from datetime import UTC, datetime, timedelta
+Phase 1 refactoring: Removed duplicate fixtures (now in conftest.py)
+and replaced credential fixtures with CredentialBuilder.
+"""
+
 from unittest.mock import Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+# Phase 1: Use builder pattern instead of individual fixtures
+from tests.utils.builders import CredentialBuilder
+
 
 @pytest.fixture
 def app():
-    """Create FastAPI app for testing."""
+    """Create minimal FastAPI app for testing credentials router."""
     from fastapi import FastAPI
 
     from api.credentials import router
@@ -22,7 +28,7 @@ def app():
 
 @pytest.fixture
 def authenticated_client(app):
-    """Create authenticated test client."""
+    """Create authenticated test client for credentials tests."""
     from dependencies.auth import get_current_user
 
     async def mock_get_current_user():
@@ -33,85 +39,10 @@ def authenticated_client(app):
     return TestClient(app)
 
 
-@pytest.fixture
-def mock_credential_active():
-    """Create mock credential that is active."""
-    mock_cred = Mock()
-    mock_cred.credential_id = "test-cred-1"
-    mock_cred.credential_name = "Test Credential"
-    mock_cred.provider = "google_drive"
-
-    # Token expires in 7 days (active)
-    expiry = datetime.now(UTC) + timedelta(days=7)
-    mock_cred.token_metadata = {"expiry": expiry.isoformat()}
-    mock_cred.to_dict.return_value = {
-        "credential_id": "test-cred-1",
-        "credential_name": "Test Credential",
-        "provider": "google_drive",
-        "token_metadata": {"expiry": expiry.isoformat()},
-    }
-
-    return mock_cred
-
-
-@pytest.fixture
-def mock_credential_expiring_soon():
-    """Create mock credential expiring in 12 hours."""
-    mock_cred = Mock()
-    mock_cred.credential_id = "test-cred-2"
-    mock_cred.credential_name = "Expiring Credential"
-    mock_cred.provider = "google_drive"
-
-    # Token expires in 12 hours
-    expiry = datetime.now(UTC) + timedelta(hours=12)
-    mock_cred.token_metadata = {"expiry": expiry.isoformat()}
-    mock_cred.to_dict.return_value = {
-        "credential_id": "test-cred-2",
-        "credential_name": "Expiring Credential",
-        "provider": "google_drive",
-        "token_metadata": {"expiry": expiry.isoformat()},
-    }
-
-    return mock_cred
-
-
-@pytest.fixture
-def mock_credential_expired():
-    """Create mock credential that has expired."""
-    mock_cred = Mock()
-    mock_cred.credential_id = "test-cred-3"
-    mock_cred.credential_name = "Expired Credential"
-    mock_cred.provider = "google_drive"
-
-    # Token expired 1 day ago
-    expiry = datetime.now(UTC) - timedelta(days=1)
-    mock_cred.token_metadata = {"expiry": expiry.isoformat()}
-    mock_cred.to_dict.return_value = {
-        "credential_id": "test-cred-3",
-        "credential_name": "Expired Credential",
-        "provider": "google_drive",
-        "token_metadata": {"expiry": expiry.isoformat()},
-    }
-
-    return mock_cred
-
-
-@pytest.fixture
-def mock_credential_no_expiry():
-    """Create mock credential with no expiry info."""
-    mock_cred = Mock()
-    mock_cred.credential_id = "test-cred-4"
-    mock_cred.credential_name = "No Expiry Credential"
-    mock_cred.provider = "google_drive"
-    mock_cred.token_metadata = {}  # No expiry
-    mock_cred.to_dict.return_value = {
-        "credential_id": "test-cred-4",
-        "credential_name": "No Expiry Credential",
-        "provider": "google_drive",
-        "token_metadata": {},
-    }
-
-    return mock_cred
+# Phase 1: Replaced 4 credential fixtures (78 lines) with builder pattern (0 lines)
+# Old fixtures: mock_credential_active, mock_credential_expiring_soon,
+#               mock_credential_expired, mock_credential_no_expiry
+# New usage: CredentialBuilder.active().build()
 
 
 class TestListCredentials:
@@ -133,13 +64,14 @@ class TestListCredentials:
             data = response.json()
             assert data["credentials"] == []
 
-    def test_list_credentials_active(
-        self, authenticated_client, mock_credential_active
-    ):
+    def test_list_credentials_active(self, authenticated_client):
         """Test listing active credential."""
+        # Phase 1: Use CredentialBuilder instead of fixture
+        mock_credential = CredentialBuilder.active().with_id("test-cred-1").build()
+
         mock_session = Mock()
         mock_query = Mock()
-        mock_query.all.return_value = [mock_credential_active]
+        mock_query.all.return_value = [mock_credential]
         mock_session.query.return_value = mock_query
 
         with patch("api.credentials.get_db_session") as mock_get_session:
@@ -155,13 +87,19 @@ class TestListCredentials:
             assert cred["status"] == "active"
             assert cred["status_message"] == "Active"
 
-    def test_list_credentials_expiring_soon(
-        self, authenticated_client, mock_credential_expiring_soon
-    ):
+    def test_list_credentials_expiring_soon(self, authenticated_client):
         """Test listing credential expiring soon."""
+        # Phase 1: Use CredentialBuilder instead of fixture
+        mock_credential = (
+            CredentialBuilder.expiring()
+            .with_id("test-cred-2")
+            .with_name("Expiring Credential")
+            .build()
+        )
+
         mock_session = Mock()
         mock_query = Mock()
-        mock_query.all.return_value = [mock_credential_expiring_soon]
+        mock_query.all.return_value = [mock_credential]
         mock_session.query.return_value = mock_query
 
         with patch("api.credentials.get_db_session") as mock_get_session:
@@ -175,13 +113,19 @@ class TestListCredentials:
             assert cred["status"] == "expiring_soon"
             assert cred["status_message"] == "Token expires soon"
 
-    def test_list_credentials_expired(
-        self, authenticated_client, mock_credential_expired
-    ):
+    def test_list_credentials_expired(self, authenticated_client):
         """Test listing expired credential."""
+        # Phase 1: Use CredentialBuilder instead of fixture
+        mock_credential = (
+            CredentialBuilder.dead()
+            .with_id("test-cred-3")
+            .with_name("Expired Credential")
+            .build()
+        )
+
         mock_session = Mock()
         mock_query = Mock()
-        mock_query.all.return_value = [mock_credential_expired]
+        mock_query.all.return_value = [mock_credential]
         mock_session.query.return_value = mock_query
 
         with patch("api.credentials.get_db_session") as mock_get_session:
@@ -195,13 +139,20 @@ class TestListCredentials:
             assert cred["status"] == "expired"
             assert cred["status_message"] == "Token expired - refresh required"
 
-    def test_list_credentials_no_expiry(
-        self, authenticated_client, mock_credential_no_expiry
-    ):
+    def test_list_credentials_no_expiry(self, authenticated_client):
         """Test listing credential without expiry info."""
+        # Phase 1: Use CredentialBuilder instead of fixture
+        mock_credential = (
+            CredentialBuilder()
+            .with_id("test-cred-4")
+            .with_name("No Expiry Credential")
+            .no_expiry()
+            .build()
+        )
+
         mock_session = Mock()
         mock_query = Mock()
-        mock_query.all.return_value = [mock_credential_no_expiry]
+        mock_query.all.return_value = [mock_credential]
         mock_session.query.return_value = mock_query
 
         with patch("api.credentials.get_db_session") as mock_get_session:
@@ -215,21 +166,18 @@ class TestListCredentials:
             assert cred["status"] == "unknown"
             assert cred["status_message"] == "No expiry info"
 
-    def test_list_credentials_multiple(
-        self,
-        authenticated_client,
-        mock_credential_active,
-        mock_credential_expired,
-        mock_credential_expiring_soon,
-    ):
+    def test_list_credentials_multiple(self, authenticated_client):
         """Test listing multiple credentials with different statuses."""
+        # Phase 1: Use CredentialBuilder instead of fixtures
+        mock_credentials = [
+            CredentialBuilder.active().with_id("test-cred-1").build(),
+            CredentialBuilder.dead().with_id("test-cred-3").build(),
+            CredentialBuilder.expiring().with_id("test-cred-2").build(),
+        ]
+
         mock_session = Mock()
         mock_query = Mock()
-        mock_query.all.return_value = [
-            mock_credential_active,
-            mock_credential_expired,
-            mock_credential_expiring_soon,
-        ]
+        mock_query.all.return_value = mock_credentials
         mock_session.query.return_value = mock_query
 
         with patch("api.credentials.get_db_session") as mock_get_session:
