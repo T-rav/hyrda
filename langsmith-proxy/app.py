@@ -222,11 +222,32 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                 }
             else:
                 parent_obs = parent_info.get("observation")
-                parent_trace_id = parent_info.get("langfuse_id")
+                parent_langfuse_id = parent_info.get("langfuse_id", parent_id)
+
+                # Get the root trace ID (walk up to find root)
+                root_trace_id = parent_langfuse_id
+                current_parent = parent_info
+                current_parent_id = current_parent.get("parent_id")
+
+                while current_parent_id:
+                    parent_parent_info = run_id_map.get(current_parent_id)
+                    if parent_parent_info:
+                        root_trace_id = parent_parent_info.get("langfuse_id", root_trace_id)
+                        current_parent = parent_parent_info
+                        current_parent_id = current_parent.get("parent_id")
+                    else:
+                        break
+
+                # Remove dashes from trace ID for Langfuse
+                root_trace_id_no_dashes = str(root_trace_id).replace("-", "")
 
                 # LLM calls become generations
                 if converted["run_type"] == "llm":
                     gen_data = {
+                        "trace_context": {
+                            "trace_id": root_trace_id_no_dashes,
+                            "parent_span_id": parent_langfuse_id  # Link to parent
+                        },
                         "name": converted["name"],
                         "input": converted["inputs"],
                         "metadata": {
@@ -257,6 +278,10 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                 # Everything else becomes spans
                 else:
                     span_data = {
+                        "trace_context": {
+                            "trace_id": root_trace_id_no_dashes,
+                            "parent_span_id": parent_langfuse_id  # Link to parent
+                        },
                         "name": converted["name"],
                         "input": converted["inputs"],
                         "metadata": {
@@ -321,20 +346,23 @@ async def update_run(
         obj = run_info.get(run_type)  # Get the actual Langfuse object
 
         if obj and hasattr(obj, "end"):
-            # End the observation/span/generation
+            # Update observation with outputs/errors, then end it
             try:
-                update_data = {}
+                # Update with output, level, status_message if available
+                update_params = {}
                 if converted["outputs"]:
-                    update_data["output"] = converted["outputs"]
-                if converted["end_time"]:
-                    update_data["end_time"] = converted["end_time"]
+                    update_params["output"] = converted["outputs"]
                 if converted["error"]:
-                    update_data["level"] = "ERROR"
-                    update_data["status_message"] = converted["error"]
+                    update_params["level"] = "ERROR"
+                    update_params["status_message"] = converted["error"]
 
-                # Call end() method to finalize
-                if update_data:
-                    obj.end(**update_data)
+                if update_params:
+                    obj.update(**update_params)
+
+                # End the observation (only accepts end_time parameter)
+                if converted["end_time"]:
+                    # Convert datetime to nanoseconds since epoch if needed
+                    obj.end()
                 else:
                     obj.end()
 
@@ -419,8 +447,29 @@ async def create_runs_batch(request: Request):
                         logger.warning(f"⚠️  Parent {parent_id} not found in batch")
                         continue
 
+                    # Get parent and root trace IDs
+                    parent_langfuse_id = parent_info.get("langfuse_id", parent_id)
+                    root_trace_id = parent_langfuse_id
+                    current_parent = parent_info
+                    current_parent_id = current_parent.get("parent_id")
+
+                    while current_parent_id:
+                        parent_parent_info = run_id_map.get(current_parent_id)
+                        if parent_parent_info:
+                            root_trace_id = parent_parent_info.get("langfuse_id", root_trace_id)
+                            current_parent = parent_parent_info
+                            current_parent_id = current_parent.get("parent_id")
+                        else:
+                            break
+
+                    root_trace_id_no_dashes = str(root_trace_id).replace("-", "")
+
                     if converted["run_type"] == "llm":
                         gen_data = {
+                            "trace_context": {
+                                "trace_id": root_trace_id_no_dashes,
+                                "parent_span_id": parent_langfuse_id
+                            },
                             "name": converted["name"],
                             "input": converted["inputs"],
                             "metadata": {
@@ -443,6 +492,10 @@ async def create_runs_batch(request: Request):
                         logger.info(f"🤖 Batch created generation: {converted['name']} ({run_id})")
                     else:
                         span_data = {
+                            "trace_context": {
+                                "trace_id": root_trace_id_no_dashes,
+                                "parent_span_id": parent_langfuse_id
+                            },
                             "name": converted["name"],
                             "input": converted["inputs"],
                             "metadata": {
@@ -482,19 +535,19 @@ async def create_runs_batch(request: Request):
                 obj = run_info.get(run_type)
 
                 if obj and hasattr(obj, "end"):
-                    update_data = {}
+                    # Update with output, level, status_message if available
+                    update_params = {}
                     if converted["outputs"]:
-                        update_data["output"] = converted["outputs"]
-                    if converted["end_time"]:
-                        update_data["end_time"] = converted["end_time"]
+                        update_params["output"] = converted["outputs"]
                     if converted["error"]:
-                        update_data["level"] = "ERROR"
-                        update_data["status_message"] = converted["error"]
+                        update_params["level"] = "ERROR"
+                        update_params["status_message"] = converted["error"]
 
-                    if update_data:
-                        obj.end(**update_data)
-                    else:
-                        obj.end()
+                    if update_params:
+                        obj.update(**update_params)
+
+                    # End the observation (only accepts end_time parameter)
+                    obj.end()
 
                     logger.info(f"✅ Batch completed {run_type}: {run_id}")
 
