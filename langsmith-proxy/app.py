@@ -163,22 +163,29 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
         # Root run -> Create Langfuse trace
         if not parent_id:
-            trace = langfuse_client.trace(
-                id=run_id,
-                name=converted["name"],
-                input=converted["inputs"],
-                output=converted["outputs"],
-                metadata={
+            # Use create_trace for Langfuse SDK 3.x
+            trace_data = {
+                "id": run_id,
+                "name": converted["name"],
+                "input": converted["inputs"],
+                "metadata": {
                     "run_type": converted["run_type"],
                     **converted["metadata"],
                 },
-            )
+            }
 
-            # Store trace reference
+            # Add output if available
+            if converted["outputs"]:
+                trace_data["output"] = converted["outputs"]
+
+            # Create trace using SDK 3.x method
+            langfuse_client.trace(**trace_data)
+
+            # Store trace reference (for child spans)
             run_id_map[run_id] = {
                 "type": "trace",
-                "langfuse_id": trace.id,
-                "trace": trace,
+                "langfuse_id": run_id,
+                "trace_data": trace_data,
             }
 
             logger.info(f"📊 Created Langfuse trace: {converted['name']} ({run_id})")
@@ -189,34 +196,39 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
             if not parent_info:
                 logger.warning(
-                    f"⚠️  Parent run {parent_id} not found, creating orphan span"
+                    f"⚠️  Parent run {parent_id} not found, creating orphan trace"
                 )
                 # Create as root trace if parent not found
-                trace = langfuse_client.trace(
+                langfuse_client.trace(
                     id=run_id,
                     name=converted["name"],
                     input=converted["inputs"],
                     output=converted["outputs"],
                 )
-                run_id_map[run_id] = {"type": "trace", "langfuse_id": trace.id}
+                run_id_map[run_id] = {"type": "trace", "langfuse_id": run_id}
             else:
-                parent_trace = parent_info.get("trace")
+                parent_trace_id = parent_info.get("langfuse_id")
 
                 # LLM calls become generations
                 if converted["run_type"] == "llm":
-                    generation = parent_trace.generation(
-                        id=run_id,
-                        name=converted["name"],
-                        input=converted["inputs"],
-                        output=converted["outputs"],
-                        metadata={
+                    gen_data = {
+                        "id": run_id,
+                        "trace_id": parent_trace_id,
+                        "name": converted["name"],
+                        "input": converted["inputs"],
+                        "metadata": {
                             "run_type": converted["run_type"],
                             **converted["metadata"],
                         },
-                    )
+                    }
+                    if converted["outputs"]:
+                        gen_data["output"] = converted["outputs"]
+
+                    langfuse_client.generation(**gen_data)
+
                     run_id_map[run_id] = {
                         "type": "generation",
-                        "langfuse_id": generation.id,
+                        "langfuse_id": run_id,
                         "parent_id": parent_id,
                     }
                     logger.info(
@@ -225,21 +237,25 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
                 # Everything else becomes spans
                 else:
-                    span = parent_trace.span(
-                        id=run_id,
-                        name=converted["name"],
-                        input=converted["inputs"],
-                        output=converted["outputs"],
-                        metadata={
+                    span_data = {
+                        "id": run_id,
+                        "trace_id": parent_trace_id,
+                        "name": converted["name"],
+                        "input": converted["inputs"],
+                        "metadata": {
                             "run_type": converted["run_type"],
                             **converted["metadata"],
                         },
-                    )
+                    }
+                    if converted["outputs"]:
+                        span_data["output"] = converted["outputs"]
+
+                    langfuse_client.span(**span_data)
+
                     run_id_map[run_id] = {
                         "type": "span",
-                        "langfuse_id": span.id,
+                        "langfuse_id": run_id,
                         "parent_id": parent_id,
-                        "span": span,
                     }
                     logger.info(
                         f"📍 Created Langfuse span: {converted['name']} ({run_id})"
