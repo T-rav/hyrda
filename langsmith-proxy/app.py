@@ -164,14 +164,18 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
         # Root run -> Create Langfuse observation (trace)
         if not parent_id:
             # Use start_observation for Langfuse SDK 3.x (creates trace-level observation)
-            # Note: SDK 3.x doesn't accept 'id' parameter, it auto-generates
+            # Reuse LangSmith trace ID for easy cross-reference (remove dashes for Langfuse)
+            trace_id_no_dashes = run_id.replace("-", "")
             obs_data = {
+                "trace_context": {"trace_id": trace_id_no_dashes},  # Reuse LangSmith trace ID (no dashes)
                 "name": converted["name"],
                 "input": converted["inputs"],
                 "metadata": {
                     "run_type": converted["run_type"],
                     "langsmith_trace": True,
-                    "langsmith_id": run_id,  # Store LangSmith ID in metadata
+                    "langsmith_id": run_id,  # Store original LangSmith ID in metadata
+                    "langsmith_trace_id_dashes": run_id,  # Also store with dashes for search
+                    "agent_name": converted["name"],  # Agent name for filtering
                     **converted["metadata"],
                 },
             }
@@ -194,7 +198,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                 "observation": observation,
             }
 
-            logger.info(f"📊 Created Langfuse trace: {converted['name']} ({run_id})")
+            logger.info(f"📊 Created Langfuse trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes})")
 
         # Child run -> Create Langfuse span/generation
         else:
@@ -357,29 +361,151 @@ async def update_run(
 
 
 @app.post("/runs/batch")
-async def create_runs_batch(
-    request: Request, authorized: bool = Depends(validate_api_key)
-):
+async def create_runs_batch(request: Request):
     """
     Handle batch run creation from LangSmith.
 
-    Requires: Authorization: Bearer <proxy-api-key>
+    Note: LangSmith SDK doesn't send Authorization header in batch requests.
+    For production, secure via network policies (internal service-to-service only).
     """
+    logger.info("📦 Batch request received")
+
     if not langfuse_client:
         return JSONResponse(content={"message": "Langfuse not available"})
 
     try:
         batch_data = await request.json()
-        runs = batch_data.get("post", []) + batch_data.get("patch", [])
+        post_runs = batch_data.get("post", [])
+        patch_runs = batch_data.get("patch", [])
 
-        results = []
-        for run_data in runs:
-            # Process each run individually
-            converted = convert_langsmith_to_langfuse(run_data)
-            results.append({"id": converted["run_id"]})
+        # Process POST (create) runs
+        for run_data in post_runs:
+            try:
+                converted = convert_langsmith_to_langfuse(run_data)
+                run_id = converted["run_id"]
+                parent_id = converted["parent_id"]
 
-        logger.info(f"📦 Processed batch of {len(runs)} runs")
-        return JSONResponse(content={"results": results})
+                # Root run -> Create Langfuse observation
+                if not parent_id:
+                    trace_id_no_dashes = run_id.replace("-", "")
+                    obs_data = {
+                        "trace_context": {"trace_id": trace_id_no_dashes},  # Reuse LangSmith trace ID (no dashes)
+                        "name": converted["name"],
+                        "input": converted["inputs"],
+                        "metadata": {
+                            "run_type": converted["run_type"],
+                            "langsmith_trace": True,
+                            "langsmith_id": run_id,
+                            "langsmith_trace_id_dashes": run_id,  # Store with dashes for search
+                            "agent_name": converted["name"],  # Agent name for filtering
+                            **converted["metadata"],
+                        },
+                    }
+                    if converted["outputs"]:
+                        obs_data["output"] = converted["outputs"]
+
+                    observation = langfuse_client.start_observation(**obs_data)
+                    run_id_map[run_id] = {
+                        "type": "observation",
+                        "langfuse_id": run_id,
+                        "observation": observation,
+                    }
+                    logger.info(f"📊 Batch created trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes})")
+
+                # Child run -> Create span/generation
+                else:
+                    parent_info = run_id_map.get(parent_id)
+                    if not parent_info:
+                        logger.warning(f"⚠️  Parent {parent_id} not found in batch")
+                        continue
+
+                    if converted["run_type"] == "llm":
+                        gen_data = {
+                            "name": converted["name"],
+                            "input": converted["inputs"],
+                            "metadata": {
+                                "run_type": converted["run_type"],
+                                "langsmith_id": run_id,
+                                "parent_langsmith_id": parent_id,
+                                **converted["metadata"],
+                            },
+                        }
+                        if converted["outputs"]:
+                            gen_data["output"] = converted["outputs"]
+
+                        generation = langfuse_client.start_generation(**gen_data)
+                        run_id_map[run_id] = {
+                            "type": "generation",
+                            "langfuse_id": run_id,
+                            "parent_id": parent_id,
+                            "generation": generation,
+                        }
+                        logger.info(f"🤖 Batch created generation: {converted['name']} ({run_id})")
+                    else:
+                        span_data = {
+                            "name": converted["name"],
+                            "input": converted["inputs"],
+                            "metadata": {
+                                "run_type": converted["run_type"],
+                                "langsmith_id": run_id,
+                                "parent_langsmith_id": parent_id,
+                                **converted["metadata"],
+                            },
+                        }
+                        if converted["outputs"]:
+                            span_data["output"] = converted["outputs"]
+
+                        span = langfuse_client.start_span(**span_data)
+                        run_id_map[run_id] = {
+                            "type": "span",
+                            "langfuse_id": run_id,
+                            "parent_id": parent_id,
+                            "span": span,
+                        }
+                        logger.info(f"📍 Batch created span: {converted['name']} ({run_id})")
+
+            except Exception as e:
+                logger.error(f"❌ Error processing batch POST run: {e}")
+
+        # Process PATCH (update) runs
+        for run_data in patch_runs:
+            try:
+                converted = convert_langsmith_to_langfuse(run_data)
+                run_id = converted["run_id"]
+                run_info = run_id_map.get(run_id)
+
+                if not run_info:
+                    logger.warning(f"⚠️  Run {run_id} not found in batch update")
+                    continue
+
+                run_type = run_info["type"]
+                obj = run_info.get(run_type)
+
+                if obj and hasattr(obj, "end"):
+                    update_data = {}
+                    if converted["outputs"]:
+                        update_data["output"] = converted["outputs"]
+                    if converted["end_time"]:
+                        update_data["end_time"] = converted["end_time"]
+                    if converted["error"]:
+                        update_data["level"] = "ERROR"
+                        update_data["status_message"] = converted["error"]
+
+                    if update_data:
+                        obj.end(**update_data)
+                    else:
+                        obj.end()
+
+                    logger.info(f"✅ Batch completed {run_type}: {run_id}")
+
+            except Exception as e:
+                logger.error(f"❌ Error processing batch PATCH run: {e}")
+
+        # Flush after batch processing
+        langfuse_client.flush()
+        logger.info(f"📦 Processed batch: {len(post_runs)} creates, {len(patch_runs)} updates")
+
+        return JSONResponse(content={"message": "Batch processed"})
 
     except Exception as e:
         logger.error(f"❌ Error processing batch: {e}", exc_info=True)
