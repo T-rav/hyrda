@@ -68,13 +68,13 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
               <div className="toggle-switch" onClick={handleToggle}>
                 <input
                   type="checkbox"
-                  checked={agent.is_public}
+                  checked={agent.is_enabled}
                   onChange={() => {}}
                   className="toggle-checkbox"
                 />
                 <span className="toggle-slider"></span>
                 <span className="toggle-label">
-                  {agent.is_public ? 'Enabled' : 'Disabled'}
+                  {agent.is_enabled ? 'Enabled' : 'Disabled'}
                 </span>
               </div>
             </div>
