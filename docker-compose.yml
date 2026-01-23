@@ -355,7 +355,6 @@ services:
       - ./external_agents:/app/external_agents:ro
       - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
       - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
-      - agent_checkpoints:/app/data/checkpoints
     depends_on:
       control-plane:
         condition: service_healthy
@@ -418,8 +417,6 @@ volumes:
   redis_data:
     driver: local
   loki_data:
-    driver: local
-  agent_checkpoints:
     driver: local
 
 networks:
