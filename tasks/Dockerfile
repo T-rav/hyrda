@@ -23,13 +23,8 @@ RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
 # Trust all self-signed certificates for inter-service communication
-# Only copy CA certificate (not private keys) for development mTLS
-# Private keys are mounted as volumes at runtime via docker-compose.yml
-COPY --chown=root:root .ssl/mkcert-ca.crt* /tmp/.ssl/ 2>/dev/null || true
-RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
-        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
-        update-ca-certificates update-ca-certificates;update-ca-certificates; rm -rf /tmp/.ssl; \
-    fi
+# SSL certificates are mounted as volumes at runtime via docker-compose.yml
+# No need to copy during build - handled at runtime
 
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
