@@ -315,9 +315,17 @@ class TestYouTubeClientTranscribeAudio:
 
     def test_transcribe_audio_success(self, youtube_client):
         """Test successful audio transcription."""
-        with patch("builtins.open"), patch("openai.OpenAI") as mock_openai:
+        # Create a mock file object that supports context manager protocol
+        mock_file = Mock()
+        mock_file.__enter__ = Mock(return_value=mock_file)
+        mock_file.__exit__ = Mock(return_value=False)
+
+        with patch("builtins.open", return_value=mock_file), patch(
+            "openai.OpenAI"
+        ) as mock_openai, patch("os.path.getsize", return_value=1024 * 1024):  # 1MB
             mock_client = Mock()
             mock_openai.return_value = mock_client
+            # Return string directly - OpenAI API returns text
             mock_client.audio.transcriptions.create.return_value = (
                 "This is the transcribed text"
             )

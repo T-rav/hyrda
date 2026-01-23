@@ -131,14 +131,14 @@ class TestSchedulerNoDuplicates:
     @pytest.mark.asyncio
     async def test_job_executes_only_once(self):
         """Test that scheduled job executes exactly once, not 4 times."""
-        from datetime import datetime
+        from datetime import datetime, timedelta
 
         from models.base import get_db_session
         from models.task_run import TaskRun
 
         # Get task runs from last 5 minutes
         with get_db_session() as session:
-            five_minutes_ago = datetime.now() - datetime.timedelta(minutes=5)
+            five_minutes_ago = datetime.now() - timedelta(minutes=5)
             recent_runs = (
                 session.query(TaskRun)
                 .filter(TaskRun.started_at >= five_minutes_ago)
