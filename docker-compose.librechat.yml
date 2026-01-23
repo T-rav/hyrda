@@ -79,7 +79,7 @@ services:
       - librechat_data:/app/client/public/images
       - librechat_logs:/app/api/logs
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3080/api/health"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3080/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

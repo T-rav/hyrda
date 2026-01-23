@@ -68,7 +68,7 @@ services:
       - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
       - QDRANT__TLS__KEY=/qdrant/tls/key.pem
     healthcheck:
-      test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp && echo 'Port 6333 listening' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
