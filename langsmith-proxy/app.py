@@ -7,24 +7,39 @@ This allows using LangSmith locally for dev while using Langfuse in production.
 Usage:
     # Production: Point LangGraph to proxy
     LANGCHAIN_ENDPOINT=http://langsmith-proxy:8002
-    LANGCHAIN_API_KEY=dummy  # Proxy doesn't validate
+    PROXY_API_KEY=your-secure-proxy-key  # Set in proxy .env
+    LANGCHAIN_API_KEY=your-secure-proxy-key  # Set in agent .env
 
     # Local dev: Use real LangSmith
     LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-    LANGCHAIN_API_KEY=lsv2_pt_your-key
+    LANGCHAIN_API_KEY=lsv2_pt_your-real-langsmith-key
 """
 
 import logging
 import os
+import secrets
 from datetime import datetime
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Security: API key validation
+security = HTTPBearer()
+PROXY_API_KEY = os.getenv("PROXY_API_KEY", "")
+
+if not PROXY_API_KEY:
+    # Generate a random key if not set (for dev/testing)
+    PROXY_API_KEY = secrets.token_urlsafe(32)
+    logger.warning(f"⚠️  No PROXY_API_KEY set! Generated temporary key: {PROXY_API_KEY}")
+    logger.warning("⚠️  Set PROXY_API_KEY in .env for production!")
+else:
+    logger.info("✅ PROXY_API_KEY configured")
 
 # Initialize Langfuse client
 try:
@@ -45,6 +60,27 @@ app = FastAPI(title="LangSmith to Langfuse Proxy")
 
 # Store run ID mappings (LangSmith run_id -> Langfuse trace/span IDs)
 run_id_map: dict[str, dict[str, Any]] = {}
+
+
+def validate_api_key(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+) -> bool:
+    """
+    Validate API key from Authorization header.
+
+    Expects: Authorization: Bearer <api-key>
+    """
+    if not credentials:
+        logger.warning("❌ Missing Authorization header")
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    provided_key = credentials.credentials
+
+    if provided_key != PROXY_API_KEY:
+        logger.warning(f"❌ Invalid API key provided: {provided_key[:8]}...")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    return True
 
 
 def convert_langsmith_to_langfuse(run_data: dict[str, Any]) -> dict[str, Any]:
@@ -105,11 +141,13 @@ def convert_langsmith_to_langfuse(run_data: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/runs")
-async def create_run(request: Request):
+async def create_run(request: Request, authorized: bool = Depends(validate_api_key)):
     """
     Handle LangSmith run creation.
 
     Creates Langfuse trace (root) or span (child).
+
+    Requires: Authorization: Bearer <proxy-api-key>
     """
     if not langfuse_client:
         return JSONResponse(
@@ -216,11 +254,15 @@ async def create_run(request: Request):
 
 
 @app.patch("/runs/{run_id}")
-async def update_run(run_id: str, request: Request):
+async def update_run(
+    run_id: str, request: Request, authorized: bool = Depends(validate_api_key)
+):
     """
     Handle LangSmith run updates (completion, errors, outputs).
 
     Updates corresponding Langfuse trace/span/generation.
+
+    Requires: Authorization: Bearer <proxy-api-key>
     """
     if not langfuse_client:
         return JSONResponse(content={"message": "Langfuse not available"})
@@ -258,8 +300,14 @@ async def update_run(run_id: str, request: Request):
 
 
 @app.post("/runs/batch")
-async def create_runs_batch(request: Request):
-    """Handle batch run creation from LangSmith."""
+async def create_runs_batch(
+    request: Request, authorized: bool = Depends(validate_api_key)
+):
+    """
+    Handle batch run creation from LangSmith.
+
+    Requires: Authorization: Bearer <proxy-api-key>
+    """
     if not langfuse_client:
         return JSONResponse(content={"message": "Langfuse not available"})
 

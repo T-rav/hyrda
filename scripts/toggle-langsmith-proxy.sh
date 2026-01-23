@@ -36,6 +36,20 @@ check_status() {
 enable_proxy() {
     echo "📊 Enabling LangSmith proxy mode..."
 
+    # Check if PROXY_API_KEY is set
+    if ! grep -q "^PROXY_API_KEY=" .env 2>/dev/null; then
+        echo "⚠️  Warning: PROXY_API_KEY not set in .env"
+        echo "   Generating secure API key..."
+
+        # Generate secure API key
+        GENERATED_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))" 2>/dev/null || openssl rand -base64 32)
+
+        echo "" >> .env
+        echo "# Proxy API Key (auto-generated)" >> .env
+        echo "PROXY_API_KEY=${GENERATED_KEY}" >> .env
+        echo "✅ Generated PROXY_API_KEY and added to .env"
+    fi
+
     # Comment out any existing LANGCHAIN_ENDPOINT
     if grep -q "^LANGCHAIN_ENDPOINT=" .env 2>/dev/null; then
         sed -i.bak 's/^LANGCHAIN_ENDPOINT=/#LANGCHAIN_ENDPOINT=/' .env
@@ -46,14 +60,14 @@ enable_proxy() {
         echo "" >> .env
         echo "# LangSmith Proxy (traces → Langfuse)" >> .env
         echo "LANGCHAIN_ENDPOINT=http://langsmith-proxy:8002" >> .env
-        echo "LANGCHAIN_API_KEY=dummy" >> .env
+        echo "LANGCHAIN_API_KEY=\${PROXY_API_KEY}  # Must match proxy's PROXY_API_KEY" >> .env
     fi
 
     echo "✅ Proxy mode enabled!"
     echo "   LangGraph traces will now go to Langfuse via proxy"
     echo ""
     echo "Restart services:"
-    echo "   docker compose restart agent-service"
+    echo "   docker compose restart langsmith-proxy agent-service"
 }
 
 enable_direct() {

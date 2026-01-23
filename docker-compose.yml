@@ -305,6 +305,7 @@ services:
     container_name: insightmesh-langsmith-proxy
     restart: unless-stopped
     environment:
+      - PROXY_API_KEY=${PROXY_API_KEY}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}

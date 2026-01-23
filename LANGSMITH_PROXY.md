@@ -87,6 +87,62 @@ Start it with:
 docker compose up -d langsmith-proxy
 ```
 
+## Translation: LangSmith → Langfuse
+
+**Yes, the proxy translates trace formats!**
+
+The proxy converts LangSmith's trace format to Langfuse's format in real-time:
+
+```python
+# LangSmith format (what agents send)
+{
+  "id": "run-123",
+  "name": "agent_executor",
+  "run_type": "chain",
+  "inputs": {"query": "..."},
+  "outputs": {"result": "..."},
+  "parent_run_id": null,
+  "start_time": "2024-01-01T00:00:00Z",
+  "end_time": "2024-01-01T00:00:05Z"
+}
+
+# ↓ Proxy converts to ↓
+
+# Langfuse format (what gets stored)
+langfuse.trace(
+  id="run-123",
+  name="agent_executor",
+  input={"query": "..."},
+  output={"result": "..."},
+  metadata={"run_type": "chain"}
+)
+```
+
+## Security
+
+The proxy requires API key authentication to prevent unauthorized access.
+
+### API Key Setup
+
+```bash
+# Generate a secure key
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Output: abc123def456...
+
+# Add to .env
+PROXY_API_KEY=abc123def456...
+LANGCHAIN_API_KEY=${PROXY_API_KEY}  # Agent must use same key
+```
+
+### How Authentication Works
+
+1. Agent sends trace with `Authorization: Bearer <key>` header
+2. Proxy validates key matches `PROXY_API_KEY`
+3. If valid → Forward to Langfuse
+4. If invalid → Return `401 Unauthorized`
+
+**Note:** If `PROXY_API_KEY` is not set, the proxy generates a temporary random key on startup and logs it. For production, always set it explicitly in `.env`.
+
 ## How It Works
 
 ### Trace Conversion
@@ -305,19 +361,23 @@ docker compose restart agent-service
 ### Production Deployment
 
 ```bash
-# 1. Enable proxy mode
+# 1. Generate and set proxy API key
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Add to .env: PROXY_API_KEY=your-generated-key
+
+# 2. Enable proxy mode (auto-generates key if not set)
 ./scripts/toggle-langsmith-proxy.sh proxy
 
-# 2. Ensure Langfuse credentials are set
+# 3. Ensure Langfuse credentials are set
 grep LANGFUSE .env
 
-# 3. Start proxy
+# 4. Start proxy
 docker compose up -d langsmith-proxy
 
-# 4. Restart agents
+# 5. Restart agents
 docker compose restart agent-service
 
-# 5. View traces in Langfuse dashboard
+# 6. View traces in Langfuse dashboard
 ```
 
 ## Files

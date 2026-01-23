@@ -18,12 +18,31 @@ LangGraph Agent → LangSmith SDK → Proxy → Langfuse
 
 ## Configuration
 
+### Security: API Key
+
+The proxy requires an API key for authentication. Generate one:
+
+```bash
+# Generate secure API key
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# Or use OpenSSL
+openssl rand -base64 32
+```
+
+Add to `.env`:
+```bash
+PROXY_API_KEY=your-generated-key-here
+```
+
 ### Production (Use Proxy)
 
 ```bash
-# Point LangGraph to proxy
+# Generate and set proxy API key
+PROXY_API_KEY=your-generated-key-here
+
+# Point LangGraph to proxy (must use same API key)
 LANGCHAIN_ENDPOINT=http://langsmith-proxy:8002
-LANGCHAIN_API_KEY=dummy  # Proxy doesn't validate
+LANGCHAIN_API_KEY=${PROXY_API_KEY}  # Must match proxy's PROXY_API_KEY
 
 # Langfuse credentials (proxy uses these)
 LANGFUSE_PUBLIC_KEY=pk-lf-xxx
@@ -159,3 +178,68 @@ The proxy logs all trace activity:
 1. Check `LANGCHAIN_ENDPOINT` is set correctly
 2. Restart agent service after env change
 3. Verify network connectivity: `docker compose exec agent-service ping langsmith-proxy`
+
+## Security
+
+The proxy uses Bearer token authentication to prevent unauthorized access.
+
+### API Key Configuration
+
+1. **Generate a secure key:**
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+2. **Set in proxy environment:**
+```bash
+# In .env or docker-compose.yml
+PROXY_API_KEY=your-generated-key-here
+```
+
+3. **Use same key in agent service:**
+```bash
+# In agent-service .env
+LANGCHAIN_API_KEY=${PROXY_API_KEY}
+```
+
+### How Authentication Works
+
+```
+Agent → HTTP Request with Authorization: Bearer <key>
+        ↓
+Proxy → Validates key matches PROXY_API_KEY
+        ↓
+     Accepted → Forward to Langfuse
+     Rejected → Return 401 Unauthorized
+```
+
+### Auto-Generated Keys
+
+If `PROXY_API_KEY` is not set, the proxy will generate a random key on startup and log it:
+
+```
+⚠️  No PROXY_API_KEY set! Generated temporary key: abc123...
+⚠️  Set PROXY_API_KEY in .env for production!
+```
+
+**For production:** Always set `PROXY_API_KEY` explicitly in `.env` to persist across restarts.
+
+## Troubleshooting 401 Errors
+
+**Symptom:** Agent logs show `401 Unauthorized` when sending traces.
+
+**Cause:** `LANGCHAIN_API_KEY` (agent) doesn't match `PROXY_API_KEY` (proxy).
+
+**Fix:**
+```bash
+# 1. Check what keys are set
+docker compose exec langsmith-proxy env | grep PROXY_API_KEY
+docker compose exec agent-service env | grep LANGCHAIN_API_KEY
+
+# 2. If they don't match, update .env
+PROXY_API_KEY=your-key-here
+LANGCHAIN_API_KEY=${PROXY_API_KEY}
+
+# 3. Restart both services
+docker compose restart langsmith-proxy agent-service
+```
