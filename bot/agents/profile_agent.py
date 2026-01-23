@@ -218,6 +218,7 @@ class ProfileAgent(BaseAgent):
             )
 
             graph_config = {
+                "recursion_limit": 100,  # High limit for deep research workflow
                 "configurable": {
                     "thread_id": thread_id,  # Required by MemorySaver checkpointer
                     "llm_service": llm_service,
@@ -226,7 +227,7 @@ class ProfileAgent(BaseAgent):
                     "max_researcher_iterations": self.config.max_researcher_iterations,
                     "allow_clarification": self.config.allow_clarification,
                     "internal_deep_research": internal_deep_research,  # Enable knowledge base search
-                }
+                },
             }
 
             # Prepare input state
