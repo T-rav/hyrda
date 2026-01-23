@@ -80,6 +80,47 @@ make docker-run                # Run Docker container with .env
 docker logs -f insightmesh-bot # View bot logs
 ```
 
+### Document Ingestion - Scheduled Google Drive Tasks
+```bash
+# PRODUCTION INGESTION METHOD
+# Document ingestion is now handled via scheduled tasks in the tasks service
+# Access the tasks dashboard at http://localhost:5001 (or your server URL)
+
+# WORKFLOW: Update .env → Authenticate → Create Scheduled Task
+
+# 1. Update .env with OAuth credentials (from Google Cloud Console):
+# GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+# GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+# SERVER_BASE_URL=http://localhost:5001  # Must match Google Cloud Console redirect URI
+# OAUTH_ENCRYPTION_KEY=your-fernet-key  # For credential storage
+
+# Also ensure these are configured:
+# - Vector database (Qdrant): VECTOR_HOST, VECTOR_PORT
+# - Embedding service: EMBEDDING_PROVIDER, EMBEDDING_API_KEY
+# - OpenAI API key (for audio/video transcription): OPENAI_API_KEY
+
+# 2. Authenticate Google Drive (saves OAuth credential to database):
+open http://localhost:5001/api/gdrive/auth
+# - Grant Google Drive permissions in OAuth popup
+# - Success page appears and auto-closes after 3 seconds
+# - Credential saved encrypted in database with ID (e.g., "prod_gdrive")
+
+# 3. Create Google Drive Ingestion Scheduled Task:
+open http://localhost:5001
+# In the tasks dashboard web UI:
+#    - Job Type: "Google Drive Ingestion"
+#    - Credential ID: "prod_gdrive" (the ID from step 2)
+#    - Folder ID: "0AMXFYdnvxhbpUk9PVA" (production documents folder)
+#    - Set schedule (e.g., daily at 3 AM)
+#    - Optional: Add custom metadata for all documents
+
+# Supported Formats:
+# - Documents: PDF, Word (.docx), Excel (.xlsx), PowerPoint (.pptx), Google Workspace files
+# - Audio: MP3, WAV, M4A, AAC, OGG, FLAC, WebM (transcribed via OpenAI Whisper)
+# - Video: MP4, MOV, AVI, MKV, WebM (audio extracted and transcribed via OpenAI Whisper)
+# Includes comprehensive metadata: file paths, permissions, owners, sharing settings
+```
+
 ### Utilities
 ```bash
 make clean        # Remove caches and build artifacts

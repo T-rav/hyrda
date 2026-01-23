@@ -1,7 +1,7 @@
 # Use Python 3.11 slim image
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
-# Install security updates and dependencies including nginx
+# Install security updates and dependencies including nginx and ffmpeg
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     default-mysql-client \
     nginx \
     supervisor \
+    ffmpeg \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -55,7 +56,10 @@ ENV PYTHONUNBUFFERED=1 \
     ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     HOME=/app \
-    EDGAR_LOCAL_DATA_DIR=/app/.edgar
+    EDGAR_LOCAL_DATA_DIR=/app/.edgar \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Expose nginx port
 EXPOSE 5001

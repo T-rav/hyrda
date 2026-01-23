@@ -6,6 +6,7 @@ import tempfile
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi.testclient import TestClient
 
 from config.settings import TasksSettings
 
@@ -99,3 +100,85 @@ def sample_slack_users():
             "updated": 1234567890,
         },
     ]
+
+
+# =============================================================================
+# FastAPI App and Authentication Fixtures (Phase 1 Consolidation)
+# =============================================================================
+
+
+@pytest.fixture
+def app():
+    """Get the FastAPI app instance for testing.
+
+    Consolidated from multiple test files to single source of truth.
+    Sets up minimal environment variables for app initialization.
+    """
+    os.environ.update(
+        {
+            "TASK_DATABASE_URL": "sqlite:///:memory:",
+            "DATA_DATABASE_URL": "sqlite:///:memory:",
+            "SERVER_BASE_URL": "http://localhost:5001",
+            "SECRET_KEY": "test-secret-key-for-sessions",
+            "ALLOWED_EMAIL_DOMAIN": "8thlight.com",
+        }
+    )
+
+    from app import app as fastapi_app
+
+    return fastapi_app
+
+
+@pytest.fixture
+def authenticated_client(app):
+    """Create authenticated test client with dependency override.
+
+    Consolidated from multiple test files. Provides a client with:
+    - User authenticated as user@8thlight.com
+    - Admin privileges (is_admin=True)
+    - Both get_current_user and require_admin_from_database overridden
+
+    Usage:
+        def test_protected_endpoint(authenticated_client):
+            response = authenticated_client.get("/api/jobs")
+            assert response.status_code == 200
+    """
+    from dependencies.auth import get_current_user, require_admin_from_database
+
+    async def override_get_current_user():
+        return {
+            "email": "user@8thlight.com",
+            "name": "Test User",
+            "picture": "https://example.com/photo.jpg",
+            "is_admin": True,
+        }
+
+    async def override_require_admin():
+        return {
+            "email": "admin@8thlight.com",
+            "name": "Test Admin",
+            "is_admin": True,
+        }
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[require_admin_from_database] = override_require_admin
+
+    client = TestClient(app)
+    yield client
+
+    # Cleanup
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unauthenticated_client(app):
+    """Create test client without authentication.
+
+    Use this for testing public endpoints or authentication flows.
+
+    Usage:
+        def test_login_required(unauthenticated_client):
+            response = unauthenticated_client.get("/api/jobs")
+            assert response.status_code == 401
+    """
+    return TestClient(app)

@@ -513,7 +513,9 @@ class TestDownloadFileContent:
         )
 
         # Act
-        result = google_drive_client.download_file_content("file123", "application/pdf")
+        result = google_drive_client.download_file_content(
+            "file123", "application/pdf", "test.pdf"
+        )
 
         # Assert
         assert result == "Extracted text"
@@ -521,7 +523,7 @@ class TestDownloadFileContent:
             "file123", "application/pdf"
         )
         google_drive_client.document_processor.extract_text.assert_called_once_with(
-            b"PDF content", "application/pdf"
+            b"PDF content", "application/pdf", "test.pdf"
         )
 
     def test_download_google_doc_decodes_as_text(self, google_drive_client):

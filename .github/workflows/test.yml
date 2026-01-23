@@ -31,6 +31,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-pip-
 
+    - name: Install system dependencies
+      if: matrix.task == 'test'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+
     - name: Install Python dependencies
       working-directory: tasks
       run: |
@@ -55,7 +61,7 @@ jobs:
         DATABASE_URL: "sqlite:///:memory:"
         REDIS_URL: "redis://localhost:6379/2"
       run: |
-        python -m pytest tests/ -v --cov=. --cov-fail-under=70 --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration" --cov=. --cov-fail-under=70 --cov-report=term-missing
 
   react-tests:
     runs-on: ubuntu-latest

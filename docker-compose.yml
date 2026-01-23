@@ -114,6 +114,8 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_HOST:-}
       - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
       - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
     ports:
       - "${TASKS_PORT:-5001}:5001"
     volumes:

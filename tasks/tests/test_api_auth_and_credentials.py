@@ -1,6 +1,5 @@
 """Comprehensive tests for Tasks API endpoints (auth, credentials, dependencies)."""
 
-import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -14,53 +13,10 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 
-# Re-use the factories but get the FastAPI app directly
 @pytest.fixture
-def app():
-    """Get the FastAPI app instance for testing."""
-    # Set required env vars for app creation
-    os.environ.setdefault("TASK_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("DATA_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("SERVER_BASE_URL", "http://localhost:5001")
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-sessions")
-    os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
-
-    from app import app as fastapi_app
-
-    return fastapi_app
-
-
-@pytest.fixture
-def client(app):
-    """Create test client for FastAPI app."""
-    from fastapi.testclient import TestClient
-
-    return TestClient(app)
-
-
-@pytest.fixture
-def authenticated_client(app):
-    """Create authenticated test client with dependency override."""
-    from fastapi.testclient import TestClient
-
-    from dependencies.auth import get_current_user
-
-    # Override the get_current_user dependency to return a mock user
-    async def override_get_current_user():
-        return {
-            "email": "user@8thlight.com",
-            "name": "Test User",
-            "picture": "https://example.com/photo.jpg",
-        }
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-
-    client = TestClient(app)
-
-    yield client
-
-    # Clean up
-    app.dependency_overrides.clear()
+def client(unauthenticated_client):
+    """Alias unauthenticated_client as client for tests that need unauthenticated access."""
+    return unauthenticated_client
 
 
 @pytest.fixture
