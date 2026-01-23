@@ -296,6 +296,40 @@ services:
     networks:
       - insightmesh
 
+  # LangSmith to Langfuse Proxy
+  langsmith-proxy:
+    build:
+      context: ./langsmith-proxy
+      dockerfile: Dockerfile
+    image: insightmesh-langsmith-proxy:latest
+    container_name: insightmesh-langsmith-proxy
+    restart: unless-stopped
+    environment:
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
+      - PORT=8002
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8002/health').raise_for_status()"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "langsmith-proxy"
+      component: "observability"
+    networks:
+      - insightmesh
+
   # Agent Service - LangGraph HTTP API
   agent-service:
     build:

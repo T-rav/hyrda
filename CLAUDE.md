@@ -920,3 +920,32 @@ To update the Langfuse prompt:
 PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
 ```
 Then promote the new version to production in Langfuse UI.
+
+## LangSmith to Langfuse Proxy
+
+The project includes a LangSmith-compatible proxy that redirects LangGraph agent traces to Langfuse in production while preserving LangSmith for local development.
+
+**Quick Start:**
+```bash
+# Production: Route traces to Langfuse
+./scripts/toggle-langsmith-proxy.sh proxy
+
+# Local Dev: Use LangSmith directly  
+./scripts/toggle-langsmith-proxy.sh direct
+
+# Check current mode
+./scripts/toggle-langsmith-proxy.sh status
+```
+
+**Documentation:** See [LANGSMITH_PROXY.md](LANGSMITH_PROXY.md) for complete details.
+
+**Benefits:**
+- 💰 No LangSmith cloud costs in production
+- 📊 Unified observability in Langfuse
+- 🛠️ LangSmith UI for local debugging
+- 🔌 Zero code changes (environment variables only)
+
+**Architecture:**
+- LangGraph agents → LangSmith SDK → Proxy → Langfuse
+- Proxy converts LangSmith trace format to Langfuse format
+- Transparent to agents (they think they're talking to LangSmith)
