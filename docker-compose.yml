@@ -189,6 +189,7 @@ services:
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - QDRANT_VERIFY_SSL=false
       - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
       - ENVIRONMENT=production
     ports:

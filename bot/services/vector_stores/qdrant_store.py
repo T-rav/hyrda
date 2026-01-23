@@ -57,10 +57,17 @@ class QdrantVectorStore(VectorStore):
             # Check for certificate path (development) or use system CA store (production/Docker)
             cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
 
+            # Check if SSL verification should be disabled (for self-signed certs)
+            verify_ssl = os.getenv("QDRANT_VERIFY_SSL", "true").lower() != "false"
+
             # Determine SSL verification strategy:
+            # - Disabled if QDRANT_VERIFY_SSL=false
             # - Use cert file if available (development/testing)
             # - Use system CA store otherwise (Docker/production)
-            verify = cert_path if cert_path and os.path.exists(cert_path) else True
+            if not verify_ssl:
+                verify = False
+            else:
+                verify = cert_path if cert_path and os.path.exists(cert_path) else True
 
             if self.api_key:
                 self.client = QdrantClient(
