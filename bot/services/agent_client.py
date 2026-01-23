@@ -268,6 +268,13 @@ class AgentClient:
                 # Add OpenTelemetry trace context propagation
                 headers = add_otel_headers(headers)
 
+                # Add Langfuse trace context propagation for unified observability
+                from services.langfuse_service import LangfuseService
+                from utils.trace_propagation import add_trace_headers_to_request
+
+                langfuse_context = LangfuseService.get_current_trace_context()
+                headers = add_trace_headers_to_request(headers, langfuse_context)
+
                 # Create span for HTTP client call
                 with create_span(
                     "http.client.agent_service.invoke",

@@ -1,14 +1,51 @@
 """
-Langfuse service for LLM observability and tracing.
+Centralized Langfuse service for LLM observability and tracing across all services.
 
-Shared across InsightMesh services (bot, agent-service) to provide consistent
-LLM tracing and observability through Langfuse.
+This module provides a unified interface for Langfuse tracing with:
+- Hierarchical trace context propagation (trace_id + parent_span_id)
+- Cross-service trace propagation via HTTP headers
+- Support for @observe decorator integration
+- Manual trace creation for fine-grained control
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
-from shared.config.settings import LangfuseSettings
+try:
+    from pydantic import SecretStr
+except ImportError:
+    SecretStr = None  # type: ignore[misc,assignment]
+
+
+class LangfuseSettingsProtocol(Protocol):
+    """Protocol for Langfuse settings to work with any service's settings class."""
+
+    enabled: bool
+    public_key: str
+    secret_key: Any  # Can be SecretStr or str
+    host: str
+    debug: bool
+
+
+# Try to import from bot config first, fallback to creating basic class
+try:
+    from config.settings import LangfuseSettings  # type: ignore[import-not-found]
+except ImportError:
+    # Create a basic settings class for services without bot config
+    class LangfuseSettings:  # type: ignore[no-redef]
+        def __init__(
+            self,
+            enabled: bool = True,
+            public_key: str = "",
+            secret_key: str = "",
+            host: str = "https://cloud.langfuse.com",
+            debug: bool = False,
+        ):
+            self.enabled = enabled
+            self.public_key = public_key
+            self.secret_key = secret_key
+            self.host = host
+            self.debug = debug
 
 if TYPE_CHECKING:
     from langfuse import Langfuse  # type: ignore[reportMissingImports]
@@ -29,7 +66,7 @@ except ImportError:
     _langfuse_available = False
 
     # Provide no-op decorator if langfuse is not available
-    def observe(name: str = None, as_type: str = None, **kwargs):  # noqa: ARG001
+    def observe(name: str | None = None, as_type: str | None = None, **kwargs):  # noqa: ARG001
         """No-op decorator when Langfuse is not available"""
         _ = (name, as_type, kwargs)  # Acknowledge but ignore parameters
 
@@ -37,10 +74,6 @@ except ImportError:
             return func
 
         return decorator
-
-
-# Langfuse API configuration constants
-LANGFUSE_API_TIMEOUT = 10  # Timeout for Langfuse API calls in seconds
 
 
 class LangfuseService:
@@ -66,11 +99,16 @@ class LangfuseService:
             return
 
         try:
+            # Extract secret key (handle both SecretStr and plain string)
+            secret_key = self.settings.secret_key
+            if hasattr(secret_key, "get_secret_value"):
+                secret_key = secret_key.get_secret_value()  # type: ignore[union-attr]
+
             # Only initialize if we have valid credentials
-            if self.settings.public_key and self.settings.secret_key.get_secret_value():
+            if self.settings.public_key and secret_key:
                 self.client = Langfuse(
                     public_key=self.settings.public_key,
-                    secret_key=self.settings.secret_key.get_secret_value(),
+                    secret_key=secret_key,
                     host=self.settings.host,
                     debug=self.settings.debug,
                     environment=self.environment,  # Set environment for all traces
@@ -96,7 +134,8 @@ class LangfuseService:
         error: str | None = None,
         prompt_template_name: str | None = None,
         prompt_template_version: str | None = None,
-    ):
+        trace_context: dict[str, str] | None = None,
+    ) -> str | None:
         """
         Trace an LLM call with Langfuse
 
@@ -110,13 +149,18 @@ class LangfuseService:
             error: Error message if call failed
             prompt_template_name: Name of the Langfuse prompt template used
             prompt_template_version: Version of the prompt template used
+            trace_context: Optional trace context with trace_id (32 hex) and parent_span_id (16 hex)
+
+        Returns:
+            observation_id: The Langfuse observation ID (16 hex chars) for parent linking
+
         """
         if not self.enabled:
-            return
+            return None
 
         try:
             if not self.client:
-                return
+                return None
 
             # Prepare generation parameters
             generation_params = {
@@ -133,6 +177,10 @@ class LangfuseService:
                 "tags": [self.environment],  # Add environment as tag for filtering
                 "usage": usage,
             }
+
+            # Add trace context for hierarchical linking
+            if trace_context:
+                generation_params["trace_context"] = trace_context
 
             # Link to prompt template if provided
             if prompt_template_name:
@@ -161,15 +209,20 @@ class LangfuseService:
             if error:
                 generation.end()
 
+            # Return observation ID for use as parent_span_id
+            return generation.id
+
         except Exception as e:
             logger.error(f"Error tracing LLM call: {e}")
+            return None
 
     def trace_retrieval(
         self,
         query: str,
         results: list[dict[str, Any]],
         metadata: dict[str, Any] | None = None,
-    ):
+        trace_context: dict[str, str] | None = None,
+    ) -> str | None:
         """
         Trace RAG retrieval operation with enhanced document visibility
 
@@ -177,13 +230,18 @@ class LangfuseService:
             query: Search query
             results: Retrieved documents/chunks
             metadata: Additional metadata
+            trace_context: Optional trace context with trace_id (32 hex) and parent_span_id (16 hex)
+
+        Returns:
+            observation_id: The Langfuse observation ID (16 hex chars) for parent linking
+
         """
         if not self.enabled:
-            return
+            return None
 
         try:
             if not self.client:
-                return
+                return None
 
             # Prepare enhanced chunk data with full content for better visibility
             enhanced_chunks = []
@@ -212,14 +270,14 @@ class LangfuseService:
 
                 enhanced_chunks.append(enhanced_chunk)
 
-            # Create span for RAG retrieval with enhanced data
-            span = self.client.start_span(
-                name="rag_retrieval",
-                input={
+            # Prepare span parameters
+            span_params = {
+                "name": "rag_retrieval",
+                "input": {
                     "query": query,
                     "query_length": len(query),
                 },
-                output={
+                "output": {
                     "total_chunks_retrieved": len(results),
                     "unique_documents": len(document_sources),
                     "document_sources": list(document_sources),
@@ -238,7 +296,7 @@ class LangfuseService:
                         ),
                     },
                 },
-                metadata={
+                "metadata": {
                     "retrieval_type": metadata.get("retrieval_type", "unknown")
                     if metadata
                     else "unknown",
@@ -250,15 +308,26 @@ class LangfuseService:
                     "environment": self.environment,
                     **(metadata or {}),
                 },
-            )
+            }
+
+            # Add trace context for hierarchical linking
+            if trace_context:
+                span_params["trace_context"] = trace_context
+
+            # Create span for RAG retrieval with enhanced data
+            span = self.client.start_span(**span_params)
             span.end()
 
             logger.debug(
                 f"Enhanced retrieval trace created: {len(results)} chunks from {len(document_sources)} documents"
             )
 
+            # Return observation ID for use as parent_span_id
+            return span.id
+
         except Exception as e:
             logger.error(f"Error tracing retrieval: {e}")
+            return None
 
     def trace_tool_execution(
         self,
@@ -266,7 +335,8 @@ class LangfuseService:
         tool_input: dict[str, Any],
         tool_output: Any,
         metadata: dict[str, Any] | None = None,
-    ):
+        trace_context: dict[str, str] | None = None,
+    ) -> str | None:
         """
         Trace tool execution (e.g., web search, API calls)
 
@@ -275,39 +345,55 @@ class LangfuseService:
             tool_input: Input parameters to the tool
             tool_output: Output/results from the tool
             metadata: Additional metadata
+            trace_context: Optional trace context with trace_id (32 hex) and parent_span_id (16 hex)
+
+        Returns:
+            observation_id: The Langfuse observation ID (16 hex chars) for parent linking
+
         """
         if not self.enabled:
-            return
+            return None
 
         try:
             if not self.client:
-                return
+                return None
 
-            # Create span for tool execution
-            span = self.client.start_span(
-                name=f"tool_{tool_name}",
-                input={
+            # Prepare span parameters
+            span_params = {
+                "name": f"tool_{tool_name}",
+                "input": {
                     "tool_name": tool_name,
                     "tool_parameters": tool_input,
                 },
-                output={
+                "output": {
                     "tool_result": tool_output,
                     "result_count": len(tool_output)
                     if isinstance(tool_output, list)
                     else 1,
                 },
-                metadata={
+                "metadata": {
                     "tool_type": tool_name,
                     "environment": self.environment,
                     **(metadata or {}),
                 },
-            )
+            }
+
+            # Add trace context for hierarchical linking
+            if trace_context:
+                span_params["trace_context"] = trace_context
+
+            # Create span for tool execution
+            span = self.client.start_span(**span_params)
             span.end()
 
             logger.debug(f"Tool execution trace created: {tool_name}")
 
+            # Return observation ID for use as parent_span_id
+            return span.id
+
         except Exception as e:
             logger.error(f"Error tracing tool execution: {e}")
+            return None
 
     def trace_document_ingestion(
         self,
@@ -324,6 +410,7 @@ class LangfuseService:
             success_count: Number of successfully ingested chunks
             error_count: Number of failed chunks
             metadata: Additional metadata
+
         """
         if not self.enabled:
             return
@@ -407,6 +494,7 @@ class LangfuseService:
             conversation_id: Conversation ID
             query: User query
             metadata: Additional metadata
+
         """
         if not self.enabled or not self.client:
             return None
@@ -445,6 +533,7 @@ class LangfuseService:
             user_id: Slack user ID
             conversation_id: Conversation/thread ID for session grouping
             metadata: Additional metadata
+
         """
         if not self.enabled or not self.client:
             return
@@ -474,7 +563,8 @@ class LangfuseService:
         user_message: str,
         bot_response: str,
         metadata: dict[str, Any] | None = None,
-    ):
+        trace_context: dict[str, str] | None = None,
+    ) -> str | None:
         """
         Trace a complete conversation turn
 
@@ -484,9 +574,14 @@ class LangfuseService:
             user_message: User's message
             bot_response: Bot's response
             metadata: Additional metadata
+            trace_context: Optional trace context with trace_id (32 hex) and parent_span_id (16 hex)
+
+        Returns:
+            observation_id: The Langfuse observation ID (16 hex chars) for parent linking
+
         """
         if not self.enabled or not self.client:
-            return
+            return None
 
         try:
             # Create or get existing trace for this conversation
@@ -496,27 +591,166 @@ class LangfuseService:
             if self.current_trace:
                 # Update the trace with conversation data using v3.x API
                 try:
-                    # Create a new generation within the trace for this conversation turn
-                    generation = self.client.start_generation(
-                        name="conversation_turn",
-                        input={"user_message": user_message},
-                        output={"bot_response": bot_response},
-                        metadata={
+                    # Prepare generation parameters
+                    generation_params = {
+                        "name": "conversation_turn",
+                        "input": {"user_message": user_message},
+                        "output": {"bot_response": bot_response},
+                        "metadata": {
                             "platform": "slack",
                             "conversation_id": conversation_id,
                             "environment": self.environment,
                             **(metadata or {}),
                         },
-                    )
+                    }
+
+                    # Add trace context for hierarchical linking
+                    if trace_context:
+                        generation_params["trace_context"] = trace_context
+
+                    # Create a new generation within the trace for this conversation turn
+                    generation = self.client.start_generation(**generation_params)
                     generation.end()
                     logger.debug(
                         f"Updated conversation trace for session: {conversation_id}"
                     )
+
+                    # Return observation ID for use as parent_span_id
+                    return generation.id
+
                 except Exception as e:
                     logger.error(f"Error updating conversation generation: {e}")
+                    return None
+
+            return None
 
         except Exception as e:
             logger.error(f"Error tracing conversation: {e}")
+            return None
+
+    def create_trace_context(
+        self, trace_id: str | None = None, parent_span_id: str | None = None
+    ) -> dict[str, str]:
+        """
+        Create a trace context for hierarchical linking
+
+        Args:
+            trace_id: Optional trace ID (32 hex chars, auto-generated if None)
+            parent_span_id: Optional parent observation ID (16 hex chars)
+
+        Returns:
+            Trace context dictionary with trace_id and optionally parent_span_id
+
+        """
+        import uuid
+
+        # Generate trace_id if not provided (remove dashes for Langfuse)
+        if not trace_id:
+            trace_id = str(uuid.uuid4()).replace("-", "")
+
+        context = {"trace_id": trace_id}
+
+        # Add parent_span_id if provided
+        if parent_span_id:
+            context["parent_span_id"] = parent_span_id
+
+        return context
+
+    @staticmethod
+    def get_current_trace_context() -> dict[str, str] | None:
+        """
+        Get trace context from current @observe decorator context
+
+        This extracts the trace_id and observation_id from the current
+        Langfuse decorator context to link manual trace calls to the
+        decorator-created observations.
+
+        Returns:
+            Trace context with trace_id and parent_span_id, or None if not in @observe context
+
+        Example:
+            @observe(name="my_function")
+            def my_function():
+                # Get context from decorator
+                context = LangfuseService.get_current_trace_context()
+
+                # Use it for child observations
+                langfuse_service.trace_retrieval(
+                    query="test",
+                    results=[],
+                    trace_context=context
+                )
+
+        """
+        try:
+            from langfuse.decorators import langfuse_context
+
+            # Get current trace ID and observation ID
+            trace_id = langfuse_context.get_current_trace_id()
+            observation_id = langfuse_context.get_current_observation_id()
+
+            if trace_id and observation_id:
+                # Return context linking to current observation
+                return {
+                    "trace_id": trace_id,
+                    "parent_span_id": observation_id,
+                }
+
+            return None
+
+        except ImportError:
+            logger.debug("Langfuse not available - cannot get trace context")
+            return None
+        except Exception as e:
+            logger.debug(f"Error getting current trace context: {e}")
+            return None
+
+    def start_root_span(
+        self,
+        name: str,
+        input_data: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[str | None, str | None]:
+        """
+        Start a root span for a new trace hierarchy
+
+        Args:
+            name: Name of the root span
+            input_data: Input data for the span
+            metadata: Additional metadata
+
+        Returns:
+            Tuple of (trace_id, observation_id) for use in child spans
+
+        """
+        if not self.enabled or not self.client:
+            return None, None
+
+        try:
+            import uuid
+
+            # Generate new trace ID
+            trace_id = str(uuid.uuid4()).replace("-", "")
+
+            # Start root span with trace_id
+            span = self.client.start_span(
+                trace_context={"trace_id": trace_id},
+                name=name,
+                input=input_data or {},
+                metadata={
+                    "environment": self.environment,
+                    **(metadata or {}),
+                },
+            )
+
+            logger.debug(f"Started root span '{name}' with trace_id: {trace_id}")
+
+            # Return trace_id (32 hex) and observation_id (16 hex) for children
+            return trace_id, span.id
+
+        except Exception as e:
+            logger.error(f"Error starting root span: {e}")
+            return None, None
 
     def score_response(
         self,
@@ -533,7 +767,9 @@ class LangfuseService:
             value: Score value (typically 0-1 or 1-5)
             comment: Optional comment about the score
             metadata: Additional metadata
+
         """
+        _ = (comment, metadata)  # Acknowledge unused params
         if not self.enabled:
             return
 
@@ -567,6 +803,7 @@ class LangfuseService:
 
         Returns:
             The prompt template string or None if not found/failed
+
         """
         if not self.enabled or not self.client:
             logger.warning("Langfuse not enabled - cannot fetch prompt template")
@@ -606,6 +843,7 @@ class LangfuseService:
             - total_interactions: Total number of observations (LLM calls, RAG, tools, etc)
             - unique_sessions: Number of unique conversation threads
             - start_date: The start date used for the query
+
         """
         if not self.enabled or not self.settings.public_key:
             return {
@@ -627,10 +865,15 @@ class LangfuseService:
             # Convert start_date to timestamp
             start_datetime = datetime.fromisoformat(f"{start_date}T00:00:00Z")
 
+            # Extract secret key (handle both SecretStr and plain string)
+            secret_key = self.settings.secret_key
+            if hasattr(secret_key, "get_secret_value"):
+                secret_key = secret_key.get_secret_value()  # type: ignore[union-attr]
+
             # Use basic auth with public_key as username and secret_key as password
             auth = aiohttp.BasicAuth(
                 login=self.settings.public_key,
-                password=self.settings.secret_key.get_secret_value(),
+                password=secret_key,
             )
 
             async with aiohttp.ClientSession() as session:
@@ -666,10 +909,7 @@ class LangfuseService:
 
                 # Get total user messages (conversation_turn observations)
                 async with session.get(
-                    observations_url,
-                    auth=auth,
-                    params=user_messages_params,
-                    timeout=LANGFUSE_API_TIMEOUT,
+                    observations_url, auth=auth, params=user_messages_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -684,10 +924,7 @@ class LangfuseService:
 
                 # Get total observations (all AI operations)
                 async with session.get(
-                    observations_url,
-                    auth=auth,
-                    params=observations_params,
-                    timeout=LANGFUSE_API_TIMEOUT,
+                    observations_url, auth=auth, params=observations_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.error(
@@ -707,10 +944,7 @@ class LangfuseService:
                 # Query sessions endpoint for unique sessions
                 sessions_url = f"{api_base}/api/public/sessions"
                 async with session.get(
-                    sessions_url,
-                    auth=auth,
-                    params=sessions_params,
-                    timeout=LANGFUSE_API_TIMEOUT,
+                    sessions_url, auth=auth, params=sessions_params, timeout=10
                 ) as response:
                     if response.status != 200:
                         logger.warning(f"Could not fetch sessions: {response.status}")

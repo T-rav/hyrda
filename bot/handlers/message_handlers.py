@@ -630,6 +630,29 @@ async def handle_message(
         has_context = bool(thread_ts)  # Has conversation context
         metrics_service.record_query_type(query_category, has_context)
 
+    # Create root Langfuse span for end-to-end trace
+    langfuse_service = get_langfuse_service()
+    root_trace_id = None
+    root_obs_id = None
+    if langfuse_service:
+        root_trace_id, root_obs_id = langfuse_service.start_root_span(
+            name="slack_message",
+            input_data={
+                "message": text,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            metadata={
+                "channel": channel,
+                "is_dm": is_dm,
+                "has_thread": bool(thread_ts),
+                "has_files": bool(files),
+            },
+        )
+        logger.debug(
+            f"Started root trace for message: trace_id={root_trace_id}, obs_id={root_obs_id}"
+        )
+
     # For tracking the thinking indicator message
     thinking_message_ts = None
 

@@ -17,7 +17,7 @@ from services.context_builder import ContextBuilder
 from services.conversation_manager import ConversationManager
 from services.embedding import create_embedding_provider
 from services.internal_deep_research import create_internal_deep_research_service
-from services.langfuse_service import get_langfuse_service, observe
+from services.langfuse_service import LangfuseService, get_langfuse_service, observe
 from services.llm_providers import create_llm_provider
 from services.retrieval_service import RetrievalService
 from services.search_clients import get_perplexity_client, get_tavily_client
@@ -349,7 +349,10 @@ class RAGService:
                                 result["document"] = chunk["metadata"]["file_name"]
                             retrieval_results.append(result)
 
-                        # Send retrieval trace to Langfuse
+                        # Get trace context from current @observe decorator
+                        trace_context = LangfuseService.get_current_trace_context()
+
+                        # Send retrieval trace to Langfuse with hierarchical linking
                         langfuse_service.trace_retrieval(
                             query=query,
                             results=retrieval_results,
@@ -375,6 +378,7 @@ class RAGService:
                                 if self.settings.vector
                                 else "unknown",
                             },
+                            trace_context=trace_context,
                         )
                         logger.info(
                             f"📊 Logged retrieval of {len(context_chunks)} chunks to Langfuse for query: {query[:50]}..."
@@ -571,8 +575,11 @@ class RAGService:
 
                     logger.info(f"✅ Web search returned {len(search_results)} results")
 
-                    # Trace tool execution to Langfuse
+                    # Trace tool execution to Langfuse with hierarchical linking
                     if langfuse_service:
+                        # Get trace context from current @observe decorator
+                        trace_context = LangfuseService.get_current_trace_context()
+
                         langfuse_service.trace_tool_execution(
                             tool_name=tool_name,
                             tool_input=tool_args,
@@ -585,6 +592,7 @@ class RAGService:
                                 "session_id": session_id,
                                 "user_id": user_id,
                             },
+                            trace_context=trace_context,
                         )
                         logger.info(
                             f"📊 Logged tool execution to Langfuse: {tool_name}"
@@ -613,8 +621,11 @@ class RAGService:
                             f"✅ URL scrape returned {len(content)} chars from {url}"
                         )
 
-                        # Trace tool execution to Langfuse
+                        # Trace tool execution to Langfuse with hierarchical linking
                         if langfuse_service:
+                            # Get trace context from current @observe decorator
+                            trace_context = LangfuseService.get_current_trace_context()
+
                             langfuse_service.trace_tool_execution(
                                 tool_name=tool_name,
                                 tool_input=tool_args,
@@ -630,6 +641,7 @@ class RAGService:
                                     "session_id": session_id,
                                     "user_id": user_id,
                                 },
+                                trace_context=trace_context,
                             )
                             logger.info(
                                 f"📊 Logged tool execution to Langfuse: {tool_name}"
@@ -693,8 +705,11 @@ class RAGService:
                             f"✅ Deep research returned {len(answer)} chars with {len(sources)} sources for: {query}"
                         )
 
-                        # Trace tool execution to Langfuse
+                        # Trace tool execution to Langfuse with hierarchical linking
                         if langfuse_service:
+                            # Get trace context from current @observe decorator
+                            trace_context = LangfuseService.get_current_trace_context()
+
                             langfuse_service.trace_tool_execution(
                                 tool_name=tool_name,
                                 tool_input=tool_args,
@@ -710,6 +725,7 @@ class RAGService:
                                     "session_id": session_id,
                                     "user_id": user_id,
                                 },
+                                trace_context=trace_context,
                             )
                             logger.info(
                                 f"📊 Logged tool execution to Langfuse: {tool_name}"

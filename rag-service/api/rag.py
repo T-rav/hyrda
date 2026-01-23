@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from config.settings import get_settings
@@ -284,6 +284,7 @@ async def _generate_rag_response(
 @router.post("/chat/completions", response_model=RAGGenerateResponse)
 async def generate_response(
     request: RAGGenerateRequest,
+    http_request: Request,
     service: dict = Depends(require_service_auth),
     x_conversation_metadata: str | None = Header(None, alias="X-Conversation-Metadata"),
 ):
@@ -300,6 +301,7 @@ async def generate_response(
 
     Args:
         request: RAG generation request with query and context
+        http_request: FastAPI request object (for trace headers)
         service: Service info from authentication (injected by dependency)
         x_conversation_metadata: Optional JSON metadata from LibreChat
 
@@ -315,6 +317,31 @@ async def generate_response(
         f"[{service_name}] RAG request: query='{request.query[:50]}...', "
         f"use_rag={request.use_rag}, conversation_id={request.conversation_id}"
     )
+
+    # Extract or create trace context for unified observability
+    from shared.services.langfuse_service import get_langfuse_service
+    from shared.utils.trace_propagation import extract_trace_context
+
+    trace_context = extract_trace_context(dict(http_request.headers))
+    langfuse_service = get_langfuse_service()
+
+    # If no parent trace context, create root span (standalone entry point)
+    if not trace_context and langfuse_service:
+        trace_id, root_obs_id = langfuse_service.start_root_span(
+            name="rag_service_generate",
+            input_data={"query": request.query, "use_rag": request.use_rag},
+            metadata={
+                "entry_point": "http",
+                "service": service_name,
+                "conversation_id": request.conversation_id,
+            },
+        )
+        trace_context = {"trace_id": trace_id, "parent_span_id": root_obs_id}
+        logger.debug(f"Created root trace: {trace_id}")
+
+    # Store trace context in request state for use by downstream calls
+    if trace_context:
+        http_request.state.trace_context = trace_context
 
     try:
         settings = get_settings()

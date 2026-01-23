@@ -321,6 +321,28 @@ async def invoke_agent(
         f"Invoking agent '{agent_name}' (auth: {auth_type}, user: {user_id or 'none'})"
     )
 
+    # Extract or create trace context for unified observability
+    from shared.services.langfuse_service import get_langfuse_service
+    from shared.utils.trace_propagation import extract_trace_context
+
+    trace_context = extract_trace_context(dict(http_request.headers))
+    langfuse_service = get_langfuse_service()
+
+    # If no parent trace context, create root span (standalone entry point)
+    if not trace_context and langfuse_service:
+        trace_id, root_obs_id = langfuse_service.start_root_span(
+            name="agent_service_invoke",
+            input_data={"agent_name": primary_name, "query": request.query},
+            metadata={
+                "entry_point": "http",
+                "auth_type": auth_type,
+                "user_id": user_id,
+                "service_account": service_account_name,
+            },
+        )
+        trace_context = {"trace_id": trace_id, "parent_span_id": root_obs_id}
+        logger.debug(f"Created root trace: {trace_id}")
+
     # Track invocation timing
     start_time = time.time()
     status = "error"
@@ -336,6 +358,10 @@ async def invoke_agent(
 
         # Add auth metadata for audit trail
         context["auth_type"] = auth_type
+
+        # Add trace context to context for downstream propagation
+        if trace_context:
+            context["trace_context"] = trace_context
 
         result = await agent_client.invoke(
             agent_name=primary_name, query=request.query, context=context
