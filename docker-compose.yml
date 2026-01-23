@@ -194,6 +194,8 @@ services:
       - ENVIRONMENT=production
     ports:
       - "${HEALTH_PORT:-8080}:8080"
+    volumes:
+      - bot_agent_checkpoints:/app/data
     depends_on:
       mysql:
         condition: service_healthy
@@ -409,6 +411,8 @@ volumes:
   redis_data:
     driver: local
   loki_data:
+    driver: local
+  bot_agent_checkpoints:
     driver: local
 
 networks:

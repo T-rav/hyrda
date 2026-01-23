@@ -12,9 +12,10 @@ Uses LangGraph to orchestrate MEDDPICC analysis workflow:
 """
 
 import logging
+import os
 from typing import Any
 
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from agents.base_agent import BaseAgent
 from agents.meddpicc_coach.configuration import MeddpiccConfiguration
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Singleton checkpoint saver - shared across all agent instances for state persistence
 _checkpointer = None
+_checkpointer_initialized = False
 
 
 class MeddicAgent(BaseAgent):
@@ -49,21 +51,31 @@ class MeddicAgent(BaseAgent):
         super().__init__()
         self.config = MeddpiccConfiguration.from_env()
         self.context_manager = MeddpiccContextManager()
-        # Initialize singleton checkpointer and graph
-        self._ensure_graph_initialized()
-        logger.info("MeddicAgent initialized with singleton MemorySaver checkpointer")
+        self.graph = None  # Will be initialized lazily on first use
+        logger.info("MeddicAgent initialized with persistent SQLite checkpointer")
 
-    def _ensure_graph_initialized(self):
+    async def _ensure_graph_initialized(self):
         """Ensure singleton checkpointer and graph are initialized."""
-        global _checkpointer  # noqa: PLW0603
-        if _checkpointer is None:
-            # Create singleton MemorySaver - shared across all agent instances
-            _checkpointer = MemorySaver()
-            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+        global _checkpointer, _checkpointer_initialized  # noqa: PLW0603
 
-        if not hasattr(self, "graph") or self.graph is None:
+        if not _checkpointer_initialized:
+            # Create singleton AsyncSqliteSaver - persists across container restarts
+            checkpoint_dir = os.getenv("AGENT_CHECKPOINT_DIR", "/app/data")
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(
+                checkpoint_dir, "meddic_agent_checkpoints.db"
+            )
+
+            _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_path)
+            await _checkpointer.setup()
+            _checkpointer_initialized = True
+            logger.info(
+                f"✅ Initialized AsyncSqliteSaver checkpointer at {checkpoint_path}"
+            )
+
+        if self.graph is None:
             self.graph = build_meddpicc_coach(checkpointer=_checkpointer)
-            logger.info("✅ Built MEDDPICC graph with singleton checkpointer")
+            logger.info("✅ Built MEDDPICC graph with persistent checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute MEDDPICC analysis using LangGraph.
@@ -85,8 +97,9 @@ class MeddicAgent(BaseAgent):
         logger.info(f"MeddicAgent executing with query length: {len(query)} chars")
         logger.info(f"MeddicAgent query content: '{query}'")
 
-        # Ensure graph is initialized (defensive check)
-        self._ensure_graph_initialized()
+        # Ensure graph is initialized (lazy initialization for async checkpointer)
+        if self.graph is None:
+            await self._ensure_graph_initialized()
 
         # Get services from context
         slack_service = context.get("slack_service")

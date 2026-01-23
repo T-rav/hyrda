@@ -5,11 +5,12 @@ through parallel web research and knowledge base retrieval.
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Any
 
 from langchain_core.messages import HumanMessage
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from agents.base_agent import BaseAgent
 from agents.profiler.configuration import ProfileConfiguration
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Singleton checkpointer shared across all ProfileAgent instances
 _checkpointer = None
+_checkpointer_initialized = False
 
 # Module-level graph variable for testing (mocked by tests)
 # This is set during ProfileAgent initialization
@@ -79,17 +81,15 @@ class ProfileAgent(BaseAgent):
         """Initialize ProfileAgent with deep research configuration."""
         super().__init__()
         self.config = ProfileConfiguration.from_env()
-
-        # Initialize singleton checkpointer and graph
-        self._ensure_graph_initialized()
+        self.graph = None  # Will be initialized lazily on first use
         logger.info(
             f"ProfileAgent initialized with {self.config.search_api} search, "
             f"max {self.config.max_concurrent_research_units} concurrent researchers"
         )
 
-    def _ensure_graph_initialized(self):
+    async def _ensure_graph_initialized(self):
         """Ensure singleton checkpointer and graph are initialized."""
-        global _checkpointer, profile_researcher  # noqa: PLW0603
+        global _checkpointer, _checkpointer_initialized, profile_researcher  # noqa: PLW0603
 
         # Check if profile_researcher is already set (by tests mocking it)
         if profile_researcher is not None:
@@ -98,10 +98,20 @@ class ProfileAgent(BaseAgent):
             logger.info("✅ Using mocked profile_researcher graph from tests")
             return
 
-        if _checkpointer is None:
-            # Create singleton MemorySaver - shared across all agent instances
-            _checkpointer = MemorySaver()
-            logger.info("✅ Initialized singleton MemorySaver checkpointer")
+        if not _checkpointer_initialized:
+            # Create singleton AsyncSqliteSaver - persists across container restarts
+            checkpoint_dir = os.getenv("AGENT_CHECKPOINT_DIR", "/app/data")
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint_path = os.path.join(
+                checkpoint_dir, "profile_agent_checkpoints.db"
+            )
+
+            _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_path)
+            await _checkpointer.setup()
+            _checkpointer_initialized = True
+            logger.info(
+                f"✅ Initialized AsyncSqliteSaver checkpointer at {checkpoint_path}"
+            )
 
         # Build graph with checkpointer
         self.graph = build_profile_researcher(checkpointer=_checkpointer)
@@ -109,7 +119,7 @@ class ProfileAgent(BaseAgent):
         # Set module-level variable for test mocking compatibility
         profile_researcher = self.graph
 
-        logger.info("✅ Built profile researcher graph with singleton checkpointer")
+        logger.info("✅ Built profile researcher graph with persistent checkpointer")
 
     async def run(self, query: str, context: dict[str, Any]) -> dict[str, Any]:
         """Execute profile research using LangGraph deep research workflow.
@@ -127,6 +137,10 @@ class ProfileAgent(BaseAgent):
                 "response": "❌ Invalid context for profile agent",
                 "metadata": {"error": "missing_context"},
             }
+
+        # Ensure graph is initialized (lazy initialization for async checkpointer)
+        if self.graph is None:
+            await self._ensure_graph_initialized()
 
         logger.info(f"ProfileAgent executing deep research for: {query}")
 
