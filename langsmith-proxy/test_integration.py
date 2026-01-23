@@ -75,12 +75,26 @@ async def test_langgraph_agent_with_tool():
         print("   ⚠️  Skipping test - OPENAI_API_KEY not set")
         return None
 
-    # Define a simple weather tool
+    # Define a weather tool that fetches real data
     @tool
     def get_weather(location: Annotated[str, "City and state, e.g. Boulder, CO"]) -> str:
         """Get the current weather for a location."""
-        # Mock weather data for testing
-        return f"The weather in {location} is sunny and 72°F with clear skies."
+        import requests
+
+        try:
+            # Use wttr.in for real weather data (no API key required)
+            # Format: location?format=j1 returns JSON with current conditions
+            response = requests.get(
+                f"https://wttr.in/{location}?format=%C+%t+%w+%h",
+                timeout=5
+            )
+            if response.status_code == 200:
+                weather = response.text.strip()
+                return f"Current weather in {location}: {weather}"
+            else:
+                return f"Unable to fetch weather for {location}"
+        except Exception as e:
+            return f"Error fetching weather: {str(e)}"
 
     # Create agent
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
