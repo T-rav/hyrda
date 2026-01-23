@@ -77,4 +77,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 USER appuser
 
 # Run with Gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+# Note: --forwarded-allow-ips='*' allows proxy headers from any source (safe in internal Docker network)
+CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--timeout", "120", "--forwarded-allow-ips", "*", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
