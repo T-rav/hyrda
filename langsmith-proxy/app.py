@@ -161,31 +161,37 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
         run_id = converted["run_id"]
         parent_id = converted["parent_id"]
 
-        # Root run -> Create Langfuse trace
+        # Root run -> Create Langfuse observation (trace)
         if not parent_id:
-            # Use create_trace for Langfuse SDK 3.x
-            trace_data = {
-                "id": run_id,
+            # Use start_observation for Langfuse SDK 3.x (creates trace-level observation)
+            # Note: SDK 3.x doesn't accept 'id' parameter, it auto-generates
+            obs_data = {
                 "name": converted["name"],
                 "input": converted["inputs"],
                 "metadata": {
                     "run_type": converted["run_type"],
+                    "langsmith_trace": True,
+                    "langsmith_id": run_id,  # Store LangSmith ID in metadata
                     **converted["metadata"],
                 },
             }
 
             # Add output if available
             if converted["outputs"]:
-                trace_data["output"] = converted["outputs"]
+                obs_data["output"] = converted["outputs"]
 
-            # Create trace using SDK 3.x method
-            langfuse_client.trace(**trace_data)
+            # Note: Timestamps are managed by the SDK, not passed in
+            # The SDK handles start_time automatically on creation
+            # end_time is set when calling .end() method
 
-            # Store trace reference (for child spans)
+            # Create observation (this acts as trace root in SDK 3.x)
+            observation = langfuse_client.start_observation(**obs_data)
+
+            # Store reference for child spans
             run_id_map[run_id] = {
-                "type": "trace",
+                "type": "observation",
                 "langfuse_id": run_id,
-                "trace_data": trace_data,
+                "observation": observation,
             }
 
             logger.info(f"📊 Created Langfuse trace: {converted['name']} ({run_id})")
@@ -196,40 +202,49 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
             if not parent_info:
                 logger.warning(
-                    f"⚠️  Parent run {parent_id} not found, creating orphan trace"
+                    f"⚠️  Parent run {parent_id} not found, creating orphan observation"
                 )
-                # Create as root trace if parent not found
-                langfuse_client.trace(
-                    id=run_id,
+                # Create as root observation if parent not found
+                obs = langfuse_client.start_observation(
                     name=converted["name"],
                     input=converted["inputs"],
                     output=converted["outputs"],
+                    metadata={"langsmith_id": run_id},
                 )
-                run_id_map[run_id] = {"type": "trace", "langfuse_id": run_id}
+                run_id_map[run_id] = {
+                    "type": "observation",
+                    "langfuse_id": run_id,
+                    "observation": obs,
+                }
             else:
+                parent_obs = parent_info.get("observation")
                 parent_trace_id = parent_info.get("langfuse_id")
 
                 # LLM calls become generations
                 if converted["run_type"] == "llm":
                     gen_data = {
-                        "id": run_id,
-                        "trace_id": parent_trace_id,
                         "name": converted["name"],
                         "input": converted["inputs"],
                         "metadata": {
                             "run_type": converted["run_type"],
+                            "langsmith_id": run_id,
+                            "parent_langsmith_id": parent_id,
                             **converted["metadata"],
                         },
                     }
                     if converted["outputs"]:
                         gen_data["output"] = converted["outputs"]
 
-                    langfuse_client.generation(**gen_data)
+                    # Note: SDK handles timestamps automatically
+
+                    # Use start_generation method
+                    generation = langfuse_client.start_generation(**gen_data)
 
                     run_id_map[run_id] = {
                         "type": "generation",
                         "langfuse_id": run_id,
                         "parent_id": parent_id,
+                        "generation": generation,
                     }
                     logger.info(
                         f"🤖 Created Langfuse generation: {converted['name']} ({run_id})"
@@ -238,24 +253,28 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                 # Everything else becomes spans
                 else:
                     span_data = {
-                        "id": run_id,
-                        "trace_id": parent_trace_id,
                         "name": converted["name"],
                         "input": converted["inputs"],
                         "metadata": {
                             "run_type": converted["run_type"],
+                            "langsmith_id": run_id,
+                            "parent_langsmith_id": parent_id,
                             **converted["metadata"],
                         },
                     }
                     if converted["outputs"]:
                         span_data["output"] = converted["outputs"]
 
-                    langfuse_client.span(**span_data)
+                    # Note: SDK handles timestamps automatically
+
+                    # Use start_span method
+                    span = langfuse_client.start_span(**span_data)
 
                     run_id_map[run_id] = {
                         "type": "span",
                         "langfuse_id": run_id,
                         "parent_id": parent_id,
+                        "span": span,
                     }
                     logger.info(
                         f"📍 Created Langfuse span: {converted['name']} ({run_id})"
@@ -293,20 +312,42 @@ async def update_run(
             logger.warning(f"⚠️  Run {run_id} not found in map, skipping update")
             return JSONResponse(content={"id": run_id})
 
-        # Update the Langfuse object
-        # Note: Langfuse Python SDK auto-updates on object reference
-        # We just need to ensure end() is called if run completed
+        # Update the Langfuse observation/span/generation with completion data
+        run_type = run_info["type"]
+        obj = run_info.get(run_type)  # Get the actual Langfuse object
 
-        if converted["end_time"]:
-            run_type = run_info["type"]
-            logger.info(
-                f"✅ Completed Langfuse {run_type}: {converted['name']} ({run_id})"
-            )
+        if obj and hasattr(obj, "end"):
+            # End the observation/span/generation
+            try:
+                update_data = {}
+                if converted["outputs"]:
+                    update_data["output"] = converted["outputs"]
+                if converted["end_time"]:
+                    update_data["end_time"] = converted["end_time"]
+                if converted["error"]:
+                    update_data["level"] = "ERROR"
+                    update_data["status_message"] = converted["error"]
+
+                # Call end() method to finalize
+                if update_data:
+                    obj.end(**update_data)
+                else:
+                    obj.end()
+
+                logger.info(
+                    f"✅ Completed Langfuse {run_type}: {converted['name']} ({run_id})"
+                )
+            except Exception as e:
+                logger.error(f"Error ending {run_type}: {e}")
 
         if converted["error"]:
-            logger.error(
-                f"❌ Error in Langfuse run {run_id}: {converted['error']}"
-            )
+            logger.error(f"❌ Error in Langfuse run {run_id}: {converted['error']}")
+
+        # Flush to Langfuse after completion of root trace
+        if converted["end_time"] and not run_info.get("parent_id"):
+            # Root trace completed, flush to Langfuse
+            langfuse_client.flush()
+            logger.info(f"📤 Flushed trace to Langfuse: {run_id}")
 
         return JSONResponse(content={"id": run_id})
 
@@ -365,8 +406,17 @@ async def info():
     }
 
 
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Flush any remaining traces to Langfuse on shutdown."""
+    if langfuse_client:
+        logger.info("📤 Flushing remaining traces to Langfuse...")
+        langfuse_client.flush()
+        logger.info("✅ Shutdown complete")
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    port = int(os.getenv("PORT", "8002"))
+    port = int(os.getenv("PORT", "8003"))
     uvicorn.run(app, host="0.0.0.0", port=port)
