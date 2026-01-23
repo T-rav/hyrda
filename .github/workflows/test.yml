@@ -155,7 +155,7 @@ jobs:
 
     - name: Build Bot Service Docker image
       run: |
-        docker build -f bot/Dockerfile -t insightmesh-bot:latest bot/
+        docker build -f bot/Dockerfile -t insightmesh-bot:latest .
 
     - name: Run Trivy on Tasks Service
       uses: aquasecurity/trivy-action@master
