@@ -63,7 +63,7 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     # Compile with increased recursion limit
     # Researcher can loop many times (researcher -> researcher_tools -> researcher)
     # Default limit of 25 is too low for deep research tasks
-    return researcher_builder.compile({"recursion_limit": 100})
+    return researcher_builder.compile(config={"recursion_limit": 100})
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -89,7 +89,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
 
     # Compile with increased recursion limit
     # Supervisor can loop many times for complex research briefs
-    return supervisor_builder.compile({"recursion_limit": 100})
+    return supervisor_builder.compile(config={"recursion_limit": 100})
 
 
 def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
