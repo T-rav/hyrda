@@ -70,7 +70,7 @@ def build_researcher_subgraph() -> CompiledStateGraph:
     researcher_builder.add_edge("researcher_tools", "researcher")
 
     # High recursion limit for deep research
-    return researcher_builder.compile({"recursion_limit": 100})
+    return researcher_builder.compile(config={"recursion_limit": 100})
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
@@ -95,7 +95,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
 
     # Compile with increased recursion limit
     # Supervisor can loop many times for complex research plans
-    return supervisor_builder.compile({"recursion_limit": 100})
+    return supervisor_builder.compile(config={"recursion_limit": 100})
 
 
 def build_research_agent(checkpointer=None) -> CompiledStateGraph:
