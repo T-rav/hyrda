@@ -234,6 +234,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
             run_id_map[run_id] = {
                 "type": "observation",
                 "langfuse_id": observation.id,  # Langfuse observation ID (16 hex chars for parent refs)
+                "trace_id": trace_id_no_dashes,  # Store the root trace ID for children to use
                 "observation": observation,
             }
 
@@ -264,20 +265,29 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                 parent_langfuse_id = parent_info.get("langfuse_id", parent_id)
 
                 # Get the root trace ID (walk up to find root)
-                root_trace_id = parent_langfuse_id
-                current_parent = parent_info
-                current_parent_id = current_parent.get("parent_id")
+                # Use 'trace_id' field (32 hex chars), not 'langfuse_id' (16 hex chars)
+                root_trace_id = parent_info.get("trace_id")
+                if not root_trace_id:
+                    # Fallback: walk up to find root with trace_id
+                    current_parent = parent_info
+                    current_parent_id = current_parent.get("parent_id")
 
-                while current_parent_id:
-                    parent_parent_info = run_id_map.get(current_parent_id)
-                    if parent_parent_info:
-                        root_trace_id = parent_parent_info.get("langfuse_id", root_trace_id)
-                        current_parent = parent_parent_info
-                        current_parent_id = current_parent.get("parent_id")
-                    else:
-                        break
+                    while current_parent_id:
+                        parent_parent_info = run_id_map.get(current_parent_id)
+                        if parent_parent_info:
+                            if parent_parent_info.get("trace_id"):
+                                root_trace_id = parent_parent_info["trace_id"]
+                                break
+                            current_parent = parent_parent_info
+                            current_parent_id = current_parent.get("parent_id")
+                        else:
+                            break
 
-                # Remove dashes from trace ID for Langfuse
+                    # If still not found, use parent's langfuse_id as fallback
+                    if not root_trace_id:
+                        root_trace_id = parent_langfuse_id
+
+                # trace_id should already be without dashes (32 hex chars)
                 root_trace_id_no_dashes = str(root_trace_id).replace("-", "")
 
                 # LLM calls become generations
@@ -315,6 +325,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                     run_id_map[run_id] = {
                         "type": "generation",
                         "langfuse_id": generation.id,  # Use Langfuse generation ID
+                        "trace_id": root_trace_id_no_dashes,  # Store trace_id for children
                         "parent_id": parent_id,
                         "generation": generation,
                     }
@@ -349,6 +360,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                     run_id_map[run_id] = {
                         "type": "span",
                         "langfuse_id": span.id,  # Use Langfuse span ID
+                        "trace_id": root_trace_id_no_dashes,  # Store trace_id for children
                         "parent_id": parent_id,
                         "span": span,
                     }
@@ -483,6 +495,7 @@ async def create_runs_batch(request: Request):
                     run_id_map[run_id] = {
                         "type": "observation",
                         "langfuse_id": observation.id,  # Use Langfuse observation ID
+                        "trace_id": trace_id_no_dashes,  # Store trace_id for children
                         "observation": observation,
                     }
                     logger.info(f"📊 Batch created trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes}, observation_id={observation.id})")
@@ -496,18 +509,28 @@ async def create_runs_batch(request: Request):
 
                     # Get parent and root trace IDs
                     parent_langfuse_id = parent_info.get("langfuse_id", parent_id)
-                    root_trace_id = parent_langfuse_id
-                    current_parent = parent_info
-                    current_parent_id = current_parent.get("parent_id")
 
-                    while current_parent_id:
-                        parent_parent_info = run_id_map.get(current_parent_id)
-                        if parent_parent_info:
-                            root_trace_id = parent_parent_info.get("langfuse_id", root_trace_id)
-                            current_parent = parent_parent_info
-                            current_parent_id = current_parent.get("parent_id")
-                        else:
-                            break
+                    # Get trace_id from parent (32 hex chars), not langfuse_id (16 hex chars)
+                    root_trace_id = parent_info.get("trace_id")
+                    if not root_trace_id:
+                        # Fallback: walk up to find root with trace_id
+                        current_parent = parent_info
+                        current_parent_id = current_parent.get("parent_id")
+
+                        while current_parent_id:
+                            parent_parent_info = run_id_map.get(current_parent_id)
+                            if parent_parent_info:
+                                if parent_parent_info.get("trace_id"):
+                                    root_trace_id = parent_parent_info["trace_id"]
+                                    break
+                                current_parent = parent_parent_info
+                                current_parent_id = current_parent.get("parent_id")
+                            else:
+                                break
+
+                        # If still not found, use parent's langfuse_id as fallback
+                        if not root_trace_id:
+                            root_trace_id = parent_langfuse_id
 
                     root_trace_id_no_dashes = str(root_trace_id).replace("-", "")
 
@@ -541,6 +564,7 @@ async def create_runs_batch(request: Request):
                         run_id_map[run_id] = {
                             "type": "generation",
                             "langfuse_id": generation.id,  # Use Langfuse generation ID
+                            "trace_id": root_trace_id_no_dashes,  # Store trace_id for children
                             "parent_id": parent_id,
                             "generation": generation,
                         }
@@ -567,6 +591,7 @@ async def create_runs_batch(request: Request):
                         run_id_map[run_id] = {
                             "type": "span",
                             "langfuse_id": span.id,  # Use Langfuse span ID
+                            "trace_id": root_trace_id_no_dashes,  # Store trace_id for children
                             "parent_id": parent_id,
                             "span": span,
                         }
