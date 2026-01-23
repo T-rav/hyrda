@@ -11,16 +11,15 @@ Clean, focused RAG orchestration service that coordinates between:
 import logging
 from typing import Any
 
-from rag_types import HealthStatus
-
 from config.settings import Settings
 from providers.embedding.factory import create_embedding_provider
+from providers.llm_providers import create_llm_provider
+from rag_types import HealthStatus
 from services.citation_service import CitationService
 from services.context_builder import ContextBuilder
 from services.conversation_manager import ConversationManager
 from services.internal_deep_research import create_internal_deep_research_service
 from services.langfuse_service import get_langfuse_service, observe
-from providers.llm_providers import create_llm_provider
 from services.retrieval_service import RetrievalService
 from services.search_clients import get_perplexity_client, get_tavily_client
 from services.vector_service import get_vector_store

@@ -343,7 +343,8 @@ def ensure_help_agent_system() -> None:
                     display_name="Help",
                     description="Built-in help command",
                     is_system=True,
-                    is_public=True,
+                    is_enabled=True,
+                    is_slack_visible=True,
                 )
                 session.add(help_agent)
                 session.commit()

@@ -4,8 +4,9 @@ Comprehensive tests for LLM service.
 Tests LLM service with mocked RAG, prompt service, and LLM providers.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from config.settings import Settings
 from services.llm_service import LLMService, create_llm_service, get_llm_service

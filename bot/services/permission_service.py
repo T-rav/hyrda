@@ -187,17 +187,21 @@ class PermissionService:
                     .first()
                 )
 
-                # If no metadata, default to public (backward compatible)
+                # If no metadata, default to enabled (backward compatible)
                 if not agent_meta:
                     logger.debug(
-                        f"No metadata for agent {agent_name}, defaulting to public"
+                        f"No metadata for agent {agent_name}, defaulting to enabled"
                     )
-                    return True, "Public agent (no metadata)"
+                    return True, "Enabled agent (no metadata)"
 
-                # 2. Check if agent is public
-                if agent_meta.is_public:
-                    logger.debug(f"Agent {agent_name} is public, allowing access")
-                    return True, "Public agent"
+                # 2. Check if agent is available (enabled and not deleted)
+                # System agents are always available
+                if not agent_meta.is_available():
+                    logger.info(f"Agent {agent_name} is disabled or deleted")
+                    return False, "This agent is currently disabled"
+
+                # Agent is available - now check permissions
+                logger.debug(f"Agent {agent_name} is enabled and available")
 
                 # 3. Check admin requirement
                 if agent_meta.requires_admin:

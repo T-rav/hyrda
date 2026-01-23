@@ -4,7 +4,6 @@ Comprehensive tests for context builder service.
 Tests context formatting, RAG prompt building, and quality validation.
 """
 
-import pytest
 from datetime import datetime
 from unittest.mock import patch
 

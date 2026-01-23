@@ -14,8 +14,8 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from agents.system.research.nodes.researcher import researcher
-from agents.system.research.state import ResearcherState, ResearchTask
+from agents.research.nodes.researcher import researcher
+from agents.research.state import ResearcherState, ResearchTask
 
 
 def create_research_task(
@@ -84,7 +84,7 @@ class TestResearcherPromptBehavior:
             "focus_area": "business model",
         }
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools):
                 result = await researcher(state)
 
@@ -116,7 +116,7 @@ class TestResearcherPromptBehavior:
             "focus_area": "deployment",
         }
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools):
                 result = await researcher(state)
 
@@ -152,7 +152,7 @@ class TestResearcherPromptBehavior:
         mock_response.content = "Researching compliance requirements."
         mock_response.tool_calls = []
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await researcher(state)
 
@@ -190,7 +190,7 @@ class TestResearcherPromptBehavior:
         mock_response.content = "I'll search for remote work policies."
         mock_response.tool_calls = []
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await researcher(state)
 
@@ -223,7 +223,7 @@ class TestResearcherPromptBehavior:
         mock_response.content = "Starting research on AI strategy."
         mock_response.tool_calls = []
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await researcher(state)
 
@@ -271,7 +271,7 @@ class TestResearcherPromptDiverseTopics:
         mock_response.content = f"Researching {topic}."
         mock_response.tool_calls = []
 
-        with patch("agents.system.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await researcher(state)
 

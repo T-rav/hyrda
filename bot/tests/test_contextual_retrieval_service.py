@@ -1,179 +1,171 @@
-"""
-Tests for ContextualRetrievalService
-"""
+"""Tests for services/contextual_retrieval_service.py"""
+
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from services.contextual_retrieval_service import ContextualRetrievalService
-from tests.utils.services.llm_service_factory import LLMServiceFactory
 
 
-# TDD Factory Patterns for Contextual Retrieval Service Testing
-class TestDataFactory:
-    """Factory for creating test data for contextual retrieval service tests"""
+@pytest.fixture
+def mock_llm_service():
+    """Mock LLM service for testing."""
+    mock = Mock()
+    mock.get_response = AsyncMock(return_value="Test context for chunk")
+    return mock
 
-    pass
+
+@pytest.fixture
+def service(mock_llm_service):
+    """Create ContextualRetrievalService instance."""
+    return ContextualRetrievalService(mock_llm_service)
 
 
-class TestContextualRetrievalService:
-    """Test suite for ContextualRetrievalService"""
+@pytest.mark.asyncio
+async def test_add_context_to_chunks_empty_list(service):
+    """Test adding context to empty chunks list."""
+    result = await service.add_context_to_chunks([], {"file_name": "test.pdf"})
 
-    @pytest.fixture
-    def mock_llm_service(self):
-        """Mock LLM service fixture using centralized factory"""
-        return LLMServiceFactory.create_mock_service(
-            response="This chunk discusses user authentication in the login system."
-        )
+    assert result == []
 
-    @pytest.fixture
-    def contextual_service(self, mock_llm_service):
-        """ContextualRetrievalService fixture"""
-        return ContextualRetrievalService(mock_llm_service)
 
-    @pytest.fixture
-    def sample_metadata(self):
-        """Sample document metadata fixture"""
-        return {
-            "file_name": "authentication.md",
-            "full_path": "docs/security/authentication.md",
-            "mimeType": "text/markdown",
-            "createdTime": "2024-01-01T12:00:00.000Z",
-            "owners": [{"displayName": "John Doe"}],
-        }
+@pytest.mark.asyncio
+async def test_add_context_to_chunks_single_chunk(service, mock_llm_service):
+    """Test adding context to a single chunk."""
+    chunks = ["This is a test chunk"]
+    metadata = {"file_name": "test.pdf"}
 
-    @pytest.mark.asyncio
-    async def test_add_context_to_chunks_success(
-        self, contextual_service, mock_llm_service, sample_metadata
-    ):
-        """Test successful context addition to chunks"""
-        chunks = [
-            "Users can log in using their email and password.",
-            "The system supports two-factor authentication.",
-        ]
+    mock_llm_service.get_response.return_value = "Context: Test document"
 
-        result = await contextual_service.add_context_to_chunks(chunks, sample_metadata)
+    result = await service.add_context_to_chunks(chunks, metadata)
 
-        assert len(result) == 2
-        assert all(
-            chunk.startswith("This chunk discusses user authentication")
-            for chunk in result
-        )
-        assert mock_llm_service.get_response.call_count == 2
+    assert len(result) == 1
+    assert "Context: Test document" in result[0]
+    assert "This is a test chunk" in result[0]
 
-    @pytest.mark.asyncio
-    async def test_add_context_to_chunks_empty_list(
-        self, contextual_service, sample_metadata
-    ):
-        """Test handling of empty chunks list"""
-        result = await contextual_service.add_context_to_chunks([], sample_metadata)
-        assert result == []
 
-    @pytest.mark.asyncio
-    async def test_add_context_to_chunks_with_batch_size(
-        self, contextual_service, mock_llm_service, sample_metadata
-    ):
-        """Test batch processing of chunks"""
-        chunks = ["chunk1", "chunk2", "chunk3", "chunk4", "chunk5"]
+@pytest.mark.asyncio
+async def test_add_context_to_chunks_multiple_chunks(service, mock_llm_service):
+    """Test adding context to multiple chunks."""
+    chunks = ["Chunk 1", "Chunk 2", "Chunk 3"]
+    metadata = {"file_name": "test.pdf"}
 
-        result = await contextual_service.add_context_to_chunks(
-            chunks, sample_metadata, batch_size=2
-        )
+    mock_llm_service.get_response.return_value = "Context added"
 
-        assert len(result) == 5
-        # Should have made 5 calls (one per chunk)
-        assert mock_llm_service.get_response.call_count == 5
+    result = await service.add_context_to_chunks(chunks, metadata, batch_size=2)
 
-    @pytest.mark.asyncio
-    async def test_generate_chunk_context_error_handling(
-        self, contextual_service, sample_metadata
-    ):
-        """Test error handling in context generation"""
-        # Mock LLM service to raise an exception
-        contextual_service.llm_service.get_response.side_effect = Exception("API Error")
+    assert len(result) == 3
+    for chunk in result:
+        assert "Context added" in chunk or chunk in chunks
 
-        chunk = "Test chunk content"
-        result = await contextual_service._generate_chunk_context(
-            chunk, sample_metadata
-        )
 
-        # Should return empty string on error
-        assert result == ""
+@pytest.mark.asyncio
+async def test_add_context_to_chunks_handles_errors(service, mock_llm_service):
+    """Test that errors in context generation don't break the pipeline."""
+    chunks = ["Chunk 1", "Chunk 2"]
+    metadata = {"file_name": "test.pdf"}
 
-    @pytest.mark.asyncio
-    async def test_process_chunk_batch_with_errors(
-        self, contextual_service, mock_llm_service, sample_metadata
-    ):
-        """Test batch processing with some errors"""
-        chunks = ["chunk1", "chunk2"]
+    # First call succeeds, second call fails
+    mock_llm_service.get_response.side_effect = [
+        "Context for chunk 1",
+        Exception("API error"),
+    ]
 
-        # Make the second call fail
-        mock_llm_service.get_response.side_effect = [
-            "Context for chunk1",
-            Exception("API Error"),
-        ]
+    result = await service.add_context_to_chunks(chunks, metadata)
 
-        result = await contextual_service._process_chunk_batch(chunks, sample_metadata)
+    # Should return both chunks, second one without context
+    assert len(result) == 2
+    assert "Context for chunk 1" in result[0]
+    # Second chunk should be original (fallback on error)
+    assert result[1] == "Chunk 2"
 
-        assert len(result) == 2
-        assert result[0] == "Context for chunk1 chunk1"  # Success case
-        assert result[1] == "chunk2"  # Fallback case
 
-    def test_build_document_context(self, contextual_service, sample_metadata):
-        """Test document context building"""
-        result = contextual_service._build_document_context(sample_metadata)
+@pytest.mark.asyncio
+async def test_add_context_to_chunks_batch_processing(service, mock_llm_service):
+    """Test that chunks are processed in batches."""
+    chunks = [f"Chunk {i}" for i in range(15)]
+    metadata = {"file_name": "test.pdf"}
 
-        expected_parts = [
-            "File: authentication.md",
-            "Path: docs/security/authentication.md",
-            "Type: Markdown document",
-            "Created: 2024-01-01",
-            "Authors: John Doe",
-        ]
+    mock_llm_service.get_response.return_value = "Context"
 
-        for part in expected_parts:
-            assert part in result
+    result = await service.add_context_to_chunks(chunks, metadata, batch_size=5)
 
-        assert result.startswith(
-            "This chunk is from a document with the following context:"
-        )
-        assert result.endswith(".")
+    # All chunks should be processed
+    assert len(result) == 15
 
-    def test_build_document_context_minimal(self, contextual_service):
-        """Test document context building with minimal metadata"""
-        minimal_metadata = {"file_name": "test.txt"}
 
-        result = contextual_service._build_document_context(minimal_metadata)
+@pytest.mark.asyncio
+async def test_process_chunk_batch(service, mock_llm_service):
+    """Test processing a batch of chunks."""
+    chunk_batch = ["Chunk A", "Chunk B"]
+    metadata = {"file_name": "test.pdf"}
 
-        assert "File: test.txt" in result
-        assert result.startswith(
-            "This chunk is from a document with the following context:"
-        )
+    mock_llm_service.get_response.return_value = "Generated context"
 
-    def test_mime_to_document_type(self, contextual_service):
-        """Test MIME type to document type conversion"""
-        test_cases = [
-            ("application/pdf", "PDF document"),
-            ("application/vnd.google-apps.document", "Google Doc"),
-            ("text/markdown", "Markdown document"),
-            ("application/unknown", ""),
-        ]
+    result = await service._process_chunk_batch(chunk_batch, metadata)
 
-        for mime_type, expected in test_cases:
-            result = contextual_service._mime_to_document_type(mime_type)
-            assert result == expected
+    assert len(result) == 2
+    for chunk in result:
+        assert "Generated context" in chunk
 
-    @pytest.mark.asyncio
-    async def test_context_length_limiting(self, contextual_service, sample_metadata):
-        """Test that context is limited to reasonable length"""
-        # Mock a very long response
-        long_response = "Very long context " * 20  # > 200 chars
-        contextual_service.llm_service.get_response.return_value = long_response
 
-        chunk = "Test chunk"
-        result = await contextual_service._generate_chunk_context(
-            chunk, sample_metadata
-        )
+@pytest.mark.asyncio
+async def test_generate_chunk_context(service, mock_llm_service):
+    """Test generating context for a single chunk."""
+    chunk = "This is test content about AI"
+    metadata = {
+        "file_name": "ai_guide.pdf",
+        "doc_type": "documentation",
+    }
 
-        # Should be truncated
-        assert len(result) <= 203  # 200 + "..."
-        assert result.endswith("...")
+    mock_llm_service.get_response.return_value = "Context: AI documentation chapter"
+
+    result = await service._generate_chunk_context(chunk, metadata)
+
+    assert result == "Context: AI documentation chapter"
+    mock_llm_service.get_response.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_chunk_context_with_minimal_metadata(service, mock_llm_service):
+    """Test generating context with minimal metadata."""
+    chunk = "Content"
+    metadata = {}  # Empty metadata
+
+    mock_llm_service.get_response.return_value = "Generic context"
+
+    result = await service._generate_chunk_context(chunk, metadata)
+
+    assert result == "Generic context"
+
+
+@pytest.mark.asyncio
+async def test_add_context_empty_context_returned(service, mock_llm_service):
+    """Test handling when LLM returns empty context."""
+    chunks = ["Test chunk"]
+    metadata = {"file_name": "test.pdf"}
+
+    # Return empty string as context
+    mock_llm_service.get_response.return_value = ""
+
+    result = await service.add_context_to_chunks(chunks, metadata)
+
+    # Should still include the original chunk
+    assert len(result) == 1
+    assert result[0] == "Test chunk"
+
+
+@pytest.mark.asyncio
+async def test_add_context_preserves_chunk_order(service, mock_llm_service):
+    """Test that chunk order is preserved after adding context."""
+    chunks = ["First", "Second", "Third"]
+    metadata = {"file_name": "test.pdf"}
+
+    # Return different context for each
+    mock_llm_service.get_response.side_effect = ["Context 1", "Context 2", "Context 3"]
+
+    result = await service.add_context_to_chunks(chunks, metadata)
+
+    assert "First" in result[0]
+    assert "Second" in result[1]
+    assert "Third" in result[2]

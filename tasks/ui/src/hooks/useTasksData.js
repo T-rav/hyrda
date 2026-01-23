@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { logError } from '../utils/logger'
 
 // API base URL - tasks service runs on port 5001
 const API_BASE = 'http://localhost:5001/api'
@@ -34,7 +35,7 @@ export function useTasksData() {
       const data = await apiCall('/scheduler/info')
       setSchedulerData(data)
     } catch (error) {
-      console.error('Error loading scheduler info:', error)
+      logError('Error loading scheduler info:', error)
       setSchedulerData({ running: false, tasks_count: 0 })
     }
   }, [apiCall])
@@ -45,7 +46,7 @@ export function useTasksData() {
       const response = await apiCall('/jobs')
       setTasksData(response.jobs || [])
     } catch (error) {
-      console.error('Error loading tasks:', error)
+      logError('Error loading tasks:', error)
       setTasksData([])
     }
   }, [apiCall])
@@ -56,7 +57,7 @@ export function useTasksData() {
       const response = await apiCall('/task-runs')
       setTaskRunsData(response.task_runs || [])
     } catch (error) {
-      console.error('Error loading task runs:', error)
+      logError('Error loading task runs:', error)
       setTaskRunsData([])
     }
   }, [apiCall])
@@ -77,7 +78,7 @@ export function useTasksData() {
       const data = await response.json()
       setRagMetrics(data.rag_performance || {})
     } catch (error) {
-      console.error('Error loading RAG metrics:', error)
+      logError('Error loading RAG metrics:', error)
       setRagMetrics({})
     }
   }, [])
@@ -95,7 +96,7 @@ export function useTasksData() {
         loadRagMetrics()
       ])
     } catch (error) {
-      console.error('Error refreshing data:', error)
+      logError('Error refreshing data:', error)
       setError(error.message || 'Failed to refresh data')
     } finally {
       setLoading(false)

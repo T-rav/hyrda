@@ -147,9 +147,10 @@ class TestQdrantVectorStoreAsyncInitialize:
             await store.initialize()
 
             mock_qdrant_class.assert_called_once_with(
-                url="http://localhost:6333",
+                url="https://localhost:6333",
                 api_key="test-api-key",
                 timeout=60,
+                verify=True,
             )
 
     @pytest.mark.asyncio

@@ -4,16 +4,15 @@ Comprehensive tests for agent client.
 Tests HTTP agent invocation with mocked requests and circuit breaker.
 """
 
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
-import httpx
+
+import pytest
 
 from services.agent_client import (
     AgentClient,
+    AgentClientError,
     CircuitBreaker,
     CircuitState,
-    CircuitBreakerError,
-    AgentClientError,
 )
 
 

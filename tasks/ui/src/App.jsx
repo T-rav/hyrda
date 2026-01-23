@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import './App.css'
+import { logError } from './utils/logger'
 
 // Custom hook for managing document title
 function useDocumentTitle(title) {
@@ -132,7 +133,7 @@ function DashboardContent() {
         scheduler: schedulerRes
       })
     } catch (error) {
-      console.error('Error loading data:', error)
+      logError('Error loading data:', error)
     } finally {
       setLoading(false)
     }
@@ -301,7 +302,7 @@ function TasksContent({ showNotification }) {
       const data = await response.json()
       setTasks(data.jobs || [])
     } catch (error) {
-      console.error('Error loading tasks:', error)
+      logError('Error loading tasks:', error)
     } finally {
       setLoading(false)
     }
@@ -427,7 +428,7 @@ function TasksContent({ showNotification }) {
           break
       }
     } catch (error) {
-      console.error(`Error ${action} task:`, error)
+      logError(`Error ${action} task:`, error)
       showNotification(`Error: ${error.message}`, 'error')
     } finally {
       setActionLoading({ ...actionLoading, [taskId]: null })
@@ -844,7 +845,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         const data = await response.json()
         setTaskTypes(data.job_types || [])
       } catch (error) {
-        console.error('Error loading task types:', error)
+        logError('Error loading task types:', error)
       }
     }
     loadTaskTypes()
@@ -1001,7 +1002,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         throw new Error('Failed to create task')
       }
     } catch (error) {
-      console.error('Error creating task:', error)
+      logError('Error creating task:', error)
       alert('Error creating task: ' + error.message)
     } finally {
       setLoading(false)
@@ -1340,7 +1341,7 @@ function TaskParameters({ taskType, taskTypes }) {
         })
         .catch(err => {
           // Silently fail if credentials endpoint not available
-          console.error('Error loading credentials:', err)
+          logError('Error loading credentials:', err)
         })
     }
   }, [isGDriveIngest])

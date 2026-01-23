@@ -299,7 +299,7 @@ def test_can_use_agent_cache_hit(
 def test_can_use_agent_public_agent_no_metadata(
     mock_get_session, permission_service, mock_db_session
 ):
-    """Test can_use_agent for public agent with no metadata."""
+    """Test can_use_agent for enabled agent with no metadata."""
     # Arrange
     mock_get_session.return_value.__enter__.return_value = mock_db_session
     mock_db_session.query.return_value.filter.return_value.first.return_value = None
@@ -309,29 +309,53 @@ def test_can_use_agent_public_agent_no_metadata(
 
     # Assert
     assert allowed is True
-    assert reason == "Public agent (no metadata)"
+    assert reason == "Enabled agent (no metadata)"
 
 
 @patch("services.permission_service.get_security_db_session")
 def test_can_use_agent_public_agent_with_metadata(
     mock_get_session, permission_service, mock_db_session
 ):
-    """Test can_use_agent for public agent with metadata."""
+    """Test can_use_agent for enabled agent with metadata (private agent with no permissions = denied)."""
     # Arrange
     mock_get_session.return_value.__enter__.return_value = mock_db_session
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = True
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = False
-    mock_db_session.query.return_value.filter.return_value.first.return_value = (
-        agent_meta
-    )
+    agent_meta.is_available.return_value = True
+
+    # Setup query mock to return different results for different queries
+    query_results = [
+        agent_meta,
+        None,
+        [],
+    ]  # AgentMetadata, AgentPermission (None), UserGroups ([])
+    query_index = [0]
+
+    def mock_first():
+        result = query_results[query_index[0]]
+        query_index[0] += 1
+        return result
+
+    def mock_all():
+        result = query_results[query_index[0]]
+        query_index[0] += 1
+        return result
+
+    mock_filter = MagicMock()
+    mock_filter.first.side_effect = mock_first
+    mock_filter.all.side_effect = mock_all
+    mock_db_session.query.return_value.filter.return_value = mock_filter
 
     # Act
     allowed, reason = permission_service.can_use_agent("U12345", "company_profile")
 
-    # Assert
-    assert allowed is True
-    assert reason == "Public agent"
+    # Assert - enabled agent with no permissions is denied (private by default)
+    assert allowed is False
+    assert reason == "You don't have permission to use this agent"
 
 
 @patch("services.permission_service.get_security_db_session")
@@ -343,8 +367,12 @@ def test_can_use_agent_admin_required_user_is_admin(
     # Arrange
     mock_get_session.return_value.__enter__.return_value = mock_db_session
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = True
+    agent_meta.is_available.return_value = True
     mock_db_session.query.return_value.filter.return_value.first.return_value = (
         agent_meta
     )
@@ -371,8 +399,12 @@ def test_can_use_agent_admin_required_user_not_admin(
     # Arrange
     mock_get_session.return_value.__enter__.return_value = mock_db_session
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = True
+    agent_meta.is_available.return_value = True
 
     # First query returns agent metadata
     first_query = MagicMock()
@@ -405,8 +437,12 @@ def test_can_use_agent_explicit_allow_permission(
 
     # Agent metadata - private, no admin requirement
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = False
+    agent_meta.is_available.return_value = True
 
     # User permission - allow
     user_permission = MagicMock(spec=AgentPermission)
@@ -444,8 +480,12 @@ def test_can_use_agent_explicit_deny_permission(
 
     # Agent metadata - private, no admin requirement
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = False
+    agent_meta.is_available.return_value = True
 
     # User permission - deny
     user_permission = MagicMock(spec=AgentPermission)
@@ -485,8 +525,12 @@ def test_can_use_agent_group_permission_allow(mock_get_session, permission_servi
 
     # Agent metadata - private, no admin requirement
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = False
+    agent_meta.is_available.return_value = True
 
     # Mock the first query for AgentMetadata
     mock_session.query.return_value.filter.return_value.first.return_value = agent_meta
@@ -510,8 +554,12 @@ def test_can_use_agent_no_permission(mock_get_session, permission_service):
 
     # Agent metadata - private, no admin requirement
     agent_meta = MagicMock(spec=AgentMetadata)
-    agent_meta.is_public = False
+    agent_meta.is_enabled = True
+    agent_meta.is_slack_visible = True
+    agent_meta.is_system = False
+    agent_meta.is_deleted = False
     agent_meta.requires_admin = False
+    agent_meta.is_available.return_value = True
 
     # Mock queries to return agent metadata but no permissions or groups
     mock_session.query.return_value.filter.return_value.first.return_value = agent_meta

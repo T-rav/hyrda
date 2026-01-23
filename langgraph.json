@@ -1,12 +1,10 @@
 {
+  "dependencies": [".", "custom_agents"],
   "graphs": {
-    "profile_researcher": "./bot/agents/company_profile/profile_researcher.py:profile_researcher",
-    "meddpicc_coach": "./bot/agents/meddpicc_coach/meddpicc_coach.py:meddpicc_coach"
+    "profile": "profiler.nodes.graph_builder:build_profile_researcher",
+    "meddic": "meddpicc_coach.nodes.graph_builder:build_meddpicc_coach",
+    "lead_qualifier": "lead_qualifier.nodes.graph_builder:build_lead_qualifier"
   },
   "env": ".env",
-  "dependencies": [
-    "./bot",
-    "langchain-google-genai>=2.0.0"
-  ],
   "python_version": "3.11"
 }

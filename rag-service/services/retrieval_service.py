@@ -8,9 +8,8 @@ Includes adaptive query rewriting for improved retrieval accuracy.
 import logging
 import re
 
-from rag_types import ContextChunk
-
 from config.settings import Settings
+from rag_types import ContextChunk
 
 from .query_rewriter import AdaptiveQueryRewriter
 
@@ -408,3 +407,34 @@ class RetrievalService:
         )
 
         return selected
+
+
+# Singleton instance
+_retrieval_service: RetrievalService | None = None
+
+
+def get_retrieval_service() -> RetrievalService:
+    """Get global retrieval service instance."""
+    global _retrieval_service
+    if _retrieval_service is None:
+        from config.settings import get_settings
+        from providers.llm_providers import create_llm_provider
+        from copy import deepcopy
+
+        settings = get_settings()
+
+        # Create LLM for query rewriting if enabled
+        query_rewrite_llm = None
+        if settings.rag.enable_query_rewriting:
+            query_llm_settings = deepcopy(settings.llm)
+            query_llm_settings.model = settings.rag.query_rewrite_model
+            query_rewrite_llm = create_llm_provider(query_llm_settings)
+
+        _retrieval_service = RetrievalService(
+            settings=settings,
+            llm_service=query_rewrite_llm,
+            enable_query_rewriting=settings.rag.enable_query_rewriting,
+        )
+        logger.info("✅ Global retrieval service initialized")
+
+    return _retrieval_service

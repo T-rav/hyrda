@@ -153,7 +153,11 @@ jobs:
       run: |
         docker build -f tasks/Dockerfile -t ai-slack-bot-tasks:latest .
 
-    - name: Run Trivy vulnerability scanner
+    - name: Build Bot Service Docker image
+      run: |
+        docker build -f bot/Dockerfile -t insightmesh-bot:latest .
+
+    - name: Run Trivy on Tasks Service
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'ai-slack-bot-tasks:latest'
@@ -162,7 +166,16 @@ jobs:
         severity: 'CRITICAL,HIGH'
         exit-code: '0'  # Don't fail on vulnerabilities (report only)
 
-    - name: Upload Trivy results to GitHub Security
+    - name: Run Trivy on Bot Service
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'insightmesh-bot:latest'
+        format: 'sarif'
+        output: 'trivy-bot.sarif'
+        severity: 'CRITICAL,HIGH'
+        exit-code: '0'  # Don't fail on vulnerabilities (report only)
+
+    - name: Upload Trivy Tasks results to GitHub Security
       if: always()
       continue-on-error: true  # Don't fail if Code Scanning is not enabled
       uses: github/codeql-action/upload-sarif@v3
@@ -170,9 +183,19 @@ jobs:
         sarif_file: 'trivy-tasks.sarif'
         category: 'docker-tasks'
 
-    - name: Upload Trivy results as artifact
+    - name: Upload Trivy Bot results to GitHub Security
+      if: always()
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-bot.sarif'
+        category: 'docker-bot'
+
+    - name: Upload Trivy results as artifacts
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: trivy-security-scan-results
-        path: trivy-tasks.sarif
+        path: |
+          trivy-tasks.sarif
+          trivy-bot.sarif

@@ -1,7 +1,8 @@
 """Tests for vector service singleton pattern."""
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from config.settings import VectorSettings
 from services.vector_service import (

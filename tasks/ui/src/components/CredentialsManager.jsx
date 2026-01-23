@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Key, Trash2, Plus, AlertCircle, ExternalLink } from 'lucide-react'
+import { logError } from '../utils/logger'
 
 /**
  * Credentials Manager Component
@@ -25,7 +26,7 @@ function CredentialsManager() {
       setCredentials(data.credentials || [])
       setError(null)
     } catch (err) {
-      console.error('Error loading credentials:', err)
+      logError('Error loading credentials:', err)
       setError('Failed to load credentials')
     } finally {
       setLoading(false)
@@ -48,7 +49,7 @@ function CredentialsManager() {
 
       await loadCredentials()
     } catch (err) {
-      console.error('Error deleting credential:', err)
+      logError('Error deleting credential:', err)
       alert('Failed to delete credential: ' + err.message)
     }
   }
@@ -206,7 +207,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
       }, 500)
 
     } catch (err) {
-      console.error('Error during OAuth:', err)
+      logError('Error during OAuth:', err)
       setError(err.message)
       setAuthInProgress(false)
     }

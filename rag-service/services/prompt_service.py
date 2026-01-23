@@ -10,9 +10,8 @@ Centralized service for managing system prompts with support for:
 
 import logging
 
-from rag_types import PromptInfo
-
 from config.settings import Settings
+from rag_types import PromptInfo
 from services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)

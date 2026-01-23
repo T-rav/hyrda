@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
+.PHONY: help install install-test install-dev check-env start-redis run test test-coverage test-file test-integration test-unit test-ingest ingest ingest-check-es lint lint-check typecheck quality docker-build-bot docker-build docker-run docker-monitor docker-prod docker-stop clean clean-all setup-dev ci pre-commit security security-docker security-docker-json security-full python-version health-ui tasks-ui ui-lint ui-lint-fix ui-test ui-test-coverage ui-dev quality-all start start-with-tasks start-tasks-only restart status db-start db-stop db-migrate db-upgrade db-downgrade db-revision db-reset db-status
 
 help:
 	@echo "$(BLUE)AI Slack Bot - Available Make Targets:$(RESET)"
@@ -79,9 +79,14 @@ help:
 	@echo "$(GREEN)Maintenance:$(RESET)"
 	@echo "  setup-dev       Setup development environment with pre-commit"
 	@echo "  pre-commit      Run pre-commit hooks on all files"
-	@echo "  security        Run security scanning with bandit"
 	@echo "  clean           Remove caches and build artifacts"
 	@echo "  clean-all       Remove caches and virtual environment"
+	@echo ""
+	@echo "$(GREEN)Security:$(RESET)"
+	@echo "  security             Run Bandit security scanner (code vulnerabilities)"
+	@echo "  security-docker      Scan Docker images with Trivy (HIGH/CRITICAL only)"
+	@echo "  security-docker-json Generate JSON vulnerability reports"
+	@echo "  security-full        Run all security checks (Bandit + Trivy)"
 	@echo ""
 	@echo "$(GREEN)UI Components:$(RESET)"
 	@echo "  health-ui       Build React health dashboard UI"
@@ -327,7 +332,12 @@ docker-logs:
 
 docker-restart: docker-down docker-up
 
-docker-build: health-ui tasks-ui
+# Setup SSL certificates (checks if exist, generates if needed)
+setup-ssl:
+	@echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"
+	@bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh
+
+docker-build: health-ui tasks-ui setup-ssl
 	@echo "$(BLUE)🔨 Building Docker images...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 	@echo "$(GREEN)✅ Images built!$(RESET)"
@@ -413,8 +423,8 @@ tasks-ui:
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 	@echo "$(BLUE)🌐 Access at: http://localhost:$${TASKS_PORT:-5001}$(RESET)"
 
-ci: quality test-coverage ui-lint ui-test docker-build
-	@echo "✅ All CI checks passed (Python + React + Docker)!"
+ci: quality test-coverage ui-lint ui-test security docker-build
+	@echo "✅ All CI checks passed (Python + React + Docker + Security)!"
 
 pre-commit:
 	cd $(PROJECT_ROOT_DIR) && pre-commit run --all-files
@@ -422,6 +432,49 @@ pre-commit:
 security: $(VENV)
 	@echo "$(BLUE)Running security scan with bandit...$(RESET)"
 	cd $(BOT_DIR) && $(PYTHON) -m bandit -r . -f json -o $(PROJECT_ROOT_DIR)security-report.json || $(PYTHON) -m bandit -r . -f txt
+
+security-docker:  ## Scan Docker images for vulnerabilities with Trivy
+	@echo "$(BLUE)🐳 Scanning Docker images for vulnerabilities...$(RESET)"
+	@echo "$(YELLOW)Checking if images exist...$(RESET)"
+	@if docker image inspect insightmesh-bot:latest >/dev/null 2>&1; then \
+		echo "$(BLUE)Scanning insightmesh-bot:latest...$(RESET)"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+			aquasec/trivy:latest image \
+			--severity HIGH,CRITICAL \
+			--format table \
+			insightmesh-bot:latest; \
+	else \
+		echo "$(YELLOW)⚠️  insightmesh-bot:latest not found. Run 'make docker-build' first.$(RESET)"; \
+	fi
+	@if docker image inspect insightmesh-rag-service:latest >/dev/null 2>&1; then \
+		echo "$(BLUE)Scanning insightmesh-rag-service:latest...$(RESET)"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+			aquasec/trivy:latest image \
+			--severity HIGH,CRITICAL \
+			--format table \
+			insightmesh-rag-service:latest; \
+	else \
+		echo "$(YELLOW)⚠️  insightmesh-rag-service:latest not found. Run 'make docker-build' first.$(RESET)"; \
+	fi
+	@echo "$(GREEN)✅ Docker vulnerability scan completed$(RESET)"
+
+security-docker-json:  ## Generate JSON vulnerability reports for Docker images
+	@echo "$(BLUE)🐳 Generating JSON vulnerability reports...$(RESET)"
+	@mkdir -p $(PROJECT_ROOT_DIR)security-reports
+	@if docker image inspect insightmesh-bot:latest >/dev/null 2>&1; then \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+			aquasec/trivy:latest image \
+			--format json \
+			--output /tmp/bot-security-report.json \
+			insightmesh-bot:latest && \
+		docker run --rm -v $(PROJECT_ROOT_DIR)security-reports:/reports aquasec/trivy:latest sh -c \
+			"cp /tmp/bot-security-report.json /reports/bot-security-report.json" 2>/dev/null || \
+		echo "$(YELLOW)⚠️  Could not copy report$(RESET)"; \
+	fi
+	@echo "$(GREEN)Reports saved to security-reports/$(RESET)"
+
+security-full: security security-docker  ## Run all security checks (Bandit + Trivy)
+	@echo "$(GREEN)✅ Complete security audit finished$(RESET)"
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"

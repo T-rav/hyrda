@@ -145,7 +145,7 @@ def mock_settings():
 @pytest.fixture
 def llm_service(mock_settings):
     """Create LLM service for testing"""
-    with patch("services.llm_service.RAGService"):
+    with patch("services.rag_client.RAGClient"):
         service = LLMService(mock_settings)
         service.rag_service = RAGServiceFactory.create_basic_service()
         return service
@@ -163,8 +163,9 @@ class TestLLMService:
     @pytest.mark.asyncio
     async def test_initialize(self, llm_service):
         """Test LLM service initialization"""
+        # RAGClient (HTTP client) doesn't require initialization
         await llm_service.initialize()
-        llm_service.rag_service.initialize.assert_called_once()
+        # No assertion needed - just verify no errors
 
     @pytest.mark.asyncio
     async def test_get_response_success(self, llm_service):
@@ -235,37 +236,9 @@ class TestLLMService:
         result = await llm_service.get_response(messages)
         assert result is None
 
-    @pytest.mark.asyncio
-    async def test_ingest_documents_success(self, llm_service):
-        """Test document ingestion"""
-        documents = [{"content": "Test document", "metadata": {"source": "test"}}]
-
-        llm_service.rag_service = (
-            RAGServiceFactory.create_service_with_ingestion_result(5)
-        )
-        llm_service.settings.vector.enabled = True
-
-        result = await llm_service.ingest_documents(documents)
-
-        assert result == 5
-        llm_service.rag_service.ingest_documents.assert_called_once_with(documents)
-
-    @pytest.mark.asyncio
-    async def test_get_system_status(self, llm_service):
-        """Test system status retrieval"""
-        expected_status = {
-            "rag_enabled": False,
-            "llm_provider": "openai",
-            "llm_model": "gpt-4o-mini",
-        }
-
-        llm_service.rag_service = RAGServiceFactory.create_service_with_status(
-            expected_status
-        )
-        result = await llm_service.get_system_status()
-
-        assert result == expected_status
-        llm_service.rag_service.get_system_status.assert_called_once()
+    # Note: ingest_documents and get_system_status methods were removed
+    # when migrating to HTTP-based RAG service. Document ingestion is now
+    # handled by the standalone rag-service via scheduled tasks.
 
     @pytest.mark.asyncio
     async def test_close(self, llm_service):

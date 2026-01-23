@@ -173,6 +173,7 @@ class AuditAction:
     AGENT_DELETE = "delete_agent"
     AGENT_TOGGLE = "toggle_agent"
     AGENT_REGISTER = "register_agent"
+    AGENT_UPDATE = "update_agent"
 
     # Permission actions
     GRANT_PERMISSION = "grant_permission"

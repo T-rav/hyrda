@@ -1,0 +1,37 @@
+# Exclude SSL private keys from Docker image
+# Public certificates (.crt, *-cert.pem) are OK to copy
+# Private keys (*-key.pem) are mounted as volumes at runtime
+.ssl/*-key.pem
+.ssl/*.key
+
+# Development files
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# Cache
+.ruff_cache/
+.pyright_cache/
