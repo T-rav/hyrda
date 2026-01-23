@@ -141,11 +141,11 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
             agent_classes = _load_agent_classes()
 
             # Build registry dict mapping names/aliases to agent info
-            # Only include enabled agents (is_public=true)
+            # Only include enabled agents (is_enabled=true)
             registry = {}
             for agent in agents:
                 # Skip disabled agents
-                if not agent.get("is_public", False):
+                if not agent.get("is_enabled", False):
                     continue
                 name = agent["name"]
                 aliases = agent.get("aliases", [])
@@ -158,7 +158,7 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
                     "display_name": agent.get("display_name", name),
                     "description": agent.get("description", ""),
                     "aliases": aliases,
-                    "is_public": agent.get("is_public", True),
+                    "is_enabled": agent.get("is_enabled", True),
                     "requires_admin": agent.get("requires_admin", False),
                     "is_system": agent.get("is_system", False),
                     "is_primary": True,
