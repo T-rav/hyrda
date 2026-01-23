@@ -191,14 +191,14 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
             # Create observation (this acts as trace root in SDK 3.x)
             observation = langfuse_client.start_observation(**obs_data)
 
-            # Store reference for child spans
+            # Store reference for child spans (use Langfuse's auto-generated observation ID)
             run_id_map[run_id] = {
                 "type": "observation",
-                "langfuse_id": run_id,
+                "langfuse_id": observation.id,  # Langfuse observation ID (16 hex chars for parent refs)
                 "observation": observation,
             }
 
-            logger.info(f"📊 Created Langfuse trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes})")
+            logger.info(f"📊 Created Langfuse trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes}, observation_id={observation.id})")
 
         # Child run -> Create Langfuse span/generation
         else:
@@ -246,7 +246,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                     gen_data = {
                         "trace_context": {
                             "trace_id": root_trace_id_no_dashes,
-                            "parent_span_id": parent_langfuse_id  # Link to parent
+                            "parent_span_id": parent_langfuse_id  # Already 16 hex chars from Langfuse
                         },
                         "name": converted["name"],
                         "input": converted["inputs"],
@@ -267,12 +267,12 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
                     run_id_map[run_id] = {
                         "type": "generation",
-                        "langfuse_id": run_id,
+                        "langfuse_id": generation.id,  # Use Langfuse generation ID
                         "parent_id": parent_id,
                         "generation": generation,
                     }
                     logger.info(
-                        f"🤖 Created Langfuse generation: {converted['name']} ({run_id})"
+                        f"🤖 Created Langfuse generation: {converted['name']} (langsmith_id={run_id}, langfuse_id={generation.id})"
                     )
 
                 # Everything else becomes spans
@@ -280,7 +280,7 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                     span_data = {
                         "trace_context": {
                             "trace_id": root_trace_id_no_dashes,
-                            "parent_span_id": parent_langfuse_id  # Link to parent
+                            "parent_span_id": parent_langfuse_id  # Already 16 hex chars from Langfuse
                         },
                         "name": converted["name"],
                         "input": converted["inputs"],
@@ -301,12 +301,12 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
 
                     run_id_map[run_id] = {
                         "type": "span",
-                        "langfuse_id": run_id,
+                        "langfuse_id": span.id,  # Use Langfuse span ID
                         "parent_id": parent_id,
                         "span": span,
                     }
                     logger.info(
-                        f"📍 Created Langfuse span: {converted['name']} ({run_id})"
+                        f"📍 Created Langfuse span: {converted['name']} (langsmith_id={run_id}, langfuse_id={span.id})"
                     )
 
         return JSONResponse(content={"id": run_id}, status_code=200)
@@ -435,10 +435,10 @@ async def create_runs_batch(request: Request):
                     observation = langfuse_client.start_observation(**obs_data)
                     run_id_map[run_id] = {
                         "type": "observation",
-                        "langfuse_id": run_id,
+                        "langfuse_id": observation.id,  # Use Langfuse observation ID
                         "observation": observation,
                     }
-                    logger.info(f"📊 Batch created trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes})")
+                    logger.info(f"📊 Batch created trace: {converted['name']} (langsmith_id={run_id}, langfuse_trace_id={trace_id_no_dashes}, observation_id={observation.id})")
 
                 # Child run -> Create span/generation
                 else:
@@ -468,7 +468,7 @@ async def create_runs_batch(request: Request):
                         gen_data = {
                             "trace_context": {
                                 "trace_id": root_trace_id_no_dashes,
-                                "parent_span_id": parent_langfuse_id
+                                "parent_span_id": parent_langfuse_id  # Already 16 hex chars
                             },
                             "name": converted["name"],
                             "input": converted["inputs"],
@@ -485,16 +485,16 @@ async def create_runs_batch(request: Request):
                         generation = langfuse_client.start_generation(**gen_data)
                         run_id_map[run_id] = {
                             "type": "generation",
-                            "langfuse_id": run_id,
+                            "langfuse_id": generation.id,  # Use Langfuse generation ID
                             "parent_id": parent_id,
                             "generation": generation,
                         }
-                        logger.info(f"🤖 Batch created generation: {converted['name']} ({run_id})")
+                        logger.info(f"🤖 Batch created generation: {converted['name']} (langsmith_id={run_id}, langfuse_id={generation.id})")
                     else:
                         span_data = {
                             "trace_context": {
                                 "trace_id": root_trace_id_no_dashes,
-                                "parent_span_id": parent_langfuse_id
+                                "parent_span_id": parent_langfuse_id  # Already 16 hex chars
                             },
                             "name": converted["name"],
                             "input": converted["inputs"],
@@ -511,11 +511,11 @@ async def create_runs_batch(request: Request):
                         span = langfuse_client.start_span(**span_data)
                         run_id_map[run_id] = {
                             "type": "span",
-                            "langfuse_id": run_id,
+                            "langfuse_id": span.id,  # Use Langfuse span ID
                             "parent_id": parent_id,
                             "span": span,
                         }
-                        logger.info(f"📍 Batch created span: {converted['name']} ({run_id})")
+                        logger.info(f"📍 Batch created span: {converted['name']} (langsmith_id={run_id}, langfuse_id={span.id})")
 
             except Exception as e:
                 logger.error(f"❌ Error processing batch POST run: {e}")
