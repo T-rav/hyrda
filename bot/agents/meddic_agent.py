@@ -15,6 +15,7 @@ import logging
 import os
 from typing import Any
 
+import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from agents.base_agent import BaseAgent
@@ -66,7 +67,9 @@ class MeddicAgent(BaseAgent):
                 checkpoint_dir, "meddic_agent_checkpoints.db"
             )
 
-            _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_path)
+            # Create async connection and initialize checkpointer
+            conn = await aiosqlite.connect(checkpoint_path)
+            _checkpointer = AsyncSqliteSaver(conn)
             await _checkpointer.setup()
             _checkpointer_initialized = True
             logger.info(

@@ -9,6 +9,7 @@ import os
 from datetime import datetime
 from typing import Any
 
+import aiosqlite
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
@@ -106,7 +107,9 @@ class ProfileAgent(BaseAgent):
                 checkpoint_dir, "profile_agent_checkpoints.db"
             )
 
-            _checkpointer = AsyncSqliteSaver.from_conn_string(checkpoint_path)
+            # Create async connection and initialize checkpointer
+            conn = await aiosqlite.connect(checkpoint_path)
+            _checkpointer = AsyncSqliteSaver(conn)
             await _checkpointer.setup()
             _checkpointer_initialized = True
             logger.info(
