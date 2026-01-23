@@ -49,11 +49,10 @@ COPY --chown=www-data:www-data tasks/ui/dist /usr/share/nginx/html
 COPY --chown=appuser:appuser tasks/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Set production environment variables
+# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     HOME=/app \
     EDGAR_LOCAL_DATA_DIR=/app/.edgar \

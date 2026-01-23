@@ -77,11 +77,10 @@ RUN set -x \
         exit 1; \
     fi
 
-# Set production environment variables
+# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \

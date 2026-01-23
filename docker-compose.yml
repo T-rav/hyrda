@@ -106,7 +106,7 @@ services:
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - FLASK_PORT=8081
       - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -191,7 +191,7 @@ services:
       - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
       - VECTOR_ENABLED=false
       - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
-      - ENVIRONMENT=production
+      - ENVIRONMENT=${ENVIRONMENT:-development}
     ports:
       - "${HEALTH_PORT:-8080}:8080"
     volumes:
