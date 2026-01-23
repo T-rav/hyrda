@@ -126,17 +126,56 @@ def convert_langsmith_to_langfuse(run_data: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             end_time = None
 
+    # Extract token usage and model info from extra/outputs
+    extra = run_data.get("extra", {})
+    outputs = run_data.get("outputs", {})
+
+    # Token usage (OpenAI format in outputs.llm_output or extra)
+    token_usage = None
+    usage_metadata = outputs.get("usage_metadata") if outputs else None
+    if usage_metadata:
+        # LangChain format: usage_metadata
+        token_usage = {
+            "input": usage_metadata.get("input_tokens", 0),
+            "output": usage_metadata.get("output_tokens", 0),
+            "total": usage_metadata.get("total_tokens", 0),
+        }
+    elif outputs and "llm_output" in outputs:
+        # OpenAI format in llm_output
+        llm_output = outputs["llm_output"]
+        if "token_usage" in llm_output:
+            usage = llm_output["token_usage"]
+            token_usage = {
+                "input": usage.get("prompt_tokens", 0),
+                "output": usage.get("completion_tokens", 0),
+                "total": usage.get("total_tokens", 0),
+            }
+
+    # Model information
+    model_name = None
+    model_params = {}
+    invocation_params = extra.get("invocation_params", {})
+    if invocation_params:
+        model_name = invocation_params.get("model_name") or invocation_params.get("model")
+        model_params = {
+            k: v for k, v in invocation_params.items()
+            if k in ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"]
+        }
+
     return {
         "run_id": run_id,
         "parent_id": parent_id,
         "run_type": run_type,
         "name": name,
         "inputs": run_data.get("inputs", {}),
-        "outputs": run_data.get("outputs"),
+        "outputs": outputs,
         "start_time": start_time,
         "end_time": end_time,
         "error": run_data.get("error"),
-        "metadata": run_data.get("extra", {}),
+        "metadata": extra,
+        "token_usage": token_usage,
+        "model_name": model_name,
+        "model_params": model_params,
     }
 
 
@@ -259,6 +298,14 @@ async def create_run(request: Request, authorized: bool = Depends(validate_api_k
                     }
                     if converted["outputs"]:
                         gen_data["output"] = converted["outputs"]
+
+                    # Add model information for LLM generations
+                    if converted.get("model_name"):
+                        gen_data["model"] = converted["model_name"]
+                    if converted.get("model_params"):
+                        gen_data["model_parameters"] = converted["model_params"]
+                    if converted.get("token_usage"):
+                        gen_data["usage_details"] = converted["token_usage"]
 
                     # Note: SDK handles timestamps automatically
 
@@ -481,6 +528,14 @@ async def create_runs_batch(request: Request):
                         }
                         if converted["outputs"]:
                             gen_data["output"] = converted["outputs"]
+
+                        # Add model information for LLM generations
+                        if converted.get("model_name"):
+                            gen_data["model"] = converted["model_name"]
+                        if converted.get("model_params"):
+                            gen_data["model_parameters"] = converted["model_params"]
+                        if converted.get("token_usage"):
+                            gen_data["usage_details"] = converted["token_usage"]
 
                         generation = langfuse_client.start_generation(**gen_data)
                         run_id_map[run_id] = {
