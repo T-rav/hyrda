@@ -173,7 +173,9 @@ class TestRetryLogic:
             patch("time.sleep") as mock_sleep,
             patch("services.youtube.YouTubeClient") as mock_youtube_client_class,
             patch("services.youtube.YouTubeTrackingService") as mock_tracking_class,
-            patch("services.openai_embeddings.OpenAIEmbeddings") as mock_embeddings_class,
+            patch(
+                "services.openai_embeddings.OpenAIEmbeddings"
+            ) as mock_embeddings_class,
             patch("services.qdrant_client.QdrantClient") as mock_qdrant_class,
         ):
             # Setup mocks for immediate success

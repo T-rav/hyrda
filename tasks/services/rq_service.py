@@ -37,7 +37,9 @@ class RQService:
             # Create default queue for job execution
             self.queue = Queue(name="default", connection=self.redis_client)
 
-            logger.info(f"✅ RQ service initialized (queue: default, redis: {self.redis_url})")
+            logger.info(
+                f"✅ RQ service initialized (queue: default, redis: {self.redis_url})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to initialize RQ service: {e}")

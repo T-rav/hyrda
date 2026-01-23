@@ -166,11 +166,14 @@ class YouTubeIngestJob(BaseJob):
                             break
 
                         if existing_uuid:
-                            logger.info(f"🔄 Transcript changed, reindexing: {video_title}")
+                            logger.info(
+                                f"🔄 Transcript changed, reindexing: {video_title}"
+                            )
 
                         # Generate or reuse UUID
-                        base_uuid = existing_uuid or tracking_service.generate_base_uuid(
-                            video_id
+                        base_uuid = (
+                            existing_uuid
+                            or tracking_service.generate_base_uuid(video_id)
                         )
 
                         # Chunk transcript
@@ -240,7 +243,9 @@ class YouTubeIngestJob(BaseJob):
                         )
 
                         success_count += 1
-                        logger.info(f"✅ Ingested: {video_title} ({len(chunks)} chunks)")
+                        logger.info(
+                            f"✅ Ingested: {video_title} ({len(chunks)} chunks)"
+                        )
                         success = True  # Mark as success to exit retry loop
 
                     except Exception as e:

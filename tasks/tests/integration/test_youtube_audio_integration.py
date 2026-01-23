@@ -26,6 +26,7 @@ class TestAudioChunkingIntegration:
     @pytest.fixture
     def create_test_audio_file(self):
         """Create a real audio file for testing using ffmpeg."""
+
         def _create(size_mb: int, duration_seconds: int = 60):
             """Create test audio file of specified size."""
             with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
@@ -82,9 +83,7 @@ class TestAudioChunkingIntegration:
 
                 # Chunk should be smaller than original
                 chunk_size_mb = os.path.getsize(chunk) / (1024 * 1024)
-                assert chunk_size_mb <= 25, (
-                    f"Chunk too large: {chunk_size_mb:.1f}MB"
-                )
+                assert chunk_size_mb <= 25, f"Chunk too large: {chunk_size_mb:.1f}MB"
 
             # Cleanup chunk files
             for chunk in chunks:
@@ -115,9 +114,7 @@ class TestAudioChunkingIntegration:
             if os.path.exists(audio_file):
                 os.unlink(audio_file)
 
-    def test_chunk_timing_and_quality(
-        self, youtube_client, create_test_audio_file
-    ):
+    def test_chunk_timing_and_quality(self, youtube_client, create_test_audio_file):
         """Test that chunked audio maintains quality and timing."""
         # Create 50MB audio file with known duration
         audio_file = create_test_audio_file(size_mb=50, duration_seconds=600)
@@ -175,12 +172,14 @@ class TestTranscriptionIntegration:
         # Use real API key from environment for integration tests
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            pytest.skip("OPENAI_API_KEY not set - skipping transcription integration test")
+            pytest.skip(
+                "OPENAI_API_KEY not set - skipping transcription integration test"
+            )
         return YouTubeClient(openai_api_key=api_key)
 
     @pytest.mark.skipif(
         not os.getenv("RUN_EXPENSIVE_TESTS"),
-        reason="Skipping expensive OpenAI API test (set RUN_EXPENSIVE_TESTS=1 to run)"
+        reason="Skipping expensive OpenAI API test (set RUN_EXPENSIVE_TESTS=1 to run)",
     )
     def test_transcribe_large_file_with_chunking(self, youtube_client):
         """Test transcription of large file with automatic chunking.

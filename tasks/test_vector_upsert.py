@@ -18,11 +18,11 @@ async def test_vector_upsert():
     print("1️⃣ Initializing Qdrant client...")
     vector_store = QdrantClient()
     await vector_store.initialize()
-    print(f"   ✅ Qdrant initialized")
+    print("   ✅ Qdrant initialized")
 
     print("2️⃣ Initializing embedding provider...")
     embedding_provider = OpenAIEmbeddings()
-    print(f"   ✅ Embedding provider initialized")
+    print("   ✅ Embedding provider initialized")
 
     # Create test data similar to YouTube ingest
     print("3️⃣ Creating test data...")
@@ -78,7 +78,7 @@ async def test_vector_upsert():
             metadata=test_metadata,
             namespace="youtube",
         )
-        print(f"   ✅ Upsert successful!")
+        print("   ✅ Upsert successful!")
     except Exception as e:
         print(f"   ❌ Upsert failed: {e}")
         import traceback

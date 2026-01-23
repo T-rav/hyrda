@@ -165,15 +165,9 @@ def upgrade():
         op.create_index(
             "idx_transcript_hash", "youtube_videos_data", ["transcript_hash"]
         )
-        op.create_index(
-            "idx_vector_uuid", "youtube_videos_data", ["vector_uuid"]
-        )
-        op.create_index(
-            "idx_video_type", "youtube_videos_data", ["video_type"]
-        )
-        op.create_index(
-            "idx_channel_id", "youtube_videos_data", ["channel_id"]
-        )
+        op.create_index("idx_vector_uuid", "youtube_videos_data", ["vector_uuid"])
+        op.create_index("idx_video_type", "youtube_videos_data", ["video_type"])
+        op.create_index("idx_channel_id", "youtube_videos_data", ["channel_id"])
         op.create_index(
             "idx_ingestion_status",
             "youtube_videos_data",

@@ -10,8 +10,6 @@ from unittest.mock import Mock, patch
 import pytest
 import redis
 
-from config.settings import get_settings
-
 
 @pytest.mark.integration
 class TestSchedulerLockIntegration:
@@ -33,18 +31,10 @@ class TestSchedulerLockIntegration:
         lock_key = "insightmesh:scheduler:lock:test"
 
         # Simulate 4 workers trying to acquire lock
-        worker_1_acquired = redis_client.set(
-            lock_key, "worker_1", nx=True, ex=600
-        )
-        worker_2_acquired = redis_client.set(
-            lock_key, "worker_2", nx=True, ex=600
-        )
-        worker_3_acquired = redis_client.set(
-            lock_key, "worker_3", nx=True, ex=600
-        )
-        worker_4_acquired = redis_client.set(
-            lock_key, "worker_4", nx=True, ex=600
-        )
+        worker_1_acquired = redis_client.set(lock_key, "worker_1", nx=True, ex=600)
+        worker_2_acquired = redis_client.set(lock_key, "worker_2", nx=True, ex=600)
+        worker_3_acquired = redis_client.set(lock_key, "worker_3", nx=True, ex=600)
+        worker_4_acquired = redis_client.set(lock_key, "worker_4", nx=True, ex=600)
 
         # Only first worker should acquire lock
         assert worker_1_acquired is True
@@ -68,6 +58,7 @@ class TestSchedulerLockIntegration:
 
         # Wait for expiration
         import time
+
         time.sleep(1.5)
 
         # Lock should be gone
@@ -118,12 +109,12 @@ class TestSchedulerLockIntegration:
         # The code has try/except that starts scheduler anyway as fallback
         # This test verifies the fallback logic exists
 
-        from app import lifespan
-
         # Mock Redis to fail
         with (
             patch("redis.from_url", side_effect=Exception("Redis unavailable")),
-            patch("services.scheduler_service.SchedulerService") as mock_scheduler_class,
+            patch(
+                "services.scheduler_service.SchedulerService"
+            ) as mock_scheduler_class,
         ):
             mock_scheduler = Mock()
             mock_scheduler_class.return_value = mock_scheduler
@@ -156,6 +147,7 @@ class TestSchedulerNoDuplicates:
 
             # Group by started_at timestamp to find duplicates
             from collections import defaultdict
+
             runs_by_timestamp = defaultdict(list)
             for run in recent_runs:
                 # Group by started_at rounded to nearest second
