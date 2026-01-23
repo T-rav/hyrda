@@ -1,5 +1,6 @@
 import React from 'react'
 import { AlertCircle } from 'lucide-react'
+import { logError } from '../utils/logger'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -11,8 +12,8 @@ class ErrorBoundary extends React.Component {
     return { hasError: true, error }
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('Health UI Error:', error, errorInfo)
+  componentDidCatch(error) {
+    logError('Health UI Error:', error)
   }
 
   render() {

@@ -59,6 +59,7 @@ class TestServiceFactory:
         settings.slack.bot_token.get_secret_value = MagicMock(
             return_value="xoxb-test-token"
         )
+        settings.rag_service_url = "http://rag-service:8002"
         return settings
 
     @pytest.fixture
@@ -192,16 +193,17 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_rag_service(self, factory):
-        """Test RAG service creation."""
-        with patch("services.rag_service.RAGService") as MockRAGService:
+        """Test RAG service (HTTP client) creation."""
+        with patch("services.rag_client.RAGClient") as MockRAGClient:
             mock_service = AsyncMock()
-            mock_service.initialize = AsyncMock()
-            MockRAGService.return_value = mock_service
+            MockRAGClient.return_value = mock_service
 
             service = await factory._create_rag_service()
 
-            MockRAGService.assert_called_once_with(settings=factory.settings)
-            mock_service.initialize.assert_called_once()
+            # Verify RAGClient was instantiated with base_url
+            MockRAGClient.assert_called_once_with(
+                base_url=factory.settings.rag_service_url
+            )
             assert service is mock_service
 
     @pytest.mark.asyncio

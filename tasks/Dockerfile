@@ -23,13 +23,9 @@ RUN useradd -m -u 1000 appuser
 RUN mkdir -p /app/logs /app/.edgar && \
     chown -R appuser:appuser /app
 
-# Trust all self-signed certificates for inter-service communication (optional)
-# Copy .ssl directory (may be empty in CI) and conditionally install any certs found
-COPY .ssl /tmp/.ssl/
-RUN if [ -n "$(ls -A /tmp/.ssl/*-cert.pem 2>/dev/null)" ]; then \
-        cp /tmp/.ssl/*-cert.pem /usr/local/share/ca-certificates/ && \
-        update-ca-certificates; \
-    fi
+# Trust all self-signed certificates for inter-service communication
+# SSL certificates are mounted as volumes at runtime via docker-compose.yml
+# No need to copy during build - handled at runtime
 
 # Copy tasks application code first (needed for pyproject.toml to work)
 COPY --chown=appuser:appuser tasks/ .
@@ -53,11 +49,10 @@ COPY --chown=www-data:www-data tasks/ui/dist /usr/share/nginx/html
 COPY --chown=appuser:appuser tasks/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Set production environment variables
+# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    ENVIRONMENT=production \
     LOG_LEVEL=INFO \
     HOME=/app \
     EDGAR_LOCAL_DATA_DIR=/app/.edgar \

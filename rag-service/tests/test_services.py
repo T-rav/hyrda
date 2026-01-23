@@ -3,8 +3,8 @@
 Tests routing service, conversation cache, and other service utilities.
 """
 
+
 import pytest
-from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 
 class TestRoutingService:
@@ -92,9 +92,10 @@ class TestLLMProviderConfiguration:
 
     def test_openai_provider_configuration(self):
         """Test OpenAI provider is configured correctly."""
-        from providers.llm_providers import create_llm_provider
-        from config.settings import LLMSettings
         from pydantic import SecretStr
+
+        from config.settings import LLMSettings
+        from providers.llm_providers import create_llm_provider
 
         settings = LLMSettings(
             provider="openai",
@@ -107,9 +108,10 @@ class TestLLMProviderConfiguration:
 
     def test_anthropic_provider_configuration(self):
         """Test Anthropic provider configuration (if supported)."""
-        from providers.llm_providers import create_llm_provider
-        from config.settings import LLMSettings
         from pydantic import SecretStr
+
+        from config.settings import LLMSettings
+        from providers.llm_providers import create_llm_provider
 
         # Anthropic may not be supported yet
         try:
@@ -126,9 +128,10 @@ class TestLLMProviderConfiguration:
 
     def test_invalid_provider_raises_error(self):
         """Test that invalid provider raises error."""
-        from providers.llm_providers import create_llm_provider
-        from config.settings import LLMSettings
         from pydantic import SecretStr
+
+        from config.settings import LLMSettings
+        from providers.llm_providers import create_llm_provider
 
         with pytest.raises(ValueError):
             settings = LLMSettings(
@@ -273,8 +276,8 @@ class TestVectorStoreBasics:
     @pytest.mark.asyncio
     async def test_vector_store_creation(self):
         """Test vector store can be created."""
-        from services.vector_service import create_vector_store
         from config.settings import VectorSettings
+        from services.vector_service import create_vector_store
 
         settings = VectorSettings(
             enabled=True,
@@ -290,8 +293,8 @@ class TestVectorStoreBasics:
     @pytest.mark.asyncio
     async def test_vector_store_disabled(self):
         """Test vector store when disabled."""
-        from services.vector_service import create_vector_store
         from config.settings import VectorSettings
+        from services.vector_service import create_vector_store
 
         settings = VectorSettings(
             enabled=False,

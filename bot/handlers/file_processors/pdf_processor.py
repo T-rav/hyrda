@@ -5,6 +5,8 @@ Handles PDF text extraction with async support to avoid blocking the event loop.
 
 import logging
 
+from handlers.constants import CHUNK_OVERLAP_CHARS, MAX_EMBEDDING_CHARS
+
 try:
     import fitz  # PyMuPDF  # type: ignore[reportMissingImports]
 
@@ -48,12 +50,16 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
         full_text = text_content.strip()
 
         # If content is too long, chunk it to prevent embedding failures
-        # Conservative limit: 6000 chars ≈ 1500 tokens (well under 8192 limit)
-        if len(full_text) > 6000:
+        # Conservative limit: MAX_EMBEDDING_CHARS ≈ 1500 tokens (well under 8192 limit)
+        if len(full_text) > MAX_EMBEDDING_CHARS:
             logger.info(
                 f"PDF content is {len(full_text)} chars, chunking for embedding compatibility"
             )
-            chunks = chunk_text(full_text, chunk_size=6000, chunk_overlap=200)
+            chunks = chunk_text(
+                full_text,
+                chunk_size=MAX_EMBEDDING_CHARS,
+                chunk_overlap=CHUNK_OVERLAP_CHARS,
+            )
             # Return first chunk with indicator
             chunked_content = chunks[0]
             if len(chunks) > 1:

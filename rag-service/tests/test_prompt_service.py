@@ -4,15 +4,14 @@ Comprehensive tests for prompt service.
 Tests prompt management, caching, and Langfuse integration.
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
 from config.settings import Settings
 from services.prompt_service import (
+    DEFAULT_SYSTEM_MESSAGE,
     PromptService,
     get_prompt_service,
     initialize_prompt_service,
-    DEFAULT_SYSTEM_MESSAGE,
 )
 
 

@@ -6,7 +6,10 @@
     "tests",
     "**/__pycache__",
     "**/node_modules",
-    "venv"
+    "venv",
+    ".venv",
+    "**/.venv",
+    "**/site-packages"
   ],
   "ignore": [
     "agents/meddpicc_coach/nodes/coaching_insights.py",
@@ -16,7 +19,7 @@
   "defineConstant": {},
   "stubPath": "./typings",
   "venvPath": ".",
-  "venv": "venv",
+  "venv": ".venv",
   "pythonVersion": "3.11",
   "pythonPlatform": "Linux",
   "typeCheckingMode": "standard",

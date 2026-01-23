@@ -98,13 +98,11 @@ class ServiceFactory:
         return service
 
     async def _create_rag_service(self):  # type: ignore[no-untyped-def]
-        """Create RAG service with dependencies."""
-        # Import and create service
-        from services.rag_service import RAGService
+        """Create RAG service HTTP client."""
+        from services.rag_client import RAGClient
 
-        service = RAGService(settings=self.settings)
-
-        await service.initialize()
+        # Use standalone rag-service via HTTP (no initialization needed)
+        service = RAGClient(base_url=self.settings.rag_service_url)
         return service
 
     async def _create_slack_service(self):  # type: ignore[no-untyped-def]

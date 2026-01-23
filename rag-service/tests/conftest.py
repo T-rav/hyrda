@@ -10,12 +10,13 @@ if not os.getenv("RAG_SERVICE_TOKEN"):
     os.environ["RAG_SERVICE_TOKEN"] = "fake-test-token-for-testing-only"
 
 # Now safe to import after environment is configured
-import pytest
-from fastapi.testclient import TestClient
-
 # Import after environment setup
 import sys
 from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.utils.request_signing import generate_signature
 
@@ -44,7 +45,10 @@ def unauth_client():
 @pytest.fixture
 def auth_headers():
     """Provide authentication headers for GET requests (no HMAC required)."""
-    return {"X-Service-Token": os.getenv("RAG_SERVICE_TOKEN", "fake-test-token-for-testing-only")}
+    return {
+        "X-Service-Token": os.getenv("RAG_SERVICE_TOKEN", "fake-test-token-for-testing-only"),
+        "X-User-Email": "test@example.com"
+    }
 
 
 def generate_signed_headers(payload: dict) -> dict:

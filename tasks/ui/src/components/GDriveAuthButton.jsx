@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Check, AlertCircle, ExternalLink } from 'lucide-react'
+import { logError } from '../utils/logger'
 
 /**
  * Google Drive OAuth Authentication Button Component
@@ -49,7 +50,7 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
         }
       }
     } catch (error) {
-      console.error('Error checking auth status:', error)
+      logError('Error checking auth status:', error)
       setAuthStatus({ authenticated: false, loading: false })
       setAuthError('Failed to check authentication status')
     }
@@ -100,7 +101,7 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
         }
       }
     } catch (error) {
-      console.error('Error during authentication:', error)
+      logError('Error during authentication:', error)
       setAuthError(error.message)
       setAuthInProgress(false)
     }

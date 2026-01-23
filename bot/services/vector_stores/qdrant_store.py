@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import ssl
 import uuid
 from typing import Any
 
@@ -54,20 +55,30 @@ class QdrantVectorStore(VectorStore):
                 )
 
             # Initialize Qdrant client with HTTPS support
-            # Check for certificate path (development) or use system CA store (production/Docker)
+            # Check for certificate path or use mkcert CA for local development
             cert_path = os.getenv("QDRANT_CERT_PATH", os.getenv("VECTOR_CERT_PATH"))
 
-            # Check if SSL verification should be disabled (for self-signed certs)
-            verify_ssl = os.getenv("QDRANT_VERIFY_SSL", "true").lower() != "false"
+            # Try to find mkcert CA certificate for local development
+            if not cert_path:
+                # Look for mkcert CA in .ssl directory (local development)
+                ca_cert_path = os.path.join(
+                    os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    ),
+                    ".ssl",
+                    "mkcert-ca.crt",
+                )
+                if os.path.exists(ca_cert_path):
+                    cert_path = ca_cert_path
 
-            # Determine SSL verification strategy:
-            # - Disabled if QDRANT_VERIFY_SSL=false
-            # - Use cert file if available (development/testing)
-            # - Use system CA store otherwise (Docker/production)
-            if not verify_ssl:
-                verify = False
+            # Determine SSL verification strategy
+            if cert_path and os.path.exists(cert_path):
+                # Use SSL context with CA certificate for proper validation
+                verify = ssl.create_default_context(cafile=cert_path)
             else:
-                verify = cert_path if cert_path and os.path.exists(cert_path) else True
+                # Fallback: disable SSL verification for local dev without cert
+                # In production with proper certificates, this should be True
+                verify = os.getenv("QDRANT_VERIFY_SSL", "false").lower() == "true"
 
             if self.api_key:
                 self.client = QdrantClient(

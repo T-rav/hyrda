@@ -101,7 +101,8 @@ async def list_agents(request: Request) -> dict[str, Any]:
                         "endpoint_url": agent.endpoint_url,
                         "langgraph_assistant_id": agent.langgraph_assistant_id,
                         "langgraph_url": agent.langgraph_url,
-                        "is_public": agent.is_public,
+                        "is_enabled": agent.is_enabled,
+                        "is_slack_visible": agent.is_slack_visible,
                         "requires_admin": agent.requires_admin,
                         "is_system": agent.is_system,
                         "is_deleted": agent.is_deleted,
@@ -201,9 +202,15 @@ async def register_agent(
                 # Check for conflict: non-deleted agent with same name
                 if agent and not agent.is_deleted:
                     # Update existing active agent
+                    # NOTE: Preserve admin-customized aliases (don't overwrite with agent defaults)
                     agent.display_name = display_name
                     agent.description = description
-                    agent.set_aliases(aliases)
+                    # Only update aliases if admin hasn't customized them
+                    if not agent.aliases_customized:
+                        agent.set_aliases(aliases)
+                        logger.info(f"Updated agent '{agent_name}' aliases from agent registration")
+                    else:
+                        logger.info(f"Preserved customized aliases for agent '{agent_name}'")
                     agent.is_system = is_system
                     agent.endpoint_url = endpoint_url
                     logger.info(f"Updated agent '{agent_name}' in database")
@@ -211,22 +218,26 @@ async def register_agent(
                 elif agent and agent.is_deleted:
                     # Reactivate deleted agent (undelete and update)
                     agent.is_deleted = False
-                    agent.is_public = True  # Re-enable when reactivating
+                    agent.is_enabled = True  # Re-enable when reactivating
+                    agent.is_slack_visible = True  # Default to visible in Slack
                     agent.display_name = display_name
                     agent.description = description
+                    # Reset aliases on reactivation (agent was deleted, start fresh)
                     agent.set_aliases(aliases)
+                    agent.aliases_customized = False
                     agent.is_system = is_system
                     agent.endpoint_url = endpoint_url
                     logger.info(f"Reactivated deleted agent '{agent_name}'")
                     action = "reactivated"
                 else:
-                    # Create new agent (default enabled)
+                    # Create new agent (default enabled and visible in Slack)
                     agent = AgentMetadata(
                         agent_name=agent_name,
                         display_name=display_name,
                         description=description,
                         endpoint_url=endpoint_url,
-                        is_public=True,  # Default enabled
+                        is_enabled=True,  # Default enabled
+                        is_slack_visible=True,  # Default visible in Slack
                         requires_admin=False,
                         is_system=is_system,
                         is_deleted=False,
@@ -280,16 +291,16 @@ async def get_agent_details(agent_name: str) -> dict[str, Any]:
                 .filter(AgentMetadata.agent_name == agent_name)
                 .first()
             )
-            is_enabled = (
-                metadata.is_public if metadata else False
-            )  # Default to disabled
+            is_enabled = metadata.is_enabled if metadata else False
+            is_slack_visible = metadata.is_slack_visible if metadata else False
             is_system = metadata.is_system if metadata else False
 
         details = {
             "name": agent_name,
             "authorized_user_ids": authorized_user_ids,
             "authorized_group_names": authorized_group_names,
-            "is_public": is_enabled,
+            "is_enabled": is_enabled,
+            "is_slack_visible": is_slack_visible,
             "is_system": is_system,
         }
 
@@ -338,9 +349,10 @@ async def delete_agent(
                     },
                 )
 
-            # Soft delete: mark as deleted
+            # Soft delete: mark as deleted and disable
             agent_metadata.is_deleted = True
-            agent_metadata.is_public = False  # Also disable when deleting
+            agent_metadata.is_enabled = False  # Disable when deleting
+            agent_metadata.is_slack_visible = False  # Hide from Slack when deleting
             session.commit()
 
             logger.info(f"Soft deleted agent '{agent_name}'")
@@ -403,10 +415,14 @@ async def get_agent_usage(agent_name: str) -> dict[str, Any]:
 
 
 @router.post("/{agent_name}/toggle")
-async def toggle_agent(
+async def toggle_agent_enabled(
     agent_name: str, admin_check: None = Depends(require_admin)
 ) -> dict[str, Any]:
-    """Toggle agent enabled/disabled state."""
+    """Toggle agent enabled/disabled state.
+
+    System agents cannot be disabled.
+    When disabled, agent is unavailable everywhere (takes priority over Slack visibility).
+    """
     try:
         with get_db_session() as session:
             # Get or create agent metadata
@@ -417,32 +433,242 @@ async def toggle_agent(
             )
 
             if not agent_metadata:
-                # Create new metadata entry, default to enabled (is_public=True)
+                # Create new metadata entry
                 agent_metadata = AgentMetadata(
                     agent_name=agent_name,
-                    is_public=False,  # Toggle will make it True
+                    is_enabled=False,  # Toggle will make it True
+                    is_slack_visible=True,
                 )
                 session.add(agent_metadata)
 
             # Prevent disabling system agents
-            if agent_metadata.is_system and agent_metadata.is_public:
+            if agent_metadata.is_system and agent_metadata.is_enabled:
                 raise HTTPException(
-                    status_code=403, detail="Cannot disable system agents"
+                    status_code=403,
+                    detail={
+                        "error": "Cannot disable system agents",
+                        "error_code": ErrorCode.FORBIDDEN,
+                    },
                 )
 
-            # Toggle the state
-            agent_metadata.is_public = not agent_metadata.is_public
+            # Toggle the enabled state
+            agent_metadata.is_enabled = not agent_metadata.is_enabled
             session.commit()
 
             return {
                 "agent_name": agent_name,
-                "is_enabled": agent_metadata.is_public,
+                "is_enabled": agent_metadata.is_enabled,
+                "is_slack_visible": agent_metadata.is_slack_visible,
             }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error toggling agent: {e}", exc_info=True)
+        logger.error(f"Error toggling agent enabled state: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
+
+
+@router.post("/{agent_name}/toggle-slack")
+async def toggle_agent_slack_visibility(
+    agent_name: str, admin_check: None = Depends(require_admin)
+) -> dict[str, Any]:
+    """Toggle agent Slack visibility.
+
+    Controls whether agent appears in Slack command routing.
+    Agent must be enabled for this to take effect.
+    """
+    try:
+        with get_db_session() as session:
+            agent_metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
+
+            if not agent_metadata:
+                raise HTTPException(
+                    status_code=404, detail=not_found_error("Agent", agent_name)
+                )
+
+            # Toggle Slack visibility
+            agent_metadata.is_slack_visible = not agent_metadata.is_slack_visible
+            session.commit()
+
+            return {
+                "agent_name": agent_name,
+                "is_enabled": agent_metadata.is_enabled,
+                "is_slack_visible": agent_metadata.is_slack_visible,
+                "effective_in_slack": agent_metadata.is_visible_in_slack(),
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error toggling agent Slack visibility: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
+
+
+@router.put("/{agent_name}/aliases")
+async def update_agent_aliases(
+    agent_name: str, request: Request, admin_check: None = Depends(require_admin)
+) -> dict[str, Any]:
+    """Update agent aliases (admin-only, preserves overrides on agent re-registration).
+
+    Request body:
+        {"aliases": ["alias1", "alias2", "alias3"]}
+
+    This sets aliases_customized=True, preventing future agent registrations
+    from overwriting these admin-edited aliases.
+    """
+    try:
+        data = await request.json()
+        aliases = data.get("aliases", [])
+
+        # Validate aliases
+        if not isinstance(aliases, list):
+            raise HTTPException(
+                status_code=400,
+                detail=validation_error("aliases must be a list", field="aliases"),
+            )
+
+        # Validate each alias (alphanumeric, spaces, hyphens, underscores)
+        import re
+
+        for alias in aliases:
+            if not isinstance(alias, str) or not re.match(r"^[\w\s-]+$", alias):
+                raise HTTPException(
+                    status_code=400,
+                    detail=validation_error(
+                        f"Invalid alias '{alias}' - must contain only letters, numbers, spaces, hyphens, underscores",
+                        field="aliases",
+                    ),
+                )
+
+        with get_db_session() as session:
+            agent_metadata = (
+                session.query(AgentMetadata)
+                .filter(AgentMetadata.agent_name == agent_name)
+                .first()
+            )
+
+            if not agent_metadata:
+                raise HTTPException(
+                    status_code=404, detail=not_found_error("Agent", agent_name)
+                )
+
+            # Update aliases and mark as customized
+            agent_metadata.set_aliases(aliases)
+            agent_metadata.aliases_customized = True
+            session.commit()
+
+            logger.info(
+                f"Admin updated aliases for agent '{agent_name}': {aliases}"
+            )
+
+            # Audit log
+            log_agent_action(
+                AuditAction.AGENT_UPDATE,
+                agent_name,
+                {"aliases": aliases, "aliases_customized": True},
+            )
+
+            return {
+                "success": True,
+                "agent_name": agent_name,
+                "aliases": aliases,
+                "aliases_customized": True,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating agent aliases: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
+        )
+
+
+@router.get("/{agent_name}/alias-conflicts")
+async def check_alias_conflicts(agent_name: str) -> dict[str, Any]:
+    """Check if agent's aliases conflict with other agents.
+
+    Returns list of conflicts where this agent's aliases are used by other agents.
+    Helps admins detect and resolve alias conflicts.
+    """
+    try:
+        with get_db_session() as session:
+            # Get this agent
+            agent = (
+                session.query(AgentMetadata)
+                .filter(
+                    AgentMetadata.agent_name == agent_name,
+                    ~AgentMetadata.is_deleted,
+                )
+                .first()
+            )
+
+            if not agent:
+                raise HTTPException(
+                    status_code=404, detail=not_found_error("Agent", agent_name)
+                )
+
+            this_agent_aliases = set(agent.get_aliases())
+            if not this_agent_aliases:
+                return {
+                    "agent_name": agent_name,
+                    "aliases": [],
+                    "conflicts": [],
+                }
+
+            # Get all other active agents
+            other_agents = (
+                session.query(AgentMetadata)
+                .filter(
+                    AgentMetadata.agent_name != agent_name,
+                    ~AgentMetadata.is_deleted,
+                )
+                .all()
+            )
+
+            conflicts = []
+            for other_agent in other_agents:
+                other_aliases = set(other_agent.get_aliases())
+
+                # Check for overlapping aliases
+                overlapping = this_agent_aliases & other_aliases
+                if overlapping:
+                    conflicts.append({
+                        "conflicting_agent": other_agent.agent_name,
+                        "conflicting_aliases": list(overlapping),
+                        "is_enabled": other_agent.is_enabled,
+                        "is_slack_visible": other_agent.is_slack_visible,
+                    })
+
+                # Check if this agent's aliases conflict with other agent's primary name
+                if other_agent.agent_name in this_agent_aliases:
+                    conflicts.append({
+                        "conflicting_agent": other_agent.agent_name,
+                        "conflicting_aliases": [other_agent.agent_name],
+                        "conflict_type": "primary_name",
+                        "is_enabled": other_agent.is_enabled,
+                        "is_slack_visible": other_agent.is_slack_visible,
+                    })
+
+            return {
+                "agent_name": agent_name,
+                "aliases": list(this_agent_aliases),
+                "conflicts": conflicts,
+                "has_conflicts": len(conflicts) > 0,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking alias conflicts: {e}", exc_info=True)
         raise HTTPException(
             status_code=500, detail={"error": str(e), "error_code": "INTERNAL_ERROR"}
         )

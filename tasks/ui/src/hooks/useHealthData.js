@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { isTestMode, getTestScenario } from '../utils/testMockData'
+import { logError } from '../utils/logger'
 
 export function useHealthData() {
   const [data, setData] = useState({
@@ -71,7 +72,7 @@ export function useHealthData() {
         lastUpdate: new Date()
       })
     } catch (error) {
-      console.error('Error fetching health data:', error)
+      logError('Error fetching health data:', error)
       setData(prev => ({
         ...prev,
         loading: false,

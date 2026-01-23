@@ -4,7 +4,6 @@ Comprehensive tests for citation service.
 Tests citation formatting, source filtering, and metadata handling.
 """
 
-import pytest
 
 from services.citation_service import CitationService
 

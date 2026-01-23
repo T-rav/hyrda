@@ -6,10 +6,11 @@ compression logic, and metadata operations.
 """
 
 import json
-import pytest
 import sys
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 # Mock the SlackService import before importing conversation_cache
 sys.modules['services.slack_service'] = Mock()

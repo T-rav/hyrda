@@ -4,10 +4,9 @@ Comprehensive tests for metrics service.
 Tests Prometheus metrics collection, RAG/agent stats, and performance tracking.
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
-from contextlib import asynccontextmanager
+
+import pytest
 
 from services.metrics_service import MetricsService, get_metrics_service, initialize_metrics_service
 

@@ -6,9 +6,9 @@ NOTE: Most tests are marked as integration tests since they require full app set
 Run with: pytest -m integration
 """
 
-import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 # Mark most API tests as integration tests
 pytestmark = pytest.mark.integration
@@ -55,6 +55,83 @@ class TestChatCompletionsEndpoint:
         assert "citations" in data
         assert "metadata" in data
         assert data["metadata"]["routed_to_agent"] is False
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_custom_system_message_is_used(
+        self, mock_get_llm, mock_get_routing, client, signed_headers
+    ):
+        """Test that custom system_message is passed to llm_service."""
+        # Mock routing service to return None (no agent)
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        # Mock LLM service
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="Custom prompt response"
+        )
+        mock_get_llm.return_value = mock_llm
+
+        custom_prompt = "You are a permission-aware assistant. User has access to projects A, B, C."
+        payload = {
+            "query": "What projects can I see?",
+            "conversation_history": [],
+            "system_message": custom_prompt,
+            "use_rag": True,
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=signed_headers(payload),
+        )
+
+        assert response.status_code == 200
+
+        # Verify system_message was passed to llm_service
+        mock_llm.get_response.assert_called_once()
+        call_kwargs = mock_llm.get_response.call_args.kwargs
+        assert call_kwargs["system_message"] == custom_prompt
+
+    @patch("api.rag.get_routing_service")
+    @patch("api.rag.get_llm_service")
+    def test_no_system_message_uses_default(
+        self, mock_get_llm, mock_get_routing, client, signed_headers
+    ):
+        """Test that when no system_message provided, None is passed (uses default)."""
+        # Mock routing service to return None (no agent)
+        mock_routing = Mock()
+        mock_routing.detect_agent.return_value = None
+        mock_get_routing.return_value = mock_routing
+
+        # Mock LLM service
+        mock_llm = Mock()
+        mock_llm.get_response = AsyncMock(
+            return_value="Default prompt response"
+        )
+        mock_get_llm.return_value = mock_llm
+
+        payload = {
+            "query": "What is the answer?",
+            "conversation_history": [],
+            "use_rag": True,
+            # No system_message provided
+        }
+
+        response = client.post(
+            "/api/v1/chat/completions",
+            json=payload,
+            headers=signed_headers(payload),
+        )
+
+        assert response.status_code == 200
+
+        # Verify system_message=None was passed (will use default in llm_service)
+        mock_llm.get_response.assert_called_once()
+        call_kwargs = mock_llm.get_response.call_args.kwargs
+        assert call_kwargs["system_message"] is None
 
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_agent_client")

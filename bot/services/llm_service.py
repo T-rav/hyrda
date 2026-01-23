@@ -14,7 +14,7 @@ from services.langfuse_service import (
 )
 from services.metrics_service import get_metrics_service
 from services.prompt_service import PromptService
-from services.rag_service import RAGService
+from services.rag_client import RAGClient
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +33,10 @@ class LLMService:
         # Initialize prompt service for system prompts
         self.prompt_service = PromptService(settings)
 
-        # Hybrid search removed - always use standard RAG
-        self.rag_service = RAGService(settings)
+        # Use standalone rag-service via HTTP (no embedded RAG)
+        self.rag_service = RAGClient(base_url=settings.rag_service_url)
         self.use_hybrid = False
-        logger.info("Using standard RAG service")
+        logger.info(f"Using standalone RAG service at {settings.rag_service_url}")
 
         # Initialize Langfuse service
         self.langfuse_service = initialize_langfuse_service(
@@ -54,8 +54,9 @@ class LLMService:
             logger.info("Langfuse observability disabled")
 
     async def initialize(self):
-        """Initialize RAG service"""
-        await self.rag_service.initialize()
+        """Initialize RAG service (no-op for HTTP client)"""
+        # RAG service initializes itself - no action needed for HTTP client
+        pass
 
     @observe(name="llm_service_response", as_type="generation")
     async def get_response(
@@ -114,8 +115,8 @@ class LLMService:
                 logger.warning("No user query found in messages")
                 return None
 
-            # Generate response using RAG service
-            response = await self.rag_service.generate_response(
+            # Generate response using RAG service (HTTP client)
+            result = await self.rag_service.generate_response(
                 query=query_to_use,
                 conversation_history=conversation_history[:-1]
                 if not current_query
@@ -126,8 +127,11 @@ class LLMService:
                 user_id=user_id,
                 document_content=document_content,
                 document_filename=document_filename,
-                conversation_cache=conversation_cache,
+                conversation_id=conversation_id,
             )
+
+            # Extract response text from result dict
+            response = result.get("response") if isinstance(result, dict) else result
 
             # NOTE: conversation_turn tracking moved to message_handlers.py to avoid double-counting
             # Each message handler (handle_message, handle_agent_command) calls trace_conversation()
@@ -176,26 +180,7 @@ class LLMService:
             document_filename=None,
         )
 
-    async def ingest_documents(self, documents: list[dict]) -> tuple[int, int]:
-        """
-        Ingest documents into the knowledge base
-
-        Args:
-            documents: List of documents with 'content' and optional 'metadata'
-
-        Returns:
-            Tuple of (success_count, error_count)
-
-        """
-        try:
-            return await self.rag_service.ingest_documents(documents)
-        except Exception as e:
-            logger.error(f"Error ingesting documents: {e}")
-            return (0, len(documents))
-
-    async def get_system_status(self) -> dict:
-        """Get system status information"""
-        return await self.rag_service.get_system_status()
+    # Document ingestion and system status removed - handled by separate services
 
     async def close(self):
         """Clean up resources"""

@@ -14,8 +14,8 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 
-from agents.system.research.nodes.research_planner import create_research_plan
-from agents.system.research.state import ResearchAgentState
+from agents.research.nodes.research_planner import create_research_plan
+from agents.research.state import ResearchAgentState
 
 
 @pytest.fixture
@@ -65,7 +65,7 @@ class TestPlannerPromptBehavior:
             "Comprehensive analysis of Costco's business model focusing on revenue streams, competitive advantages, and market position."
         )
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await create_research_plan(state)
 
@@ -86,7 +86,7 @@ class TestPlannerPromptBehavior:
             "Comprehensive analysis of microservices deployment practices, infrastructure, and operational procedures."
         )
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await create_research_plan(state)
 
@@ -112,7 +112,7 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Legal compliance analysis.")
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
                 await create_research_plan(state)
 
@@ -136,7 +136,7 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("HR policy analysis.")
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
                 await create_research_plan(state)
 
@@ -162,7 +162,7 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Product development analysis.")
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
                 await create_research_plan(state)
 
@@ -205,7 +205,7 @@ class TestPlannerPromptDiverseTopics:
             f"Comprehensive analysis of {expected_domain} topic."
         )
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await create_research_plan(state)
 
@@ -235,7 +235,7 @@ class TestPlannerPromptDiverseTopics:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Infrastructure analysis.", num_tasks=15)
 
-        with patch("agents.system.research.nodes.research_planner.Settings", return_value=mock_settings):
+        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
             with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
                 result = await create_research_plan(state)
 

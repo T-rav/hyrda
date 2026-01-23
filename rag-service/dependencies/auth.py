@@ -17,8 +17,8 @@ from fastapi import Header, HTTPException, Request
 
 # Add shared directory to path for auth utilities
 sys.path.insert(0, "/app")
-from shared.utils.service_auth import verify_service_token
 from shared.utils.request_signing import RequestSigningError, extract_and_verify_signature
+from shared.utils.service_auth import verify_service_token
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ async def require_service_auth(
     request: Request,
     x_service_token: str | None = Header(None, description="Service authentication token"),
     x_user_email: str | None = Header(None, description="User email for permissions"),
+    x_google_oauth_token: str | None = Header(None, alias="X-Google-OAuth-Token", description="Google OAuth access token for user"),
     x_librechat_token: str | None = Header(None, description="JWT token from LibreChat"),
     x_librechat_user: str | None = Header(None, description="LibreChat user ID"),
     x_request_timestamp: str | None = Header(None, description="Request timestamp for HMAC"),
@@ -45,9 +46,15 @@ async def require_service_auth(
        - Authorization: Bearer <service-token> (LibreChat service token)
        - X-LibreChat-Token header (user JWT)
        - X-User-Email header for user permissions
+       - X-Google-OAuth-Token header (optional, Google OAuth access token for user)
+
+    The Google OAuth token allows the service to act on behalf of the user:
+    - Access user's Google Drive
+    - Read user's Gmail
+    - Call any Google API the user authorized
 
     Returns:
-        dict: Auth info with service, user_email, auth_method
+        dict: Auth info with service, user_email, auth_method, google_oauth_token
 
     Raises:
         HTTPException: 401 if not authenticated
@@ -59,8 +66,12 @@ async def require_service_auth(
             auth: dict = Depends(require_service_auth)
         ):
             # auth = {"service": "bot", "user_email": "john@example.com", "auth_method": "service"}
-            # OR {"service": "librechat", "user_email": "john@example.com", "auth_method": "jwt"}
-            pass
+            # OR {"service": "librechat", "user_email": "john@example.com", "auth_method": "jwt", "google_oauth_token": "ya29.xxx"}
+
+            # Use OAuth token if available
+            if auth.get("google_oauth_token"):
+                # Call Google APIs on behalf of user
+                pass
     """
     start_time = time.time()
 
@@ -161,13 +172,19 @@ async def require_service_auth(
     service_info["user_email"] = x_user_email
     service_info["auth_method"] = auth_method
 
+    # Add Google OAuth token if provided (for acting on behalf of user)
+    if x_google_oauth_token:
+        service_info["google_oauth_token"] = x_google_oauth_token
+        logger.debug(f"Google OAuth token provided for user: {x_user_email}")
+
     # Audit log successful authentication
     service_name = service_info.get("service", "unknown")
     elapsed = time.time() - start_time
+    has_oauth = "with OAuth" if x_google_oauth_token else "without OAuth"
 
     logger.info(
         f"Auth success: {service_name} ({auth_method}) -> {method} {path} | "
-        f"User: {x_user_email} | IP: {client_ip} | "
+        f"User: {x_user_email} | IP: {client_ip} | {has_oauth} | "
         f"Auth time: {elapsed * 1000:.2f}ms | "
         f"Timestamp: {datetime.now(UTC).isoformat()}"
     )

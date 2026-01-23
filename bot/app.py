@@ -17,7 +17,6 @@ from slack_sdk.web.async_client import AsyncWebClient
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from shared.utils.otel_tracing import get_tracer
 
-from agents import agent_registry  # Import to register agents
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
@@ -70,10 +69,8 @@ def create_app():
     initialize_prompt_service(settings)
     logger.info("Prompt service initialized")
 
-    # Log registered agents
-    registered_agents = agent_registry.list_agents()
-    agent_names = [agent["name"] for agent in registered_agents]
-    logger.info(f"Registered {len(agent_names)} agents: {', '.join(agent_names)}")
+    # Agents are now dynamically discovered from control-plane (no static registry)
+    logger.info("Agent discovery will happen dynamically via control-plane")
 
     # Create LLM service
     llm_service = LLMService(settings)

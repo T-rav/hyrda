@@ -61,7 +61,7 @@ class TestConversationTrackingDocumentation:
         Document that message_handlers.py is the single source of truth for tracking.
 
         The following handlers in message_handlers.py should call trace_conversation:
-        - handle_message() - for normal user messages
+        - handle_message() - for normal user messages (via _send_llm_response helper)
         - handle_agent_command() - for agent commands
         - agent process handlers - for process-specific commands
         """
@@ -69,11 +69,16 @@ class TestConversationTrackingDocumentation:
 
         from handlers import message_handlers
 
-        source = inspect.getsource(message_handlers.handle_message)
+        # Check that handle_message calls _send_llm_response (which contains trace_conversation)
+        handle_message_source = inspect.getsource(message_handlers.handle_message)
+        assert "_send_llm_response" in handle_message_source, (
+            "message_handlers.handle_message() should call _send_llm_response()"
+        )
 
-        # Verify handle_message calls trace_conversation
-        assert "trace_conversation" in source, (
-            "message_handlers.handle_message() should call trace_conversation()"
+        # Verify _send_llm_response helper contains trace_conversation call
+        helper_source = inspect.getsource(message_handlers._send_llm_response)
+        assert "trace_conversation" in helper_source, (
+            "message_handlers._send_llm_response() should call trace_conversation()"
         )
 
     def test_langfuse_lifetime_stats_query(self):

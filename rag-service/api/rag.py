@@ -258,6 +258,7 @@ async def _generate_rag_response(
         conversation_id=request.conversation_id,
         conversation_cache=None,
         use_rag=request.use_rag,
+        system_message=request.system_message,
     )
 
     if not response_text:
