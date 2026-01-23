@@ -320,9 +320,11 @@ class TestYouTubeClientTranscribeAudio:
         mock_file.__enter__ = Mock(return_value=mock_file)
         mock_file.__exit__ = Mock(return_value=False)
 
-        with patch("builtins.open", return_value=mock_file), patch(
-            "openai.OpenAI"
-        ) as mock_openai, patch("os.path.getsize", return_value=1024 * 1024):  # 1MB
+        with (
+            patch("builtins.open", return_value=mock_file),
+            patch("openai.OpenAI") as mock_openai,
+            patch("os.path.getsize", return_value=1024 * 1024),
+        ):  # 1MB
             mock_client = Mock()
             mock_openai.return_value = mock_client
             # Return string directly - OpenAI API returns text
