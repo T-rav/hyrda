@@ -157,21 +157,21 @@ async def require_service_auth(
                 detail=f"Request signature validation failed: {e}",
             )
 
-    # Validate X-User-Email header
-    # REQUIRED for LibreChat JWT auth (user permissions, Google OAuth)
-    # OPTIONAL for service-to-service auth (bot, control-plane don't need it)
-    if not x_user_email and auth_method == "jwt":
+    # Validate X-User-Email header (REQUIRED for both auth methods)
+    # For Slack bot: Uses user_id@insightmesh.local as placeholder until OAuth is implemented
+    # For LibreChat: Uses actual user email from JWT
+    if not x_user_email:
         logger.warning(
-            f"Auth failed: X-User-Email header missing for JWT auth | "
+            f"Auth failed: X-User-Email header missing | "
             f"Service: {service_info.get('service')} | IP: {client_ip}"
         )
         raise HTTPException(
             status_code=400,
-            detail="X-User-Email header required for JWT authentication",
+            detail="X-User-Email header required for user permissions",
         )
 
     # Add user email and auth method to service info
-    service_info["user_email"] = x_user_email or "service@insightmesh.local"
+    service_info["user_email"] = x_user_email
     service_info["auth_method"] = auth_method
 
     # Add Google OAuth token if provided (for acting on behalf of user)
