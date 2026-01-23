@@ -5,6 +5,7 @@ Uses yt-dlp for all operations - no YouTube Data API required!
 Only requires OpenAI API key for Whisper transcription.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -301,9 +302,93 @@ class YouTubeClient:
             logger.error(f"Error downloading audio: {e}")
             return None
 
+    def _chunk_audio_file(
+        self, audio_file_path: str, max_size_mb: int = 24
+    ) -> list[str]:
+        """
+        Split large audio file into smaller chunks using ffmpeg.
+
+        Args:
+            audio_file_path: Path to audio file
+            max_size_mb: Maximum size per chunk in MB (default 24MB to stay under 25MB limit)
+
+        Returns:
+            List of chunk file paths
+        """
+        import os
+
+        file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
+
+        if file_size_mb <= max_size_mb:
+            return [audio_file_path]
+
+        try:
+            # Calculate chunk duration based on file size and bitrate estimate
+            # Assuming average bitrate of ~128kbps for m4a files
+            duration_cmd = [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                audio_file_path,
+            ]
+
+            duration_result = subprocess.run(
+                duration_cmd, capture_output=True, text=True, check=True
+            )
+            total_duration = float(duration_result.stdout.strip())
+
+            # Calculate chunk duration to keep each chunk under max_size_mb
+            num_chunks = int(file_size_mb / max_size_mb) + 1
+            chunk_duration = total_duration / num_chunks
+
+            logger.info(
+                f"Splitting audio file ({file_size_mb:.1f}MB) into {num_chunks} chunks "
+                f"of ~{chunk_duration:.0f}s each"
+            )
+
+            # Split audio file into chunks
+            chunk_paths = []
+            output_dir = os.path.dirname(audio_file_path)
+            base_name = os.path.splitext(os.path.basename(audio_file_path))[0]
+
+            for i in range(num_chunks):
+                start_time = i * chunk_duration
+                chunk_path = os.path.join(output_dir, f"{base_name}_chunk{i}.m4a")
+
+                chunk_cmd = [
+                    "ffmpeg",
+                    "-i",
+                    audio_file_path,
+                    "-ss",
+                    str(start_time),
+                    "-t",
+                    str(chunk_duration),
+                    "-c",
+                    "copy",
+                    "-y",  # Overwrite output file
+                    chunk_path,
+                ]
+
+                subprocess.run(
+                    chunk_cmd, capture_output=True, text=True, check=True, timeout=300
+                )
+                chunk_paths.append(chunk_path)
+
+            logger.info(f"Created {len(chunk_paths)} audio chunks")
+            return chunk_paths
+
+        except Exception as e:
+            logger.error(f"Error chunking audio file: {e}")
+            return [audio_file_path]  # Fall back to original file
+
     def transcribe_audio(self, audio_file_path: str) -> str | None:
         """
         Transcribe audio file using OpenAI Whisper API.
+        Automatically chunks large files (>24MB) before transcription.
 
         Args:
             audio_file_path: Path to audio file
@@ -311,18 +396,57 @@ class YouTubeClient:
         Returns:
             Transcribed text, or None if transcription fails
         """
+        import os
+
         try:
             from openai import OpenAI
 
             client = OpenAI(api_key=self.openai_api_key)
 
-            with open(audio_file_path, "rb") as audio_file:
-                logger.debug(f"Transcribing audio file: {audio_file_path}")
-                transcription = client.audio.transcriptions.create(
-                    model="whisper-1", file=audio_file, response_format="text"
-                )
+            # Check file size and chunk if needed
+            file_size_mb = os.path.getsize(audio_file_path) / (1024 * 1024)
 
-            return transcription if transcription.strip() else None
+            if file_size_mb > 24:
+                logger.info(
+                    f"Audio file is {file_size_mb:.1f}MB, chunking before transcription"
+                )
+                chunk_paths = self._chunk_audio_file(audio_file_path)
+
+                # Transcribe each chunk
+                transcriptions = []
+                for i, chunk_path in enumerate(chunk_paths):
+                    logger.debug(
+                        f"Transcribing chunk {i + 1}/{len(chunk_paths)}: {chunk_path}"
+                    )
+                    with open(chunk_path, "rb") as audio_file:
+                        transcription = client.audio.transcriptions.create(
+                            model="whisper-1", file=audio_file, response_format="text"
+                        )
+                        if transcription and transcription.strip():
+                            transcriptions.append(transcription.strip())
+
+                    # Clean up chunk file if it's not the original
+                    if chunk_path != audio_file_path:
+                        with contextlib.suppress(Exception):
+                            os.remove(chunk_path)
+
+                # Assemble transcriptions
+                full_transcript = " ".join(transcriptions)
+                logger.info(
+                    f"Assembled transcript from {len(transcriptions)} chunks "
+                    f"({len(full_transcript)} characters)"
+                )
+                return full_transcript if full_transcript else None
+
+            else:
+                # File is small enough, transcribe directly
+                with open(audio_file_path, "rb") as audio_file:
+                    logger.debug(f"Transcribing audio file: {audio_file_path}")
+                    transcription = client.audio.transcriptions.create(
+                        model="whisper-1", file=audio_file, response_format="text"
+                    )
+
+                return transcription if transcription.strip() else None
 
         except Exception as e:
             logger.error(f"Error transcribing audio file: {e}")

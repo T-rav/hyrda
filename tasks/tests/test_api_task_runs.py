@@ -1,76 +1,14 @@
-"""Comprehensive tests for Task Runs API (api/task_runs.py)."""
+"""Comprehensive tests for Task Runs API (api/task_runs.py).
 
-import os
-from datetime import UTC, datetime
+Phase 2 refactoring: Replaced create_mock_task_run helper with TaskRunBuilder
+and database mocks with DatabaseMockFactory.
+"""
+
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-from fastapi.testclient import TestClient
-
-
-@pytest.fixture
-def app():
-    """Get the FastAPI app instance for testing."""
-    os.environ.setdefault("TASK_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("DATA_DATABASE_URL", "sqlite:///:memory:")
-    os.environ.setdefault("SERVER_BASE_URL", "http://localhost:5001")
-    os.environ.setdefault("SECRET_KEY", "test-secret-key-for-sessions")
-    os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "8thlight.com")
-
-    from app import app as fastapi_app
-
-    return fastapi_app
-
-
-@pytest.fixture
-def authenticated_client(app):
-    """Create authenticated test client."""
-    from dependencies.auth import get_current_user
-
-    async def override_get_current_user():
-        return {
-            "email": "user@8thlight.com",
-            "name": "Test User",
-            "picture": "https://example.com/photo.jpg",
-        }
-
-    app.dependency_overrides[get_current_user] = override_get_current_user
-    client = TestClient(app)
-    yield client
-    app.dependency_overrides.clear()
-
-
-def create_mock_task_run(
-    run_id,
-    job_type="slack_user_import",
-    status="completed",
-    job_id=None,
-    task_name=None,
-):
-    """Helper to create mock task run."""
-    mock_run = Mock()
-    mock_run.id = run_id
-    mock_run.run_id = f"run-{run_id}"
-    mock_run.status = status
-    mock_run.started_at = datetime.now(UTC)
-    mock_run.completed_at = datetime.now(UTC)
-    mock_run.duration_seconds = 120
-    mock_run.triggered_by = "auto"
-    mock_run.triggered_by_user = None
-    mock_run.error_message = None if status == "completed" else "Test error"
-    mock_run.records_processed = 100
-    mock_run.records_success = 95
-    mock_run.records_failed = 5
-
-    # Task config snapshot
-    config = {"job_type": job_type}
-    if job_id:
-        config["job_id"] = job_id
-    if task_name:
-        config["task_name"] = task_name
-    mock_run.task_config_snapshot = config
-
-    return mock_run
+# Phase 2: Use builders and factories
+from tests.utils.builders import TaskRunBuilder
+from tests.utils.mocks import DatabaseMockFactory
 
 
 class TestListTaskRunsEndpoint:
@@ -79,20 +17,23 @@ class TestListTaskRunsEndpoint:
     @patch("api.task_runs.get_db_session")
     def test_list_task_runs_success(self, mock_db_session, authenticated_client):
         """Test listing task runs successfully."""
-        # Create mock task runs
+        # Phase 2: Use TaskRunBuilder instead of create_mock_task_run
         mock_runs = [
-            create_mock_task_run(1, "slack_user_import"),
-            create_mock_task_run(2, "google_drive_ingest"),
+            TaskRunBuilder().with_id(1).with_type("slack_user_import").build(),
+            TaskRunBuilder().with_id(2).with_type("google_drive_ingest").build(),
         ]
 
-        # Mock database session
+        # Phase 2: Setup database mock with proper chaining
         mock_query = MagicMock()
         mock_query.order_by().count.return_value = 2
         mock_query.order_by().offset().limit().all.return_value = mock_runs
 
         mock_session = MagicMock()
         mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -107,14 +48,8 @@ class TestListTaskRunsEndpoint:
     @patch("api.task_runs.get_db_session")
     def test_list_task_runs_empty(self, mock_db_session, authenticated_client):
         """Test listing task runs when none exist."""
-        # Mock empty results
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 0
-        mock_query.order_by().offset().limit().all.return_value = []
-
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        # Phase 2: Use DatabaseMockFactory for empty results
+        mock_db_session.return_value = DatabaseMockFactory.create_session_context([])
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -129,16 +64,26 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test pagination parameters."""
-        # Mock 150 total runs
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 150
+        # Phase 2: Use TaskRunBuilder for test data
+        mock_runs = [TaskRunBuilder().with_id(i).build() for i in range(25)]
 
-        mock_runs = [create_mock_task_run(i) for i in range(25)]
-        mock_query.order_by().offset().limit().all.return_value = mock_runs
+        # Phase 2: Setup mock query chain properly (order_by returns ordered_query)
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 150
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = mock_runs
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs?page=2&per_page=25")
 
@@ -156,13 +101,23 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test that per_page is capped at MAX_PAGE_SIZE."""
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 200
-        mock_query.order_by().offset().limit().all.return_value = []
+        # Phase 2: Setup mock query chain properly
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 200
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = []
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         # Request 500 items per page (should be capped at 100)
         response = authenticated_client.get("/api/task-runs?per_page=500")
@@ -177,18 +132,33 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test task runs with custom task names."""
-        # Create run with task_name in snapshot
-        mock_run = create_mock_task_run(
-            1, job_type="slack_user_import", job_id="job-1", task_name="Daily User Sync"
+        # Phase 2: Use TaskRunBuilder with fluent API
+        mock_run = (
+            TaskRunBuilder()
+            .with_id(1)
+            .with_type("slack_user_import")
+            .with_job_id("job-1")
+            .with_task_name("Daily User Sync")
+            .build()
         )
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Setup mock query chain properly
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 1
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = [mock_run]
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -203,26 +173,43 @@ class TestListTaskRunsEndpoint:
         """Test task runs fall back to metadata for job name."""
         from models.task_metadata import TaskMetadata
 
-        # Create run without task_name in snapshot
-        mock_run = create_mock_task_run(1, job_type="slack_user_import", job_id="job-1")
+        # Phase 2: Use TaskRunBuilder (no task_name in snapshot)
+        mock_run = (
+            TaskRunBuilder()
+            .with_id(1)
+            .with_type("slack_user_import")
+            .with_job_id("job-1")
+            .build()
+        )
 
-        # Create metadata
+        # Create metadata mock
         mock_metadata = Mock(spec=TaskMetadata)
         mock_metadata.job_id = "job-1"
         mock_metadata.task_name = "Metadata Task Name"
 
-        # Mock both queries
-        mock_run_query = MagicMock()
-        mock_run_query.order_by().count.return_value = 1
-        mock_run_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Mock both queries - TaskRun query chain
+        mock_ordered_run_query = MagicMock()
+        mock_ordered_run_query.count.return_value = 1
+        mock_ordered_run_query.offset.return_value = mock_ordered_run_query
+        mock_ordered_run_query.limit.return_value = mock_ordered_run_query
+        mock_ordered_run_query.all.return_value = [mock_run]
 
+        mock_base_run_query = MagicMock()
+        mock_base_run_query.order_by.return_value = mock_ordered_run_query
+
+        # TaskMetadata query chain
         mock_metadata_query = MagicMock()
-        mock_metadata_query.filter().all.return_value = [mock_metadata]
+        mock_metadata_query.filter.return_value = mock_metadata_query
+        mock_metadata_query.all.return_value = [mock_metadata]
 
         mock_session = MagicMock()
         # query() is called twice: once for TaskRun, once for TaskMetadata
-        mock_session.query.side_effect = [mock_run_query, mock_metadata_query]
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_session.query.side_effect = [mock_base_run_query, mock_metadata_query]
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -235,20 +222,31 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test task runs fall back to job type names."""
-        # Create run without task_name or metadata
-        mock_run = create_mock_task_run(1, job_type="slack_user_import")
+        # Phase 2: Use TaskRunBuilder (no task_name or metadata)
+        mock_run = TaskRunBuilder().with_id(1).with_type("slack_user_import").build()
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Mock TaskRun query chain
+        mock_ordered_run_query = MagicMock()
+        mock_ordered_run_query.count.return_value = 1
+        mock_ordered_run_query.offset.return_value = mock_ordered_run_query
+        mock_ordered_run_query.limit.return_value = mock_ordered_run_query
+        mock_ordered_run_query.all.return_value = [mock_run]
+
+        mock_base_run_query = MagicMock()
+        mock_base_run_query.order_by.return_value = mock_ordered_run_query
 
         # No metadata found
         mock_metadata_query = MagicMock()
-        mock_metadata_query.filter().all.return_value = []
+        mock_metadata_query.filter.return_value = mock_metadata_query
+        mock_metadata_query.all.return_value = []
 
         mock_session = MagicMock()
-        mock_session.query.side_effect = [mock_query, mock_metadata_query]
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_session.query.side_effect = [mock_base_run_query, mock_metadata_query]
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -262,19 +260,30 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test task runs with unknown job type."""
-        # Create run with unknown job type
-        mock_run = create_mock_task_run(1, job_type="unknown_job_type")
+        # Phase 2: Use TaskRunBuilder with unknown job type
+        mock_run = TaskRunBuilder().with_id(1).with_type("unknown_job_type").build()
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Mock TaskRun query chain
+        mock_ordered_run_query = MagicMock()
+        mock_ordered_run_query.count.return_value = 1
+        mock_ordered_run_query.offset.return_value = mock_ordered_run_query
+        mock_ordered_run_query.limit.return_value = mock_ordered_run_query
+        mock_ordered_run_query.all.return_value = [mock_run]
+
+        mock_base_run_query = MagicMock()
+        mock_base_run_query.order_by.return_value = mock_ordered_run_query
 
         mock_metadata_query = MagicMock()
-        mock_metadata_query.filter().all.return_value = []
+        mock_metadata_query.filter.return_value = mock_metadata_query
+        mock_metadata_query.all.return_value = []
 
         mock_session = MagicMock()
-        mock_session.query.side_effect = [mock_query, mock_metadata_query]
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_session.query.side_effect = [mock_base_run_query, mock_metadata_query]
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -288,16 +297,28 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test task runs with failed status."""
-        mock_run = create_mock_task_run(1, status="failed")
-        mock_run.error_message = "Database connection timeout"
+        # Phase 2: Use TaskRunBuilder with fluent API for failed status
+        mock_run = (
+            TaskRunBuilder().with_id(1).failed("Database connection timeout").build()
+        )
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Setup mock query chain properly
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 1
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = [mock_run]
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -311,13 +332,23 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test pagination edge cases."""
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 55  # Not evenly divisible
-        mock_query.order_by().offset().limit().all.return_value = []
+        # Phase 2: Setup mock query chain properly
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 55  # Not evenly divisible
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = []
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs?per_page=10")
 
@@ -331,19 +362,31 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test graceful handling of metadata loading errors."""
-        mock_run = create_mock_task_run(1, job_id="job-1")
+        # Phase 2: Use TaskRunBuilder
+        mock_run = TaskRunBuilder().with_id(1).with_job_id("job-1").build()
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Mock TaskRun query chain
+        mock_ordered_run_query = MagicMock()
+        mock_ordered_run_query.count.return_value = 1
+        mock_ordered_run_query.offset.return_value = mock_ordered_run_query
+        mock_ordered_run_query.limit.return_value = mock_ordered_run_query
+        mock_ordered_run_query.all.return_value = [mock_run]
+
+        mock_base_run_query = MagicMock()
+        mock_base_run_query.order_by.return_value = mock_ordered_run_query
 
         # Metadata query raises error
         mock_metadata_query = MagicMock()
-        mock_metadata_query.filter().all.side_effect = Exception("Database error")
+        mock_metadata_query.filter.return_value = mock_metadata_query
+        mock_metadata_query.all.side_effect = Exception("Database error")
 
         mock_session = MagicMock()
-        mock_session.query.side_effect = [mock_query, mock_metadata_query]
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_session.query.side_effect = [mock_base_run_query, mock_metadata_query]
+
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 
@@ -370,16 +413,27 @@ class TestListTaskRunsEndpoint:
         self, mock_db_session, authenticated_client
     ):
         """Test that all expected fields are present in response."""
-        mock_run = create_mock_task_run(1)
+        # Phase 2: Use TaskRunBuilder
+        mock_run = TaskRunBuilder().with_id(1).build()
         mock_run.triggered_by_user = "user@example.com"
 
-        mock_query = MagicMock()
-        mock_query.order_by().count.return_value = 1
-        mock_query.order_by().offset().limit().all.return_value = [mock_run]
+        # Phase 2: Setup mock query chain properly
+        mock_ordered_query = MagicMock()
+        mock_ordered_query.count.return_value = 1
+        mock_ordered_query.offset.return_value = mock_ordered_query
+        mock_ordered_query.limit.return_value = mock_ordered_query
+        mock_ordered_query.all.return_value = [mock_run]
 
-        mock_session = MagicMock()
-        mock_session.query.return_value = mock_query
-        mock_db_session.return_value.__enter__.return_value = mock_session
+        mock_base_query = MagicMock()
+        mock_base_query.order_by.return_value = mock_ordered_query
+
+        mock_session = DatabaseMockFactory.create_session_with_custom_query(
+            mock_base_query
+        )
+        mock_context = MagicMock()
+        mock_context.__enter__.return_value = mock_session
+        mock_context.__exit__.return_value = None
+        mock_db_session.return_value = mock_context
 
         response = authenticated_client.get("/api/task-runs")
 

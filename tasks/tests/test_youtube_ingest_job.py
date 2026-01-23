@@ -183,18 +183,22 @@ class TestYouTubeIngestJobExecution:
                 )
                 mock_tracking_service.generate_base_uuid.return_value = "uuid-123"
 
-                # Setup embeddings mock
+                # Setup embeddings mock (mixed sync/async methods)
                 mock_embeddings = Mock()
                 mock_embeddings_class.return_value = mock_embeddings
+                # chunk_text is synchronous
                 mock_embeddings.chunk_text.return_value = ["Chunk 1", "Chunk 2"]
-                mock_embeddings.embed_texts.return_value = [
-                    [0.1, 0.2, 0.3],
-                    [0.4, 0.5, 0.6],
-                ]
+                # embed_texts is async
+                mock_embeddings.embed_texts = AsyncMock(
+                    return_value=[[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
+                )
 
                 # Setup vector store mock
                 mock_qdrant = AsyncMock()
                 mock_qdrant_class.return_value = mock_qdrant
+                # Mock the async methods
+                mock_qdrant.initialize.return_value = None
+                mock_qdrant.upsert_with_namespace.return_value = None
 
                 # Execute job
                 result = await job._execute_job()
@@ -209,7 +213,7 @@ class TestYouTubeIngestJobExecution:
                 assert result["channel_id"] == "UC_test_channel"
 
                 # Verify vector store was called
-                mock_qdrant.upsert.assert_called_once()
+                mock_qdrant.upsert_with_namespace.assert_called_once()
 
                 # Verify tracking service was called
                 mock_tracking_service.record_video_ingestion.assert_called_once()
@@ -272,6 +276,9 @@ class TestYouTubeIngestJobExecution:
                 # Setup vector store mock
                 mock_qdrant = AsyncMock()
                 mock_qdrant_class.return_value = mock_qdrant
+                # Mock the async methods
+                mock_qdrant.initialize.return_value = None
+                mock_qdrant.upsert_with_namespace.return_value = None
 
                 # Execute job
                 result = await job._execute_job()
@@ -321,6 +328,9 @@ class TestYouTubeIngestJobExecution:
                 # Setup vector store mock
                 mock_qdrant = AsyncMock()
                 mock_qdrant_class.return_value = mock_qdrant
+                # Mock the async methods
+                mock_qdrant.initialize.return_value = None
+                mock_qdrant.upsert_with_namespace.return_value = None
 
                 # Execute job
                 result = await job._execute_job()

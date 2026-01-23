@@ -1,7 +1,7 @@
 # Use Python 3.11 slim image
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
-# Install security updates and dependencies including nginx
+# Install security updates and dependencies including nginx and ffmpeg
 RUN apt-get update && apt-get install -y \
     gcc \
     curl \
@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     default-mysql-client \
     nginx \
     supervisor \
+    ffmpeg \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
