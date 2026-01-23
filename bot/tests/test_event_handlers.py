@@ -743,3 +743,119 @@ class TestEventHandlerErrorHandling:
                 )
 
             mock_handle_error.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_llm_service_passed_to_handle_message_in_all_paths(
+        self, mock_slack_service, mock_llm_service
+    ):
+        """
+        Regression test: Ensure llm_service is passed to handle_message in all code paths.
+
+        This test covers the bug where process_message_by_context() was calling handle_message()
+        without the required llm_service parameter, causing TypeError.
+        """
+        with patch(
+            "handlers.event_handlers.handle_message", new_callable=AsyncMock
+        ) as mock_handle_message:
+            # Test 1: DM (channel_type="im")
+            await process_message_by_context(
+                user_id="U123",
+                channel="D123",
+                channel_type="im",
+                text="Hello",
+                thread_ts=None,
+                ts="1234.56",
+                slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
+                conversation_cache=None,
+                files=None,
+            )
+
+            # Verify handle_message was called with llm_service
+            assert mock_handle_message.call_count == 1
+            call_kwargs = mock_handle_message.call_args[1]
+            assert "llm_service" in call_kwargs
+            assert call_kwargs["llm_service"] == mock_llm_service
+
+            mock_handle_message.reset_mock()
+
+            # Test 2: Bot mention
+            mock_slack_service.bot_id = "B12345"
+            await process_message_by_context(
+                user_id="U123",
+                channel="C123",
+                channel_type="channel",
+                text="<@B12345> test message",
+                thread_ts=None,
+                ts="1234.56",
+                slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
+                conversation_cache=None,
+                files=None,
+            )
+
+            # Verify handle_message was called with llm_service
+            assert mock_handle_message.call_count == 1
+            call_kwargs = mock_handle_message.call_args[1]
+            assert "llm_service" in call_kwargs
+            assert call_kwargs["llm_service"] == mock_llm_service
+
+            mock_handle_message.reset_mock()
+
+            # Test 3: Thread with bot participation
+            from models import ThreadInfo
+
+            mock_slack_service.get_thread_info = AsyncMock(
+                return_value=ThreadInfo(
+                    exists=True,
+                    message_count=1,
+                    bot_is_participant=True,
+                    messages=[],
+                    participant_ids=["B12345"],
+                )
+            )
+
+            await process_message_by_context(
+                user_id="U123",
+                channel="C123",
+                channel_type="channel",
+                text="thread reply",
+                thread_ts="1234.56",
+                ts="1234.78",
+                slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
+                conversation_cache=None,
+                files=None,
+            )
+
+            # Verify handle_message was called with llm_service
+            assert mock_handle_message.call_count == 1
+            call_kwargs = mock_handle_message.call_args[1]
+            assert "llm_service" in call_kwargs
+            assert call_kwargs["llm_service"] == mock_llm_service
+
+            mock_handle_message.reset_mock()
+
+            # Test 4: Thread history check error (fallback path)
+            mock_slack_service.get_thread_info = AsyncMock(
+                side_effect=Exception("Permission denied")
+            )
+
+            await process_message_by_context(
+                user_id="U123",
+                channel="C123",
+                channel_type="channel",
+                text="thread reply",
+                thread_ts="1234.56",
+                ts="1234.78",
+                slack_service=mock_slack_service,
+                llm_service=mock_llm_service,
+                conversation_cache=None,
+                files=None,
+            )
+
+            # Verify handle_message was called with llm_service (fallback path)
+            assert mock_handle_message.call_count == 1
+            call_kwargs = mock_handle_message.call_args[1]
+            assert "llm_service" in call_kwargs
+            assert call_kwargs["llm_service"] == mock_llm_service
