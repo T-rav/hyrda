@@ -1,0 +1,5 @@
+langchain>=0.1.0
+langgraph>=0.0.40
+langchain-openai>=0.0.5
+langfuse>=3.0.0
+requests>=2.31.0
