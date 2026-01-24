@@ -235,6 +235,8 @@ async def _execute_agent_with_streaming(
 
     response = ""
     metadata = {}
+    completed_steps = []  # Track completed steps
+    current_step = None
 
     async for event in agent_client.stream(primary_name, query, context):
         phase = event.get("phase")
@@ -242,14 +244,25 @@ async def _execute_agent_with_streaming(
         message = event.get("message")
         duration = event.get("duration")
 
-        # Update status message in place for node execution
+        # Update status message showing progress
         if phase and thinking_message_ts and step:
             if phase == "started":
-                status_text = f"⏳ *{message}*"
+                current_step = f"⏳ *{message}*"
             elif phase == "completed":
-                status_text = f"✅ *{message}* ({duration})"
-            else:
-                status_text = f"⏳ *Running:* {step}"
+                # Add to completed list
+                completed_steps.append(f"✅ {message} ({duration})")
+                current_step = None
+
+            # Build cumulative status message
+            status_lines = []
+            if completed_steps:
+                status_lines.extend(completed_steps[-5:])  # Show last 5 completed
+            if current_step:
+                status_lines.append(current_step)
+
+            status_text = (
+                "\n".join(status_lines) if status_lines else "⏳ Processing..."
+            )
 
             try:
                 await slack_service.update_message(
