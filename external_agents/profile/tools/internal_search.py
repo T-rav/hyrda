@@ -97,12 +97,15 @@ class InternalSearchTool(BaseTool):
                         host=vector_host,
                         port=int(vector_port),
                         api_key=vector_api_key,
-                        https=False,
+                        https=True,
+                        verify=False,  # Accept self-signed certs in internal network
                     )
                 else:
                     qdrant_client = QdrantClient(
                         host=vector_host,
                         port=int(vector_port),
+                        https=True,
+                        verify=False,  # Accept self-signed certs in internal network
                     )
 
             if vector_collection is None:
