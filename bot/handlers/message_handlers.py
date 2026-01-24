@@ -275,7 +275,20 @@ async def _execute_agent_with_streaming(
             except Exception as e:
                 logger.warning(f"Failed to update status message: {e}")
 
-        # Final response with full agent output
+        # Handle result events from output nodes (contains message + attachments)
+        if event.get("type") == "result":
+            data = event.get("data", {})
+            if data.get("message"):
+                response = data.get("message", "")
+                # Store attachments in metadata for downstream processing
+                if data.get("attachments"):
+                    metadata["attachments"] = data.get("attachments")
+                logger.info(
+                    f"Received result event with message ({len(response)} chars) "
+                    f"and {len(metadata.get('attachments', []))} attachment(s)"
+                )
+
+        # Final response with full agent output (legacy format)
         if "response" in event:
             response = event.get("response", "")
             metadata = event.get("metadata", {})
@@ -328,6 +341,7 @@ async def _send_agent_response(
     user_id: str,
     query: str,
     conversation_id: str | None,
+    metadata: dict | None = None,
 ) -> None:
     """Format and send agent response, track in Langfuse.
 
@@ -340,6 +354,7 @@ async def _send_agent_response(
         user_id: User ID
         query: Original query
         conversation_id: Conversation ID for tracking
+        metadata: Optional metadata dict (may contain attachments)
     """
     # Clean up thinking message
     if thinking_message_ts:
@@ -356,6 +371,47 @@ async def _send_agent_response(
         )
     else:
         logger.info("Agent returned empty response (likely already posted message)")
+
+    # Handle attachments (e.g., PDFs from profile agent)
+    if metadata and metadata.get("attachments"):
+        from io import BytesIO
+
+        import httpx
+
+        attachments = metadata.get("attachments", [])
+        logger.info(f"Processing {len(attachments)} attachment(s)")
+
+        for attachment in attachments:
+            # Only process attachments marked for injection
+            if not attachment.get("inject", False):
+                continue
+
+            url = attachment.get("url")
+            filename = attachment.get("filename", "attachment.pdf")
+
+            if not url:
+                logger.warning(f"Attachment missing URL: {attachment}")
+                continue
+
+            try:
+                logger.info(f"Downloading attachment from {url}")
+                # Download file from URL (use verify=False for internal MinIO with self-signed cert)
+                async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
+                    file_response = await client.get(url)
+                    file_response.raise_for_status()
+                    file_content = BytesIO(file_response.content)
+
+                logger.info(f"Uploading {filename} to Slack")
+                await slack_service.upload_file(
+                    channel=channel,
+                    file_content=file_content,
+                    filename=filename,
+                    thread_ts=thread_ts,
+                )
+                logger.info(f"Successfully uploaded {filename}")
+
+            except Exception as e:
+                logger.error(f"Failed to process attachment {filename}: {e}")
 
     # Record agent conversation turn in Langfuse for lifetime stats
     langfuse_service = get_langfuse_service()
@@ -722,7 +778,7 @@ async def handle_bot_command(
         # Track thread for future continuity
         await _track_thread_for_continuity(thread_ts, primary_name, metadata)
 
-        # Send response
+        # Send response (with attachments if present in metadata)
         await _send_agent_response(
             response,
             thinking_message_ts,
@@ -732,6 +788,7 @@ async def handle_bot_command(
             user_id,
             query,
             conversation_id,
+            metadata,
         )
 
         return True
