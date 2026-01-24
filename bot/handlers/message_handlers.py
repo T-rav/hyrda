@@ -1,6 +1,9 @@
 import contextlib
 import logging
 import time
+from io import BytesIO
+
+import httpx
 
 from handlers.file_processors import process_file_attachments
 from services.formatting import MessageFormatter
@@ -288,20 +291,20 @@ async def _execute_agent_with_streaming(
                     f"and {len(metadata.get('attachments', []))} attachment(s)"
                 )
 
+                # Update status one final time to show completion
+                if thinking_message_ts:
+                    final_status = "\n".join(all_steps[-10:]) + "\n\n✅ *Complete*"
+                    try:
+                        await slack_service.update_message(
+                            channel, thinking_message_ts, final_status
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update final status: {e}")
+
         # Final response with full agent output (legacy format)
         if "response" in event:
             response = event.get("response", "")
             metadata = event.get("metadata", {})
-
-            # Update status one final time to show completion
-            if thinking_message_ts:
-                final_status = "\n".join(all_steps[-10:]) + "\n\n✅ *Complete*"
-                try:
-                    await slack_service.update_message(
-                        channel, thinking_message_ts, final_status
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to update final status: {e}")
 
     return response, metadata, thinking_message_ts
 
@@ -347,7 +350,7 @@ async def _send_agent_response(
 
     Args:
         response: Agent response text
-        thinking_message_ts: Thinking message to delete
+        thinking_message_ts: Thinking message timestamp (already updated with final status, don't delete)
         slack_service: Slack service
         channel: Channel ID
         thread_ts: Thread timestamp
@@ -356,12 +359,8 @@ async def _send_agent_response(
         conversation_id: Conversation ID for tracking
         metadata: Optional metadata dict (may contain attachments)
     """
-    # Clean up thinking message
-    if thinking_message_ts:
-        try:
-            await slack_service.delete_thinking_indicator(channel, thinking_message_ts)
-        except Exception as e:
-            logger.warning(f"Error deleting thinking message: {e}")
+    # Don't delete thinking message - it has the progress steps and "Complete" status
+    # The thinking message was already updated with final status in _execute_agent_with_streaming
 
     # Format and send response (only if non-empty)
     if response:
@@ -374,10 +373,6 @@ async def _send_agent_response(
 
     # Handle attachments (e.g., PDFs from profile agent)
     if metadata and metadata.get("attachments"):
-        from io import BytesIO
-
-        import httpx
-
         attachments = metadata.get("attachments", [])
         logger.info(f"Processing {len(attachments)} attachment(s)")
 

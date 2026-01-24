@@ -55,19 +55,15 @@ class TestAgentStreamingDisplay:
         from handlers import message_handlers
 
         # Patch dependencies
-        with (
-            patch.object(
-                message_handlers, "get_agent_client", return_value=agent_client
-            ),
-            patch.object(message_handlers, "SlackService", return_value=slack_service),
-        ):
+        with patch("services.agent_client.get_agent_client", return_value=agent_client):
             # Call the internal streaming handler
-            await message_handlers._handle_agent_command_streaming(
+            await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="microsoft",
-                channel="C123",
-                thinking_message_ts="123.456",
                 context={"thread_id": "test"},
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
             )
 
         # Verify update_message was called
@@ -120,7 +116,7 @@ class TestAgentStreamingDisplay:
             ),
             patch.object(message_handlers, "SlackService", return_value=slack_service),
         ):
-            await message_handlers._handle_agent_command_streaming(
+            await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="test",
                 channel="C123",
@@ -165,7 +161,7 @@ class TestAgentStreamingDisplay:
             ),
             patch.object(message_handlers, "SlackService", return_value=slack_service),
         ):
-            await message_handlers._handle_agent_command_streaming(
+            await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="test",
                 channel="C123",
@@ -203,7 +199,7 @@ class TestAgentStreamingDisplay:
             ),
             patch.object(message_handlers, "SlackService", return_value=slack_service),
         ):
-            await message_handlers._handle_agent_command_streaming(
+            await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="test",
                 channel="C123",
@@ -246,7 +242,7 @@ class TestAgentStreamingDisplay:
             ),
             patch.object(message_handlers, "SlackService", return_value=slack_service),
         ):
-            await message_handlers._handle_agent_command_streaming(
+            await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="test",
                 channel="C123",
@@ -296,7 +292,7 @@ class TestAgentStreamingDisplay:
                 response,
                 metadata,
                 _,
-            ) = await message_handlers._handle_agent_command_streaming(
+            ) = await message_handlers._execute_agent_with_streaming(
                 primary_name="profile",
                 query="test",
                 channel="C123",
@@ -310,3 +306,82 @@ class TestAgentStreamingDisplay:
         # Verify metadata preserved
         assert metadata["pdf_url"] == "https://storage.example.com/report.pdf"
         assert "sources" in metadata
+
+    @pytest.mark.asyncio
+    async def test_result_event_keeps_thinking_message_with_steps(self):
+        """Test that result events update thinking message to show completion without deleting steps."""
+        events = [
+            {"phase": "started", "step": "research", "message": "Research"},
+            {
+                "phase": "completed",
+                "step": "research",
+                "message": "Research",
+                "duration": "5.0s",
+            },
+            {"phase": "started", "step": "report", "message": "Generate Report"},
+            {
+                "phase": "completed",
+                "step": "report",
+                "message": "Generate Report",
+                "duration": "10.0s",
+            },
+            {
+                "type": "result",
+                "node": "output",
+                "data": {
+                    "message": "Executive Summary: Report complete",
+                    "attachments": [
+                        {
+                            "url": "http://minio:9000/reports/report.pdf",
+                            "inject": True,
+                            "type": "pdf",
+                            "filename": "report.pdf",
+                        }
+                    ],
+                },
+            },
+        ]
+
+        slack_service = Mock()
+        slack_service.update_message = AsyncMock()
+
+        agent_client = MockAgentClient(events)
+
+        from handlers import message_handlers
+
+        with (
+            patch.object(
+                message_handlers, "get_agent_client", return_value=agent_client
+            ),
+            patch.object(message_handlers, "SlackService", return_value=slack_service),
+        ):
+            (
+                response,
+                metadata,
+                thinking_ts,
+            ) = await message_handlers._execute_agent_with_streaming(
+                primary_name="profile",
+                query="test",
+                context={"thread_id": "test"},
+                slack_service=slack_service,
+                channel="C123",
+                thread_ts=None,
+            )
+
+        # Verify thinking message was updated (not deleted)
+        assert slack_service.update_message.called
+
+        # Get the final status update (last call to update_message)
+        final_update_call = slack_service.update_message.call_args_list[-1]
+        final_status_text = str(final_update_call[0][2])
+
+        # Verify final status contains completed steps + Complete marker
+        assert "✅ Research (5.0s)" in final_status_text
+        assert "✅ Generate Report (10.0s)" in final_status_text
+        assert "✅ *Complete*" in final_status_text
+
+        # Verify response and attachments preserved
+        assert "Executive Summary: Report complete" in response
+        assert "attachments" in metadata
+        assert len(metadata["attachments"]) == 1
+        assert metadata["attachments"][0]["filename"] == "report.pdf"
