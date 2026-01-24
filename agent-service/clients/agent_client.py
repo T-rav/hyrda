@@ -191,11 +191,6 @@ class AgentClient:
         self, agent: dict, query: str, context: dict
     ) -> dict[str, Any]:
         """Invoke embedded agent directly (not via HTTP to avoid recursion)."""
-        import os
-        from pathlib import Path
-
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-
         agent_name = agent["agent_name"]
 
         logger.info(f"Invoking embedded agent '{agent_name}' directly")
@@ -211,24 +206,17 @@ class AgentClient:
             if hasattr(agent_instance, "ainvoke") and not hasattr(
                 agent_instance, "run"
             ):
-                # LangGraph graph - invoke with persistent SQLite checkpointer
-                checkpoint_dir = Path("/app/data/checkpoints")
-                checkpoint_dir.mkdir(parents=True, exist_ok=True)
-                checkpoint_path = str(checkpoint_dir / "agent_checkpoints.db")
-
+                # LangGraph graph - invoke with checkpoint state management
                 # Get thread_id from context (default to agent_name if not provided)
                 thread_id = context.get("thread_id", f"{agent_name}_default")
 
-                # Use AsyncSqliteSaver for persistent state across restarts
-                async with AsyncSqliteSaver.from_conn_string(
-                    checkpoint_path
-                ) as checkpointer:
-                    config = {"configurable": {"thread_id": thread_id}}
-                    result = await agent_instance.ainvoke(
-                        {"query": query, **context},
-                        config=config,
-                        checkpointer=checkpointer,
-                    )
+                # Use config with thread_id for checkpoint-based state management
+                # The graph's checkpointer (compiled at build time) will use this thread_id
+                config = {"configurable": {"thread_id": thread_id}}
+                result = await agent_instance.ainvoke(
+                    {"query": query, **context},
+                    config=config,
+                )
             else:
                 # Regular agent with invoke/run methods
                 result = await agent_instance.invoke(query, context)
@@ -276,17 +264,13 @@ class AgentClient:
         """Stream embedded agent directly (not via HTTP to avoid recursion)."""
         import json
         import time
-        from pathlib import Path
-
-        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        import inspect
 
         agent_name = agent["agent_name"]
 
         logger.info(f"Streaming embedded agent '{agent_name}' directly")
 
         # Import agent registry to get agent instance
-        import inspect
-
         from services.agent_registry import get_agent
 
         try:
@@ -298,11 +282,6 @@ class AgentClient:
                 # LangGraph graph - stream with debug mode to track node start/end
                 logger.info("Streaming LangGraph agent with stream_mode='debug'")
 
-                # Setup persistent SQLite checkpointer
-                checkpoint_dir = Path("/app/data/checkpoints")
-                checkpoint_dir.mkdir(parents=True, exist_ok=True)
-                checkpoint_path = str(checkpoint_dir / "agent_checkpoints.db")
-
                 # Get thread_id from context (default to agent_name if not provided)
                 thread_id = context.get("thread_id", f"{agent_name}_default")
 
@@ -310,18 +289,15 @@ class AgentClient:
                 node_start_times = {}
                 node_execution_counts = {}  # Track how many times each node has run
 
-                # Use AsyncSqliteSaver for persistent state across restarts
-                async with AsyncSqliteSaver.from_conn_string(
-                    checkpoint_path
-                ) as checkpointer:
-                    config = {"configurable": {"thread_id": thread_id}}
+                # Use config with thread_id for checkpoint-based state management
+                # The graph's checkpointer (compiled at build time) will use this thread_id
+                config = {"configurable": {"thread_id": thread_id}}
 
-                    async for event in agent_instance.astream(
-                            {"query": query, **context},
-                                stream_mode="debug",  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
-                                config=config,
-                                checkpointer=checkpointer,
-                            ):
+                async for event in agent_instance.astream(
+                        {"query": query, **context},
+                            stream_mode="debug",  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
+                            config=config,
+                        ):
                         logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
 
                         # Debug mode yields events with type, timestamp, and payload

@@ -25,10 +25,12 @@ async def output_node(state: ProfileAgentState, config: RunnableConfig) -> dict:
     # These were set by final_report_generation node
     message = state.get("message", "")
     attachments = state.get("attachments", [])
+    followup_mode = state.get("followup_mode", False)
 
-    logger.info(f"Output node returning: message={len(message)} chars, attachments={len(attachments)}")
+    logger.info(f"Output node returning: message={len(message)} chars, attachments={len(attachments)}, followup_mode={followup_mode}")
 
     return {
         "message": message,
-        "attachments": attachments
+        "attachments": attachments,
+        "followup_mode": followup_mode
     }

@@ -278,17 +278,20 @@ async def _execute_agent_with_streaming(
             except Exception as e:
                 logger.warning(f"Failed to update status message: {e}")
 
-        # Handle result events from output nodes (contains message + attachments)
+        # Handle result events from output nodes (contains message + attachments + followup_mode)
         if event.get("type") == "result":
             data = event.get("data", {})
             if data.get("message"):
                 response = data.get("message", "")
-                # Store attachments in metadata for downstream processing
+                # Store attachments and followup_mode in metadata for downstream processing
                 if data.get("attachments"):
                     metadata["attachments"] = data.get("attachments")
+                if data.get("followup_mode"):
+                    metadata["followup_mode"] = data.get("followup_mode")
                 logger.info(
-                    f"Received result event with message ({len(response)} chars) "
-                    f"and {len(metadata.get('attachments', []))} attachment(s)"
+                    f"Received result event with message ({len(response)} chars), "
+                    f"{len(metadata.get('attachments', []))} attachment(s), "
+                    f"followup_mode={metadata.get('followup_mode', False)}"
                 )
 
                 # Update status one final time to show completion
