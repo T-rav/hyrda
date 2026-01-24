@@ -239,10 +239,18 @@ async def _execute_agent_with_streaming(
     async for event in agent_client.stream(primary_name, query, context):
         phase = event.get("phase")
         step = event.get("step")
+        message = event.get("message")
+        duration = event.get("duration")
 
-        # Update status message in place
-        if phase and thinking_message_ts and phase == "running" and step:
-            status_text = f"⏳ *Running:* {step}"
+        # Update status message in place for node execution
+        if phase and thinking_message_ts and step:
+            if phase == "started":
+                status_text = f"⏳ *{message}*"
+            elif phase == "completed":
+                status_text = f"✅ *{message}* ({duration})"
+            else:
+                status_text = f"⏳ *Running:* {step}"
+
             try:
                 await slack_service.update_message(
                     channel, thinking_message_ts, status_text
