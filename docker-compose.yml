@@ -349,6 +349,14 @@ services:
       - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
       - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
       - EXTERNAL_AGENTS_PATH=/app/external_agents
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - VECTOR_COLLECTION_NAME=${VECTOR_COLLECTION_NAME:-insightmesh-knowledge-base}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - REPORTS_BUCKET=${REPORTS_BUCKET:-profile-reports}
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
