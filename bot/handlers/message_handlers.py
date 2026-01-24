@@ -246,8 +246,10 @@ async def _execute_agent_with_streaming(
         # Update status message showing progress
         if phase and thinking_message_ts and step:
             if phase == "started":
-                # Add new running step
-                all_steps.append(f"⏳ {message}")
+                # Add new running step (only if not already present - avoid duplicates)
+                running_entry = f"⏳ {message}"
+                if running_entry not in all_steps:
+                    all_steps.append(running_entry)
             elif phase == "completed":
                 # Replace the running step with completed version
                 running_entry = f"⏳ {message}"
