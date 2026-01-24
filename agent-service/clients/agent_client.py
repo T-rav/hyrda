@@ -310,128 +310,132 @@ class AgentClient:
                 node_start_times = {}
                 node_execution_counts = {}  # Track how many times each node has run
 
-                # Skip checkpointer for streaming - pass it via config instead
-                config = {"configurable": {"thread_id": thread_id}}
+                # Use AsyncSqliteSaver for persistent state across restarts
+                async with AsyncSqliteSaver.from_conn_string(
+                    checkpoint_path
+                ) as checkpointer:
+                    config = {"configurable": {"thread_id": thread_id}}
 
-                async for event in agent_instance.astream(
-                        {"query": query, **context},
-                        stream_mode="debug",  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
-                    config=config,
-                    ):
-                    logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
+                    async for event in agent_instance.astream(
+                            {"query": query, **context},
+                                stream_mode="debug",  # Yields events like {"type": "task", ...} and {"type": "task_result", ...}
+                                config=config,
+                                checkpointer=checkpointer,
+                            ):
+                        logger.info(f"🔥 Received event from LangGraph: {str(event)[:200]}")
 
-                    # Debug mode yields events with type, timestamp, and payload
-                    if isinstance(event, dict):
-                        event_type = event.get("type")
-                        payload = event.get("payload", {})
-                        node_name = payload.get("name")
+                        # Debug mode yields events with type, timestamp, and payload
+                        if isinstance(event, dict):
+                            event_type = event.get("type")
+                            payload = event.get("payload", {})
+                            node_name = payload.get("name")
 
-                        # Skip internal nodes
-                        if node_name and node_name.startswith("__"):
-                            continue
-
-                        current_time = time.time()
-                        formatted_name = node_name.replace("_", " ").title() if node_name else ""
-
-                        if event_type == "task" and node_name:
-                            # Node is STARTING
-                            node_start_times[node_name] = current_time
-
-                            # Track execution count
-                            node_execution_counts[node_name] = node_execution_counts.get(node_name, 0) + 1
-                            execution_count = node_execution_counts[node_name]
-
-                            logger.info(f"⏳ Node starting: {node_name} (attempt {execution_count})")
-
-                            # Append count if node has run before
-                            display_name = formatted_name
-                            if execution_count > 1:
-                                display_name = f"{formatted_name} ({execution_count})"
-
-                        # Emit started status
-                        status = {
-                            "step": node_name,
-                            "phase": "started",
-                            "message": display_name
-                        }
-                        yield json.dumps(status)
-
-                    elif event_type == "task_result" and node_name:
-                        # Node COMPLETED
-                        if node_name in node_start_times:
-                            duration = current_time - node_start_times[node_name]
-                        else:
-                            duration = 1.0  # Fallback if we missed the start
-
-                        # Format duration
-                        if duration < 60:
-                            duration_str = f"{duration:.1f}s"
-                        else:
-                            minutes = int(duration // 60)
-                            seconds = int(duration % 60)
-                            duration_str = f"{minutes}m {seconds}s"
-
-                        # Get execution count for display
-                        execution_count = node_execution_counts.get(node_name, 1)
-
-                        logger.info(f"✅ Node completed: {node_name} (attempt {execution_count}, {duration_str})")
-
-                        # Append count if node has run before
-                        display_name = formatted_name
-                        if execution_count > 1:
-                            display_name = f"{formatted_name} ({execution_count})"
-
-                        # Emit completed status
-                        status = {
-                            "step": node_name,
-                            "phase": "completed",
-                            "message": display_name,
-                            "duration": duration_str
-                        }
-                        yield json.dumps(status)
-
-                        # Generic pass-through: Emit the raw result data
-                        # Let the consumer (message_handler) decide what to do with it
-                        result = payload.get("result", {})
-                        if isinstance(result, dict) and result:
-                            # Only emit results from designated "output" nodes
-                            # This prevents intermediate results from showing during revision loops
-                            EMIT_RESULT_NODES = {"output"}  # Add other nodes here if needed
-
-                            if node_name not in EMIT_RESULT_NODES:
-                                logger.info(f"⏭️  Skipping intermediate result from '{node_name}'")
+                            # Skip internal nodes
+                            if node_name and node_name.startswith("__"):
                                 continue
 
-                            # Filter out non-serializable fields
-                            # Only include simple types: str, int, float, bool, None, list, dict
-                            def is_json_serializable(value):
-                                """Check if a value is JSON serializable."""
-                                if value is None:
-                                    return True
-                                if isinstance(value, (str, int, float, bool)):
-                                    return True
-                                if isinstance(value, list):
-                                    return all(is_json_serializable(item) for item in value)
-                                if isinstance(value, dict):
-                                    return all(is_json_serializable(v) for v in value.values())
-                                return False
+                            current_time = time.time()
+                            formatted_name = node_name.replace("_", " ").title() if node_name else ""
 
-                            serializable_result = {
-                                k: v for k, v in result.items()
-                                if k != "messages" and not k.startswith("_") and is_json_serializable(v)
-                            }
+                            if event_type == "task" and node_name:
+                                # Node is STARTING
+                                node_start_times[node_name] = current_time
 
-                            # Debug logging
-                            logger.info(f"🔍 {node_name} result keys: {list(result.keys())}")
-                            logger.info(f"✅ {node_name} serializable keys: {list(serializable_result.keys())}")
+                                # Track execution count
+                                node_execution_counts[node_name] = node_execution_counts.get(node_name, 0) + 1
+                                execution_count = node_execution_counts[node_name]
 
-                            result_event = {
-                                "type": "result",
-                                "node": node_name,
-                                "data": serializable_result  # Pass serializable fields only
-                            }
-                            yield json.dumps(result_event)
-                            logger.info(f"Yielded result from {node_name} with {len(serializable_result)} fields")
+                                logger.info(f"⏳ Node starting: {node_name} (attempt {execution_count})")
+
+                                # Append count if node has run before
+                                display_name = formatted_name
+                                if execution_count > 1:
+                                    display_name = f"{formatted_name} ({execution_count})"
+
+                                # Emit started status
+                                status = {
+                                    "step": node_name,
+                                    "phase": "started",
+                                    "message": display_name
+                                }
+                                yield json.dumps(status)
+
+                            elif event_type == "task_result" and node_name:
+                                # Node COMPLETED
+                                if node_name in node_start_times:
+                                    duration = current_time - node_start_times[node_name]
+                                else:
+                                    duration = 1.0  # Fallback if we missed the start
+
+                                # Format duration
+                                if duration < 60:
+                                    duration_str = f"{duration:.1f}s"
+                                else:
+                                    minutes = int(duration // 60)
+                                    seconds = int(duration % 60)
+                                    duration_str = f"{minutes}m {seconds}s"
+
+                                # Get execution count for display
+                                execution_count = node_execution_counts.get(node_name, 1)
+
+                                logger.info(f"✅ Node completed: {node_name} (attempt {execution_count}, {duration_str})")
+
+                                # Append count if node has run before
+                                display_name = formatted_name
+                                if execution_count > 1:
+                                    display_name = f"{formatted_name} ({execution_count})"
+
+                                # Emit completed status
+                                status = {
+                                    "step": node_name,
+                                    "phase": "completed",
+                                    "message": display_name,
+                                    "duration": duration_str
+                                }
+                                yield json.dumps(status)
+
+                                # Generic pass-through: Emit the raw result data
+                                # Let the consumer (message_handler) decide what to do with it
+                                result = payload.get("result", {})
+                                if isinstance(result, dict) and result:
+                                    # Only emit results from designated "output" nodes
+                                    # This prevents intermediate results from showing during revision loops
+                                    EMIT_RESULT_NODES = {"output"}  # Add other nodes here if needed
+
+                                    if node_name not in EMIT_RESULT_NODES:
+                                        logger.info(f"⏭️  Skipping intermediate result from '{node_name}'")
+                                        continue
+
+                                    # Filter out non-serializable fields
+                                    # Only include simple types: str, int, float, bool, None, list, dict
+                                    def is_json_serializable(value):
+                                        """Check if a value is JSON serializable."""
+                                        if value is None:
+                                            return True
+                                        if isinstance(value, (str, int, float, bool)):
+                                            return True
+                                        if isinstance(value, list):
+                                            return all(is_json_serializable(item) for item in value)
+                                        if isinstance(value, dict):
+                                            return all(is_json_serializable(v) for v in value.values())
+                                        return False
+
+                                    serializable_result = {
+                                        k: v for k, v in result.items()
+                                        if k != "messages" and not k.startswith("_") and is_json_serializable(v)
+                                    }
+
+                                    # Debug logging
+                                    logger.info(f"🔍 {node_name} result keys: {list(result.keys())}")
+                                    logger.info(f"✅ {node_name} serializable keys: {list(serializable_result.keys())}")
+
+                                    result_event = {
+                                        "type": "result",
+                                        "node": node_name,
+                                        "data": serializable_result  # Pass serializable fields only
+                                    }
+                                    yield json.dumps(result_event)
+                                    logger.info(f"Yielded result from {node_name} with {len(serializable_result)} fields")
 
             # Check if agent has a stream method (for non-LangGraph agents)
             elif hasattr(agent_instance, "stream"):
