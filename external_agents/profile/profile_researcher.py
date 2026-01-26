@@ -3,11 +3,12 @@
 Implements a hierarchical research system with supervisor and researcher subgraphs.
 All nodes have been refactored into the nodes/ subdirectory with comprehensive Langfuse tracing.
 
-IMPORTANT: Graph is compiled WITH AsyncSqliteSaver for persistent conversation state.
+IMPORTANT: Graph is compiled WITH SqliteSaver for persistent conversation state.
 This enables followup_mode to work across invocations in the same thread.
 """
 
 import logging
+import sqlite3
 from pathlib import Path
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -27,9 +28,11 @@ checkpoint_dir = Path("/app/data/checkpoints")
 checkpoint_dir.mkdir(parents=True, exist_ok=True)
 checkpoint_path = str(checkpoint_dir / "profile_agent_checkpoints.db")
 
-# Create checkpointer (sync SqliteSaver since this runs at module load time)
-# This allows followup_mode and final_report to persist across invocations
-checkpointer = SqliteSaver.from_conn_string(checkpoint_path)
+# Create connection and checkpointer
+# SqliteSaver.from_conn_string returns a context manager, but we need persistent connection
+# So create connection directly and pass to SqliteSaver
+conn = sqlite3.connect(checkpoint_path, check_same_thread=False)
+checkpointer = SqliteSaver(conn)
 
 # Create the main graph instance WITH persistent checkpointer
 profile_researcher = build_profile_researcher(checkpointer=checkpointer)
