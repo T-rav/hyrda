@@ -140,3 +140,91 @@ class TestDocumentTrackingServiceUnit:
 
             assert needs_reindex is False
             assert existing_uuid == "existing-uuid-123"
+
+
+class TestWebPageTrackingService:
+    """Tests for web page tracking service (HTTP conditional requests)."""
+
+    def test_get_conditional_headers_new_page(self):
+        """Test conditional headers for new page (none available)."""
+        from services.web_page_tracking_service import WebPageTrackingService
+
+        service = WebPageTrackingService()
+
+        with patch(
+            "services.web_page_tracking_service.get_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = None
+
+            headers = service.get_conditional_headers("https://example.com/page")
+
+            assert headers == {}  # No headers for new page
+
+    def test_get_conditional_headers_with_last_modified(self):
+        """Test conditional headers include If-Modified-Since."""
+        from services.web_page_tracking_service import (
+            ScrapedWebPage,
+            WebPageTrackingService,
+        )
+
+        service = WebPageTrackingService()
+
+        mock_page = Mock(spec=ScrapedWebPage)
+        mock_page.last_modified = "Mon, 01 Jan 2024 12:00:00 GMT"
+        mock_page.etag = None
+
+        with patch(
+            "services.web_page_tracking_service.get_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
+
+            headers = service.get_conditional_headers("https://example.com/page")
+
+            assert headers == {"If-Modified-Since": "Mon, 01 Jan 2024 12:00:00 GMT"}
+
+    def test_get_conditional_headers_with_etag(self):
+        """Test conditional headers include If-None-Match."""
+        from services.web_page_tracking_service import (
+            ScrapedWebPage,
+            WebPageTrackingService,
+        )
+
+        service = WebPageTrackingService()
+
+        mock_page = Mock(spec=ScrapedWebPage)
+        mock_page.last_modified = None
+        mock_page.etag = '"abc123"'
+
+        with patch(
+            "services.web_page_tracking_service.get_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
+
+            headers = service.get_conditional_headers("https://example.com/page")
+
+            assert headers == {"If-None-Match": '"abc123"'}
+
+    def test_get_conditional_headers_with_both(self):
+        """Test conditional headers include both If-Modified-Since and If-None-Match."""
+        from services.web_page_tracking_service import (
+            ScrapedWebPage,
+            WebPageTrackingService,
+        )
+
+        service = WebPageTrackingService()
+
+        mock_page = Mock(spec=ScrapedWebPage)
+        mock_page.last_modified = "Mon, 01 Jan 2024 12:00:00 GMT"
+        mock_page.etag = '"abc123"'
+
+        with patch(
+            "services.web_page_tracking_service.get_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
+
+            headers = service.get_conditional_headers("https://example.com/page")
+
+            assert headers == {
+                "If-Modified-Since": "Mon, 01 Jan 2024 12:00:00 GMT",
+                "If-None-Match": '"abc123"',
+            }
