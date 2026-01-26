@@ -112,7 +112,24 @@ class IngestionOrchestrator:
 
                 print(f"Processing: {file_info['name']}")
 
-                # Download file content
+                # COST OPTIMIZATION: Check metadata FIRST (fast, no download/transcription)
+                needs_reindex_metadata, existing_uuid = (
+                    self.document_tracker.check_document_needs_reindex_by_metadata(
+                        file_info["id"],
+                        file_info.get("modifiedTime"),
+                        int(file_info.get("size", 0)) if file_info.get("size") else None,
+                    )
+                )
+
+                if not needs_reindex_metadata:
+                    print(
+                        f"⏭️  Skipping (unchanged since {file_info.get('modifiedTime')}): {file_info['name']}"
+                    )
+                    skipped_count += 1
+                    continue
+
+                # File is new or changed - NOW download (may include expensive transcription)
+                print(f"📥 Downloading (new or changed): {file_info['name']}")
                 content = self.google_drive_client.download_file_content(
                     file_info["id"], file_info["mimeType"], file_info["name"]
                 )
@@ -121,7 +138,7 @@ class IngestionOrchestrator:
                     error_count += 1
                     continue
 
-                # Check if document needs reindexing (idempotent ingestion)
+                # Double-check with content hash (in case metadata is unreliable)
                 needs_reindex, existing_uuid = (
                     self.document_tracker.check_document_needs_reindex(
                         file_info["id"], content
@@ -129,7 +146,7 @@ class IngestionOrchestrator:
                 )
 
                 if not needs_reindex:
-                    print(f"⏭️  Skipping (unchanged): {file_info['name']}")
+                    print(f"⏭️  Skipping (content unchanged): {file_info['name']}")
                     skipped_count += 1
                     continue
 
