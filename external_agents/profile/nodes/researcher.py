@@ -13,6 +13,7 @@ from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_openai import ChatOpenAI
 from langgraph.types import Command
+from shared.utils.agent_tracing import trace_agent_node
 
 from .. import prompts
 from ..configuration import ProfileConfiguration
@@ -30,6 +31,7 @@ from ..services.search_clients import get_perplexity_client, get_tavily_client
 logger = logging.getLogger(__name__)
 
 
+@trace_agent_node("researcher")
 async def researcher(state: ResearcherState, config: RunnableConfig) -> Command[str]:
     """Individual researcher node - executes specific research task.
 
