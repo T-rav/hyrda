@@ -677,6 +677,7 @@ async def handle_bot_command(
     check_thread_context: bool = False,
     conversation_cache=None,
     conversation_id: str | None = None,
+    trace_context: dict[str, str] | None = None,
 ) -> bool:
     """Handle bot agent commands using router pattern.
 
@@ -759,6 +760,11 @@ async def handle_bot_command(
         "channel": channel,
         "thread_ts": thread_ts,
     }
+
+    # Add trace context for distributed tracing
+    if trace_context:
+        context["trace_context"] = trace_context
+        logger.info(f"Added trace context to agent context: {trace_context}")
 
     # Add file information if available
     if document_content:
@@ -895,6 +901,14 @@ async def handle_message(
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
         # Pass check_thread_context=True to enable thread continuity
+        # Build trace context from root span
+        trace_context = None
+        if root_trace_id and root_obs_id:
+            trace_context = {
+                "trace_id": root_trace_id,
+                "parent_span_id": root_obs_id,
+            }
+
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -907,6 +921,7 @@ async def handle_message(
             check_thread_context=True,  # Enable thread-aware routing
             conversation_cache=conversation_cache,  # Pass cache for agent-generated docs
             conversation_id=conversation_id,  # Pass for Langfuse tracking
+            trace_context=trace_context,  # Pass for distributed tracing
         )
 
         if handled:

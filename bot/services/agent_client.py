@@ -8,6 +8,9 @@ from typing import Any
 
 import httpx
 
+from services.langfuse_service import get_langfuse_service
+from utils.trace_propagation import add_trace_headers_to_request
+
 logger = logging.getLogger(__name__)
 
 
@@ -116,6 +119,19 @@ class AgentClient:
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
         }
+
+        # Add Langfuse trace context for distributed tracing
+        # Prefer trace_context from context dict (passed from message handler)
+        # Fall back to current decorator context if available
+        trace_context = context.get("trace_context")
+        if not trace_context:
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                trace_context = langfuse_service.get_current_trace_context()
+
+        if trace_context:
+            headers = add_trace_headers_to_request(headers, trace_context)
+            logger.info(f"Added trace context to request: {trace_context}")
 
         # Use 30 minute timeout for long-running agents
         timeout = httpx.Timeout(1800.0, connect=30.0)

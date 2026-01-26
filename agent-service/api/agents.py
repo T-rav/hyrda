@@ -578,6 +578,14 @@ async def stream_agent(
             # Add auth metadata for audit trail
             context["auth_type"] = auth_type
 
+            # Extract and propagate trace context for distributed tracing
+            from shared.utils.trace_propagation import extract_trace_context
+
+            trace_context = extract_trace_context(dict(http_request.headers))
+            if trace_context:
+                context["trace_context"] = trace_context
+                logger.info(f"Propagating trace context to agent: {trace_context}")
+
             async for chunk in agent_client.stream(
                 agent_name=primary_name, query=request.query, context=context
             ):
