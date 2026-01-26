@@ -492,23 +492,13 @@ class WebsiteScrapeJob(BaseJob):
         else:
             logger.info(f"Processing all {len(urls)} URLs from sitemap (no limit)")
 
-        # Check for pages to scrape vs skip
+        # Scrape all pages and check content hash BEFORE embedding
         domain = tracking_service.extract_domain(website_url)
         scraped_pages = []
-        skipped_count = 0
         failed_count = 0
 
+        # STEP 1: Scrape all pages to get content
         for i, url in enumerate(urls, 1):
-            # Check if page needs rescraping
-            if not force_rescrape:
-                needs_rescrape, existing_uuid = (
-                    tracking_service.check_page_needs_rescrape(url)
-                )
-                if not needs_rescrape:
-                    logger.info(f"Skipping unchanged page {i}/{len(urls)}: {url}")
-                    skipped_count += 1
-                    continue
-
             logger.info(f"Scraping page {i}/{len(urls)}: {url}")
             page_data = await self._scrape_page(url, auth_headers)
 
@@ -518,8 +508,32 @@ class WebsiteScrapeJob(BaseJob):
                 failed_count += 1
 
         logger.info(
-            f"Scraped {len(scraped_pages)} new/changed pages, "
-            f"skipped {skipped_count} unchanged, {failed_count} failed"
+            f"Scraped {len(scraped_pages)} pages, {failed_count} failed. "
+            f"Now checking content hashes..."
+        )
+
+        # STEP 2: Check content hash to filter unchanged pages (COST OPTIMIZATION)
+        pages_to_embed = []
+        skipped_count = 0
+
+        for page in scraped_pages:
+            if not force_rescrape:
+                # Check content hash - skip embedding if unchanged
+                needs_rescrape, existing_uuid = (
+                    tracking_service.check_page_needs_rescrape(
+                        page["url"], page["content"]
+                    )
+                )
+                if not needs_rescrape:
+                    logger.info(f"⏭️  Skipping unchanged content: {page['url']}")
+                    skipped_count += 1
+                    continue
+
+            pages_to_embed.append(page)
+
+        logger.info(
+            f"Content hash check: {len(pages_to_embed)} new/changed pages, "
+            f"{skipped_count} unchanged (skipping embedding)"
         )
 
         # Detect removed pages (in DB but not in sitemap)
@@ -547,13 +561,13 @@ class WebsiteScrapeJob(BaseJob):
             if removed_count > 0:
                 logger.info(f"Marked {removed_count} pages as removed")
 
-        # Index into Qdrant (direct vector database access like other jobs)
+        # Index into Qdrant (only new/changed pages)
         texts = []
         metadata_list = []
         vector_ids = []
         page_chunk_counts = []  # Track chunks per page for recording
 
-        for page in scraped_pages:
+        for page in pages_to_embed:
             # Generate deterministic UUID for this page
             vector_uuid = tracking_service.generate_base_uuid(page["url"])
 
@@ -598,26 +612,31 @@ class WebsiteScrapeJob(BaseJob):
                 chunk_id = str(uuid_lib.uuid5(uuid_lib.UUID(vector_uuid), f"chunk_{i}"))
                 vector_ids.append(chunk_id)
 
-        # Generate embeddings and upsert to Qdrant
-        logger.info(
-            f"Generating embeddings for {len(texts)} chunks from {len(scraped_pages)} pages..."
-        )
-        embeddings = self.embedding_client.embed_batch(texts)
+        # Generate embeddings and upsert to Qdrant (only for new/changed pages)
+        if pages_to_embed:
+            logger.info(
+                f"Generating embeddings for {len(texts)} chunks from {len(pages_to_embed)} pages..."
+            )
+            embeddings = self.embedding_client.embed_batch(texts)
 
-        logger.info(f"Upserting {len(texts)} documents to Qdrant...")
-        await self.vector_client.upsert_with_namespace(
-            texts, embeddings, metadata_list, namespace="website_scrape"
-        )
+            logger.info(f"Upserting {len(texts)} documents to Qdrant...")
+            await self.vector_client.upsert_with_namespace(
+                texts, embeddings, metadata_list, namespace="website_scrape"
+            )
 
-        success_count = len(texts)
-        error_count = 0
+            success_count = len(texts)
+            error_count = 0
 
-        logger.info(
-            f"Ingestion complete: {success_count} success, {error_count} errors"
-        )
+            logger.info(
+                f"Ingestion complete: {success_count} success, {error_count} errors"
+            )
+        else:
+            logger.info("No new/changed pages to embed - all content unchanged")
+            success_count = 0
+            error_count = 0
 
         # Record successful scrapes in tracking table
-        for i, page in enumerate(scraped_pages):
+        for i, page in enumerate(pages_to_embed):
             try:
                 vector_uuid = tracking_service.generate_base_uuid(page["url"])
                 tracking_service.record_page_scrape(
@@ -642,12 +661,20 @@ class WebsiteScrapeJob(BaseJob):
                 # Don't fail entire job on tracking errors
 
         # Return result summary
+        total_processed = len(scraped_pages) + skipped_count + failed_count
         return {
+            # Standardized fields for task run tracking
+            "records_processed": total_processed,
+            "records_success": len(pages_to_embed),
+            "records_failed": failed_count,
+            # Job-specific details
+            "records_skipped": skipped_count,
             "success": True,
-            "message": f"Scraped {len(scraped_pages)} new/changed pages, skipped {skipped_count} unchanged, removed {removed_count} obsolete",
+            "message": f"Embedded {len(pages_to_embed)} new/changed pages, skipped {skipped_count} unchanged, removed {removed_count} obsolete",
             "website_url": website_url,
             "sitemap_url": sitemap_url,
             "pages_scraped": len(scraped_pages),
+            "pages_embedded": len(pages_to_embed),
             "pages_skipped": skipped_count,
             "pages_removed": removed_count,
             "pages_failed": failed_count,
@@ -660,7 +687,7 @@ class WebsiteScrapeJob(BaseJob):
                 - len(scraped_pages)
                 - skipped_count
                 - failed_count,
-                "sample_scraped": [page["url"] for page in scraped_pages[:5]],
+                "sample_embedded": [page["url"] for page in pages_to_embed[:5]],
                 "change_detection_enabled": not force_rescrape,
             },
         }
