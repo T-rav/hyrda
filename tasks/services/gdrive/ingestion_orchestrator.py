@@ -117,7 +117,9 @@ class IngestionOrchestrator:
                     self.document_tracker.check_document_needs_reindex_by_metadata(
                         file_info["id"],
                         file_info.get("modifiedTime"),
-                        int(file_info.get("size", 0)) if file_info.get("size") else None,
+                        int(file_info.get("size", 0))
+                        if file_info.get("size")
+                        else None,
                     )
                 )
 

@@ -163,10 +163,10 @@ class YouTubeIngestJob(BaseJob):
                             break
 
                         # Video is new or changed - NOW transcribe (expensive)
-                        logger.info(
-                            f"🎤 Transcribing (new or changed): {video_title}"
+                        logger.info(f"🎤 Transcribing (new or changed): {video_title}")
+                        transcript, _language = youtube_client.get_video_transcript(
+                            video_id
                         )
-                        transcript, _language = youtube_client.get_video_transcript(video_id)
 
                         if not transcript:
                             logger.warning(

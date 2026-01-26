@@ -66,6 +66,67 @@ class TestYouTubeTrackingServiceUUIDGeneration:
 class TestYouTubeTrackingServiceReindexCheck:
     """Test video reindex checking."""
 
+    def test_check_new_video_needs_reindex_by_metadata(self, tracking_service):
+        """Test metadata-based check for new video (fast, no transcription)."""
+        with patch(
+            "services.youtube.youtube_tracking_service.get_data_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = None
+
+            needs_reindex, existing_uuid = (
+                tracking_service.check_video_needs_reindex_by_metadata(
+                    "new_video_id", datetime(2024, 1, 1)
+                )
+            )
+
+            assert needs_reindex is True
+            assert existing_uuid is None
+
+    def test_check_unchanged_video_skips_reindex_by_metadata(self, tracking_service):
+        """Test metadata-based check skips unchanged video (avoids transcription cost)."""
+        published_date = datetime(2024, 1, 1)
+
+        mock_video = Mock(spec=YouTubeVideo)
+        mock_video.published_at = published_date
+        mock_video.vector_uuid = "existing-uuid-123"
+
+        with patch(
+            "services.youtube.youtube_tracking_service.get_data_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = mock_video
+
+            needs_reindex, existing_uuid = (
+                tracking_service.check_video_needs_reindex_by_metadata(
+                    "existing_video_id", published_date
+                )
+            )
+
+            assert needs_reindex is False
+            assert existing_uuid == "existing-uuid-123"
+
+    def test_check_changed_video_needs_reindex_by_metadata(self, tracking_service):
+        """Test metadata-based check detects date changes."""
+        old_date = datetime(2024, 1, 1)
+        new_date = datetime(2024, 1, 2)
+
+        mock_video = Mock(spec=YouTubeVideo)
+        mock_video.published_at = old_date
+        mock_video.vector_uuid = "existing-uuid-123"
+
+        with patch(
+            "services.youtube.youtube_tracking_service.get_data_db_session"
+        ) as mock_session:
+            mock_session.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = mock_video
+
+            needs_reindex, existing_uuid = (
+                tracking_service.check_video_needs_reindex_by_metadata(
+                    "existing_video_id", new_date
+                )
+            )
+
+            assert needs_reindex is True
+            assert existing_uuid == "existing-uuid-123"
+
     def test_check_new_video_needs_reindex(self, tracking_service):
         """Test checking a new video that doesn't exist in database."""
         with patch(

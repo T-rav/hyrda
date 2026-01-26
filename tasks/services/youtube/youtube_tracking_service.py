@@ -152,7 +152,11 @@ class YouTubeTrackingService:
             # If published_at matches, video hasn't changed - skip transcription!
             if published_at and video_record.published_at:
                 # Compare dates (ignore time differences for comparison)
-                existing_date = video_record.published_at.date() if video_record.published_at else None
+                existing_date = (
+                    video_record.published_at.date()
+                    if video_record.published_at
+                    else None
+                )
                 new_date = published_at.date() if published_at else None
 
                 if existing_date == new_date:
