@@ -274,8 +274,14 @@ async def auth_callback(request: Request):
         from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
         parsed_url = urlparse(redirect_url)
-        if parsed_url.netloc and ':5001' in parsed_url.netloc:
-            # Redirecting to tasks service - add token as query param
+        # Check if we need to pass token in URL (for cross-port/domain redirects)
+        # We allow this for localhost/127.0.0.1 on different ports
+        is_localhost = parsed_url.hostname in ('localhost', '127.0.0.1')
+        current_port = request.url.port or (443 if request.url.scheme == 'https' else 80)
+        target_port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+
+        if is_localhost and current_port != target_port:
+            # Redirecting to another service on localhost - add token as query param
             query_params = parse_qs(parsed_url.query)
             query_params['token'] = [jwt_token]
             new_query = urlencode(query_params, doseq=True)
@@ -287,7 +293,7 @@ async def auth_callback(request: Request):
                 new_query,
                 parsed_url.fragment
             ))
-            logger.info("Added token to redirect URL for cross-port auth")
+            logger.info(f"Added token to redirect URL for cross-port auth to {parsed_url.netloc}")
 
         response = RedirectResponse(url=redirect_url, status_code=302)
         response.set_cookie(
