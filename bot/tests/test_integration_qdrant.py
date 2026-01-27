@@ -4,6 +4,9 @@ Tests verify Qdrant connection, collection existence, and vector operations.
 These tests validate that RAG functionality works correctly.
 
 Run with: pytest -v -m integration bot/tests/test_integration_qdrant.py
+
+NOTE: These tests require Qdrant running with proper authentication.
+They will skip if Qdrant is not available or auth fails.
 """
 
 import os
@@ -11,6 +14,7 @@ import ssl
 
 import pytest
 from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 pytestmark = pytest.mark.integration
@@ -45,7 +49,17 @@ def qdrant_client():
         )
     else:
         # Fallback if CA cert not found
-        raise FileNotFoundError(f"mkcert CA certificate not found at {ca_cert_path}")
+        pytest.skip(f"mkcert CA certificate not found at {ca_cert_path}")
+
+    # Test connection - skip if auth fails
+    try:
+        client.get_collections()
+    except UnexpectedResponse as e:
+        if "401" in str(e) or "Unauthorized" in str(e):
+            pytest.skip(
+                "Qdrant authentication failed. Configure VECTOR_API_KEY or disable auth."
+            )
+        raise
 
     try:
         yield client

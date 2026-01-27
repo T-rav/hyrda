@@ -60,17 +60,23 @@ class TestAgentStreaming:
             yield sse_line
 
         mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = Mock()
 
-        # Mock httpx client
+        # Mock httpx client with proper async context manager support
         mock_client = AsyncMock()
+
+        # Create mock stream context
         mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__.return_value = mock_response
-        mock_stream_context.__aexit__.return_value = None
-        mock_client.stream.return_value = mock_stream_context
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream = Mock(return_value=mock_stream_context)
 
-        with patch("httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__.return_value = mock_client
+        # Mock AsyncClient context manager
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("httpx.AsyncClient", return_value=mock_client_context):
             # Test stream parsing
             client = AgentClient()
             events = []
@@ -104,16 +110,23 @@ class TestAgentStreaming:
             yield sse_line
 
         mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = Mock()
 
+        # Mock httpx client with proper async context manager support
         mock_client = AsyncMock()
+
+        # Create mock stream context
         mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__.return_value = mock_response
-        mock_stream_context.__aexit__.return_value = None
-        mock_client.stream.return_value = mock_stream_context
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream = Mock(return_value=mock_stream_context)
 
-        with patch("httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__.return_value = mock_client
+        # Mock AsyncClient context manager
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("httpx.AsyncClient", return_value=mock_client_context):
             client = AgentClient()
             events = []
             async for event in client.stream(
@@ -143,16 +156,23 @@ class TestAgentStreaming:
             yield sse_line
 
         mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = Mock()
 
+        # Mock httpx client with proper async context manager support
         mock_client = AsyncMock()
+
+        # Create mock stream context
         mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__.return_value = mock_response
-        mock_stream_context.__aexit__.return_value = None
-        mock_client.stream.return_value = mock_stream_context
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream = Mock(return_value=mock_stream_context)
 
-        with patch("httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__.return_value = mock_client
+        # Mock AsyncClient context manager
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("httpx.AsyncClient", return_value=mock_client_context):
             client = AgentClient()
             events = []
             async for event in client.stream(
@@ -194,16 +214,23 @@ class TestAgentStreaming:
                 yield f"data: {json.dumps(event)}"
 
         mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = Mock()
 
+        # Mock httpx client with proper async context manager support
         mock_client = AsyncMock()
+
+        # Create mock stream context
         mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__.return_value = mock_response
-        mock_stream_context.__aexit__.return_value = None
-        mock_client.stream.return_value = mock_stream_context
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream = Mock(return_value=mock_stream_context)
 
-        with patch("httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__.return_value = mock_client
+        # Mock AsyncClient context manager
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("httpx.AsyncClient", return_value=mock_client_context):
             client = AgentClient()
             events = []
             async for event in client.stream(
@@ -233,16 +260,23 @@ class TestAgentStreaming:
             yield f"data: {json.dumps({'response': 'Done'})}"  # Valid
 
         mock_response.aiter_lines = mock_aiter_lines
+        mock_response.raise_for_status = Mock()
 
+        # Mock httpx client with proper async context manager support
         mock_client = AsyncMock()
+
+        # Create mock stream context
         mock_stream_context = AsyncMock()
-        mock_stream_context.__aenter__.return_value = mock_response
-        mock_stream_context.__aexit__.return_value = None
-        mock_client.stream.return_value = mock_stream_context
+        mock_stream_context.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_stream_context.__aexit__ = AsyncMock(return_value=None)
+        mock_client.stream = Mock(return_value=mock_stream_context)
 
-        with patch("httpx.AsyncClient") as MockClient:
-            MockClient.return_value.__aenter__.return_value = mock_client
+        # Mock AsyncClient context manager
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
 
+        with patch("httpx.AsyncClient", return_value=mock_client_context):
             client = AgentClient()
             events = []
             async for event in client.stream(

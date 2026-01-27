@@ -1,4 +1,8 @@
-"""Tests for MeddicAgent SQLite checkpointer initialization."""
+"""Tests for MeddicAgent SQLite checkpointer initialization.
+
+NOTE: These tests are obsolete. MEDDIC agents have been moved to agent-service.
+Checkpointer tests should be in external_agents/meddic/tests/ instead.
+"""
 
 import os
 import sys
@@ -9,6 +13,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+pytestmark = pytest.mark.skip(
+    reason="Agents moved to agent-service. These tests are obsolete."
+)
 
 
 class TestMeddicAgentCheckpointer:
