@@ -55,7 +55,7 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 ```bash
 # Point LangGraph to real LangSmith
 LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=lsv2_pt_xxx  # Your real LangSmith key
+LANGCHAIN_API_KEY=<your-langsmith-api-key>  # Your real LangSmith key
 
 # Or unset to use defaults
 unset LANGCHAIN_ENDPOINT

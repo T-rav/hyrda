@@ -54,7 +54,7 @@ docker compose restart agent-service
 
 # Or manually edit .env
 LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGCHAIN_API_KEY=lsv2_pt_your-real-key
+LANGCHAIN_API_KEY=<your-langsmith-api-key>
 
 # Restart agent service
 docker compose restart agent-service
@@ -205,7 +205,7 @@ LANGCHAIN_API_KEY=dummy
 
 # Option 2: Direct LangSmith (local dev)
 LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-LANGSMITH_API_KEY=lsv2_pt_your-key
+LANGSMITH_API_KEY=<your-langsmith-api-key>
 
 # Langfuse credentials (used by proxy)
 LANGFUSE_PUBLIC_KEY=pk-lf-xxx
@@ -349,7 +349,7 @@ docker compose logs langsmith-proxy
 ./scripts/toggle-langsmith-proxy.sh direct
 
 # 2. Set your LangSmith API key in .env
-LANGSMITH_API_KEY=lsv2_pt_your-key
+LANGSMITH_API_KEY=<your-langsmith-api-key>
 
 # 3. Restart services
 docker compose restart agent-service

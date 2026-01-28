@@ -12,7 +12,7 @@ Usage:
 
     # Local dev: Use real LangSmith
     LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-    LANGCHAIN_API_KEY=lsv2_pt_your-real-langsmith-key
+    LANGCHAIN_API_KEY=<your-langsmith-api-key>
 """
 
 import logging
