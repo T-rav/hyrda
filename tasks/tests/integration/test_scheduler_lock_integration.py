@@ -20,6 +20,13 @@ class TestSchedulerLockIntegration:
         """Create real Redis client for testing."""
         redis_url = os.getenv("CACHE_REDIS_URL", "redis://redis:6379")
         client = redis.from_url(redis_url, decode_responses=True)
+
+        # Test connection - skip if Redis unavailable
+        try:
+            client.ping()
+        except (redis.ConnectionError, redis.TimeoutError):
+            pytest.skip("Redis not available for integration tests")
+
         # Clean up any existing locks before test
         client.delete("insightmesh:scheduler:lock:test")
         yield client
@@ -135,6 +142,14 @@ class TestSchedulerNoDuplicates:
 
         from models.base import get_db_session
         from models.task_run import TaskRun
+
+        # Test database connection - skip if unavailable
+        try:
+            with get_db_session() as session:
+                # Test connection
+                session.execute("SELECT 1")
+        except Exception:
+            pytest.skip("Database not available for integration tests")
 
         # Get task runs from last 5 minutes
         with get_db_session() as session:

@@ -167,6 +167,7 @@ class Agent:
                 "display_name": "Test Agent",
                 "description": "Test",
                 "aliases": [],
+                "is_enabled": True,
                 "is_public": True,
                 "requires_admin": False,
             }

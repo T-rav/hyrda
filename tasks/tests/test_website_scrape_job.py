@@ -213,6 +213,7 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             mock_tracking_instance.record_page_scrape.return_value = None
             mock_tracking_instance.extract_domain.return_value = "example.site"
             mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking_instance.get_conditional_headers.return_value = {}
             mock_tracking.return_value = mock_tracking_instance
 
             # Execute job
@@ -304,6 +305,7 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             mock_tracking_instance.record_page_scrape.return_value = None
             mock_tracking_instance.extract_domain.return_value = "example.site"
             mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking_instance.get_conditional_headers.return_value = {}
             mock_tracking.return_value = mock_tracking_instance
 
             # Execute job
@@ -439,6 +441,7 @@ class TestWebsiteScrapeJobOAuthAuthentication:
             mock_tracking_instance.record_page_scrape.return_value = None
             mock_tracking_instance.extract_domain.return_value = "example.site"
             mock_tracking_instance.get_pages_by_domain.return_value = []
+            mock_tracking_instance.get_conditional_headers.return_value = {}
             mock_tracking.return_value = mock_tracking_instance
 
             # Execute job

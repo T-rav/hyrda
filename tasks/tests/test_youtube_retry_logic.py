@@ -54,21 +54,23 @@ class TestRetryLogic:
                 {"video_id": "video123", "title": "Test Video"}
             ]
 
-            # Mock transcription to fail 3 times, then succeed on 4th attempt
-            mock_youtube_client.get_video_info_with_transcript.side_effect = [
+            # Mock get_video_info to fail 3 times, then succeed on 4th attempt
+            mock_youtube_client.get_video_info.side_effect = [
                 None,  # Attempt 1: fail
                 None,  # Attempt 2: fail
                 None,  # Attempt 3: fail
                 {  # Attempt 4: success
                     "video_id": "video123",
                     "title": "Test Video",
-                    "transcript": "Success!",
                     "video_type": "video",
                     "duration_seconds": 300,
                     "published_at": datetime(2024, 1, 1, tzinfo=UTC),
                     "view_count": 1000,
                 },
             ]
+
+            # Mock get_video_transcript to succeed
+            mock_youtube_client.get_video_transcript.return_value = ("Success!", "en")
 
             # Setup vector store mock
             mock_qdrant = AsyncMock()
@@ -80,8 +82,10 @@ class TestRetryLogic:
             ) as mock_tracking_class:
                 mock_tracking = Mock()
                 mock_tracking_class.return_value = mock_tracking
+                mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
                 mock_tracking.check_video_needs_reindex.return_value = (True, None)
                 mock_tracking.generate_base_uuid.return_value = "uuid-123"
+                mock_tracking.record_video_ingestion = Mock()
 
                 # Mock embeddings
                 with patch(
@@ -137,7 +141,7 @@ class TestRetryLogic:
             ]
 
             # Mock transcription to always fail
-            mock_youtube_client.get_video_info_with_transcript.return_value = None
+            mock_youtube_client.get_video_info.return_value = None
 
             # Setup vector store mock
             mock_qdrant = AsyncMock()
@@ -189,21 +193,25 @@ class TestRetryLogic:
             mock_youtube_client.list_channel_videos.return_value = [
                 {"video_id": "video123", "title": "Test Video"}
             ]
-            mock_youtube_client.get_video_info_with_transcript.return_value = {
+            mock_youtube_client.get_video_info.return_value = {
                 "video_id": "video123",
                 "title": "Test Video",
-                "transcript": "Success on first try!",
                 "video_type": "video",
                 "duration_seconds": 300,
                 "published_at": datetime(2024, 1, 1, tzinfo=UTC),
                 "view_count": 1000,
             }
 
+            # Mock get_video_transcript
+            mock_youtube_client.get_video_transcript.return_value = ("Success on first try!", "en")
+
             # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
             mock_tracking.check_video_needs_reindex.return_value = (True, None)
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
+            mock_tracking.record_video_ingestion = Mock()
 
             # Setup embeddings
             mock_embeddings = Mock()
@@ -252,7 +260,7 @@ class TestRetryLogic:
             mock_youtube_client.list_channel_videos.return_value = [
                 {"video_id": "video123", "title": "Test Video"}
             ]
-            mock_youtube_client.get_video_info_with_transcript.return_value = None
+            mock_youtube_client.get_video_info.return_value = None
 
             # Setup vector store
             mock_qdrant = AsyncMock()

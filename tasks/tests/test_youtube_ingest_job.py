@@ -163,25 +163,37 @@ class TestYouTubeIngestJobExecution:
                     }
                 ]
 
-                # Mock video with transcript
-                mock_youtube_client.get_video_info_with_transcript.return_value = {
+                # Mock get_video_info (called first to get metadata without transcript)
+                mock_youtube_client.get_video_info.return_value = {
                     "video_id": "video123",
                     "title": "Test Video",
-                    "transcript": "This is a test transcript",
                     "video_type": "video",
                     "duration_seconds": 300,
                     "published_at": datetime(2024, 1, 1, tzinfo=UTC),
                     "view_count": 1000,
                 }
 
+                # Mock get_video_transcript (called separately to get transcript)
+                mock_youtube_client.get_video_transcript.return_value = (
+                    "This is a test transcript",
+                    "en"
+                )
+
                 # Setup tracking service mock
                 mock_tracking_service = Mock()
                 mock_tracking_service_class.return_value = mock_tracking_service
+                # First check by metadata (fast)
+                mock_tracking_service.check_video_needs_reindex_by_metadata.return_value = (
+                    True,
+                    None,
+                )
+                # Second check by transcript hash (after transcription)
                 mock_tracking_service.check_video_needs_reindex.return_value = (
                     True,
                     None,
                 )
                 mock_tracking_service.generate_base_uuid.return_value = "uuid-123"
+                mock_tracking_service.record_video_ingestion = Mock()
 
                 # Setup embeddings mock (mixed sync/async methods)
                 mock_embeddings = Mock()
@@ -255,10 +267,11 @@ class TestYouTubeIngestJobExecution:
                 mock_youtube_client.list_channel_videos.return_value = [
                     {"video_id": "video123", "title": "Test Video"}
                 ]
-                mock_youtube_client.get_video_info_with_transcript.return_value = {
+
+                # Mock get_video_info (called first to get metadata)
+                mock_youtube_client.get_video_info.return_value = {
                     "video_id": "video123",
                     "title": "Test Video",
-                    "transcript": "Transcript",
                     "video_type": "video",
                     "duration_seconds": 300,
                     "published_at": datetime(2024, 1, 1, tzinfo=UTC),
@@ -268,7 +281,7 @@ class TestYouTubeIngestJobExecution:
                 # Setup tracking service mock - video unchanged
                 mock_tracking_service = Mock()
                 mock_tracking_service_class.return_value = mock_tracking_service
-                mock_tracking_service.check_video_needs_reindex.return_value = (
+                mock_tracking_service.check_video_needs_reindex_by_metadata.return_value = (
                     False,
                     "existing-uuid",
                 )
