@@ -64,7 +64,6 @@ class TestRetryLogicIntegration:
             # Track when each attempt happens
             def track_attempt(*args, **kwargs):
                 attempt_times.append(time.time())
-                return None  # Return None to trigger retry
 
             mock_youtube_client.get_video_info.side_effect = (
                 track_attempt
@@ -191,8 +190,8 @@ class TestJobExecutionUnderLoad:
     async def test_multiple_jobs_concurrent_execution(self):
         """Test that multiple jobs can execute concurrently without blocking."""
         from config.settings import TasksSettings
-        from services.scheduler_service import SchedulerService
         from models.base import get_db_session
+        from services.scheduler_service import SchedulerService
 
         # Test database connection - skip if unavailable
         try:

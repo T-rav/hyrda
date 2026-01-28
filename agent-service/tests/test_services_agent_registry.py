@@ -282,10 +282,12 @@ class TestServicesAgentRegistry:
         # Clear the cache to force reload
         agent_registry._agent_classes = {}
 
-        with patch("services.system_agent_loader.get_system_loader", return_value=mock_system_loader):
-            # Disable external agents to test only system loader
-            with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "false"}):
-                classes = agent_registry._load_agent_classes()
+        # Disable external agents to test only system loader
+        with (
+            patch("services.system_agent_loader.get_system_loader", return_value=mock_system_loader),
+            patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "false"}),
+        ):
+            classes = agent_registry._load_agent_classes()
 
         assert "test" in classes
         assert classes["test"] == test_agent_class

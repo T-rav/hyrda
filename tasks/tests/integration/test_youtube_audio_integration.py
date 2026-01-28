@@ -155,7 +155,6 @@ class TestAudioChunkingIntegration:
             chunks = youtube_client._chunk_audio_file(audio_file, max_size_mb=max_size_mb)
 
             # Should have multiple chunks based on actual size
-            expected_chunks = max(2, int(actual_size_mb / max_size_mb))
             assert len(chunks) >= 2, f"Expected multiple chunks, got {len(chunks)}"
 
             # Verify each chunk's duration using ffprobe
