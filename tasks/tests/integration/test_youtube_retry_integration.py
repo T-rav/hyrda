@@ -56,7 +56,10 @@ class TestRetryLogicIntegration:
             # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
-            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                True,
+                None,
+            )
             mock_tracking.check_video_needs_reindex.return_value = (True, None)
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
             mock_tracking.record_video_ingestion = Mock()
@@ -65,9 +68,7 @@ class TestRetryLogicIntegration:
             def track_attempt(*args, **kwargs):
                 attempt_times.append(time.time())
 
-            mock_youtube_client.get_video_info.side_effect = (
-                track_attempt
-            )
+            mock_youtube_client.get_video_info.side_effect = track_attempt
 
             # Setup vector store
             mock_qdrant = AsyncMock()
@@ -152,7 +153,10 @@ class TestRetryLogicIntegration:
             # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
-            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                True,
+                None,
+            )
             mock_tracking.check_video_needs_reindex.return_value = (True, None)
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
             mock_tracking.record_video_ingestion = Mock()

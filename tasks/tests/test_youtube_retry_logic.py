@@ -82,7 +82,10 @@ class TestRetryLogic:
             ) as mock_tracking_class:
                 mock_tracking = Mock()
                 mock_tracking_class.return_value = mock_tracking
-                mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
+                mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                    True,
+                    None,
+                )
                 mock_tracking.check_video_needs_reindex.return_value = (True, None)
                 mock_tracking.generate_base_uuid.return_value = "uuid-123"
                 mock_tracking.record_video_ingestion = Mock()
@@ -203,12 +206,18 @@ class TestRetryLogic:
             }
 
             # Mock get_video_transcript
-            mock_youtube_client.get_video_transcript.return_value = ("Success on first try!", "en")
+            mock_youtube_client.get_video_transcript.return_value = (
+                "Success on first try!",
+                "en",
+            )
 
             # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
-            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (True, None)
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                True,
+                None,
+            )
             mock_tracking.check_video_needs_reindex.return_value = (True, None)
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
             mock_tracking.record_video_ingestion = Mock()

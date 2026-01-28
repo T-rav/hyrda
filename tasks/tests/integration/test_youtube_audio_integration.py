@@ -93,7 +93,9 @@ class TestAudioChunkingIntegration:
                 )
 
             # Chunk the file (max 24MB)
-            chunks = youtube_client._chunk_audio_file(audio_file, max_size_mb=max_size_mb)
+            chunks = youtube_client._chunk_audio_file(
+                audio_file, max_size_mb=max_size_mb
+            )
 
             # Should have created multiple chunks
             assert len(chunks) >= 2, f"Expected multiple chunks, got {len(chunks)}"
@@ -152,7 +154,9 @@ class TestAudioChunkingIntegration:
                 )
 
             # Chunk the file
-            chunks = youtube_client._chunk_audio_file(audio_file, max_size_mb=max_size_mb)
+            chunks = youtube_client._chunk_audio_file(
+                audio_file, max_size_mb=max_size_mb
+            )
 
             # Should have multiple chunks based on actual size
             assert len(chunks) >= 2, f"Expected multiple chunks, got {len(chunks)}"

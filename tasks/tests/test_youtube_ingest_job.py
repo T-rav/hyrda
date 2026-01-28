@@ -176,7 +176,7 @@ class TestYouTubeIngestJobExecution:
                 # Mock get_video_transcript (called separately to get transcript)
                 mock_youtube_client.get_video_transcript.return_value = (
                     "This is a test transcript",
-                    "en"
+                    "en",
                 )
 
                 # Setup tracking service mock
