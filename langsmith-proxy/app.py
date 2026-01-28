@@ -36,7 +36,7 @@ PROXY_API_KEY = os.getenv("PROXY_API_KEY", "")
 if not PROXY_API_KEY:
     # Generate a random key if not set (for dev/testing)
     PROXY_API_KEY = secrets.token_urlsafe(32)
-    logger.warning(f"⚠️  No PROXY_API_KEY set! Generated temporary key: {PROXY_API_KEY}")
+    logger.warning("⚠️  No PROXY_API_KEY set! Generated temporary key for this session")
     logger.warning("⚠️  Set PROXY_API_KEY in .env for production!")
 else:
     logger.info("✅ PROXY_API_KEY configured")
