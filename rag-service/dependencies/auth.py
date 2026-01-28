@@ -158,6 +158,8 @@ async def require_service_auth(
             )
 
     # Validate X-User-Email header (REQUIRED for both auth methods)
+    # For Slack bot: Uses user_id@insightmesh.local as placeholder until OAuth is implemented
+    # For LibreChat: Uses actual user email from JWT
     if not x_user_email:
         logger.warning(
             f"Auth failed: X-User-Email header missing | "

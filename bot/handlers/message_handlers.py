@@ -1,6 +1,9 @@
 import contextlib
 import logging
 import time
+from io import BytesIO
+
+import httpx
 
 from handlers.file_processors import process_file_attachments
 from services.formatting import MessageFormatter
@@ -235,14 +238,39 @@ async def _execute_agent_with_streaming(
 
     response = ""
     metadata = {}
+    all_steps = []  # Track ALL steps (completed and running)
 
     async for event in agent_client.stream(primary_name, query, context):
         phase = event.get("phase")
         step = event.get("step")
+        message = event.get("message")
+        duration = event.get("duration")
 
-        # Update status message in place
-        if phase and thinking_message_ts and phase == "running" and step:
-            status_text = f"⏳ *Running:* {step}"
+        # Update status message showing progress
+        if phase and thinking_message_ts and step:
+            if phase == "started":
+                # Add new running step (only if not already present - avoid duplicates)
+                running_entry = f"⏳ {message}"
+                if running_entry not in all_steps:
+                    all_steps.append(running_entry)
+            elif phase == "completed":
+                # Replace the running step with completed version
+                running_entry = f"⏳ {message}"
+                if running_entry in all_steps:
+                    idx = all_steps.index(running_entry)
+                    all_steps[idx] = f"✅ {message} ({duration})"
+                else:
+                    # Didn't see the start, just add completed
+                    all_steps.append(f"✅ {message} ({duration})")
+
+            # Show last 10 steps
+            status_text = (
+                "\n".join(all_steps[-10:]) if all_steps else "⏳ Processing..."
+            )
+
+            logger.info(f"📊 Status update - Total steps: {len(all_steps)}")
+            logger.info(f"📊 Status text:\n{status_text}")
+
             try:
                 await slack_service.update_message(
                     channel, thinking_message_ts, status_text
@@ -250,7 +278,33 @@ async def _execute_agent_with_streaming(
             except Exception as e:
                 logger.warning(f"Failed to update status message: {e}")
 
-        # Final response with full agent output
+        # Handle result events from output nodes (contains message + attachments + followup_mode)
+        if event.get("type") == "result":
+            data = event.get("data", {})
+            if data.get("message"):
+                response = data.get("message", "")
+                # Store attachments and followup_mode in metadata for downstream processing
+                if data.get("attachments"):
+                    metadata["attachments"] = data.get("attachments")
+                if data.get("followup_mode"):
+                    metadata["followup_mode"] = data.get("followup_mode")
+                logger.info(
+                    f"Received result event with message ({len(response)} chars), "
+                    f"{len(metadata.get('attachments', []))} attachment(s), "
+                    f"followup_mode={metadata.get('followup_mode', False)}"
+                )
+
+                # Update status one final time to show completion
+                if thinking_message_ts:
+                    final_status = "\n".join(all_steps[-10:]) + "\n\n✅ *Complete*"
+                    try:
+                        await slack_service.update_message(
+                            channel, thinking_message_ts, final_status
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to update final status: {e}")
+
+        # Final response with full agent output (legacy format)
         if "response" in event:
             response = event.get("response", "")
             metadata = event.get("metadata", {})
@@ -293,25 +347,23 @@ async def _send_agent_response(
     user_id: str,
     query: str,
     conversation_id: str | None,
+    metadata: dict | None = None,
 ) -> None:
     """Format and send agent response, track in Langfuse.
 
     Args:
         response: Agent response text
-        thinking_message_ts: Thinking message to delete
+        thinking_message_ts: Thinking message timestamp (already updated with final status, don't delete)
         slack_service: Slack service
         channel: Channel ID
         thread_ts: Thread timestamp
         user_id: User ID
         query: Original query
         conversation_id: Conversation ID for tracking
+        metadata: Optional metadata dict (may contain attachments)
     """
-    # Clean up thinking message
-    if thinking_message_ts:
-        try:
-            await slack_service.delete_thinking_indicator(channel, thinking_message_ts)
-        except Exception as e:
-            logger.warning(f"Error deleting thinking message: {e}")
+    # Don't delete thinking message - it has the progress steps and "Complete" status
+    # The thinking message was already updated with final status in _execute_agent_with_streaming
 
     # Format and send response (only if non-empty)
     if response:
@@ -321,6 +373,43 @@ async def _send_agent_response(
         )
     else:
         logger.info("Agent returned empty response (likely already posted message)")
+
+    # Handle attachments (e.g., PDFs from profile agent)
+    if metadata and metadata.get("attachments"):
+        attachments = metadata.get("attachments", [])
+        logger.info(f"Processing {len(attachments)} attachment(s)")
+
+        for attachment in attachments:
+            # Only process attachments marked for injection
+            if not attachment.get("inject", False):
+                continue
+
+            url = attachment.get("url")
+            filename = attachment.get("filename", "attachment.pdf")
+
+            if not url:
+                logger.warning(f"Attachment missing URL: {attachment}")
+                continue
+
+            try:
+                logger.info(f"Downloading attachment from {url}")
+                # Download file from URL (use verify=False for internal MinIO with self-signed cert)
+                async with httpx.AsyncClient(verify=False, timeout=30.0) as client:  # nosec B501
+                    file_response = await client.get(url)
+                    file_response.raise_for_status()
+                    file_content = BytesIO(file_response.content)
+
+                logger.info(f"Uploading {filename} to Slack")
+                await slack_service.upload_file(
+                    channel=channel,
+                    file_content=file_content,
+                    filename=filename,
+                    thread_ts=thread_ts,
+                )
+                logger.info(f"Successfully uploaded {filename}")
+
+            except Exception as e:
+                logger.error(f"Failed to process attachment {filename}: {e}")
 
     # Record agent conversation turn in Langfuse for lifetime stats
     langfuse_service = get_langfuse_service()
@@ -588,6 +677,7 @@ async def handle_bot_command(
     check_thread_context: bool = False,
     conversation_cache=None,
     conversation_id: str | None = None,
+    trace_context: dict[str, str] | None = None,
 ) -> bool:
     """Handle bot agent commands using router pattern.
 
@@ -671,6 +761,11 @@ async def handle_bot_command(
         "thread_ts": thread_ts,
     }
 
+    # Add trace context for distributed tracing
+    if trace_context:
+        context["trace_context"] = trace_context
+        logger.info(f"Added trace context to agent context: {trace_context}")
+
     # Add file information if available
     if document_content:
         context["document_content"] = document_content
@@ -687,7 +782,7 @@ async def handle_bot_command(
         # Track thread for future continuity
         await _track_thread_for_continuity(thread_ts, primary_name, metadata)
 
-        # Send response
+        # Send response (with attachments if present in metadata)
         await _send_agent_response(
             response,
             thinking_message_ts,
@@ -697,6 +792,7 @@ async def handle_bot_command(
             user_id,
             query,
             conversation_id,
+            metadata,
         )
 
         return True
@@ -739,6 +835,9 @@ async def handle_message(
     # Determine unique conversation ID
     conversation_id = _determine_conversation_id(channel, thread_ts, message_ts)
 
+    # Check if this is a DM
+    is_dm = channel.startswith("D")
+
     logger.info(
         "Processing user message",
         extra={
@@ -757,6 +856,29 @@ async def handle_message(
     _record_message_metrics(
         metrics_service, user_id, channel, text, conversation_id, thread_ts
     )
+
+    # Create root Langfuse span for end-to-end trace
+    langfuse_service = get_langfuse_service()
+    root_trace_id = None
+    root_obs_id = None
+    if langfuse_service:
+        root_trace_id, root_obs_id = langfuse_service.start_root_span(
+            name="slack_message",
+            input_data={
+                "message": text,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+            },
+            metadata={
+                "channel": channel,
+                "is_dm": is_dm,
+                "has_thread": bool(thread_ts),
+                "has_files": bool(files),
+            },
+        )
+        logger.debug(
+            f"Started root trace for message: trace_id={root_trace_id}, obs_id={root_obs_id}"
+        )
 
     # For tracking the thinking indicator message
     thinking_message_ts = None
@@ -779,6 +901,14 @@ async def handle_message(
         # Check for bot agent commands: -profile, profile, -meddic, meddic, etc.
         # Router handles parsing and validation internally
         # Pass check_thread_context=True to enable thread continuity
+        # Build trace context from root span
+        trace_context = None
+        if root_trace_id and root_obs_id:
+            trace_context = {
+                "trace_id": root_trace_id,
+                "parent_span_id": root_obs_id,
+            }
+
         handled = await handle_bot_command(
             text=text,
             user_id=user_id,
@@ -791,6 +921,7 @@ async def handle_message(
             check_thread_context=True,  # Enable thread-aware routing
             conversation_cache=conversation_cache,  # Pass cache for agent-generated docs
             conversation_id=conversation_id,  # Pass for Langfuse tracking
+            trace_context=trace_context,  # Pass for distributed tracing
         )
 
         if handled:

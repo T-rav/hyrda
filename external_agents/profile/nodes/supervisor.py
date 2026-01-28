@@ -14,6 +14,8 @@ from langgraph.graph import END
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from shared.utils.agent_tracing import trace_agent_node
+
 from .. import prompts
 from ..configuration import ProfileConfiguration
 from ..state import (
@@ -30,6 +32,7 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 
+@trace_agent_node("supervisor")
 async def supervisor(state: SupervisorState, config: RunnableConfig) -> Command[str]:
     """Supervisor node - delegates research tasks to researchers.
 

@@ -107,11 +107,73 @@ class DocumentTrackingService:
         namespace = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # DNS namespace
         return str(uuid.uuid5(namespace, google_drive_id))
 
+    def check_document_needs_reindex_by_metadata(
+        self, google_drive_id: str, modified_time: str | None, file_size: int | None
+    ) -> tuple[bool, str | None]:
+        """
+        Check if a document needs reindexing based on metadata (FAST - no download/transcription).
+
+        This method checks if the file exists and if its modifiedTime or size has changed.
+        Use this BEFORE downloading to avoid unnecessary transcription costs for videos/audio.
+
+        Args:
+            google_drive_id: Google Drive file ID
+            modified_time: File's modifiedTime from Google Drive API (ISO format)
+            file_size: File size in bytes
+
+        Returns:
+            Tuple of (needs_reindex, existing_vector_uuid)
+            - needs_reindex: True if document is new or metadata changed
+            - existing_vector_uuid: Existing UUID if document was previously indexed, None otherwise
+        """
+        with get_data_db_session() as session:
+            existing_doc = (
+                session.query(GoogleDriveDocument)
+                .filter_by(google_drive_id=google_drive_id)
+                .first()
+            )
+
+            if not existing_doc:
+                # Document never indexed before
+                return True, None
+
+            # Compare modifiedTime (most reliable indicator)
+            if modified_time:
+                # Parse the ISO timestamp from Google Drive
+                try:
+                    new_modified = datetime.fromisoformat(
+                        modified_time.replace("Z", "+00:00")
+                    )
+                    # Compare with last ingestion time
+                    if (
+                        existing_doc.last_ingested_at
+                        and new_modified <= existing_doc.last_ingested_at
+                    ):
+                        # File not modified since last ingestion - SKIP!
+                        return False, existing_doc.vector_uuid
+                except (ValueError, AttributeError):
+                    pass  # If parsing fails, fall through to size check
+
+            # If modified time check inconclusive, check file size
+            if (
+                file_size is not None
+                and existing_doc.file_size is not None
+                and file_size == existing_doc.file_size
+            ):
+                # Same size, likely unchanged - SKIP!
+                return False, existing_doc.vector_uuid
+
+            # Metadata suggests change or inconclusive - download to be safe
+            return True, existing_doc.vector_uuid
+
     def check_document_needs_reindex(
         self, google_drive_id: str, content: str
     ) -> tuple[bool, str | None]:
         """
         Check if a document needs to be reindexed based on content hash.
+
+        NOTE: This method requires the full content (expensive for videos/audio).
+        Use check_document_needs_reindex_by_metadata() first to avoid download costs.
 
         Args:
             google_drive_id: Google Drive file ID

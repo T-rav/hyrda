@@ -141,6 +141,12 @@ async def run():
         await llm_service.initialize()
         logger.info("LLM service initialized")
 
+        # Initialize global Langfuse service for distributed tracing
+        from services.langfuse_service import initialize_langfuse_service
+
+        initialize_langfuse_service(settings.langfuse, environment=settings.environment)
+        logger.info("Global Langfuse service initialized for distributed tracing")
+
         # Initialize search clients (Tavily + Perplexity)
         await initialize_search_clients(
             tavily_api_key=settings.search.tavily_api_key,

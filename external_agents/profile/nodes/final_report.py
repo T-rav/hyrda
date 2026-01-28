@@ -11,6 +11,7 @@ from typing import Optional
 
 import boto3
 from langchain_core.runnables import RunnableConfig
+from shared.utils.agent_tracing import trace_agent_node
 
 from .. import prompts
 from ..configuration import ProfileConfiguration
@@ -127,6 +128,7 @@ def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]
         return None
 
 
+@trace_agent_node("final_report_generation")
 async def final_report_generation(
     state: ProfileAgentState, config: RunnableConfig
 ) -> dict:

@@ -256,9 +256,16 @@ class RAGClient:
         )
 
         try:
+            # Use Slack user_id as email placeholder until OAuth/email lookup is implemented
+            # Format: U01234567@insightmesh.local
+            user_email = (
+                f"{user_id}@insightmesh.local" if user_id else "bot@insightmesh.local"
+            )
+
             headers = {
                 "X-Service-Token": self.service_token,
                 "Content-Type": "application/json",
+                "X-User-Email": user_email,
             }
 
             # Serialize request body once and use the exact same string for signing and sending
@@ -347,9 +354,16 @@ class RAGClient:
             request_body["document_filename"] = document_filename
 
         try:
+            # Use Slack user_id as email placeholder until OAuth/email lookup is implemented
+            # Format: U01234567@insightmesh.local
+            user_email = (
+                f"{user_id}@insightmesh.local" if user_id else "bot@insightmesh.local"
+            )
+
             headers = {
                 "X-Service-Token": self.service_token,
                 "Content-Type": "application/json",
+                "X-User-Email": user_email,
             }
 
             # Serialize request body once

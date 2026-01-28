@@ -119,11 +119,61 @@ class YouTubeTrackingService:
         namespace = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # DNS namespace
         return str(uuid.uuid5(namespace, f"youtube:{youtube_video_id}"))
 
+    def check_video_needs_reindex_by_metadata(
+        self, youtube_video_id: str, published_at: datetime | None
+    ) -> tuple[bool, str | None]:
+        """
+        Check if a video needs reindexing based on metadata (FAST - no transcription).
+
+        This method checks if the video exists and if its published_at date has changed.
+        Use this BEFORE transcription to avoid unnecessary API costs.
+
+        Args:
+            youtube_video_id: YouTube video ID
+            published_at: Video publication date from YouTube API
+
+        Returns:
+            Tuple of (needs_reindex, existing_uuid)
+            - needs_reindex: True if video is new or published_at changed
+            - existing_uuid: Base UUID if video exists, None otherwise
+        """
+        with get_data_db_session() as session:
+            video_record = (
+                session.query(YouTubeVideo)
+                .filter(YouTubeVideo.youtube_video_id == youtube_video_id)
+                .first()
+            )
+
+            if not video_record:
+                # Video doesn't exist, needs indexing
+                return (True, None)
+
+            # Compare published_at dates (videos don't change after publishing)
+            # If published_at matches, video hasn't changed - skip transcription!
+            if published_at and video_record.published_at:
+                # Compare dates (ignore time differences for comparison)
+                existing_date = (
+                    video_record.published_at.date()
+                    if video_record.published_at
+                    else None
+                )
+                new_date = published_at.date() if published_at else None
+
+                if existing_date == new_date:
+                    # Published date unchanged, video content unchanged - SKIP!
+                    return (False, video_record.vector_uuid)
+
+            # If we can't compare dates or they differ, transcribe to be safe
+            return (True, video_record.vector_uuid)
+
     def check_video_needs_reindex(
         self, youtube_video_id: str, transcript: str
     ) -> tuple[bool, str | None]:
         """
         Check if a video needs to be reindexed based on transcript changes.
+
+        NOTE: This method requires the full transcript (expensive to obtain).
+        Use check_video_needs_reindex_by_metadata() first to avoid transcription costs.
 
         Args:
             youtube_video_id: YouTube video ID

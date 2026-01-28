@@ -150,7 +150,7 @@ class TestQdrantVectorStoreAsyncInitialize:
                 url="https://localhost:6333",
                 api_key="test-api-key",
                 timeout=60,
-                verify=True,
+                verify=False,  # Disabled for self-signed certificates
             )
 
     @pytest.mark.asyncio

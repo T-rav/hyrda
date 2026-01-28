@@ -38,7 +38,7 @@ class TestRetryLogicIntegration:
         with (
             patch("os.getenv", return_value="test-key"),
             patch("services.youtube.YouTubeClient") as mock_youtube_client_class,
-            patch("services.youtube.YouTubeTrackingService"),
+            patch("services.youtube.YouTubeTrackingService") as mock_tracking_class,
             patch("services.openai_embeddings.OpenAIEmbeddings"),
             patch("services.qdrant_client.QdrantClient") as mock_qdrant_class,
         ):
@@ -53,13 +53,22 @@ class TestRetryLogicIntegration:
                 {"video_id": "video123", "title": "Test Video"}
             ]
 
+            # Setup tracking service
+            mock_tracking = Mock()
+            mock_tracking_class.return_value = mock_tracking
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                True,
+                None,
+            )
+            mock_tracking.check_video_needs_reindex.return_value = (True, None)
+            mock_tracking.generate_base_uuid.return_value = "uuid-123"
+            mock_tracking.record_video_ingestion = Mock()
+
             # Track when each attempt happens
             def track_attempt(*args, **kwargs):
                 attempt_times.append(time.time())
 
-            mock_youtube_client.get_video_info_with_transcript.side_effect = (
-                track_attempt
-            )
+            mock_youtube_client.get_video_info.side_effect = track_attempt
 
             # Setup vector store
             mock_qdrant = AsyncMock()
@@ -125,13 +134,12 @@ class TestRetryLogicIntegration:
             ]
 
             # Fail twice, then succeed
-            mock_youtube_client.get_video_info_with_transcript.side_effect = [
+            mock_youtube_client.get_video_info.side_effect = [
                 None,  # Fail attempt 1
                 None,  # Fail attempt 2
                 {  # Success attempt 3
                     "video_id": "video123",
                     "title": "Test Video",
-                    "transcript": "Success!",
                     "video_type": "video",
                     "duration_seconds": 300,
                     "published_at": datetime(2024, 1, 1, tzinfo=UTC),
@@ -139,11 +147,19 @@ class TestRetryLogicIntegration:
                 },
             ]
 
+            # Mock get_video_transcript
+            mock_youtube_client.get_video_transcript.return_value = ("Success!", "en")
+
             # Setup tracking service
             mock_tracking = Mock()
             mock_tracking_class.return_value = mock_tracking
+            mock_tracking.check_video_needs_reindex_by_metadata.return_value = (
+                True,
+                None,
+            )
             mock_tracking.check_video_needs_reindex.return_value = (True, None)
             mock_tracking.generate_base_uuid.return_value = "uuid-123"
+            mock_tracking.record_video_ingestion = Mock()
 
             # Setup embeddings
             mock_embeddings = Mock()
@@ -178,7 +194,15 @@ class TestJobExecutionUnderLoad:
     async def test_multiple_jobs_concurrent_execution(self):
         """Test that multiple jobs can execute concurrently without blocking."""
         from config.settings import TasksSettings
+        from models.base import get_db_session
         from services.scheduler_service import SchedulerService
+
+        # Test database connection - skip if unavailable
+        try:
+            with get_db_session() as session:
+                session.execute("SELECT 1")
+        except Exception:
+            pytest.skip("Database not available for integration tests")
 
         settings = TasksSettings()
         scheduler_service = SchedulerService(settings)

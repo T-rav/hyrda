@@ -25,16 +25,9 @@ RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
 # Trust all self-signed certificates for inter-service communication (optional)
-# Only copy public certificates (not private keys) for development mTLS
-# Private keys are mounted as volumes at runtime via docker-compose.yml
-RUN mkdir -p /tmp/.ssl
-COPY .ssl/*.crt /tmp/.ssl/ 2>/dev/null || true
-COPY .ssl/*-cert.pem /tmp/.ssl/ 2>/dev/null || true
-RUN if [ -n "$(ls -A /tmp/.ssl 2>/dev/null)" ]; then \
-        cp /tmp/.ssl/* /usr/local/share/ca-certificates/ 2>/dev/null || true && \
-        update-ca-certificates && \
-        rm -rf /tmp/.ssl; \
-    fi
+# Trust all self-signed certificates for inter-service communication
+# SSL certificates are mounted as volumes at runtime via docker-compose.yml
+# No need to copy during build - handled at runtime
 
 # Copy shared library first (required for common utilities)
 COPY --chown=appuser:appuser ./shared /app/shared
@@ -84,4 +77,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 USER appuser
 
 # Run with Gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
+# Note: Empty forwarded-allow-ips disables proxy headers middleware (no X-Forwarded-* processing)
+CMD ["gunicorn", "--bind", "0.0.0.0:8002", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "--timeout", "120", "--forwarded-allow-ips", "", "--access-logfile", "-", "--error-logfile", "-", "app:app"]

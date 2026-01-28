@@ -36,9 +36,11 @@ class TestGetAgent:
 
     def test_get_agent_not_found(self):
         """Test error when agent not found."""
-        with patch("services.agent_registry.get_agent_info", return_value=None):
-            with pytest.raises(ValueError, match="Agent 'nonexistent' not found"):
-                get_agent("nonexistent")
+        with (
+            patch("services.agent_registry.get_agent_info", return_value=None),
+            pytest.raises(ValueError, match="Agent 'nonexistent' not found"),
+        ):
+            get_agent("nonexistent")
 
     def test_get_agent_no_implementation(self):
         """Test error when agent has no implementation."""
@@ -167,13 +169,14 @@ class Agent:
                 "display_name": "Test Agent",
                 "description": "Test",
                 "aliases": [],
+                "is_enabled": True,
                 "is_public": True,
                 "requires_admin": False,
             }
         ]
 
         # Add tmp_path to sys.path so imports work
-        import sys
+        import sys  # noqa: PLC0415
         sys.path.insert(0, str(tmp_path))
 
         try:
@@ -196,12 +199,12 @@ class Agent:
                     mock_getenv.side_effect = getenv_side_effect
 
                     # Clear cache to force reload
-                    from services.agent_registry import clear_cache
+                    from services.agent_registry import clear_cache  # noqa: PLC0415
 
                     clear_cache()
 
                     # Reset loader
-                    import services.external_agent_loader as loader_module
+                    import services.external_agent_loader as loader_module  # noqa: PLC0415
 
                     loader_module._external_loader = None
 

@@ -8,6 +8,9 @@ from typing import Any
 
 import httpx
 
+from services.langfuse_service import get_langfuse_service
+from utils.trace_propagation import add_trace_headers_to_request
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,6 +120,19 @@ class AgentClient:
             "Accept": "text/event-stream",
         }
 
+        # Add Langfuse trace context for distributed tracing
+        # Prefer trace_context from context dict (passed from message handler)
+        # Fall back to current decorator context if available
+        trace_context = context.get("trace_context")
+        if not trace_context:
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                trace_context = langfuse_service.get_current_trace_context()
+
+        if trace_context:
+            headers = add_trace_headers_to_request(headers, trace_context)
+            logger.info(f"Added trace context to request: {trace_context}")
+
         # Use 30 minute timeout for long-running agents
         timeout = httpx.Timeout(1800.0, connect=30.0)
 
@@ -124,24 +140,31 @@ class AgentClient:
         # Security: Internal service-to-service calls within Docker network
         async with httpx.AsyncClient(verify=False, timeout=timeout) as client:  # nosec B501
             try:
+                logger.info("🚀 Bot about to start HTTP stream request...")
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/api/agents/{agent_name}/stream",
                     json=payload,
                     headers=headers,
                 ) as response:
+                    logger.info(f"🚀 Bot got response status: {response.status_code}")
                     response.raise_for_status()
-
+                    logger.info(
+                        "🚀 Bot status check passed, starting to iterate over SSE lines..."
+                    )
                     # Parse Server-Sent Events (SSE)
                     async for line in response.aiter_lines():
+                        logger.info(f"🚀 Bot received SSE line: {line[:100]}")
                         if line.startswith("data: "):
                             data_str = line[6:]  # Remove "data: " prefix
                             try:
                                 data = json.loads(data_str)
+                                logger.info(f"✅ Bot parsed SSE data: {data}")
                                 yield data
                             except json.JSONDecodeError:
                                 logger.warning(f"Failed to parse SSE data: {data_str}")
                                 continue
+                    logger.info("🏁 Bot finished iterating SSE lines")
 
             except httpx.HTTPStatusError as e:
                 logger.error(

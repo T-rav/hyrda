@@ -55,7 +55,9 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, AgentInfo]:
         control_plane_url = settings.control_plane_url
 
         response = requests.get(
-            f"{control_plane_url}/api/agents", timeout=AGENT_SERVICE_TIMEOUT
+            f"{control_plane_url}/api/agents",
+            timeout=AGENT_SERVICE_TIMEOUT,
+            verify=False,  # nosec B501 - Internal Docker network with self-signed certs
         )
         if response.status_code == 200:
             data = response.json()
@@ -160,6 +162,7 @@ def check_agent_availability(agent_name: str) -> dict[str, bool | str] | None:
         response = requests.get(
             f"{control_plane_url}/api/agents?include_deleted=false",
             timeout=AGENT_SERVICE_TIMEOUT,
+            verify=False,  # nosec B501 - Internal Docker network with self-signed certs
         )
 
         if response.status_code != 200:

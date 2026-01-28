@@ -1,0 +1,8 @@
+{
+  "id": "test-final-working",
+  "name": "test_successful_trace",
+  "run_type": "chain",
+  "inputs": {"query": "Hello World"},
+  "outputs": {"result": "Success"},
+  "start_time": "2024-01-01T00:00:00Z"
+}

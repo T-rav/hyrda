@@ -67,13 +67,12 @@ services:
       - QDRANT__SERVICE__ENABLE_TLS=true
       - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
       - QDRANT__TLS__KEY=/qdrant/tls/key.pem
-    # Healthcheck disabled - Qdrant image doesn't include curl
-    # healthcheck:
-    #   test: ["CMD-SHELL", "curl -f -k https://localhost:6333/healthz || exit 1"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 10s
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp && echo 'Port 6333 listening' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -301,6 +300,41 @@ services:
     networks:
       - insightmesh
 
+  # LangSmith to Langfuse Proxy
+  langsmith-proxy:
+    build:
+      context: ./langsmith-proxy
+      dockerfile: Dockerfile
+    image: insightmesh-langsmith-proxy:latest
+    container_name: insightmesh-langsmith-proxy
+    restart: unless-stopped
+    environment:
+      - PROXY_API_KEY=${PROXY_API_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
+      - PORT=8003
+    ports:
+      - "8003:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8003/health').raise_for_status()"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "langsmith-proxy"
+      component: "observability"
+    networks:
+      - insightmesh
+
   # Agent Service - LangGraph HTTP API
   agent-service:
     build:
@@ -314,13 +348,21 @@ services:
     environment:
       - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
       - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
+      - EXTERNAL_AGENTS_PATH=/app/external_agents
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY:-}
+      - VECTOR_COLLECTION_NAME=${VECTOR_COLLECTION_NAME:-insightmesh-knowledge-base}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - REPORTS_BUCKET=${REPORTS_BUCKET:-profile-reports}
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
-      - ./custom_agents:/app/custom_agents:ro
+      - ./external_agents:/app/external_agents:ro
       - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
       - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
-      - agent_checkpoints:/app/data/checkpoints
     depends_on:
       control-plane:
         condition: service_healthy
@@ -383,8 +425,6 @@ volumes:
   redis_data:
     driver: local
   loki_data:
-    driver: local
-  agent_checkpoints:
     driver: local
 
 networks:

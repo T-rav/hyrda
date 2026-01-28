@@ -28,8 +28,8 @@ WORKDIR /app
 # Create non-root user early
 RUN useradd -m -u 1000 appuser
 
-# Create logs directory with proper permissions
-RUN mkdir -p /app/logs && \
+# Create logs and data directories with proper permissions
+RUN mkdir -p /app/logs /app/data && \
     chown -R appuser:appuser /app
 
 # Trust all self-signed certificates for inter-service communication

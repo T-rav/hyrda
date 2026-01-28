@@ -133,14 +133,42 @@ class YouTubeIngestJob(BaseJob):
 
                         logger.info(f"Processing: {video_title}")
 
-                        # Get video transcript (download audio + transcribe)
-                        video_with_transcript = (
-                            youtube_client.get_video_info_with_transcript(video_id)
+                        # COST OPTIMIZATION: Check metadata FIRST (fast, no transcription)
+                        # Get video info WITHOUT transcription to check published_at
+                        video_info = youtube_client.get_video_info(video_id)
+
+                        if not video_info:
+                            logger.warning(
+                                f"Skipping {video_title} - could not fetch video info "
+                                f"(attempt {attempt}/{max_attempts})"
+                            )
+                            if attempt >= max_attempts:
+                                error_count += 1
+                                break
+                            continue
+
+                        # Check if video needs reindexing based on published_at (FAST!)
+                        needs_reindex_metadata, existing_uuid = (
+                            tracking_service.check_video_needs_reindex_by_metadata(
+                                video_id, video_info.get("published_at")
+                            )
                         )
 
-                        if not video_with_transcript or not video_with_transcript.get(
-                            "transcript"
-                        ):
+                        if not needs_reindex_metadata:
+                            logger.info(
+                                f"⏭️  Skipping (unchanged since {video_info.get('published_at')}): {video_title}"
+                            )
+                            skipped_count += 1
+                            success = True  # Mark as success to exit retry loop
+                            break
+
+                        # Video is new or changed - NOW transcribe (expensive)
+                        logger.info(f"🎤 Transcribing (new or changed): {video_title}")
+                        transcript, _language = youtube_client.get_video_transcript(
+                            video_id
+                        )
+
+                        if not transcript:
                             logger.warning(
                                 f"Skipping {video_title} - transcription failed "
                                 f"(attempt {attempt}/{max_attempts})"
@@ -150,14 +178,16 @@ class YouTubeIngestJob(BaseJob):
                                 break
                             continue
 
-                        transcript = video_with_transcript["transcript"]
-
-                        # Check if video needs reindexing
+                        # Double-check with transcript hash (in case published_at is unreliable)
                         needs_reindex, existing_uuid = (
                             tracking_service.check_video_needs_reindex(
                                 video_id, transcript
                             )
                         )
+
+                        # Combine video_info with transcript for downstream processing
+                        video_with_transcript = video_info.copy()
+                        video_with_transcript["transcript"] = transcript
 
                         if not needs_reindex:
                             logger.info(f"⏭️  Skipping (unchanged): {video_title}")

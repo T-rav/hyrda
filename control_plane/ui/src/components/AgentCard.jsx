@@ -24,8 +24,8 @@ function AgentCard({ agent, onClick, usageStats }) {
           )}
         </div>
         <div>
-          <span className={`stat-badge ${agent.is_public ? 'enabled' : 'disabled'}`}>
-            {agent.is_public ? 'Enabled' : 'Disabled'}
+          <span className={`stat-badge ${agent.is_enabled ? 'enabled' : 'disabled'}`}>
+            {agent.is_enabled ? 'Enabled' : 'Disabled'}
           </span>
         </div>
       </div>

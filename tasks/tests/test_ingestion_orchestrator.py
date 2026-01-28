@@ -34,6 +34,7 @@ def mock_google_drive_client():
 def mock_document_tracker():
     """Create mock document tracking service."""
     tracker = Mock()
+    tracker.check_document_needs_reindex_by_metadata = Mock(return_value=(True, None))
     tracker.check_document_needs_reindex = Mock(return_value=(True, None))
     tracker.generate_base_uuid = Mock(
         return_value="12345678-1234-5678-1234-567812345678"
@@ -355,6 +356,11 @@ class TestIngestionOrchestratorIngestFiles:
         """Test ingestion skips files with unchanged content."""
         # Arrange
         orchestrator.set_services(mock_vector_service, mock_embedding_service)
+        # First check by metadata returns False (skip without download)
+        mock_document_tracker.check_document_needs_reindex_by_metadata.return_value = (
+            False,
+            "existing-uuid",
+        )
         mock_document_tracker.check_document_needs_reindex.return_value = (
             False,
             "existing-uuid",
@@ -393,6 +399,10 @@ class TestIngestionOrchestratorIngestFiles:
         orchestrator.set_services(mock_vector_service, mock_embedding_service)
         # Use a properly formatted UUID (with hyphens in correct positions)
         existing_uuid = "12345678-1234-5678-1234-567812345678"
+        mock_document_tracker.check_document_needs_reindex_by_metadata.return_value = (
+            True,
+            existing_uuid,
+        )
         mock_document_tracker.check_document_needs_reindex.return_value = (
             True,
             existing_uuid,
@@ -1027,6 +1037,17 @@ class TestIngestionOrchestratorEdgeCases:
         files = [file1, file2, file3]
 
         # Setup mocks
+        def metadata_reindex_side_effect(file_id, modified_time, size):
+            if file_id == "file3":
+                # File3 is unchanged based on metadata - skip without download
+                return (False, "existing-uuid")
+            # File1 and file2 need download
+            return (True, None)
+
+        mock_document_tracker.check_document_needs_reindex_by_metadata.side_effect = (
+            metadata_reindex_side_effect
+        )
+
         def download_side_effect(file_id, mime_type, filename):
             if file_id == "file2":
                 return None
@@ -1037,8 +1058,7 @@ class TestIngestionOrchestratorEdgeCases:
         )
 
         def reindex_side_effect(file_id, content):
-            if file_id == "file3":
-                return (False, "existing-uuid")
+            # This won't be called for file3 (skipped by metadata check)
             return (True, None)
 
         mock_document_tracker.check_document_needs_reindex.side_effect = (

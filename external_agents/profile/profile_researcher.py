@@ -2,9 +2,13 @@
 
 Implements a hierarchical research system with supervisor and researcher subgraphs.
 All nodes have been refactored into the nodes/ subdirectory with comprehensive Langfuse tracing.
+
+IMPORTANT: Graph is compiled WITH checkpointing enabled for persistent conversation state.
+This enables followup_mode to work across invocations in the same thread.
 """
 
 import logging
+from pathlib import Path
 
 from .nodes.graph_builder import build_profile_researcher
 from .services.prompt_service import initialize_prompt_service
@@ -17,7 +21,12 @@ settings = Settings()
 initialize_prompt_service(settings)
 logger.info("PromptService initialized for profile agent")
 
-# Create the main graph instance
-profile_researcher = build_profile_researcher()
+# Setup checkpointing directory
+checkpoint_dir = Path("/app/data/checkpoints")
+checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-logger.info("Profile researcher graph compiled successfully")
+# Create the main graph instance WITH checkpointing enabled
+# Pass True to enable automatic checkpointing (LangGraph will manage the checkpointer)
+profile_researcher = build_profile_researcher(checkpointer=True)
+
+logger.info("Profile researcher graph compiled with persistent checkpointing enabled")

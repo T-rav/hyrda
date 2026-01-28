@@ -165,10 +165,8 @@ class TestResearcherPromptBehavior:
                 assert "sec_query" in system_msg
                 assert "web_search" in system_msg
 
-                # Verify effort levels documented
-                assert "effort levels" in system_msg.lower() or "low" in system_msg
-                assert "medium" in system_msg
-                assert "high" in system_msg
+                # Verify priority is documented (effort levels explanation was removed from prompt)
+                assert "priority" in system_msg.lower() or "high" in system_msg
 
     @pytest.mark.asyncio
     async def test_prompt_emphasizes_source_citation(self, mock_settings):

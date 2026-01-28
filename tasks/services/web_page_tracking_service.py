@@ -316,6 +316,7 @@ class WebPageTrackingService:
                     "url": page.url,
                     "page_title": page.page_title,
                     "content_hash": page.content_hash[:16],  # Shortened for display
+                    "vector_uuid": page.vector_uuid,
                     "last_scraped_at": page.last_scraped_at.isoformat()
                     if page.last_scraped_at
                     else None,
@@ -323,3 +324,33 @@ class WebPageTrackingService:
                 }
                 for page in pages
             ]
+
+    def get_conditional_headers(self, url: str) -> dict[str, str]:
+        """
+        Get HTTP conditional request headers for a URL.
+
+        Returns If-Modified-Since and If-None-Match headers based on stored
+        last_modified and etag values. Use these headers to avoid downloading
+        unchanged pages (server returns 304 Not Modified).
+
+        Args:
+            url: Page URL
+
+        Returns:
+            Dictionary of conditional headers (may be empty if page never scraped)
+        """
+        page_info = self.get_page_info(url)
+        if not page_info:
+            return {}
+
+        headers = {}
+
+        # Add If-Modified-Since header if we have last_modified
+        if page_info.get("last_modified"):
+            headers["If-Modified-Since"] = page_info["last_modified"]
+
+        # Add If-None-Match header if we have etag
+        if page_info.get("etag"):
+            headers["If-None-Match"] = page_info["etag"]
+
+        return headers
