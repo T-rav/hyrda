@@ -227,3 +227,9 @@ tasks/ssl/
 # Vector database volumes (Milvus, Qdrant)
 dx/milvus/volumes/
 dx/qdrant/volumes/
+
+# Security scan reports
+*_security_report.json
+
+# Audio files
+*.mp3
