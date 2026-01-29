@@ -194,6 +194,41 @@ class RAGClient:
             await self._client.aclose()
             self._client = None
 
+    def _get_user_email(self, user_id: str | None) -> str:
+        """Get user email from database or return placeholder.
+
+        Looks up the Slack user's email from the local database using UserService.
+        Falls back to placeholder format if user not found in database.
+
+        Args:
+            user_id: Slack user ID (e.g., U01234567)
+
+        Returns:
+            User email from database or placeholder like "U01234567@insightmesh.local"
+        """
+        if not user_id:
+            return "bot@insightmesh.local"
+
+        try:
+            from services.user_service import get_user_service
+
+            user_service = get_user_service()
+            user_info = user_service.get_user_info(user_id)
+
+            if user_info and user_info.get("email_address"):
+                email = user_info["email_address"]
+                logger.debug(f"Found email for user {user_id}: {email}")
+                return email
+
+            logger.debug(
+                f"No email found for user {user_id} in database, using placeholder"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to look up user email for {user_id}: {e}")
+
+        # Fall back to placeholder
+        return f"{user_id}@insightmesh.local"
+
     async def generate_response(
         self,
         query: str,
@@ -256,11 +291,8 @@ class RAGClient:
         )
 
         try:
-            # Use Slack user_id as email placeholder until OAuth/email lookup is implemented
-            # Format: U01234567@insightmesh.local
-            user_email = (
-                f"{user_id}@insightmesh.local" if user_id else "bot@insightmesh.local"
-            )
+            # Look up user email from database, fall back to placeholder if not found
+            user_email = self._get_user_email(user_id)
 
             headers = {
                 "X-Service-Token": self.service_token,
@@ -354,11 +386,8 @@ class RAGClient:
             request_body["document_filename"] = document_filename
 
         try:
-            # Use Slack user_id as email placeholder until OAuth/email lookup is implemented
-            # Format: U01234567@insightmesh.local
-            user_email = (
-                f"{user_id}@insightmesh.local" if user_id else "bot@insightmesh.local"
-            )
+            # Look up user email from database, fall back to placeholder if not found
+            user_email = self._get_user_email(user_id)
 
             headers = {
                 "X-Service-Token": self.service_token,
