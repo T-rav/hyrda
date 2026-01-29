@@ -11,6 +11,8 @@ const socialLogin =
       const { email, id, avatarUrl, username, name, emailVerified } = getProfileDetails({
         idToken,
         profile,
+        accessToken,
+        refreshToken,
       });
 
       const appConfig = await getAppConfig();
@@ -42,7 +44,13 @@ const socialLogin =
       }
 
       if (existingUser?.provider === provider) {
-        await handleExistingUser(existingUser, avatarUrl, appConfig, email);
+        // Prepare Google tokens for existing user update
+        const googleTokens = provider === 'google' ? {
+          accessToken,
+          refreshToken,
+          expiresAt: new Date(Date.now() + 3600 * 1000), // Google tokens typically expire in 1 hour
+        } : null;
+        await handleExistingUser(existingUser, avatarUrl, appConfig, email, googleTokens);
         return cb(null, existingUser);
       } else if (existingUser) {
         logger.info(
@@ -65,6 +73,13 @@ const socialLogin =
         return cb(error);
       }
 
+      // Prepare Google tokens for new user if using Google provider
+      const googleTokens = provider === 'google' ? {
+        accessToken,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 3600 * 1000), // Google tokens typically expire in 1 hour
+      } : null;
+
       const newUser = await createSocialUser({
         email,
         avatarUrl,
@@ -75,6 +90,7 @@ const socialLogin =
         name,
         emailVerified,
         appConfig,
+        googleTokens,
       });
       return cb(null, newUser);
     } catch (err) {
