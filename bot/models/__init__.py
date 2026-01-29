@@ -61,11 +61,13 @@ from .slack_events import (
     SlackUser,
     ThreadContext,
 )
+from .slack_usage import SlackUsage
 from .slack_user import SlackUser as SlackUserDB
 
 __all__ = [
     # Database models
     "Base",
+    "SlackUsage",
     "SlackUserDB",
     # Service responses
     "ApiResponse",
