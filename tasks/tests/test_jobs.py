@@ -1,14 +1,10 @@
 """Tests for job implementations."""
 
-import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
 
 from jobs.base_job import BaseJob
-
-# MetricsCollectionJob removed - module doesn't exist
-# from jobs.metrics_collection import MetricsCollectionJob
 from jobs.slack_user_import import SlackUserImportJob
 
 
@@ -42,39 +38,6 @@ class SlackClientMockFactory:
         return mock_client
 
 
-class HTTPResponseMockFactory:
-    """Factory for creating HTTP response mocks"""
-
-    @staticmethod
-    def create_success_response(data: dict = None) -> Mock:
-        """Create successful HTTP response mock"""
-        if data is None:
-            data = {"processed_count": 2}
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = data
-        return mock_response
-
-    @staticmethod
-    def create_metrics_response(metrics_data: list = None) -> Mock:
-        """Create HTTP response mock for metrics data"""
-        if metrics_data is None:
-            metrics_data = [{"metric": "value"}]
-
-        return HTTPResponseMockFactory.create_success_response({"data": metrics_data})
-
-    @staticmethod
-    def create_error_response(
-        status_code: int = 500, error: str = "Server Error"
-    ) -> Mock:
-        """Create error HTTP response mock"""
-        mock_response = Mock()
-        mock_response.status_code = status_code
-        mock_response.json.return_value = {"error": error}
-        return mock_response
-
-
 class JobTestDataFactory:
     """Factory for creating job test data"""
 
@@ -97,14 +60,6 @@ class JobTestDataFactory:
                 "profile": {"email": "admin.user@example.com"},
             },
         ]
-
-    @staticmethod
-    def create_metrics_data(metric_type: str = "usage", values: list = None) -> dict:
-        """Create sample metrics data"""
-        if values is None:
-            values = [1, 2, 3]
-
-        return {metric_type: {"data": values}}
 
     @staticmethod
     def create_job_execution_result(
@@ -259,60 +214,3 @@ class TestSlackUserImportJob:
         # Filter for all types
         filtered = job._filter_users(sample_slack_users, ["member", "admin"])
         assert len(filtered) == 2
-
-
-@pytest.mark.skip(reason="MetricsCollectionJob module doesn't exist")
-class TestMetricsCollectionJob:
-    """Test metrics collection job."""
-
-    def test_metrics_collection_job_init(self, test_settings):
-        """Test metrics collection job initialization."""
-        job = MetricsCollectionJob(test_settings)  # noqa: F821
-        assert job.JOB_NAME == "Metrics Collection"
-
-    @pytest.mark.asyncio
-    @patch("jobs.metrics_collection.requests")
-    async def test_metrics_collection_execution(self, mock_requests, test_settings):
-        """Test metrics collection execution."""
-        # Mock API responses using factory
-        mock_response = HTTPResponseMockFactory.create_metrics_response(
-            [{"metric": "value"}]
-        )
-        mock_requests.get.return_value = mock_response
-        mock_requests.post.return_value = mock_response
-
-        job = MetricsCollectionJob(test_settings)  # noqa: F821
-        result = await job.execute()
-
-        assert result["status"] == "success"
-        assert "collected_metrics" in result["result"]
-        assert "aggregated_metrics" in result["result"]
-
-    def test_metrics_aggregation(self, test_settings):
-        """Test metrics aggregation logic."""
-        job = MetricsCollectionJob(test_settings)  # noqa: F821
-
-        sample_metrics = {
-            "usage": {"data": [1, 2, 3]},
-            "performance": {"error": "API unavailable"},
-        }
-
-        aggregated = job._aggregate_metrics(sample_metrics, "hourly")
-
-        assert aggregated["aggregation_level"] == "hourly"
-        assert aggregated["summary"]["usage"]["status"] == "success"
-        assert aggregated["summary"]["performance"]["status"] == "error"
-
-    @patch("jobs.metrics_collection.requests.get")
-    def test_collect_usage_metrics_no_api(self, mock_get, test_settings):
-        """Test collecting usage metrics without API URL."""
-        # Remove API URL
-        test_settings.slack_bot_api_url = None
-
-        job = MetricsCollectionJob(test_settings)  # noqa: F821
-
-        # Use asyncio.run to run the async method
-        result = asyncio.run(job._collect_usage_metrics(24))
-
-        assert "error" in result
-        assert result["error"] == "No bot API URL configured"
