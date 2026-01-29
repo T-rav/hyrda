@@ -361,6 +361,23 @@ async def generate_response(
             request.query,
         )
 
+        # Track usage for LibreChat interactions
+        if service_name == "librechat" and request.user_id:
+            try:
+                from services.usage_tracking_client import get_usage_client
+
+                usage_client = get_usage_client()
+                await usage_client.track_librechat_usage(
+                    user_id=request.user_id,
+                    conversation_id=request.conversation_id or "unknown",
+                    agent_used=agent_name,
+                    deep_search=str(deep_search_enabled).lower(),
+                    interaction_type="agent_message" if agent_name else "rag_message",
+                    email=request.user_id,  # LibreChat uses email as user_id
+                )
+            except Exception as e:
+                logger.debug(f"Failed to track LibreChat usage: {e}")
+
         # Route to agent if applicable
         if agent_name:
             logger.info(f"Routing to agent: {agent_name}")

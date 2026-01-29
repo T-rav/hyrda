@@ -13,6 +13,7 @@ from .file_processing import (
     ProcessingStatus,
     SlackFileInfo,
 )
+from .librechat_usage import LibreChatUsage
 
 # LLM interaction models
 from .llm_interactions import (
@@ -67,6 +68,7 @@ from .slack_user import SlackUser as SlackUserDB
 __all__ = [
     # Database models
     "Base",
+    "LibreChatUsage",
     "SlackUsage",
     "SlackUserDB",
     # Service responses
