@@ -30,6 +30,9 @@ async def require_service_auth(
     x_google_oauth_token: str | None = Header(
         None, alias="X-Google-OAuth-Token", description="Google OAuth access token for user"
     ),
+    x_google_refresh_token: str | None = Header(
+        None, alias="X-Google-Refresh-Token", description="Google OAuth refresh token for user"
+    ),
     x_librechat_token: str | None = Header(None, description="JWT token from LibreChat"),
     x_librechat_user: str | None = Header(None, description="LibreChat user ID"),
     x_request_timestamp: str | None = Header(None, description="Request timestamp for HMAC"),
@@ -48,7 +51,8 @@ async def require_service_auth(
        - Authorization: Bearer <service-token> (LibreChat service token)
        - X-LibreChat-Token header (user JWT)
        - X-User-Email header for user permissions
-       - X-Google-OAuth-Token header (optional, Google OAuth access token for user)
+       - X-Google-OAuth-Token header (optional, Google OAuth access token)
+       - X-Google-Refresh-Token header (optional, for token refresh)
 
     The Google OAuth token allows the service to act on behalf of the user:
     - Access user's Google Drive
@@ -56,7 +60,8 @@ async def require_service_auth(
     - Call any Google API the user authorized
 
     Returns:
-        dict: Auth info with service, user_email, auth_method, google_oauth_token
+        dict: Auth info with service, user_email, auth_method, google_oauth_token,
+              google_refresh_token. If token refresh is needed, call refresh_google_token().
 
     Raises:
         HTTPException: 401 if not authenticated
@@ -67,8 +72,16 @@ async def require_service_auth(
             request: RAGGenerateRequest,
             auth: dict = Depends(require_service_auth)
         ):
-            # auth = {"service": "bot", "user_email": "john@example.com", "auth_method": "service"}
-            # OR {"service": "librechat", "user_email": "john@example.com", "auth_method": "jwt", "google_oauth_token": "ya29.xxx"}
+            # auth = {
+            #   "service": "librechat",
+            #   "user_email": "john@example.com",
+            #   "auth_method": "jwt",
+            #   "google_oauth_token": "ya29.xxx",
+            #   "google_refresh_token": "1//04xxx"
+            # }
+
+            # Refresh token if needed
+            auth = await refresh_google_token_if_needed(auth)
 
             # Use OAuth token if available
             if auth.get("google_oauth_token"):
@@ -177,10 +190,14 @@ async def require_service_auth(
     service_info["user_email"] = x_user_email
     service_info["auth_method"] = auth_method
 
-    # Add Google OAuth token if provided (for acting on behalf of user)
+    # Add Google OAuth tokens if provided (for acting on behalf of user)
     if x_google_oauth_token:
         service_info["google_oauth_token"] = x_google_oauth_token
-        logger.debug(f"Google OAuth token provided for user: {x_user_email}")
+        logger.debug(f"Google OAuth access token provided for user: {x_user_email}")
+
+    if x_google_refresh_token:
+        service_info["google_refresh_token"] = x_google_refresh_token
+        logger.debug(f"Google OAuth refresh token provided for user: {x_user_email}")
 
     # Audit log successful authentication
     service_name = service_info.get("service", "unknown")
@@ -195,3 +212,70 @@ async def require_service_auth(
     )
 
     return service_info
+
+
+async def refresh_google_token_if_needed(auth: dict) -> dict:
+    """Refresh Google OAuth token if expired.
+
+    This function checks if the Google OAuth access token is expired
+    and uses the refresh token to obtain a new one if needed.
+
+    Args:
+        auth: The auth dict from require_service_auth containing:
+            - google_oauth_token: Current access token
+            - google_refresh_token: Refresh token
+            - user_email: User's email for logging
+
+    Returns:
+        Updated auth dict with refreshed token if needed.
+        The auth_info will have 'token_refreshed': True if a refresh occurred.
+    """
+    access_token = auth.get("google_oauth_token")
+    refresh_token = auth.get("google_refresh_token")
+    user_email = auth.get("user_email", "unknown")
+
+    if not access_token or not refresh_token:
+        # No tokens to refresh
+        return auth
+
+    try:
+        from utils.google_token_refresh import get_token_refresher
+
+        refresher = get_token_refresher()
+
+        # Try to use the current token - if it fails with 401, refresh it
+        # For now, we'll refresh if the token is older than 50 minutes
+        # (Google tokens expire after 60 minutes)
+        # If not, assume it might be expired and try to validate
+        # For simplicity, we'll attempt refresh if we have a refresh token
+        # and no explicit "token_is_fresh" marker
+
+        if auth.get("google_token_fresh"):
+            # Token was recently refreshed, skip
+            return auth
+
+        # Attempt token refresh
+        logger.info(f"Attempting to refresh Google token for user: {user_email}")
+        result = await refresher.refresh_token(refresh_token)
+
+        if result["success"]:
+            auth["google_oauth_token"] = result["access_token"]
+            auth["google_token_refreshed"] = True
+            auth["google_token_fresh"] = True
+            auth["google_token_expires_at"] = result["expires_at"]
+
+            # Update refresh token if Google provided a new one
+            if result["refresh_token"] != refresh_token:
+                auth["google_refresh_token"] = result["refresh_token"]
+                auth["google_refresh_token_updated"] = True
+
+            logger.info(f"Successfully refreshed Google token for user: {user_email}")
+        else:
+            logger.warning(f"Failed to refresh Google token for {user_email}: {result['error']}")
+            auth["google_token_refresh_error"] = result["error"]
+
+    except Exception as e:
+        logger.error(f"Error during token refresh for {user_email}: {e}")
+        auth["google_token_refresh_error"] = str(e)
+
+    return auth

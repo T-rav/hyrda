@@ -349,6 +349,18 @@ async def generate_response(
     try:
         settings = get_settings()
 
+        # Refresh Google OAuth token if needed (for Google API calls on behalf of user)
+        if service.get("google_refresh_token"):
+            from dependencies.auth import refresh_google_token_if_needed
+
+            service = await refresh_google_token_if_needed(service)
+            if service.get("google_token_refreshed"):
+                logger.info(f"Google OAuth token refreshed for user: {request.user_id}")
+            elif service.get("google_token_refresh_error"):
+                logger.warning(
+                    f"Google token refresh failed: {service['google_token_refresh_error']}"
+                )
+
         # Parse metadata from LibreChat
         deep_search_enabled, selected_agent, research_depth = _parse_conversation_metadata(
             x_conversation_metadata

@@ -27,11 +27,14 @@ endpoints:
     # - Access user's Google Drive
     # - Read user's Gmail
     # - Call Google APIs with user's permissions
+    #
+    # Note: Refresh token is passed so RAG service can auto-refresh expired tokens
     headers:
       X-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
       X-LibreChat-Token: "{{LIBRECHAT_USER_ID}}"
       X-LibreChat-User: "{{LIBRECHAT_USER_ID}}"
       X-Google-OAuth-Token: "{{LIBRECHAT_USER_GOOGLEACCESSTOKEN}}"
+      X-Google-Refresh-Token: "{{LIBRECHAT_USER_GOOGLEREFRESHTOKEN}}"
     models:
       default:
         - "gpt-4o"
