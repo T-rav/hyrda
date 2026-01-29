@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from config.settings import SlackSettings
 from services.slack_service import SlackService
+from tests.utils.builders.thread_history_builder import ThreadHistoryBuilder
 
 
 # TDD Factory Patterns for Slack Service Testing
@@ -164,85 +165,6 @@ class SlackServiceFactory:
         if hasattr(service, "bot_user_id"):
             service.bot_user_id = None
         return service
-
-
-class ThreadHistoryBuilder:
-    """Builder for creating thread history test data"""
-
-    def __init__(self):
-        self.messages = []
-
-    def add_user_message(
-        self,
-        text: str = "Hello",
-        user_id: str = "U12345",
-        ts: str = "1234567890.123456",
-    ) -> "ThreadHistoryBuilder":
-        """Add user message to thread history"""
-        self.messages.append({"text": text, "user": user_id, "ts": ts})
-        return self
-
-    def add_bot_message(
-        self,
-        text: str = "Hi there!",
-        bot_id: str = "B12345678",
-        ts: str = "1234567890.234567",
-    ) -> "ThreadHistoryBuilder":
-        """Add bot message to thread history"""
-        self.messages.append({"text": text, "user": bot_id, "ts": ts})
-        return self
-
-    def add_empty_message(
-        self,
-        user_id: str = "U12345",
-        ts: str = "1234567890.345678",
-    ) -> "ThreadHistoryBuilder":
-        """Add empty message to thread history"""
-        self.messages.append({"text": "", "user": user_id, "ts": ts})
-        return self
-
-    def add_message_with_mention(
-        self,
-        text: str = "<@B12345678> hello",
-        user_id: str = "U12345",
-        ts: str = "1234567890.123456",
-    ) -> "ThreadHistoryBuilder":
-        """Add message with bot mention"""
-        self.messages.append({"text": text, "user": user_id, "ts": ts})
-        return self
-
-    def build(self) -> list[dict[str, Any]]:
-        """Build the thread history"""
-        return self.messages.copy()
-
-    @staticmethod
-    def basic_conversation() -> "ThreadHistoryBuilder":
-        """Create basic conversation thread"""
-        return (
-            ThreadHistoryBuilder()
-            .add_user_message("Hello")
-            .add_bot_message("Hi there!")
-            .add_user_message("How are you?", ts="1234567890.345678")
-        )
-
-    @staticmethod
-    def conversation_with_mentions() -> "ThreadHistoryBuilder":
-        """Create conversation with bot mentions"""
-        return (
-            ThreadHistoryBuilder()
-            .add_message_with_mention("<@B12345678> hello")
-            .add_bot_message("Hi there!")
-        )
-
-    @staticmethod
-    def conversation_with_empty_messages() -> "ThreadHistoryBuilder":
-        """Create conversation with empty messages"""
-        return (
-            ThreadHistoryBuilder()
-            .add_empty_message()
-            .add_empty_message(user_id="U12345", ts="1234567890.234567")
-            .add_user_message("Hello", ts="1234567890.345678")
-        )
 
 
 class TestSlackService:
