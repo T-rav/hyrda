@@ -90,7 +90,9 @@ async def verify_admin_status(email: str) -> dict[str, Any]:
             user = session.query(User).filter(User.email == email).first()
 
             if not user:
-                logger.warning(f"Admin verification failed: user {email} not found in database")
+                logger.warning(
+                    f"Admin verification failed: user {email} not found in database"
+                )
                 return {"is_admin": False, "user_found": False}
 
             logger.info(f"Admin verification for {email}: is_admin={user.is_admin}")

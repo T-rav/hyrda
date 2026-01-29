@@ -1,90 +1,9 @@
 """Tests for agent management API endpoints."""
 
-import os
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, AsyncMock
 import pytest
-from starlette.testclient import TestClient
 
-# Create temporary SQLite databases for tests
-security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-data_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-security_db_path = security_db_file.name
-data_db_path = data_db_file.name
-security_db_file.close()
-data_db_file.close()
-
-# Set up SQLite for tests BEFORE any imports
-os.environ["SECURITY_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-os.environ["DATA_DATABASE_URL"] = f"sqlite:///{data_db_path}"
-
-# Add control_plane to path
-control_plane_dir = Path(__file__).parent.parent
-if str(control_plane_dir) not in sys.path:
-    sys.path.insert(0, str(control_plane_dir))
-
-from models.base import Base
-from models import AgentMetadata, User, get_db_session
-
-# Create tables in SQLite
-with get_db_session() as session:
-    Base.metadata.create_all(session.bind)
-
-
-@pytest.fixture(scope="module")
-def app():
-    """Get FastAPI app for testing."""
-    from app import create_app
-    return create_app()
-
-
-@pytest.fixture
-def mock_oauth_env():
-    """Mock OAuth environment variables."""
-    with patch.dict(
-        os.environ,
-        {
-            "GOOGLE_OAUTH_CLIENT_ID": "test-client-id",
-            "GOOGLE_OAUTH_CLIENT_SECRET": "test-secret",
-            "ALLOWED_EMAIL_DOMAIN": "@8thlight.com",
-        },
-        clear=False,
-    ):
-        yield
-
-
-@pytest.fixture
-def client(app, mock_oauth_env):
-    """Create test client."""
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-@pytest.fixture
-def authenticated_client(client, app):
-    """Create authenticated admin client."""
-    from dependencies.auth import get_current_user
-    from utils.permissions import require_admin
-
-    mock_admin = User(
-        email="admin@8thlight.com",
-        full_name="Test Admin",
-        slack_user_id="U_ADMIN_TEST",
-        is_admin=True,
-    )
-
-    async def mock_get_current_user():
-        return mock_admin
-
-    async def mock_require_admin():
-        return None
-
-    app.dependency_overrides[get_current_user] = mock_get_current_user
-    app.dependency_overrides[require_admin] = mock_require_admin
-    yield client
-    app.dependency_overrides.clear()
+# All fixtures (app, client, authenticated_client) are in conftest.py
+from models import AgentMetadata, get_db_session
 
 
 @pytest.fixture
@@ -108,7 +27,8 @@ def service_client(client, app):
     app.dependency_overrides[_verify_service_only] = mock_verify_service_only
     app.dependency_overrides[check_idempotency] = mock_check_idempotency
     yield client
-    app.dependency_overrides.clear()
+
+    # Don't clear overrides - they may be needed by other tests
 
 
 @pytest.fixture(autouse=True)
@@ -204,7 +124,9 @@ class TestRegisterAgent:
 
         # Verify agent was created
         with get_db_session() as session:
-            created_agent = session.query(AgentMetadata).filter_by(agent_name="new_agent").first()
+            created_agent = (
+                session.query(AgentMetadata).filter_by(agent_name="new_agent").first()
+            )
             assert created_agent is not None
             assert created_agent.display_name == "New Agent"
             assert created_agent.get_aliases() == ["new", "agent"]
@@ -284,7 +206,9 @@ class TestUpdateAliases:
     def test_update_aliases_not_found(self, authenticated_client):
         """Update aliases for non-existent agent returns 404."""
         payload = {"aliases": ["test"]}
-        response = authenticated_client.put("/api/agents/nonexistent/aliases", json=payload)
+        response = authenticated_client.put(
+            "/api/agents/nonexistent/aliases", json=payload
+        )
         assert response.status_code == 404
 
 
@@ -350,13 +274,3 @@ class TestToggleAgent:
 
         response = authenticated_client.post("/api/agents/help/toggle")
         assert response.status_code == 403
-
-
-# Cleanup after all tests
-def teardown_module():
-    """Clean up test databases."""
-    try:
-        os.unlink(security_db_path)
-        os.unlink(data_db_path)
-    except Exception:
-        pass

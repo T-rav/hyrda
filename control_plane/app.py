@@ -165,13 +165,16 @@ def create_app() -> FastAPI:
         # Mount assets folder for JS/CSS files
         assets_folder = static_folder / "assets"
         if assets_folder.exists():
-            app.mount("/assets", StaticFiles(directory=str(assets_folder)), name="assets")
+            app.mount(
+                "/assets", StaticFiles(directory=str(assets_folder)), name="assets"
+            )
 
     # Prometheus metrics endpoint
     app.get("/metrics")(create_metrics_endpoint())
 
     # Catch-all route for SPA - this must be LAST
     if static_folder.exists():
+
         @app.get("/")
         @app.get("/{path:path}")
         async def serve_react_app(path: str = ""):
@@ -181,15 +184,22 @@ def create_app() -> FastAPI:
             to avoid intercepting API calls and static assets.
             """
             # Don't serve index.html for API, auth, or assets paths (safety check)
-            if path.startswith("api/") or path.startswith("auth/") or path.startswith("assets/"):
+            if (
+                path.startswith("api/")
+                or path.startswith("auth/")
+                or path.startswith("assets/")
+            ):
                 from fastapi import HTTPException
+
                 raise HTTPException(404)
 
             index_file = static_folder / "index.html"
             if index_file.exists():
                 # Prevent browser caching to ensure auth checks run on every page load
                 response = FileResponse(index_file)
-                response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                response.headers["Cache-Control"] = (
+                    "no-cache, no-store, must-revalidate"
+                )
                 response.headers["Pragma"] = "no-cache"
                 response.headers["Expires"] = "0"
                 return response
@@ -231,7 +241,7 @@ def cleanup_duplicate_user_groups() -> None:
                 session.query(
                     UserGroup.slack_user_id,
                     UserGroup.group_name,
-                    func.count(UserGroup.id).label('count')
+                    func.count(UserGroup.id).label("count"),
                 )
                 .group_by(UserGroup.slack_user_id, UserGroup.group_name)
                 .having(func.count(UserGroup.id) > 1)
@@ -250,7 +260,7 @@ def cleanup_duplicate_user_groups() -> None:
                     session.query(UserGroup)
                     .filter(
                         UserGroup.slack_user_id == slack_user_id,
-                        UserGroup.group_name == group_name
+                        UserGroup.group_name == group_name,
                     )
                     .order_by(UserGroup.created_at.asc())  # Keep the oldest
                     .all()

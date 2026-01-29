@@ -40,16 +40,26 @@ class ServiceAccount(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Identification
-    name = Column(String(255), nullable=False, unique=True, index=True)  # e.g., "HubSpot Production"
+    name = Column(
+        String(255), nullable=False, unique=True, index=True
+    )  # e.g., "HubSpot Production"
     description = Column(Text, nullable=True)  # Purpose and use case
 
     # Authentication
-    api_key_hash = Column(String(255), nullable=False, unique=True, index=True)  # bcrypt hash
-    api_key_prefix = Column(String(10), nullable=False, index=True)  # First 8 chars for identification
+    api_key_hash = Column(
+        String(255), nullable=False, unique=True, index=True
+    )  # bcrypt hash
+    api_key_prefix = Column(
+        String(10), nullable=False, index=True
+    )  # First 8 chars for identification
 
     # Permissions
-    scopes = Column(String(1000), nullable=False, default="agents:read,agents:invoke")  # Comma-separated
-    allowed_agents = Column(Text, nullable=True)  # JSON array of allowed agent names, NULL = all
+    scopes = Column(
+        String(1000), nullable=False, default="agents:read,agents:invoke"
+    )  # Comma-separated
+    allowed_agents = Column(
+        Text, nullable=True
+    )  # JSON array of allowed agent names, NULL = all
     rate_limit = Column(Integer, nullable=False, default=100)  # Requests per hour
 
     # Status
@@ -59,11 +69,15 @@ class ServiceAccount(Base):
     # Metadata
     created_by = Column(String(255), nullable=True)  # User email who created it
     last_used_at = Column(DateTime(timezone=True), nullable=True)
-    expires_at = Column(DateTime(timezone=True), nullable=True, index=True)  # Optional expiration
+    expires_at = Column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Optional expiration
 
     # Audit
     created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
-    updated_at = Column(DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, default=func.now(), onupdate=func.now()
+    )
     revoked_at = Column(DateTime(timezone=True), nullable=True)
     revoked_by = Column(String(255), nullable=True)
     revoke_reason = Column(Text, nullable=True)
@@ -74,7 +88,11 @@ class ServiceAccount(Base):
 
     def __repr__(self) -> str:
         """Return string representation."""
-        status = "revoked" if self.is_revoked else ("active" if self.is_active else "inactive")
+        status = (
+            "revoked"
+            if self.is_revoked
+            else ("active" if self.is_active else "inactive")
+        )
         return f"<ServiceAccount(name='{self.name}', status='{status}')>"
 
     def is_expired(self) -> bool:
@@ -98,6 +116,7 @@ class ServiceAccount(Base):
             return True  # NULL = access to all agents
 
         import json
+
         try:
             allowed = json.loads(self.allowed_agents)
             return agent_name in allowed

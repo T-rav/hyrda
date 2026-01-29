@@ -188,9 +188,7 @@ class TestTavilyClient:
     async def test_search_network_timeout(self, tavily_client):
         """Test search when network times out."""
         mock_session = AsyncMock()
-        mock_session.post = Mock(
-            side_effect=aiohttp.ClientTimeout("Request timeout")
-        )
+        mock_session.post = Mock(side_effect=aiohttp.ClientTimeout("Request timeout"))
 
         tavily_client.session = mock_session
 
@@ -249,7 +247,9 @@ class TestTavilyClient:
 
         assert result["success"] is True
         assert result["url"] == "https://example.com/article"
-        assert result["content"] == "This is the full article content in markdown format."
+        assert (
+            result["content"] == "This is the full article content in markdown format."
+        )
         assert "title" in result
 
     @pytest.mark.asyncio
@@ -328,9 +328,7 @@ class TestTavilyClient:
     async def test_scrape_url_network_error(self, tavily_client):
         """Test scraping when network fails."""
         mock_session = AsyncMock()
-        mock_session.post = Mock(
-            side_effect=aiohttp.ClientError("Network error")
-        )
+        mock_session.post = Mock(side_effect=aiohttp.ClientError("Network error"))
 
         tavily_client.session = mock_session
 
@@ -501,9 +499,7 @@ class TestPerplexityClient:
     async def test_deep_research_network_timeout(self, perplexity_client):
         """Test deep research when network times out."""
         mock_session = AsyncMock()
-        mock_session.post = Mock(
-            side_effect=aiohttp.ClientTimeout("Request timeout")
-        )
+        mock_session.post = Mock(side_effect=aiohttp.ClientTimeout("Request timeout"))
 
         perplexity_client.session = mock_session
 
@@ -554,7 +550,10 @@ class TestPerplexityClient:
         mock_response = Mock()
         mock_response.status = 200
         mock_response.json = AsyncMock(
-            return_value={"choices": [{"message": {"content": "Answer"}}], "citations": []}
+            return_value={
+                "choices": [{"message": {"content": "Answer"}}],
+                "citations": [],
+            }
         )
         mock_response.raise_for_status = MagicMock()
 
@@ -759,7 +758,9 @@ class TestToolDefinitions:
         assert "deep_research" in tool_names
 
         # Verify deep_research tool structure
-        deep_research = next(t for t in tools if t["function"]["name"] == "deep_research")
+        deep_research = next(
+            t for t in tools if t["function"]["name"] == "deep_research"
+        )
         assert deep_research["type"] == "function"
         assert "query" in deep_research["function"]["parameters"]["properties"]
         assert "EXPENSIVE" in deep_research["function"]["description"]

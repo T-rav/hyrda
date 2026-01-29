@@ -65,14 +65,19 @@ class TestPlannerPromptBehavior:
             "Comprehensive analysis of Costco's business model focusing on revenue streams, competitive advantages, and market position."
         )
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await create_research_plan(state)
 
-                # Verify plan was created
-                assert "research_plan" in result
-                assert "research_tasks" in result
-                assert len(result["research_tasks"]) > 0
+            # Verify plan was created
+            assert "research_plan" in result
+            assert "research_tasks" in result
+            assert len(result["research_tasks"]) > 0
 
     @pytest.mark.asyncio
     async def test_prompt_creates_plan_for_technical_topic(self, mock_settings):
@@ -86,16 +91,21 @@ class TestPlannerPromptBehavior:
             "Comprehensive analysis of microservices deployment practices, infrastructure, and operational procedures."
         )
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await create_research_plan(state)
 
-                # Verify plan doesn't assume company research
-                assert "research_plan" in result
-                assert "research_tasks" in result
+            # Verify plan doesn't assume company research
+            assert "research_plan" in result
+            assert "research_tasks" in result
 
-                # Plan should be created successfully for non-company topic
-                assert len(result["research_tasks"]) > 0
+            # Plan should be created successfully for non-company topic
+            assert len(result["research_tasks"]) > 0
 
     @pytest.mark.asyncio
     async def test_prompt_includes_query_and_depth(self, mock_settings):
@@ -112,14 +122,19 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Legal compliance analysis.")
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt),
+        ):
+            await create_research_plan(state)
 
-                # Verify prompt included query and depth
-                assert captured_prompt is not None
-                assert state["query"] in captured_prompt
-                assert state["research_depth"] in captured_prompt
+            # Verify prompt included query and depth
+            assert captured_prompt is not None
+            assert state["query"] in captured_prompt
+            assert state["research_depth"] in captured_prompt
 
     @pytest.mark.asyncio
     async def test_prompt_requests_structured_output(self, mock_settings):
@@ -136,16 +151,21 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("HR policy analysis.")
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt),
+        ):
+            await create_research_plan(state)
 
-                # Verify prompt requests structured format
-                assert captured_prompt is not None
-                assert "JSON" in captured_prompt or "json" in captured_prompt
-                assert "strategy" in captured_prompt
-                assert "tasks" in captured_prompt
-                assert "report_structure" in captured_prompt
+            # Verify prompt requests structured format
+            assert captured_prompt is not None
+            assert "JSON" in captured_prompt or "json" in captured_prompt
+            assert "strategy" in captured_prompt
+            assert "tasks" in captured_prompt
+            assert "report_structure" in captured_prompt
 
     @pytest.mark.asyncio
     async def test_prompt_example_is_generic(self, mock_settings):
@@ -162,19 +182,27 @@ class TestPlannerPromptBehavior:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Product development analysis.")
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt),
+        ):
+            await create_research_plan(state)
 
-                # Verify example doesn't bias toward companies
-                assert captured_prompt is not None
+            # Verify example doesn't bias toward companies
+            assert captured_prompt is not None
 
-                # Should NOT have company-specific example
-                assert "Q4 2023 financial performance" not in captured_prompt
-                assert "company's Q4" not in captured_prompt.lower()
+            # Should NOT have company-specific example
+            assert "Q4 2023 financial performance" not in captured_prompt
+            assert "company's Q4" not in captured_prompt.lower()
 
-                # Should have generic example
-                assert "internal documentation" in captured_prompt.lower() or "key findings" in captured_prompt.lower()
+            # Should have generic example
+            assert (
+                "internal documentation" in captured_prompt.lower()
+                or "key findings" in captured_prompt.lower()
+            )
 
 
 class TestPlannerPromptDiverseTopics:
@@ -205,20 +233,25 @@ class TestPlannerPromptDiverseTopics:
             f"Comprehensive analysis of {expected_domain} topic."
         )
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await create_research_plan(state)
 
-                # Verify plan was created for any domain
-                assert "research_plan" in result
-                assert "research_tasks" in result
-                assert len(result["research_tasks"]) > 0
+            # Verify plan was created for any domain
+            assert "research_plan" in result
+            assert "research_tasks" in result
+            assert len(result["research_tasks"]) > 0
 
-                # Verify tasks have required fields
-                for task in result["research_tasks"]:
-                    assert hasattr(task, "description")
-                    assert hasattr(task, "priority")
-                    assert hasattr(task, "dependencies")
+            # Verify tasks have required fields
+            for task in result["research_tasks"]:
+                assert hasattr(task, "description")
+                assert hasattr(task, "priority")
+                assert hasattr(task, "dependencies")
 
     @pytest.mark.asyncio
     async def test_prompt_guides_comprehensive_task_creation(self, mock_settings):
@@ -235,13 +268,20 @@ class TestPlannerPromptDiverseTopics:
             captured_prompt = messages[0].content
             return create_mock_plan_response("Infrastructure analysis.", num_tasks=15)
 
-        with patch("agents.research.nodes.research_planner.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt):
-                result = await create_research_plan(state)
+        with (
+            patch(
+                "agents.research.nodes.research_planner.Settings",
+                return_value=mock_settings,
+            ),
+            patch.object(ChatOpenAI, "ainvoke", side_effect=capture_prompt),
+        ):
+            result = await create_research_plan(state)
 
-                # Verify prompt requests multiple tasks
-                assert captured_prompt is not None
-                assert "15-20 specific tasks" in captured_prompt or "tasks" in captured_prompt
+            # Verify prompt requests multiple tasks
+            assert captured_prompt is not None
+            assert (
+                "15-20 specific tasks" in captured_prompt or "tasks" in captured_prompt
+            )
 
-                # Should create multiple tasks
-                assert len(result["research_tasks"]) >= 5
+            # Should create multiple tasks
+            assert len(result["research_tasks"]) >= 5

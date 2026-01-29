@@ -3,8 +3,9 @@
 Tests SECRET_KEY validation, environment detection, and service configuration.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 class TestSecretKeyValidation:
@@ -12,19 +13,23 @@ class TestSecretKeyValidation:
 
     def test_production_rejects_default_secret_key(self):
         """Test that production environment rejects default SECRET_KEY."""
-        with patch.dict(
-            "os.environ",
-            {
-                "SECRET_KEY": "dev-secret-key-change-in-production",
-                "ENVIRONMENT": "production",
-            },
-            clear=False,
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "SECRET_KEY": "dev-secret-key-change-in-production",
+                    "ENVIRONMENT": "production",
+                },
+                clear=False,
+            ),
+            pytest.raises(ValueError, match="SECRET_KEY must be set to a secure value"),
         ):
-            with pytest.raises(ValueError, match="SECRET_KEY must be set to a secure value"):
-                # Re-import app to trigger validation
-                import importlib
-                import app as app_module
-                importlib.reload(app_module)
+            # Re-import app to trigger validation
+            import importlib
+
+            import app as app_module
+
+            importlib.reload(app_module)
 
     def test_production_accepts_custom_secret_key(self):
         """Test that production environment accepts custom SECRET_KEY."""
@@ -42,7 +47,9 @@ class TestSecretKeyValidation:
         ):
             # Should not raise
             import importlib
+
             import app as app_module
+
             importlib.reload(app_module)
 
     def test_development_allows_default_secret_key(self):
@@ -61,7 +68,9 @@ class TestSecretKeyValidation:
         ):
             # Should not raise
             import importlib
+
             import app as app_module
+
             importlib.reload(app_module)
 
 
@@ -75,7 +84,9 @@ class TestServiceConfiguration:
         required_services = ["bot", "agent_service", "tasks", "control_plane"]
         for service in required_services:
             assert service in SERVICES, f"Missing service: {service}"
-            assert SERVICES[service].startswith("http://") or SERVICES[service].startswith("https://"), f"Invalid URL for {service}"
+            assert SERVICES[service].startswith("http://") or SERVICES[
+                service
+            ].startswith("https://"), f"Invalid URL for {service}"
 
     def test_service_timeout_is_configured(self):
         """Test that DEFAULT_SERVICE_TIMEOUT is configured."""
@@ -97,6 +108,7 @@ class TestEnvironmentDetection:
             clear=False,
         ):
             from app import is_production
+
             # This would be True if we could reload without SECRET_KEY error
             # Just verify the logic exists
             assert isinstance(is_production, bool)
@@ -109,9 +121,12 @@ class TestEnvironmentDetection:
             clear=False,
         ):
             import importlib
+
             import app as app_module
+
             importlib.reload(app_module)
             from app import is_production
+
             assert is_production is False
 
 
@@ -133,6 +148,7 @@ class TestMiddlewareConfiguration:
             clear=False,
         ):
             from app import app
+
             # Check that middleware is configured
             middleware_classes = [m.cls.__name__ for m in app.user_middleware]
             assert "SessionMiddleware" in middleware_classes
@@ -152,5 +168,6 @@ class TestMiddlewareConfiguration:
             clear=False,
         ):
             from app import app
+
             middleware_classes = [m.cls.__name__ for m in app.user_middleware]
             assert "FastAPIAuthMiddleware" in middleware_classes

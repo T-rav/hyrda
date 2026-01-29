@@ -146,10 +146,12 @@ ignore = [
     "PLR0915", # too many statements
     "PLR2004", # magic value used in comparison
     "PLC0415", # Allow imports inside functions for optional dependencies
+    "SIM117",  # Allow nested with statements (test mocking often requires this)
+    "SIM105",  # Allow try-except-pass (cleanup code pattern)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "B011", "F811"]  # Allow tests to use asserts, etc.
+"tests/*" = ["S101", "B011", "F811", "E402"]  # Allow tests to use asserts, imports after sys.path mods
 "../debug/*" = ["E402"]  # Allow imports after sys.path modifications in debug files
 
 [tool.ruff.lint.isort]

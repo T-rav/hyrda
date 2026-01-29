@@ -308,7 +308,11 @@ class TestDiversificationStrategy:
         service = RetrievalService(settings)
 
         results = [
-            {"content": f"Chunk {i}", "similarity": 0.9 - i * 0.01, "metadata": {"file_name": "doc.pdf"}}
+            {
+                "content": f"Chunk {i}",
+                "similarity": 0.9 - i * 0.01,
+                "metadata": {"file_name": "doc.pdf"},
+            }
             for i in range(5)
         ]
 

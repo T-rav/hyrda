@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 # Mock the SlackService import before importing conversation_cache
-sys.modules['services.slack_service'] = Mock()
-sys.modules['services.slack_service'].SlackService = Mock()
+sys.modules["services.slack_service"] = Mock()
+sys.modules["services.slack_service"].SlackService = Mock()
 
 from services.conversation_cache import ConversationCache
 
@@ -134,6 +134,7 @@ class TestRedisClientConnection:
 
         with patch("redis.asyncio.from_url") as mock_from_url:
             import redis.asyncio as redis
+
             mock_client = AsyncMock()
             mock_client.ping = AsyncMock(side_effect=redis.TimeoutError("Timeout"))
             mock_from_url.return_value = mock_client
@@ -174,16 +175,18 @@ class TestConversationRetrieval:
 
         messages = [
             {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi there!"}
+            {"role": "assistant", "content": "Hi there!"},
         ]
         metadata = {"cached_at": datetime.now(UTC).isoformat(), "message_count": 2}
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
-            mock_client.get = AsyncMock(side_effect=[
-                json.dumps(messages),  # cached_data
-                json.dumps(metadata)   # cached_meta
-            ])
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    json.dumps(messages),  # cached_data
+                    json.dumps(metadata),  # cached_meta
+                ]
+            )
             mock_get_client.return_value = mock_client
 
             result_messages, success, source = await cache.get_conversation(
@@ -204,9 +207,7 @@ class TestConversationRetrieval:
         mock_slack_service = AsyncMock()
 
         slack_messages = [{"role": "user", "content": "Hello from Slack"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(slack_messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(slack_messages, True))
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
@@ -251,9 +252,7 @@ class TestConversationRetrieval:
         mock_slack_service = AsyncMock()
 
         slack_messages = [{"role": "user", "content": "Hello"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(slack_messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(slack_messages, True))
 
         with patch.object(cache, "_get_redis_client", return_value=None):
             result_messages, success, source = await cache.get_conversation(
@@ -271,9 +270,7 @@ class TestConversationRetrieval:
         mock_slack_service = AsyncMock()
 
         slack_messages = [{"role": "user", "content": "Hello"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(slack_messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(slack_messages, True))
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
@@ -282,9 +279,7 @@ class TestConversationRetrieval:
             mock_get_client.return_value = mock_client
 
             with patch.object(cache, "_cache_conversation") as mock_cache:
-                await cache.get_conversation(
-                    "C123", "1234567890.123456", mock_slack_service
-                )
+                await cache.get_conversation("C123", "1234567890.123456", mock_slack_service)
 
                 mock_cache.assert_called_once()
 
@@ -303,9 +298,7 @@ class TestDocumentStorage:
             mock_get_client.return_value = mock_client
 
             result = await cache.store_document_content(
-                "1234567890.123456",
-                "Document content here",
-                "report.pdf"
+                "1234567890.123456", "Document content here", "report.pdf"
             )
 
             assert result is True
@@ -322,9 +315,7 @@ class TestDocumentStorage:
 
         with patch.object(cache, "_get_redis_client", return_value=None):
             result = await cache.store_document_content(
-                "1234567890.123456",
-                "Document content",
-                "report.pdf"
+                "1234567890.123456", "Document content", "report.pdf"
             )
 
             assert result is False
@@ -340,9 +331,7 @@ class TestDocumentStorage:
             mock_get_client.return_value = mock_client
 
             result = await cache.store_document_content(
-                "1234567890.123456",
-                "Document content",
-                "report.pdf"
+                "1234567890.123456", "Document content", "report.pdf"
             )
 
             assert result is False
@@ -355,7 +344,7 @@ class TestDocumentStorage:
         document_data = {
             "content": "Document content here",
             "filename": "report.pdf",
-            "stored_at": datetime.now(UTC).isoformat()
+            "stored_at": datetime.now(UTC).isoformat(),
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -413,7 +402,7 @@ class TestSummaryStorage:
                 "1234567890.123456",
                 "This is a summary of the conversation",
                 message_count=5,
-                compressed_from=10
+                compressed_from=10,
             )
 
             assert result is True
@@ -429,8 +418,8 @@ class TestSummaryStorage:
             "current_version": 2,
             "versions": [
                 {"version": 1, "token_count": 100, "created_at": "2024-01-01T00:00:00Z"},
-                {"version": 2, "token_count": 150, "created_at": "2024-01-02T00:00:00Z"}
-            ]
+                {"version": 2, "token_count": 150, "created_at": "2024-01-02T00:00:00Z"},
+            ],
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -441,16 +430,14 @@ class TestSummaryStorage:
             mock_get_client.return_value = mock_client
 
             result = await cache.store_summary(
-                "1234567890.123456",
-                "Updated summary",
-                message_count=8,
-                compressed_from=15
+                "1234567890.123456", "Updated summary", message_count=8, compressed_from=15
             )
 
             assert result is True
             # Verify new version is 3
-            history_call = [call for call in mock_client.setex.call_args_list
-                           if "history" in str(call)]
+            history_call = [
+                call for call in mock_client.setex.call_args_list if "history" in str(call)
+            ]
             assert len(history_call) > 0
 
     @pytest.mark.asyncio
@@ -464,7 +451,7 @@ class TestSummaryStorage:
             "versions": [
                 {"version": i, "token_count": 100, "created_at": "2024-01-01T00:00:00Z"}
                 for i in range(1, 6)
-            ]
+            ],
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -479,7 +466,7 @@ class TestSummaryStorage:
                 "Sixth summary",
                 message_count=10,
                 compressed_from=20,
-                max_versions=5
+                max_versions=5,
             )
 
             assert result is True
@@ -535,7 +522,7 @@ class TestSummaryRetrieval:
             "token_count": 120,
             "message_count": 7,
             "compressed_from_messages": 12,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -558,7 +545,7 @@ class TestSummaryRetrieval:
             "token_count": 100,
             "message_count": 5,
             "compressed_from_messages": 8,
-            "created_at": datetime.now(UTC).isoformat()
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -612,7 +599,7 @@ class TestSummaryMetadata:
             "token_count": 150,
             "message_count": 8,
             "compressed_from_messages": 15,
-            "created_at": "2024-01-15T10:30:00Z"
+            "created_at": "2024-01-15T10:30:00Z",
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -653,9 +640,9 @@ class TestSummaryMetadata:
             "versions": [
                 {"version": 1, "token_count": 100, "created_at": "2024-01-01T00:00:00Z"},
                 {"version": 2, "token_count": 120, "created_at": "2024-01-02T00:00:00Z"},
-                {"version": 3, "token_count": 140, "created_at": "2024-01-03T00:00:00Z"}
+                {"version": 3, "token_count": 140, "created_at": "2024-01-03T00:00:00Z"},
             ],
-            "updated_at": "2024-01-03T00:00:00Z"
+            "updated_at": "2024-01-03T00:00:00Z",
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -693,7 +680,7 @@ class TestConversationUpdate:
 
         existing_messages = [
             {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi!"}
+            {"role": "assistant", "content": "Hi!"},
         ]
         new_message = {"role": "user", "content": "How are you?"}
 
@@ -704,10 +691,7 @@ class TestConversationUpdate:
             mock_get_client.return_value = mock_client
 
             with patch.object(cache, "_cache_conversation") as mock_cache:
-                result = await cache.update_conversation(
-                    "1234567890.123456",
-                    new_message
-                )
+                result = await cache.update_conversation("1234567890.123456", new_message)
 
                 assert result is True
                 # Verify _cache_conversation was called with updated messages
@@ -730,10 +714,7 @@ class TestConversationUpdate:
             mock_get_client.return_value = mock_client
 
             with patch.object(cache, "_cache_conversation") as mock_cache:
-                result = await cache.update_conversation(
-                    "1234567890.123456",
-                    new_message
-                )
+                result = await cache.update_conversation("1234567890.123456", new_message)
 
                 assert result is True
                 call_messages = mock_cache.call_args[0][2]
@@ -747,8 +728,7 @@ class TestConversationUpdate:
 
         with patch.object(cache, "_get_redis_client", return_value=None):
             result = await cache.update_conversation(
-                "1234567890.123456",
-                {"role": "user", "content": "Test"}
+                "1234567890.123456", {"role": "user", "content": "Test"}
             )
             assert result is False
 
@@ -767,7 +747,7 @@ class TestConversationUpdate:
                 result = await cache.update_conversation(
                     "1234567890.123456",
                     {"role": "assistant", "content": "Bot response"},
-                    is_bot_message=True
+                    is_bot_message=True,
                 )
                 assert result is True
 
@@ -784,10 +764,7 @@ class TestCacheConversation:
         mock_client.get = AsyncMock(return_value=None)  # No existing metadata
         mock_client.setex = AsyncMock()
 
-        messages = [
-            {"role": "user", "content": "Hello"},
-            {"role": "assistant", "content": "Hi!"}
-        ]
+        messages = [{"role": "user", "content": "Hello"}, {"role": "assistant", "content": "Hi!"}]
 
         await cache._cache_conversation(mock_client, "1234567890.123456", messages)
 
@@ -795,8 +772,9 @@ class TestCacheConversation:
         assert mock_client.setex.call_count == 2
 
         # Verify metadata structure
-        meta_call = [call for call in mock_client.setex.call_args_list
-                    if "meta" in str(call[0][0])][0]
+        meta_call = [
+            call for call in mock_client.setex.call_args_list if "meta" in str(call[0][0])
+        ][0]
         metadata = json.loads(meta_call[0][2])
         assert metadata["message_count"] == 2
         assert "cached_at" in metadata
@@ -807,11 +785,7 @@ class TestCacheConversation:
         """Test that caching preserves existing metadata fields."""
         cache = ConversationCache()
 
-        existing_metadata = {
-            "thread_type": "profile",
-            "user_id": "U123",
-            "custom_field": "value"
-        }
+        existing_metadata = {"thread_type": "profile", "user_id": "U123", "custom_field": "value"}
 
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=json.dumps(existing_metadata))
@@ -822,8 +796,9 @@ class TestCacheConversation:
         await cache._cache_conversation(mock_client, "1234567890.123456", messages)
 
         # Find metadata setex call
-        meta_call = [call for call in mock_client.setex.call_args_list
-                    if "meta" in str(call[0][0])][0]
+        meta_call = [
+            call for call in mock_client.setex.call_args_list if "meta" in str(call[0][0])
+        ][0]
         metadata = json.loads(meta_call[0][2])
 
         # Should preserve existing fields
@@ -936,8 +911,8 @@ class TestClearConversation:
             "versions": [
                 {"version": 1, "token_count": 100, "created_at": "2024-01-01T00:00:00Z"},
                 {"version": 2, "token_count": 120, "created_at": "2024-01-02T00:00:00Z"},
-                {"version": 3, "token_count": 140, "created_at": "2024-01-03T00:00:00Z"}
-            ]
+                {"version": 3, "token_count": 140, "created_at": "2024-01-03T00:00:00Z"},
+            ],
         }
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
@@ -1003,10 +978,7 @@ class TestThreadType:
         """Test updating thread type in existing metadata."""
         cache = ConversationCache()
 
-        existing_metadata = {
-            "cached_at": "2024-01-01T00:00:00Z",
-            "message_count": 5
-        }
+        existing_metadata = {"cached_at": "2024-01-01T00:00:00Z", "message_count": 5}
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
@@ -1035,10 +1007,7 @@ class TestThreadType:
         """Test retrieving thread type successfully."""
         cache = ConversationCache()
 
-        metadata = {
-            "thread_type": "profile",
-            "cached_at": "2024-01-01T00:00:00Z"
-        }
+        metadata = {"thread_type": "profile", "cached_at": "2024-01-01T00:00:00Z"}
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
@@ -1099,13 +1068,8 @@ class TestCacheStats:
 
         with patch.object(cache, "_get_redis_client") as mock_get_client:
             mock_client = AsyncMock()
-            mock_client.info = AsyncMock(return_value={
-                "used_memory_human": "2.5M"
-            })
-            mock_client.keys = AsyncMock(return_value=[
-                "conversation:123",
-                "conversation:456"
-            ])
+            mock_client.info = AsyncMock(return_value={"used_memory_human": "2.5M"})
+            mock_client.keys = AsyncMock(return_value=["conversation:123", "conversation:456"])
             mock_get_client.return_value = mock_client
 
             stats = await cache.get_cache_stats()

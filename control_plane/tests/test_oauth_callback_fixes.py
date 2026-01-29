@@ -22,14 +22,17 @@ class TestUserModelFieldNames:
         content = user_model_file.read_text()
 
         # Should have full_name field
-        assert (
-            "full_name = Column" in content
-        ), "User model should have full_name field"
+        assert "full_name = Column" in content, "User model should have full_name field"
 
         # Should NOT have a standalone 'name' field (but given_name, family_name are okay)
         lines = content.split("\n")
         for line in lines:
-            if "name = Column" in line and "given_name" not in line and "family_name" not in line and "full_name" not in line:
+            if (
+                "name = Column" in line
+                and "given_name" not in line
+                and "family_name" not in line
+                and "full_name" not in line
+            ):
                 pytest.fail(
                     f"User model should not have standalone 'name' field: {line}"
                 )
@@ -55,7 +58,7 @@ class TestUserModelFieldNames:
                     # Should NOT use name=
                     if "name=" in lines[j] and "full_name" not in lines[j]:
                         pytest.fail(
-                            f"Found 'name=' instead of 'full_name=' at line {j+1}: {lines[j]}"
+                            f"Found 'name=' instead of 'full_name=' at line {j + 1}: {lines[j]}"
                         )
                 break
 
@@ -74,9 +77,7 @@ class TestAuditLoggerParameters:
         content = auth_utils_file.read_text()
 
         # Find the log_auth_event signature
-        assert (
-            "def log_auth_event" in content
-        ), "Should have log_auth_event function"
+        assert "def log_auth_event" in content, "Should have log_auth_event function"
 
         # Check for valid parameters in signature
         valid_params = [
@@ -90,9 +91,9 @@ class TestAuditLoggerParameters:
         ]
 
         for param in valid_params:
-            assert (
-                f"{param}:" in content or f"{param} =" in content
-            ), f"log_auth_event should accept {param} parameter"
+            assert f"{param}:" in content or f"{param} =" in content, (
+                f"log_auth_event should accept {param} parameter"
+            )
 
     def test_oauth_callback_calls_audit_logger_correctly(self):
         """OAuth callback should call AuditLogger.log_auth_event with valid params."""
@@ -121,9 +122,9 @@ class TestAuditLoggerParameters:
         invalid_params = ["user_id=", "metadata="]
         for line_num, call in audit_calls:
             for invalid_param in invalid_params:
-                assert (
-                    invalid_param not in call
-                ), f"Line {line_num}: AuditLogger.log_auth_event should not use {invalid_param}"
+                assert invalid_param not in call, (
+                    f"Line {line_num}: AuditLogger.log_auth_event should not use {invalid_param}"
+                )
 
 
 class TestAuthEndpointStructure:
@@ -151,9 +152,7 @@ class TestAuthEndpointStructure:
                 break
 
         assert found_login_route, "Should have @router.get('/login') endpoint"
-        assert (
-            serves_html
-        ), "/auth/login should serve HTML (HTMLResponse or template)"
+        assert serves_html, "/auth/login should serve HTML (HTMLResponse or template)"
 
     def test_auth_start_initiates_oauth(self):
         """GET /auth/start should initiate OAuth flow."""
@@ -185,9 +184,7 @@ class TestAuthEndpointStructure:
 
     def test_login_template_points_to_start(self):
         """Login page should point to /auth/start, not /auth/login."""
-        login_template = (
-            Path(__file__).parent.parent / "templates" / "login.html"
-        )
+        login_template = Path(__file__).parent.parent / "templates" / "login.html"
 
         if not login_template.exists():
             pytest.skip("login.html template not found")
@@ -195,16 +192,12 @@ class TestAuthEndpointStructure:
         content = login_template.read_text()
 
         # Should link to /auth/start
-        assert (
-            "/auth/start" in content
-        ), "Login page should have link to /auth/start"
+        assert "/auth/start" in content, "Login page should have link to /auth/start"
 
         # Should NOT link to /auth/login for OAuth (that would be circular)
         # Count occurrences - one is okay (for "Sign In Again" button)
         login_links = content.count('href="/auth/login"')
-        assert (
-            login_links <= 1
-        ), "Login page should not use /auth/login for OAuth flow"
+        assert login_links <= 1, "Login page should not use /auth/login for OAuth flow"
 
 
 class TestLogoutPageRendering:
@@ -231,9 +224,7 @@ class TestLogoutPageRendering:
                 break
 
         assert found_logout, "Should have @router.post('/logout') endpoint"
-        assert (
-            redirects_to_logged_out
-        ), "Logout should redirect to /auth/logged-out"
+        assert redirects_to_logged_out, "Logout should redirect to /auth/logged-out"
 
     def test_logged_out_endpoint_serves_html(self):
         """GET /auth/logged-out should serve HTML page."""
@@ -256,12 +247,10 @@ class TestLogoutPageRendering:
                         break
                 break
 
-        assert (
-            found_logged_out_route
-        ), "Should have @router.get('/logged-out') endpoint"
-        assert (
-            serves_html
-        ), "/auth/logged-out should serve HTML (HTMLResponse or template)"
+        assert found_logged_out_route, "Should have @router.get('/logged-out') endpoint"
+        assert serves_html, (
+            "/auth/logged-out should serve HTML (HTMLResponse or template)"
+        )
 
 
 if __name__ == "__main__":

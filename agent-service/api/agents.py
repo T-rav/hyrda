@@ -506,7 +506,9 @@ async def stream_agent(
         if service_info:
             auth_type = "service"
             service_name = service_info.get("service", "unknown")
-            logger.info(f"Authenticated as internal service for streaming: {service_name}")
+            logger.info(
+                f"Authenticated as internal service for streaming: {service_name}"
+            )
             user_id = http_request.headers.get("X-User-Context")
         else:
             raise HTTPException(

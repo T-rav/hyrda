@@ -113,7 +113,9 @@ async def verify_service_account_api_key(
 
     # Find service account by prefix (fast lookup)
     accounts = (
-        db.query(ServiceAccount).filter(ServiceAccount.api_key_prefix == api_key_prefix).all()
+        db.query(ServiceAccount)
+        .filter(ServiceAccount.api_key_prefix == api_key_prefix)
+        .all()
     )
 
     if not accounts:
@@ -143,12 +145,16 @@ async def verify_service_account_api_key(
 
     # Check active
     if not service_account.is_active:
-        logger.warning(f"Inactive service account access attempt: {service_account.name}")
+        logger.warning(
+            f"Inactive service account access attempt: {service_account.name}"
+        )
         raise HTTPException(status_code=403, detail="Service account is inactive")
 
     # Check expiration
     if service_account.is_expired():
-        logger.warning(f"Expired service account access attempt: {service_account.name}")
+        logger.warning(
+            f"Expired service account access attempt: {service_account.name}"
+        )
         raise HTTPException(
             status_code=403,
             detail=f"Service account expired on {service_account.expires_at.isoformat()}",
@@ -169,10 +175,14 @@ async def verify_service_account_api_key(
     service_account.last_used_at = datetime.now(timezone.utc)
     service_account.total_requests += 1
     if request:
-        service_account.last_request_ip = request.client.host if request.client else None
+        service_account.last_request_ip = (
+            request.client.host if request.client else None
+        )
     db.commit()
 
-    logger.info(f"Service account authenticated: {service_account.name} ({service_account.id})")
+    logger.info(
+        f"Service account authenticated: {service_account.name} ({service_account.id})"
+    )
 
     return service_account
 

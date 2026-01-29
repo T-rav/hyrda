@@ -61,7 +61,10 @@ class TestMeddpiccContextManagerInitialization:
         """Test initialization with some custom and some default parameters."""
         # Arrange & Act
         manager = MeddpiccContextManager(
-            max_messages=25, keep_recent=5, summarize_threshold=None, model_context_window=None
+            max_messages=25,
+            keep_recent=5,
+            summarize_threshold=None,
+            model_context_window=None,
         )
 
         # Assert
@@ -792,9 +795,7 @@ class TestManageContext:
         manager = MeddpiccContextManager(max_messages=10, keep_recent=2)
 
         # Turn 1 - initial query
-        result1 = await manager.manage_context(
-            "What is MEDDPICC?", None, None
-        )
+        result1 = await manager.manage_context("What is MEDDPICC?", None, None)
 
         # Assert turn 1
         assert len(result1["conversation_history"]) == 1
@@ -803,10 +804,14 @@ class TestManageContext:
 
         # Turn 2 - add assistant response manually and send next query
         history_after_turn1 = result1["conversation_history"].copy()
-        history_after_turn1.append({"role": "assistant", "content": "MEDDPICC is a framework"})
+        history_after_turn1.append(
+            {"role": "assistant", "content": "MEDDPICC is a framework"}
+        )
 
         result2 = await manager.manage_context(
-            "Tell me about metrics", history_after_turn1, result1["conversation_summary"]
+            "Tell me about metrics",
+            history_after_turn1,
+            result1["conversation_summary"],
         )
 
         # Assert turn 2
@@ -815,10 +820,14 @@ class TestManageContext:
 
         # Turn 3 - add another assistant response and send next query
         history_after_turn2 = result2["conversation_history"].copy()
-        history_after_turn2.append({"role": "assistant", "content": "Metrics are important"})
+        history_after_turn2.append(
+            {"role": "assistant", "content": "Metrics are important"}
+        )
 
         result3 = await manager.manage_context(
-            "What about decision criteria?", history_after_turn2, result2["conversation_summary"]
+            "What about decision criteria?",
+            history_after_turn2,
+            result2["conversation_summary"],
         )
 
         # Assert turn 3 - should have 5 messages (no compression yet)

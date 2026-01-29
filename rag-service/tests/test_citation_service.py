@@ -4,7 +4,6 @@ Comprehensive tests for citation service.
 Tests citation formatting, source filtering, and metadata handling.
 """
 
-
 from services.citation_service import CitationService
 
 
@@ -291,7 +290,12 @@ class TestCitationFormatting:
         chunk = {
             "content": "Employee data",
             "similarity": 0.95,
-            "metadata": {"name": "John Doe", "data_type": "employee", "source": "metric", "role": "Engineer"},
+            "metadata": {
+                "name": "John Doe",
+                "data_type": "employee",
+                "source": "metric",
+                "role": "Engineer",
+            },
         }
 
         citation = service._format_single_citation(

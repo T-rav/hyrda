@@ -49,9 +49,7 @@ class RetrieveRequest(BaseModel):
             "Example: 'User: john@8thlight.com\\nRole: consultant\\nProjects: A, B, C'"
         ),
     )
-    max_chunks: int = Field(
-        5, ge=1, le=20, description="Maximum chunks to return (1-20)"
-    )
+    max_chunks: int = Field(5, ge=1, le=20, description="Maximum chunks to return (1-20)")
     similarity_threshold: float = Field(
         0.7, ge=0.0, le=1.0, description="Minimum similarity score (0.0-1.0)"
     )
@@ -83,9 +81,7 @@ class RetrievalChunk(BaseModel):
 class RetrieveResponse(BaseModel):
     """Response model for retrieval-only operations."""
 
-    chunks: list[RetrievalChunk] = Field(
-        ..., description="Retrieved chunks with metadata"
-    )
+    chunks: list[RetrievalChunk] = Field(..., description="Retrieved chunks with metadata")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -175,11 +171,13 @@ async def retrieve_chunks(
         # Convert ContextChunk objects to dicts for response
         chunks = []
         for context_chunk in context_chunks:
-            chunks.append({
-                "content": context_chunk.content,
-                "similarity": context_chunk.similarity,
-                "metadata": context_chunk.metadata,
-            })
+            chunks.append(
+                {
+                    "content": context_chunk.content,
+                    "similarity": context_chunk.similarity,
+                    "metadata": context_chunk.metadata,
+                }
+            )
 
         # Build response metadata
         unique_sources = set()

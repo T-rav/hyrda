@@ -83,7 +83,9 @@ class RAGStatusResponse(BaseModel):
 # Helper functions for generate_response
 
 
-def _parse_conversation_metadata(x_conversation_metadata: str | None) -> tuple[bool, str | None, str]:
+def _parse_conversation_metadata(
+    x_conversation_metadata: str | None,
+) -> tuple[bool, str | None, str]:
     """
     Parse LibreChat conversation metadata from header.
 

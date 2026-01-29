@@ -37,7 +37,9 @@ def mock_state():
 class TestSynthesizerPDFGeneration:
     """Test PDF generation in synthesizer node."""
 
-    @pytest.mark.skip(reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)")
+    @pytest.mark.skip(
+        reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)"
+    )
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_synthesize_with_pdf_success(self, mock_state):
@@ -107,7 +109,9 @@ class TestSynthesizerPDFGeneration:
             assert mock_cache.cache_file.called
             assert mock_cache.get_presigned_url.called
 
-    @pytest.mark.skip(reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)")
+    @pytest.mark.skip(
+        reason="Requires full environment (SLACK_BOT_TOKEN, LLM_API_KEY, S3)"
+    )
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_synthesize_pdf_generation_fails_gracefully(self, mock_state):

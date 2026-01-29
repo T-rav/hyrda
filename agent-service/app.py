@@ -44,6 +44,7 @@ def get_app_version() -> str:
     except Exception:
         return "0.0.0"
 
+
 # Import agents after logging is configured
 from agents import agent_registry  # noqa: E402
 from api import agents_router  # noqa: E402

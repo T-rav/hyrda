@@ -45,7 +45,9 @@ class TestLLMServiceInitialization:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService"):
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     # Act
@@ -71,7 +73,9 @@ class TestLLMServiceInitialization:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService"):
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse_service = Mock()
                     mock_langfuse_service.enabled = True
                     mock_langfuse.return_value = mock_langfuse_service
@@ -81,7 +85,9 @@ class TestLLMServiceInitialization:
 
                     # Assert
                     assert service.langfuse_service.enabled is True
-                    mock_langfuse.assert_called_once_with(settings.langfuse, "production")
+                    mock_langfuse.assert_called_once_with(
+                        settings.langfuse, "production"
+                    )
 
     def test_initialization_creates_prompt_service(self):
         """Test that PromptService is initialized."""
@@ -96,7 +102,9 @@ class TestLLMServiceInitialization:
         # Mock dependencies
         with patch("services.llm_service.PromptService") as mock_prompt_service:
             with patch("services.llm_service.RAGService"):
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     # Act
@@ -119,7 +127,9 @@ class TestLLMServiceInitialization:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     # Act
@@ -147,7 +157,9 @@ class TestLLMServiceInitialize:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     mock_rag = AsyncMock()
@@ -182,8 +194,12 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
-                    with patch("services.llm_service.get_metrics_service") as mock_metrics:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
+                    with patch(
+                        "services.llm_service.get_metrics_service"
+                    ) as mock_metrics:
                         mock_langfuse.return_value = Mock(enabled=False)
                         mock_metrics.return_value = None
 
@@ -228,8 +244,12 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
-                    with patch("services.llm_service.get_metrics_service") as mock_metrics:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
+                    with patch(
+                        "services.llm_service.get_metrics_service"
+                    ) as mock_metrics:
                         mock_langfuse.return_value = Mock(enabled=False)
                         mock_metrics.return_value = None
 
@@ -275,12 +295,16 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     with patch("services.llm_service.get_metrics_service"):
                         mock_langfuse.return_value = Mock(enabled=False)
 
                         mock_rag = AsyncMock()
-                        mock_rag.generate_response = AsyncMock(return_value="It's sunny")
+                        mock_rag.generate_response = AsyncMock(
+                            return_value="It's sunny"
+                        )
                         mock_rag_service.return_value = mock_rag
 
                         service = LLMService(settings)
@@ -323,7 +347,9 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     with patch("services.llm_service.get_metrics_service"):
                         mock_langfuse.return_value = Mock(enabled=False)
 
@@ -351,8 +377,13 @@ class TestGetResponse:
                             # Assert
                             assert result == "Document summary"
                             call_args = mock_rag.generate_response.call_args
-                            assert call_args.kwargs["document_content"] == document_content
-                            assert call_args.kwargs["document_filename"] == document_filename
+                            assert (
+                                call_args.kwargs["document_content"] == document_content
+                            )
+                            assert (
+                                call_args.kwargs["document_filename"]
+                                == document_filename
+                            )
 
     @pytest.mark.asyncio
     async def test_get_response_extracts_query_from_messages(self):
@@ -374,7 +405,9 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     with patch("services.llm_service.get_metrics_service"):
                         mock_langfuse.return_value = Mock(enabled=False)
 
@@ -416,7 +449,9 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService"):
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     with patch("services.llm_service.get_metrics_service"):
                         mock_langfuse.return_value = Mock(enabled=False)
 
@@ -448,8 +483,12 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
-                    with patch("services.llm_service.get_metrics_service") as mock_metrics:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
+                    with patch(
+                        "services.llm_service.get_metrics_service"
+                    ) as mock_metrics:
                         mock_langfuse.return_value = Mock(enabled=False)
 
                         mock_metrics_service = Mock()
@@ -470,11 +509,15 @@ class TestGetResponse:
                             return_value="System prompt",
                         ):
                             # Act
-                            await service.get_response(messages=messages, user_id="U123")
+                            await service.get_response(
+                                messages=messages, user_id="U123"
+                            )
 
                             # Assert
                             mock_metrics_service.record_llm_request.assert_called_once()
-                            call_args = mock_metrics_service.record_llm_request.call_args
+                            call_args = (
+                                mock_metrics_service.record_llm_request.call_args
+                            )
                             assert call_args.kwargs["provider"] == "openai"
                             assert call_args.kwargs["model"] == "gpt-4o-mini"
                             assert call_args.kwargs["status"] == "success"
@@ -497,8 +540,12 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
-                    with patch("services.llm_service.get_metrics_service") as mock_metrics:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
+                    with patch(
+                        "services.llm_service.get_metrics_service"
+                    ) as mock_metrics:
                         mock_langfuse.return_value = Mock(enabled=False)
 
                         mock_metrics_service = Mock()
@@ -526,7 +573,9 @@ class TestGetResponse:
                             # Assert
                             assert result is None
                             # Verify error metric was recorded
-                            call_args = mock_metrics_service.record_llm_request.call_args
+                            call_args = (
+                                mock_metrics_service.record_llm_request.call_args
+                            )
                             assert call_args.kwargs["status"] == "error"
 
     @pytest.mark.asyncio
@@ -546,7 +595,9 @@ class TestGetResponse:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     with patch("services.llm_service.get_metrics_service"):
                         mock_langfuse.return_value = Mock(enabled=False)
 
@@ -570,7 +621,10 @@ class TestGetResponse:
 
                             # Assert
                             call_args = mock_rag.generate_response.call_args
-                            assert call_args.kwargs["conversation_cache"] == conversation_cache
+                            assert (
+                                call_args.kwargs["conversation_cache"]
+                                == conversation_cache
+                            )
 
 
 class TestGetResponseWithoutRAG:
@@ -592,7 +646,9 @@ class TestGetResponseWithoutRAG:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService"):
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     service = LLMService(settings)
@@ -639,7 +695,9 @@ class TestIngestDocuments:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     mock_rag = AsyncMock()
@@ -649,7 +707,9 @@ class TestIngestDocuments:
                     service = LLMService(settings)
 
                     # Act
-                    success_count, error_count = await service.ingest_documents(documents)
+                    success_count, error_count = await service.ingest_documents(
+                        documents
+                    )
 
                     # Assert
                     assert success_count == 2
@@ -676,7 +736,9 @@ class TestIngestDocuments:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     mock_rag = AsyncMock()
@@ -686,7 +748,9 @@ class TestIngestDocuments:
                     service = LLMService(settings)
 
                     # Act
-                    success_count, error_count = await service.ingest_documents(documents)
+                    success_count, error_count = await service.ingest_documents(
+                        documents
+                    )
 
                     # Assert
                     assert success_count == 2
@@ -708,7 +772,9 @@ class TestIngestDocuments:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     mock_rag = AsyncMock()
@@ -720,7 +786,9 @@ class TestIngestDocuments:
                     service = LLMService(settings)
 
                     # Act
-                    success_count, error_count = await service.ingest_documents(documents)
+                    success_count, error_count = await service.ingest_documents(
+                        documents
+                    )
 
                     # Assert
                     assert success_count == 0
@@ -750,7 +818,9 @@ class TestGetSystemStatus:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse.return_value = Mock(enabled=False)
 
                     mock_rag = AsyncMock()
@@ -784,7 +854,9 @@ class TestClose:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     mock_langfuse_service = AsyncMock()
                     mock_langfuse_service.enabled = True
                     mock_langfuse_service.close = AsyncMock()
@@ -817,7 +889,9 @@ class TestClose:
         # Mock dependencies
         with patch("services.llm_service.PromptService"):
             with patch("services.llm_service.RAGService") as mock_rag_service:
-                with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                with patch(
+                    "services.llm_service.initialize_langfuse_service"
+                ) as mock_langfuse:
                     # Return a mock with enabled=False
                     mock_langfuse_service = Mock()
                     mock_langfuse_service.enabled = False
@@ -864,7 +938,9 @@ class TestCreateLLMService:
             # Mock dependencies
             with patch("services.llm_service.PromptService"):
                 with patch("services.llm_service.RAGService") as mock_rag_service:
-                    with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                    with patch(
+                        "services.llm_service.initialize_langfuse_service"
+                    ) as mock_langfuse:
                         mock_langfuse_service = Mock()
                         mock_langfuse_service.enabled = False
                         mock_langfuse.return_value = mock_langfuse_service
@@ -906,7 +982,9 @@ class TestCreateLLMService:
             # Mock dependencies
             with patch("services.llm_service.PromptService"):
                 with patch("services.llm_service.RAGService") as mock_rag_service:
-                    with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                    with patch(
+                        "services.llm_service.initialize_langfuse_service"
+                    ) as mock_langfuse:
                         mock_langfuse_service = Mock()
                         mock_langfuse_service.enabled = False
                         mock_langfuse.return_value = mock_langfuse_service
@@ -946,7 +1024,9 @@ class TestCreateLLMService:
             # Mock dependencies
             with patch("services.llm_service.PromptService"):
                 with patch("services.llm_service.RAGService") as mock_rag_service:
-                    with patch("services.llm_service.initialize_langfuse_service") as mock_langfuse:
+                    with patch(
+                        "services.llm_service.initialize_langfuse_service"
+                    ) as mock_langfuse:
                         mock_langfuse_service = Mock()
                         mock_langfuse_service.enabled = False
                         mock_langfuse.return_value = mock_langfuse_service

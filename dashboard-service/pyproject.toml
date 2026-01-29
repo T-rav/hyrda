@@ -71,7 +71,20 @@ src = ["."]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "PL", "SIM"]
-ignore = ["E501", "PLR0913", "PLR0912", "PLR0915", "PLR2004"]
+ignore = [
+    "E402",    # module import not at top (for dynamic imports)
+    "E501",    # line too long
+    "PLC0415", # import outside top-level (needed for optional dependencies)
+    "PLC0206", # extracting from dict without .items()
+    "PLR0913", # too many arguments
+    "PLR0912", # too many branches
+    "PLR0915", # too many statements
+    "PLR2004", # magic value
+    "SIM117",  # nested with statements
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "E402", "PLC0415"]  # assert, imports in tests
 
 [tool.ruff.format]
 quote-style = "double"

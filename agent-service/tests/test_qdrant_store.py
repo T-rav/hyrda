@@ -34,10 +34,13 @@ mock_qdrant_models = {
 @pytest.fixture(autouse=True)
 def mock_qdrant_imports():
     """Mock Qdrant imports for all tests."""
-    with patch.dict("sys.modules", {
-        "qdrant_client": MagicMock(),
-        "qdrant_client.models": MagicMock(**mock_qdrant_models),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "qdrant_client": MagicMock(),
+            "qdrant_client.models": MagicMock(**mock_qdrant_models),
+        },
+    ):
         yield
 
 
@@ -125,7 +128,9 @@ class TestQdrantVectorStoreAsyncInitialize:
         mock_collections.collections = []
         mock_client.get_collections.return_value = mock_collections
 
-        with patch("services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client):
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client
+        ):
             await store.initialize()
 
             assert store.client == mock_client
@@ -143,7 +148,9 @@ class TestQdrantVectorStoreAsyncInitialize:
         mock_collections.collections = []
         mock_client.get_collections.return_value = mock_collections
 
-        with patch("services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client) as mock_qdrant_class:
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client
+        ) as mock_qdrant_class:
             await store.initialize()
 
             mock_qdrant_class.assert_called_once_with(
@@ -162,8 +169,12 @@ class TestQdrantVectorStoreAsyncInitialize:
         mock_client.get_collections.return_value = mock_collections
         mock_client.create_collection = MagicMock()
 
-        with patch("services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client):
-            with patch("services.vector_stores.qdrant_store.VectorParams") as mock_vector_params:
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client
+        ):
+            with patch(
+                "services.vector_stores.qdrant_store.VectorParams"
+            ) as mock_vector_params:
                 await store.initialize()
 
                 mock_client.create_collection.assert_called_once()
@@ -180,7 +191,9 @@ class TestQdrantVectorStoreAsyncInitialize:
         mock_client.get_collections.return_value = mock_collections
         mock_client.create_collection = MagicMock()
 
-        with patch("services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client):
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient", return_value=mock_client
+        ):
             await store.initialize()
 
             mock_client.create_collection.assert_not_called()
@@ -189,13 +202,18 @@ class TestQdrantVectorStoreAsyncInitialize:
     async def test_initialize_raises_import_error_if_qdrant_not_installed(self, store):
         """Test that initialize raises ImportError if qdrant-client not installed."""
         with patch("services.vector_stores.qdrant_store.QdrantClient", None):
-            with pytest.raises(ImportError, match="qdrant-client package not installed"):
+            with pytest.raises(
+                ImportError, match="qdrant-client package not installed"
+            ):
                 await store.initialize()
 
     @pytest.mark.asyncio
     async def test_initialize_raises_on_connection_error(self, store):
         """Test that initialize raises exception on connection error."""
-        with patch("services.vector_stores.qdrant_store.QdrantClient", side_effect=ConnectionError("Connection failed")):
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient",
+            side_effect=ConnectionError("Connection failed"),
+        ):
             with pytest.raises(ConnectionError):
                 await store.initialize()
 
@@ -224,7 +242,9 @@ class TestQdrantVectorStoreAddDocuments:
         texts = ["doc1", "doc2"]
         embeddings = [[0.1, 0.2], [0.3, 0.4]]
 
-        with patch("services.vector_stores.qdrant_store.PointStruct") as mock_point_struct:
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct"
+        ) as mock_point_struct:
             await store.add_documents(texts, embeddings)
 
             assert mock_point_struct.call_count == 2
@@ -237,7 +257,9 @@ class TestQdrantVectorStoreAddDocuments:
         embeddings = [[0.1, 0.2]]
         metadata = [{"source": "test.txt", "author": "user1"}]
 
-        with patch("services.vector_stores.qdrant_store.PointStruct") as mock_point_struct:
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct"
+        ) as mock_point_struct:
             await store.add_documents(texts, embeddings, metadata)
 
             call_args = mock_point_struct.call_args_list[0]
@@ -258,7 +280,9 @@ class TestQdrantVectorStoreAddDocuments:
             generated_ids.append(kwargs.get("id"))
             return MagicMock()
 
-        with patch("services.vector_stores.qdrant_store.PointStruct", side_effect=capture_id):
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct", side_effect=capture_id
+        ):
             await store.add_documents(texts, embeddings)
             await store.add_documents(texts, embeddings)
 
@@ -272,7 +296,9 @@ class TestQdrantVectorStoreAddDocuments:
         texts = [f"doc{i}" for i in range(250)]
         embeddings = [[0.1, 0.2] for _ in range(250)]
 
-        with patch("services.vector_stores.qdrant_store.PointStruct", return_value=MagicMock()):
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct", return_value=MagicMock()
+        ):
             await store.add_documents(texts, embeddings)
 
             # Should batch into 3 calls: 100, 100, 50
@@ -284,7 +310,9 @@ class TestQdrantVectorStoreAddDocuments:
         texts = ["doc1"]
         embeddings = [[0.1, 0.2]]
 
-        with patch("services.vector_stores.qdrant_store.PointStruct") as mock_point_struct:
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct"
+        ) as mock_point_struct:
             await store.add_documents(texts, embeddings, metadata=None)
 
             call_args = mock_point_struct.call_args_list[0]
@@ -309,7 +337,9 @@ class TestQdrantVectorStoreAddDocuments:
         embeddings = [[0.1, 0.2]]
         store.client.upsert.side_effect = Exception("Upsert failed")
 
-        with patch("services.vector_stores.qdrant_store.PointStruct", return_value=MagicMock()):
+        with patch(
+            "services.vector_stores.qdrant_store.PointStruct", return_value=MagicMock()
+        ):
             with pytest.raises(Exception, match="Upsert failed"):
                 await store.add_documents(texts, embeddings)
 
@@ -335,6 +365,7 @@ class TestQdrantVectorStoreSearch:
     @pytest.fixture
     def mock_search_result(self):
         """Create mock search results."""
+
         def create_result(score, text, metadata=None, doc_id="test-id"):
             result = MagicMock()
             result.score = score
@@ -343,6 +374,7 @@ class TestQdrantVectorStoreSearch:
             if metadata:
                 result.payload.update(metadata)
             return result
+
         return create_result
 
     @pytest.mark.asyncio
@@ -374,7 +406,9 @@ class TestQdrantVectorStoreSearch:
                 assert store.client.query_points.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_search_filters_by_similarity_threshold(self, store, mock_search_result):
+    async def test_search_filters_by_similarity_threshold(
+        self, store, mock_search_result
+    ):
         """Test that search filters results by similarity threshold."""
         mock_response_metric = MagicMock()
         mock_response_metric.points = [
@@ -384,11 +418,16 @@ class TestQdrantVectorStoreSearch:
         mock_response_default = MagicMock()
         mock_response_default.points = []
 
-        store.client.query_points.side_effect = [mock_response_metric, mock_response_default]
+        store.client.query_points.side_effect = [
+            mock_response_metric,
+            mock_response_default,
+        ]
 
         with patch("services.vector_stores.qdrant_store.Filter"):
             with patch("services.vector_stores.qdrant_store.FieldCondition"):
-                results = await store.search([0.1, 0.2], limit=10, similarity_threshold=0.7)
+                results = await store.search(
+                    [0.1, 0.2], limit=10, similarity_threshold=0.7
+                )
 
                 # Should only return high_score result
                 assert len(results) == 1
@@ -407,11 +446,16 @@ class TestQdrantVectorStoreSearch:
             mock_search_result(0.8, "good", doc_id="id3"),
         ]
 
-        store.client.query_points.side_effect = [mock_response_metric, mock_response_default]
+        store.client.query_points.side_effect = [
+            mock_response_metric,
+            mock_response_default,
+        ]
 
         with patch("services.vector_stores.qdrant_store.Filter"):
             with patch("services.vector_stores.qdrant_store.FieldCondition"):
-                with patch.object(store, "_diversify_results", side_effect=lambda x, _: x):
+                with patch.object(
+                    store, "_diversify_results", side_effect=lambda x, _: x
+                ):
                     results = await store.search([0.1, 0.2], limit=10)
 
                     # Should be sorted highest to lowest
@@ -424,17 +468,21 @@ class TestQdrantVectorStoreSearch:
         """Test that search respects the limit parameter."""
         mock_response_metric = MagicMock()
         mock_response_metric.points = [
-            mock_search_result(0.9, f"doc{i}", doc_id=f"id{i}")
-            for i in range(10)
+            mock_search_result(0.9, f"doc{i}", doc_id=f"id{i}") for i in range(10)
         ]
         mock_response_default = MagicMock()
         mock_response_default.points = []
 
-        store.client.query_points.side_effect = [mock_response_metric, mock_response_default]
+        store.client.query_points.side_effect = [
+            mock_response_metric,
+            mock_response_default,
+        ]
 
         with patch("services.vector_stores.qdrant_store.Filter"):
             with patch("services.vector_stores.qdrant_store.FieldCondition"):
-                with patch.object(store, "_diversify_results", side_effect=lambda x, lim: x[:lim]):
+                with patch.object(
+                    store, "_diversify_results", side_effect=lambda x, lim: x[:lim]
+                ):
                     results = await store.search([0.1, 0.2], limit=5)
 
                     assert len(results) <= 5
@@ -449,11 +497,16 @@ class TestQdrantVectorStoreSearch:
         mock_response_default = MagicMock()
         mock_response_default.points = []
 
-        store.client.query_points.side_effect = [mock_response_metric, mock_response_default]
+        store.client.query_points.side_effect = [
+            mock_response_metric,
+            mock_response_default,
+        ]
 
         with patch("services.vector_stores.qdrant_store.Filter"):
             with patch("services.vector_stores.qdrant_store.FieldCondition"):
-                with patch.object(store, "_diversify_results", side_effect=lambda x, _: x):
+                with patch.object(
+                    store, "_diversify_results", side_effect=lambda x, _: x
+                ):
                     results = await store.search([0.1, 0.2], limit=10)
 
                     assert results[0]["metadata"]["source"] == "test.txt"
@@ -468,23 +521,32 @@ class TestQdrantVectorStoreSearch:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_search_excludes_default_namespace_with_namespace_field(self, store, mock_search_result):
+    async def test_search_excludes_default_namespace_with_namespace_field(
+        self, store, mock_search_result
+    ):
         """Test that default namespace search excludes docs with namespace field."""
         mock_response_metric = MagicMock()
         mock_response_metric.points = []
 
         # Create results with and without namespace field
-        result_with_ns = mock_search_result(0.9, "has_namespace", {"namespace": "metric"})
+        result_with_ns = mock_search_result(
+            0.9, "has_namespace", {"namespace": "metric"}
+        )
         result_without_ns = mock_search_result(0.8, "no_namespace", {})
 
         mock_response_default = MagicMock()
         mock_response_default.points = [result_with_ns, result_without_ns]
 
-        store.client.query_points.side_effect = [mock_response_metric, mock_response_default]
+        store.client.query_points.side_effect = [
+            mock_response_metric,
+            mock_response_default,
+        ]
 
         with patch("services.vector_stores.qdrant_store.Filter"):
             with patch("services.vector_stores.qdrant_store.FieldCondition"):
-                with patch.object(store, "_diversify_results", side_effect=lambda x, _: x):
+                with patch.object(
+                    store, "_diversify_results", side_effect=lambda x, _: x
+                ):
                     results = await store.search([0.1, 0.2], limit=10)
 
                     # Should only include result without namespace field
@@ -542,8 +604,7 @@ class TestQdrantVectorStoreDiversifyResults:
     def test_diversify_respects_limit(self, store):
         """Test that diversification respects limit."""
         documents = [
-            {"similarity": 0.9, "metadata": {"file_name": f"doc{i}"}}
-            for i in range(20)
+            {"similarity": 0.9, "metadata": {"file_name": f"doc{i}"}} for i in range(20)
         ]
         result = store._diversify_results(documents, 5)
         assert len(result) == 5
@@ -769,6 +830,9 @@ class TestQdrantVectorStoreEdgeCases:
     @pytest.mark.asyncio
     async def test_initialize_with_connection_timeout(self, store):
         """Test initialization handles timeout errors."""
-        with patch("services.vector_stores.qdrant_store.QdrantClient", side_effect=TimeoutError("Timeout")):
+        with patch(
+            "services.vector_stores.qdrant_store.QdrantClient",
+            side_effect=TimeoutError("Timeout"),
+        ):
             with pytest.raises(TimeoutError):
                 await store.initialize()

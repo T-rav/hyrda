@@ -417,9 +417,10 @@ def get_retrieval_service() -> RetrievalService:
     """Get global retrieval service instance."""
     global _retrieval_service
     if _retrieval_service is None:
+        from copy import deepcopy
+
         from config.settings import get_settings
         from providers.llm_providers import create_llm_provider
-        from copy import deepcopy
 
         settings = get_settings()
 

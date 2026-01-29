@@ -1,11 +1,7 @@
 """Tests for agent sync with alias discovery from langgraph.json."""
 
 import json
-import tempfile
-from pathlib import Path
-from unittest.mock import patch, mock_open
-
-import pytest
+from unittest.mock import mock_open, patch
 
 from services.agent_sync import _discover_agents_from_langgraph
 
@@ -24,8 +20,8 @@ class TestAgentDiscoveryFromLangGraph:
 
         config_json = json.dumps(config)
 
-        with patch('builtins.open', mock_open(read_data=config_json)):
-            with patch('pathlib.Path.exists', return_value=True):
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
                 agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 2
@@ -43,24 +39,24 @@ class TestAgentDiscoveryFromLangGraph:
                     "metadata": {
                         "display_name": "Company Profile",
                         "description": "Generate company profiles",
-                        "aliases": ["profile", "company profile", "-profile"]
-                    }
+                        "aliases": ["profile", "company profile", "-profile"],
+                    },
                 },
                 "meddic": {
                     "graph": "meddic.nodes:build_meddic",
                     "metadata": {
                         "display_name": "MEDDIC Coach",
                         "description": "Deal coaching",
-                        "aliases": ["meddic", "medic", "meddpicc"]
-                    }
-                }
+                        "aliases": ["meddic", "medic", "meddpicc"],
+                    },
+                },
             }
         }
 
         config_json = json.dumps(config)
 
-        with patch('builtins.open', mock_open(read_data=config_json)):
-            with patch('pathlib.Path.exists', return_value=True):
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
                 agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 2
@@ -80,16 +76,16 @@ class TestAgentDiscoveryFromLangGraph:
                     "graph": "help.agent:build_help",
                     "metadata": {
                         "display_name": "Help Agent",
-                        "aliases": ["help", "agents"]
-                    }
+                        "aliases": ["help", "agents"],
+                    },
                 }
             }
         }
 
         config_json = json.dumps(config)
 
-        with patch('builtins.open', mock_open(read_data=config_json)):
-            with patch('pathlib.Path.exists', return_value=True):
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
                 agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 1
@@ -103,17 +99,15 @@ class TestAgentDiscoveryFromLangGraph:
                 "simple_agent": "simple.module:build",
                 "extended_agent": {
                     "graph": "extended.module:build",
-                    "metadata": {
-                        "aliases": ["ext", "extended"]
-                    }
-                }
+                    "metadata": {"aliases": ["ext", "extended"]},
+                },
             }
         }
 
         config_json = json.dumps(config)
 
-        with patch('builtins.open', mock_open(read_data=config_json)):
-            with patch('pathlib.Path.exists', return_value=True):
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
                 agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 2
@@ -128,19 +122,14 @@ class TestAgentDiscoveryFromLangGraph:
         """Should handle agents with empty aliases list."""
         config = {
             "graphs": {
-                "no_aliases": {
-                    "graph": "module:build",
-                    "metadata": {
-                        "aliases": []
-                    }
-                }
+                "no_aliases": {"graph": "module:build", "metadata": {"aliases": []}}
             }
         }
 
         config_json = json.dumps(config)
 
-        with patch('builtins.open', mock_open(read_data=config_json)):
-            with patch('pathlib.Path.exists', return_value=True):
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
                 agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 1
@@ -148,7 +137,7 @@ class TestAgentDiscoveryFromLangGraph:
 
     def test_discover_agents_file_not_found(self):
         """Should return empty list when langgraph.json not found."""
-        with patch('pathlib.Path.exists', return_value=False):
+        with patch("pathlib.Path.exists", return_value=False):
             agents = _discover_agents_from_langgraph()
 
         assert agents == []

@@ -1,4 +1,5 @@
 """Pytest configuration - disable tracing during tests."""
+
 import os
 
 # Set environment variables BEFORE imports (critical for jwt_auth module initialization)
@@ -27,7 +28,9 @@ if not os.getenv("SLACK_APP_TOKEN"):
 import sys
 
 # Add project root to Python path to access shared module
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, project_root)
 
 from unittest.mock import AsyncMock, Mock, patch
@@ -43,9 +46,11 @@ def mock_openai_client():
         mock_instance = Mock()
         mock_instance.chat = Mock()
         mock_instance.chat.completions = Mock()
-        mock_instance.chat.completions.create = AsyncMock(return_value=Mock(
-            choices=[Mock(message=Mock(content="Test response"))],
-            usage=Mock(prompt_tokens=10, completion_tokens=20, total_tokens=30)
-        ))
+        mock_instance.chat.completions.create = AsyncMock(
+            return_value=Mock(
+                choices=[Mock(message=Mock(content="Test response"))],
+                usage=Mock(prompt_tokens=10, completion_tokens=20, total_tokens=30),
+            )
+        )
         mock_client.return_value = mock_instance
         yield mock_client

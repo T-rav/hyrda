@@ -131,7 +131,9 @@ class FastAPIAuthMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if (
             path.startswith("/health")
-            or path.startswith("/api/")  # Skip auth for all API endpoints (including tests)
+            or path.startswith(
+                "/api/"
+            )  # Skip auth for all API endpoints (including tests)
             or path.startswith("/auth/")
             or path.startswith("/assets/")
             or path in {"/", "/ui"}

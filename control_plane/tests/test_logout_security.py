@@ -64,15 +64,15 @@ class TestLogoutCookieDeletion:
         }
 
         # Verify critical parameters match
-        assert (
-            set_cookie_params["key"] == delete_cookie_params["key"]
-        ), "Cookie key must match"
-        assert (
-            set_cookie_params["httponly"] == delete_cookie_params["httponly"]
-        ), "httponly flag must match"
-        assert (
-            set_cookie_params["samesite"] == delete_cookie_params["samesite"]
-        ), "samesite policy must match"
+        assert set_cookie_params["key"] == delete_cookie_params["key"], (
+            "Cookie key must match"
+        )
+        assert set_cookie_params["httponly"] == delete_cookie_params["httponly"], (
+            "httponly flag must match"
+        )
+        assert set_cookie_params["samesite"] == delete_cookie_params["samesite"], (
+            "samesite policy must match"
+        )
 
     @patch("api.auth.revoke_token")
     @patch("api.auth.extract_token_from_request")
@@ -207,9 +207,9 @@ class TestCacheControlHeaders:
 
         # Verify headers match
         for key, value in expected_headers.items():
-            assert (
-                mock_response.headers[key] == value
-            ), f"Header {key} should be {value}"
+            assert mock_response.headers[key] == value, (
+                f"Header {key} should be {value}"
+            )
 
     def test_cache_headers_prevent_browser_caching(self, mock_oauth_env):
         """Cache-control headers should instruct browser not to cache."""
@@ -218,9 +218,9 @@ class TestCacheControlHeaders:
         # Verify all three directives are present
         assert "no-cache" in cache_control, "Should have no-cache directive"
         assert "no-store" in cache_control, "Should have no-store directive"
-        assert (
-            "must-revalidate" in cache_control
-        ), "Should have must-revalidate directive"
+        assert "must-revalidate" in cache_control, (
+            "Should have must-revalidate directive"
+        )
 
         # Verify Pragma header (HTTP/1.0 compatibility)
         pragma = "no-cache"

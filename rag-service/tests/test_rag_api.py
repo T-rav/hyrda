@@ -30,9 +30,7 @@ class TestChatCompletionsEndpoint:
 
         # Mock LLM service to return a response
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="The answer is 42."
-        )
+        mock_llm.get_response = AsyncMock(return_value="The answer is 42.")
         mock_get_llm.return_value = mock_llm
 
         payload = {
@@ -69,9 +67,7 @@ class TestChatCompletionsEndpoint:
 
         # Mock LLM service
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="Custom prompt response"
-        )
+        mock_llm.get_response = AsyncMock(return_value="Custom prompt response")
         mock_get_llm.return_value = mock_llm
 
         custom_prompt = "You are a permission-aware assistant. User has access to projects A, B, C."
@@ -108,9 +104,7 @@ class TestChatCompletionsEndpoint:
 
         # Mock LLM service
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="Default prompt response"
-        )
+        mock_llm.get_response = AsyncMock(return_value="Default prompt response")
         mock_get_llm.return_value = mock_llm
 
         payload = {
@@ -214,16 +208,17 @@ class TestChatCompletionsEndpoint:
         mock_get_routing.return_value = mock_routing
 
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="Based on our previous discussion..."
-        )
+        mock_llm.get_response = AsyncMock(return_value="Based on our previous discussion...")
         mock_get_llm.return_value = mock_llm
 
         payload = {
             "query": "Can you elaborate on that?",
             "conversation_history": [
                 {"role": "user", "content": "What is RAG?"},
-                {"role": "assistant", "content": "RAG stands for Retrieval-Augmented Generation..."},
+                {
+                    "role": "assistant",
+                    "content": "RAG stands for Retrieval-Augmented Generation...",
+                },
             ],
             "user_id": "test_user",
         }
@@ -249,9 +244,7 @@ class TestChatCompletionsEndpoint:
         mock_get_routing.return_value = mock_routing
 
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="Based on the document provided..."
-        )
+        mock_llm.get_response = AsyncMock(return_value="Based on the document provided...")
         mock_get_llm.return_value = mock_llm
 
         payload = {
@@ -274,18 +267,14 @@ class TestChatCompletionsEndpoint:
 
     @patch("api.rag.get_routing_service")
     @patch("api.rag.get_llm_service")
-    def test_query_with_rag_disabled(
-        self, mock_get_llm, mock_get_routing, client, signed_headers
-    ):
+    def test_query_with_rag_disabled(self, mock_get_llm, mock_get_routing, client, signed_headers):
         """Test query with RAG retrieval disabled."""
         mock_routing = Mock()
         mock_routing.detect_agent.return_value = None
         mock_get_routing.return_value = mock_routing
 
         mock_llm = Mock()
-        mock_llm.get_response = AsyncMock(
-            return_value="Response without RAG retrieval"
-        )
+        mock_llm.get_response = AsyncMock(return_value="Response without RAG retrieval")
         mock_get_llm.return_value = mock_llm
 
         payload = {
@@ -306,9 +295,7 @@ class TestChatCompletionsEndpoint:
         assert data["metadata"]["rag_used"] is False
 
     @patch("api.rag.get_routing_service")
-    def test_error_handling_when_generation_fails(
-        self, mock_get_routing, client, signed_headers
-    ):
+    def test_error_handling_when_generation_fails(self, mock_get_routing, client, signed_headers):
         """Test error handling when LLM generation fails."""
         mock_routing = Mock()
         mock_routing.detect_agent.side_effect = Exception("Service unavailable")
@@ -353,7 +340,12 @@ class TestStatusEndpoint:
     @patch("api.rag.create_vector_store")
     @patch("api.rag.get_settings")
     def test_status_endpoint_with_vector_enabled(
-        self, mock_get_settings, mock_create_vector_store, mock_get_agent_client, client, auth_headers
+        self,
+        mock_get_settings,
+        mock_create_vector_store,
+        mock_get_agent_client,
+        client,
+        auth_headers,
     ):
         """Test status endpoint when vector DB is enabled."""
         mock_settings = Mock()
@@ -389,7 +381,9 @@ class TestStatusEndpoint:
 
     @patch("api.rag.get_agent_client")
     @patch("api.rag.get_settings")
-    def test_status_endpoint_with_vector_disabled(self, mock_get_settings, mock_get_agent_client, client, auth_headers):
+    def test_status_endpoint_with_vector_disabled(
+        self, mock_get_settings, mock_get_agent_client, client, auth_headers
+    ):
         """Test status endpoint when vector DB is disabled."""
         mock_settings = Mock()
         mock_settings.vector.enabled = False
@@ -414,7 +408,9 @@ class TestStatusEndpoint:
 
     @patch("api.rag.get_agent_client")
     @patch("api.rag.create_vector_store")
-    def test_status_alias_endpoint(self, mock_create_vector_store, mock_get_agent_client, client, auth_headers):
+    def test_status_alias_endpoint(
+        self, mock_create_vector_store, mock_get_agent_client, client, auth_headers
+    ):
         """Test /status alias endpoint (without /v1 prefix)."""
         with patch("api.rag.get_settings") as mock_settings:
             mock_settings.return_value.vector.enabled = True
@@ -630,7 +626,9 @@ class TestStreamingEndpoints:
         }
 
         headers = signed_headers(payload)
-        headers["X-Conversation-Metadata"] = '{"deepSearchEnabled": true, "researchDepth": "comprehensive"}'
+        headers["X-Conversation-Metadata"] = (
+            '{"deepSearchEnabled": true, "researchDepth": "comprehensive"}'
+        )
 
         # Act
         response = client.post(

@@ -118,9 +118,7 @@ class TestGetResponse:
         service.rag_service.generate_response = AsyncMock(return_value="Traced response")
 
         messages = [{"role": "user", "content": "Hello"}]
-        response = await service.get_response(
-            messages, conversation_id="thread_123"
-        )
+        response = await service.get_response(messages, conversation_id="thread_123")
 
         assert response == "Traced response"
 
@@ -133,9 +131,7 @@ class TestGetResponse:
         service.rag_service.generate_response = AsyncMock(return_value="Query response")
 
         messages = [{"role": "user", "content": "Old message"}]
-        response = await service.get_response(
-            messages, current_query="New query"
-        )
+        response = await service.get_response(messages, current_query="New query")
 
         # Verify the new query was used
         call_args = service.rag_service.generate_response.call_args
@@ -151,9 +147,7 @@ class TestGetResponse:
 
         messages = [{"role": "user", "content": "Analyze this"}]
         response = await service.get_response(
-            messages,
-            document_content="Document text here",
-            document_filename="report.pdf"
+            messages, document_content="Document text here", document_filename="report.pdf"
         )
 
         # Verify document was passed
@@ -171,9 +165,7 @@ class TestGetResponse:
         mock_cache = Mock()
 
         messages = [{"role": "user", "content": "Hello"}]
-        response = await service.get_response(
-            messages, conversation_cache=mock_cache
-        )
+        response = await service.get_response(messages, conversation_cache=mock_cache)
 
         # Verify cache was passed
         call_args = service.rag_service.generate_response.call_args
@@ -200,9 +192,7 @@ class TestGetResponse:
         service = LLMService(settings)
 
         # Simulate error
-        service.rag_service.generate_response = AsyncMock(
-            side_effect=Exception("LLM error")
-        )
+        service.rag_service.generate_response = AsyncMock(side_effect=Exception("LLM error"))
 
         messages = [{"role": "user", "content": "Hello"}]
         response = await service.get_response(messages)
@@ -215,9 +205,7 @@ class TestGetResponse:
         settings = Settings()
         service = LLMService(settings)
 
-        service.rag_service.generate_response = AsyncMock(
-            side_effect=ValueError("Invalid input")
-        )
+        service.rag_service.generate_response = AsyncMock(side_effect=ValueError("Invalid input"))
 
         messages = [{"role": "user", "content": "Hello"}]
         response = await service.get_response(messages)
@@ -312,9 +300,7 @@ class TestDocumentIngestion:
         settings = Settings()
         service = LLMService(settings)
 
-        service.rag_service.ingest_documents = AsyncMock(
-            side_effect=Exception("Ingestion failed")
-        )
+        service.rag_service.ingest_documents = AsyncMock(side_effect=Exception("Ingestion failed"))
 
         documents = [{"content": "Doc"}]
 
@@ -380,7 +366,7 @@ class TestCreateLLMService:
         settings = Settings()
 
         # Mock RAG service initialize to avoid Qdrant connection
-        with patch('services.llm_service.RAGService') as MockRAG:
+        with patch("services.llm_service.RAGService") as MockRAG:
             mock_rag = AsyncMock()
             mock_rag.initialize = AsyncMock()
             MockRAG.return_value = mock_rag
@@ -396,7 +382,7 @@ class TestCreateLLMService:
         settings = Settings()
 
         # Mock RAG service to avoid Qdrant connection
-        with patch('services.llm_service.RAGService') as MockRAG:
+        with patch("services.llm_service.RAGService") as MockRAG:
             mock_rag = AsyncMock()
             mock_rag.initialize = AsyncMock()
             MockRAG.return_value = mock_rag

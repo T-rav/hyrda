@@ -25,9 +25,9 @@ class TestLogoutDropdownStructure:
         content = app_jsx.read_text()
 
         # Should have logout-dropdown wrapper
-        assert (
-            'className="logout-dropdown"' in content
-        ), "Should have logout-dropdown wrapper div"
+        assert 'className="logout-dropdown"' in content, (
+            "Should have logout-dropdown wrapper div"
+        )
 
     def test_dropdown_menu_element_exists(self):
         """Dropdown menu element should exist in structure."""
@@ -39,9 +39,9 @@ class TestLogoutDropdownStructure:
         content = app_jsx.read_text()
 
         # Should have dropdown-menu div
-        assert (
-            'className="dropdown-menu"' in content
-        ), "Should have dropdown-menu element"
+        assert 'className="dropdown-menu"' in content, (
+            "Should have dropdown-menu element"
+        )
 
     def test_user_email_in_dropdown(self):
         """User email should be displayed in dropdown menu."""
@@ -53,17 +53,21 @@ class TestLogoutDropdownStructure:
         content = app_jsx.read_text()
 
         # Should display currentUserEmail inside dropdown-menu
-        lines = content.split('\n')
+        lines = content.split("\n")
         in_dropdown = False
         has_email = False
 
         for i, line in enumerate(lines):
             if 'className="dropdown-menu"' in line:
                 in_dropdown = True
-            elif in_dropdown and 'currentUserEmail' in line:
+            elif in_dropdown and "currentUserEmail" in line:
                 has_email = True
                 break
-            elif in_dropdown and '</div>' in line and 'dropdown-menu' in lines[max(0, i-10):i+1]:
+            elif (
+                in_dropdown
+                and "</div>" in line
+                and "dropdown-menu" in lines[max(0, i - 10) : i + 1]
+            ):
                 # End of dropdown-menu
                 break
 
@@ -79,9 +83,9 @@ class TestLogoutDropdownStructure:
         content = app_jsx.read_text()
 
         # Should have dropdown-item user-email class
-        assert (
-            'className="dropdown-item user-email"' in content
-        ), "Dropdown item should have user-email class"
+        assert 'className="dropdown-item user-email"' in content, (
+            "Dropdown item should have user-email class"
+        )
 
     def test_logout_button_inside_dropdown_wrapper(self):
         """Logout button should be inside logout-dropdown wrapper."""
@@ -93,7 +97,7 @@ class TestLogoutDropdownStructure:
         content = app_jsx.read_text()
 
         # Find logout-dropdown and verify logout-btn is inside
-        lines = content.split('\n')
+        lines = content.split("\n")
         in_dropdown_wrapper = False
         has_logout_btn = False
 
@@ -103,9 +107,9 @@ class TestLogoutDropdownStructure:
             elif in_dropdown_wrapper and 'className="nav-link logout-btn"' in line:
                 has_logout_btn = True
                 break
-            elif in_dropdown_wrapper and '</div>' in line and in_dropdown_wrapper:
+            elif in_dropdown_wrapper and "</div>" in line and in_dropdown_wrapper:
                 # Check if this might be closing the wrapper
-                if 'logout-dropdown' not in line:
+                if "logout-dropdown" not in line:
                     continue
                 break
 
@@ -124,9 +128,7 @@ class TestLogoutDropdownCSS:
 
         content = app_css.read_text()
 
-        assert (
-            '.logout-dropdown' in content
-        ), "Should have .logout-dropdown CSS class"
+        assert ".logout-dropdown" in content, "Should have .logout-dropdown CSS class"
 
     def test_dropdown_menu_css_exists(self):
         """CSS for dropdown-menu should exist."""
@@ -137,9 +139,7 @@ class TestLogoutDropdownCSS:
 
         content = app_css.read_text()
 
-        assert (
-            '.dropdown-menu' in content
-        ), "Should have .dropdown-menu CSS class"
+        assert ".dropdown-menu" in content, "Should have .dropdown-menu CSS class"
 
     def test_dropdown_menu_positioned_absolute(self):
         """Dropdown menu should be positioned absolutely."""
@@ -151,18 +151,22 @@ class TestLogoutDropdownCSS:
         content = app_css.read_text()
 
         # Find .dropdown-menu block and check for position: absolute
-        lines = content.split('\n')
+        lines = content.split("\n")
         in_dropdown_menu = False
         has_absolute = False
 
         for line in lines:
-            if '.dropdown-menu' in line and '{' in line or (in_dropdown_menu is False and '.dropdown-menu' in line):
+            if (
+                ".dropdown-menu" in line
+                and "{" in line
+                or (in_dropdown_menu is False and ".dropdown-menu" in line)
+            ):
                 in_dropdown_menu = True
-            elif in_dropdown_menu and 'position:' in line.replace(' ', ''):
-                if 'absolute' in line:
+            elif in_dropdown_menu and "position:" in line.replace(" ", ""):
+                if "absolute" in line:
                     has_absolute = True
                     break
-            elif in_dropdown_menu and '}' in line:
+            elif in_dropdown_menu and "}" in line:
                 break
 
         assert has_absolute, "Dropdown menu should have position: absolute"
@@ -177,24 +181,30 @@ class TestLogoutDropdownCSS:
         content = app_css.read_text()
 
         # Find .dropdown-menu block and check for visibility or opacity
-        lines = content.split('\n')
+        lines = content.split("\n")
         in_dropdown_menu = False
         is_hidden = False
 
         for line in lines:
-            if '.dropdown-menu' in line and '{' in line or (in_dropdown_menu is False and '.dropdown-menu' in line):
+            if (
+                ".dropdown-menu" in line
+                and "{" in line
+                or (in_dropdown_menu is False and ".dropdown-menu" in line)
+            ):
                 in_dropdown_menu = True
             elif in_dropdown_menu:
-                if 'visibility:' in line.replace(' ', '') and 'hidden' in line:
+                if "visibility:" in line.replace(" ", "") and "hidden" in line:
                     is_hidden = True
                     break
-                elif 'opacity:' in line.replace(' ', '') and '0' in line:
+                elif "opacity:" in line.replace(" ", "") and "0" in line:
                     is_hidden = True
                     break
-            elif in_dropdown_menu and '}' in line:
+            elif in_dropdown_menu and "}" in line:
                 break
 
-        assert is_hidden, "Dropdown should be hidden by default (opacity: 0 or visibility: hidden)"
+        assert is_hidden, (
+            "Dropdown should be hidden by default (opacity: 0 or visibility: hidden)"
+        )
 
     def test_dropdown_hover_shows_menu(self):
         """Hovering dropdown wrapper should show menu."""
@@ -206,9 +216,9 @@ class TestLogoutDropdownCSS:
         content = app_css.read_text()
 
         # Should have .logout-dropdown:hover .dropdown-menu rule
-        assert (
-            '.logout-dropdown:hover .dropdown-menu' in content
-        ), "Should have hover rule to show dropdown menu"
+        assert ".logout-dropdown:hover .dropdown-menu" in content, (
+            "Should have hover rule to show dropdown menu"
+        )
 
     def test_dropdown_item_css_exists(self):
         """CSS for dropdown-item should exist."""
@@ -219,9 +229,7 @@ class TestLogoutDropdownCSS:
 
         content = app_css.read_text()
 
-        assert (
-            '.dropdown-item' in content
-        ), "Should have .dropdown-item CSS class"
+        assert ".dropdown-item" in content, "Should have .dropdown-item CSS class"
 
     def test_user_email_dropdown_item_css_exists(self):
         """CSS for user-email dropdown item should exist."""
@@ -232,9 +240,9 @@ class TestLogoutDropdownCSS:
 
         content = app_css.read_text()
 
-        assert (
-            '.dropdown-item.user-email' in content
-        ), "Should have .dropdown-item.user-email CSS class"
+        assert ".dropdown-item.user-email" in content, (
+            "Should have .dropdown-item.user-email CSS class"
+        )
 
 
 class TestLogoutDropdownConditional:
@@ -250,15 +258,15 @@ class TestLogoutDropdownConditional:
         content = app_jsx.read_text()
 
         # Should have conditional check for currentUserEmail before dropdown-menu
-        lines = content.split('\n')
+        lines = content.split("\n")
         found_conditional = False
         found_dropdown_menu = False
 
         for i, line in enumerate(lines):
-            if 'currentUserEmail &&' in line or '{currentUserEmail &&' in line:
+            if "currentUserEmail &&" in line or "{currentUserEmail &&" in line:
                 # Check next few lines for dropdown-menu
                 for j in range(i, min(i + 10, len(lines))):
-                    if 'dropdown-menu' in lines[j]:
+                    if "dropdown-menu" in lines[j]:
                         found_conditional = True
                         found_dropdown_menu = True
                         break
