@@ -37,9 +37,9 @@ async def check_langsmith_proxy_status() -> dict:
                 response = await client.get(f"{proxy_url}/health")
                 if response.status_code == 200:
                     proxy_status["active"] = True
-                    proxy_status[
-                        "message"
-                    ] = "✅ Active - Proxying LangSmith traces to Langfuse"
+                    proxy_status["message"] = (
+                        "✅ Active - Proxying LangSmith traces to Langfuse"
+                    )
                 else:
                     proxy_status["message"] = "⚠️ Configured but not responding"
         except Exception as e:
@@ -47,7 +47,10 @@ async def check_langsmith_proxy_status() -> dict:
             logger.debug(f"LangSmith proxy health check failed: {e}")
     else:
         # Check if using LangSmith directly
-        if "langsmith" in langchain_endpoint.lower() or "smith.langchain" in langchain_endpoint.lower():
+        if (
+            "langsmith" in langchain_endpoint.lower()
+            or "smith.langchain" in langchain_endpoint.lower()
+        ):
             proxy_status["message"] = "Using LangSmith cloud directly (not proxied)"
         else:
             proxy_status["message"] = "LangSmith tracing not configured"

@@ -166,7 +166,9 @@ async def get_current_user(request: Request) -> dict:
         }
 
         if not user_info["user_id"]:
-            raise HTTPException(status_code=401, detail="Invalid token: missing user_id")
+            raise HTTPException(
+                status_code=401, detail="Invalid token: missing user_id"
+            )
 
         return user_info
 

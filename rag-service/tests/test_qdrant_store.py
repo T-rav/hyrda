@@ -54,7 +54,15 @@ class MockQdrantClient:
         self.upserted_points = points
         return Mock()
 
-    def query_points(self, collection_name, query, limit, query_filter=None, with_payload=True, with_vectors=False):
+    def query_points(
+        self,
+        collection_name,
+        query,
+        limit,
+        query_filter=None,
+        with_payload=True,
+        with_vectors=False,
+    ):
         """Mock query points."""
         self.query_points_called = True
         self.queried_collection = collection_name
@@ -171,7 +179,9 @@ class TestQdrantVectorStoreInitialization:
         store = QdrantVectorStore(settings)
         mock_client = MockQdrantClient()
 
-        with patch("vector_stores.qdrant_store.QdrantClient", return_value=mock_client) as mock_qdrant:
+        with patch(
+            "vector_stores.qdrant_store.QdrantClient", return_value=mock_client
+        ) as mock_qdrant:
             await store.initialize()
 
             # Should use http:// URL when API key is present
@@ -579,7 +589,15 @@ class TestQdrantVectorStoreSearch:
             def __init__(self):
                 self.query_points_called = 0
 
-            def query_points(self, collection_name, query, limit, query_filter=None, with_payload=True, with_vectors=False):
+            def query_points(
+                self,
+                collection_name,
+                query,
+                limit,
+                query_filter=None,
+                with_payload=True,
+                with_vectors=False,
+            ):
                 self.query_points_called += 1
 
                 # Return different results for namespace query vs default query
@@ -588,7 +606,11 @@ class TestQdrantVectorStoreSearch:
                     mock_point1 = Mock()
                     mock_point1.id = "metric-1"
                     mock_point1.score = 0.6  # Lower score
-                    mock_point1.payload = {"text": "Metric doc", "file_name": "metric.pdf", "namespace": "metric"}
+                    mock_point1.payload = {
+                        "text": "Metric doc",
+                        "file_name": "metric.pdf",
+                        "namespace": "metric",
+                    }
 
                     result = Mock()
                     result.points = [mock_point1]

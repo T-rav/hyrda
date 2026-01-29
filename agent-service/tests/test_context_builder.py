@@ -116,7 +116,9 @@ class TestBuildRAGPrompt:
         conversation_history = original_history.copy()
 
         # Act
-        _, messages = builder.build_rag_prompt(query, context_chunks, conversation_history)
+        _, messages = builder.build_rag_prompt(
+            query, context_chunks, conversation_history
+        )
 
         # Assert
         assert len(original_history) == 1  # Original not modified
@@ -131,12 +133,18 @@ class TestBuildRAGPrompt:
             {
                 "content": "Python is a high-level programming language",
                 "similarity": 0.95,
-                "metadata": {"file_name": "python_guide.pdf", "source": "knowledge_base"},
+                "metadata": {
+                    "file_name": "python_guide.pdf",
+                    "source": "knowledge_base",
+                },
             },
             {
                 "content": "Python was created by Guido van Rossum",
                 "similarity": 0.87,
-                "metadata": {"file_name": "python_history.pdf", "source": "knowledge_base"},
+                "metadata": {
+                    "file_name": "python_history.pdf",
+                    "source": "knowledge_base",
+                },
             },
         ]
         conversation_history = []
@@ -316,7 +324,9 @@ class TestBuildRAGPrompt:
         )
 
         # Assert
-        assert "Do not add inline source citations like '[Source: ...]'" in system_message
+        assert (
+            "Do not add inline source citations like '[Source: ...]'" in system_message
+        )
         assert "complete source citations will be automatically added" in system_message
 
     def test_build_prompt_with_missing_metadata(self):
@@ -341,7 +351,9 @@ class TestBuildRAGPrompt:
         assert system_message is not None
         assert "Content without metadata" in system_message
         # Should handle missing metadata gracefully
-        assert "[Source: Unknown" in system_message or "KNOWLEDGE BASE" in system_message
+        assert (
+            "[Source: Unknown" in system_message or "KNOWLEDGE BASE" in system_message
+        )
 
     def test_build_prompt_with_missing_file_name(self):
         """Test prompt building with chunks missing file_name."""

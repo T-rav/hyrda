@@ -190,9 +190,7 @@ class TestClassifyIntent:
         )
         rewriter = AdaptiveQueryRewriter(mock_llm)
 
-        intent = await rewriter._classify_intent(
-            "who worked on Ticketmaster projects?", [], None
-        )
+        intent = await rewriter._classify_intent("who worked on Ticketmaster projects?", [], None)
 
         assert intent["type"] == "team_allocation"
         assert "Ticketmaster" in intent["entities"]
@@ -443,9 +441,7 @@ class TestSemanticRewrite:
             "confidence": 0.85,
         }
 
-        result = await rewriter._semantic_rewrite(
-            "which engineers worked on the project?", intent
-        )
+        result = await rewriter._semantic_rewrite("which engineers worked on the project?", intent)
 
         assert result["strategy"] == "semantic"
         # Should expand both "engineer" and "project"
@@ -477,8 +473,7 @@ class TestExpandQuery:
         assert result["filters"] == {"source": "google_drive"}
         # Should include document-related terms
         assert any(
-            term in result["query"]
-            for term in ["document", "file", "report", "documentation"]
+            term in result["query"] for term in ["document", "file", "report", "documentation"]
         )
 
     @pytest.mark.asyncio
@@ -635,9 +630,7 @@ class TestRewriteQueryIntegration:
             {"role": "assistant", "content": "ProjectA is an active project."},
         ]
 
-        result = await rewriter.rewrite_query(
-            "who worked on it?", conversation_history=history
-        )
+        result = await rewriter.rewrite_query("who worked on it?", conversation_history=history)
 
         assert result["strategy"] == "hyde"
         # Should use conversation context to understand "it" refers to ProjectA

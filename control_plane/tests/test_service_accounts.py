@@ -4,113 +4,25 @@ Tests CRUD operations, authentication, API key generation, rate limiting,
 and revocation for external API integration service accounts.
 """
 
-import os
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
-import pytest
 import bcrypt
-from starlette.testclient import TestClient
 
-# Create temporary SQLite databases for tests
-security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-security_db_path = security_db_file.name
-security_db_file.close()
-
-# Set up SQLite BEFORE imports
-os.environ["SECURITY_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-os.environ["DATA_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-
-# Add control_plane to path
-control_plane_dir = Path(__file__).parent.parent
-if str(control_plane_dir) not in sys.path:
-    sys.path.insert(0, str(control_plane_dir))
-
-# Import models and create tables
-from models.base import Base, get_db_session
+# Import models for test assertions
+from models.base import get_db_session
 from models import ServiceAccount
 
-with get_db_session() as session:
-    Base.metadata.create_all(session.bind)
-
-
-@pytest.fixture(scope="module")
-def app():
-    """Get FastAPI app for testing."""
-    from app import create_app
-    return create_app()
-
-
-@pytest.fixture
-def mock_oauth_env():
-    """Mock OAuth environment variables."""
-    with patch.dict(
-        os.environ,
-        {
-            "GOOGLE_OAUTH_CLIENT_ID": "test-client-id",
-            "GOOGLE_OAUTH_CLIENT_SECRET": "test-secret",
-            "ALLOWED_EMAIL_DOMAIN": "@8thlight.com",
-        },
-        clear=False,
-    ):
-        yield
-
-
-@pytest.fixture
-def client(app, mock_oauth_env):
-    """Create test client."""
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-@pytest.fixture
-def authenticated_client(client, app):
-    """Create authenticated admin client."""
-    from fastapi import Request
-    from utils.auth import require_admin
-
-    mock_admin_user = {
-        "email": "admin@8thlight.com",
-        "sub": "admin-sub-123",
-        "name": "Test Admin",
-        "is_admin": True,
-    }
-
-    async def mock_require_admin(request: Request):
-        request.state.user = mock_admin_user
-        return mock_admin_user
-
-    app.dependency_overrides[require_admin] = mock_require_admin
-    yield client
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture(autouse=True)
-def clean_database():
-    """Clean database before each test."""
-    with get_db_session() as session:
-        session.query(ServiceAccount).delete()
-        session.commit()
-    yield
+# All fixtures are now in conftest.py
 
 
 # Test: Create Service Account
-def test_create_service_account_success(authenticated_client):
+def test_create_service_account_success(authenticated_client, service_account_builder):
     """Test creating a service account returns API key once."""
-    response = authenticated_client.post(
-        "/api/service-accounts",
-        json={
-            "name": "HubSpot Production",
-            "description": "Integration with HubSpot CRM",
-            "scopes": "agents:read,agents:invoke",
-            "rate_limit": 500,
-        },
-    )
+    # Arrange
+    payload = service_account_builder().for_hubspot().build()
 
-    if response.status_code != 200:
-        print(f"Response: {response.status_code}")
-        print(f"Body: {response.json()}")
+    # Act
+    response = authenticated_client.post("/api/service-accounts", json=payload)
+
+    # Assert
     assert response.status_code == 200
     data = response.json()
 
@@ -130,63 +42,79 @@ def test_create_service_account_success(authenticated_client):
 
     # Verify API key is hashed in database
     with get_db_session() as session:
-        account = session.query(ServiceAccount).filter_by(name="HubSpot Production").first()
+        account = (
+            session.query(ServiceAccount).filter_by(name="HubSpot Production").first()
+        )
         assert account is not None
         assert bcrypt.checkpw(data["api_key"].encode(), account.api_key_hash.encode())
 
 
-def test_create_service_account_duplicate_name(authenticated_client):
+def test_create_service_account_duplicate_name(
+    authenticated_client, service_account_builder
+):
     """Test creating service account with duplicate name fails."""
-    # Create first account
-    authenticated_client.post(
-        "/api/service-accounts",
-        json={"name": "Test Account", "scopes": "agents:read"},
-    )
+    # Arrange
+    payload = service_account_builder().named("Test Account").read_only().build()
 
-    # Try to create duplicate
-    response = authenticated_client.post(
-        "/api/service-accounts",
-        json={"name": "Test Account", "scopes": "agents:read"},
-    )
+    # Act - Create first account
+    authenticated_client.post("/api/service-accounts", json=payload)
 
+    # Act - Try to create duplicate
+    response = authenticated_client.post("/api/service-accounts", json=payload)
+
+    # Assert
     assert response.status_code == 400
     assert "already exists" in response.json()["detail"]
 
 
-def test_create_service_account_with_allowed_agents(authenticated_client):
+def test_create_service_account_with_allowed_agents(
+    authenticated_client, service_account_builder
+):
     """Test creating service account with specific allowed agents."""
-    response = authenticated_client.post(
-        "/api/service-accounts",
-        json={
-            "name": "Limited Account",
-            "scopes": "agents:invoke",
-            "allowed_agents": ["profile_researcher", "meddic_coach"],
-        },
+    # Arrange
+    payload = (
+        service_account_builder()
+        .named("Limited Account")
+        .invoke_only()
+        .limited_to_agents(["profile_researcher", "meddic_coach"])
+        .build()
     )
 
+    # Act
+    response = authenticated_client.post("/api/service-accounts", json=payload)
+
+    # Assert
     assert response.status_code == 200
     data = response.json()
     assert set(data["allowed_agents"]) == {"profile_researcher", "meddic_coach"}
 
 
-def test_create_service_account_with_empty_agents_array(authenticated_client):
+def test_create_service_account_with_empty_agents_array(
+    authenticated_client, service_account_builder
+):
     """Test creating service account with empty agents array = no access."""
-    response = authenticated_client.post(
-        "/api/service-accounts",
-        json={
-            "name": "No Access Account",
-            "scopes": "agents:invoke",
-            "allowed_agents": [],  # Empty array = cannot invoke any agents
-        },
+    # Arrange
+    payload = (
+        service_account_builder()
+        .named("No Access Account")
+        .invoke_only()
+        .no_agent_access()
+        .build()
     )
 
+    # Act
+    response = authenticated_client.post("/api/service-accounts", json=payload)
+
+    # Assert
     assert response.status_code == 200
     data = response.json()
     assert data["allowed_agents"] == []  # Should return empty array
 
     # Verify the model denies access to all agents
     with get_db_session() as session:
-        account = session.query(ServiceAccount).filter_by(name="No Access Account").first()
+        account = (
+            session.query(ServiceAccount).filter_by(name="No Access Account").first()
+        )
         assert account is not None
         assert account.can_access_agent("profile_researcher") is False
         assert account.can_access_agent("any_agent") is False
@@ -220,19 +148,18 @@ def test_list_service_accounts_empty(authenticated_client):
     assert response.json() == []
 
 
-def test_list_service_accounts(authenticated_client):
+def test_list_service_accounts(authenticated_client, service_account_builder):
     """Test listing service accounts."""
-    # Create two accounts
-    authenticated_client.post(
-        "/api/service-accounts",
-        json={"name": "Account 1", "scopes": "agents:read"},
-    )
-    authenticated_client.post(
-        "/api/service-accounts",
-        json={"name": "Account 2", "scopes": "agents:invoke"},
-    )
+    # Arrange - Create two accounts
+    account1 = service_account_builder().named("Account 1").read_only().build()
+    account2 = service_account_builder().named("Account 2").invoke_only().build()
+    authenticated_client.post("/api/service-accounts", json=account1)
+    authenticated_client.post("/api/service-accounts", json=account2)
 
+    # Act
     response = authenticated_client.get("/api/service-accounts")
+
+    # Assert
     assert response.status_code == 200
     accounts = response.json()
     assert len(accounts) == 2
@@ -478,15 +405,23 @@ def test_generate_api_key_format():
 
 
 # Test: Admin-Only Access (should fail without admin auth)
-def test_create_service_account_requires_admin(client):
+def test_create_service_account_requires_admin(client, app):
     """Test that creating service account requires admin auth."""
-    response = client.post(
-        "/api/service-accounts",
-        json={"name": "Unauthorized", "scopes": "agents:read"},
-    )
+    # Temporarily clear auth overrides to test unauthenticated access
+    saved_overrides = app.dependency_overrides.copy()
+    app.dependency_overrides.clear()
 
-    # Should fail without admin authentication
-    assert response.status_code in [401, 403]
+    try:
+        response = client.post(
+            "/api/service-accounts",
+            json={"name": "Unauthorized", "scopes": "agents:read"},
+        )
+
+        # Should fail without admin authentication
+        assert response.status_code in [401, 403]
+    finally:
+        # Restore overrides for other tests
+        app.dependency_overrides = saved_overrides
 
 
 # Test: Service Account Validation Endpoint

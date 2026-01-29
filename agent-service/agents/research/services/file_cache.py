@@ -50,8 +50,12 @@ class ResearchFileCache:
             ValueError: If MinIO connection fails
         """
         # Get config from env vars if not provided
-        self.endpoint_url = endpoint_url or os.getenv("MINIO_ENDPOINT")  # Internal endpoint for boto3
-        self.public_url = os.getenv("MINIO_PUBLIC_URL", "http://localhost:9000")  # Public endpoint for presigned URLs
+        self.endpoint_url = endpoint_url or os.getenv(
+            "MINIO_ENDPOINT"
+        )  # Internal endpoint for boto3
+        self.public_url = os.getenv(
+            "MINIO_PUBLIC_URL", "http://localhost:9000"
+        )  # Public endpoint for presigned URLs
         self.access_key = access_key or os.getenv("MINIO_ACCESS_KEY")
         self.secret_key = secret_key or os.getenv("MINIO_SECRET_KEY")
         self.region = region
@@ -469,7 +473,9 @@ class ResearchFileCache:
             # This allows the presigned URL to work from outside Docker network
             if self.endpoint_url in url:
                 url = url.replace(self.endpoint_url, self.public_url)
-                logger.debug(f"Converted presigned URL from {self.endpoint_url} to {self.public_url}")
+                logger.debug(
+                    f"Converted presigned URL from {self.endpoint_url} to {self.public_url}"
+                )
 
             logger.info(
                 f"Generated presigned URL for {file_path} (expires in {expiration}s)"

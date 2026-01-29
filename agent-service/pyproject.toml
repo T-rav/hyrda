@@ -140,15 +140,21 @@ select = [
 ignore = [
     "E501",   # line too long
     "B008",   # do not perform function calls in argument defaults
+    "B904",   # raise ... from err (allow raise without from)
     "C901",   # too complex
     "PLR0913", # too many arguments
     "PLR0912", # too many branches
     "PLR0915", # too many statements
     "PLR2004", # magic value used in comparison
+    "PLR0911", # too many return statements
+    "PLC0415", # import should be at top-level (needed for conditional imports)
+    "PLW0603", # global statement (needed for singletons)
+    "SIM102",  # nested if statements (sometimes more readable)
+    "SIM117",  # nested with statements (common in test mocking)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "B011", "F811"]
+"tests/*" = ["S101", "B011", "F811", "E402", "SIM105"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["."]

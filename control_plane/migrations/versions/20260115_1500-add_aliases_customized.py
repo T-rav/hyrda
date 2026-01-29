@@ -20,7 +20,9 @@ def upgrade() -> None:
     """Add aliases_customized column to track admin edits."""
     op.add_column(
         "agent_metadata",
-        sa.Column("aliases_customized", sa.Boolean(), nullable=False, server_default="0"),
+        sa.Column(
+            "aliases_customized", sa.Boolean(), nullable=False, server_default="0"
+        ),
     )
 
 

@@ -141,6 +141,7 @@ def verify_token(token: str) -> dict[str, Any]:
     """Verify Google ID token and return user info."""
     try:
         from google.auth.transport.requests import Request as GoogleRequest
+
         idinfo = id_token.verify_oauth2_token(token, GoogleRequest(), GOOGLE_CLIENT_ID)
         return idinfo
     except ValueError as e:
@@ -438,7 +439,7 @@ async def require_admin(request: Request) -> dict[str, Any]:
             logger.warning(f"Admin access denied: User not found in database: {email}")
             raise HTTPException(
                 status_code=403,
-                detail="User not found. Please contact an administrator."
+                detail="User not found. Please contact an administrator.",
             )
 
         if not user.is_admin:
@@ -448,12 +449,9 @@ async def require_admin(request: Request) -> dict[str, Any]:
                 email=email,
                 path=str(request.url.path),
                 success=False,
-                error="User is not an administrator"
+                error="User is not an administrator",
             )
-            raise HTTPException(
-                status_code=403,
-                detail="Administrator access required"
-            )
+            raise HTTPException(status_code=403, detail="Administrator access required")
 
         # User is admin
         AuditLogger.log_auth_event(
@@ -462,8 +460,4 @@ async def require_admin(request: Request) -> dict[str, Any]:
             path=str(request.url.path),
         )
 
-        return {
-            "email": user.email,
-            "name": user.full_name,
-            "is_admin": user.is_admin
-        }
+        return {"email": user.email, "name": user.full_name, "is_admin": user.is_admin}

@@ -20,8 +20,10 @@ def clear_prometheus_registry():
     for collector in collectors:
         try:
             # Don't unregister default collectors
-            if not any(name.startswith(('python_', 'process_', 'platform_'))
-                      for name in REGISTRY._collector_to_names.get(collector, [])):
+            if not any(
+                name.startswith(("python_", "process_", "platform_"))
+                for name in REGISTRY._collector_to_names.get(collector, [])
+            ):
                 REGISTRY.unregister(collector)
         except Exception:
             pass  # Collector already unregistered or is a default collector
@@ -32,8 +34,10 @@ def clear_prometheus_registry():
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
         try:
-            if not any(name.startswith(('python_', 'process_', 'platform_'))
-                      for name in REGISTRY._collector_to_names.get(collector, [])):
+            if not any(
+                name.startswith(("python_", "process_", "platform_"))
+                for name in REGISTRY._collector_to_names.get(collector, [])
+            ):
                 REGISTRY.unregister(collector)
         except Exception:
             pass

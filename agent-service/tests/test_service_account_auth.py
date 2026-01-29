@@ -73,17 +73,22 @@ class TestVerifyServiceAccountApiKey:
         result = await verify_service_account_api_key(mock_request)
         assert result is None
 
-    async def test_extracts_from_x_api_key_header(self, mock_request, mock_httpx_response):
+    async def test_extracts_from_x_api_key_header(
+        self, mock_request, mock_httpx_response
+    ):
         """Test extracting API key from X-API-Key header."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_httpx_response
             )
@@ -94,17 +99,22 @@ class TestVerifyServiceAccountApiKey:
             assert result.name == "Test Account"
             assert "agents:invoke" in result.scopes
 
-    async def test_extracts_from_authorization_bearer(self, mock_request, mock_httpx_response):
+    async def test_extracts_from_authorization_bearer(
+        self, mock_request, mock_httpx_response
+    ):
         """Test extracting API key from Authorization: Bearer header."""
         mock_request.headers = {"Authorization": "Bearer sa_test_key_12345"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_httpx_response
             )
@@ -122,13 +132,16 @@ class TestVerifyServiceAccountApiKey:
         mock_response.status_code = 401
         mock_response.json.return_value = {"detail": "Invalid API key"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
@@ -147,13 +160,16 @@ class TestVerifyServiceAccountApiKey:
         mock_response.status_code = 403
         mock_response.json.return_value = {"detail": "API key revoked"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
@@ -172,13 +188,16 @@ class TestVerifyServiceAccountApiKey:
         mock_response.status_code = 429
         mock_response.json.return_value = {"detail": "Rate limit exceeded"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
                 return_value=mock_response
             )
@@ -203,13 +222,16 @@ class TestVerifyServiceAccountApiKey:
         """Test that httpx.RequestError raises 503."""
         mock_request.headers = {"X-API-Key": "sa_test_key"}
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             import httpx
 
             mock_client.return_value.__aenter__.return_value.post = AsyncMock(
@@ -222,18 +244,23 @@ class TestVerifyServiceAccountApiKey:
             assert exc_info.value.status_code == 503
             assert "unavailable" in exc_info.value.detail
 
-    async def test_includes_client_ip_in_request(self, mock_request, mock_httpx_response):
+    async def test_includes_client_ip_in_request(
+        self, mock_request, mock_httpx_response
+    ):
         """Test that client IP is included in validation request."""
         mock_request.headers = {"X-API-Key": "sa_test_key"}
         mock_request.client.host = "10.0.0.5"
 
-        with patch.dict(
-            "os.environ",
-            {
-                "CONTROL_PLANE_URL": "http://control-plane:6001",
-                "AGENT_SERVICE_TOKEN": "test-token",
-            },
-        ), patch("httpx.AsyncClient") as mock_client:
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "CONTROL_PLANE_URL": "http://control-plane:6001",
+                    "AGENT_SERVICE_TOKEN": "test-token",
+                },
+            ),
+            patch("httpx.AsyncClient") as mock_client,
+        ):
             mock_post = AsyncMock(return_value=mock_httpx_response)
             mock_client.return_value.__aenter__.return_value.post = mock_post
 

@@ -50,13 +50,17 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 # Extended format: "agent_name": {"graph": "...", "metadata": {...}}
                 metadata = agent_config.get("metadata", {})
             else:
-                logger.warning(f"Invalid config format for agent '{agent_name}', skipping")
+                logger.warning(
+                    f"Invalid config format for agent '{agent_name}', skipping"
+                )
                 continue
 
             # Build agent data with defaults
             agent_data = {
                 "name": agent_name,
-                "display_name": metadata.get("display_name", agent_name.replace("_", " ").title()),
+                "display_name": metadata.get(
+                    "display_name", agent_name.replace("_", " ").title()
+                ),
                 "description": metadata.get("description", f"Agent for {agent_name}"),
                 "aliases": metadata.get("aliases", []),
                 "is_system": False,  # Default: can be disabled by admins
@@ -69,13 +73,17 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 if not metadata.get("display_name"):
                     agent_data["display_name"] = "Help Agent"
                 if not metadata.get("description"):
-                    agent_data["description"] = "List available bot agents and their aliases"
+                    agent_data["description"] = (
+                        "List available bot agents and their aliases"
+                    )
                 if not metadata.get("aliases"):
                     agent_data["aliases"] = ["help", "agents"]
 
             agents.append(agent_data)
 
-        logger.info(f"Discovered {len(agents)} agents from langgraph.json: {[a['name'] for a in agents]}")
+        logger.info(
+            f"Discovered {len(agents)} agents from langgraph.json: {[a['name'] for a in agents]}"
+        )
         return agents
 
     except Exception as e:
@@ -109,7 +117,9 @@ def sync_agents_to_control_plane() -> None:
         # Build registration payloads with endpoint URLs
         agents_to_register = []
         for agent_data in discovered_agents:
-            agent_data["endpoint_url"] = f"http://{agent_service_host}:8000/api/agents/{agent_data['name']}/invoke"
+            agent_data["endpoint_url"] = (
+                f"http://{agent_service_host}:8000/api/agents/{agent_data['name']}/invoke"
+            )
             agents_to_register.append(agent_data)
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")

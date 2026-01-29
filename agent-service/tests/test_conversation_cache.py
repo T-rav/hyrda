@@ -207,9 +207,7 @@ class TestConversationRetrieval:
 
         # Mock Slack API success
         messages = [{"role": "user", "content": "Hello from Slack"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(messages, True))
 
         result_messages, success, source = await cache.get_conversation(
             "C123", "1234.5678", mock_slack_service
@@ -251,9 +249,7 @@ class TestConversationRetrieval:
 
         mock_slack_service = AsyncMock()
         messages = [{"role": "user", "content": "Hello"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(messages, True))
 
         # Mock _get_redis_client to return None
         with patch.object(cache, "_get_redis_client", return_value=None):
@@ -279,9 +275,7 @@ class TestConversationRetrieval:
 
         # Mock Slack API success
         messages = [{"role": "user", "content": "Hello"}]
-        mock_slack_service.get_thread_history = AsyncMock(
-            return_value=(messages, True)
-        )
+        mock_slack_service.get_thread_history = AsyncMock(return_value=(messages, True))
 
         result_messages, success, source = await cache.get_conversation(
             "C123", "1234.5678", mock_slack_service
@@ -407,9 +401,7 @@ class TestDocumentStorage:
         cache.redis_client = mock_redis
         cache._redis_available = True
 
-        result = await cache.store_document_content(
-            "1234.5678", "content", "test.pdf"
-        )
+        result = await cache.store_document_content("1234.5678", "content", "test.pdf")
 
         assert result is False
 
@@ -1040,7 +1032,9 @@ class TestCacheConversationInternal:
         await cache._cache_conversation(mock_redis, "1234.5678", messages)
 
         # Verify thread_type was preserved
-        meta_call = [call for call in mock_redis.setex.call_args_list if "meta" in call[0][0]][0]
+        meta_call = [
+            call for call in mock_redis.setex.call_args_list if "meta" in call[0][0]
+        ][0]
         stored_metadata = json.loads(meta_call[0][2])
         assert stored_metadata["thread_type"] == "profile"
 

@@ -21,7 +21,9 @@ class TestAppLifespan:
             with patch("config.settings.get_settings") as mock_settings:
                 with patch("services.vector_service.create_vector_store") as mock_vector_store:
                     with patch("services.vector_service.set_vector_store") as mock_set_vector:
-                        with patch("services.search_clients.initialize_search_clients") as mock_search_init:
+                        with patch(
+                            "services.search_clients.initialize_search_clients"
+                        ) as mock_search_init:
                             # Setup mocks
                             mock_settings_obj = MagicMock()
                             mock_settings_obj.port = 8002
@@ -61,27 +63,27 @@ class TestAppLifespan:
             with patch("config.settings.get_settings") as mock_settings:
                 with patch("services.search_clients.initialize_search_clients") as mock_search_init:
                     with patch("app.logger") as mock_logger:
-                            # Setup mocks
-                            mock_settings_obj = MagicMock()
-                            mock_settings_obj.port = 8002
-                            mock_settings_obj.environment = "test"
-                            mock_settings_obj.vector.enabled = False
-                            mock_settings_obj.rag.enable_query_rewriting = False
-                            mock_settings_obj.search.tavily_api_key = None
-                            mock_settings_obj.search.perplexity_api_key = None
-                            mock_settings.return_value = mock_settings_obj
+                        # Setup mocks
+                        mock_settings_obj = MagicMock()
+                        mock_settings_obj.port = 8002
+                        mock_settings_obj.environment = "test"
+                        mock_settings_obj.vector.enabled = False
+                        mock_settings_obj.rag.enable_query_rewriting = False
+                        mock_settings_obj.search.tavily_api_key = None
+                        mock_settings_obj.search.perplexity_api_key = None
+                        mock_settings.return_value = mock_settings_obj
 
-                            # Make search client init fail
-                            mock_search_init.side_effect = Exception("Failed to init")
+                        # Make search client init fail
+                        mock_search_init.side_effect = Exception("Failed to init")
 
-                            # Run lifespan - should not raise
-                            async with lifespan(mock_app):
-                                pass
+                        # Run lifespan - should not raise
+                        async with lifespan(mock_app):
+                            pass
 
-                            # Verify warning was logged
-                            assert mock_logger.warning.called
-                            warning_call = mock_logger.warning.call_args[0][0]
-                            assert "Search clients initialization failed" in warning_call
+                        # Verify warning was logged
+                        assert mock_logger.warning.called
+                        warning_call = mock_logger.warning.call_args[0][0]
+                        assert "Search clients initialization failed" in warning_call
 
     @pytest.mark.asyncio
     async def test_lifespan_cleanup_search_clients(self):
@@ -96,24 +98,24 @@ class TestAppLifespan:
             with patch("config.settings.get_settings") as mock_settings:
                 with patch("services.search_clients.initialize_search_clients"):
                     with patch("services.search_clients.close_search_clients") as mock_cleanup:
-                            # Setup mocks
-                            mock_settings_obj = MagicMock()
-                            mock_settings_obj.port = 8002
-                            mock_settings_obj.environment = "test"
-                            mock_settings_obj.vector.enabled = False
-                            mock_settings_obj.rag.enable_query_rewriting = False
-                            mock_settings_obj.search.tavily_api_key = "test-key"
-                            mock_settings_obj.search.perplexity_api_key = None
-                            mock_settings.return_value = mock_settings_obj
+                        # Setup mocks
+                        mock_settings_obj = MagicMock()
+                        mock_settings_obj.port = 8002
+                        mock_settings_obj.environment = "test"
+                        mock_settings_obj.vector.enabled = False
+                        mock_settings_obj.rag.enable_query_rewriting = False
+                        mock_settings_obj.search.tavily_api_key = "test-key"
+                        mock_settings_obj.search.perplexity_api_key = None
+                        mock_settings.return_value = mock_settings_obj
 
-                            mock_cleanup.return_value = AsyncMock()
+                        mock_cleanup.return_value = AsyncMock()
 
-                            # Run lifespan
-                            async with lifespan(mock_app):
-                                pass
+                        # Run lifespan
+                        async with lifespan(mock_app):
+                            pass
 
-                            # Verify cleanup was called
-                            mock_cleanup.assert_called_once()
+                        # Verify cleanup was called
+                        mock_cleanup.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_lifespan_initializes_vector_store(self):

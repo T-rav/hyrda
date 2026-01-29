@@ -1,7 +1,8 @@
 """Tests for Google API client utilities."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from utils.google_api_client import (
     GoogleAPIError,
@@ -18,22 +19,24 @@ async def test_search_google_drive_success():
     """Test successful Google Drive file search."""
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json = MagicMock(return_value={
-        "files": [
-            {
-                "id": "1ABC123",
-                "name": "Q4 Report.pdf",
-                "mimeType": "application/pdf",
-                "webViewLink": "https://drive.google.com/file/d/1ABC123",
-            },
-            {
-                "id": "2DEF456",
-                "name": "Q4 Presentation.pptx",
-                "mimeType": "application/vnd.ms-powerpoint",
-                "webViewLink": "https://drive.google.com/file/d/2DEF456",
-            },
-        ]
-    })
+    mock_response.json = MagicMock(
+        return_value={
+            "files": [
+                {
+                    "id": "1ABC123",
+                    "name": "Q4 Report.pdf",
+                    "mimeType": "application/pdf",
+                    "webViewLink": "https://drive.google.com/file/d/1ABC123",
+                },
+                {
+                    "id": "2DEF456",
+                    "name": "Q4 Presentation.pptx",
+                    "mimeType": "application/vnd.ms-powerpoint",
+                    "webViewLink": "https://drive.google.com/file/d/2DEF456",
+                },
+            ]
+        }
+    )
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client_class:
@@ -116,12 +119,14 @@ async def test_search_gmail_success():
     """Test successful Gmail message search."""
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json = MagicMock(return_value={
-        "messages": [
-            {"id": "msg123", "threadId": "thread123"},
-            {"id": "msg456", "threadId": "thread456"},
-        ]
-    })
+    mock_response.json = MagicMock(
+        return_value={
+            "messages": [
+                {"id": "msg123", "threadId": "thread123"},
+                {"id": "msg456", "threadId": "thread456"},
+            ]
+        }
+    )
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client_class:
@@ -163,17 +168,19 @@ async def test_get_gmail_message_success():
     """Test successful Gmail message retrieval."""
     mock_response = MagicMock()
     mock_response.status_code = 200
-    mock_response.json = MagicMock(return_value={
-        "id": "msg123",
-        "threadId": "thread123",
-        "payload": {
-            "headers": [
-                {"name": "Subject", "value": "Test Email"},
-                {"name": "From", "value": "sender@example.com"},
-            ],
-            "body": {"data": "VGVzdCBtZXNzYWdlIGNvbnRlbnQ="},
-        },
-    })
+    mock_response.json = MagicMock(
+        return_value={
+            "id": "msg123",
+            "threadId": "thread123",
+            "payload": {
+                "headers": [
+                    {"name": "Subject", "value": "Test Email"},
+                    {"name": "From", "value": "sender@example.com"},
+                ],
+                "body": {"data": "VGVzdCBtZXNzYWdlIGNvbnRlbnQ="},
+            },
+        }
+    )
     mock_response.raise_for_status = MagicMock()
 
     with patch("httpx.AsyncClient") as mock_client_class:

@@ -27,7 +27,9 @@ async def require_service_auth(
     request: Request,
     x_service_token: str | None = Header(None, description="Service authentication token"),
     x_user_email: str | None = Header(None, description="User email for permissions"),
-    x_google_oauth_token: str | None = Header(None, alias="X-Google-OAuth-Token", description="Google OAuth access token for user"),
+    x_google_oauth_token: str | None = Header(
+        None, alias="X-Google-OAuth-Token", description="Google OAuth access token for user"
+    ),
     x_librechat_token: str | None = Header(None, description="JWT token from LibreChat"),
     x_librechat_user: str | None = Header(None, description="LibreChat user ID"),
     x_request_timestamp: str | None = Header(None, description="Request timestamp for HMAC"),
@@ -116,6 +118,7 @@ async def require_service_auth(
         # Validate user JWT token
         try:
             from shared.utils.jwt_auth import verify_jwt_token
+
             jwt_payload = verify_jwt_token(x_librechat_token)
             if not jwt_payload:
                 raise HTTPException(status_code=401, detail="Invalid user JWT token")

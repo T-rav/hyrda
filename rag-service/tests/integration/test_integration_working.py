@@ -78,9 +78,7 @@ class TestContextBuilding:
         history = []
         system_msg = "You are a helpful assistant."
 
-        final_system, messages = builder.build_rag_prompt(
-            query, chunks, history, system_msg
-        )
+        final_system, messages = builder.build_rag_prompt(query, chunks, history, system_msg)
 
         assert "Python is a high-level programming language" in final_system
         assert "KNOWLEDGE BASE" in final_system
@@ -108,9 +106,7 @@ class TestContextBuilding:
         ]
 
         query = "Analyze this document"
-        final_system, messages = builder.build_rag_prompt(
-            query, chunks, [], "System message"
-        )
+        final_system, messages = builder.build_rag_prompt(query, chunks, [], "System message")
 
         assert "UPLOADED DOCUMENT" in final_system
         assert "KNOWLEDGE BASE" in final_system

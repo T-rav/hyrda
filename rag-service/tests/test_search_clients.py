@@ -156,9 +156,7 @@ class TestTavilyClientSearch:
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
 
-        with patch.object(
-            aiohttp.ClientSession, "post", return_value=mock_response
-        ) as mock_post:
+        with patch.object(aiohttp.ClientSession, "post", return_value=mock_response) as mock_post:
             mock_post.__aenter__ = AsyncMock(return_value=mock_response)
             mock_post.__aexit__ = AsyncMock()
 
@@ -376,9 +374,7 @@ class TestTavilyClientScrapeUrl:
         mock_response.json = AsyncMock(return_value={"results": []})
         mock_response.raise_for_status = Mock()
 
-        with patch.object(
-            aiohttp.ClientSession, "post", return_value=mock_response
-        ) as mock_post:
+        with patch.object(aiohttp.ClientSession, "post", return_value=mock_response) as mock_post:
             mock_post.__aenter__ = AsyncMock(return_value=mock_response)
             mock_post.__aexit__ = AsyncMock()
 
@@ -477,9 +473,7 @@ class TestTavilyClientScrapeUrl:
         client = TavilyClient(api_key="test-tavily-key")
 
         mock_session = AsyncMock()
-        mock_session.post = Mock(
-            side_effect=aiohttp.ClientTimeout("Request timeout")
-        )
+        mock_session.post = Mock(side_effect=aiohttp.ClientTimeout("Request timeout"))
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock()
 
@@ -500,9 +494,7 @@ class TestTavilyClientScrapeUrl:
 
         mock_response = Mock()
         mock_response.status = 200
-        mock_response.json = AsyncMock(
-            return_value={"results": [{"raw_content": "Test content"}]}
-        )
+        mock_response.json = AsyncMock(return_value={"results": [{"raw_content": "Test content"}]})
         mock_response.raise_for_status = Mock()
 
         mock_post_cm = create_mock_post_context_manager(mock_response)
@@ -630,10 +622,7 @@ class TestPerplexityClientDeepResearch:
         result = await client.deep_research(query="What is quantum computing?")
 
         assert result["success"] is True
-        assert (
-            result["answer"]
-            == "This is a comprehensive research answer with detailed analysis."
-        )
+        assert result["answer"] == "This is a comprehensive research answer with detailed analysis."
         assert len(result["sources"]) == 2
         assert result["sources"][0]["url"] == "https://example.com/source1"
         assert "title" in result["sources"][0]
@@ -653,9 +642,7 @@ class TestPerplexityClientDeepResearch:
         )
         mock_response.raise_for_status = Mock()
 
-        with patch.object(
-            aiohttp.ClientSession, "post", return_value=mock_response
-        ) as mock_post:
+        with patch.object(aiohttp.ClientSession, "post", return_value=mock_response) as mock_post:
             mock_post.__aenter__ = AsyncMock(return_value=mock_response)
             mock_post.__aexit__ = AsyncMock()
 

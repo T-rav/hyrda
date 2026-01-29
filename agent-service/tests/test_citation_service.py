@@ -275,7 +275,9 @@ class TestAddSourceCitations:
         # Assert
         # Response text still contains "uploaded" but it shouldn't be in sources
         # Check that only kb_doc is in sources section
-        sources_section = result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        sources_section = (
+            result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        )
         assert "kb_doc" in sources_section
         assert "uploaded" not in sources_section
 
@@ -474,9 +476,14 @@ class TestAddSourceCitations:
         # Should only appear once due to case-insensitive dedup
         # The file_chunk_counts is keyed by file_name, and the deduplication
         # only prevents listing the source twice, not the chunk count
-        sources_section = result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        sources_section = (
+            result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        )
         # Count how many times the filename appears in sources
-        assert sources_section.count("Document") == 1 or sources_section.count("document") == 1
+        assert (
+            sources_section.count("Document") == 1
+            or sources_section.count("document") == 1
+        )
 
     def test_add_citations_with_missing_web_view_link(self):
         """Test citation when web_view_link is missing."""
@@ -1047,7 +1054,9 @@ class TestFormatContextForLLM:
 
         # Assert
         # Should still deduplicate based on file name
-        sources_section = result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        sources_section = (
+            result.split("**📚 Sources:**")[1] if "**📚 Sources:**" in result else ""
+        )
         # Check that annual_report appears only once in sources
         annual_count = sources_section.lower().count("annual_report")
         assert annual_count == 1

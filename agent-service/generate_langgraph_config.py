@@ -40,11 +40,7 @@ def merge_langgraph_configs(system_config: dict, custom_config: dict) -> dict:
     Returns:
         Merged config with all agents
     """
-    merged = {
-        "dependencies": [".", "../"],
-        "graphs": {},
-        "env": "../.env"
-    }
+    merged = {"dependencies": [".", "../"], "graphs": {}, "env": "../.env"}
 
     # Merge graphs from both configs
     if "graphs" in system_config:

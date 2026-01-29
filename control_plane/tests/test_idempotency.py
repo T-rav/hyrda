@@ -136,11 +136,7 @@ class TestCheckIdempotency:
         mock_request.body = AsyncMock(return_value=b'{"data": "test"}')
 
         # Store first
-        await store_idempotency(
-            mock_request,
-            {"status": "success", "id": 123},
-            201
-        )
+        await store_idempotency(mock_request, {"status": "success", "id": 123}, 201)
 
         # Reset body mock for second call
         mock_request.body = AsyncMock(return_value=b'{"data": "test"}')
@@ -268,6 +264,7 @@ class TestRequireIdempotencyDecorator:
     @pytest.mark.asyncio
     async def test_decorator_without_request(self):
         """Test decorator when no Request object found."""
+
         @require_idempotency()
         async def test_endpoint():
             return {"result": "no request"}
@@ -352,10 +349,7 @@ class TestRequireIdempotencyDecorator:
 
         @require_idempotency()
         async def test_endpoint(request: Request):
-            return JSONResponse(
-                content={"result": "json response"},
-                status_code=201
-            )
+            return JSONResponse(content={"result": "json response"}, status_code=201)
 
         result = await test_endpoint(mock_request)
         assert isinstance(result, JSONResponse)

@@ -212,7 +212,10 @@ class TestShouldSummarize:
         """Test summarization triggered by token count."""
         # Arrange
         manager = ConversationManager(
-            AsyncMock(), max_messages=100, model_context_window=1000, summarize_threshold=0.5
+            AsyncMock(),
+            max_messages=100,
+            model_context_window=1000,
+            summarize_threshold=0.5,
         )
         # Create messages that exceed 500 tokens (50% of 1000)
         long_content = "a" * 2500  # 2500 chars = ~625 tokens
@@ -228,7 +231,10 @@ class TestShouldSummarize:
         """Test that system message tokens are included in calculation."""
         # Arrange
         manager = ConversationManager(
-            AsyncMock(), max_messages=100, model_context_window=1000, summarize_threshold=0.5
+            AsyncMock(),
+            max_messages=100,
+            model_context_window=1000,
+            summarize_threshold=0.5,
         )
         messages = [{"role": "user", "content": "a" * 1000}]  # 250 tokens
         system_message = "b" * 1200  # 300 tokens
@@ -244,16 +250,17 @@ class TestShouldSummarize:
         """Test that existing summary tokens are included."""
         # Arrange
         manager = ConversationManager(
-            AsyncMock(), max_messages=100, model_context_window=1000, summarize_threshold=0.5
+            AsyncMock(),
+            max_messages=100,
+            model_context_window=1000,
+            summarize_threshold=0.5,
         )
         messages = [{"role": "user", "content": "a" * 800}]  # 200 tokens
         existing_summary = "c" * 1400  # 350 tokens
         # Total: 550 tokens > 500 threshold
 
         # Act
-        result = manager.should_summarize(
-            messages, existing_summary=existing_summary
-        )
+        result = manager.should_summarize(messages, existing_summary=existing_summary)
 
         # Assert
         assert result is True
@@ -262,7 +269,10 @@ class TestShouldSummarize:
         """Test summarization with all token sources."""
         # Arrange
         manager = ConversationManager(
-            AsyncMock(), max_messages=100, model_context_window=1000, summarize_threshold=0.5
+            AsyncMock(),
+            max_messages=100,
+            model_context_window=1000,
+            summarize_threshold=0.5,
         )
         messages = [{"role": "user", "content": "a" * 600}]  # 150 tokens
         system_message = "b" * 800  # 200 tokens
@@ -281,7 +291,10 @@ class TestShouldSummarize:
         """Test no summarization when below token threshold."""
         # Arrange
         manager = ConversationManager(
-            AsyncMock(), max_messages=100, model_context_window=10000, summarize_threshold=0.75
+            AsyncMock(),
+            max_messages=100,
+            model_context_window=10000,
+            summarize_threshold=0.75,
         )
         messages = [{"role": "user", "content": "Short message"}]
 
@@ -495,9 +508,7 @@ class TestSummarizeMessages:
         """Test summarization handles dict response from LLM."""
         # Arrange
         mock_llm = AsyncMock()
-        mock_llm.get_response = AsyncMock(
-            return_value={"content": "Summary from dict"}
-        )
+        mock_llm.get_response = AsyncMock(return_value={"content": "Summary from dict"})
         manager = ConversationManager(mock_llm)
         messages = [{"role": "user", "content": "Test"}]
 
@@ -552,7 +563,10 @@ class TestSummarizeMessages:
 
         # Assert
         call_args = mock_llm.get_response.call_args
-        assert call_args[1]["system_message"] == "You are a conversation summarization assistant. Create clear, concise summaries that preserve important context."
+        assert (
+            call_args[1]["system_message"]
+            == "You are a conversation summarization assistant. Create clear, concise summaries that preserve important context."
+        )
         assert call_args[1]["max_tokens"] == 4000
 
 
@@ -736,7 +750,10 @@ class TestBuildSystemWithSummary:
         result = manager._build_system_with_summary(base_system, summary)
 
         # Assert
-        assert "Continue naturally based on both the summary and the recent messages" in result
+        assert (
+            "Continue naturally based on both the summary and the recent messages"
+            in result
+        )
 
 
 class TestGetManagedHistory:

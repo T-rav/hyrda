@@ -65,12 +65,26 @@ docker compose up -d  # Run full stack (bot + services)
 ```
 
 ### Testing and Code Quality
+
+**Progressive Validation (Fastest to Slowest):**
 ```bash
-make test         # Run test suite with pytest (565 tests)
-make lint         # Auto-fix linting, formatting, and import issues
-make lint-check   # Check code quality without fixing (used by pre-commit)
-make quality      # Run complete pipeline: linting + type checking + tests
-make ci           # Run complete CI pipeline locally (quality + tests + security + build)
+make lint         # Auto-fix linting, formatting, and import issues (~2s)
+make test-fast    # Quick validation - unit tests only (~20s)
+make test-service SERVICE=bot  # Test specific service (varies by service)
+make quality      # Complete pipeline: linting + type checking + tests (~2-3min)
+make ci           # Full CI pipeline locally (quality + tests + security + build)
+```
+
+**Smart Testing Strategy:**
+```bash
+# After small changes - quick feedback
+make lint && make test-fast
+
+# Before committing - full validation
+make quality
+
+# Before pushing - CI simulation
+make ci
 ```
 
 ### Docker
@@ -222,20 +236,53 @@ Access the tasks dashboard at http://localhost:5001
 
 **🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
 
-The project maintains a **565/565 test success rate (100%)** - this standard must be preserved.
+The project maintains a **100% test success rate** across all microservices - this standard must be preserved.
 
 ### Test Commands
+
+**Progressive Validation Approach:**
 ```bash
-make test                    # Full test suite (565 tests)
-make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
-make test-file FILE=test_name.py  # Run specific test file
+# 1. Syntax check - Fast feedback (2s)
+make lint
+
+# 2. Unit tests only - Quick validation (20s)
+make test-fast
+
+# 3. Service-specific - Test what you changed
+make test-service SERVICE=bot        # Bot service only
+make test-service SERVICE=tasks      # Tasks service only
+cd bot && pytest tests/test_specific_feature.py -v  # Single file
+
+# 4. Full test suite - Before commit (2-3min)
+make test
+
+# 5. With coverage report - Validate coverage targets
+make test-coverage          # Requires >70% coverage
+
+# 6. Full CI pipeline - Before push (5-10min)
+make ci
+```
+
+**Test Markers for Selective Testing:**
+```bash
+# Run only unit tests (fast, excludes integration/slow tests)
+pytest -m "not integration and not slow"
+
+# Run only integration tests (when needed)
+pytest -m integration
+
+# Run tests matching a pattern
+pytest -k "test_auth"
+
+# Run specific test file with verbose output
+pytest tests/test_feature.py -v
 ```
 
 ### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)
-- **Current Coverage**: ~72%
 - **All new functions/classes MUST have tests**
 - **Critical paths require 100% coverage**
+- **Coverage should increase or stay constant, never decrease**
 
 ### Code Quality Standards
 
@@ -260,7 +307,7 @@ def process_message(text, user_id, service):
 #### For Every Code Change:
 
 1. **Write Tests First** (TDD approach preferred)
-2. **Run Quality Checks**: `make quality` before every commit
+2. **Run Quality Checks**: Use progressive validation based on change scope
 3. **Commit with Verified Quality**: Only commit when all checks pass
 
 #### For Bug Fixes:
@@ -268,6 +315,47 @@ def process_message(text, user_id, service):
 1. **Write Reproduction Test** (should fail initially)
 2. **Fix the Bug** (test should now pass)
 3. **Add Edge Case Tests** (prevent regression)
+
+#### Agent Self-Validation Checklist
+
+After completing a code change, validate your work progressively:
+
+**Level 1: Syntax Validation (2s)**
+- [ ] `make lint` passes without errors
+- [ ] No type checking errors from Pyright
+- [ ] No security issues from Bandit
+
+**Level 2: Unit Testing (20s)**
+- [ ] `make test-fast` passes (unit tests only)
+- [ ] All modified services have passing tests
+- [ ] Coverage maintains >70% threshold
+
+**Level 3: Service-Specific Testing (varies)**
+- [ ] For bot changes: `cd bot && pytest tests/test_<feature>.py -v`
+- [ ] For agent-service: `cd agent-service && pytest tests/test_<feature>.py -v`
+- [ ] For tasks changes: `cd tasks && pytest -m "not integration" tests/test_<feature>.py`
+- [ ] Only run integration tests if modifying subprocess, ffmpeg, or file operations
+
+**Level 4: Full Validation (2-3min)**
+- [ ] `make quality` passes completely
+- [ ] All pre-commit hooks pass
+- [ ] No test regressions
+
+**Level 5: CI Simulation (5-10min)**
+- [ ] `make ci` completes successfully
+- [ ] Docker builds succeed
+- [ ] Security scans pass (Bandit + Trivy)
+
+**Git Commit Decision Matrix:**
+
+| Change Type | Required Validation | Time |
+|-------------|-------------------|------|
+| Documentation, comments | `make lint` | 2s |
+| Small refactor (renaming) | `make lint` + `make test-fast` | 22s |
+| Single function change | `make lint` + `make test-service` | varies |
+| New feature or bug fix | `make quality` | 2-3min |
+| Critical changes (auth, security) | `make ci` | 5-10min |
+| Before pushing to remote | `make ci` | 5-10min |
 
 ### Integration with CI/CD
 

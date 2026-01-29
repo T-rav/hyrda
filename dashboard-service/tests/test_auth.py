@@ -394,9 +394,7 @@ class TestAuthEdgeCases:
 
     @pytest.mark.asyncio
     @patch("utils.auth.get_flow")
-    async def test_auth_callback_generic_exception(
-        self, mock_get_flow, mock_oauth_env
-    ):
+    async def test_auth_callback_generic_exception(self, mock_get_flow, mock_oauth_env):
         """Test callback handling generic exceptions."""
         mock_get_flow.side_effect = Exception("Network error")
 
@@ -425,6 +423,7 @@ class TestAuthEdgeCases:
 
     def test_middleware_bypasses_api_endpoints(self, client, mock_oauth_env):
         """Test that API endpoints bypass authentication."""
+
         # Add an API endpoint to the test app
         @client.app.get("/api/test")
         async def api_endpoint():

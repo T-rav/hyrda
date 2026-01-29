@@ -752,7 +752,9 @@ class TestEntityBoosting:
 
         # Mock _extract_entities_simple to raise an exception
         with patch.object(
-            service, "_extract_entities_simple", side_effect=Exception("Entity extraction failed")
+            service,
+            "_extract_entities_simple",
+            side_effect=Exception("Entity extraction failed"),
         ):
             # Act
             boosted_results = service._apply_entity_boosting(query, results)
@@ -843,9 +845,15 @@ class TestDiversificationStrategies:
         # Doc1 has 3 chunks but max_per_doc is 2, so only 5 total chunks returned
         assert len(diversified) == 5
         # Count chunks per document
-        doc1_count = sum(1 for r in diversified if r["metadata"]["file_name"] == "doc1.pdf")
-        doc2_count = sum(1 for r in diversified if r["metadata"]["file_name"] == "doc2.pdf")
-        doc3_count = sum(1 for r in diversified if r["metadata"]["file_name"] == "doc3.pdf")
+        doc1_count = sum(
+            1 for r in diversified if r["metadata"]["file_name"] == "doc1.pdf"
+        )
+        doc2_count = sum(
+            1 for r in diversified if r["metadata"]["file_name"] == "doc2.pdf"
+        )
+        doc3_count = sum(
+            1 for r in diversified if r["metadata"]["file_name"] == "doc3.pdf"
+        )
 
         assert doc1_count <= 2
         assert doc2_count <= 2

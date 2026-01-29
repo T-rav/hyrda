@@ -65,7 +65,9 @@ def upgrade():
         sa.Column("last_request_ip", sa.String(length=45), nullable=True),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_service_accounts")),
         sa.UniqueConstraint("name", name=op.f("uq_service_accounts_name")),
-        sa.UniqueConstraint("api_key_hash", name=op.f("uq_service_accounts_api_key_hash")),
+        sa.UniqueConstraint(
+            "api_key_hash", name=op.f("uq_service_accounts_api_key_hash")
+        ),
     )
 
     # Indexes for fast lookups
@@ -109,7 +111,11 @@ def downgrade():
     op.drop_index(op.f("ix_service_accounts_expires_at"), table_name="service_accounts")
     op.drop_index(op.f("ix_service_accounts_is_revoked"), table_name="service_accounts")
     op.drop_index(op.f("ix_service_accounts_is_active"), table_name="service_accounts")
-    op.drop_index(op.f("ix_service_accounts_api_key_prefix"), table_name="service_accounts")
-    op.drop_index(op.f("ix_service_accounts_api_key_hash"), table_name="service_accounts")
+    op.drop_index(
+        op.f("ix_service_accounts_api_key_prefix"), table_name="service_accounts"
+    )
+    op.drop_index(
+        op.f("ix_service_accounts_api_key_hash"), table_name="service_accounts"
+    )
     op.drop_index(op.f("ix_service_accounts_name"), table_name="service_accounts")
     op.drop_table("service_accounts")

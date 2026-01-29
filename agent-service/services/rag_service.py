@@ -868,10 +868,12 @@ class RAGService:
             )
 
             # Extract unique sources
-            sources = list({
-                chunk.get("metadata", {}).get("file_name", "unknown")
-                for chunk in chunks
-            })
+            sources = list(
+                {
+                    chunk.get("metadata", {}).get("file_name", "unknown")
+                    for chunk in chunks
+                }
+            )
 
             logger.info(
                 f"✅ Agent deep research complete: {len(chunks)} chunks from "

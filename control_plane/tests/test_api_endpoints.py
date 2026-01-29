@@ -1,111 +1,16 @@
 """Test suite for Control Plane API endpoints."""
 
-import os
-import sys
-import tempfile
-from pathlib import Path
-from unittest.mock import patch
 import pytest
-from starlette.testclient import TestClient
 
-# Create temporary file-based SQLite databases for tests
-security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-data_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-security_db_path = security_db_file.name
-data_db_path = data_db_file.name
-security_db_file.close()
-data_db_file.close()
-
-# Set up SQLite for tests BEFORE any imports
-os.environ["SECURITY_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-os.environ["DATA_DATABASE_URL"] = f"sqlite:///{data_db_path}"
-
-# Add control_plane to path BEFORE importing app
-control_plane_dir = Path(__file__).parent.parent
-if str(control_plane_dir) not in sys.path:
-    sys.path.insert(0, str(control_plane_dir))
-
-# Now import from control_plane - but create tables first
-from models.base import Base
+# All fixtures (app, client, authenticated_client) are now in conftest.py
+# Import models needed for test assertions
 from models import (
-    PermissionGroup,
-    UserGroup,
     AgentGroupPermission,
+    UserGroup,
+    PermissionGroup,
     AgentMetadata,
     User,
-    get_db_session,
 )
-
-# Create tables in SQLite BEFORE app initialization
-with get_db_session() as session:
-    Base.metadata.create_all(session.bind)
-
-
-@pytest.fixture(scope="module")
-def app():
-    """Get FastAPI app for testing."""
-    from app import create_app
-
-    fastapi_app = create_app()
-    yield fastapi_app
-
-
-@pytest.fixture
-def mock_oauth_env():
-    """Mock OAuth environment variables."""
-    with patch.dict(
-        os.environ,
-        {
-            "GOOGLE_OAUTH_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
-            "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
-            "ALLOWED_EMAIL_DOMAIN": "@8thlight.com",
-            "CONTROL_PLANE_BASE_URL": "http://localhost:6001",
-        },
-        clear=False,
-    ):
-        yield
-
-
-@pytest.fixture
-def client(app, mock_oauth_env):
-    """Create test client with OAuth env mocked."""
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-@pytest.fixture
-def authenticated_client(client, app):
-    """Create authenticated test client with valid session and admin user."""
-    from dependencies.auth import get_current_user
-    from dependencies.service_auth import verify_service_auth
-    from utils.permissions import require_admin
-
-    # Create mock admin user (no database needed with dependency overrides)
-    mock_admin = User(
-        email="admin@8thlight.com",
-        full_name="Test Admin",
-        slack_user_id="U_ADMIN_TEST",
-        is_admin=True,
-    )
-
-    # Mock authentication dependencies for FastAPI
-    async def mock_get_current_user():
-        return mock_admin
-
-    async def mock_require_admin():
-        return None
-
-    async def mock_verify_service_auth():
-        return None
-
-    app.dependency_overrides[get_current_user] = mock_get_current_user
-    app.dependency_overrides[require_admin] = mock_require_admin
-    app.dependency_overrides[verify_service_auth] = mock_verify_service_auth
-
-    yield client
-
-    # Clean up overrides
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -479,7 +384,7 @@ class TestAgentToggleAPI:
         """Test toggling agent from disabled to enabled."""
         try:
             # Create disabled agent
-            agent = AgentMetadata(agent_name="toggle_test_enabled", is_public=False)
+            agent = AgentMetadata(agent_name="toggle_test_enabled", is_enabled=False)
             db_session.add(agent)
             db_session.commit()
 
@@ -498,7 +403,7 @@ class TestAgentToggleAPI:
                 .filter(AgentMetadata.agent_name == "toggle_test_enabled")
                 .first()
             )
-            assert updated_agent.is_public is True
+            assert updated_agent.is_enabled is True
 
             # Clean up
             db_session.delete(updated_agent)
@@ -541,7 +446,7 @@ class TestAgentToggleAPI:
                     .first()
                 )
                 assert new_agent is not None
-                assert new_agent.is_public is True
+                assert new_agent.is_slack_visible is True
 
                 # Clean up
                 fresh_session.delete(new_agent)
@@ -593,7 +498,7 @@ class TestSystemAgents:
         assert response.status_code == 200
         data = response.json()
         assert data["is_system"] is True
-        assert data["is_public"] is True
+        assert data["is_slack_visible"] is True
 
     def test_help_agent_has_all_users_access(self, authenticated_client):
         """Test that help agent has all_users group access."""
@@ -607,7 +512,8 @@ class TestSystemAgents:
         response = authenticated_client.post("/api/agents/help/toggle")
         assert response.status_code == 403
         data = response.json()
-        assert "Cannot disable system agents" in data["detail"]
+        # detail is a dict with error and error_code keys
+        assert "Cannot disable system agents" in str(data["detail"])
 
     def test_cannot_grant_system_agent_to_non_all_users(
         self, authenticated_client, db_session
@@ -652,7 +558,7 @@ class TestAgentDeletionAPI:
         agent = AgentMetadata(
             agent_name="delete_test_agent",
             display_name="Delete Test",
-            is_public=True,
+            is_slack_visible=True,
             is_deleted=False,
         )
         db_session.add(agent)
@@ -674,7 +580,7 @@ class TestAgentDeletionAPI:
         )
         assert deleted_agent is not None
         assert deleted_agent.is_deleted is True
-        assert deleted_agent.is_public is False
+        assert deleted_agent.is_slack_visible is False
 
     def test_delete_nonexistent_agent_returns_404(self, authenticated_client):
         """Test that deleting a non-existent agent returns 404."""
@@ -696,7 +602,7 @@ class TestAgentDeletionAPI:
         agent = AgentMetadata(
             agent_name="list_test_agent",
             display_name="List Test",
-            is_public=True,
+            is_slack_visible=True,
             is_deleted=False,
         )
         db_session.add(agent)
@@ -714,13 +620,16 @@ class TestAgentDeletionAPI:
 
     def test_can_reregister_deleted_agent(self, authenticated_client, db_session):
         """Test that a deleted agent can be re-registered."""
-        from shared.utils.jwt_auth import SERVICE_TOKEN
+        from shared.utils.service_auth import SERVICE_TOKENS
+
+        # Use agent-service token for authentication
+        service_token = SERVICE_TOKENS["agent-service"]
 
         # Create and delete an agent
         agent = AgentMetadata(
             agent_name="reregister_test",
             display_name="Reregister Test",
-            is_public=True,
+            is_slack_visible=True,
             is_deleted=False,
         )
         db_session.add(agent)
@@ -737,7 +646,7 @@ class TestAgentDeletionAPI:
                 "display_name": "Reregistered",
                 "description": "Reactivated agent",
             },
-            headers={"Authorization": f"Bearer {SERVICE_TOKEN}"},
+            headers={"Authorization": f"Bearer {service_token}"},
         )
         if response.status_code != 200:
             print(f"Error response: {response.json()}")
@@ -754,4 +663,4 @@ class TestAgentDeletionAPI:
         )
         assert reactivated_agent is not None
         assert reactivated_agent.is_deleted is False
-        assert reactivated_agent.is_public is True
+        assert reactivated_agent.is_slack_visible is True

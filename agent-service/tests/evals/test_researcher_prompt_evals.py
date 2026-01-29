@@ -84,19 +84,25 @@ class TestResearcherPromptBehavior:
             "focus_area": "business model",
         }
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools):
-                result = await researcher(state)
+        with (
+            patch(
+                "agents.research.nodes.researcher.Settings", return_value=mock_settings
+            ),
+            patch.object(
+                ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools
+            ),
+        ):
+            result = await researcher(state)
 
-                # Verify tool was called
-                assert result["tool_call_iterations"] == 1
-                assert len(result["researcher_messages"]) > 0
+            # Verify tool was called
+            assert result["tool_call_iterations"] == 1
+            assert len(result["researcher_messages"]) > 0
 
-                # Check that the prompt emphasized internal search
-                messages = result["researcher_messages"]
-                system_msg = str(messages[0].content)
-                assert "internal_search_tool" in system_msg.lower()
-                assert "ALWAYS START HERE" in system_msg
+            # Check that the prompt emphasized internal search
+            messages = result["researcher_messages"]
+            system_msg = str(messages[0].content)
+            assert "internal_search_tool" in system_msg.lower()
+            assert "ALWAYS START HERE" in system_msg
 
     @pytest.mark.asyncio
     async def test_prompt_works_for_technical_topic(
@@ -116,21 +122,27 @@ class TestResearcherPromptBehavior:
             "focus_area": "deployment",
         }
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools):
-                result = await researcher(state)
+        with (
+            patch(
+                "agents.research.nodes.researcher.Settings", return_value=mock_settings
+            ),
+            patch.object(
+                ChatOpenAI, "ainvoke", return_value=mock_llm_response_with_tools
+            ),
+        ):
+            result = await researcher(state)
 
-                # Verify the prompt doesn't force company-specific behavior
-                messages = result["researcher_messages"]
-                system_msg = str(messages[0].content)
+            # Verify the prompt doesn't force company-specific behavior
+            messages = result["researcher_messages"]
+            system_msg = str(messages[0].content)
 
-                # Should NOT have company-specific language
-                assert "companies/people" not in system_msg.lower()
-                assert "relationships (companies" not in system_msg.lower()
+            # Should NOT have company-specific language
+            assert "companies/people" not in system_msg.lower()
+            assert "relationships (companies" not in system_msg.lower()
 
-                # Should have generic guidance
-                assert "internal knowledge base" in system_msg.lower()
-                assert "documents, policies, past work" in system_msg.lower()
+            # Should have generic guidance
+            assert "internal knowledge base" in system_msg.lower()
+            assert "documents, policies, past work" in system_msg.lower()
 
     @pytest.mark.asyncio
     async def test_prompt_includes_tool_guidance(self, mock_settings):
@@ -152,7 +164,9 @@ class TestResearcherPromptBehavior:
         mock_response.content = "Researching compliance requirements."
         mock_response.tool_calls = []
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
+        with patch(
+            "agents.research.nodes.researcher.Settings", return_value=mock_settings
+        ):
             with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
                 result = await researcher(state)
 
@@ -188,16 +202,20 @@ class TestResearcherPromptBehavior:
         mock_response.content = "I'll search for remote work policies."
         mock_response.tool_calls = []
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await researcher(state)
+        with (
+            patch(
+                "agents.research.nodes.researcher.Settings", return_value=mock_settings
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await researcher(state)
 
-                messages = result["researcher_messages"]
-                system_msg = str(messages[0].content)
+            messages = result["researcher_messages"]
+            system_msg = str(messages[0].content)
 
-                # Verify citation guidance
-                assert "cite" in system_msg.lower() or "sources" in system_msg.lower()
-                assert "internal" in system_msg.lower()
+            # Verify citation guidance
+            assert "cite" in system_msg.lower() or "sources" in system_msg.lower()
+            assert "internal" in system_msg.lower()
 
     @pytest.mark.asyncio
     async def test_prompt_format_includes_task_details(self, mock_settings):
@@ -221,16 +239,20 @@ class TestResearcherPromptBehavior:
         mock_response.content = "Starting research on AI strategy."
         mock_response.tool_calls = []
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await researcher(state)
+        with (
+            patch(
+                "agents.research.nodes.researcher.Settings", return_value=mock_settings
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await researcher(state)
 
-                messages = result["researcher_messages"]
-                system_msg = str(messages[0].content)
+            messages = result["researcher_messages"]
+            system_msg = str(messages[0].content)
 
-                # Verify task details are included
-                assert task.description in system_msg
-                assert task.priority in system_msg
+            # Verify task details are included
+            assert task.description in system_msg
+            assert task.priority in system_msg
 
 
 class TestResearcherPromptDiverseTopics:
@@ -269,16 +291,20 @@ class TestResearcherPromptDiverseTopics:
         mock_response.content = f"Researching {topic}."
         mock_response.tool_calls = []
 
-        with patch("agents.research.nodes.researcher.Settings", return_value=mock_settings):
-            with patch.object(ChatOpenAI, "ainvoke", return_value=mock_response):
-                result = await researcher(state)
+        with (
+            patch(
+                "agents.research.nodes.researcher.Settings", return_value=mock_settings
+            ),
+            patch.object(ChatOpenAI, "ainvoke", return_value=mock_response),
+        ):
+            result = await researcher(state)
 
-                messages = result["researcher_messages"]
-                system_msg = str(messages[0].content)
+            messages = result["researcher_messages"]
+            system_msg = str(messages[0].content)
 
-                # Verify prompt is topic-agnostic
-                assert task_description in system_msg
-                assert "internal" in system_msg.lower()
+            # Verify prompt is topic-agnostic
+            assert task_description in system_msg
+            assert "internal" in system_msg.lower()
 
-                # Should not fail or produce company-specific biases
-                assert "researcher_messages" in result
+            # Should not fail or produce company-specific biases
+            assert "researcher_messages" in result

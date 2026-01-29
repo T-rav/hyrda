@@ -42,14 +42,16 @@ def remove_duplicates():
 
         total_removed = 0
         for slack_user_id, group_name, count in duplicates:
-            logger.info(f"Removing {count - 1} duplicate entries for user={slack_user_id}, group={group_name}")
+            logger.info(
+                f"Removing {count - 1} duplicate entries for user={slack_user_id}, group={group_name}"
+            )
 
             # Get all entries for this user-group combination
             entries = (
                 session.query(UserGroup)
                 .filter(
                     UserGroup.slack_user_id == slack_user_id,
-                    UserGroup.group_name == group_name
+                    UserGroup.group_name == group_name,
                 )
                 .order_by(UserGroup.created_at.asc())  # Keep the oldest
                 .all()
@@ -96,7 +98,9 @@ def add_unique_constraint():
 
         except Exception as e:
             logger.error(f"Error adding unique constraint: {e}")
-            logger.info("Constraint might already exist or there might be remaining duplicates")
+            logger.info(
+                "Constraint might already exist or there might be remaining duplicates"
+            )
             session.rollback()
 
 

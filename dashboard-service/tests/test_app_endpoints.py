@@ -3,10 +3,11 @@
 Tests all endpoints including health checks, metrics aggregation, and service health.
 """
 
+from unittest.mock import AsyncMock, Mock, patch
+
+import aiohttp
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, Mock, patch
-import aiohttp
 
 
 @pytest.fixture
@@ -31,6 +32,7 @@ def mock_env():
 def client(mock_env):
     """Create test client with mocked environment."""
     from app import app
+
     return TestClient(app)
 
 
@@ -63,9 +65,15 @@ class TestReadinessEndpoint:
         """Test /api/ready returns ready when all services are healthy."""
         mock_responses = {
             "bot": Mock(status=200, json=AsyncMock(return_value={"status": "healthy"})),
-            "agent_service": Mock(status=200, json=AsyncMock(return_value={"status": "healthy"})),
-            "tasks": Mock(status=200, json=AsyncMock(return_value={"status": "healthy"})),
-            "control_plane": Mock(status=200, json=AsyncMock(return_value={"status": "healthy"})),
+            "agent_service": Mock(
+                status=200, json=AsyncMock(return_value={"status": "healthy"})
+            ),
+            "tasks": Mock(
+                status=200, json=AsyncMock(return_value={"status": "healthy"})
+            ),
+            "control_plane": Mock(
+                status=200, json=AsyncMock(return_value={"status": "healthy"})
+            ),
         }
 
         async def mock_get(url, **kwargs):
@@ -87,6 +95,7 @@ class TestReadinessEndpoint:
     @pytest.mark.asyncio
     async def test_ready_endpoint_when_service_unavailable(self, client):
         """Test /api/ready returns not_ready when a service is unavailable."""
+
         async def mock_get(url, **kwargs):
             # Simulate bot service being unavailable
             if "bot" in url:
@@ -136,6 +145,7 @@ class TestMetricsAggregation:
     @pytest.mark.asyncio
     async def test_get_all_metrics_handles_service_errors(self, client):
         """Test /api/metrics handles errors from services gracefully."""
+
         async def mock_get(url, **kwargs):
             if "bot" in url:
                 raise aiohttp.ClientConnectorError(Mock(), Mock())
@@ -158,6 +168,7 @@ class TestServicesHealthEndpoint:
     @pytest.mark.asyncio
     async def test_get_services_health_returns_all_services(self, client):
         """Test /api/services/health returns health for all services."""
+
         async def mock_get(url, **kwargs):
             return Mock(status=200, json=AsyncMock(return_value={"status": "healthy"}))
 
@@ -174,6 +185,7 @@ class TestServicesHealthEndpoint:
     @pytest.mark.asyncio
     async def test_get_services_health_handles_unhealthy_service(self, client):
         """Test /api/services/health handles unhealthy services."""
+
         async def mock_get(url, **kwargs):
             if "bot" in url:
                 return Mock(status=503)  # Service unavailable
@@ -234,6 +246,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_endpoints_handle_network_errors_gracefully(self, client):
         """Test endpoints handle network errors without crashing."""
+
         async def mock_get(url, **kwargs):
             raise aiohttp.ClientError("Network error")
 

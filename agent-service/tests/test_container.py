@@ -169,7 +169,9 @@ class TestFactoryRegistration:
         container = ServiceContainer()
         container._closed = True
 
-        with pytest.raises(RuntimeError, match="Cannot register factories on closed container"):
+        with pytest.raises(
+            RuntimeError, match="Cannot register factories on closed container"
+        ):
             container.register_factory(MockService, lambda: MockService())
 
 
@@ -202,7 +204,9 @@ class TestSingletonRegistration:
         container = ServiceContainer()
         container._closed = True
 
-        with pytest.raises(RuntimeError, match="Cannot register services on closed container"):
+        with pytest.raises(
+            RuntimeError, match="Cannot register services on closed container"
+        ):
             container.register_singleton(MockService, MockService())
 
 
@@ -267,7 +271,9 @@ class TestServiceRetrieval:
         container.register_factory(MockService, lambda: MockService())
         container._closed = True
 
-        with pytest.raises(RuntimeError, match="Cannot get services from closed container"):
+        with pytest.raises(
+            RuntimeError, match="Cannot get services from closed container"
+        ):
             await container.get(MockService)
 
 
@@ -313,7 +319,9 @@ class TestServiceInitializationHook:
     async def test_async_initialize_called(self):
         """Test that async initialize method is called during creation."""
         container = ServiceContainer()
-        container.register_factory(MockAsyncService, lambda: MockAsyncService("init_test"))
+        container.register_factory(
+            MockAsyncService, lambda: MockAsyncService("init_test")
+        )
 
         service = await container.get(MockAsyncService)
 
@@ -377,7 +385,9 @@ class TestConcurrentServiceCreation:
         container = ServiceContainer()
 
         container.register_factory(MockService, lambda: MockService("service1"))
-        container.register_factory(MockAsyncService, lambda: MockAsyncService("service2"))
+        container.register_factory(
+            MockAsyncService, lambda: MockAsyncService("service2")
+        )
 
         # Request different services concurrently
         service1, service2 = await asyncio.gather(
@@ -608,7 +618,11 @@ class TestContainerCloseAll:
 
         # Task should be cancelled or done (cancelled)
         # Note: The init_task may still be pending but the internal task is cancelled
-        assert MockAsyncService in container._initializing or init_task.cancelled() or init_task.done()
+        assert (
+            MockAsyncService in container._initializing
+            or init_task.cancelled()
+            or init_task.done()
+        )
 
 
 class TestHealthCheck:
@@ -680,7 +694,9 @@ class TestHealthCheck:
 
         assert "FailingHealthService" in health["services"]
         assert health["services"]["FailingHealthService"]["status"] == "error"
-        assert "Health check failed" in health["services"]["FailingHealthService"]["error"]
+        assert (
+            "Health check failed" in health["services"]["FailingHealthService"]["error"]
+        )
 
     @pytest.mark.asyncio
     async def test_health_check_multiple_services(self):
@@ -908,7 +924,9 @@ class TestContainerEdgeCases:
 
         await container.close_all()
 
-        with pytest.raises(RuntimeError, match="Cannot get services from closed container"):
+        with pytest.raises(
+            RuntimeError, match="Cannot get services from closed container"
+        ):
             await container.get(MockService)
 
 

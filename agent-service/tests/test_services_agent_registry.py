@@ -284,7 +284,10 @@ class TestServicesAgentRegistry:
 
         # Disable external agents to test only system loader
         with (
-            patch("services.system_agent_loader.get_system_loader", return_value=mock_system_loader),
+            patch(
+                "services.system_agent_loader.get_system_loader",
+                return_value=mock_system_loader,
+            ),
             patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "false"}),
         ):
             classes = agent_registry._load_agent_classes()

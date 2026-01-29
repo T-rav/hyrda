@@ -171,7 +171,7 @@ async def auth_callback(request: Request):
                         logger.error("SLACK_BOT_TOKEN not configured")
                         raise HTTPException(
                             status_code=403,
-                            detail="User not found and Slack integration not configured"
+                            detail="User not found and Slack integration not configured",
                         )
 
                     slack_client = WebClient(token=slack_token)
@@ -182,7 +182,9 @@ async def auth_callback(request: Request):
                     if response["ok"] and response.get("user"):
                         slack_user = response["user"]
                         slack_user_id = slack_user["id"]
-                        slack_name = slack_user.get("real_name") or slack_user.get("name")
+                        slack_name = slack_user.get("real_name") or slack_user.get(
+                            "name"
+                        )
 
                         # Check if this is the first user (bootstrap admin)
                         user_count = db_session.query(User).count()
@@ -194,7 +196,7 @@ async def auth_callback(request: Request):
                             slack_user_id=slack_user_id,
                             email=email,
                             full_name=slack_name,
-                            is_admin=is_admin
+                            is_admin=is_admin,
                         )
                         db_session.add(new_user)
                         db_session.commit()
@@ -205,22 +207,22 @@ async def auth_callback(request: Request):
                             f"User {email} found in Slack and created in database: user_id={user_id}, is_admin={is_admin}, first_user={is_first_user}"
                         )
                         AuditLogger.log_auth_event(
-                            "user_created_from_slack",
-                            email=email,
-                            success=True
+                            "user_created_from_slack", email=email, success=True
                         )
                     else:
                         # User not found in Slack - deny access
-                        logger.warning(f"User {email} not found in Slack - denying access")
+                        logger.warning(
+                            f"User {email} not found in Slack - denying access"
+                        )
                         AuditLogger.log_auth_event(
                             "login_denied_not_in_slack",
                             email=email,
                             success=False,
-                            error="User not found in Slack workspace"
+                            error="User not found in Slack workspace",
                         )
                         raise HTTPException(
                             status_code=403,
-                            detail="Access denied: User not found in Slack workspace. Please contact your administrator."
+                            detail="Access denied: User not found in Slack workspace. Please contact your administrator.",
                         )
 
                 except HTTPException:
@@ -228,14 +230,11 @@ async def auth_callback(request: Request):
                 except Exception as e:
                     logger.error(f"Error looking up user in Slack: {e}", exc_info=True)
                     AuditLogger.log_auth_event(
-                        "slack_lookup_failed",
-                        email=email,
-                        success=False,
-                        error=str(e)
+                        "slack_lookup_failed", email=email, success=False, error=str(e)
                     )
                     raise HTTPException(
                         status_code=403,
-                        detail="Unable to verify user access. Please contact your administrator."
+                        detail="Unable to verify user access. Please contact your administrator.",
                     )
 
         # Generate JWT token with is_admin and user_id
@@ -276,24 +275,30 @@ async def auth_callback(request: Request):
         parsed_url = urlparse(redirect_url)
         # Check if we need to pass token in URL (for cross-port/domain redirects)
         # We allow this for localhost/127.0.0.1 on different ports
-        is_localhost = parsed_url.hostname in ('localhost', '127.0.0.1')
-        current_port = request.url.port or (443 if request.url.scheme == 'https' else 80)
-        target_port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+        is_localhost = parsed_url.hostname in ("localhost", "127.0.0.1")
+        current_port = request.url.port or (
+            443 if request.url.scheme == "https" else 80
+        )
+        target_port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
 
         if is_localhost and current_port != target_port:
             # Redirecting to another service on localhost - add token as query param
             query_params = parse_qs(parsed_url.query)
-            query_params['token'] = [jwt_token]
+            query_params["token"] = [jwt_token]
             new_query = urlencode(query_params, doseq=True)
-            redirect_url = urlunparse((
-                parsed_url.scheme,
-                parsed_url.netloc,
-                parsed_url.path,
-                parsed_url.params,
-                new_query,
-                parsed_url.fragment
-            ))
-            logger.info(f"Added token to redirect URL for cross-port auth to {parsed_url.netloc}")
+            redirect_url = urlunparse(
+                (
+                    parsed_url.scheme,
+                    parsed_url.netloc,
+                    parsed_url.path,
+                    parsed_url.params,
+                    new_query,
+                    parsed_url.fragment,
+                )
+            )
+            logger.info(
+                f"Added token to redirect URL for cross-port auth to {parsed_url.netloc}"
+            )
 
         response = RedirectResponse(url=redirect_url, status_code=302)
         response.set_cookie(

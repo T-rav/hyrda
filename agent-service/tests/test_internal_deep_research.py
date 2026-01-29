@@ -63,9 +63,7 @@ class TestInternalDeepResearchServiceInitialization:
         }
 
         # Act
-        service = InternalDeepResearchService(
-            **services, enable_query_rewriting=False
-        )
+        service = InternalDeepResearchService(**services, enable_query_rewriting=False)
 
         # Assert
         assert service.enable_query_rewriting is False
@@ -370,9 +368,7 @@ class TestDeepResearch:
         """Test error handling when LLM service fails."""
         # Arrange
         llm_service = AsyncMock()
-        llm_service.get_response = AsyncMock(
-            side_effect=Exception("LLM service error")
-        )
+        llm_service.get_response = AsyncMock(side_effect=Exception("LLM service error"))
 
         service = InternalDeepResearchService(
             llm_service=llm_service,
@@ -491,9 +487,7 @@ class TestDecomposeQuery:
         """Test fallback to original query when JSON parsing fails."""
         # Arrange
         llm_service = AsyncMock()
-        llm_service.get_response = AsyncMock(
-            return_value="This is not valid JSON"
-        )
+        llm_service.get_response = AsyncMock(return_value="This is not valid JSON")
 
         service = InternalDeepResearchService(
             llm_service=llm_service,
@@ -503,9 +497,7 @@ class TestDecomposeQuery:
         )
 
         # Act
-        sub_queries = await service._decompose_query(
-            query="test query", num_queries=2
-        )
+        sub_queries = await service._decompose_query(query="test query", num_queries=2)
 
         # Assert
         assert len(sub_queries) == 1
@@ -526,9 +518,7 @@ class TestDecomposeQuery:
         )
 
         # Act
-        sub_queries = await service._decompose_query(
-            query="test query", num_queries=2
-        )
+        sub_queries = await service._decompose_query(query="test query", num_queries=2)
 
         # Assert
         assert len(sub_queries) == 1
@@ -549,9 +539,7 @@ class TestDecomposeQuery:
         )
 
         # Act
-        sub_queries = await service._decompose_query(
-            query="test query", num_queries=2
-        )
+        sub_queries = await service._decompose_query(query="test query", num_queries=2)
 
         # Assert
         assert len(sub_queries) == 1
@@ -1235,9 +1223,7 @@ class TestEdgeCases:
             embedding_service=Mock(),
         )
 
-        chunks = [
-            {"content": "Content without metadata", "similarity": 0.9}
-        ]
+        chunks = [{"content": "Content without metadata", "similarity": 0.9}]
 
         # Act
         summary = await service._synthesize_findings(

@@ -100,10 +100,12 @@ class TestJWTAdminClaim:
         # Assert - Decode and verify JWT token contains correct is_admin
         payload = verify_token(jwt_token)
         assert payload["email"] == "admin@8thlight.com"
-        assert payload["is_admin"] is True, "Admin user should have is_admin=true in JWT"
-        assert (
-            payload["user_id"] == "U12345ADMIN"
-        ), "JWT should include user_id from database"
+        assert payload["is_admin"] is True, (
+            "Admin user should have is_admin=true in JWT"
+        )
+        assert payload["user_id"] == "U12345ADMIN", (
+            "JWT should include user_id from database"
+        )
 
     @patch("models.get_db_session")
     def test_jwt_includes_admin_status_for_regular_user(
@@ -145,12 +147,12 @@ class TestJWTAdminClaim:
         # Assert
         payload = verify_token(jwt_token)
         assert payload["email"] == "user@8thlight.com"
-        assert (
-            payload["is_admin"] is False
-        ), "Regular user should have is_admin=false in JWT"
-        assert (
-            payload["user_id"] == "U12345USER"
-        ), "JWT should include user_id from database"
+        assert payload["is_admin"] is False, (
+            "Regular user should have is_admin=false in JWT"
+        )
+        assert payload["user_id"] == "U12345USER", (
+            "JWT should include user_id from database"
+        )
 
     @patch("models.get_db_session")
     def test_jwt_handles_user_not_in_database(
@@ -191,10 +193,12 @@ class TestJWTAdminClaim:
         # Assert - Should succeed with is_admin=false
         payload = verify_token(jwt_token)
         assert payload["email"] == "newuser@8thlight.com"
-        assert (
-            payload["is_admin"] is False
-        ), "User not in database should have is_admin=false"
-        assert payload["user_id"] is None, "User not in database should have user_id=None"
+        assert payload["is_admin"] is False, (
+            "User not in database should have is_admin=false"
+        )
+        assert payload["user_id"] is None, (
+            "User not in database should have user_id=None"
+        )
 
     def test_jwt_without_additional_claims_has_no_is_admin(self, mock_oauth_env):
         """Test that JWT without additional_claims does not include is_admin (regression test for bug)."""
@@ -211,6 +215,6 @@ class TestJWTAdminClaim:
         # Assert - JWT should not have is_admin field
         payload = verify_token(jwt_token)
         assert payload["email"] == "user@8thlight.com"
-        assert (
-            "is_admin" not in payload
-        ), "JWT without additional_claims should not have is_admin field"
+        assert "is_admin" not in payload, (
+            "JWT without additional_claims should not have is_admin field"
+        )

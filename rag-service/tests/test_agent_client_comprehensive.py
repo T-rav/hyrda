@@ -53,9 +53,9 @@ class TestCircuitBreaker:
         """Test that circuit breaker tracks state."""
         cb = CircuitBreaker()
         # Just verify it has the expected attributes
-        assert hasattr(cb, 'state')
-        assert hasattr(cb, 'failure_threshold')
-        assert hasattr(cb, 'recovery_timeout')
+        assert hasattr(cb, "state")
+        assert hasattr(cb, "failure_threshold")
+        assert hasattr(cb, "recovery_timeout")
 
 
 class TestPrepareContext:
@@ -107,9 +107,6 @@ class TestPrepareContext:
 
         assert "metadata" in prepared
         assert prepared["metadata"]["source"] == "slack"
-
-
-
 
 
 class TestListAgents:

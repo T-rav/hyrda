@@ -7,34 +7,13 @@ Mark with @pytest.mark.integration for CI filtering.
 """
 
 import os
-import sys
-import tempfile
-from pathlib import Path
-
-# Create temporary SQLite databases for tests
-security_db_file = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-security_db_path = security_db_file.name
-security_db_file.close()
-
-# Set up SQLite BEFORE imports
-os.environ["SECURITY_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-os.environ["DATA_DATABASE_URL"] = f"sqlite:///{security_db_path}"
-
-# Add control_plane to path
-control_plane_dir = Path(__file__).parent.parent
-if str(control_plane_dir) not in sys.path:
-    sys.path.insert(0, str(control_plane_dir))
-
 import pytest
 import redis
 from datetime import datetime, timezone
 
-from models.base import get_db_session, Base
+# All database setup is in conftest.py
+from models.base import get_db_session
 from models import ServiceAccount
-
-# Create tables
-with get_db_session() as session:
-    Base.metadata.create_all(session.bind)
 
 
 # Mark all tests in this module as integration tests
@@ -159,7 +138,9 @@ class TestEndToEndAuthenticationFlow:
 class TestRedisCachingBehavior:
     """Test Redis caching for service account validation."""
 
-    def test_cache_hit_miss(self, authenticated_client, redis_client, test_service_account):
+    def test_cache_hit_miss(
+        self, authenticated_client, redis_client, test_service_account
+    ):
         """Test cache hit and miss behavior."""
         api_key = test_service_account["api_key"]
 
@@ -290,7 +271,9 @@ class TestRedisCachingBehavior:
 class TestRateLimitingEnforcement:
     """Test rate limiting with Redis."""
 
-    def test_rate_limit_enforced(self, authenticated_client, redis_client, test_service_account):
+    def test_rate_limit_enforced(
+        self, authenticated_client, redis_client, test_service_account
+    ):
         """Test that rate limits are enforced."""
         api_key = test_service_account["api_key"]
         rate_limit = test_service_account["rate_limit"]  # Should be 10
@@ -301,7 +284,7 @@ class TestRateLimitingEnforcement:
                 "/api/service-accounts/validate",
                 json={"api_key": api_key, "client_ip": f"10.0.0.{i}"},
             )
-            assert response.status_code == 200, f"Request {i+1} failed"
+            assert response.status_code == 200, f"Request {i + 1} failed"
 
         # Next request should be rate limited
         response = authenticated_client.post(
@@ -329,7 +312,9 @@ class TestRateLimitingEnforcement:
         current_hour = datetime.now(timezone.utc).replace(
             minute=0, second=0, microsecond=0
         )
-        rate_limit_key = f"rate_limit:service_account:{account_id}:{current_hour.isoformat()}"
+        rate_limit_key = (
+            f"rate_limit:service_account:{account_id}:{current_hour.isoformat()}"
+        )
         count = redis_client.get(rate_limit_key)
 
         assert count is not None
@@ -352,7 +337,9 @@ class TestRateLimitingEnforcement:
         current_hour = datetime.now(timezone.utc).replace(
             minute=0, second=0, microsecond=0
         )
-        rate_limit_key = f"rate_limit:service_account:{account_id}:{current_hour.isoformat()}"
+        rate_limit_key = (
+            f"rate_limit:service_account:{account_id}:{current_hour.isoformat()}"
+        )
         ttl = redis_client.ttl(rate_limit_key)
 
         # TTL should be around 3600 seconds (1 hour)
@@ -411,7 +398,9 @@ class TestUsageTracking:
         account_id = test_service_account["id"]
 
         # Get initial stats
-        initial_response = authenticated_client.get(f"/api/service-accounts/{account_id}")
+        initial_response = authenticated_client.get(
+            f"/api/service-accounts/{account_id}"
+        )
         initial_requests = initial_response.json()["total_requests"]
 
         # Validate 5 times

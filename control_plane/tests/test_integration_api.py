@@ -141,9 +141,11 @@ class TestCORS:
         client = TestClient(app)
         response = client.get("/health")
         # Check for CORS headers
-        assert "access-control-allow-origin" in [
-            k.lower() for k in response.headers.keys()
-        ] or response.status_code == 200
+        assert (
+            "access-control-allow-origin"
+            in [k.lower() for k in response.headers.keys()]
+            or response.status_code == 200
+        )
 
 
 class TestAPIDocumentation:

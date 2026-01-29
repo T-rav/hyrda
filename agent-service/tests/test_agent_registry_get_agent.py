@@ -50,11 +50,14 @@ class TestGetAgent:
             # Missing agent_class
         }
 
-        with patch(
-            "services.agent_registry.get_agent_info", return_value=mock_agent_info
-        ), pytest.raises(
-            ValueError,
-            match="found in control-plane but no implementation available",
+        with (
+            patch(
+                "services.agent_registry.get_agent_info", return_value=mock_agent_info
+            ),
+            pytest.raises(
+                ValueError,
+                match="found in control-plane but no implementation available",
+            ),
         ):
             get_agent("test_agent")
 
@@ -107,9 +110,12 @@ class TestGetAgent:
             "agent_class": mock_agent_class,
         }
 
-        with patch(
-            "services.agent_registry.get_agent_info", return_value=mock_agent_info
-        ), pytest.raises(Exception, match="Initialization failed"):
+        with (
+            patch(
+                "services.agent_registry.get_agent_info", return_value=mock_agent_info
+            ),
+            pytest.raises(Exception, match="Initialization failed"),
+        ):
             get_agent("broken_agent")
 
     def test_get_agent_returns_new_instance_each_time(self):
@@ -177,13 +183,16 @@ class Agent:
 
         # Add tmp_path to sys.path so imports work
         import sys  # noqa: PLC0415
+
         sys.path.insert(0, str(tmp_path))
 
         try:
             with patch("requests.get") as mock_get:
                 mock_response = MagicMock()
                 mock_response.status_code = 200
-                mock_response.json.return_value = {"agents": mock_control_plane_response}
+                mock_response.json.return_value = {
+                    "agents": mock_control_plane_response
+                }
                 mock_get.return_value = mock_response
 
                 # Set external agents path

@@ -177,9 +177,7 @@ class TestReadinessCheckEndpoint:
         # Arrange
         mock_request = Mock()
 
-        with patch(
-            "health_aggregator.get_metrics_service"
-        ) as mock_get_metrics:
+        with patch("health_aggregator.get_metrics_service") as mock_get_metrics:
             mock_metrics = Mock()
             mock_metrics.enabled = True
             mock_metrics.get_active_conversation_count = Mock(return_value=5)
@@ -281,9 +279,7 @@ class TestReadinessCheckEndpoint:
         # Arrange
         mock_request = Mock()
 
-        with patch(
-            "health_aggregator.get_metrics_service"
-        ) as mock_get_metrics:
+        with patch("health_aggregator.get_metrics_service") as mock_get_metrics:
             mock_metrics = Mock()
             mock_metrics.enabled = True
             mock_metrics.get_active_conversation_count = Mock(return_value=10)
@@ -367,9 +363,7 @@ class TestMetricsEndpoint:
         # Arrange
         mock_request = Mock()
 
-        with patch(
-            "health_aggregator.get_metrics_service"
-        ) as mock_get_metrics:
+        with patch("health_aggregator.get_metrics_service") as mock_get_metrics:
             mock_metrics = Mock()
             mock_metrics.enabled = True
             mock_metrics.get_active_conversation_count = Mock(return_value=15)
@@ -465,9 +459,7 @@ class TestPrometheusMetricsEndpoint:
         # Arrange
         mock_request = Mock()
 
-        with patch(
-            "health_aggregator.get_metrics_service"
-        ) as mock_get_metrics:
+        with patch("health_aggregator.get_metrics_service") as mock_get_metrics:
             mock_metrics = Mock()
             mock_metrics.get_metrics = Mock(
                 return_value="# HELP test_metric Test metric\n# TYPE test_metric gauge\ntest_metric 42\n"

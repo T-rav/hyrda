@@ -24,12 +24,20 @@ router = APIRouter(prefix="/api/service-accounts", tags=["service-accounts"])
 class ServiceAccountCreate(BaseModel):
     """Request to create a new service account."""
 
-    name: str = Field(..., min_length=1, max_length=255, description="Unique name for identification")
+    name: str = Field(
+        ..., min_length=1, max_length=255, description="Unique name for identification"
+    )
     description: str | None = Field(None, description="Purpose and use case")
-    scopes: str = Field("agents:read,agents:invoke", description="Comma-separated scopes")
-    allowed_agents: list[str] | None = Field(None, description="Agent names allowed, null = all")
+    scopes: str = Field(
+        "agents:read,agents:invoke", description="Comma-separated scopes"
+    )
+    allowed_agents: list[str] | None = Field(
+        None, description="Agent names allowed, null = all"
+    )
     rate_limit: int = Field(100, ge=1, le=10000, description="Requests per hour")
-    expires_at: datetime | None = Field(None, description="Optional expiration (ISO 8601)")
+    expires_at: datetime | None = Field(
+        None, description="Optional expiration (ISO 8601)"
+    )
 
 
 class ServiceAccountUpdate(BaseModel):
@@ -73,7 +81,9 @@ class ServiceAccountResponse(BaseModel):
 class ServiceAccountCreateResponse(ServiceAccountResponse):
     """Response when creating a service account - includes API key ONCE."""
 
-    api_key: str = Field(..., description="API key - SAVE THIS! It won't be shown again")
+    api_key: str = Field(
+        ..., description="API key - SAVE THIS! It won't be shown again"
+    )
 
 
 # Helper function to parse service account
@@ -134,9 +144,13 @@ async def create_service_account(
     """
     with get_db_session() as db:
         # Check if name already exists
-        existing = db.query(ServiceAccount).filter(ServiceAccount.name == data.name).first()
+        existing = (
+            db.query(ServiceAccount).filter(ServiceAccount.name == data.name).first()
+        )
         if existing:
-            raise HTTPException(status_code=400, detail=f"Service account '{data.name}' already exists")
+            raise HTTPException(
+                status_code=400, detail=f"Service account '{data.name}' already exists"
+            )
 
         # Generate API key and hash it
         api_key = generate_api_key()
@@ -155,7 +169,9 @@ async def create_service_account(
             api_key_hash=api_key_hash,
             api_key_prefix=api_key_prefix,
             scopes=data.scopes,
-            allowed_agents=json.dumps(data.allowed_agents) if data.allowed_agents is not None else None,
+            allowed_agents=json.dumps(data.allowed_agents)
+            if data.allowed_agents is not None
+            else None,
             rate_limit=data.rate_limit,
             is_active=True,
             is_revoked=False,
@@ -177,7 +193,11 @@ async def create_service_account(
         return ServiceAccountCreateResponse(**response_dict)
 
 
-@router.get("", response_model=list[ServiceAccountResponse], dependencies=[Depends(require_admin)])
+@router.get(
+    "",
+    response_model=list[ServiceAccountResponse],
+    dependencies=[Depends(require_admin)],
+)
 async def list_service_accounts(
     include_revoked: bool = False,
 ):
@@ -194,15 +214,22 @@ async def list_service_accounts(
     with get_db_session() as db:
         query = db.query(ServiceAccount)
         if not include_revoked:
-            query = query.filter(not ServiceAccount.is_revoked)
+            query = query.filter(ServiceAccount.is_revoked.is_(False))
 
         accounts = query.order_by(ServiceAccount.created_at.desc()).all()
 
         # Parse service accounts with JSON fields decoded
-        return [ServiceAccountResponse(**_parse_service_account(account)) for account in accounts]
+        return [
+            ServiceAccountResponse(**_parse_service_account(account))
+            for account in accounts
+        ]
 
 
-@router.get("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
+@router.get(
+    "/{account_id}",
+    response_model=ServiceAccountResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def get_service_account(
     account_id: int,
 ):
@@ -220,14 +247,20 @@ async def get_service_account(
         HTTPException: 404 if not found
     """
     with get_db_session() as db:
-        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        account = (
+            db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        )
         if not account:
             raise HTTPException(status_code=404, detail="Service account not found")
 
         return ServiceAccountResponse(**_parse_service_account(account))
 
 
-@router.patch("/{account_id}", response_model=ServiceAccountResponse, dependencies=[Depends(require_admin)])
+@router.patch(
+    "/{account_id}",
+    response_model=ServiceAccountResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def update_service_account(
     account_id: int,
     data: ServiceAccountUpdate,
@@ -247,12 +280,16 @@ async def update_service_account(
         HTTPException: 404 if not found, 400 if revoked
     """
     with get_db_session() as db:
-        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        account = (
+            db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        )
         if not account:
             raise HTTPException(status_code=404, detail="Service account not found")
 
         if account.is_revoked:
-            raise HTTPException(status_code=400, detail="Cannot update revoked service account")
+            raise HTTPException(
+                status_code=400, detail="Cannot update revoked service account"
+            )
 
         # Track if we're deactivating the account
         was_deactivated = False
@@ -302,7 +339,9 @@ async def update_service_account(
                         f"Invalidated {len(cached_keys)} cached validation entries for deactivated account {account_id}"
                     )
             except redis.ConnectionError as e:
-                logger.warning(f"Could not invalidate cache for deactivated account {account_id}: {e}")
+                logger.warning(
+                    f"Could not invalidate cache for deactivated account {account_id}: {e}"
+                )
 
         return ServiceAccountResponse(**_parse_service_account(account))
 
@@ -329,12 +368,16 @@ async def revoke_service_account(
         HTTPException: 404 if not found, 400 if already revoked
     """
     with get_db_session() as db:
-        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        account = (
+            db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        )
         if not account:
             raise HTTPException(status_code=404, detail="Service account not found")
 
         if account.is_revoked:
-            raise HTTPException(status_code=400, detail="Service account already revoked")
+            raise HTTPException(
+                status_code=400, detail="Service account already revoked"
+            )
 
         # Revoke
         admin_email = admin_user.get("email", "unknown")
@@ -347,7 +390,9 @@ async def revoke_service_account(
         db.commit()
         db.refresh(account)
 
-        logger.warning(f"Revoked service account '{account.name}' by {admin_email}: {reason}")
+        logger.warning(
+            f"Revoked service account '{account.name}' by {admin_email}: {reason}"
+        )
 
         # Invalidate all cached validations for this account
         # We can't compute the exact cache key (don't have plaintext API key)
@@ -436,7 +481,9 @@ async def delete_service_account(
         HTTPException: 404 if not found
     """
     with get_db_session() as db:
-        account = db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        account = (
+            db.query(ServiceAccount).filter(ServiceAccount.id == account_id).first()
+        )
         if not account:
             raise HTTPException(status_code=404, detail="Service account not found")
 
@@ -444,7 +491,9 @@ async def delete_service_account(
         db.delete(account)
         db.commit()
 
-        logger.warning(f"Permanently deleted service account '{name}' (ID: {account_id})")
+        logger.warning(
+            f"Permanently deleted service account '{name}' (ID: {account_id})"
+        )
 
         # Invalidate all cached validations for this account
         try:
@@ -466,7 +515,9 @@ async def delete_service_account(
                     f"Invalidated {len(cached_keys)} cached validation entries for deleted account {account_id}"
                 )
         except redis.ConnectionError as e:
-            logger.warning(f"Could not invalidate cache for deleted account {account_id}: {e}")
+            logger.warning(
+                f"Could not invalidate cache for deleted account {account_id}: {e}"
+            )
 
         return {"message": f"Service account '{name}' deleted permanently"}
 
@@ -502,7 +553,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
         HTTPException: 401 if invalid/revoked/expired, 429 if rate limited
     """
     import hashlib
-
 
     # This endpoint requires service-to-service authentication
     # (agent-service must authenticate to call this)
@@ -697,7 +747,11 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     # Update usage stats (must be in DB context)
     with get_db_session() as db:
         # Re-fetch to update
-        account = db.query(ServiceAccount).filter(ServiceAccount.id == service_account.id).first()
+        account = (
+            db.query(ServiceAccount)
+            .filter(ServiceAccount.id == service_account.id)
+            .first()
+        )
         if account:
             account.last_used_at = datetime.now(timezone.utc)
             account.total_requests += 1

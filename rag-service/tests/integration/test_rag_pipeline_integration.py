@@ -26,12 +26,16 @@ class TestRAGServiceInitialization:
         settings.rag.enable_query_rewriting = False  # Disable to avoid extra mocks
 
         # Mock all dependencies where RAGService imports them
-        with patch('services.rag_service.get_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
-                    with patch('services.rag_service.create_internal_deep_research_service') as mock_deep:
-                        with patch('services.rag_service.get_tavily_client', return_value=None):
-                            with patch('services.rag_service.get_perplexity_client', return_value=None):
+        with patch("services.rag_service.get_vector_store") as mock_vector:
+            with patch("services.rag_service.create_embedding_provider") as mock_embed:
+                with patch("services.rag_service.create_llm_provider") as mock_llm:
+                    with patch(
+                        "services.rag_service.create_internal_deep_research_service"
+                    ) as mock_deep:
+                        with patch("services.rag_service.get_tavily_client", return_value=None):
+                            with patch(
+                                "services.rag_service.get_perplexity_client", return_value=None
+                            ):
                                 # Setup mocks
                                 mock_vector.return_value = AsyncMock()
                                 mock_embed.return_value = AsyncMock()
@@ -55,12 +59,17 @@ class TestRAGServiceInitialization:
         settings = Settings()
         settings.rag.enable_query_rewriting = False
 
-        with patch('services.rag_service.get_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
-                    with patch('services.rag_service.create_internal_deep_research_service', return_value=None):
-                        with patch('services.rag_service.get_tavily_client', return_value=None):
-                            with patch('services.rag_service.get_perplexity_client', return_value=None):
+        with patch("services.rag_service.get_vector_store") as mock_vector:
+            with patch("services.rag_service.create_embedding_provider") as mock_embed:
+                with patch("services.rag_service.create_llm_provider") as mock_llm:
+                    with patch(
+                        "services.rag_service.create_internal_deep_research_service",
+                        return_value=None,
+                    ):
+                        with patch("services.rag_service.get_tavily_client", return_value=None):
+                            with patch(
+                                "services.rag_service.get_perplexity_client", return_value=None
+                            ):
                                 mock_vector_store = AsyncMock()
                                 mock_vector_store.initialize = AsyncMock()
                                 mock_vector.return_value = mock_vector_store
@@ -83,12 +92,16 @@ class TestDocumentIngestion:
         settings = Settings()
         settings.rag.enable_query_rewriting = False  # Disable to avoid extra mocks
 
-        with patch('services.rag_service.get_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
-                    with patch('services.rag_service.create_internal_deep_research_service') as mock_deep:
-                        with patch('services.rag_service.get_tavily_client', return_value=None):
-                            with patch('services.rag_service.get_perplexity_client', return_value=None):
+        with patch("services.rag_service.get_vector_store") as mock_vector:
+            with patch("services.rag_service.create_embedding_provider") as mock_embed:
+                with patch("services.rag_service.create_llm_provider") as mock_llm:
+                    with patch(
+                        "services.rag_service.create_internal_deep_research_service"
+                    ) as mock_deep:
+                        with patch("services.rag_service.get_tavily_client", return_value=None):
+                            with patch(
+                                "services.rag_service.get_perplexity_client", return_value=None
+                            ):
                                 # Setup vector store mock
                                 mock_vector_store = AsyncMock()
                                 mock_vector_store.initialize = AsyncMock()
@@ -126,12 +139,16 @@ class TestDocumentIngestion:
         settings = Settings()
         settings.rag.enable_query_rewriting = False  # Disable to avoid extra mocks
 
-        with patch('services.rag_service.get_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
-                    with patch('services.rag_service.create_internal_deep_research_service') as mock_deep:
-                        with patch('services.rag_service.get_tavily_client', return_value=None):
-                            with patch('services.rag_service.get_perplexity_client', return_value=None):
+        with patch("services.rag_service.get_vector_store") as mock_vector:
+            with patch("services.rag_service.create_embedding_provider") as mock_embed:
+                with patch("services.rag_service.create_llm_provider") as mock_llm:
+                    with patch(
+                        "services.rag_service.create_internal_deep_research_service"
+                    ) as mock_deep:
+                        with patch("services.rag_service.get_tavily_client", return_value=None):
+                            with patch(
+                                "services.rag_service.get_perplexity_client", return_value=None
+                            ):
                                 mock_vector_store = AsyncMock()
                                 mock_vector_store.initialize = AsyncMock()
                                 mock_vector.return_value = mock_vector_store
@@ -171,9 +188,7 @@ class TestRetrievalPipeline:
 
         # Mock embedding service
         mock_embed_service = AsyncMock()
-        mock_embed_service.get_embedding = AsyncMock(
-            return_value=[0.1] * 1536
-        )
+        mock_embed_service.get_embedding = AsyncMock(return_value=[0.1] * 1536)
 
         results = await retrieval_service.retrieve_context(
             query="What is Python?",
@@ -240,9 +255,7 @@ class TestContextBuilding:
             }
         ]
 
-        system_msg, messages = builder.build_rag_prompt(
-            "Analyze this", chunks, [], "System"
-        )
+        system_msg, messages = builder.build_rag_prompt("Analyze this", chunks, [], "System")
 
         assert "UPLOADED DOCUMENT" in system_msg
         assert "Primary user content" in system_msg
@@ -251,17 +264,13 @@ class TestContextBuilding:
         """Test quality validation for high-quality chunks."""
         builder = ContextBuilder()
 
-        chunks = [
-            {"content": "Content", "similarity": 0.9, "metadata": {"file_name": "doc.pdf"}}
-        ]
+        chunks = [{"content": "Content", "similarity": 0.9, "metadata": {"file_name": "doc.pdf"}}]
 
         quality = builder.validate_context_quality(chunks, min_similarity=0.5)
 
         assert quality["high_quality_chunks"] == 1
         assert quality["avg_similarity"] == 0.9
         assert len(quality["warnings"]) == 0
-
-
 
 
 class TestSystemStatus:
@@ -273,12 +282,16 @@ class TestSystemStatus:
         settings = Settings()
         settings.rag.enable_query_rewriting = False  # Disable to avoid extra mocks
 
-        with patch('services.rag_service.get_vector_store') as mock_vector:
-            with patch('services.rag_service.create_embedding_provider') as mock_embed:
-                with patch('services.rag_service.create_llm_provider') as mock_llm:
-                    with patch('services.rag_service.create_internal_deep_research_service') as mock_deep:
-                        with patch('services.rag_service.get_tavily_client', return_value=None):
-                            with patch('services.rag_service.get_perplexity_client', return_value=None):
+        with patch("services.rag_service.get_vector_store") as mock_vector:
+            with patch("services.rag_service.create_embedding_provider") as mock_embed:
+                with patch("services.rag_service.create_llm_provider") as mock_llm:
+                    with patch(
+                        "services.rag_service.create_internal_deep_research_service"
+                    ) as mock_deep:
+                        with patch("services.rag_service.get_tavily_client", return_value=None):
+                            with patch(
+                                "services.rag_service.get_perplexity_client", return_value=None
+                            ):
                                 mock_vector_store = AsyncMock()
                                 mock_vector_store.initialize = AsyncMock()
                                 mock_vector.return_value = mock_vector_store

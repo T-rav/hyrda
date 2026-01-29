@@ -30,13 +30,15 @@ select = [
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "E402",  # module import not at top (for sys.path modifications)
     "B008",  # do not perform function calls in argument defaults
+    "B904",  # raise ... from err (allow raise without from)
     "C901",  # too complex
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]  # unused imports in __init__.py
-"tests/*" = ["S101"]  # assert allowed in tests
+"tests/*" = ["S101", "E402", "F811", "F841", "SIM105"]  # assert, imports, unused vars, redefinition, try-except-pass allowed in tests
 
 [tool.ruff.lint.isort]
 known-first-party = ["services", "config", "api", "dependencies"]

@@ -1,4 +1,5 @@
 """Pytest configuration - disable tracing during tests."""
+
 import json
 import os
 import time
@@ -25,6 +26,7 @@ from shared.utils.request_signing import generate_signature
 def test_client():
     """Create FastAPI test client for integration tests."""
     from app import app
+
     return TestClient(app)
 
 
@@ -32,6 +34,7 @@ def test_client():
 def client():
     """Create FastAPI test client (alias for test_client)."""
     from app import app
+
     return TestClient(app)
 
 
@@ -39,6 +42,7 @@ def client():
 def unauth_client():
     """Create unauthenticated test client."""
     from app import app
+
     return TestClient(app)
 
 
@@ -47,7 +51,7 @@ def auth_headers():
     """Provide authentication headers for GET requests (no HMAC required)."""
     return {
         "X-Service-Token": os.getenv("RAG_SERVICE_TOKEN", "fake-test-token-for-testing-only"),
-        "X-User-Email": "test@example.com"
+        "X-User-Email": "test@example.com",
     }
 
 
@@ -63,7 +67,7 @@ def generate_signed_headers(payload: dict) -> dict:
     service_token = os.getenv("RAG_SERVICE_TOKEN", "fake-test-token-for-testing-only")
     timestamp = str(int(time.time()))
     # Use same JSON encoding as FastAPI TestClient (no spaces, sorted keys)
-    body_json = json.dumps(payload, separators=(',', ':'), sort_keys=True)
+    body_json = json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
     signature = generate_signature(service_token, body_json, timestamp)
 

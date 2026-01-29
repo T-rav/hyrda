@@ -75,39 +75,25 @@ class TestRAGMetrics:
     def test_record_rag_retrieval_basic(self):
         """Test recording basic RAG retrieval."""
         service = MetricsService(enabled=False)
-        service.record_rag_retrieval(
-            provider="qdrant",
-            chunks_found=5,
-            avg_similarity=0.85
-        )
+        service.record_rag_retrieval(provider="qdrant", chunks_found=5, avg_similarity=0.85)
 
     def test_record_rag_retrieval_with_filters(self):
         """Test recording RAG retrieval with entity filters."""
         service = MetricsService(enabled=False)
         service.record_rag_retrieval(
-            provider="qdrant",
-            chunks_found=3,
-            avg_similarity=0.9,
-            entity_filter="employee"
+            provider="qdrant", chunks_found=3, avg_similarity=0.9, entity_filter="employee"
         )
 
     def test_record_rag_retrieval_no_results(self):
         """Test recording RAG retrieval with no results."""
         service = MetricsService(enabled=False)
-        service.record_rag_retrieval(
-            provider="qdrant",
-            chunks_found=0,
-            avg_similarity=0.0
-        )
+        service.record_rag_retrieval(provider="qdrant", chunks_found=0, avg_similarity=0.0)
 
     def test_record_rag_query_result_hit(self):
         """Test recording RAG query hit."""
         service = MetricsService(enabled=False)
         service.record_rag_query_result(
-            result_type="hit",
-            provider="qdrant",
-            chunks_found=5,
-            avg_similarity=0.85
+            result_type="hit", provider="qdrant", chunks_found=5, avg_similarity=0.85
         )
 
         stats = service.get_rag_stats()
@@ -118,10 +104,7 @@ class TestRAGMetrics:
         """Test recording RAG query miss."""
         service = MetricsService(enabled=False)
         service.record_rag_query_result(
-            result_type="miss",
-            provider="qdrant",
-            chunks_found=0,
-            avg_similarity=0.0
+            result_type="miss", provider="qdrant", chunks_found=0, avg_similarity=0.0
         )
 
         stats = service.get_rag_stats()
@@ -132,10 +115,7 @@ class TestRAGMetrics:
         """Test recording RAG query error."""
         service = MetricsService(enabled=False)
         service.record_rag_query_result(
-            result_type="error",
-            provider="qdrant",
-            chunks_found=0,
-            avg_similarity=0.0
+            result_type="error", provider="qdrant", chunks_found=0, avg_similarity=0.0
         )
 
         stats = service.get_rag_stats()
@@ -177,30 +157,18 @@ class TestLLMMetrics:
         """Test recording successful LLM request."""
         service = MetricsService(enabled=False)
         service.record_llm_request(
-            provider="openai",
-            model="gpt-4",
-            status="success",
-            duration=2.5,
-            tokens=500
+            provider="openai", model="gpt-4", status="success", duration=2.5, tokens=500
         )
 
     def test_record_llm_request_error(self):
         """Test recording failed LLM request."""
         service = MetricsService(enabled=False)
-        service.record_llm_request(
-            provider="anthropic",
-            model="claude-3",
-            status="error"
-        )
+        service.record_llm_request(provider="anthropic", model="claude-3", status="error")
 
     def test_record_llm_request_minimal(self):
         """Test recording LLM request with minimal params."""
         service = MetricsService(enabled=False)
-        service.record_llm_request(
-            provider="openai",
-            model="gpt-3.5-turbo",
-            status="success"
-        )
+        service.record_llm_request(provider="openai", model="gpt-3.5-turbo", status="success")
 
 
 class TestAgentMetrics:
@@ -209,11 +177,7 @@ class TestAgentMetrics:
     def test_record_agent_invocation_success(self):
         """Test recording successful agent invocation."""
         service = MetricsService(enabled=False)
-        service.record_agent_invocation(
-            agent_name="research",
-            status="success",
-            duration=5.2
-        )
+        service.record_agent_invocation(agent_name="research", status="success", duration=5.2)
 
         stats = service.get_agent_stats()
         assert stats["total_invocations"] == 1
@@ -223,11 +187,7 @@ class TestAgentMetrics:
     def test_record_agent_invocation_error(self):
         """Test recording failed agent invocation."""
         service = MetricsService(enabled=False)
-        service.record_agent_invocation(
-            agent_name="company_profile",
-            status="error",
-            duration=1.5
-        )
+        service.record_agent_invocation(agent_name="company_profile", status="error", duration=1.5)
 
         stats = service.get_agent_stats()
         assert stats["total_invocations"] == 1

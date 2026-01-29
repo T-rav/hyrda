@@ -208,9 +208,13 @@ async def register_agent(
                     # Only update aliases if admin hasn't customized them
                     if not agent.aliases_customized:
                         agent.set_aliases(aliases)
-                        logger.info(f"Updated agent '{agent_name}' aliases from agent registration")
+                        logger.info(
+                            f"Updated agent '{agent_name}' aliases from agent registration"
+                        )
                     else:
-                        logger.info(f"Preserved customized aliases for agent '{agent_name}'")
+                        logger.info(
+                            f"Preserved customized aliases for agent '{agent_name}'"
+                        )
                     agent.is_system = is_system
                     agent.endpoint_url = endpoint_url
                     logger.info(f"Updated agent '{agent_name}' in database")
@@ -565,9 +569,7 @@ async def update_agent_aliases(
             agent_metadata.aliases_customized = True
             session.commit()
 
-            logger.info(
-                f"Admin updated aliases for agent '{agent_name}': {aliases}"
-            )
+            logger.info(f"Admin updated aliases for agent '{agent_name}': {aliases}")
 
             # Audit log
             log_agent_action(
@@ -641,22 +643,26 @@ async def check_alias_conflicts(agent_name: str) -> dict[str, Any]:
                 # Check for overlapping aliases
                 overlapping = this_agent_aliases & other_aliases
                 if overlapping:
-                    conflicts.append({
-                        "conflicting_agent": other_agent.agent_name,
-                        "conflicting_aliases": list(overlapping),
-                        "is_enabled": other_agent.is_enabled,
-                        "is_slack_visible": other_agent.is_slack_visible,
-                    })
+                    conflicts.append(
+                        {
+                            "conflicting_agent": other_agent.agent_name,
+                            "conflicting_aliases": list(overlapping),
+                            "is_enabled": other_agent.is_enabled,
+                            "is_slack_visible": other_agent.is_slack_visible,
+                        }
+                    )
 
                 # Check if this agent's aliases conflict with other agent's primary name
                 if other_agent.agent_name in this_agent_aliases:
-                    conflicts.append({
-                        "conflicting_agent": other_agent.agent_name,
-                        "conflicting_aliases": [other_agent.agent_name],
-                        "conflict_type": "primary_name",
-                        "is_enabled": other_agent.is_enabled,
-                        "is_slack_visible": other_agent.is_slack_visible,
-                    })
+                    conflicts.append(
+                        {
+                            "conflicting_agent": other_agent.agent_name,
+                            "conflicting_aliases": [other_agent.agent_name],
+                            "conflict_type": "primary_name",
+                            "is_enabled": other_agent.is_enabled,
+                            "is_slack_visible": other_agent.is_slack_visible,
+                        }
+                    )
 
             return {
                 "agent_name": agent_name,
