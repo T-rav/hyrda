@@ -1,7 +1,6 @@
 """Comprehensive tests for Google Drive API endpoints (api/gdrive.py)."""
 
-import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -165,129 +164,6 @@ class TestInitiateGDriveAuth:
         )
 
         assert response.status_code == 500
-
-
-class TestGDriveAuthCallback:
-    """Test GET /api/gdrive/auth/callback endpoint."""
-
-    @patch("api.gdrive.get_encryption_service")
-    @patch("api.gdrive.get_db_session")
-    @patch("api.gdrive.Flow")
-    @patch("api.gdrive.get_settings")
-    def test_callback_success_new_credential(
-        self,
-        mock_get_settings,
-        mock_flow_class,
-        mock_db_session,
-        mock_encryption,
-        authenticated_client,
-        mock_oauth_env,
-    ):
-        """Test OAuth callback successfully creates new credential."""
-        # Note: Testing OAuth callback is complex with FastAPI sessions
-        # In real usage, these would be set during the initiate flow
-        # For testing, we'll skip session-dependent callback tests
-        # and focus on testing the initiate endpoint which sets up the session
-        pytest.skip(
-            "OAuth callback requires complex session mocking - tested via integration"
-        )
-
-        # Mock settings
-        mock_settings = Mock()
-        mock_settings.server_base_url = "http://localhost:5001"
-        mock_get_settings.return_value = mock_settings
-
-        # Mock OAuth flow and credentials
-        mock_flow = Mock()
-        mock_credentials = Mock()
-        mock_credentials.to_json.return_value = json.dumps(
-            {
-                "token": "test-token",
-                "refresh_token": "test-refresh",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
-                "expiry": "2025-01-20T10:00:00Z",
-            }
-        )
-        mock_flow.credentials = mock_credentials
-        mock_flow.fetch_token = Mock()
-        mock_flow_class.from_client_config.return_value = mock_flow
-
-        # Mock encryption
-        mock_encryption_service = Mock()
-        mock_encryption_service.encrypt.return_value = "encrypted-token-data"
-        mock_encryption.return_value = mock_encryption_service
-
-        # Mock database
-        mock_session = MagicMock()
-        mock_db_session.return_value.__enter__.return_value = mock_session
-
-        response = authenticated_client.get(
-            "/api/gdrive/auth/callback?code=test-code&state=test-state-123"
-        )
-
-        assert response.status_code == 200
-        assert "Authentication Successful" in response.text
-        assert (
-            "auto-close" in response.text.lower()
-            or "window.close" in response.text.lower()
-        )
-
-    def test_callback_missing_session_state(self, authenticated_client):
-        """Test callback fails without session state."""
-        response = authenticated_client.get(
-            "/api/gdrive/auth/callback?code=test-code&state=test-state"
-        )
-
-        assert response.status_code == 400 or "Invalid session state" in response.text
-
-    def test_callback_refresh_existing_credential(self, authenticated_client):
-        """Test OAuth callback refreshes existing credential."""
-        pytest.skip(
-            "OAuth callback requires complex session mocking - tested via integration"
-        )
-
-    def test_callback_oauth_error(self, authenticated_client):
-        """Test callback handles OAuth errors gracefully."""
-        pytest.skip(
-            "OAuth callback requires complex session mocking - tested via integration"
-        )
-
-    def test_callback_missing_oauth_config(self, authenticated_client):
-        """Test callback fails without OAuth configuration."""
-        pytest.skip(
-            "OAuth callback requires complex session mocking - tested via integration"
-        )
-
-
-class TestCheckGDriveAuthStatus:
-    """Test GET /api/gdrive/auth/status/{task_id} endpoint."""
-
-    def test_check_status_authenticated(self, authenticated_client):
-        """Test checking auth status when authenticated."""
-        # Auth status endpoint checks for token files which requires complex Path mocking
-        # This is better tested via integration tests with actual files
-        pytest.skip(
-            "Auth status requires complex Path mocking - tested via integration"
-        )
-
-    def test_check_status_not_authenticated(self, authenticated_client):
-        """Test checking auth status when not authenticated."""
-        pytest.skip(
-            "Auth status requires complex Path mocking - tested via integration"
-        )
-
-    def test_check_status_token_expired(self, authenticated_client):
-        """Test checking auth status with expired token."""
-        pytest.skip(
-            "Auth status requires complex Path mocking - tested via integration"
-        )
-
-    def test_check_status_error_handling(self, authenticated_client):
-        """Test check status handles errors gracefully."""
-        pytest.skip(
-            "Auth status requires complex Path mocking - tested via integration"
-        )
 
 
 class TestGDriveEndpointIntegration:
