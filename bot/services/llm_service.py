@@ -115,6 +115,13 @@ class LLMService:
                 logger.warning("No user query found in messages")
                 return None
 
+            # Get current trace context for cross-service propagation
+            trace_context = None
+            if self.langfuse_service.enabled:
+                trace_context = self.langfuse_service.get_current_trace_context()
+                if trace_context:
+                    logger.debug(f"Propagating trace context to RAG: {trace_context}")
+
             # Generate response using RAG service (HTTP client)
             result = await self.rag_service.generate_response(
                 query=query_to_use,
@@ -128,6 +135,7 @@ class LLMService:
                 document_content=document_content,
                 document_filename=document_filename,
                 conversation_id=conversation_id,
+                trace_context=trace_context,
             )
 
             # Extract response text from result dict

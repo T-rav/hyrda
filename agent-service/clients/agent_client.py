@@ -15,12 +15,14 @@ import logging
 import os
 import sys
 from collections.abc import AsyncGenerator
+from contextlib import suppress
 from typing import Any
 
 import httpx
 
 # Add shared directory to path
 sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
+from shared.services.langfuse_service import get_langfuse_service
 from shared.utils.http_client import get_internal_service_url, get_secure_client
 
 logger = logging.getLogger(__name__)
@@ -198,6 +200,29 @@ class AgentClient:
         # Import agent registry to get agent instance
         from services.agent_registry import get_agent
 
+        # Extract trace context for distributed tracing
+        trace_context = context.get("trace_context")
+        parent_span = None
+        langfuse_service = get_langfuse_service()
+
+        # Create parent span if trace context exists
+        if trace_context and langfuse_service and langfuse_service.enabled:
+            try:
+                parent_span = langfuse_service.client.start_span(
+                    trace_context=trace_context,
+                    name=f"agent_{agent_name}",
+                    input={"query": query, "agent_name": agent_name},
+                    metadata={
+                        "agent_name": agent_name,
+                        "execution_mode": "embedded",
+                    },
+                )
+                logger.debug(
+                    f"Created parent span for agent '{agent_name}' with trace context"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create parent span for agent: {e}")
+
         try:
             # Get agent instance and invoke it directly
             agent_instance = get_agent(agent_name)
@@ -221,9 +246,26 @@ class AgentClient:
                 # Regular agent with invoke/run methods
                 result = await agent_instance.invoke(query, context)
 
+            # Update parent span with output if created
+            if parent_span:
+                try:
+                    output_data = (
+                        result.get("response", str(result))
+                        if isinstance(result, dict)
+                        else str(result)
+                    )
+                    parent_span.end(output=output_data)
+                except Exception as e:
+                    logger.debug(f"Failed to end parent span: {e}")
+
             return result
+
         except Exception as e:
             logger.error(f"Error invoking embedded agent '{agent_name}': {e}")
+            # End parent span with error if created
+            if parent_span:
+                with suppress(Exception):
+                    parent_span.end(output={"error": str(e)})
             raise
 
     async def _invoke_cloud(
@@ -272,6 +314,29 @@ class AgentClient:
 
         # Import agent registry to get agent instance
         from services.agent_registry import get_agent
+
+        # Extract trace context for distributed tracing
+        trace_context = context.get("trace_context")
+        parent_span = None
+        langfuse_service = get_langfuse_service()
+
+        # Create parent span if trace context exists
+        if trace_context and langfuse_service and langfuse_service.enabled:
+            try:
+                parent_span = langfuse_service.client.start_span(
+                    trace_context=trace_context,
+                    name=f"agent_{agent_name}_stream",
+                    input={"query": query, "agent_name": agent_name},
+                    metadata={
+                        "agent_name": agent_name,
+                        "execution_mode": "embedded_stream",
+                    },
+                )
+                logger.debug(
+                    f"Created parent span for streaming agent '{agent_name}' with trace context"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create parent span for streaming agent: {e}")
 
         try:
             # Get agent instance and stream it directly
@@ -466,7 +531,17 @@ class AgentClient:
 
         except Exception as e:
             logger.error(f"Error streaming embedded agent '{agent_name}': {e}")
+            # End parent span with error if created
+            if parent_span:
+                with suppress(Exception):
+                    parent_span.end(output={"error": str(e)})
             raise
+
+        finally:
+            # End parent span on successful completion
+            if parent_span:
+                with suppress(Exception):
+                    parent_span.end()
 
     async def _stream_cloud(
         self, agent: dict, query: str, context: dict

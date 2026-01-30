@@ -11,6 +11,7 @@ import httpx
 # Add shared directory to path for request signing utilities
 sys.path.insert(0, "/app")
 from shared.utils.request_signing import add_signature_headers
+from shared.utils.trace_propagation import add_trace_headers_to_request
 
 logger = logging.getLogger(__name__)
 
@@ -240,6 +241,7 @@ class RAGClient:
         document_content: str | None = None,
         document_filename: str | None = None,
         session_id: str | None = None,
+        trace_context: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """
         Generate response via rag-service.
@@ -260,6 +262,7 @@ class RAGClient:
             document_content: Uploaded document content
             document_filename: Uploaded document filename
             session_id: Session ID for cache
+            trace_context: Optional Langfuse trace context for cross-service tracing
 
         Returns:
             Response dict with 'response', 'citations', 'metadata'
@@ -299,6 +302,11 @@ class RAGClient:
                 "Content-Type": "application/json",
                 "X-User-Email": user_email,
             }
+
+            # Add Langfuse trace context propagation for cross-service tracing
+            if trace_context:
+                headers = add_trace_headers_to_request(headers, trace_context)
+                logger.debug(f"Added Langfuse trace context: {trace_context}")
 
             # Serialize request body once and use the exact same string for signing and sending
             request_body_str = json.dumps(request_body)
@@ -355,8 +363,12 @@ class RAGClient:
         user_id: str | None = None,
         conversation_id: str | None = None,
         session_id: str | None = None,
+        trace_context: dict[str, str] | None = None,
     ):
         """Generate streaming response from RAG service (for agents).
+
+        Args:
+            trace_context: Optional Langfuse trace context for cross-service tracing
 
         Yields:
             String chunks from the streaming response
@@ -394,6 +406,11 @@ class RAGClient:
                 "Content-Type": "application/json",
                 "X-User-Email": user_email,
             }
+
+            # Add Langfuse trace context propagation for cross-service tracing
+            if trace_context:
+                headers = add_trace_headers_to_request(headers, trace_context)
+                logger.debug(f"Added Langfuse trace context to stream: {trace_context}")
 
             # Serialize request body once
             request_body_str = json.dumps(request_body)

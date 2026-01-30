@@ -165,6 +165,7 @@ async def _stream_agent_response(
     request: RAGGenerateRequest,
     agent_context: dict[str, Any],
     research_depth: str,
+    trace_context: dict[str, str] | None = None,
 ):
     """
     Stream agent execution with SSE format.
@@ -174,6 +175,7 @@ async def _stream_agent_response(
         request: Original RAG request
         agent_context: Agent-specific context
         research_depth: Research depth for research agent
+        trace_context: Optional Langfuse trace context for cross-service tracing
 
     Returns:
         StreamingResponse with SSE-formatted agent output
@@ -211,6 +213,7 @@ async def _stream_agent_response(
             agent_name=agent_name,
             query=request.query,
             context=context,
+            trace_context=trace_context,
         ):
             logger.info(f"Received chunk: {chunk[:50]}")
             yield f"data: {chunk}\n\n"
@@ -398,6 +401,7 @@ async def generate_response(
                 request,
                 agent_context,
                 research_depth,
+                trace_context=http_request.state.trace_context,
             )
 
         # Standard RAG pipeline

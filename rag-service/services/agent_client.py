@@ -24,6 +24,7 @@ from shared.utils.otel_http_client import (
     record_exception,
 )
 from shared.utils.request_signing import add_signature_headers
+from shared.utils.trace_propagation import add_trace_headers_to_request
 from shared.utils.tracing import add_trace_id_to_headers, get_or_create_trace_id
 
 logger = logging.getLogger(__name__)
@@ -189,7 +190,11 @@ class AgentClient:
             self._client = None
 
     async def invoke_agent(
-        self, agent_name: str, query: str, context: AgentContext
+        self,
+        agent_name: str,
+        query: str,
+        context: AgentContext,
+        trace_context: dict[str, str] | None = None,
     ) -> AgentResponse:
         """Invoke an agent via HTTP with circuit breaker protection.
 
@@ -197,6 +202,7 @@ class AgentClient:
             agent_name: Name of agent to invoke
             query: User query
             context: Context dictionary for agent
+            trace_context: Optional Langfuse trace context for cross-service tracing
 
         Returns:
             Agent execution result with response and metadata
@@ -207,10 +213,14 @@ class AgentClient:
         """
         # Wrap with circuit breaker
         wrapped_func = self.circuit_breaker.call(self._invoke_agent_internal)
-        return await wrapped_func(agent_name, query, context)
+        return await wrapped_func(agent_name, query, context, trace_context)
 
     async def _invoke_agent_internal(
-        self, agent_name: str, query: str, context: AgentContext
+        self,
+        agent_name: str,
+        query: str,
+        context: AgentContext,
+        trace_context: dict[str, str] | None = None,
     ) -> AgentResponse:
         """Internal method that performs the actual agent invocation.
 
@@ -252,6 +262,11 @@ class AgentClient:
                 headers = add_trace_id_to_headers(headers)
                 trace_id = get_or_create_trace_id()
                 logger.info(f"[{trace_id}] Calling agent-service: {agent_name} | {url}")
+
+                # Add Langfuse trace context propagation for cross-service tracing
+                if trace_context:
+                    headers = add_trace_headers_to_request(headers, trace_context)
+                    logger.debug(f"Added Langfuse trace context: {trace_context}")
 
                 # Add OpenTelemetry trace context propagation
                 headers = add_otel_headers(headers)
@@ -344,13 +359,20 @@ class AgentClient:
             logger.error(f"Error listing agents: {e}", exc_info=True)
             raise AgentClientError(f"Failed to list agents: {str(e)}") from e
 
-    async def stream_agent(self, agent_name: str, query: str, context: AgentContext):
+    async def stream_agent(
+        self,
+        agent_name: str,
+        query: str,
+        context: AgentContext,
+        trace_context: dict[str, str] | None = None,
+    ):
         """Stream agent execution with real-time updates.
 
         Args:
             agent_name: Name of agent to invoke
             query: User query
             context: Context dictionary for agent
+            trace_context: Optional Langfuse trace context for cross-service tracing
 
         Yields:
             String updates from agent execution
@@ -371,6 +393,12 @@ class AgentClient:
             # Prepare headers
             headers = {"X-Service-Token": self.service_token}
             headers = add_trace_id_to_headers(headers)
+
+            # Add Langfuse trace context propagation for cross-service tracing
+            if trace_context:
+                headers = add_trace_headers_to_request(headers, trace_context)
+                logger.debug(f"Added Langfuse trace context to stream: {trace_context}")
+
             headers = add_otel_headers(headers)
 
             client = await self._get_client()
