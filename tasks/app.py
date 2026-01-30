@@ -202,8 +202,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "X-Service-Token",
+            "X-Idempotency-Key",
+        ],
     )
 
     # Register API routers (all routes from api/* modules)

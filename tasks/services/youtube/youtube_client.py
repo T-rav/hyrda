@@ -14,8 +14,46 @@ import subprocess
 import tempfile
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+
+# Security: Validate YouTube URLs to prevent command injection
+YOUTUBE_URL_PATTERNS = [
+    r"^https?://(www\.)?youtube\.com/",
+    r"^https?://(www\.)?youtu\.be/",
+    r"^https?://youtube\.com/",
+    r"^https?://youtu\.be/",
+]
+YOUTUBE_URL_REGEX = re.compile("|".join(YOUTUBE_URL_PATTERNS), re.IGNORECASE)
+
+
+def validate_youtube_url(url: str) -> bool:
+    """Validate that a URL is a legitimate YouTube URL.
+
+    Args:
+        url: URL to validate
+
+    Returns:
+        True if valid YouTube URL, False otherwise
+    """
+    # Basic validation: must be non-empty string matching YouTube pattern
+    if not url or not isinstance(url, str) or not YOUTUBE_URL_REGEX.match(url):
+        return False
+
+    # Parse and validate URL components
+    try:
+        parsed = urlparse(url)
+        allowed_domains = ("youtube.com", "www.youtube.com", "youtu.be", "www.youtu.be")
+        is_valid = (
+            parsed.scheme in ("http", "https")
+            and parsed.netloc
+            and parsed.netloc.lower() in allowed_domains
+        )
+        return is_valid
+    except Exception:
+        return False
 
 
 class YouTubeClient:
@@ -44,6 +82,11 @@ class YouTubeClient:
         Returns:
             Dictionary with channel info or None if not found
         """
+        # Security: Validate URL before passing to subprocess
+        if not validate_youtube_url(channel_url):
+            logger.error(f"Invalid YouTube URL provided: {channel_url}")
+            return None
+
         try:
             command = [
                 "yt-dlp",
@@ -92,6 +135,11 @@ class YouTubeClient:
         Returns:
             List of video metadata dictionaries
         """
+        # Security: Validate URL before passing to subprocess
+        if not validate_youtube_url(channel_url):
+            logger.error(f"Invalid YouTube URL provided: {channel_url}")
+            return []
+
         try:
             # Build yt-dlp command to list all videos
             command = [
@@ -163,6 +211,17 @@ class YouTubeClient:
         Returns:
             Dictionary with video metadata or None if not found
         """
+        # Security: Validate video_id format to prevent injection
+        if not video_id or not isinstance(video_id, str):
+            logger.error("Invalid video_id provided")
+            return None
+
+        # YouTube video IDs are alphanumeric, hyphen, underscore (typically 11 chars)
+        # Allow shorter IDs for testing, but reject dangerous characters
+        if not re.match(r"^[a-zA-Z0-9_-]+$", video_id):
+            logger.error(f"Invalid video_id format: {video_id}")
+            return None
+
         try:
             video_url = f"https://www.youtube.com/watch?v={video_id}"
             command = [
@@ -261,6 +320,11 @@ class YouTubeClient:
         Returns:
             Path to downloaded audio file, or None if download fails
         """
+        # Security: Validate URL before passing to subprocess
+        if not validate_youtube_url(video_url):
+            logger.error(f"Invalid YouTube URL provided: {video_url}")
+            return None
+
         if output_path is None:
             output_path = tempfile.mkdtemp()
 
