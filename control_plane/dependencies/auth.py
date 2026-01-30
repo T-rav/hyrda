@@ -10,6 +10,20 @@ sys.path.insert(0, "/app")
 from shared.utils.jwt_auth import JWTAuthError, extract_token_from_request, verify_token
 
 
+# Security: Fail fast in production if using default service token
+_ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+_IS_PRODUCTION = _ENVIRONMENT in ("production", "prod", "staging")
+_DEFAULT_SERVICE_TOKEN = "dev-service-token-insecure"
+_SERVICE_TOKEN = os.getenv("SERVICE_TOKEN", _DEFAULT_SERVICE_TOKEN)
+
+if _IS_PRODUCTION and _SERVICE_TOKEN == _DEFAULT_SERVICE_TOKEN:
+    raise ValueError(
+        "CRITICAL SECURITY: Default service token cannot be used in production! "
+        "Set SERVICE_TOKEN environment variable to a secure random value. "
+        "Generate with: openssl rand -hex 32"
+    )
+
+
 async def get_current_user_or_service(request: Request) -> dict:
     """
     Flexible auth dependency that accepts either user JWT or service token.
@@ -20,7 +34,7 @@ async def get_current_user_or_service(request: Request) -> dict:
     """
     # Try service token first
     service_token = request.headers.get("X-Service-Token")
-    expected_service_token = os.getenv("SERVICE_TOKEN", "dev-service-token-insecure")
+    expected_service_token = _SERVICE_TOKEN
 
     if service_token and service_token == expected_service_token:
         return {"service": True, "is_admin": True}  # Services have admin privileges
