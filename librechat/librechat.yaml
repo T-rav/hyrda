@@ -22,11 +22,19 @@ endpoints:
     name: "InsightMesh RAG"
     apiKey: "${OPENAI_API_KEY}"
     baseURL: "http://insightmesh-rag-service:8002/v1"
-    # Custom headers to pass user email and JWT token to RAG service
+    # Custom headers to pass user context and Google OAuth token to RAG service
+    # The Google OAuth token allows RAG service to act on behalf of the user:
+    # - Access user's Google Drive
+    # - Read user's Gmail
+    # - Call Google APIs with user's permissions
+    #
+    # Note: Refresh token is passed so RAG service can auto-refresh expired tokens
     headers:
-      X-User-Email: "${user.email}"
-      X-LibreChat-Token: "${user.token}"
-      X-LibreChat-User: "${user.id}"
+      X-User-Email: "{{LIBRECHAT_USER_EMAIL}}"
+      X-LibreChat-Token: "{{LIBRECHAT_USER_ID}}"
+      X-LibreChat-User: "{{LIBRECHAT_USER_ID}}"
+      X-Google-OAuth-Token: "{{LIBRECHAT_USER_GOOGLEACCESSTOKEN}}"
+      X-Google-Refresh-Token: "{{LIBRECHAT_USER_GOOGLEREFRESHTOKEN}}"
     models:
       default:
         - "gpt-4o"

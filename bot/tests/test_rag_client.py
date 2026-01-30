@@ -8,6 +8,83 @@ import pytest
 from services.rag_client import RAGClient, RAGClientError
 
 
+class TestRAGClientGetUserEmail:
+    """Test RAG client user email lookup functionality."""
+
+    @pytest.fixture
+    def rag_client(self):
+        """Create RAG client instance for testing."""
+        with patch.dict("os.environ", {"BOT_SERVICE_TOKEN": "test-token-123"}):
+            return RAGClient(base_url="http://test-rag:8002")
+
+    def test_get_user_email_from_database(self, rag_client):
+        """Test email lookup when user exists in database."""
+        mock_user_service = MagicMock()
+        mock_user_service.get_user_info.return_value = {
+            "slack_user_id": "U01234567",
+            "email_address": "john@8thlight.com",
+            "display_name": "John",
+        }
+
+        with patch(
+            "services.user_service.get_user_service", return_value=mock_user_service
+        ):
+            email = rag_client._get_user_email("U01234567")
+
+        assert email == "john@8thlight.com"
+        mock_user_service.get_user_info.assert_called_once_with("U01234567")
+
+    def test_get_user_email_not_in_database(self, rag_client):
+        """Test fallback to placeholder when user not in database."""
+        mock_user_service = MagicMock()
+        mock_user_service.get_user_info.return_value = None
+
+        with patch(
+            "services.user_service.get_user_service", return_value=mock_user_service
+        ):
+            email = rag_client._get_user_email("U01234567")
+
+        assert email == "U01234567@insightmesh.local"
+
+    def test_get_user_email_no_email_in_database(self, rag_client):
+        """Test fallback when user exists but has no email."""
+        mock_user_service = MagicMock()
+        mock_user_service.get_user_info.return_value = {
+            "slack_user_id": "U01234567",
+            "email_address": None,
+            "display_name": "John",
+        }
+
+        with patch(
+            "services.user_service.get_user_service", return_value=mock_user_service
+        ):
+            email = rag_client._get_user_email("U01234567")
+
+        assert email == "U01234567@insightmesh.local"
+
+    def test_get_user_email_database_error(self, rag_client):
+        """Test fallback when database lookup fails."""
+        mock_user_service = MagicMock()
+        mock_user_service.get_user_info.side_effect = Exception("DB connection failed")
+
+        with patch(
+            "services.user_service.get_user_service", return_value=mock_user_service
+        ):
+            email = rag_client._get_user_email("U01234567")
+
+        assert email == "U01234567@insightmesh.local"
+
+    def test_get_user_email_no_user_id(self, rag_client):
+        """Test bot email when no user_id provided."""
+        email = rag_client._get_user_email(None)
+        assert email == "bot@insightmesh.local"
+
+    def test_get_user_email_empty_string(self, rag_client):
+        """Test bot email when empty user_id provided."""
+        email = rag_client._get_user_email("")
+        assert email == "bot@insightmesh.local"
+
+
 class TestRAGClient:
     """Test RAG client with HMAC signature authentication."""
 

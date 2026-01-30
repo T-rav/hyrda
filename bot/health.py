@@ -60,6 +60,9 @@ class HealthChecker:
         app.router.add_get("/api/metrics/performance", self.get_performance_metrics)
         app.router.add_get("/api/metrics/errors", self.get_error_metrics)
 
+        # Usage tracking endpoint for RAG service
+        app.router.add_post("/api/v1/usage/librechat", self.handle_librechat_usage)
+
         # Services health endpoint
         app.router.add_get("/api/services/health", self.services_health)
 
@@ -653,6 +656,57 @@ class HealthChecker:
         except Exception as e:
             logger.error(f"Error getting error metrics: {e}")
             return web.json_response({"status": "error", "error": str(e)}, status=400)
+
+    async def handle_librechat_usage(self, request):
+        """Handle LibreChat usage tracking from RAG service."""
+        try:
+            data = await request.json()
+
+            user_id = data.get("user_id")
+            conversation_id = data.get("conversation_id")
+            agent_used = data.get("agent_used")
+            deep_search = data.get("deep_search")
+            interaction_type = data.get("interaction_type", "message")
+            email = data.get("email")
+
+            if not user_id or not conversation_id:
+                return web.json_response(
+                    {"status": "error", "message": "Missing required fields"},
+                    status=400,
+                )
+
+            # Import here to avoid circular imports
+            from services.usage_tracking_service import get_usage_tracking_service
+
+            usage_service = get_usage_tracking_service(
+                database_url=self.settings.database_url
+            )
+
+            # Store LibreChat usage - reuse SlackUsage model with librechat prefix
+            # or create a new record in a separate table
+            usage_service.record_interaction(
+                slack_user_id=f"librechat:{user_id}",
+                thread_ts=conversation_id,
+                channel_id=None,
+                interaction_type=f"librechat_{interaction_type}",
+            )
+
+            logger.debug(
+                f"Recorded LibreChat usage: user={user_id}, "
+                f"conversation={conversation_id}, agent={agent_used}, "
+                f"deep_search={deep_search}, email={email}"
+            )
+
+            return web.json_response(
+                {
+                    "status": "success",
+                    "message": "Usage recorded",
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error recording LibreChat usage: {e}")
+            return web.json_response({"status": "error", "message": str(e)}, status=500)
 
     async def services_health(self, request):
         """Get health status of all services."""

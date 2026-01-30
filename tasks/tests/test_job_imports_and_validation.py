@@ -29,21 +29,6 @@ def mock_settings():
 class TestJobImports:
     """Test all job imports are valid and classes exist."""
 
-    @pytest.mark.skip(
-        reason="gdrive_ingest has noqa suppressions - excluded from coverage as optional feature"
-    )
-    def test_gdrive_ingest_imports_exist(self):
-        """Test GDriveIngestJob imports only real classes."""
-
-        # Check the module doesn't have suppressed import errors
-        import jobs.gdrive_ingest as module
-
-        source = inspect.getsource(module)
-
-        # Should not have any noqa: F821 (undefined name)
-        assert "noqa: F821" not in source, "Job has suppressed undefined name errors"
-        assert "# type: ignore" not in source, "Job has suppressed type errors"
-
     def test_metric_sync_imports_exist(self):
         """Test MetricSyncJob imports only real classes."""
         from jobs.metric_sync import MetricSyncJob

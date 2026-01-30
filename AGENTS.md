@@ -1,472 +1,208 @@
-# Repository Guidelines
+# InsightMesh - AI Coding Agent Guide
 
-This file provides guidance to automation agents (Claude Code, GPT-based, etc.) when working with code in this repository.
+This document provides essential information for AI coding agents working with the InsightMesh codebase.
 
-## 🚨 CRITICAL: Never Skip Commit Hooks
+## Project Overview
 
-**NEVER** use `git commit --no-verify` or `--no-hooks` flags. Always fix code issues first.
+InsightMesh is a production-ready Slack AI Bot with **RAG (Retrieval-Augmented Generation)**, **Deep Research Agents**, and **Web Search** capabilities. It provides intelligent, context-aware assistance using knowledge bases and real-time web data.
 
-### 🔄 Unified Linting System
-Pre-commit hooks and CI now use **identical Makefile commands and tool versions** to prevent environment mismatches:
-- **Same Commands**: `make lint-check` used by pre-commit hooks, local dev, and CI
-- **Same Versions**: `requirements-dev.txt` pins exact tool versions  
-- **Same Config**: `pyproject.toml` shared across environments
-- **Unified Tools**: Ruff + Pyright + Bandit via Makefile
+### Key Capabilities
 
-This eliminates the "works locally but fails in CI" problem!
+- **Advanced RAG Intelligence**: Qdrant vector search with hybrid retrieval, cross-encoder reranking, and adaptive query rewriting
+- **Web Search & Real-Time Data**: Tavily web search and Perplexity deep research integration
+- **Deep Research Agents**: Multi-agent LangGraph system for comprehensive company analysis
+- **Production Ready**: Thread management, conversation summarization, health monitoring, and comprehensive observability
 
-### Commit Process:
-1. Fix all linting, formatting, and security issues identified by pre-commit hooks
-2. Ensure all tests pass (`make test`)
-3. Only commit once code passes all quality checks
-4. Pre-commit hooks are there to maintain code quality and security
+## Technology Stack
 
-### If hooks fail:
-- Fix the issues reported (imports, formatting, security, type hints)
-- Run `make lint` to auto-fix what can be fixed automatically  
-- Manually fix remaining issues
-- Then commit normally
+### Core Technologies
 
-**Code quality is non-negotiable.** Broken code should never be committed.
+| Component | Technology |
+|-----------|------------|
+| Language | Python 3.11 |
+| Slack Framework | slack-bolt |
+| Agent Orchestration | LangChain / LangGraph |
+| LLM Providers | OpenAI (GPT-4o), Anthropic (Claude) |
+| Vector Database | Qdrant |
+| Relational Database | MySQL 8.0 |
+| Cache | Redis |
+| Observability | Langfuse, Prometheus |
+| Task Scheduling | Custom tasks service with APScheduler |
 
-## Development Commands
+### External Integrations
 
-### Setup and Installation
-```bash
-make install      # Install Python dependencies
+- **Tavily**: Web search API
+- **Perplexity**: Deep research with citations
+- **Google Drive**: Document ingestion with OAuth2
+- **Langfuse**: LLM observability and prompt management
+
+## Architecture
+
+### Microservices Architecture
+
+The project consists of 6 microservices communicating via HTTP APIs:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Slack Bot     │────▶│  Control Plane   │◀────│  Agent Service  │
+│    (bot/)       │     │ (control_plane/) │     │(agent-service/) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  RAG Service    │────▶│   MySQL/Redis    │◀────│  Tasks Service  │
+│ (rag-service/)  │     │   (Data/Cache)   │     │    (tasks/)     │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│     Qdrant      │
+│ (Vector Store)  │
+└─────────────────┘
 ```
 
-### Running the Application
-```bash
-make run          # Run the Slack bot (requires .env file)
+### Service Descriptions
+
+| Service | Path | Purpose | Port |
+|---------|------|---------|------|
+| **Bot** | `bot/` | Slack event handling and message processing | 8080 |
+| **Agent Service** | `agent-service/` | LangGraph HTTP API for deep research agents | 8000 |
+| **Control Plane** | `control_plane/` | Agent registry, management UI, authentication | 6001 |
+| **Tasks** | `tasks/` | Background task scheduler and Google Drive ingestion | 5001 |
+| **RAG Service** | `rag-service/` | Vector search and knowledge base queries | 8002 |
+| **Dashboard** | `dashboard-service/` | Health monitoring and metrics aggregation | (internal) |
+
+### Shared Code
+
+The `shared/` directory contains utilities used across services:
+- `shared/clients/` - HTTP clients for inter-service communication
+- `shared/config/` - Common configuration
+- `shared/middleware/` - Authentication and logging middleware
+- `shared/services/` - Shared service utilities
+- `shared/tools/` - Common tool implementations
+- `shared/utils/` - Helper utilities including OpenTelemetry tracing
+
+## Project Structure
+
+```
+insightmesh/
+├── bot/                          # Main Slack bot service
+│   ├── app.py                    # Application entry point
+│   ├── health.py                 # Health check endpoints
+│   ├── config/                   # Pydantic settings
+│   │   └── settings.py           # Environment configuration
+│   ├── handlers/                 # Event handling
+│   │   ├── event_handlers.py     # Slack event handlers
+│   │   └── message_handlers.py   # Message processing logic
+│   ├── services/                 # Core services
+│   │   ├── llm_service.py        # LLM interaction
+│   │   ├── rag_client.py         # RAG service client
+│   │   ├── agent_client.py       # Agent service client
+│   │   ├── conversation_cache.py # Redis conversation storage
+│   │   └── search_clients.py     # Tavily/Perplexity clients
+│   ├── utils/                    # Utilities
+│   └── tests/                    # Test suite (245 tests)
+├── agent-service/                # LangGraph HTTP API
+│   ├── agents/                   # Agent implementations
+│   ├── api/                      # FastAPI routes
+│   └── services/                 # Agent services
+├── control_plane/                # Agent registry & management
+│   ├── api/                      # REST API endpoints
+│   ├── ui/                       # Web UI
+│   └── models/                   # Database models
+├── tasks/                        # Background task scheduler
+│   ├── jobs/                     # Job implementations
+│   ├── ui/                       # React frontend
+│   └── services/                 # Task services
+├── rag-service/                  # Vector search service
+│   ├── services/                 # Retrieval services
+│   └── vector_stores/            # Qdrant integration
+├── dashboard-service/            # Health monitoring
+│   ├── health_aggregator.py      # Service health aggregation
+│   └── health_ui/                # React health dashboard
+├── shared/                       # Shared utilities
+├── custom_agents/                # Custom agent definitions
+├── external_agents/              # External agent configurations
+├── docs/                         # Documentation
+├── scripts/                      # Utility scripts
+└── monitoring/                   # Prometheus/Grafana configs
 ```
 
-### Testing and Code Quality
+## Build and Development Commands
+
+### Essential Make Commands
+
 ```bash
-make test         # Run test suite with pytest (245 tests)
-make lint         # Auto-fix linting, formatting, and import issues
-make lint-check   # Check code quality without fixing (used by pre-commit)
-make quality      # Run complete pipeline: linting + type checking + tests
+# PRIMARY COMMAND - Comprehensive validation
+make ci                    # Run lint + test + security + build
+
+# Development
+make install              # Install Python dependencies
+make setup-dev            # Install dev tools + pre-commit hooks
+make run                  # Run bot locally (requires .env)
+
+# Testing
+make test                 # Run all 6 microservices tests
+make test-fast            # Unit tests only (excludes integration)
+make test-coverage        # Tests with coverage report (>70% required)
+
+# Code Quality
+make lint                 # Auto-fix linting, formatting, imports
+make lint-check           # Check-only mode (used by pre-commit)
+make quality              # Complete pipeline: lint + type check + test
+
+# Docker Operations
+make start                # Start full Docker stack
+make stop                 # Stop all containers
+make restart              # Restart all services
+make status               # Show container status
+make docker-build         # Build all Docker images
+
+# Security
+make security             # Run Bandit code security scanner
+make security-docker      # Scan Docker images with Trivy
+make security-full        # Run both Bandit + Trivy
+
+# Database
+make db-start             # Start MySQL databases
+make db-stop              # Stop MySQL databases
+make db-migrate           # Generate new migration files
+make db-upgrade           # Apply pending migrations
+make db-downgrade         # Rollback last migration
 ```
 
-### Docker
+### Docker Compose Commands
+
 ```bash
-# Full stack (bot + services)
-docker compose up -d
+# Full stack deployment
+docker compose up -d                    # Start all services
+docker compose down                     # Stop all services
+docker compose logs -f bot              # View bot logs
+docker compose ps                       # Check service status
 
 # Individual services
-docker compose up -d bot       # Start Slack bot
-docker compose up -d qdrant    # Start vector database
-
-# Build and run
-make docker-build              # Build Docker images
-make docker-run                # Run Docker container with .env
-
-# Logs
-docker logs -f insightmesh-bot      # Bot logs
+docker compose up -d qdrant            # Start Qdrant only
+docker compose restart bot             # Restart bot after code changes
 ```
 
-### Document Ingestion - Google Drive Only
-```bash
-# THE ONLY SUPPORTED INGESTION METHOD
-# Ingest documents from Google Drive with comprehensive metadata using the new modular architecture
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789"
-cd ingest && python main.py --folder-id "1ABC123DEF456GHI789" --metadata '{"department": "engineering", "project": "docs"}'
+## Code Style Guidelines
 
-# Legacy command still works with deprecation warnings
-cd ingest && python ingester.py --folder-id "1ABC123DEF456GHI789"
+### Quality Tooling
 
-# First-time setup requires Google OAuth2 credentials
-# See ingest/README.md for detailed setup instructions
-# Now supports comprehensive document formats: PDF, Word, Excel, PowerPoint, Google Workspace files
-# Includes file paths, permissions, and access control metadata
-```
+The project uses unified quality tooling across local dev, pre-commit, and CI:
 
+| Tool | Purpose | Config |
+|------|---------|--------|
+| **Ruff** | Linting, formatting, import sorting | `bot/pyproject.toml` |
+| **Pyright** | Type checking (strict mode) | `bot/pyproject.toml` |
+| **Bandit** | Security vulnerability scanning | `bot/pyproject.toml` |
 
-### Utilities
-```bash
-make clean        # Remove caches and build artifacts
-```
+### Type Annotations (Required)
 
-## Environment Configuration
+All functions must have type hints:
 
-The application requires a `.env` file in the project root. Copy `.env.example` as a starting point:
-
-### Basic Configuration
-```bash
-# Slack
-SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_APP_TOKEN=xapp-your-app-token
-
-# LLM Provider (choose one)
-LLM_PROVIDER=openai  # openai, anthropic, ollama
-LLM_API_KEY=your-api-key
-LLM_MODEL=gpt-4o-mini
-
-# Cache
-CACHE_REDIS_URL=redis://localhost:6379
-```
-
-### RAG Configuration (Optional)
-```bash
-# Vector Database
-VECTOR_ENABLED=true
-VECTOR_PROVIDER=qdrant
-VECTOR_HOST=localhost
-VECTOR_PORT=6333
-
-# Embeddings
-EMBEDDING_PROVIDER=openai
-EMBEDDING_MODEL=text-embedding-3-small
-
-# Retrieval Settings
-RAG_MAX_CHUNKS=5
-RAG_SIMILARITY_THRESHOLD=0.7
-```
-
-### Web Search Configuration
-```bash
-# Web search via Tavily
-TAVILY_API_KEY=your-tavily-api-key  # Get from https://tavily.com
-
-# Deep research (optional)
-PERPLEXITY_API_KEY=your-perplexity-api-key  # Get from https://www.perplexity.ai/settings/api
-```
-
-### Quick Setup Examples
-
-**OpenAI + Qdrant (Recommended):**
-```bash
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-your-openai-key
-VECTOR_PROVIDER=qdrant
-VECTOR_HOST=localhost
-VECTOR_PORT=6333
-```
-
-**Anthropic + Qdrant:**
-```bash
-LLM_PROVIDER=anthropic
-LLM_API_KEY=your-anthropic-key
-VECTOR_PROVIDER=qdrant
-VECTOR_HOST=localhost
-VECTOR_PORT=6333
-```
-
-**Ollama (Local, No RAG):**
-```bash
-LLM_PROVIDER=ollama
-LLM_BASE_URL=http://localhost:11434
-LLM_MODEL=llama2
-VECTOR_ENABLED=false
-```
-
-## Architecture Overview
-
-This is a production-ready Python Slack bot with **RAG (Retrieval-Augmented Generation)** capabilities, direct LLM provider integration, and comprehensive testing.
-
-### 🏗️ Core Architecture
-
-#### New RAG-Enabled Design
-- **Direct LLM Integration**: OpenAI, Anthropic, or Ollama (no proxy required)
-- **Vector Database**: Qdrant for self-hosted vector search
-- **Embedding Service**: Configurable text vectorization
-- **RAG Pipeline**: Retrieval-augmented response generation
-- **Document Ingestion**: CLI tool for knowledge base management
-
-#### Core Structure
-- **bot/app.py**: Main application entry point with async Socket Mode handler
-- **bot/config/**: Pydantic settings with environment-based configuration
-- **bot/handlers/**: Event and message handling, including agent process management
-- **bot/services/**: Core services including RAG, LLM providers, and vector storage
-- **bot/utils/**: Error handling and logging utilities
-- **ingest/**: Google Drive document ingestion system with OAuth2 authentication
-
-### Key Components
-
-#### Settings Management (config/settings.py)
-Uses Pydantic with environment variable prefixes:
-- `SlackSettings` (SLACK_*)
-- `LLMSettings` (LLM_*)  
-- `AgentSettings` (AGENT_*)
-
-#### Message Flow
-1. Slack events → `bot/handlers/event_handlers.py`
-2. Message processing → `bot/handlers/message_handlers.py`
-3. LLM API calls → `bot/services/llm_service.py`
-4. Response formatting → `bot/services/formatting.py`
-5. Slack response → `bot/services/slack_service.py`
-
-#### Document Ingestion Flow (Google Drive Only)
-1. OAuth2 authentication → `ingest/google_drive_ingester.py`
-2. Comprehensive metadata extraction → File paths, permissions, owners
-3. Document download and processing → Google Drive API
-4. Content chunking and embedding → `bot/services/vector_service.py`
-5. Vector storage with rich metadata → Qdrant
-
-#### Agent Processes
-Defined in `bot/handlers/agent_processes.py` with the `AGENT_PROCESSES` dictionary. Users can trigger data processing jobs through natural language requests.
-
-### Threading and Context
-- Automatically creates and maintains Slack threads
-- Retrieves thread history for context in LLM conversations
-- Shows typing indicators during response generation
-- Maintains online presence status
-
-### File Attachment Handling
-
-#### In-Thread File Access
-The bot can process file attachments (PDF, Word, Excel, PowerPoint, text files) and maintain context within threads:
-
-**✅ What Works:**
-- Upload file with bot present → Bot downloads and caches content
-- Continue discussion in same thread → Bot remembers file content
-- Reference the file later in thread → Bot has access to cached content
-
-**❌ Slack API Limitation - Retroactive File Access:**
-The bot **cannot access files uploaded before it joined a channel**, even though it can see the message history.
-
-**Why this limitation exists:**
-- **Message history**: Bot can read via `conversations.history` API ✅
-- **File downloads**: Require the bot to have been present when file was shared ❌
-- Slack's file URLs are permission-gated at **upload time**, not view time
-- This is a Slack security/privacy feature, not a bot limitation
-
-**Example scenario:**
-1. Private channel exists with `company_financials.pdf` uploaded
-2. Users discuss the document
-3. Bot is added to channel later
-4. Bot can see messages: "Check out the financial report" ✅
-5. Bot **cannot** download `company_financials.pdf` ❌ (403 Forbidden)
-
-**Workarounds:**
-1. **Re-upload the document** after adding the bot (recommended)
-2. **Add bot BEFORE** sharing sensitive documents
-3. **Use RAG knowledge base** - Pre-ingest documents via `ingest/` module so bot can search them without Slack file access
-
-**Technical details:**
-- Bot sees file metadata (name, ID) in thread history
-- File download requires bot to have `files:read` permission **at upload time**
-- Human users don't have this limitation (inherit channel permissions retroactively)
-- Other platforms (Discord, Teams) have similar restrictions
-
-### RAG & LLM Integration
-
-#### Supported LLM Providers
-- **OpenAI**: GPT-4, GPT-3.5, with configurable models
-- **Anthropic**: Claude 3 (Haiku, Sonnet, Opus)  
-- **Ollama**: Local models (Llama 2, Code Llama, etc.)
-
-#### Vector Database
-- **Qdrant**: Self-hosted vector database for semantic search
-
-#### RAG Pipeline Features
-- **Document Chunking**: Configurable size and overlap
-- **Semantic Search**: Vector similarity with threshold filtering
-- **Context Integration**: Retrieved chunks enhance LLM responses
-- **Metadata Support**: Track document sources and properties
-- **Configurable Retrieval**: Adjust chunk count and similarity thresholds
-- **Web Search**: Automatic web search via Tavily for current events
-
-#### How It Works
-1. **Ingestion**: Documents are chunked and embedded into vector database
-2. **Query Processing**: User questions are embedded for similarity search
-3. **Retrieval**: Most relevant chunks are retrieved based on similarity
-4. **Augmentation**: Retrieved context is added to the LLM prompt
-5. **Web Search** (if needed): LLM can trigger web search for current information
-6. **Generation**: LLM generates response with enhanced context
-
-#### Web Search Integration
-- **Tavily Search**: Fast, high-quality web search results
-- **Perplexity Deep Research**: Long-form research with citations
-- **Function Calling**: LLM automatically decides when to search the web
-- **Langfuse Tracing**: All tool calls are traced for observability
-- **Auto-discovery**: Bot detects when queries need real-time web data
-
-### Company Profile Agent: Entity Verification & Bug Fixes
-
-The company profile agent includes multiple layers of validation to ensure reports are generated for the correct company.
-
-#### Slack URL Formatting Bug (Fixed)
-
-**Problem**: Slack converts URLs like "Baker.edu" to format `<http://Baker.edu|Baker.edu>`. This formatting was passed directly to the LLM during research brief generation, causing confusion that led to reports about wrong companies (e.g., querying "Baker College" produced reports about Caterpillar Inc., Munich Re, or Twilio).
-
-**Root Cause**:
-- Research brief node received raw Slack-formatted query: `"profile Baker College (<http://Baker.edu|Baker.edu>)"`
-- LLM couldn't parse the confusing URL format properly
-- Generated generic research questions without explicit company mentions
-- Generic questions allowed web searches to drift to prominent companies with similar keywords
-
-**Fix Location**: `bot/agents/company_profile/nodes/research_brief.py:36-45`
-
-**Solution**: Added regex-based URL cleaning before passing query to LLM:
 ```python
-# Clean Slack URL formatting: <http://URL|display> → display
-# This prevents LLM confusion from Slack's link format
-import re
-
-cleaned_query = re.sub(r"<https?://([^|>]+)\|([^>]+)>", r"\2", query)
-cleaned_query = re.sub(r"<https?://([^>]+)>", r"\1", cleaned_query)
-
-if cleaned_query != query:
-    logger.info(f"Cleaned Slack URLs from query: '{query}' → '{cleaned_query}'")
-    query = cleaned_query
-```
-
-**Result**: LLM receives clean query "profile Baker College (Baker.edu)" → generates research questions explicitly mentioning "Baker College" → researchers find correct company.
-
-#### Relationship Verification System
-
-The bot includes a sophisticated system to prevent false positives when identifying past client relationships in company profiles.
-
-**How It Works**:
-
-1. **Internal Search Tool** (`bot/agents/company_profile/tools/internal_search.py`):
-   - Performs deep search of internal knowledge base for company-specific documents
-   - Uses enhanced entity boosting to prioritize company-specific docs over generic index files
-   - Returns explicit "Relationship status: Existing client" or "Relationship status: No prior engagement"
-   - Filters out index/overview files that contaminate results
-
-2. **Langfuse Prompt Versioning**:
-   - Prompt v10 (production): Trusts internal_search_tool's relationship determination
-   - Scripts in `scripts/`: `update_final_report_prompt.py` and `fix_final_report_prompt.py`
-   - Prompt tells LLM to trust the "Relationship status:" line, not validate it again
-
-3. **Entity Boosting Logic**:
-   - 20% boost for company name in content (vs 5% for other terms)
-   - 30% boost for company name in title (vs 10% for other terms)
-   - -50% penalty for index/overview files
-   - Smart company name extraction from queries
-
-**Integration Tests**:
-
-Comprehensive test suite in `evals/relationship_detection/`:
-- `test_relationship_verification_integration.py`: 4 integration tests using real vector DB
-- Tests validate false positive prevention (Vail Resorts, Costco) and true positive detection (AllCampus, 3Step)
-- Run with: `PYTHONPATH=bot venv/bin/python -m pytest evals/relationship_detection/test_relationship_verification_integration.py`
-
-**Key Files**:
-- `bot/agents/company_profile/tools/internal_search.py`: Entity boosting logic (lines 466-527)
-- `bot/agents/company_profile/nodes/research_brief.py`: Slack URL cleaning (lines 36-45)
-- `scripts/fix_final_report_prompt.py`: Prompt updater to trust internal search
-- `evals/relationship_detection/*.py`: Integration and unit tests
-
-**Updating the Prompt**:
-```bash
-PYTHONPATH=bot venv/bin/python scripts/fix_final_report_prompt.py
-```
-Then promote the new version to production in Langfuse UI.
-
-## Testing Framework & Quality Standards
-
-### Test Suite Requirements
-
-**🎯 MANDATORY: All code changes MUST include comprehensive tests and pass 100% of the test suite.**
-
-The project maintains a **245/245 test success rate (100%)** - this standard must be preserved.
-
-#### Test Commands
-```bash
-# Run all tests (REQUIRED before any commit)
-make test                    # Full test suite (245 tests)
-make test-coverage          # Tests with coverage report (requires >70%, currently ~72%)
-make test-file FILE=test_name.py  # Run specific test file
-
-# Quality checks (REQUIRED before commit)  
-make lint                   # Auto-fix with ruff + pyright + bandit (unified Makefile)
-make lint-check            # Check-only mode with ruff + pyright + bandit (unified Makefile)
-make typecheck             # Run pyright type checking only (legacy, use lint-check instead)
-make quality               # Run complete pipeline: linting + type checking + tests
-```
-
-#### Pre-commit Requirements
-```bash
-# Setup (run once)
-make setup-dev             # Install dev tools + pre-commit hooks
-
-# Before every commit (MANDATORY)
-make pre-commit           # Run all pre-commit hooks
-git add . && git commit   # Hooks run automatically
-
-# CI simulation
-make ci                   # Run complete CI pipeline locally
-```
-
-### Testing Standards
-
-#### 1. Test Coverage Requirements
-- **Minimum 80% code coverage** (enforced by CI)
-- **All new functions/classes MUST have tests**
-- **Critical paths require 100% coverage**
-
-#### 2. Test Types & Structure
-```
-bot/tests/
-├── test_app.py              # Application initialization
-├── test_config.py           # Configuration management  
-├── test_conversation_cache.py  # Redis caching
-├── test_event_handlers.py   # Slack event handling
-├── test_formatting.py       # Message formatting
-├── test_health_endpoints.py # Health check endpoints
-├── test_integration.py      # End-to-end workflows
-├── test_llm_service.py      # LLM API integration
-├── test_message_handlers.py # Message processing
-├── test_slack_service.py    # Slack API integration
-└── test_utils.py            # Utilities and helpers
-
-ingest/
-└── tests/                   # Google Drive ingestion tests (future)
-```
-
-#### 3. Test Patterns (Follow These Examples)
-```python
-# ✅ GOOD: Async test with proper mocking
-@pytest.mark.asyncio
-async def test_message_handling_success(mock_slack_service):
-    mock_slack_service.get_thread_history = AsyncMock(return_value=([], True))
-    result = await handle_message("test", "U123", mock_slack_service, "C123")
-    assert result is True
-    mock_slack_service.send_message.assert_called_once()
-
-# ✅ GOOD: Simple fixture for consistent mocking  
-@pytest.fixture
-def mock_service():
-    service = AsyncMock(spec=ServiceClass)
-    service.method.return_value = "expected_result"
-    return service
-
-# ❌ BAD: Complex async mocking that can hang tests
-# Avoid deep nested AsyncMock patterns
-```
-
-### Code Quality Standards  
-
-#### 1. Unified Quality Tooling (Auto-enforced)
-- **Ruff**: Fast linting, formatting, and import sorting (replaces black + isort)
-- **Pyright**: Type checking (strict mode, replaces MyPy for better performance)
-- **Bandit**: Security vulnerability scanning
-
-**🎯 Unified Makefile**: `make lint-check` ensures identical behavior across:
-- Local development (`make lint`, `make lint-check`)
-- Pre-commit hooks (automatic on git commit)
-- CI pipeline (GitHub Actions)
-
-**Benefits**: Single modern toolchain, faster execution, zero conflicts between tools.
-
-#### Consistency Guarantees
-The unified `make lint-check` command ensures **identical behavior** across all environments:
-
-| Environment | Tools | Consistency |
-|-------------|-------|-------------|
-| Local dev (`make lint-check`) | Ruff + Pyright + Bandit | ✅ Same Makefile |
-| Pre-commit hooks | Ruff + Pyright + Bandit | ✅ Same Makefile |
-| CI pipeline | Ruff + Pyright + Bandit | ✅ Same Makefile |
-
-**No more "works locally but fails in CI"** - all environments use identical tooling and configuration.
-
-#### 2. Type Annotations (Required)
-```python
-# ✅ REQUIRED: All functions must have type hints
+# ✅ REQUIRED
 async def process_message(
     text: str,
     user_id: str,
@@ -475,316 +211,271 @@ async def process_message(
     """Process a message with proper typing."""
     return True
 
-# ❌ FORBIDDEN: Untyped functions
+# ❌ FORBIDDEN - Untyped functions
 def process_message(text, user_id, service):
     return True
 ```
 
-## 🛠️ Code Modification Workflow
+### Ruff Configuration
 
-### **MANDATORY: Before Making ANY Code Changes**
+- Target Python version: 3.11
+- Line length: 88 characters
+- Quote style: double
+- Import sorting enabled (isort)
 
-When modifying existing files or creating new ones, **ALWAYS** follow this exact workflow:
+See `bot/pyproject.toml` for complete configuration.
 
-#### 1. **Read and Understand Current Code**
+## Testing Instructions
+
+### Testing Requirements
+
+**MANDATORY**: All code changes MUST include comprehensive tests and pass 100% of the test suite.
+
+- ✅ New features: Write tests BEFORE committing
+- ✅ Bug fixes: Add regression tests
+- ✅ Refactoring: Ensure existing tests pass
+- ✅ API changes: Test all endpoints and error cases
+
+### Test Commands by Service
+
 ```bash
-# Always read the file you're about to modify
-cat path/to/file.py
+# Bot service
+cd bot && PYTHONPATH=. pytest tests/ -v
 
-# Understand the existing patterns, imports, and structure
-# Check related files and tests
+# Agent service
+cd agent-service && PYTHONPATH=. pytest tests/ -v
+
+# Control plane
+cd control_plane && PYTHONPATH=. pytest tests/ -v
+
+# Tasks service
+cd tasks && PYTHONPATH=. pytest -m "not integration" tests/ -v
+
+# RAG service
+cd rag-service && PYTHONPATH=.. pytest tests/ -v
+
+# Dashboard service
+cd dashboard-service && PYTHONPATH=.. pytest tests/ -v
 ```
 
-#### 2. **Run Tests Before Changes**
-```bash
-# Establish baseline - ensure current tests pass
-make test
+### Test Markers
 
-# If modifying a specific service, run related tests
-make test-file FILE=test_your_service.py
+```bash
+# Run only unit tests (fast)
+pytest -m "not integration and not slow"
+
+# Run only integration tests
+pytest -m integration
+
+# Run tests matching a pattern
+pytest -k "test_auth"
 ```
 
-#### 3. **Make Your Changes**
-- Follow existing code patterns and conventions
-- Add proper type annotations
-- Include docstrings for new functions
-- Import sorting will be handled automatically
+### Coverage Requirements
 
-#### 4. **Run Linter Immediately After Changes**
-```bash
-# CRITICAL: Run linter after every significant change
-make lint              # Auto-fix formatting, imports, and common issues
-make lint-check        # Verify everything passes (what pre-commit uses)
-```
-
-#### 5. **Run Related Tests**
-```bash
-# Test the specific functionality you changed
-make test-file FILE=test_your_modified_service.py
-
-# Run full test suite to ensure no regressions
-make test              # Must show 245/245 tests passing
-```
-
-#### 6. **Verify Complete Quality Pipeline**
-```bash
-# Run the complete quality pipeline before committing
-make quality           # Combines: linting + type checking + all tests
-```
-
-### **File-Specific Workflows**
-
-#### When Modifying Services (`bot/services/`)
-```bash
-# 1. Read the service file
-cat bot/services/your_service.py
-
-# 2. Check existing tests  
-cat bot/tests/test_your_service.py
-
-# 3. Make changes with proper typing
-# 4. Auto-fix code quality
-make lint
-
-# 5. Run specific tests
-make test-file FILE=test_your_service.py
-
-# 6. Run full test suite
-make test
-```
-
-#### When Modifying Tests (`bot/tests/`)
-```bash
-# 1. Understand what you're testing
-cat bot/services/service_being_tested.py
-
-# 2. Make test changes following existing patterns
-# 3. Auto-fix formatting
-make lint
-
-# 4. Run the specific test
-make test-file FILE=test_your_test.py
-
-# 5. Verify all tests still pass
-make test
-```
-
-#### When Adding New Features
-```bash
-# 1. Create tests first (TDD approach)
-touch bot/tests/test_new_feature.py
-
-# 2. Write failing tests
-# 3. Implement feature to make tests pass
-# 4. Run linter
-make lint
-
-# 5. Verify tests pass
-make test-file FILE=test_new_feature.py
-make test
-
-# 6. Full quality check
-make quality
-```
-
-### **Quick Reference: When to Run What**
-
-| Situation | Commands to Run | Purpose |
-|-----------|-----------------|---------|
-| **Before any changes** | `make test` | Establish baseline |
-| **After editing any `.py` file** | `make lint` | Auto-fix formatting/imports |
-| **After significant changes** | `make lint-check` | Verify code quality |
-| **After modifying a service** | `make test-file FILE=test_service.py` | Test specific functionality |
-| **Before committing** | `make quality` | Complete pipeline |
-| **If pre-commit fails** | `make lint` → fix issues → try commit again | Fix quality issues |
-
-### **Remember**
-- 🚨 **245/245 tests must always pass** - never commit with failing tests
-- 🔧 **Always run `make lint` after code changes** - fixes most issues automatically  
-- ✅ **Use `make quality` before commits** - runs everything (linting + tests)
-- 🚫 **Never use `git commit --no-verify`** - quality gates exist for good reason
-
-### Development Workflow (MANDATORY)
-
-#### For Every Code Change:
-
-1. **Write Tests First** (TDD approach preferred)
-   ```bash
-   # Create test file for new feature
-   touch bot/tests/test_new_feature.py
-   # Write failing tests
-   # Implement feature to make tests pass
-   ```
-
-2. **Maintain Existing Tests**
-   ```bash
-   # After code changes, ensure all tests still pass
-   make test
-   # Update tests if interfaces change
-   # Never delete tests without replacement
-   ```
-
-3. **Run Quality Checks**
-   ```bash
-   # MANDATORY before every commit
-   make quality              # All checks + tests
-   make pre-commit          # Pre-commit hooks
-   ```
-
-4. **Commit with Verified Quality**
-   ```bash
-   # Only commit when all checks pass
-   git add .
-   git commit -m "feat: add new feature with comprehensive tests"
-   git push
-   ```
-
-#### For Bug Fixes:
-
-1. **Write Reproduction Test**
-   ```python
-   def test_bug_reproduction():
-       """Test that reproduces the reported bug."""
-       # This test should fail initially
-       assert buggy_function() == expected_result
-   ```
-
-2. **Fix the Bug**
-   ```python
-   # Implement fix
-   # Test should now pass
-   ```
-
-3. **Add Edge Case Tests**
-   ```python
-   def test_edge_cases():
-       """Test edge cases related to the bug."""
-       # Prevent regression
-   ```
-
-### Integration with CI/CD
-
-#### GitHub Actions Pipeline
-- **Triggered on**: Every push and PR
-- **Runs**: `make ci` (quality + tests + build)
-- **Blocks merge**: If any test fails or coverage < 70%
-
-#### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)
-- **Current Coverage**: ~72% (excluding CLI scripts)
-- **Coverage Exclusions**: `bot/app.py`, `ingest/google_drive_ingester.py` (CLI scripts)
-- **Coverage Command**: `make test-coverage`
-- **Configuration**: `.coveragerc` with realistic production thresholds
+- All new functions/classes MUST have tests
+- Critical paths require 100% coverage
 
-#### Pre-commit Hooks (Local)
-- **Unified Quality Checks**: Uses `make lint-check` (same as CI)
-- **Ruff**: Linting, formatting, and import sorting
-- **Pyright**: Type checking with strict mode
-- **Bandit**: Security vulnerability scanning
-- **File cleanup**: Trailing whitespace, line endings, merge conflicts
-- **Syntax validation**: Python AST, YAML, TOML, JSON
+## Security Considerations
 
-### Test Environment
+### Security Standards
 
-#### Test Configuration
+InsightMesh follows the 8th Light Host Hardening Policy:
+
+- **Secrets Management**: Never commit secrets (`.env` in `.gitignore`)
+- **Container Security**: All containers run as non-root user (UID 1000)
+- **Code Scanning**: 50+ Bandit security checks
+- **Docker Scanning**: Trivy scans for CVEs and secrets
+- **Service Authentication**: Inter-service tokens required
+
+### Pre-commit Security Checks
+
 ```bash
-# Test Redis (optional, uses fakeredis if unavailable)  
-CACHE_REDIS_URL=redis://localhost:6379/1
+# Run all quality checks before committing
+make lint                 # Auto-fix issues
+make test                 # Ensure tests pass
 
-# Test environment file
-cp bot/tests/.env.test .env.test
+# Never skip commit hooks
+# ❌ NEVER USE: git commit --no-verify
 ```
 
-#### Test Data Management
-- **Use fixtures for consistent test data**
-- **Mock external services (Slack, LLM APIs)**
-- **Clean up after tests (cache)**
-- **Isolate tests (no shared state)**
+### Service-to-Service Authentication
 
-### Performance Testing
+All inter-service requests require authentication tokens:
 
-```bash
-# Monitor test performance
-make test-coverage          # Includes timing
-pytest --durations=10       # Show 10 slowest tests
-
-# Keep tests fast (< 2 seconds per test)
-# Use mocking instead of real API calls
+```python
+# Headers required for service calls
+headers = {
+    "X-Service-Token": settings.service_token,
+    "X-Request-ID": generate_request_id()
+}
 ```
 
-This testing framework ensures **100% reliability** and **production-ready code quality**.
-
-## Production Deployment
-
-### Docker Deployment (Recommended)
+### Security Commands
 
 ```bash
-# Build and run with Docker Compose
-docker compose -f docker-compose.prod.yml up -d
+# Code security scan
+make security
 
-# Or build Docker image directly
-make docker-build
-make docker-run
+# Docker image scan
+make security-docker
+
+# Full security audit
+make security-full
 ```
 
-**Features:**
-- Health checks on port 8080 (`/health`, `/ready`, `/metrics`)
-- Automatic restart on failure
-- Log rotation and persistent storage
-- Resource limits (512M memory, 0.5 CPU)
-- Graceful shutdown handling
-- Container isolation and security
+## Environment Configuration
 
-### Environment Variables
+### Required Environment Variables
 
-Required for production:
+Copy `.env.example` to `.env` and configure:
+
 ```bash
+# Slack (required)
 SLACK_BOT_TOKEN=xoxb-your-bot-token
-SLACK_APP_TOKEN=xapp-your-app-token  
-LLM_API_URL=https://your-api.com
-LLM_API_KEY=your-api-key
+SLACK_APP_TOKEN=xapp-your-app-token
+
+# LLM Provider (required)
+LLM_API_KEY=sk-your-openai-api-key
+LLM_MODEL=gpt-4o-mini
+
+# Database (required)
+DATABASE_URL=mysql+pymysql://user:password@localhost:3306/bot
+
+# Cache (optional, defaults to localhost)
+CACHE_REDIS_URL=redis://localhost:6379
+
+# Vector Database (optional, defaults to localhost)
+VECTOR_HOST=localhost
+VECTOR_PORT=6333
+VECTOR_COLLECTION_NAME=insightmesh-knowledge-base
+
+# Web Search (optional)
+TAVILY_API_KEY=your-tavily-api-key
+PERPLEXITY_API_KEY=your-perplexity-api-key
+
+# Observability (optional)
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-your-key
+LANGFUSE_SECRET_KEY=sk-lf-your-key
 ```
 
-Optional:
+### Google Drive Ingestion Setup
+
 ```bash
-ENVIRONMENT=production          # Enables JSON logging
-LOG_LEVEL=INFO                 # DEBUG, INFO, WARNING, ERROR
-HEALTH_PORT=8080              # Health check server port
+# 1. Configure OAuth credentials in .env
+GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+SERVER_BASE_URL=http://localhost:5001
+OAUTH_ENCRYPTION_KEY=your-fernet-key
+
+# 2. Authenticate (saves credential to database)
+open http://localhost:5001/api/gdrive/auth
+
+# 3. Create scheduled ingestion job via web UI
+open http://localhost:5001
 ```
 
-### Monitoring & Alerting
+## CI/CD Pipeline
 
-**Health Endpoints:**
-- `GET /health` - Basic health check
-- `GET /ready` - Readiness probe (checks LLM API)
-- `GET /metrics` - Basic metrics
+### GitHub Actions Workflows
 
-**Docker Monitoring:**
-- Built-in health checks with Docker and Docker Compose
-- Container auto-restart on failure
-- Health check endpoints exposed on port 8080
-- Use `docker logs slack-bot` to view application logs
+| Workflow | File | Purpose |
+|----------|------|---------|
+| CI Pipeline | `.github/workflows/test.yml` | Lint, test, build, Docker security scan |
+| Quality Gate | `.github/workflows/quality-gate.yml` | Claude Code audit (disabled) |
 
-**Logging:**
-- Production: Structured JSON logs to stdout and files
-- Development: Human-readable console logs
-- Log rotation: 50MB files, 5 backups for main log, 10 for errors
-- Third-party library logs suppressed
+### CI Pipeline Stages
 
-### Production Considerations
+1. **Python Tests** (tasks service)
+2. **React Tests** (tasks UI)
+3. **LibreChat Build**
+4. **Docker Security Scanning** (Trivy)
 
-**Resource Requirements (100 users):**
-- Memory: 256MB reserved, 512MB limit
-- CPU: 0.25 cores reserved, 0.5 limit
-- Disk: ~100MB for application, variable for logs
+### Pre-commit Hooks
 
-**Security:**
-- Runs as non-root user
-- Container security hardening
-- Environment variable protection
+Configured in `.pre-commit-config.yaml`:
 
-**Reliability:**
-- Graceful shutdown on SIGTERM/SIGINT
-- Auto-restart on crashes
-- Health check integration with orchestrators
-- Connection recovery for network issues
+- Unified lint check (Ruff + Pyright + Bandit via Makefile)
+- React UI linting and tests
+- Trailing whitespace removal
+- YAML/TOML/JSON syntax validation
+- Large file check
+
+## Common Development Tasks
+
+### Adding a New Service
+
+1. Create directory with `pyproject.toml`, `Dockerfile`, `app.py`
+2. Add service to `docker-compose.yml`
+3. Add health check endpoint
+4. Add tests to `tests/` directory
+5. Update Makefile with service-specific targets
+6. Add to `make ci` pipeline
+
+### Adding a New Agent
+
+1. Create agent in `agent-service/agents/` or `custom_agents/`
+2. Define graph builder function
+3. Add entry to `langgraph.json` graphs
+4. Register agent with control plane
+5. Add comprehensive tests
+
+### Database Migrations
+
+```bash
+# Generate migration
+cd <service> && alembic revision --autogenerate -m "description"
+
+# Apply migrations
+cd <service> && alembic upgrade head
+
+# Check status
+make db-status
+```
+
+## Debugging and Monitoring
+
+### Health Dashboard
+
+Access at `http://localhost:8080/ui`:
+- Real-time service status
+- System metrics (memory, uptime)
+- Error information and troubleshooting
+
+### Langfuse Observability
+
+- Cost tracking per user/conversation
+- Performance analytics
+- Conversation traces
+- Prompt versioning
+
+### Logs
+
+```bash
+# View all service logs
+docker compose logs -f
+
+# View specific service
+docker compose logs -f bot
+```
+
+## Key Files Reference
+
+| File | Purpose |
+|------|---------|
+| `Makefile` | Build automation and common commands |
+| `docker-compose.yml` | Service orchestration |
+| `bot/pyproject.toml` | Python dependencies and tool config |
+| `.env.example` | Environment variable template |
+| `.pre-commit-config.yaml` | Pre-commit hooks |
+| `langgraph.json` | LangGraph agent definitions |
+| `CLAUDE.md` | Detailed development workflow |
+
+## Getting Help
+
+- **README.md**: Comprehensive project documentation
+- **CLAUDE.md**: Detailed development workflow and standards
+- **docs/**: Additional documentation (Langfuse setup, security, etc.)
+- **Service READMEs**: Each service has its own README.md

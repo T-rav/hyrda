@@ -157,6 +157,20 @@ const userSchema = new Schema<IUser>(
       type: String,
       sparse: true,
     },
+    /** Google OAuth access token for accessing Google APIs on behalf of user */
+    googleAccessToken: {
+      type: String,
+      select: false, // Don't include by default for security
+    },
+    /** Google OAuth refresh token for getting new access tokens */
+    googleRefreshToken: {
+      type: String,
+      select: false, // Don't include by default for security
+    },
+    /** Google OAuth token expiry timestamp */
+    googleTokenExpiresAt: {
+      type: Date,
+    },
   },
   { timestamps: true },
 );

@@ -177,6 +177,69 @@ class UserService:
             logger.error(f"Error fetching user from database: {e}")
             return None
 
+    def create_or_update_user(
+        self,
+        slack_user_id: str,
+        email_address: str | None = None,
+        display_name: str | None = None,
+        real_name: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Create or update a Slack user in the database.
+
+        Args:
+            slack_user_id: The Slack user ID
+            email_address: User's email address
+            display_name: Display name from Slack
+            real_name: Real name from Slack
+
+        Returns:
+            User info dictionary or None if operation failed
+        """
+        if not self._session_factory:
+            logger.warning("Database not configured, cannot create/update user")
+            return None
+
+        try:
+            with self._session_factory() as session:
+                stmt = select(SlackUser).where(SlackUser.slack_user_id == slack_user_id)
+                user = session.execute(stmt).scalar_one_or_none()
+
+                if user:
+                    # Update existing user
+                    if email_address:
+                        user.email_address = email_address
+                    if display_name:
+                        user.display_name = display_name
+                    if real_name:
+                        user.real_name = real_name
+                    logger.info(f"Updated user {slack_user_id} in database")
+                else:
+                    # Create new user
+                    user = SlackUser(
+                        slack_user_id=slack_user_id,
+                        email_address=email_address,
+                        display_name=display_name,
+                        real_name=real_name,
+                    )
+                    session.add(user)
+                    logger.info(f"Created new user {slack_user_id} in database")
+
+                session.commit()
+
+                # Invalidate cache to ensure fresh data
+                self.invalidate_cache(slack_user_id)
+
+                return {
+                    "slack_user_id": user.slack_user_id,
+                    "email_address": user.email_address,
+                    "display_name": user.display_name,
+                    "real_name": user.real_name,
+                }
+
+        except Exception as e:
+            logger.error(f"Error creating/updating user {slack_user_id}: {e}")
+            return None
+
     def invalidate_cache(self, slack_user_id: str) -> None:
         """
         Invalidate cached user info (useful when user data is updated).
