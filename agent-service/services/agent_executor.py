@@ -7,9 +7,15 @@ Routes agent invocations based on AGENT_EXECUTION_MODE environment variable:
 
 import logging
 import os
+import sys
+from contextlib import suppress
 from enum import Enum
 
 import httpx
+
+# Add shared directory to path for Langfuse service
+sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
+from shared.services.langfuse_service import get_langfuse_service
 
 logger = logging.getLogger(__name__)
 
@@ -101,15 +107,62 @@ class AgentExecutor:
         # Get agent from local registry
         agent = get_agent(agent_name)
 
-        # Check if agent is a LangGraph CompiledStateGraph
-        if hasattr(agent, "ainvoke") and not hasattr(agent, "run"):
-            # LangGraph graph - invoke with state dict
-            result = await agent.ainvoke({"query": query, **context})
-        else:
-            # Regular agent with invoke/run methods
-            result = await agent.invoke(query, context)
+        # Extract trace context for distributed tracing
+        trace_context = context.get("trace_context")
+        parent_span = None
+        langfuse_service = get_langfuse_service()
 
-        return result
+        try:
+            # If we have trace context, create a parent span for the agent execution
+            # This ensures all @observe calls within the agent nest properly
+            if trace_context and langfuse_service and langfuse_service.enabled:
+                try:
+                    parent_span = langfuse_service.client.start_span(
+                        trace_context=trace_context,
+                        name=f"agent_{agent_name}",
+                        input={"query": query, "agent_name": agent_name},
+                        metadata={
+                            "agent_name": agent_name,
+                            "execution_mode": "embedded",
+                            **{
+                                k: v for k, v in context.items() if k != "trace_context"
+                            },
+                        },
+                    )
+                    logger.debug(
+                        f"Created parent span for agent '{agent_name}' with trace context"
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to create parent span for agent: {e}")
+
+            # Check if agent is a LangGraph CompiledStateGraph
+            if hasattr(agent, "ainvoke") and not hasattr(agent, "run"):
+                # LangGraph graph - invoke with state dict
+                result = await agent.ainvoke({"query": query, **context})
+            else:
+                # Regular agent with invoke/run methods
+                result = await agent.invoke(query, context)
+
+            # Update parent span with output if created
+            if parent_span:
+                try:
+                    output_data = (
+                        result.get("response", str(result))
+                        if isinstance(result, dict)
+                        else str(result)
+                    )
+                    parent_span.end(output=output_data)
+                except Exception as e:
+                    logger.debug(f"Failed to end parent span: {e}")
+
+            return result
+
+        except Exception as e:
+            # End parent span with error if created
+            if parent_span:
+                with suppress(Exception):
+                    parent_span.end(output={"error": str(e)})
+            raise
 
     async def _invoke_cloud(self, agent_name: str, query: str, context: dict) -> dict:
         """Execute agent on LangGraph Cloud.
