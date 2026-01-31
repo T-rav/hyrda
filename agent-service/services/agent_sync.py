@@ -142,7 +142,7 @@ def sync_agents_to_control_plane() -> None:
                     json=agent_data,
                     headers=headers,
                     timeout=5,
-                    verify=False,  # Skip SSL verification for self-signed certs
+                    verify=False,  # nosec B501 - Internal Docker network with self-signed certs
                 )
                 if response.status_code == 200:
                     logger.info(

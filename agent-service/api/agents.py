@@ -69,7 +69,7 @@ async def list_agents():
     service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
 
     try:
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False) as client:  # nosec B501 - Internal Docker network with self-signed certs
             response = await client.get(
                 f"{control_plane_url}/api/agents",
                 headers={"X-Service-Token": service_token},
@@ -272,7 +272,7 @@ async def invoke_agent(
         headers = {"X-Service-Token": service_token}
 
         try:
-            async with httpx.AsyncClient(verify=False) as client:
+            async with httpx.AsyncClient(verify=False) as client:  # nosec B501 - Internal Docker network with self-signed certs
                 perm_response = await client.get(
                     permissions_url, headers=headers, timeout=5.0
                 )
@@ -528,7 +528,7 @@ async def stream_agent(
         headers = {"X-Service-Token": service_token}
 
         try:
-            async with httpx.AsyncClient(verify=False) as client:
+            async with httpx.AsyncClient(verify=False) as client:  # nosec B501 - Internal Docker network with self-signed certs
                 perm_response = await client.get(
                     permissions_url, headers=headers, timeout=5.0
                 )

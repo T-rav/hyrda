@@ -81,7 +81,7 @@ async def verify_service_account_api_key(
     client_ip = request.client.host if request.client else "unknown"
 
     try:
-        async with httpx.AsyncClient(verify=False) as client:
+        async with httpx.AsyncClient(verify=False) as client:  # nosec B501 - Internal Docker network with self-signed certs
             response = await client.post(
                 f"{control_plane_url}/api/service-accounts/validate",
                 headers={
