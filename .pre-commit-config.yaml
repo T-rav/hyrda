@@ -83,7 +83,8 @@ repos:
             .*\.json$|
             .*\.yaml$|
             .*\.yml$|
-            .*/tests/.*
+            .*/tests/.*|
+            librechat-custom/.*
           )$
 
   # Detect secrets - Defense in depth (complements GitGuardian)
@@ -111,6 +112,7 @@ repos:
         name: Hadolint Dockerfile Linter
         entry: hadolint/hadolint:v2.12.0 hadolint
         files: Dockerfile.*|Dockerfile$
+        exclude: ^librechat-custom/
         args: ['--ignore', 'DL3008', '--ignore', 'DL3013', '--ignore', 'DL3018']
 
 # Global configuration
