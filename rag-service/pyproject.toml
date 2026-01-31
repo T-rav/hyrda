@@ -4,6 +4,18 @@ version = "1.0.0"
 description = "RAG orchestration service with agent routing"
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+]
+dev = [
+    "ruff>=0.14.0",
+    "pyright>=1.1.390",
+]
+
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
