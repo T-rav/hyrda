@@ -92,7 +92,7 @@ repos:
     hooks:
       - id: detect-secrets
         name: Detect Secrets
-        args: ['--baseline', '.secrets.baseline', '--force-use-all-plugins']
+        args: ['--baseline', '.secrets.baseline']
         exclude: >
           (?x)^(
             .*\.md$|
