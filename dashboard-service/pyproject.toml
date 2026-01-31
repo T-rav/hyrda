@@ -32,6 +32,9 @@ dependencies = [
     "google-auth-oauthlib>=1.0.0",
     # Session middleware
     "itsdangerous>=2.0.0",
+
+    # Database
+    "pymysql>=1.1.0",
 ]
 
 [project.optional-dependencies]

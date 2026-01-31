@@ -81,6 +81,9 @@ dependencies = [
 
     # Search and research APIs
     "tavily-python>=0.3.0",
+
+    # Slack integration
+    "slack-sdk>=3.0.0",
 ]
 
 [project.optional-dependencies]
