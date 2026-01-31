@@ -259,24 +259,24 @@ security-full: security
 	@echo ""
 	@echo "$(BLUE)🔒 Extended security scans...$(RESET)"
 	@echo "$(BLUE)3/5 Dependency vulnerability audit (pip-audit)...$(RESET)"
-	@if command -v pip-audit >/dev/null 2>&1; then \
-		pip-audit --desc -r bot/requirements.txt 2>/dev/null || echo "$(YELLOW)⚠️  pip-audit found issues (review above)$(RESET)"; \
+	@if $(PYTHON) -m pip_audit --help >/dev/null 2>&1; then \
+		$(PYTHON) -m pip_audit --desc -r bot/requirements.txt 2>/dev/null || echo "$(YELLOW)⚠️  pip-audit found issues (review above)$(RESET)"; \
 	else \
-		echo "$(YELLOW)⚠️  pip-audit not installed. Run: pip install pip-audit$(RESET)"; \
+		echo "$(YELLOW)⚠️  pip-audit not installed. Run: $(PIP) install pip-audit$(RESET)"; \
 	fi
 	@echo ""
 	@echo "$(BLUE)4/5 Infrastructure security scan (Checkov)...$(RESET)"
-	@if command -v checkov >/dev/null 2>&1; then \
-		checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
+	@if $(VENV)/bin/checkov --help >/dev/null 2>&1; then \
+		$(VENV)/bin/checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
 	else \
-		echo "$(YELLOW)⚠️  Checkov not installed. Run: pip install checkov$(RESET)"; \
+		echo "$(YELLOW)⚠️  Checkov not installed. Run: $(PIP) install checkov$(RESET)"; \
 	fi
 	@echo ""
 	@echo "$(BLUE)5/5 Semgrep security analysis...$(RESET)"
-	@if command -v semgrep >/dev/null 2>&1; then \
-		semgrep --config=auto --quiet --error bot/ 2>/dev/null || echo "$(YELLOW)⚠️  Semgrep found issues (review above)$(RESET)"; \
+	@if $(VENV)/bin/semgrep --help >/dev/null 2>&1; then \
+		cd $(BOT_DIR) && $(VENV)/bin/semgrep --config=auto --quiet --error . 2>/dev/null || echo "$(YELLOW)⚠️  Semgrep found issues (review above)$(RESET)"; \
 	else \
-		echo "$(YELLOW)⚠️  Semgrep not installed. Run: pip install semgrep$(RESET)"; \
+		echo "$(YELLOW)⚠️  Semgrep not installed. Run: $(PIP) install semgrep$(RESET)"; \
 	fi
 	@echo "$(GREEN)✅ Extended security scans completed$(RESET)"
 
