@@ -45,9 +45,9 @@ class TestSchedulerLockIntegration:
 
         # Only first worker should acquire lock
         assert worker_1_acquired is True
-        assert worker_2_acquired is False
-        assert worker_3_acquired is False
-        assert worker_4_acquired is False
+        assert worker_2_acquired is None
+        assert worker_3_acquired is None
+        assert worker_4_acquired is None
 
         # Verify lock value is worker_1
         assert redis_client.get(lock_key) == "worker_1"
@@ -142,14 +142,6 @@ class TestSchedulerNoDuplicates:
 
         from models.base import get_db_session
         from models.task_run import TaskRun
-
-        # Test database connection - skip if unavailable
-        try:
-            with get_db_session() as session:
-                # Test connection
-                session.execute("SELECT 1")
-        except Exception:
-            pytest.skip("Database not available for integration tests")
 
         # Get task runs from last 5 minutes
         with get_db_session() as session:
