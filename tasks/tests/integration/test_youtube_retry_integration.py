@@ -219,7 +219,10 @@ class TestJobExecutionUnderLoad:
 
             # Check thread pool configuration
             assert scheduler_service.scheduler is not None
-            assert scheduler_service.scheduler._executors["default"]._pool._max_workers == 20
+            assert (
+                scheduler_service.scheduler._executors["default"]._pool._max_workers
+                == 20
+            )
 
             # Verify scheduler is running
             assert scheduler_service.scheduler.running is True
