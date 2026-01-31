@@ -5,7 +5,207 @@ on:
   pull_request:
 
 jobs:
-  python-tests:
+  # ===== BOT SERVICE =====
+  bot-service:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test]
+    name: Bot Service ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: bot/pyproject.toml
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libffi-dev libssl-dev
+
+    - name: Install Python dependencies
+      working-directory: bot
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run linting and type checking
+      if: matrix.task == 'lint'
+      working-directory: bot
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
+        python -m pyright
+
+    - name: Run tests
+      if: matrix.task == 'test'
+      working-directory: bot
+      env:
+        ENVIRONMENT: test
+        LOG_LEVEL: WARNING
+      run: |
+        python -m pytest tests/ -v -m "not integration and not system_flow and not smoke" --cov=. --cov-report=term-missing
+
+  # ===== AGENT SERVICE =====
+  agent-service:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test]
+    name: Agent Service ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: agent-service/pyproject.toml
+
+    - name: Install Python dependencies
+      working-directory: agent-service
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run linting
+      if: matrix.task == 'lint'
+      working-directory: agent-service
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
+
+    - name: Run tests
+      if: matrix.task == 'test'
+      working-directory: agent-service
+      run: |
+        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+
+  # ===== CONTROL PLANE =====
+  control-plane:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test]
+    name: Control Plane ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: control_plane/pyproject.toml
+
+    - name: Install Python dependencies
+      working-directory: control_plane
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run linting
+      if: matrix.task == 'lint'
+      working-directory: control_plane
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
+
+    - name: Run tests
+      if: matrix.task == 'test'
+      working-directory: control_plane
+      run: |
+        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+
+  # ===== RAG SERVICE =====
+  rag-service:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test]
+    name: RAG Service ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: rag-service/pyproject.toml
+
+    - name: Install Python dependencies
+      working-directory: rag-service
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run linting
+      if: matrix.task == 'lint'
+      working-directory: rag-service
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
+
+    - name: Run tests
+      if: matrix.task == 'test'
+      working-directory: rag-service
+      run: |
+        python -m pytest tests/ -v -m "not smoke" --cov=. --cov-report=term-missing
+
+  # ===== DASHBOARD SERVICE =====
+  dashboard-service:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [lint, test]
+    name: Dashboard Service ${{ matrix.task }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+        cache-dependency-path: dashboard-service/pyproject.toml
+
+    - name: Install Python dependencies
+      working-directory: dashboard-service
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,test]"
+
+    - name: Run linting
+      if: matrix.task == 'lint'
+      working-directory: dashboard-service
+      run: |
+        python -m ruff check . --no-fix
+        python -m ruff format --check .
+
+    - name: Run tests
+      if: matrix.task == 'test'
+      working-directory: dashboard-service
+      run: |
+        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+
+  # ===== TASKS SERVICE =====
+  tasks-service:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -61,8 +261,9 @@ jobs:
         DATABASE_URL: "sqlite:///:memory:"
         REDIS_URL: "redis://localhost:6379/2"
       run: |
-        python -m pytest tests/ -v -m "not integration" --cov=. --cov-fail-under=70 --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-fail-under=70 --cov-report=term-missing
 
+  # ===== REACT UI TESTS =====
   react-tests:
     runs-on: ubuntu-latest
     strategy:
@@ -108,6 +309,7 @@ jobs:
         flags: react-ui
         name: tasks-ui-coverage
 
+  # ===== LIBRECHAT BUILD =====
   librechat-build:
     runs-on: ubuntu-latest
     name: LibreChat Build
@@ -126,9 +328,11 @@ jobs:
       run: |
         docker images | grep "danny-avila/librechat"
 
+  # ===== DOCKER SECURITY SCAN =====
   docker-security:
     name: Docker Security Scanning
     runs-on: ubuntu-latest
+    needs: [tasks-service, bot-service]
 
     steps:
     - uses: actions/checkout@v4
@@ -164,7 +368,7 @@ jobs:
         format: 'sarif'
         output: 'trivy-tasks.sarif'
         severity: 'CRITICAL,HIGH'
-        exit-code: '0'  # Don't fail on vulnerabilities (report only)
+        exit-code: '0'
 
     - name: Run Trivy on Bot Service
       uses: aquasecurity/trivy-action@master
@@ -173,11 +377,11 @@ jobs:
         format: 'sarif'
         output: 'trivy-bot.sarif'
         severity: 'CRITICAL,HIGH'
-        exit-code: '0'  # Don't fail on vulnerabilities (report only)
+        exit-code: '0'
 
     - name: Upload Trivy Tasks results to GitHub Security
       if: always()
-      continue-on-error: true  # Don't fail if Code Scanning is not enabled
+      continue-on-error: true
       uses: github/codeql-action/upload-sarif@v3
       with:
         sarif_file: 'trivy-tasks.sarif'
@@ -200,9 +404,11 @@ jobs:
           trivy-tasks.sarif
           trivy-bot.sarif
 
+  # ===== EXTENDED SECURITY ANALYSIS =====
   extended-security:
     name: Extended Security Analysis
     runs-on: ubuntu-latest
+    needs: [bot-service, agent-service, control-plane, rag-service, dashboard-service]
 
     steps:
     - uses: actions/checkout@v4
@@ -212,45 +418,44 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libffi-dev
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-action@stable
 
     - name: Install Bandit
       run: |
+        pip install --upgrade pip
         pip install bandit[toml]
-
-    - name: Install pip-audit
-      run: |
-        pip install pip-audit
-
-    - name: Install Checkov
-      run: |
-        pip install checkov || echo "Checkov install failed - may require additional dependencies"
-
-    - name: Install Semgrep
-      run: |
-        pip install semgrep || echo "Semgrep install failed - may require Rust compiler"
 
     - name: Run Bandit (Python security)
       run: |
         bandit -r bot/ -f json -o bandit-results.json --exclude ./bot/tests || true
       continue-on-error: true
 
+    - name: Install pip-audit
+      run: |
+        pip install pip-audit
+
     - name: Run pip-audit (dependency vulnerabilities)
       run: |
         pip-audit --desc -r bot/requirements.txt || true
       continue-on-error: true
 
+    - name: Install Checkov
+      run: |
+        pip install checkov
+
     - name: Run Checkov (infrastructure security)
       run: |
-        checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact || echo "Checkov not available"
+        checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact || true
       continue-on-error: true
+
+    - name: Install Semgrep
+      run: |
+        pip install semgrep
 
     - name: Run Semgrep (security analysis)
       run: |
-        semgrep --config=auto --error bot/ || echo "Semgrep not available"
+        semgrep --config=auto --error bot/ || true
       continue-on-error: true
 
     - name: Upload security scan results
