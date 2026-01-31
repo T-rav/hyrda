@@ -194,7 +194,6 @@ class TestJobExecutionUnderLoad:
     async def test_multiple_jobs_concurrent_execution(self):
         """Test that multiple jobs can execute concurrently without blocking."""
         from config.settings import TasksSettings
-        from models.base import get_db_session
         from services.scheduler_service import SchedulerService
 
         settings = TasksSettings()
