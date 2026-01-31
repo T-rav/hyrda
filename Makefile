@@ -226,7 +226,7 @@ status:
 	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 # CI pipeline: lint + test + security + build
-ci: lint-check test security docker-build
+ci: lint-check test security-full docker-build
 	@echo "$(GREEN)✅ Comprehensive CI validation passed!$(RESET)"
 	@echo "$(GREEN)✅ All services: linted, tested, secured, and built$(RESET)"
 
@@ -243,6 +243,31 @@ security: $(VENV)
 		echo "$(YELLOW)⚠️  Docker images not built yet. Run 'make docker-build' first for full scan.$(RESET)"; \
 	fi
 	@echo "$(GREEN)✅ Security scans completed (warnings above are non-blocking)$(RESET)"
+
+security-full: security
+	@echo ""
+	@echo "$(BLUE)🔒 Extended security scans...$(RESET)"
+	@echo "$(BLUE)3/5 Dependency vulnerability audit (pip-audit)...$(RESET)"
+	@if command -v pip-audit >/dev/null 2>&1; then \
+		pip-audit --desc -r bot/requirements.txt 2>/dev/null || echo "$(YELLOW)⚠️  pip-audit found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  pip-audit not installed. Run: pip install pip-audit$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)4/5 Infrastructure security scan (Checkov)...$(RESET)"
+	@if command -v checkov >/dev/null 2>&1; then \
+		checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Checkov not installed. Run: pip install checkov$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)5/5 Semgrep security analysis...$(RESET)"
+	@if command -v semgrep >/dev/null 2>&1; then \
+		semgrep --config=auto --quiet --error bot/ 2>/dev/null || echo "$(YELLOW)⚠️  Semgrep found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Semgrep not installed. Run: pip install semgrep$(RESET)"; \
+	fi
+	@echo "$(GREEN)✅ Extended security scans completed$(RESET)"
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"

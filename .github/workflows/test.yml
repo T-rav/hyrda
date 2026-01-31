@@ -199,3 +199,48 @@ jobs:
         path: |
           trivy-tasks.sarif
           trivy-bot.sarif
+
+  extended-security:
+    name: Extended Security Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install security tools
+      run: |
+        pip install pip-audit checkov semgrep
+
+    - name: Run pip-audit (dependency vulnerabilities)
+      run: |
+        pip-audit --desc -r bot/requirements.txt || true
+      continue-on-error: true
+
+    - name: Run Checkov (infrastructure security)
+      run: |
+        checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact || true
+      continue-on-error: true
+
+    - name: Run Semgrep (security analysis)
+      run: |
+        semgrep --config=auto --error bot/ || true
+      continue-on-error: true
+
+    - name: Run Bandit (Python security)
+      run: |
+        pip install bandit[toml]
+        bandit -r bot/ -f json -o bandit-results.json --exclude ./bot/tests || true
+      continue-on-error: true
+
+    - name: Upload security scan results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: extended-security-scan-results
+        path: |
+          bandit-results.json
