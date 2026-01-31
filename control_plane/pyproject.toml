@@ -40,6 +40,7 @@ dev = [
 [tool.pytest.ini_options]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "smoke: quick health checks to verify services are operational",
 ]
 
 [tool.ruff.lint.per-file-ignores]
