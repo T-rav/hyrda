@@ -108,7 +108,7 @@ test: $(VENV)
 	@echo "$(BLUE)Testing all 6 microservices (unit tests only)...$(RESET)"
 	@echo ""
 	@echo "$(BLUE)[1/6] Bot...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow" -q
+	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -q
@@ -117,7 +117,7 @@ test: $(VENV)
 	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -q
 	@echo ""
 	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -q
+	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -q

@@ -6,8 +6,8 @@ These tests fail fast if any service is unreachable or misconfigured.
 
 import os
 
-import pytest
 import httpx
+import pytest
 
 # Service endpoints from environment or defaults
 CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_URL", "https://control-plane:6001")
@@ -145,6 +145,6 @@ class TestRedisConnectivity:
             timeout=10.0,
         )
         assert response.status_code == 200
-        data = response.json()
         # Health check doesn't explicitly report cache status,
         # but if we get a 200, the service is operational
+        _ = response.json()  # Validate JSON response

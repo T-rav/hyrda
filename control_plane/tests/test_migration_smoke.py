@@ -6,12 +6,11 @@ Verifies all migrations are applied and schema matches expected state.
 import os
 
 import pytest
-import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 
 DATABASE_URL = os.getenv(
     "SECURITY_DATABASE_URL",
-    "mysql+pymysql://root:password@mysql:3306/insightmesh_security"
+    "mysql+pymysql://root:password@mysql:3306/insightmesh_security",
 )
 
 
@@ -89,7 +88,7 @@ class TestDataDatabase:
         """Create data database engine."""
         data_url = os.getenv(
             "DATA_DATABASE_URL",
-            "mysql+pymysql://root:password@mysql:3306/insightmesh_data"
+            "mysql+pymysql://root:password@mysql:3306/insightmesh_data",
         )
         return create_engine(data_url)
 

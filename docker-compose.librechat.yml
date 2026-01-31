@@ -28,8 +28,6 @@ services:
     image: ghcr.io/danny-avila/librechat:latest
     container_name: librechat
     restart: unless-stopped
-    ports:
-      - "3080:3080"
     depends_on:
       librechat-mongodb:
         condition: service_healthy
@@ -75,6 +73,9 @@ services:
       - DOMAIN_WHITELIST=8thlight.com
       - ALLOW_EMAIL_WHITELIST=true
 
+    expose:
+      - "3080"
+
     volumes:
       - librechat_data:/app/client/public/images
       - librechat_logs:/app/api/logs
@@ -97,6 +98,30 @@ services:
       logging: "promtail"
       service: "librechat"
       component: "ui"
+
+  # Nginx reverse proxy with SSL
+  librechat-nginx:
+    image: nginx:alpine
+    container_name: librechat-nginx
+    restart: unless-stopped
+    ports:
+      - "3080:80"
+      - "3443:443"
+    depends_on:
+      librechat:
+        condition: service_healthy
+    volumes:
+      - ./.ssl/librechat-cert.pem:/etc/nginx/ssl/cert.pem:ro
+      - ./.ssl/librechat-key.pem:/etc/nginx/ssl/key.pem:ro
+      - ./librechat/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - librechat
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.Name}}"
 
 volumes:
   librechat_mongodb_data:
