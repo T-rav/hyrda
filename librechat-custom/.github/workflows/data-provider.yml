@@ -38,10 +38,10 @@ jobs:
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
-      
+
       - name: Update npm for OIDC support
         run: npm install -g npm@latest  # Must be 11.5.1+ for provenance
-      
+
       - run: cd packages/data-provider && npm ci
       - run: cd packages/data-provider && npm run build
       - run: cd packages/data-provider && npm publish --provenance

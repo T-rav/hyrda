@@ -12,7 +12,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
     <div
       className="markdown-body"
       style={{
-        padding: '2rem',        
+        padding: '2rem',
         margin: '1rem',
         minHeight: '100vh'
       }}

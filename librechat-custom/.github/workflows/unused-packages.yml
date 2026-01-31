@@ -64,36 +64,36 @@ jobs:
           extract_deps_from_code() {
             local folder=$1
             local output_file=$2
-            
+
             # Initialize empty output file
             > "$output_file"
-            
+
             if [[ -d "$folder" ]]; then
               # Extract require() statements (use explicit includes for portability)
               grep -rEho "require\\(['\"]([a-zA-Z0-9@/._-]+)['\"]\\)" "$folder" \
                 --include='*.js' --include='*.ts' --include='*.tsx' --include='*.jsx' --include='*.mjs' --include='*.cjs' 2>/dev/null | \
                 sed -E "s/require\\(['\"]([a-zA-Z0-9@/._-]+)['\"]\\)/\1/" >> "$output_file" || true
-          
+
               # Extract ES6 imports - import x from 'module'
               grep -rEho "import .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]" "$folder" \
                 --include='*.js' --include='*.ts' --include='*.tsx' --include='*.jsx' --include='*.mjs' --include='*.cjs' 2>/dev/null | \
                 sed -E "s/import .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]/\1/" >> "$output_file" || true
-              
+
               # import 'module' (side-effect imports)
               grep -rEho "import ['\"]([a-zA-Z0-9@/._-]+)['\"]" "$folder" \
                 --include='*.js' --include='*.ts' --include='*.tsx' --include='*.jsx' --include='*.mjs' --include='*.cjs' 2>/dev/null | \
                 sed -E "s/import ['\"]([a-zA-Z0-9@/._-]+)['\"]/\1/" >> "$output_file" || true
-              
+
               # export { x } from 'module' or export * from 'module'
               grep -rEho "export .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]" "$folder" \
                 --include='*.js' --include='*.ts' --include='*.tsx' --include='*.jsx' --include='*.mjs' --include='*.cjs' 2>/dev/null | \
                 sed -E "s/export .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]/\1/" >> "$output_file" || true
-              
+
               # import type { x } from 'module' (TypeScript)
               grep -rEho "import type .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]" "$folder" \
                 --include='*.ts' --include='*.tsx' 2>/dev/null | \
                 sed -E "s/import type .* from ['\"]([a-zA-Z0-9@/._-]+)['\"]/\1/" >> "$output_file" || true
-          
+
               # Remove subpath imports but keep the base package
               # For scoped packages: '@scope/pkg/subpath' -> '@scope/pkg'
               # For regular packages: 'pkg/subpath' -> 'pkg'
@@ -101,7 +101,7 @@ jobs:
               sed -i -E 's|^(@[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+)/.*|\1|' "$output_file" 2>/dev/null || true
               # Non-scoped packages (keep package name, strip subpath)
               sed -i -E 's|^([a-zA-Z0-9_-]+)/.*|\1|' "$output_file" 2>/dev/null || true
-              
+
               sort -u "$output_file" -o "$output_file"
             fi
           }
@@ -109,7 +109,7 @@ jobs:
           extract_deps_from_code "." root_used_code.txt
           extract_deps_from_code "client" client_used_code.txt
           extract_deps_from_code "api" api_used_code.txt
-          
+
           # Extract dependencies used by workspace packages
           # These packages are used in the workspace but dependencies are provided by parent package.json
           extract_deps_from_code "packages/client" packages_client_used_code.txt
@@ -123,15 +123,15 @@ jobs:
             DEPS=$(jq -r '.dependencies // {} | keys[]' packages/client/package.json 2>/dev/null || echo "")
             DEV_DEPS=$(jq -r '.devDependencies // {} | keys[]' packages/client/package.json 2>/dev/null || echo "")
             PEER_DEPS=$(jq -r '.peerDependencies // {} | keys[]' packages/client/package.json 2>/dev/null || echo "")
-            
+
             # Combine all dependencies
             echo "$DEPS" > librechat_client_deps.txt
             echo "$DEV_DEPS" >> librechat_client_deps.txt
             echo "$PEER_DEPS" >> librechat_client_deps.txt
-            
+
             # Also include dependencies that are imported in packages/client
             cat packages_client_used_code.txt >> librechat_client_deps.txt
-            
+
             # Remove empty lines and sort
             grep -v '^$' librechat_client_deps.txt | sort -u > temp_deps.txt
             mv temp_deps.txt librechat_client_deps.txt
@@ -147,15 +147,15 @@ jobs:
             DEPS=$(jq -r '.dependencies // {} | keys[]' packages/api/package.json 2>/dev/null || echo "")
             DEV_DEPS=$(jq -r '.devDependencies // {} | keys[]' packages/api/package.json 2>/dev/null || echo "")
             PEER_DEPS=$(jq -r '.peerDependencies // {} | keys[]' packages/api/package.json 2>/dev/null || echo "")
-            
+
             # Combine all dependencies
             echo "$DEPS" > librechat_api_deps.txt
             echo "$DEV_DEPS" >> librechat_api_deps.txt
             echo "$PEER_DEPS" >> librechat_api_deps.txt
-            
+
             # Also include dependencies that are imported in packages/api
             cat packages_api_used_code.txt >> librechat_api_deps.txt
-            
+
             # Remove empty lines and sort
             grep -v '^$' librechat_api_deps.txt | sort -u > temp_deps.txt
             mv temp_deps.txt librechat_api_deps.txt
@@ -170,17 +170,17 @@ jobs:
           get_workspace_package_deps() {
             local package_json=$1
             local output_file=$2
-            
+
             # Get all workspace dependencies (starting with @librechat/)
             if [[ -f "$package_json" ]]; then
               local workspace_deps=$(jq -r '.dependencies // {} | to_entries[] | select(.key | startswith("@librechat/")) | .key' "$package_json" 2>/dev/null || echo "")
-              
+
               # For each workspace dependency, get its dependencies
               for dep in $workspace_deps; do
                 # Convert @librechat/api to packages/api
                 local workspace_path=$(echo "$dep" | sed 's/@librechat\//packages\//')
                 local workspace_package_json="${workspace_path}/package.json"
-                
+
                 if [[ -f "$workspace_package_json" ]]; then
                   # Extract all dependencies from the workspace package
                   jq -r '.dependencies // {} | keys[]' "$workspace_package_json" 2>/dev/null >> "$output_file"
@@ -189,14 +189,14 @@ jobs:
                 fi
               done
             fi
-            
+
             if [[ -f "$output_file" ]]; then
               sort -u "$output_file" -o "$output_file"
             else
               touch "$output_file"
             fi
           }
-          
+
           # Get workspace dependencies for each package
           get_workspace_package_deps "package.json" root_workspace_deps.txt
           get_workspace_package_deps "client/package.json" client_workspace_deps.txt

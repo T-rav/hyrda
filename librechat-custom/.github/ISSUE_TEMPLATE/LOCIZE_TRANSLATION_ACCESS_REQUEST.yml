@@ -6,11 +6,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for your interest in contributing to LibreChat translations!  
+        Thank you for your interest in contributing to LibreChat translations!
         Please fill out the form below to request access to an additional language in **Locize**.
 
         **🔗 Available Languages:** [View the list here](https://www.librechat.ai/docs/translation)
-        
+
         **📌 Note:** Ensure that the requested language is supported before submitting your request.
   - type: input
     id: account_name
@@ -25,9 +25,9 @@ body:
     attributes:
       label: Language Code (ISO 639-1)
       description: |
-        Enter the **ISO 639-1** language code for the language you want to translate into.  
+        Enter the **ISO 639-1** language code for the language you want to translate into.
         Example: `es` for Spanish, `zh-Hant` for Traditional Chinese.
-        
+
         **🔗 Reference:** [Available Languages](https://www.librechat.ai/docs/translation)
       placeholder: e.g., es
     validations:

@@ -8,7 +8,7 @@ To add a new language to LibreChat, follow these steps:
 
 ### 1. Add the Language to Locize Project
 
-- Navigate to the [LibreChat locize project](https://www.locize.app/cat/62uyy7c9), 
+- Navigate to the [LibreChat locize project](https://www.locize.app/cat/62uyy7c9),
 - Click the "ADD LANGUAGE" button, typically found within the "..." menu of the "Start to translate" card on the project overview page.
 
 ### 2. Update the Language Selector Component

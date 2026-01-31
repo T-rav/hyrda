@@ -6,7 +6,7 @@ const { components } = require('~/app/clients/prompts/shadcn-docs/components');
 /** @deprecated */
 // eslint-disable-next-line no-unused-vars
 const artifactsPromptV1 = dedent`The assistant can create and reference artifacts during conversations.
-  
+
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
 # Good artifacts are...
@@ -118,7 +118,7 @@ Here are some examples of correct usage of artifacts:
 </examples>`;
 
 const artifactsPrompt = dedent`The assistant can create and reference artifacts during conversations.
-  
+
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
 # Good artifacts are...
@@ -309,7 +309,7 @@ Here are some examples of correct usage of artifacts:
 </examples>`;
 
 const artifactsOpenAIPrompt = dedent`The assistant can create and reference artifacts during conversations.
-  
+
 Artifacts are for substantial, self-contained content that users might modify or reuse, displayed in a separate UI window for clarity.
 
 # Good artifacts are...
@@ -446,7 +446,7 @@ Here are some examples of correct usage of artifacts:
 ### Example 2
 
     User: Create a simple React counter component
-    
+
     Assistant: Here's a simple React counter component:
 
       :::artifact{identifier="react-counter" type="application/vnd.react" title="React Counter"}
