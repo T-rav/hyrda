@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "insightmesh-dashboard"
-dynamic = ["version"]
+version = "1.0.0"
 description = "System-wide health and metrics dashboard"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
@@ -60,9 +60,6 @@ exclude = [
 
 # Ruff configuration
 [tool.setuptools]
-
-[tool.setuptools.dynamic]
-version = {file = ".version"}
 
 [tool.ruff]
 target-version = "py311"

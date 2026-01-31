@@ -75,9 +75,20 @@ $(VENV):
 	@echo "$(GREEN)Virtual environment created at $(VENV)$(RESET)"
 
 install: $(VENV)
-	@echo "$(BLUE)Installing project dependencies (dev + test)...$(RESET)"
+	@echo "$(BLUE)Installing all service dependencies...$(RESET)"
+	@echo "$(BLUE)[1/6] Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PIP) install -e .[dev,test]
-	@echo "$(GREEN)Dependencies installed successfully$(RESET)"
+	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)agent-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[3/6] Control-plane...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)control_plane && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)rag-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)dashboard-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(GREEN)✅ All service dependencies installed successfully$(RESET)"
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -120,7 +131,7 @@ test: $(VENV)
 	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -q
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -m "not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(PYTHON) -m pytest -q

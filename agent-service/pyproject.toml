@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "insightmesh-agent-service"
-dynamic = ["version"]
+version = "1.1.0"
 description = "FastAPI service for LangGraph agent execution"
 authors = [
     {name = "Travis Frisinger", email = "travis@example.com"}
@@ -109,9 +109,6 @@ agent-service = "app:main"
 # Package discovery configuration
 [tool.setuptools]
 packages = ["agents", "api", "config", "services", "models", "utils"]
-
-[tool.setuptools.dynamic]
-version = {file = ".version"}
 
 # Ruff configuration
 [tool.ruff]
