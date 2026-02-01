@@ -8,11 +8,14 @@ Main service that coordinates the ingestion process by:
 - Managing the overall ingestion workflow
 """
 
+import logging
 import uuid
 from datetime import datetime
 
 from .document_tracking_service import DocumentTrackingService
 from .google_drive_client import GoogleDriveClient
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionOrchestrator:
@@ -297,7 +300,9 @@ class IngestionOrchestrator:
                         error_message=str(e),
                     )
                 except Exception:
-                    pass  # Don't fail on tracking failures
+                    logger.warning(
+                        "Failed to record failed ingestion tracking", exc_info=True
+                    )
 
         return success_count, error_count, skipped_count
 

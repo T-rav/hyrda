@@ -6,6 +6,7 @@ Uses the google_drive_documents_data table to store content hashes and UUIDs.
 """
 
 import hashlib
+import logging
 import sys
 import uuid
 from datetime import datetime
@@ -20,6 +21,8 @@ from sqlalchemy import JSON, BigInteger, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import Base, get_data_db_session  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleDriveDocument(Base):
@@ -152,7 +155,9 @@ class DocumentTrackingService:
                         # File not modified since last ingestion - SKIP!
                         return False, existing_doc.vector_uuid
                 except (ValueError, AttributeError):
-                    pass  # If parsing fails, fall through to size check
+                    logger.debug(
+                        "Failed to parse modified time, falling through to size check"
+                    )
 
             # If modified time check inconclusive, check file size
             if (

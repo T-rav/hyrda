@@ -245,4 +245,4 @@ def usage_tracking_context(
     try:
         yield service
     finally:
-        pass
+        logger.debug("Usage tracking context exited")

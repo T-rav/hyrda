@@ -24,16 +24,6 @@ _rate_limit_storage: OrderedDict[str, list[float]] = OrderedDict()
 def get_rate_limit_key(
     identifier: str | None = None, request_ip: str | None = None
 ) -> str:
-    """Generate rate limit key for the current request.
-
-    Args:
-        identifier: Optional custom identifier (e.g., user email, API key)
-                   If not provided, uses IP address
-        request_ip: IP address for rate limiting (when not using identifier)
-
-    Returns:
-        Rate limit key string
-    """
     if identifier:
         return f"rate_limit:{identifier}"
 
@@ -45,25 +35,6 @@ def get_rate_limit_key(
 def check_rate_limit(
     key: str, max_requests: int, window_seconds: int
 ) -> tuple[bool, dict[str, Any]]:
-    """Check if request is within rate limit.
-
-    Uses sliding window algorithm.
-
-    Args:
-        key: Rate limit key
-        max_requests: Maximum requests allowed in window
-        window_seconds: Time window in seconds
-
-    Returns:
-        Tuple of (is_allowed, headers) where:
-        - is_allowed: True if request is allowed, False if rate limited
-        - headers: Dictionary of rate limit headers to include in response
-
-    Example:
-        >>> is_allowed, headers = check_rate_limit("user:alice", 100, 3600)
-        >>> if not is_allowed:
-        ...     raise HTTPException(status_code=429, detail="Rate limit exceeded", headers=headers)
-    """
     now = time.time()
     window_start = now - window_seconds
 
@@ -122,25 +93,6 @@ def rate_limit(
     window_seconds: int = 3600,
     identifier_func: Callable[[], str] | None = None,
 ):
-    """Decorator to add rate limiting to FastAPI endpoints.
-
-    Uses in-memory sliding window rate limiting.
-    Identifies requests by IP address or custom identifier.
-
-    Args:
-        max_requests: Maximum requests allowed in window (default: 100)
-        window_seconds: Time window in seconds (default: 3600 = 1 hour)
-        identifier_func: Optional function to generate custom identifier
-
-    Returns:
-        FastAPI-compatible decorator that checks rate limits
-
-    Example:
-        @router.post("/auth/login")
-        @rate_limit(max_requests=10, window_seconds=60)
-        async def login(request: Request):
-            pass
-    """
     from fastapi import HTTPException, Request
 
     def decorator(f: Callable) -> Callable:
@@ -200,13 +152,6 @@ def rate_limit(
 
 
 def clear_rate_limits() -> int:
-    """Clear all rate limit data.
-
-    Used for testing or manual cleanup.
-
-    Returns:
-        Number of keys cleared
-    """
     count = len(_rate_limit_storage)
     _rate_limit_storage.clear()
     logger.info(f"Cleared {count} rate limit entries")
@@ -214,14 +159,6 @@ def clear_rate_limits() -> int:
 
 
 def get_rate_limit_info(identifier: str | None = None) -> dict[str, Any]:
-    """Get current rate limit information.
-
-    Args:
-        identifier: Optional custom identifier
-
-    Returns:
-        Dictionary with request_count and timestamps
-    """
     key = get_rate_limit_key(identifier)
     timestamps = _rate_limit_storage.get(key, [])
 

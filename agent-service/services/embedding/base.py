@@ -16,31 +16,14 @@ class EmbeddingProvider(ABC):
 
     @abstractmethod
     async def get_embeddings(self, texts: list[str]) -> list[list[float]]:
-        """
-        Generate embeddings for a list of texts
-
-        Args:
-            texts: List of texts to embed
-
-        Returns:
-            List of embedding vectors
-        """
+        """Generate embeddings for a list of texts."""
         pass
 
     @abstractmethod
     async def get_embedding(self, text: str) -> list[float]:
-        """
-        Generate embedding for a single text
-
-        Args:
-            text: Text to embed
-
-        Returns:
-            Embedding vector
-        """
+        """Generate embedding for a single text."""
         pass
 
     @abstractmethod
     async def close(self):
-        """Clean up resources"""
         pass

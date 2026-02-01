@@ -62,7 +62,7 @@ JWT_ISSUER = "insightmesh"
 class JWTAuthError(Exception):
     """JWT authentication error."""
 
-    pass
+    ...
 
 
 def create_access_token(

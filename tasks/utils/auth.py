@@ -28,7 +28,7 @@ OAUTH_SCOPES = [
 class AuthError(Exception):
     """Authentication error."""
 
-    pass
+    ...
 
 
 class AuditLogger:

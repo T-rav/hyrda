@@ -277,5 +277,6 @@ async def refresh_google_token_if_needed(auth: dict) -> dict:
     except Exception as e:
         logger.error(f"Error during token refresh for {user_email}: {e}")
         auth["google_token_refresh_error"] = str(e)
+        logger.debug(f"Token refresh failed for {user_email}, returning auth with error")
 
     return auth

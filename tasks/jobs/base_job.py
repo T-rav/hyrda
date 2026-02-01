@@ -36,7 +36,7 @@ class BaseJob(ABC):
     @abstractmethod
     async def _execute_job(self) -> dict[str, Any]:
         """Execute the actual job logic. Must be implemented by subclasses."""
-        pass
+        ...
 
     async def execute(self) -> dict[str, Any]:
         """Execute the job with error handling and logging."""

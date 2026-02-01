@@ -44,5 +44,4 @@ class EmbeddingProvider(ABC):
 
     @abstractmethod
     async def close(self):
-        """Clean up resources"""
         pass

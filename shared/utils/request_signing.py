@@ -20,7 +20,7 @@ SIGNATURE_VALIDITY_SECONDS = 300
 class RequestSigningError(Exception):
     """Raised when request signing or validation fails."""
 
-    pass
+    ...
 
 
 def generate_signature(
