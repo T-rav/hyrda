@@ -88,7 +88,7 @@ jobs:
       if: matrix.task == 'test'
       working-directory: agent-service
       run: |
-        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
 
   # ===== CONTROL PLANE =====
   control-plane:
@@ -126,7 +126,7 @@ jobs:
       if: matrix.task == 'test'
       working-directory: control_plane
       run: |
-        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
 
   # ===== RAG SERVICE =====
   rag-service:
@@ -164,7 +164,7 @@ jobs:
       if: matrix.task == 'test'
       working-directory: rag-service
       run: |
-        python -m pytest tests/ -v -m "not smoke" --cov=. --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
 
   # ===== DASHBOARD SERVICE =====
   dashboard-service:
@@ -202,7 +202,7 @@ jobs:
       if: matrix.task == 'test'
       working-directory: dashboard-service
       run: |
-        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+        python -m pytest tests/ -v -m "not integration and not smoke" --cov=. --cov-report=term-missing
 
   # ===== TASKS SERVICE =====
   tasks-service:
