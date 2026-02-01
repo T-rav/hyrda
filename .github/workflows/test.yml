@@ -419,7 +419,7 @@ jobs:
         python-version: '3.11'
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-action@stable
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Install Bandit
       run: |
