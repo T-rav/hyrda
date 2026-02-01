@@ -469,7 +469,7 @@ class RAGClient:
 class RAGClientError(Exception):
     """Exception raised when RAG client operations fail."""
 
-    pass
+    ...
 
 
 # Global client instance

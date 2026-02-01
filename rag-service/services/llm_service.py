@@ -11,7 +11,6 @@ from config.settings import LLMSettings, Settings
 if TYPE_CHECKING:
     from services.conversation_cache import ConversationCache
 
-# Hybrid search removed
 from services.langfuse_service import (
     initialize_langfuse_service,
     observe,
@@ -37,7 +36,6 @@ class LLMService:
         # Initialize prompt service for system prompts
         self.prompt_service = PromptService(settings)
 
-        # Hybrid search removed - always use standard RAG
         self.rag_service = RAGService(settings)
         self.use_hybrid = False
         logger.info("Using standard RAG service")
@@ -56,7 +54,6 @@ class LLMService:
             logger.info("Langfuse observability disabled")
 
     async def initialize(self):
-        """Initialize RAG service"""
         await self.rag_service.initialize()
 
     @observe(name="llm_service_response", as_type="generation")
@@ -101,7 +98,7 @@ class LLMService:
 
             add_trace_to_langfuse_context()
         except Exception:
-            pass  # Silently ignore if tracing not available
+            logger.debug("Langfuse tracing not available")
         metrics_service = get_metrics_service()
         start_time = time.time()
 
@@ -239,11 +236,9 @@ class LLMService:
             return (0, len(documents))
 
     async def get_system_status(self) -> dict:
-        """Get system status information"""
         return await self.rag_service.get_system_status()
 
     async def close(self):
-        """Clean up resources"""
         await self.rag_service.close()
 
         # Close Langfuse service
@@ -297,7 +292,6 @@ _llm_service: LLMService | None = None
 
 
 def get_llm_service() -> LLMService:
-    """Get or create global LLM service instance."""
     global _llm_service  # noqa: PLW0603
 
     if _llm_service is None:

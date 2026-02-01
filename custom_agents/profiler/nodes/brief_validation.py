@@ -202,19 +202,9 @@ Validate the brief and return JSON only.
 
 
 def count_questions_in_brief(brief: str) -> int:
-    """Count question marks in research brief as proxy for question count.
-
-    Args:
-        brief: Research brief text
-
-    Returns:
-        Number of questions found
-
-    """
-    # Count lines ending with '?'
+    """Count question marks in research brief as proxy for question count."""
     lines = brief.split("\n")
-    question_count = sum(1 for line in lines if line.strip().endswith("?"))
-    return question_count
+    return sum(1 for line in lines if line.strip().endswith("?"))
 
 
 async def validate_research_brief(
@@ -301,7 +291,6 @@ async def validate_research_brief(
         question_count_judge = evaluation.get("question_count", 0)
         has_research_priorities = evaluation.get("has_research_priorities", False)
 
-        # Extract focus alignment with null safety
         focus_alignment = evaluation.get("focus_alignment") or {}
         alignment_adequate = focus_alignment.get("alignment_adequate")
         relevant_ratio = focus_alignment.get("relevant_question_ratio")

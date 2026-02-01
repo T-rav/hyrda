@@ -86,7 +86,6 @@ class RAGService:
         logger.info("✅ Internal deep research service initialized")
 
     async def initialize(self):
-        """Initialize all services"""
         logger.info("Initializing RAG service...")
 
         if self.vector_store:
@@ -832,7 +831,6 @@ class RAGService:
         return final_response or ""
 
     async def get_system_status(self) -> HealthStatus:
-        """Get system status information"""
         status = {
             "vector_enabled": self.vector_store is not None,
             "embedding_provider": type(self.embedding_provider).__name__
@@ -860,7 +858,6 @@ class RAGService:
         return status
 
     async def close(self):
-        """Clean up resources"""
         logger.info("Shutting down RAG service...")
 
         if self.vector_store:
@@ -871,7 +868,6 @@ class RAGService:
 
 # Factory function for backward compatibility
 async def create_rag_service(settings: Settings) -> RAGService:
-    """Create and initialize RAG service"""
     service = RAGService(settings)
     await service.initialize()
     return service
