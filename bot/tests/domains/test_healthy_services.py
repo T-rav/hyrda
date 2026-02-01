@@ -40,7 +40,7 @@ async def test_agent_service_lists_available_agents(http_client, service_urls):
     data = response.json()
 
     # Should return list of agents
-    assert isinstance(data, (list, dict)), f"Expected list or dict, got {type(data)}"
+    assert isinstance(data, list | dict), f"Expected list or dict, got {type(data)}"
 
     agents = data if isinstance(data, list) else data.get("agents", [])
 

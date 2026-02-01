@@ -74,3 +74,19 @@ async def health_check():
         "service": "control-plane",
         "langsmith_proxy": proxy_status,
     }
+
+
+@router.get("/ready")
+@router.get("/api/ready")
+async def ready_check():
+    """Readiness check endpoint for Kubernetes/Docker health probes.
+
+    Returns:
+        JSON response indicating if the service is ready to accept traffic
+    """
+    # Basic readiness check - service is ready if it can respond
+    # Could be extended to check database connectivity, etc.
+    return {
+        "status": "ready",
+        "service": "control-plane",
+    }

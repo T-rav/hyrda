@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "control-plane"
-dynamic = ["version"]
+version = "1.0.0"
 description = "InsightMesh Control Plane - Agent and Permission Management"
 requires-python = ">=3.10"
 dependencies = [
@@ -34,12 +34,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",
+    "ruff>=0.14.0",
 ]
 
 [tool.pytest.ini_options]
+asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "smoke: quick health checks to verify services are operational",
 ]
 
 [tool.ruff.lint.per-file-ignores]

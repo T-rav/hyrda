@@ -68,6 +68,53 @@ repos:
         files: ^bot/
         exclude: ^bot/tests/
 
+  # Semgrep - Static analysis with security rules (complements Bandit)
+  - repo: https://github.com/returntocorp/semgrep
+    rev: v1.100.0
+    hooks:
+      - id: semgrep
+        name: Semgrep Security Analysis
+        args: ['--config=auto', '--error', '--skip-unknown-extensions']
+        stages: [pre-commit]
+        exclude: >
+          (?x)^(
+            .*\.md$|
+            .*\.txt$|
+            .*\.json$|
+            .*\.yaml$|
+            .*\.yml$|
+            .*/tests/.*|
+            librechat-custom/.*
+          )$
+
+  # Detect secrets - Defense in depth (complements GitGuardian)
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        name: Detect Secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: >
+          (?x)^(
+            .*\.md$|
+            .*\.env\.(example|test)$|
+            .*test.*\.py$|
+            .*/tests/.*|
+            .*conftest\.py$|
+            .secrets\.baseline$
+          )$
+
+  # Hadolint - Dockerfile security and best practices
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        name: Hadolint Dockerfile Linter
+        entry: hadolint/hadolint:v2.12.0 hadolint
+        files: Dockerfile.*|Dockerfile$
+        exclude: ^librechat-custom/
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3013', '--ignore', 'DL3018']
+
 # Global configuration
 default_language_version:
   python: python3

@@ -339,7 +339,7 @@ components:
           description: The offset of the next page of results.
         total_num_results:
           type: number
-          description: The total number of results. 
+          description: The total number of results.
         abstracts:
           type: array
           items:

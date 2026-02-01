@@ -26,10 +26,10 @@ All configurations are designed for **local development and testing**.
    ```bash
    # macOS
    brew install redis
-   
+
    # Ubuntu/Debian
    sudo apt-get install redis-server
-   
+
    # CentOS/RHEL
    sudo yum install redis
    ```
@@ -241,7 +241,7 @@ The TLS setup includes:
 - **Server Certificate**: Contains Subject Alternative Names (SAN) for:
   - `DNS: localhost`
   - `IP: 127.0.0.1`
-- **TLS Configuration**: 
+- **TLS Configuration**:
   - TLS v1.2 and v1.3 support
   - No client certificate authentication required
   - Strong cipher suites (AES-256-GCM, ChaCha20-Poly1305)

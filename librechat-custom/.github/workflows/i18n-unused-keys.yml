@@ -47,7 +47,7 @@ jobs:
           # Check if each key is used in the source code
           for KEY in $KEYS; do
             FOUND=false
-            
+
             # Special case for dynamically constructed special variable keys
             if [[ "$KEY" == com_ui_special_var_* ]]; then
               # Check if TSpecialVarLabel is used in the codebase
@@ -57,7 +57,7 @@ jobs:
                   break
                 fi
               done
-              
+
               # Also check if the key is directly used somewhere
               if [[ "$FOUND" == false ]]; then
                 for DIR in "${SOURCE_DIRS[@]}"; do
@@ -82,7 +82,7 @@ jobs:
                   break
                 fi
               done
-              
+
               # Also check if the key is directly used somewhere
               if [[ "$FOUND" == false ]]; then
                 for DIR in "${SOURCE_DIRS[@]}"; do
@@ -101,7 +101,7 @@ jobs:
                 fi
               done
             fi
-          
+
             if [[ "$FOUND" == false ]]; then
               UNUSED_KEYS+=("$KEY")
             fi

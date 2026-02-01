@@ -80,11 +80,11 @@ function checkPasswordReset() {
       `❗❗❗
 
       Password reset is enabled with \`ALLOW_PASSWORD_RESET\` but email service is not configured.
-      
+
       This setup is insecure as password reset links will be issued with a recognized email.
-      
+
       Please configure email service for secure password reset functionality.
-      
+
       https://www.librechat.ai/docs/configuration/authentication/email
 
       ❗❗❗`,
@@ -291,14 +291,14 @@ export function checkWebSearchConfig(webSearchConfig?: Partial<TCustomConfig['we
         // This is not an environment variable reference - warn user
         logger.warn(
           `❗ Web search configuration error: ${key} contains an actual value instead of an environment variable reference.
-          
+
           Current value: "${value.substring(0, 10)}..."
-          
+
           This is incorrect! You should use environment variable references in your librechat.yaml file, such as:
           ${key}: "\${YOUR_ENV_VAR_NAME}"
-          
+
           Then set the actual API key in your .env file or environment variables.
-          
+
           More info: https://www.librechat.ai/docs/configuration/librechat_yaml/web_search`,
         );
       }

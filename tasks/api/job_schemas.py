@@ -55,7 +55,7 @@ class GDriveIngestParams(BaseModel):
         for key, value in v.items():
             if not isinstance(key, str):
                 raise ValueError("metadata keys must be strings")
-            if not isinstance(value, (str, int, float, bool, type(None))):
+            if not isinstance(value, str | int | float | bool | type(None)):
                 raise ValueError(
                     f"metadata values must be simple types (str/int/float/bool/null), "
                     f"got {type(value).__name__} for key '{key}'"

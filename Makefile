@@ -75,9 +75,20 @@ $(VENV):
 	@echo "$(GREEN)Virtual environment created at $(VENV)$(RESET)"
 
 install: $(VENV)
-	@echo "$(BLUE)Installing project dependencies (dev + test)...$(RESET)"
+	@echo "$(BLUE)Installing all service dependencies...$(RESET)"
+	@echo "$(BLUE)[1/6] Bot...$(RESET)"
 	cd $(BOT_DIR) && $(PIP) install -e .[dev,test]
-	@echo "$(GREEN)Dependencies installed successfully$(RESET)"
+	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)agent-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[3/6] Control-plane...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)control_plane && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)tasks && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)rag-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)dashboard-service && $(PIP) install -e ".[dev,test]" 2>/dev/null || $(PIP) install -e .
+	@echo "$(GREEN)✅ All service dependencies installed successfully$(RESET)"
 
 check-env:
 	@if [ ! -f $(ENV_FILE) ]; then \
@@ -108,7 +119,7 @@ test: $(VENV)
 	@echo "$(BLUE)Testing all 6 microservices (unit tests only)...$(RESET)"
 	@echo ""
 	@echo "$(BLUE)[1/6] Bot...$(RESET)"
-	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow" -q
+	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -q
@@ -117,10 +128,10 @@ test: $(VENV)
 	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -q
 	@echo ""
 	@echo "$(BLUE)[4/6] Tasks...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -q
+	@cd $(PROJECT_ROOT_DIR)tasks && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[5/6] Rag-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -q
+	@cd $(PROJECT_ROOT_DIR)rag-service && PYTHONPATH=.. $(PYTHON) -m pytest -m "not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[6/6] Dashboard-service...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)dashboard-service && PYTHONPATH=.. $(PYTHON) -m pytest -q
@@ -226,7 +237,7 @@ status:
 	@echo "$(BLUE)  - AlertManager: http://localhost:9093$(RESET)"
 
 # CI pipeline: lint + test + security + build
-ci: lint-check test security docker-build
+ci: lint-check test security-full docker-build
 	@echo "$(GREEN)✅ Comprehensive CI validation passed!$(RESET)"
 	@echo "$(GREEN)✅ All services: linted, tested, secured, and built$(RESET)"
 
@@ -243,6 +254,31 @@ security: $(VENV)
 		echo "$(YELLOW)⚠️  Docker images not built yet. Run 'make docker-build' first for full scan.$(RESET)"; \
 	fi
 	@echo "$(GREEN)✅ Security scans completed (warnings above are non-blocking)$(RESET)"
+
+security-full: security
+	@echo ""
+	@echo "$(BLUE)🔒 Extended security scans...$(RESET)"
+	@echo "$(BLUE)3/5 Dependency vulnerability audit (pip-audit)...$(RESET)"
+	@if $(PYTHON) -m pip_audit --help >/dev/null 2>&1; then \
+		$(PYTHON) -m pip_audit --desc -r bot/requirements.txt 2>/dev/null || echo "$(YELLOW)⚠️  pip-audit found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  pip-audit not installed. Run: $(PIP) install pip-audit$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)4/5 Infrastructure security scan (Checkov)...$(RESET)"
+	@if $(VENV)/bin/checkov --help >/dev/null 2>&1; then \
+		$(VENV)/bin/checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact 2>/dev/null || echo "$(YELLOW)⚠️  Checkov found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Checkov not installed. Run: $(PIP) install checkov$(RESET)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)5/5 Semgrep security analysis...$(RESET)"
+	@if $(VENV)/bin/semgrep --help >/dev/null 2>&1; then \
+		cd $(BOT_DIR) && $(VENV)/bin/semgrep --config=auto --quiet --error . 2>/dev/null || echo "$(YELLOW)⚠️  Semgrep found issues (review above)$(RESET)"; \
+	else \
+		echo "$(YELLOW)⚠️  Semgrep not installed. Run: $(PIP) install semgrep$(RESET)"; \
+	fi
+	@echo "$(GREEN)✅ Extended security scans completed$(RESET)"
 
 clean:
 	@echo "$(YELLOW)Cleaning up build artifacts and caches...$(RESET)"

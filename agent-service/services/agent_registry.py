@@ -131,7 +131,9 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
 
         response = requests.get(
-            f"{control_plane_url}/api/agents", timeout=5, verify=False
+            f"{control_plane_url}/api/agents",
+            timeout=5,
+            verify=False,  # nosec B501 - Internal Docker network with self-signed certs
         )
         if response.status_code == 200:
             data = response.json()

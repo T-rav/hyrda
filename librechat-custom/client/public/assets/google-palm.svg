@@ -17,15 +17,15 @@
 			</g>
 			<circle fill="none" stroke="#000000" stroke-width="0.25" stroke-miterlimit="10" cx="0" cy="0" r="64"/>
 		</g>
-		
+
 			<circle clip-path="url(#SVGID_00000071517564283228984050000017848131202901217410_)" fill="none" stroke="#000000" stroke-width="0.25" stroke-miterlimit="10" cx="0" cy="0" r="88"/>
-		
+
 			<path clip-path="url(#SVGID_00000071517564283228984050000017848131202901217410_)" fill="none" stroke="#000000" stroke-width="0.25" stroke-miterlimit="10" d="
 			M64,76H-64c-6.6,0-12-5.4-12-12V-64c0-6.6,5.4-12,12-12H64c6.6,0,12,5.4,12,12V64C76,70.6,70.6,76,64,76z"/>
-		
+
 			<path clip-path="url(#SVGID_00000071517564283228984050000017848131202901217410_)" fill="none" stroke="#000000" stroke-width="0.25" stroke-miterlimit="10" d="
 			M52,88H-52c-6.6,0-12-5.4-12-12V-76c0-6.6,5.4-12,12-12H52c6.6,0,12,5.4,12,12V76C64,82.6,58.6,88,52,88z"/>
-		
+
 			<path clip-path="url(#SVGID_00000071517564283228984050000017848131202901217410_)" fill="none" stroke="#000000" stroke-width="0.25" stroke-miterlimit="10" d="
 			M76,64H-76c-6.6,0-12-5.4-12-12V-52c0-6.6,5.4-12,12-12H76c6.6,0,12,5.4,12,12V52C88,58.6,82.6,64,76,64z"/>
 	</g>
@@ -61,7 +61,7 @@
 	</g>
 </g>
 <g id="keylines" display="none">
-	
+
 		<use xlink:href="#material_x5F_product_x5F_standard_x5F_icon_x5F_keylines_00000077318920148093339210000006245950728745084294_"  width="192" height="192" id="material_x5F_product_x5F_standard_x5F_icon_x5F_keylines" x="-96" y="-96" transform="matrix(1 0 0 -1 96 96)" display="inline" overflow="visible"/>
 </g>
 </svg>
