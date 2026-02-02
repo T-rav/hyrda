@@ -194,15 +194,7 @@ class TestJobExecutionUnderLoad:
     async def test_multiple_jobs_concurrent_execution(self):
         """Test that multiple jobs can execute concurrently without blocking."""
         from config.settings import TasksSettings
-        from models.base import get_db_session
         from services.scheduler_service import SchedulerService
-
-        # Test database connection - skip if unavailable
-        try:
-            with get_db_session() as session:
-                session.execute("SELECT 1")
-        except Exception:
-            pytest.skip("Database not available for integration tests")
 
         settings = TasksSettings()
         scheduler_service = SchedulerService(settings)
@@ -227,7 +219,10 @@ class TestJobExecutionUnderLoad:
 
             # Check thread pool configuration
             assert scheduler_service.scheduler is not None
-            assert scheduler_service.scheduler._executors["default"].max_workers == 20
+            assert (
+                scheduler_service.scheduler._executors["default"]._pool._max_workers
+                == 20
+            )
 
             # Verify scheduler is running
             assert scheduler_service.scheduler.running is True

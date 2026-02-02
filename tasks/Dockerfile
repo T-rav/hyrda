@@ -2,7 +2,7 @@
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
 # Install security updates and dependencies including nginx and ffmpeg
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
     ca-certificates \

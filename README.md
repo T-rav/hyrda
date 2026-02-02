@@ -343,6 +343,65 @@ docker compose -f docker-compose.dev.yml up -d langgraph-studio
 
 Access at `http://localhost:8123` - See `LANGGRAPH_STUDIO.md` for details.
 
+## 💬 LibreChat Web UI
+
+InsightMesh includes [LibreChat](https://librechat.ai) - a ChatGPT-like web interface for interacting with the RAG service directly.
+
+### Features
+- **Multiple AI Model Support**: OpenAI, Anthropic Claude, Google Gemini
+- **Knowledge Base Chat**: Query your ingested documents via RAG
+- **Web Search**: Tavily integration for real-time information
+- **Google OAuth**: Secure authentication with domain restrictions
+- **Conversation History**: Persistent chat history per user
+
+### Quick Start
+
+```bash
+# 1. Ensure LibreChat secrets are set in .env:
+# LIBRECHAT_JWT_SECRET, LIBRECHAT_JWT_REFRESH_SECRET
+# LIBRECHAT_CREDS_KEY, LIBRECHAT_CREDS_IV
+# See .env.example for details
+
+# 2. Start LibreChat
+docker compose -f docker-compose.librechat.yml up -d
+
+# 3. Access the UI
+open https://localhost:3443  # HTTPS (recommended)
+# OR
+open http://localhost:3080   # HTTP (redirects to HTTPS)
+```
+
+### HTTPS Setup (Local Development)
+
+LibreChat uses nginx with SSL certificates for local HTTPS:
+
+```bash
+# Generate trusted local certificates (one-time setup)
+brew install mkcert
+mkcert -install  # Adds local CA to system trust store
+mkcert localhost 127.0.0.1 ::1  # Creates certs in .ssl/
+
+# Restart LibreChat to pick up new certificates
+docker compose -f docker-compose.librechat.yml restart librechat-nginx
+```
+
+### Service Ports
+
+| Service | URL | Protocol | Notes |
+|---------|-----|----------|-------|
+| LibreChat UI | `https://localhost:3443` | HTTPS | Main access (no cert warnings with mkcert) |
+| LibreChat HTTP | `http://localhost:3080` | HTTP | Redirects to HTTPS |
+| RAG API | `http://localhost:8002` | HTTP | Internal API |
+
+### Authentication Flow
+
+1. User logs in with Google OAuth (restricted to 8thlight.com domain)
+2. LibreChat generates JWT session token
+3. Chat requests include service token + user identity
+4. RAG service validates and filters documents by user permissions
+
+See `docs/SERVICE_AUTHENTICATION.md` for details on service-to-service auth.
+
 ## 🏗️ Architecture
 
 ### Technology Stack

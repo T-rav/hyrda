@@ -465,7 +465,7 @@ class AgentClient:
                                     """Check if a value is JSON serializable."""
                                     if value is None:
                                         return True
-                                    if isinstance(value, (str, int, float, bool)):
+                                    if isinstance(value, str | int | float | bool):
                                         return True
                                     if isinstance(value, list):
                                         return all(

@@ -4,6 +4,16 @@
 
 InsightMesh uses **static service tokens** for service-to-service authentication. Each service has a unique token configured in `.env`.
 
+### Service Endpoints Reference
+
+| Service | URL | Authentication |
+|---------|-----|----------------|
+| **LibreChat UI** | `https://localhost:3443` | Google OAuth |
+| **Control Plane** | `https://localhost:6001` | Service token + JWT |
+| **Agent Service** | `https://localhost:8000` | Service token |
+| **RAG Service** | `http://localhost:8002` | Service token |
+| **Tasks Service** | `http://localhost:5001` | Service token (API) |
+
 ## Token Configuration
 
 ### Required Tokens in `.env`
@@ -224,6 +234,17 @@ SERVICE_TOKENS = {
 - Ensure `LIBRECHAT_SERVICE_TOKEN` is set in `.env`
 - Ensure `docker-compose.librechat.yml` uses `${LIBRECHAT_SERVICE_TOKEN}`
 - Restart LibreChat: `docker compose -f docker-compose.librechat.yml restart`
+
+### Cannot Access LibreChat UI
+
+**Cause**: Port or SSL configuration issue
+
+**Fix**:
+- Check containers are running: `docker compose -f docker-compose.librechat.yml ps`
+- Verify ports: HTTP on 3080, HTTPS on 3443
+- Check nginx logs: `docker logs librechat-nginx`
+- For SSL warnings, use `mkcert -install` to trust local CA
+- Ensure SSL certificates exist in `.ssl/librechat-cert.pem` and `.ssl/librechat-key.pem`
 
 ## Files Reference
 

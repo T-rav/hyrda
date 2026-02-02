@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 def get_app_version() -> str:
     """Get application version from .version file at project root."""
     try:
-        version_file = Path(__file__).parent.parent / ".version"
+        version_file = Path(__file__).parent / ".version"
         if version_file.exists():
             return version_file.read_text().strip()
         return "0.0.0"

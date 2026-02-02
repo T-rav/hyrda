@@ -82,7 +82,7 @@ const connect = require('./connect');
     const emailVerifiedInput = await askQuestion(`Email verified? (Y/n, default is Y):
 
 If \`y\`, the user's email will be considered verified.
-      
+
 If \`n\`, and email service is configured, the user will be sent a verification email.
 
 If \`n\`, and email service is not configured, you must have the \`ALLOW_UNVERIFIED_EMAIL_LOGIN\` .env variable set to true,

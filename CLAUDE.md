@@ -201,10 +201,78 @@ PERPLEXITY_API_KEY=your-perplexity-api-key  # Optional: Deep research
 ## Architecture Overview
 
 Production-ready Python Slack bot with:
-- **Microservices**: Bot, agent-service, control-plane, tasks
+- **Microservices**: Bot, agent-service, control-plane, tasks, rag-service
 - **RAG capabilities**: Vector search with Qdrant
 - **Agent system**: Specialized AI agents via HTTP API
 - **Multi-LLM support**: OpenAI, Anthropic, or Ollama
+- **Web UI**: LibreChat for direct knowledge base access
+
+### Service Architecture
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Slack Bot     │────▶│  Control Plane   │◀────│  Agent Service  │
+│    (bot/)       │     │ (control_plane/) │     │(agent-service/) │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  RAG Service    │────▶│   MySQL/Redis    │◀────│  Tasks Service  │
+│ (rag-service/)  │     │   (Data/Cache)   │     │    (tasks/)     │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │
+         ▼
+┌─────────────────┐     ┌──────────────────┐
+│     Qdrant      │     │    LibreChat     │
+│ (Vector Store)  │     │   (Web UI/3443)  │
+└─────────────────┘     └──────────────────┘
+```
+
+### Service Ports & Endpoints
+
+| Service | Port | URL | Purpose |
+|---------|------|-----|---------|
+| **Bot** | 8080 | `http://localhost:8080` | Slack event handling |
+| **Control Plane** | 6001 | `https://localhost:6001` | Agent registry, management UI |
+| **Agent Service** | 8000 | `https://localhost:8000` | LangGraph HTTP API |
+| **Tasks** | 5001 | `http://localhost:5001` | Task scheduler, Google Drive auth |
+| **RAG Service** | 8002 | `http://localhost:8002` | Vector search API |
+| **LibreChat** | 3443 | `https://localhost:3443` | Web UI (HTTPS) |
+| **LibreChat HTTP** | 3080 | `http://localhost:3080` | Web UI (HTTP→HTTPS redirect) |
+| **Qdrant** | 6333 | `http://localhost:6333` | Vector database |
+| **MySQL** | 3306 | `localhost:3306` | Relational database |
+| **Redis** | 6379 | `localhost:6379` | Cache |
+
+### LibreChat Web UI
+
+LibreChat provides a ChatGPT-like interface for direct RAG interaction:
+
+**Start LibreChat:**
+```bash
+docker compose -f docker-compose.librechat.yml up -d
+```
+
+**Access:**
+- HTTPS: `https://localhost:3443` (recommended)
+- HTTP: `http://localhost:3080` (redirects to HTTPS)
+
+**Architecture:**
+- `librechat` container: Node.js application (internal port 3080)
+- `librechat-nginx` container: Nginx reverse proxy with SSL
+- `librechat-mongodb` container: User data storage
+
+**SSL Certificates (Local Development):**
+```bash
+# Generate trusted local certificates
+brew install mkcert
+mkcert -install
+mkcert localhost 127.0.0.1 ::1
+cp localhost+2.pem .ssl/librechat-cert.pem
+cp localhost+2-key.pem .ssl/librechat-key.pem
+
+# Restart to apply
+docker compose -f docker-compose.librechat.yml restart librechat-nginx
+```
 
 ### Core Structure
 - **bot/app.py**: Main application entry point
@@ -265,11 +333,14 @@ make ci
 
 **Test Markers for Selective Testing:**
 ```bash
-# Run only unit tests (fast, excludes integration/slow tests)
-pytest -m "not integration and not slow"
+# Run only unit tests (fast, excludes integration/slow/smoke tests)
+pytest -m "not integration and not slow and not smoke"
 
 # Run only integration tests (when needed)
 pytest -m integration
+
+# Run only smoke tests (quick health checks)
+pytest -m smoke
 
 # Run tests matching a pattern
 pytest -k "test_auth"
@@ -277,6 +348,13 @@ pytest -k "test_auth"
 # Run specific test file with verbose output
 pytest tests/test_feature.py -v
 ```
+
+**Test Markers Reference:**
+- `@pytest.mark.unit` - Unit tests (default, always run)
+- `@pytest.mark.integration` - Integration tests requiring external services
+- `@pytest.mark.smoke` - Quick health checks (require running services)
+- `@pytest.mark.slow` - Long-running tests
+- `@pytest.mark.system_flow` - End-to-end system tests
 
 ### Test Coverage Requirements
 - **Minimum Coverage**: 70% (enforced by CI)

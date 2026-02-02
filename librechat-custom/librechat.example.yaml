@@ -442,7 +442,7 @@ endpoints:
   #   guardrailConfig:
   #     guardrailIdentifier: "your-guardrail-id"
   #     guardrailVersion: "1"
-  #     
+  #
   #     # Trace behavior for debugging (optional)
   #     # - "enabled": Include basic trace information about guardrail assessments
   #     # - "enabled_full": Include comprehensive trace details (recommended for debugging)

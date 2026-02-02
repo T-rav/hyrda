@@ -49,7 +49,7 @@ RUN set -eux \
 # Install dependencies from requirements.txt
 RUN set -x \
     && pip install --no-cache-dir -r requirements.txt 2>&1 | tee /tmp/pip_install.log; \
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then \
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then \
         echo "=== PIP INSTALL FAILED ==="; \
         echo "Python version: $(python --version)"; \
         echo "Pip version: $(pip --version)"; \

@@ -24,6 +24,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 # Mock the query_rewriter module before importing retrieval_service
 sys.modules["services.query_rewriter"] = MagicMock()
 
+# Mock handlers module (from bot service) that some tests reference
+sys.modules["handlers"] = MagicMock()
+sys.modules["handlers.message_handlers"] = MagicMock()
+
 from config.settings import LangfuseSettings, LLMSettings, Settings  # noqa: E402
 from services.llm_service import LLMService, create_llm_service  # noqa: E402
 

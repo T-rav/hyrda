@@ -7,14 +7,14 @@ services:
     container_name: insightmesh-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     command: --default-authentication-plugin=mysql_native_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-ppassword"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD:-password} || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -40,7 +40,7 @@ services:
       PMA_HOST: mysql
       PMA_PORT: 3306
       PMA_USER: root
-      PMA_PASSWORD: password
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
     ports:
       - "8081:80"
     depends_on:
@@ -128,14 +128,14 @@ services:
     command: >
       sh -c "
         echo '=== Creating databases ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_task CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
         echo '=== Creating database users ===' &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_tasks'@'%' IDENTIFIED BY 'insightmesh_tasks_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_task.* TO 'insightmesh_tasks'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
-        mysql -h mysql -u root -ppassword --skip-ssl -e 'FLUSH PRIVILEGES;' &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_tasks'@'%' IDENTIFIED BY 'insightmesh_tasks_password';\" &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_task.* TO 'insightmesh_tasks'@'%';\" &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e \"CREATE USER IF NOT EXISTS 'insightmesh_data'@'%' IDENTIFIED BY 'insightmesh_data_password';\" &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e \"GRANT ALL PRIVILEGES ON insightmesh_data.* TO 'insightmesh_data'@'%';\" &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e 'FLUSH PRIVILEGES;' &&
         echo '=== Running task database migrations ===' &&
         alembic upgrade head &&
         echo '=== Running data database migrations ===' &&
@@ -185,7 +185,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=mysql+pymysql://root:password@mysql:3306/insightmesh_data
+      - DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/insightmesh_data
       - CONTROL_PLANE_URL=${CONTROL_PLANE_URL:-http://control-plane:6001}
       - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
       - VECTOR_ENABLED=false
@@ -265,6 +265,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - SECURITY_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/insightmesh_security
+      - DATA_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/insightmesh_data
+      - CACHE_REDIS_URL=redis://redis:6379
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     volumes:
@@ -277,6 +281,9 @@ services:
         condition: service_healthy
     command: >
       sh -c "
+        echo '=== Creating control-plane databases ===' &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_security CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
+        mysql -h mysql -u root -p${MYSQL_ROOT_PASSWORD:-password} --skip-ssl -e 'CREATE DATABASE IF NOT EXISTS insightmesh_data CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;' &&
         echo '=== Running control-plane migrations ===' &&
         alembic upgrade head &&
         echo '=== Starting control-plane ===' &&

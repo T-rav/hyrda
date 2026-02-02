@@ -17,15 +17,15 @@ const getImageGenDescription = () => {
 };
 
 /** Default prompt descriptions  */
-const DEFAULT_IMAGE_GEN_PROMPT_DESCRIPTION = `Describe the image you want in detail. 
-      Be highly specific—break your idea into layers: 
+const DEFAULT_IMAGE_GEN_PROMPT_DESCRIPTION = `Describe the image you want in detail.
+      Be highly specific—break your idea into layers:
       (1) main concept and subject,
       (2) composition and position,
       (3) lighting and mood,
       (4) style, medium, or camera details,
       (5) important features (age, expression, clothing, etc.),
       (6) background.
-      Use positive, descriptive language and specify what should be included, not what to avoid. 
+      Use positive, descriptive language and specify what should be included, not what to avoid.
       List number and characteristics of people/objects, and mention style/technical requirements (e.g., "DSLR photo, 85mm lens, golden hour").
       Do not reference any uploaded images—use for new image creation from text only.` as const;
 
@@ -55,7 +55,7 @@ const getImageEditDescription = () => {
 };
 
 const DEFAULT_IMAGE_EDIT_PROMPT_DESCRIPTION = `Describe the changes, enhancements, or new ideas to apply to the uploaded image(s).
-      Be highly specific—break your request into layers: 
+      Be highly specific—break your request into layers:
       (1) main concept or transformation,
       (2) specific edits/replacements or composition guidance,
       (3) desired style, mood, or technique,
@@ -120,7 +120,7 @@ export const oaiToolkit = {
 IDs (image ID strings) of previously generated or uploaded images that should guide the edit.
 
 Guidelines:
-- If the user's request depends on any prior image(s), copy their image IDs into the \`image_ids\` array (in the same order the user refers to them).  
+- If the user's request depends on any prior image(s), copy their image IDs into the \`image_ids\` array (in the same order the user refers to them).
 - Never invent or hallucinate IDs; only use IDs that are still visible in the conversation context.
 - If no earlier image is relevant, omit the field entirely.
 `.trim(),

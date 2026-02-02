@@ -63,7 +63,7 @@ RUN set -eux \
 # Install package with detailed logging
 RUN set -x \
     && pip install --no-cache-dir -e . 2>&1 | tee /tmp/pip_install.log; \
-    if [ ${PIPESTATUS[0]} -ne 0 ]; then \
+    if [ "${PIPESTATUS[0]}" -ne 0 ]; then \
         echo "=== PIP INSTALL FAILED ==="; \
         echo "Python version: $(python --version)"; \
         echo "Pip version: $(pip --version)"; \
