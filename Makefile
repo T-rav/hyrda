@@ -187,7 +187,28 @@ lint-check:
 
 # Removed redundant Docker targets - use start/stop/restart/status instead
 
-docker-build:
+# Build React UIs (required for Docker images)
+health-ui:
+	@echo "$(BLUE)Building React health dashboard...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/bot/health_ui && npm install --no-audit && npm run build
+	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
+
+tasks-ui:
+	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
+	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
+
+control-plane-ui:
+	@echo "$(BLUE)Building React control plane dashboard...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/control_plane/ui && npm install --no-audit && npm run build
+	@echo "$(GREEN)✅ Control Plane UI built successfully!$(RESET)"
+
+dashboard-health-ui:
+	@echo "$(BLUE)Building React dashboard health UI...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
+	@echo "$(GREEN)✅ Dashboard Health UI built successfully!$(RESET)"
+
+docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.librechat.yml build
