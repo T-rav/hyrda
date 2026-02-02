@@ -42,7 +42,11 @@ def upgrade() -> None:
     # Rename is_public to is_slack_visible (check if old column exists and new doesn't)
     if "is_public" in columns and "is_slack_visible" not in columns:
         op.alter_column(
-            "agent_metadata", "is_public", new_column_name="is_slack_visible"
+            "agent_metadata",
+            "is_public",
+            new_column_name="is_slack_visible",
+            existing_type=sa.Boolean(),
+            existing_nullable=True,
         )
 
     # For existing agents, copy values:
@@ -59,7 +63,11 @@ def downgrade() -> None:
     # Rename is_slack_visible back to is_public
     if "is_slack_visible" in columns and "is_public" not in columns:
         op.alter_column(
-            "agent_metadata", "is_slack_visible", new_column_name="is_public"
+            "agent_metadata",
+            "is_slack_visible",
+            new_column_name="is_public",
+            existing_type=sa.Boolean(),
+            existing_nullable=True,
         )
 
     # Drop is_enabled column

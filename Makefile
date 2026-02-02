@@ -34,7 +34,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status librechat-build
+.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status librechat-build setup-ssl
 
 help:
 	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
@@ -208,7 +208,15 @@ dashboard-health-ui:
 	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Dashboard Health UI built successfully!$(RESET)"
 
-docker-build: health-ui tasks-ui control-plane-ui dashboard-health-ui
+# Setup SSL certificates (clean broken dirs first)
+setup-ssl:
+	@echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"
+	@# Remove any broken directories that might exist
+	@rm -rf $(PROJECT_ROOT_DIR)/.ssl/*-cert.pem $(PROJECT_ROOT_DIR)/.ssl/*-key.pem
+	@bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh
+	@echo "$(GREEN)✅ SSL certificates ready!$(RESET)"
+
+docker-build: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
 	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
 	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.librechat.yml build
