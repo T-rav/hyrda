@@ -1,7 +1,4 @@
-"""PDF document processing for bot message handlers.
-
-Handles PDF text extraction with async support to avoid blocking the event loop.
-"""
+"""PDF document processing for bot message handlers."""
 
 import logging
 
@@ -18,26 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
-    """Synchronous PDF extraction (called via run_in_executor to avoid blocking).
-
-    This function performs blocking I/O operations and should only be called
-    from extract_pdf_text() which runs it in a thread pool executor.
-
-    Args:
-        pdf_content: PDF file content as bytes
-        file_name: Name of the PDF file for logging
-
-    Returns:
-        Extracted text content from the PDF
-
-    """
+    """Synchronous PDF extraction (runs in thread pool)."""
     from services.embedding import chunk_text
 
-    # Open PDF from bytes - BLOCKING I/O
     pdf_document = fitz.open(stream=pdf_content, filetype="pdf")
     text_content = ""
 
-    # Iterate through pages - BLOCKING I/O
     for page_num in range(pdf_document.page_count):
         page = pdf_document.load_page(page_num)
         page_text = page.get_text()  # type: ignore[attr-defined]
@@ -49,8 +32,6 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
     if text_content.strip():
         full_text = text_content.strip()
 
-        # If content is too long, chunk it to prevent embedding failures
-        # Conservative limit: MAX_EMBEDDING_CHARS ≈ 1500 tokens (well under 8192 limit)
         if len(full_text) > MAX_EMBEDDING_CHARS:
             logger.info(
                 f"PDF content is {len(full_text)} chars, chunking for embedding compatibility"
@@ -60,7 +41,6 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
                 chunk_size=MAX_EMBEDDING_CHARS,
                 chunk_overlap=CHUNK_OVERLAP_CHARS,
             )
-            # Return first chunk with indicator
             chunked_content = chunks[0]
             if len(chunks) > 1:
                 chunked_content += (
@@ -74,25 +54,12 @@ def _extract_pdf_text_sync(pdf_content: bytes, file_name: str) -> str:
 
 
 async def extract_pdf_text(pdf_content: bytes, file_name: str) -> str:
-    """Extract text from PDF using PyMuPDF without blocking the event loop.
-
-    Runs the blocking PDF extraction in a thread pool executor to prevent
-    large PDFs from freezing the async message handler.
-
-    Args:
-        pdf_content: PDF file content as bytes
-        file_name: Name of the PDF file
-
-    Returns:
-        Extracted text content
-
-    """
+    """Extract text from PDF using PyMuPDF without blocking the event loop."""
     if not PYMUPDF_AVAILABLE:
         logger.warning("PyMuPDF not available - cannot extract PDF text")
         return f"[PDF file: {file_name} - PyMuPDF not installed]"
 
     try:
-        # Run blocking PDF extraction in thread pool to avoid blocking event loop
         import asyncio
 
         loop = asyncio.get_event_loop()

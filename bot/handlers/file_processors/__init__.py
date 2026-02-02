@@ -1,14 +1,4 @@
-"""File processors for handling document attachments in bot messages.
-
-This module provides text extraction from various file formats:
-- PDF (.pdf)
-- Microsoft Word (.docx)
-- Microsoft Excel (.xlsx)
-- Microsoft PowerPoint (.pptx)
-- Plain text (.txt)
-
-All extraction is done async-safe to avoid blocking the event loop.
-"""
+"""File processors for handling document attachments in bot messages."""
 
 import logging
 
@@ -19,27 +9,14 @@ from .pdf_processor import extract_pdf_text
 
 logger = logging.getLogger(__name__)
 
-# Constants
 HTTP_OK = 200
-FILE_DOWNLOAD_TIMEOUT = 30  # Timeout for downloading files in seconds
+FILE_DOWNLOAD_TIMEOUT = 30
 
-# Re-export for backward compatibility
 __all__ = ["process_file_attachments", "extract_pdf_text", "extract_office_text"]
 
 
 async def process_file_attachments(files: list[dict], slack_service) -> str:
-    """Process file attachments and extract text content.
-
-    Handles multiple file types and downloads files from Slack if needed.
-
-    Args:
-        files: List of file dictionaries from Slack API
-        slack_service: SlackService instance for downloading files
-
-    Returns:
-        Combined text content from all processed files
-
-    """
+    """Process file attachments and extract text content."""
     if not files:
         return ""
 
@@ -53,12 +30,10 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
         logger.info(f"Processing file: {file_name} (type: {file_type})")
 
         try:
-            # Download file content
             if not file_url:
                 logger.warning(f"No URL for file: {file_name}")
                 continue
 
-            # Use Slack service to download with proper auth
             headers = {"Authorization": f"Bearer {slack_service.bot_token}"}
             response = requests.get(
                 file_url, headers=headers, timeout=FILE_DOWNLOAD_TIMEOUT
@@ -72,7 +47,6 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
 
             content = response.content
 
-            # Extract text based on file type
             extracted_text = ""
 
             if file_type == "application/pdf" or file_name.lower().endswith(".pdf"):
@@ -114,12 +88,10 @@ async def process_file_attachments(files: list[dict], slack_service) -> str:
                 extracted_text = f"[Unsupported file type: {file_name}]"
 
             if extracted_text:
-                # Add file header (for both successful extraction and errors)
                 if not extracted_text.startswith("["):
                     all_content.append(f"\n\n=== Content from {file_name} ===\n")
                     all_content.append(extracted_text)
                 else:
-                    # Include error messages so users know processing failed
                     all_content.append(f"\n\n{extracted_text}")
 
         except Exception as e:

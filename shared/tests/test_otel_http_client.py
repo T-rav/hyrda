@@ -32,14 +32,14 @@ def reset_otel_state_after_each_test():
         if hasattr(current_provider, "shutdown"):
             try:
                 current_provider.shutdown()
-            except Exception:
+            except Exception:  # Provider may already be shut down
                 pass
 
         # Use internal _reset_trace() to completely reset global state
         # This is the only way to allow setting a new TracerProvider
         if hasattr(trace, "_reset_trace"):
             trace._reset_trace()
-    except Exception:
+    except Exception:  # Tracer provider may not exist
         pass
 
 

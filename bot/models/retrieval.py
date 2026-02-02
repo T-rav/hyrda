@@ -30,8 +30,6 @@ class SearchType(str, Enum):
 
 
 class RetrievalResult(BaseModel):
-    """Enhanced retrieval result with comprehensive metadata."""
-
     content: str
     similarity: float
     chunk_id: str
@@ -46,19 +44,15 @@ class RetrievalResult(BaseModel):
 
     @property
     def document_chunk(self) -> DocumentChunk | None:
-        """Convert to DocumentChunk if metadata contains required fields."""
         if all(
             key in self.metadata for key in ["chunk_index", "start_char", "end_char"]
         ):
-            # This would need to be implemented based on available metadata
-            pass
+            ...
         return None
 
 
 @dataclass(frozen=True)
 class SearchQuery:
-    """Structured search query with parameters."""
-
     text: str
     search_type: SearchType = SearchType.SEMANTIC
     max_results: int = 10
@@ -71,8 +65,6 @@ class SearchQuery:
 
 @dataclass(frozen=True)
 class SearchResponse:
-    """Complete search response with timing and metadata."""
-
     query: SearchQuery
     results: list[RetrievalResult]
     total_found: int
@@ -84,8 +76,6 @@ class SearchResponse:
 
 @dataclass(frozen=True)
 class VectorStoreStats:
-    """Vector store statistics and health information."""
-
     total_documents: int
     total_chunks: int
     index_size_mb: float
@@ -99,8 +89,6 @@ class VectorStoreStats:
 
 @dataclass(frozen=True)
 class IndexingOperation:
-    """Document indexing operation result."""
-
     documents_processed: int
     chunks_created: int
     embeddings_generated: int
@@ -112,8 +100,6 @@ class IndexingOperation:
 
 @dataclass(frozen=True)
 class RetrievalConfig:
-    """Configuration for retrieval operations."""
-
     max_chunks: int = 5
     similarity_threshold: float = 0.7
     rerank_enabled: bool = False

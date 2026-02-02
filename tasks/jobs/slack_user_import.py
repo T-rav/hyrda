@@ -54,20 +54,16 @@ class SlackUserImportJob(BaseJob):
     OPTIONAL_PARAMS = ["workspace_filter", "user_types", "include_deactivated"]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
-        """Initialize the Slack user import job."""
         super().__init__(settings, **kwargs)
         self.validate_params()
 
-        # Initialize Slack client if token is available
         self.slack_client = None
         if self.settings.slack_bot_token:
             self.slack_client = WebClient(token=self.settings.slack_bot_token)
 
-        # Store data database URL for later use (don't create engine in __init__)
         self.data_db_url = self.settings.data_database_url
 
     def validate_params(self) -> bool:
-        """Validate job parameters."""
         super().validate_params()
 
         if not self.settings.slack_bot_token:
@@ -76,13 +72,11 @@ class SlackUserImportJob(BaseJob):
         return True
 
     def _get_data_session(self):
-        """Create database session for data database when needed."""
         data_engine = create_engine(self.data_db_url)
         DataSession = sessionmaker(bind=data_engine)
         return DataSession()
 
     async def _execute_job(self) -> dict[str, Any]:
-        """Execute the Slack user import job."""
         if not self.slack_client:
             raise RuntimeError("Slack client not initialized")
 
@@ -130,7 +124,6 @@ class SlackUserImportJob(BaseJob):
     async def _fetch_slack_users(
         self, include_deactivated: bool
     ) -> list[dict[str, Any]]:
-        """Fetch users from Slack API."""
         users = []
         cursor = None
 
@@ -169,7 +162,6 @@ class SlackUserImportJob(BaseJob):
     def _filter_users(
         self, users: list[dict[str, Any]], user_types: list[str]
     ) -> list[dict[str, Any]]:
-        """Filter users based on user types and other criteria."""
         filtered = []
 
         for user in users:
@@ -245,7 +237,6 @@ class SlackUserImportJob(BaseJob):
     async def _store_users_in_database(
         self, users: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        """Store users directly in the bot database."""
         processed_count = 0
         new_users_count = 0
         updated_users_count = 0

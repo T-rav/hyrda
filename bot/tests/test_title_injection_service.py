@@ -10,7 +10,6 @@ from services.title_injection_service import (
 )
 
 
-# TDD Factory Patterns for Title Injection Service Testing
 class TitleInjectionServiceFactory:
     """Factory for creating TitleInjectionService instances"""
 

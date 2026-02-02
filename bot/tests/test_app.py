@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from app import create_app, main
 
 
-# TDD Factory Patterns for App Testing
 class MockEnvironmentFactory:
     """Factory for creating mock environment configurations for app testing"""
 
@@ -153,10 +152,7 @@ class AppTestContextFactory:
 
 
 class TestApp:
-    """Tests for the main app functionality using factory patterns"""
-
     def test_create_app_basic(self):
-        """Test basic app creation returns expected components"""
         env_vars, mock_classes = AppTestContextFactory.create_basic_app_context()
 
         with (
@@ -187,7 +183,6 @@ class TestApp:
             mock_classes["LLMService"].assert_called_once()
 
     def test_create_app_with_rag_enabled(self):
-        """Test app creation with RAG/vector features enabled"""
         env_vars, mock_classes = AppTestContextFactory.create_rag_enabled_context()
 
         with (
@@ -212,7 +207,6 @@ class TestApp:
             assert env_vars["VECTOR_ENABLED"] == "true"
 
     def test_create_app_with_anthropic(self):
-        """Test app creation with Anthropic LLM provider"""
         env_vars, mock_classes = AppTestContextFactory.create_anthropic_context()
 
         with (
@@ -233,7 +227,6 @@ class TestApp:
             assert "claude-" in env_vars["LLM_MODEL"]
 
     def test_create_app_ollama_configuration(self):
-        """Test app creation with Ollama configuration"""
         env_vars = MockEnvironmentFactory.create_ollama_env()
         _, mock_classes = AppTestContextFactory.create_basic_app_context(env_vars)
 
@@ -255,7 +248,6 @@ class TestApp:
             assert env_vars["LLM_MODEL"] == "llama2"
 
     def test_main_function_exists(self):
-        """Test that main function calls asyncio.run"""
         with patch("app.asyncio.run") as mock_asyncio_run:
             main()
             # Should call asyncio.run with a coroutine

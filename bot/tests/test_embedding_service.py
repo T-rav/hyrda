@@ -19,7 +19,6 @@ from bot.services.embedding_service import (
 from config.settings import EmbeddingSettings, LLMSettings
 
 
-# TDD Factory Patterns for Embedding Service Testing
 class EmbeddingSettingsFactory:
     """Factory for creating embedding settings with different configurations"""
 

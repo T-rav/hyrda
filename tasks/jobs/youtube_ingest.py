@@ -26,12 +26,10 @@ class YouTubeIngestJob(BaseJob):
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
-        """Initialize the YouTube ingestion job."""
         super().__init__(settings, **kwargs)
         self.validate_params()
 
     def validate_params(self) -> bool:
-        """Validate job parameters."""
         super().validate_params()
 
         # Validate channel_url
@@ -52,7 +50,6 @@ class YouTubeIngestJob(BaseJob):
         return True
 
     async def _execute_job(self) -> dict[str, Any]:
-        """Execute the YouTube ingestion job."""
         # Get job parameters
         channel_url = self.params.get("channel_url")
         include_videos = self.params.get("include_videos", True)
@@ -68,37 +65,31 @@ class YouTubeIngestJob(BaseJob):
         )
 
         try:
-            # Import services
             import os
 
             from services.openai_embeddings import OpenAIEmbeddings
             from services.qdrant_client import QdrantClient
             from services.youtube import YouTubeClient, YouTubeTrackingService
 
-            # Get OpenAI API key from environment (only key needed!)
             openai_api_key = os.getenv("OPENAI_API_KEY")
 
             if not openai_api_key:
                 raise ValueError("OPENAI_API_KEY environment variable is required")
 
-            # Initialize services (no YouTube API key needed!)
             youtube_client = YouTubeClient(openai_api_key=openai_api_key)
             tracking_service = YouTubeTrackingService()
 
-            # Initialize vector and embedding services
             logger.info("Initializing vector database and embedding service...")
             embedding_provider = OpenAIEmbeddings()
             vector_store = QdrantClient()
             await vector_store.initialize()
 
-            # Get channel info using yt-dlp
             channel_info = youtube_client.get_channel_info(channel_url)
             if not channel_info:
                 raise ValueError(f"Could not find channel: {channel_url}")
 
             logger.info(f"Processing channel: {channel_info['channel_name']}")
 
-            # List videos from channel using yt-dlp
             videos = youtube_client.list_channel_videos(
                 channel_url=channel_url,
                 include_videos=include_videos,
@@ -133,7 +124,6 @@ class YouTubeIngestJob(BaseJob):
 
                         logger.info(f"Processing: {video_title}")
 
-                        # COST OPTIMIZATION: Check metadata FIRST (fast, no transcription)
                         # Get video info WITHOUT transcription to check published_at
                         video_info = youtube_client.get_video_info(video_id)
 
@@ -147,7 +137,6 @@ class YouTubeIngestJob(BaseJob):
                                 break
                             continue
 
-                        # Check if video needs reindexing based on published_at (FAST!)
                         needs_reindex_metadata, existing_uuid = (
                             tracking_service.check_video_needs_reindex_by_metadata(
                                 video_id, video_info.get("published_at")
@@ -162,7 +151,6 @@ class YouTubeIngestJob(BaseJob):
                             success = True  # Mark as success to exit retry loop
                             break
 
-                        # Video is new or changed - NOW transcribe (expensive)
                         logger.info(f"🎤 Transcribing (new or changed): {video_title}")
                         transcript, _language = youtube_client.get_video_transcript(
                             video_id
@@ -178,14 +166,12 @@ class YouTubeIngestJob(BaseJob):
                                 break
                             continue
 
-                        # Double-check with transcript hash (in case published_at is unreliable)
                         needs_reindex, existing_uuid = (
                             tracking_service.check_video_needs_reindex(
                                 video_id, transcript
                             )
                         )
 
-                        # Combine video_info with transcript for downstream processing
                         video_with_transcript = video_info.copy()
                         video_with_transcript["transcript"] = transcript
 
@@ -200,18 +186,15 @@ class YouTubeIngestJob(BaseJob):
                                 f"🔄 Transcript changed, reindexing: {video_title}"
                             )
 
-                        # Generate or reuse UUID
                         base_uuid = (
                             existing_uuid
                             or tracking_service.generate_base_uuid(video_id)
                         )
 
-                        # Chunk transcript
                         chunks = embedding_provider.chunk_text(
                             transcript, chunk_size=512, chunk_overlap=50
                         )
 
-                        # Create metadata for each chunk
                         chunk_metadata_list = []
                         for i, _chunk in enumerate(chunks):
                             chunk_metadata = {
@@ -237,17 +220,13 @@ class YouTubeIngestJob(BaseJob):
                             }
                             chunk_metadata_list.append(chunk_metadata)
 
-                        # Embed chunks
                         embeddings = await embedding_provider.embed_texts(chunks)
 
-                        # Create chunk IDs (stored in metadata for tracking)
                         chunk_ids = [f"{base_uuid}_{i}" for i in range(len(chunks))]
 
-                        # Add chunk_id to metadata for each chunk
                         for i, meta in enumerate(chunk_metadata_list):
                             meta["chunk_id"] = chunk_ids[i]
 
-                        # Upsert to vector store
                         await vector_store.upsert_with_namespace(
                             texts=chunks,
                             embeddings=embeddings,
@@ -255,7 +234,6 @@ class YouTubeIngestJob(BaseJob):
                             namespace="youtube",
                         )
 
-                        # Record ingestion in tracking database
                         tracking_service.record_video_ingestion(
                             youtube_video_id=video_id,
                             video_title=video_title,

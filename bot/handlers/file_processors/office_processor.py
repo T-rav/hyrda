@@ -1,7 +1,4 @@
-"""Microsoft Office document processing (Word, Excel, PowerPoint).
-
-Handles text extraction from .docx, .xlsx, and .pptx files.
-"""
+"""Microsoft Office document processing (Word, Excel, PowerPoint)."""
 
 import io
 import logging
@@ -31,16 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
-    """Extract text from Word document.
-
-    Args:
-        content_stream: BytesIO stream containing the .docx file
-        file_name: Name of the file for logging
-
-    Returns:
-        Extracted text content
-
-    """
+    """Extract text from Word document."""
     if not PYTHON_DOCX_AVAILABLE:
         logger.warning("python-docx not available")
         return f"[Word file: {file_name} - python-docx not installed]"
@@ -49,12 +37,10 @@ async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
         doc = Document(content_stream)
         text_parts = []
 
-        # Extract paragraphs
         for para in doc.paragraphs:
             if para.text.strip():
                 text_parts.append(para.text)
 
-        # Extract tables
         for table in doc.tables:
             for row in table.rows:
                 row_text = " | ".join(cell.text.strip() for cell in row.cells)
@@ -72,16 +58,7 @@ async def extract_word_text(content_stream: io.BytesIO, file_name: str) -> str:
 
 
 async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
-    """Extract text from Excel spreadsheet.
-
-    Args:
-        content_stream: BytesIO stream containing the .xlsx file
-        file_name: Name of the file for logging
-
-    Returns:
-        Extracted text content
-
-    """
+    """Extract text from Excel spreadsheet."""
     if not OPENPYXL_AVAILABLE:
         logger.warning("openpyxl not available")
         return f"[Excel file: {file_name} - openpyxl not installed]"
@@ -96,7 +73,7 @@ async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
 
             for row in sheet.iter_rows(values_only=True):
                 row_values = [str(cell) if cell is not None else "" for cell in row]
-                if any(row_values):  # Skip empty rows
+                if any(row_values):
                     text_parts.append(" | ".join(row_values))
 
         if text_parts:
@@ -110,16 +87,7 @@ async def extract_excel_text(content_stream: io.BytesIO, file_name: str) -> str:
 
 
 async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) -> str:
-    """Extract text from PowerPoint presentation.
-
-    Args:
-        content_stream: BytesIO stream containing the .pptx file
-        file_name: Name of the file for logging
-
-    Returns:
-        Extracted text content
-
-    """
+    """Extract text from PowerPoint presentation."""
     if not PYTHON_PPTX_AVAILABLE:
         logger.warning("python-pptx not available")
         return f"[PowerPoint file: {file_name} - python-pptx not installed]"
@@ -149,20 +117,9 @@ async def extract_powerpoint_text(content_stream: io.BytesIO, file_name: str) ->
 
 
 async def extract_office_text(content: bytes, file_name: str, file_type: str) -> str:
-    """Extract text from Microsoft Office files (.docx, .xlsx, .pptx).
-
-    Args:
-        content: File content as bytes
-        file_name: Name of the file
-        file_type: Type of file (docx, xlsx, pptx) or full mimetype
-
-    Returns:
-        Extracted text content
-
-    """
+    """Extract text from Microsoft Office files (.docx, .xlsx, .pptx)."""
     content_stream = io.BytesIO(content)
 
-    # Normalize file type - handle both simple types and full mimetypes
     file_type_lower = file_type.lower()
     if "wordprocessingml" in file_type_lower or file_type_lower == "docx":
         return await extract_word_text(content_stream, file_name)

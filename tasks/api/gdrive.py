@@ -27,15 +27,6 @@ router = APIRouter(prefix="/api/gdrive")
 
 @router.post("/auth/initiate")
 async def initiate_gdrive_auth(request: Request):
-    """Initiate Google Drive OAuth flow.
-
-    Request Body:
-        - task_id: Unique identifier for this task
-        - credential_name: Name for this credential
-
-    Returns:
-        Authorization URL and credential ID
-    """
     try:
         # Allow OAuth over HTTP ONLY in local development (not production)
         if os.getenv("ENVIRONMENT") != "production":
@@ -135,11 +126,6 @@ async def initiate_gdrive_auth(request: Request):
 
 @router.get("/auth/callback", response_class=HTMLResponse)
 async def gdrive_auth_callback(request: Request):
-    """Handle Google Drive OAuth callback.
-
-    Returns:
-        HTML success or error page
-    """
     try:
         # Allow OAuth over HTTP ONLY in local development (not production)
         if os.getenv("ENVIRONMENT") != "production":
@@ -405,14 +391,6 @@ async def gdrive_auth_callback(request: Request):
 async def check_gdrive_auth_status(
     request: Request, task_id: str, user: dict = Depends(get_current_user)
 ):
-    """Check if Google Drive authentication exists for a task.
-
-    Args:
-        task_id: Task identifier
-
-    Returns:
-        Authentication status
-    """
     try:
         token_file = (
             Path(__file__).parent.parent

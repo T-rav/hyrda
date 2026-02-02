@@ -11,7 +11,7 @@ class User(Base):
     """User model supporting multiple identity providers.
 
     Links to slack_users table in data database via slack_user_id.
-    Supports linking multiple provider identities (Slack, Google, etc.) via user_identities table.
+    Supports linking multiple provider identities via user_identities table.
     """
 
     __tablename__ = "users"
@@ -34,7 +34,7 @@ class User(Base):
     # Provider tracking
     primary_provider = Column(
         String(50), nullable=False, default="slack", index=True
-    )  # Which provider is primary
+    )
 
     # User status and role
     is_active = Column(Boolean, nullable=False, default=True)
@@ -53,7 +53,6 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        """Return string representation of user."""
         return (
             f"<User(email='{self.email}', primary_provider='{self.primary_provider}')>"
         )

@@ -9,8 +9,6 @@ from pydantic import Field
 
 @dataclass(frozen=True)
 class ApiResponse:
-    """Generic API response wrapper."""
-
     success: bool
     data: Any | None = None
     error_message: str | None = None

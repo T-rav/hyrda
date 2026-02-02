@@ -8,8 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MetricsData(BaseModel):
-    """Metrics collection data structure."""
-
     model_config = ConfigDict(frozen=True)
 
     service_name: str
@@ -22,8 +20,6 @@ class MetricsData(BaseModel):
 
 @dataclass(frozen=True)
 class UsageMetrics:
-    """Usage metrics aggregation."""
-
     requests_count: int
     active_users: int
     average_response_time_ms: float
@@ -34,8 +30,6 @@ class UsageMetrics:
 
 @dataclass(frozen=True)
 class PerformanceMetrics:
-    """Performance metrics aggregation."""
-
     avg_latency_ms: float
     p95_latency_ms: float
     p99_latency_ms: float

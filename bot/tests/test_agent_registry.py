@@ -65,8 +65,6 @@ def mock_agents_response():
 
 
 class TestGetAgentRegistry:
-    """Tests for get_agent_registry function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_get_agent_registry_success(
@@ -136,7 +134,6 @@ class TestGetAgentRegistry:
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_get_agent_registry_http_error(self, mock_get, mock_settings):
-        """Test agent registry fetch with HTTP error."""
         mock_settings.return_value.control_plane_url = "http://control:6001"
         mock_response = Mock()
         mock_response.status_code = 500
@@ -150,7 +147,6 @@ class TestGetAgentRegistry:
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_get_agent_registry_exception(self, mock_get, mock_settings):
-        """Test agent registry fetch with exception."""
         mock_settings.return_value.control_plane_url = "http://control:6001"
         mock_get.side_effect = Exception("Connection error")
 
@@ -188,8 +184,6 @@ class TestGetAgentRegistry:
 
 
 class TestGetAgentInfo:
-    """Tests for get_agent_info function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_get_agent_info_by_name(
@@ -261,8 +255,6 @@ class TestGetAgentInfo:
 
 
 class TestGetPrimaryName:
-    """Tests for get_primary_name function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_get_primary_name_from_alias(
@@ -314,8 +306,6 @@ class TestGetPrimaryName:
 
 
 class TestCheckAgentAvailability:
-    """Tests for check_agent_availability function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_check_agent_availability_enabled(
@@ -411,7 +401,6 @@ class TestCheckAgentAvailability:
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_check_agent_availability_http_error(self, mock_get, mock_settings):
-        """Test availability check with HTTP error."""
         mock_settings.return_value.control_plane_url = "http://control:6001"
         mock_response = Mock()
         mock_response.status_code = 500
@@ -424,7 +413,6 @@ class TestCheckAgentAvailability:
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_check_agent_availability_exception(self, mock_get, mock_settings):
-        """Test availability check with exception."""
         mock_settings.return_value.control_plane_url = "http://control:6001"
         mock_get.side_effect = Exception("Connection error")
 
@@ -434,8 +422,6 @@ class TestCheckAgentAvailability:
 
 
 class TestRouteCommand:
-    """Tests for route_command function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_route_command_with_dash(
@@ -558,7 +544,6 @@ class TestRouteCommand:
         assert primary_name == "profile"
 
     def test_route_command_invalid_format(self):
-        """Test routing with invalid command format."""
         agent_info, query, primary_name = agent_registry.route_command("")
 
         assert agent_info is None
@@ -567,12 +552,9 @@ class TestRouteCommand:
 
 
 class TestClearCache:
-    """Tests for clear_cache function."""
-
     @patch("config.settings.Settings")
     @patch("requests.get")
     def test_clear_cache(self, mock_get, mock_settings, mock_agents_response):
-        """Test clearing the agent registry cache."""
         mock_settings.return_value.control_plane_url = "http://control:6001"
         mock_response = Mock()
         mock_response.status_code = 200

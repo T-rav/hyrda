@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EvalResult:
-    """Single evaluation result"""
     test_name: str
     score: float  # 0.0 to 1.0
     passed: bool
@@ -34,7 +33,6 @@ class EvalResult:
 
 @dataclass
 class EvalSuite:
-    """Complete evaluation suite results"""
     total_tests: int
     passed_tests: int
     failed_tests: int
@@ -43,9 +41,6 @@ class EvalSuite:
 
 
 class SystemPromptEvaluator:
-    """
-    Evaluates system prompt behavior using LLM-as-a-Judge
-    """
 
     def __init__(
         self,
@@ -59,7 +54,6 @@ class SystemPromptEvaluator:
         self.system_prompt = self._get_system_prompt()
 
     def _get_system_prompt(self) -> str:
-        """Get the current system prompt from Langfuse"""
         try:
             prompt = self.langfuse.get_prompt("System/Default")
             if prompt and hasattr(prompt, "prompt"):
@@ -72,7 +66,6 @@ class SystemPromptEvaluator:
             raise
 
     async def _get_ai_response(self, user_message: str) -> str:
-        """Get response from AI using the system prompt"""
         try:
             response = await self.openai.chat.completions.create(
                 model="gpt-4o-mini",  # Model being evaluated
@@ -91,7 +84,6 @@ class SystemPromptEvaluator:
     async def _judge_response(
         self, user_query: str, ai_response: str, expected_behavior: str, criteria: str
     ) -> tuple[float, str]:
-        """Use LLM-as-a-Judge to evaluate the response"""
         judge_prompt = f"""You are evaluating an AI assistant's response for adherence to specific behavioral criteria.
 
 USER QUERY: {user_query}
@@ -154,7 +146,6 @@ Provide your response in JSON format:
     async def run_single_eval(
         self, test_name: str, user_query: str, expected_behavior: str, criteria: str
     ) -> EvalResult:
-        """Run a single evaluation test"""
         logger.info(f"Running eval: {test_name}")
 
         # Get AI response
@@ -178,7 +169,6 @@ Provide your response in JSON format:
         )
 
     async def run_eval_suite(self) -> EvalSuite:
-        """Run the complete evaluation suite"""
         logger.info("🚀 Starting System Prompt Evaluation Suite")
         logger.info("=" * 60)
 
@@ -217,7 +207,6 @@ Provide your response in JSON format:
     async def _run_single_eval_with_langfuse_tracking(
         self, test_name: str, user_query: str, expected_behavior: str, criteria: str
     ) -> EvalResult:
-        """Run single eval with Langfuse tracking"""
         try:
             result = await self.run_single_eval(
                 test_name, user_query, expected_behavior, criteria
@@ -243,7 +232,6 @@ Provide your response in JSON format:
             raise
 
     def _get_test_cases(self) -> list[tuple[str, str, str, str]]:
-        """Get test cases for evaluation"""
         return [
             # Professional Communication Tests
             (
@@ -346,7 +334,6 @@ Provide your response in JSON format:
         ]
 
     def _log_summary(self, suite: EvalSuite):
-        """Log evaluation summary"""
         logger.info("=" * 60)
         logger.info("📊 EVALUATION SUMMARY")
         logger.info("=" * 60)
@@ -375,7 +362,6 @@ Provide your response in JSON format:
 
 
 async def main():
-    """Run the evaluation suite"""
     import os
 
     from dotenv import load_dotenv

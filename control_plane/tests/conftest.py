@@ -62,8 +62,8 @@ def reset_prometheus_registry():
         if collector not in collectors_before:
             try:
                 REGISTRY.unregister(collector)
-            except Exception:
-                pass  # Already unregistered or not in registry
+            except Exception:  # Already unregistered or not in registry
+                pass
 
 
 @pytest.fixture(scope="session")

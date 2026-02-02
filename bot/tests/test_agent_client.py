@@ -42,7 +42,6 @@ _record_exception_patcher.start()
 from bot.services.agent_client import AgentClient, get_agent_client
 
 
-# TDD Factory Patterns for AgentClient Testing
 class HttpResponseFactory:
     """Factory for creating mock HTTP responses"""
 
@@ -207,10 +206,7 @@ class MockHttpClientFactory:
 
 
 class TestAgentClientInitialization:
-    """Test AgentClient initialization"""
-
     def test_init_default_base_url(self):
-        """Test initialization with default base URL"""
         # Mock BOT_SERVICE_TOKEN to avoid picking up environment value
         with patch.dict("os.environ", {"BOT_SERVICE_TOKEN": "dev-bot-service-token"}):
             client = AgentClient()
@@ -218,24 +214,19 @@ class TestAgentClientInitialization:
             assert client.service_token == "dev-bot-service-token"
 
     def test_init_custom_base_url(self):
-        """Test initialization with custom base URL"""
         base_url = AgentClientTestDataFactory.create_base_url()
         client = AgentClient(base_url=base_url)
         assert client.base_url == base_url
 
     def test_init_strips_trailing_slash(self):
-        """Test that trailing slash is preserved in base URL"""
         client = AgentClient(base_url="http://test-service:8000/")
         # New implementation preserves trailing slash
         assert client.base_url == "http://test-service:8000/"
 
 
 class TestAgentClientInvokeAgent:
-    """Test AgentClient.invoke() method"""
-
     @pytest.mark.asyncio
     async def test_invoke_agent_success(self):
-        """Test successful agent invocation"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -253,7 +244,6 @@ class TestAgentClientInvokeAgent:
 
     @pytest.mark.asyncio
     async def test_invoke_agent_404_not_found(self):
-        """Test agent invocation with 404 error"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_unknown_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -270,7 +260,6 @@ class TestAgentClientInvokeAgent:
 
     @pytest.mark.asyncio
     async def test_invoke_agent_500_server_error(self):
-        """Test agent invocation with 500 error"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -287,7 +276,6 @@ class TestAgentClientInvokeAgent:
 
     @pytest.mark.asyncio
     async def test_invoke_agent_timeout(self):
-        """Test agent invocation with timeout error"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -303,7 +291,6 @@ class TestAgentClientInvokeAgent:
 
     @pytest.mark.asyncio
     async def test_invoke_agent_connection_error(self):
-        """Test agent invocation with connection error"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -319,7 +306,6 @@ class TestAgentClientInvokeAgent:
 
     @pytest.mark.asyncio
     async def test_invoke_agent_generic_error(self):
-        """Test agent invocation with generic error"""
         client = AgentClient()
         agent_name = AgentClientTestDataFactory.create_agent_name()
         query = AgentClientTestDataFactory.create_query()
@@ -329,13 +315,12 @@ class TestAgentClientInvokeAgent:
 
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            pytest.raises(Exception),  # noqa: B017
+            pytest.raises(Exception),
         ):
             await client.invoke(agent_name, query, context)
 
     @pytest.mark.asyncio
     async def test_invoke_agent_url_construction(self):
-        """Test that invoke_agent constructs correct URL"""
         base_url = AgentClientTestDataFactory.create_base_url()
         client = AgentClient(base_url=base_url)
         agent_name = AgentClientTestDataFactory.create_agent_name()
@@ -355,15 +340,8 @@ class TestAgentClientInvokeAgent:
             assert call_args[0][0] == expected_url
 
 
-# Tests removed: list_agents() and _prepare_context() methods no longer exist
-# These methods were removed as part of the HTTP agent client refactor
-
-
 class TestGetAgentClient:
-    """Test get_agent_client() global instance function"""
-
     def test_get_agent_client_creates_instance(self):
-        """Test that get_agent_client creates instance on first call"""
         # Reset singleton instance
         from bot.services.agent_client import _AgentClientSingleton
 
@@ -378,7 +356,6 @@ class TestGetAgentClient:
         _AgentClientSingleton._instance = None
 
     def test_get_agent_client_returns_same_instance(self):
-        """Test that get_agent_client returns same instance on multiple calls"""
         # Reset singleton instance
         from bot.services.agent_client import _AgentClientSingleton
 
@@ -393,7 +370,6 @@ class TestGetAgentClient:
         _AgentClientSingleton._instance = None
 
     def test_get_agent_client_uses_env_variable(self):
-        """Test that get_agent_client uses AGENT_SERVICE_URL env variable"""
         # Reset singleton instance
         from bot.services.agent_client import _AgentClientSingleton
 
@@ -409,7 +385,6 @@ class TestGetAgentClient:
         _AgentClientSingleton._instance = None
 
     def test_get_agent_client_default_url(self):
-        """Test that get_agent_client uses default URL when env not set"""
         # Reset singleton instance
         from bot.services.agent_client import _AgentClientSingleton
 

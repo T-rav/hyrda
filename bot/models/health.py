@@ -7,8 +7,6 @@ from typing import Any, Literal
 
 @dataclass(frozen=True)
 class HealthCheckResponse:
-    """Standardized health check response."""
-
     status: Literal["healthy", "degraded", "unhealthy"]
     timestamp: datetime
     service_name: str
@@ -18,8 +16,6 @@ class HealthCheckResponse:
 
 @dataclass(frozen=True)
 class SystemStatus:
-    """Comprehensive system status information."""
-
     service_name: str
     status: Literal["running", "stopped", "error"]
     uptime_seconds: float

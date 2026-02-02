@@ -14,7 +14,6 @@ from config.settings import (
 )
 
 
-# TDD Factory Patterns for Configuration Testing
 class EnvironmentVariableFactory:
     """Factory for creating environment variable configurations"""
 
@@ -137,10 +136,7 @@ class ConfigurationFactory:
 
 
 class TestConfig:
-    """Tests for the configuration system using factory patterns"""
-
     def test_slack_settings_default(self):
-        """Test SlackSettings configuration with default values"""
         settings = ConfigurationFactory.create_slack_settings()
 
         assert settings.bot_token == "xoxb-test-token"
@@ -148,7 +144,6 @@ class TestConfig:
         assert settings.bot_id == "B12345678"
 
     def test_slack_settings_custom(self):
-        """Test SlackSettings configuration with custom values"""
         custom_bot_token = "xoxb-custom-token"
         custom_app_token = "xapp-custom-token"
         custom_bot_id = "B87654321"
@@ -164,7 +159,6 @@ class TestConfig:
         assert settings.bot_id == custom_bot_id
 
     def test_llm_settings_openai(self):
-        """Test LLMSettings configuration for OpenAI"""
         settings = ConfigurationFactory.create_llm_settings()
 
         assert settings.provider == "openai"
@@ -173,7 +167,6 @@ class TestConfig:
         assert settings.base_url == "http://test-api.com"
 
     def test_llm_settings_anthropic(self):
-        """Test LLMSettings configuration for Anthropic"""
         settings = ConfigurationFactory.create_anthropic_settings()
 
         assert settings.provider == "anthropic"
@@ -182,7 +175,6 @@ class TestConfig:
         assert settings.base_url == "https://api.anthropic.com"
 
     def test_llm_settings_ollama(self):
-        """Test LLMSettings configuration for Ollama"""
         settings = ConfigurationFactory.create_ollama_settings()
 
         assert settings.provider == "ollama"
@@ -191,7 +183,6 @@ class TestConfig:
         assert settings.base_url == "http://localhost:11434"
 
     def test_llm_settings_custom(self):
-        """Test LLMSettings configuration with custom values"""
         custom_provider = "custom"
         custom_api_key = "custom-key"
         custom_model = "custom-model"
@@ -210,7 +201,6 @@ class TestConfig:
         assert settings.base_url == custom_base_url
 
     def test_settings_defaults(self):
-        """Test Settings default values and structure"""
         settings = ConfigurationFactory.create_complete_settings()
 
         # Check attribute types
@@ -226,7 +216,6 @@ class TestConfig:
         assert hasattr(settings, "log_level") and isinstance(settings.log_level, str)
 
     def test_environment_variable_factory_slack(self):
-        """Test EnvironmentVariableFactory for Slack configuration"""
         env_vars = EnvironmentVariableFactory.create_slack_env_vars(
             bot_token="custom-bot", app_token="custom-app", bot_id="CUSTOM123"
         )
@@ -236,7 +225,6 @@ class TestConfig:
         assert env_vars["SLACK_BOT_ID"] == "CUSTOM123"
 
     def test_environment_variable_factory_llm(self):
-        """Test EnvironmentVariableFactory for LLM configuration"""
         env_vars = EnvironmentVariableFactory.create_llm_env_vars(
             provider="custom",
             api_key="key123",
@@ -250,7 +238,6 @@ class TestConfig:
         assert env_vars["LLM_BASE_URL"] == "http://test.com"
 
     def test_vector_settings_has_provider_field(self):
-        """Test that VectorSettings has provider field with default value"""
         with patch.dict(
             os.environ,
             {
@@ -265,7 +252,6 @@ class TestConfig:
             assert settings.provider == "qdrant"
 
     def test_vector_settings_provider_can_be_set(self):
-        """Test that VectorSettings provider can be set via environment"""
         with patch.dict(
             os.environ,
             {

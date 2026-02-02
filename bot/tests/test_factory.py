@@ -45,11 +45,8 @@ class MockService:
 
 
 class TestServiceFactory:
-    """Test cases for ServiceFactory."""
-
     @pytest.fixture
     def mock_settings(self):
-        """Create mock settings."""
         settings = MagicMock(spec=Settings)
         settings.langfuse = MagicMock()
         settings.langfuse.enabled = True
@@ -71,11 +68,9 @@ class TestServiceFactory:
 
     @pytest.fixture
     def factory(self, container, mock_settings):
-        """Create a service factory with mocked dependencies."""
         return ServiceFactory(container, mock_settings)
 
     def test_init(self, container, mock_settings):
-        """Test factory initialization."""
         factory = ServiceFactory(container, mock_settings)
 
         assert factory.container is container
@@ -83,7 +78,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_register_all_services_logs_start(self, factory, container, caplog):
-        """Test that register_all_services logs the start message."""
         with caplog.at_level(logging.INFO):
             await factory.register_all_services()
 
@@ -92,7 +86,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_register_all_services_registers_metrics(self, factory, container):
-        """Test that metrics service is registered."""
         await factory.register_all_services()
 
         assert MetricsServiceProtocol in container._factories
@@ -101,7 +94,6 @@ class TestServiceFactory:
     async def test_register_all_services_registers_langfuse_when_enabled(
         self, factory, container, mock_settings
     ):
-        """Test that Langfuse service is registered when enabled."""
         mock_settings.langfuse.enabled = True
 
         await factory.register_all_services()
@@ -112,7 +104,6 @@ class TestServiceFactory:
     async def test_register_all_services_skips_langfuse_when_disabled(
         self, factory, container, mock_settings
     ):
-        """Test that Langfuse service is not registered when disabled."""
         mock_settings.langfuse.enabled = False
 
         await factory.register_all_services()
@@ -121,35 +112,30 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_register_all_services_registers_vector(self, factory, container):
-        """Test that vector service is registered."""
         await factory.register_all_services()
 
         assert VectorServiceProtocol in container._factories
 
     @pytest.mark.asyncio
     async def test_register_all_services_registers_rag(self, factory, container):
-        """Test that RAG service is registered."""
         await factory.register_all_services()
 
         assert RAGServiceProtocol in container._factories
 
     @pytest.mark.asyncio
     async def test_register_all_services_registers_slack(self, factory, container):
-        """Test that Slack service is registered."""
         await factory.register_all_services()
 
         assert SlackServiceProtocol in container._factories
 
     @pytest.mark.asyncio
     async def test_register_all_services_registers_llm(self, factory, container):
-        """Test that LLM service is registered."""
         await factory.register_all_services()
 
         assert LLMServiceProtocol in container._factories
 
     @pytest.mark.asyncio
     async def test_create_metrics_service(self, factory):
-        """Test metrics service creation."""
         with patch("services.metrics_service.MetricsService") as MockMetricsService:
             mock_service = AsyncMock()
             mock_service.initialize = AsyncMock()
@@ -163,7 +149,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_langfuse_service(self, factory):
-        """Test Langfuse service creation."""
         with patch("services.langfuse_service.LangfuseService") as MockLangfuseService:
             mock_service = AsyncMock()
             mock_service.initialize = AsyncMock()
@@ -177,7 +162,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_vector_service(self, factory):
-        """Test vector service creation."""
         with patch(
             "services.vector_stores.qdrant_store.QdrantVectorStore"
         ) as MockQdrantVectorStore:
@@ -193,7 +177,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_rag_service(self, factory):
-        """Test RAG service (HTTP client) creation."""
         with patch("services.rag_client.RAGClient") as MockRAGClient:
             mock_service = AsyncMock()
             MockRAGClient.return_value = mock_service
@@ -208,14 +191,10 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_slack_service(self, factory, mock_settings):
-        """Test Slack service creation - skipped due to complex slack_sdk imports."""
-        # Note: This test is skipped because slack_sdk has complex import dependencies
-        # The actual service creation is tested in integration tests
         pytest.skip("Slack service creation requires slack_sdk package")
 
     @pytest.mark.asyncio
     async def test_create_llm_service(self, factory):
-        """Test LLM service creation."""
         with patch("services.llm_service.LLMService") as MockLLMService:
             mock_service = AsyncMock()
             mock_service.initialize = AsyncMock()
@@ -229,7 +208,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_get_service_delegates_to_container(self, factory, container):
-        """Test that get_service delegates to container."""
         mock_service = MockService("test")
         container.register_singleton(MockService, mock_service)
 
@@ -239,7 +217,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_close_all_delegates_to_container(self, factory, container):
-        """Test that close_all delegates to container."""
         # Register and create a service
         container.register_factory(MockService, lambda: MockService("test"))
         service = await container.get(MockService)
@@ -253,7 +230,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_health_check_delegates_to_container(self, factory, container):
-        """Test that health_check delegates to container."""
         # Register and create a service
         container.register_factory(MockService, lambda: MockService("test"))
         await container.get(MockService)
@@ -266,7 +242,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_service_creation_error_handling(self, factory):
-        """Test error handling during service creation."""
         with (
             patch(
                 "services.metrics_service.MetricsService",
@@ -278,7 +253,6 @@ class TestServiceFactory:
 
     @pytest.mark.asyncio
     async def test_service_initialization_error_handling(self, factory):
-        """Test error handling during service initialization."""
         with patch("services.metrics_service.MetricsService") as MockMetricsService:
             mock_service = AsyncMock()
             mock_service.initialize = AsyncMock(
@@ -291,11 +265,8 @@ class TestServiceFactory:
 
 
 class TestCreateServiceFactory:
-    """Test cases for create_service_factory function."""
-
     @pytest.fixture
     def mock_settings(self):
-        """Create mock settings."""
         settings = MagicMock(spec=Settings)
         settings.langfuse = MagicMock()
         settings.langfuse.enabled = False  # Disable to avoid complex dependencies
@@ -309,7 +280,6 @@ class TestCreateServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_service_factory_returns_factory(self, mock_settings):
-        """Test that create_service_factory returns a ServiceFactory instance."""
         with patch("services.container.get_container") as mock_get_container:
             mock_container = ServiceContainer()
             mock_get_container.return_value = mock_container
@@ -325,7 +295,6 @@ class TestCreateServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_service_factory_registers_services(self, mock_settings):
-        """Test that create_service_factory registers all services."""
         with patch("services.container.get_container") as mock_get_container:
             mock_container = ServiceContainer()
             mock_get_container.return_value = mock_container
@@ -344,7 +313,6 @@ class TestCreateServiceFactory:
 
     @pytest.mark.asyncio
     async def test_create_service_factory_with_langfuse_enabled(self, mock_settings):
-        """Test that Langfuse is registered when enabled."""
         mock_settings.langfuse.enabled = True
 
         with patch("services.container.get_container") as mock_get_container:
@@ -360,11 +328,8 @@ class TestCreateServiceFactory:
 
 
 class TestServiceFactoryIntegration:
-    """Integration tests for ServiceFactory with real container."""
-
     @pytest.fixture
     def mock_settings(self):
-        """Create mock settings."""
         settings = MagicMock(spec=Settings)
         settings.langfuse = MagicMock()
         settings.langfuse.enabled = False
@@ -378,7 +343,6 @@ class TestServiceFactoryIntegration:
 
     @pytest.mark.asyncio
     async def test_full_service_lifecycle(self, mock_settings):
-        """Test complete service lifecycle from creation to cleanup."""
         container = ServiceContainer()
         factory = ServiceFactory(container, mock_settings)
 
@@ -407,7 +371,6 @@ class TestServiceFactoryIntegration:
 
     @pytest.mark.asyncio
     async def test_service_singleton_behavior(self, mock_settings):
-        """Test that services are created as singletons."""
         container = ServiceContainer()
         factory = ServiceFactory(container, mock_settings)
 
@@ -430,7 +393,6 @@ class TestServiceFactoryIntegration:
 
     @pytest.mark.asyncio
     async def test_health_check_integration(self, mock_settings):
-        """Test health check integration with multiple services."""
         container = ServiceContainer()
         factory = ServiceFactory(container, mock_settings)
 
@@ -452,8 +414,6 @@ class TestServiceFactoryIntegration:
 
 
 class TestServiceFactoryErrorHandling:
-    """Test error handling in ServiceFactory."""
-
     @pytest.fixture
     def mock_settings(self):
         """Create mock settings."""
@@ -470,7 +430,6 @@ class TestServiceFactoryErrorHandling:
 
     @pytest.mark.asyncio
     async def test_missing_settings_attribute(self):
-        """Test handling of missing settings attributes."""
         settings = MagicMock(spec=Settings)
         # Missing langfuse attribute - should raise AttributeError
         del settings.langfuse
@@ -485,7 +444,6 @@ class TestServiceFactoryErrorHandling:
 
     @pytest.mark.asyncio
     async def test_get_unregistered_service(self, mock_settings):
-        """Test getting unregistered service raises error."""
         container = ServiceContainer()
         factory = ServiceFactory(container, mock_settings)
 
@@ -497,7 +455,4 @@ class TestServiceFactoryErrorHandling:
 
     @pytest.mark.asyncio
     async def test_service_creation_with_invalid_token(self):
-        """Test service creation with invalid settings - skipped for slack_sdk."""
-        # Note: This test is skipped because slack_sdk has complex import dependencies
-        # Error handling is tested with other services
         pytest.skip("Slack service creation requires slack_sdk package")

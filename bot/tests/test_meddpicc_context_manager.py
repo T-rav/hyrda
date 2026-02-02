@@ -17,7 +17,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from services.meddpicc_context_manager import MeddpiccContextManager
 
 
-# TDD Factory Patterns for MEDDPICC Context Manager Testing
 class SettingsFactory:
     """Factory for creating mock settings"""
 

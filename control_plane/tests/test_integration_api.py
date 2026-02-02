@@ -20,7 +20,7 @@ def clear_prometheus_registry():
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
-        except Exception:
+        except Exception:  # Already unregistered
             pass
     yield
     # Clean up after test
@@ -28,7 +28,7 @@ def clear_prometheus_registry():
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
-        except Exception:
+        except Exception:  # Already unregistered
             pass
 
 

@@ -7,8 +7,6 @@ from .security_base import SecurityBase
 
 
 class PermissionGroup(SecurityBase):
-    """Model for permission groups (e.g., 'analysts', 'sales', 'admins')."""
-
     __tablename__ = "permission_groups"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -30,8 +28,6 @@ class PermissionGroup(SecurityBase):
 
 
 class UserGroup(SecurityBase):
-    """Model for user-to-group membership (many-to-many)."""
-
     __tablename__ = "user_groups"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -62,8 +58,6 @@ class UserGroup(SecurityBase):
 
 
 class AgentGroupPermission(SecurityBase):
-    """Model for agent-to-group permissions."""
-
     __tablename__ = "agent_group_permissions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

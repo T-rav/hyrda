@@ -14,7 +14,6 @@ from utils.errors import delete_message, handle_error
 from utils.logging import configure_logging
 
 
-# TDD Factory Patterns for Utils Testing
 class SlackClientFactory:
     """Factory for creating mock Slack clients for utils testing"""
 
@@ -98,11 +97,8 @@ class LoggingLevelFactory:
 
 
 class TestErrorUtils:
-    """Tests for the error utilities using factory patterns"""
-
     @pytest.mark.asyncio
     async def test_delete_message_success(self):
-        """Test successful message deletion"""
         mock_client = SlackClientFactory.create_successful_client()
         channel = TestDataFactory.create_channel_id()
         ts = TestDataFactory.create_message_ts()
@@ -114,7 +110,6 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_delete_message_api_error(self):
-        """Test message deletion with API error (message_not_found is idempotent)"""
         api_error = SlackApiError(
             message="Error", response={"error": "message_not_found"}
         )
@@ -130,7 +125,6 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_delete_message_generic_error(self):
-        """Test message deletion with generic error"""
         network_error = Exception("Network error")
         mock_client = SlackClientFactory.create_client_with_delete_error(network_error)
         channel = TestDataFactory.create_channel_id()
@@ -142,7 +136,6 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_handle_error_success(self):
-        """Test successful error handling"""
         mock_client = SlackClientFactory.create_successful_client()
         channel = TestDataFactory.create_channel_id()
         thread_ts = TestDataFactory.create_thread_ts()
@@ -157,7 +150,6 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_handle_error_post_message_fails(self):
-        """Test error handling when posting message fails"""
         mock_client = SlackClientFactory.create_client_with_post_error()
         channel = TestDataFactory.create_channel_id()
         thread_ts = TestDataFactory.create_thread_ts()
@@ -171,7 +163,6 @@ class TestErrorUtils:
 
     @pytest.mark.asyncio
     async def test_handle_error_no_thread(self):
-        """Test error handling without thread"""
         mock_client = SlackClientFactory.create_successful_client()
         channel = TestDataFactory.create_channel_id()
         error = TestDataFactory.create_test_error()
@@ -185,10 +176,7 @@ class TestErrorUtils:
 
 
 class TestLoggingUtils:
-    """Tests for the logging utilities using factory patterns"""
-
     def test_configure_logging_valid_levels(self):
-        """Test logging configuration with all valid levels"""
         valid_levels = LoggingLevelFactory.create_valid_levels()
         for level in valid_levels:
             try:
@@ -198,7 +186,6 @@ class TestLoggingUtils:
                 pytest.fail(f"configure_logging failed for {level}: {e}")
 
     def test_configure_logging_default_level(self):
-        """Test logging configuration with default level"""
         default_level = LoggingLevelFactory.create_default_level()
         try:
             configure_logging(default_level)
@@ -207,7 +194,6 @@ class TestLoggingUtils:
             pytest.fail(f"configure_logging failed: {e}")
 
     def test_configure_logging_invalid_level(self):
-        """Test logging configuration with invalid level"""
         invalid_level = LoggingLevelFactory.create_invalid_level()
         try:
             configure_logging(invalid_level)
@@ -216,7 +202,6 @@ class TestLoggingUtils:
             pytest.fail(f"configure_logging failed: {e}")
 
     def test_configure_logging_format(self):
-        """Test logging configuration format"""
         # Test that function configures logging properly
         try:
             configure_logging()
@@ -228,7 +213,6 @@ class TestLoggingUtils:
             pytest.fail(f"configure_logging failed: {e}")
 
     def test_configure_logging_handler_setup(self):
-        """Test that logging handlers are properly configured"""
         # Test that logging setup works
         try:
             configure_logging()
@@ -241,7 +225,6 @@ class TestLoggingUtils:
             pytest.fail(f"configure_logging failed: {e}")
 
     def test_configure_logging_slack_sdk_level(self):
-        """Test that Slack SDK logging level is configured"""
         with (
             patch("logging.basicConfig"),
             patch("logging.getLogger") as mock_get_logger,
@@ -255,7 +238,6 @@ class TestLoggingUtils:
             assert mock_get_logger.call_count >= 1
 
     def test_configure_logging_urllib3_level(self):
-        """Test that urllib3 logging level is configured"""
         with (
             patch("logging.basicConfig"),
             patch("logging.getLogger") as mock_get_logger,
