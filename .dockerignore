@@ -44,5 +44,11 @@ logs/
 htmlcov/
 
 # Build
-dist/
 build/
+
+# Exclude general dist directories but keep UI build outputs needed for Docker
+**/dist/
+!tasks/ui/dist/
+!control_plane/ui/dist/
+!dashboard-service/health_ui/dist/
+!bot/health_ui/dist/
