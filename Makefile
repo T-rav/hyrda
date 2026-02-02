@@ -411,7 +411,7 @@ db-status: $(VENV)
 # ===== LIBRECHAT UI =====
 
 # Build custom LibreChat Docker image with InsightMesh UI
-librechat-build setup-ssl:
+librechat-build:
 	@echo "$(BLUE)🔨 Building custom LibreChat with InsightMesh UI...$(RESET)"
 	docker compose -f docker-compose.librechat.yml build
 	@echo "$(GREEN)✅ LibreChat image built successfully!$(RESET)"
