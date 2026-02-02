@@ -73,6 +73,16 @@ else
     echo "✅ qdrant certificate already exists, skipping..."
 fi
 
+# Generate certificates for LibreChat
+if [ ! -f "librechat-cert.pem" ] || [ ! -f "librechat-key.pem" ]; then
+    echo "📜 Generating certificate for LibreChat..."
+    mkcert -cert-file librechat-cert.pem -key-file librechat-key.pem \
+        localhost 127.0.0.1 ::1 librechat
+    CERTS_GENERATED=true
+else
+    echo "✅ LibreChat certificate already exists, skipping..."
+fi
+
 # Copy mkcert CA certificate for Docker containers
 if [ ! -f "mkcert-ca.crt" ]; then
     echo "📜 Copying mkcert CA certificate for container trust..."
@@ -96,6 +106,7 @@ echo "  - control-plane: control-plane-cert.pem, control-plane-key.pem"
 echo "  - agent-service: agent-service-cert.pem, agent-service-key.pem"
 echo "  - tasks: tasks-cert.pem, tasks-key.pem"
 echo "  - qdrant: qdrant-cert.pem, qdrant-key.pem"
+echo "  - librechat: librechat-cert.pem, librechat-key.pem"
 echo "  - mkcert CA: mkcert-ca.crt (for Docker container trust)"
 echo ""
 echo "These certificates are signed by your local mkcert CA and will be trusted by your browser."
