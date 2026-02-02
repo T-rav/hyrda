@@ -21,7 +21,6 @@ from utils.validation import validate_display_name, validate_group_name
 
 logger = logging.getLogger(__name__)
 
-# Create router with authentication required for all endpoints
 router = APIRouter(
     prefix="/api/groups", tags=["groups"], dependencies=[Depends(get_current_user)]
 )
@@ -34,10 +33,8 @@ async def list_groups(
     """List all groups with pagination."""
     try:
         with get_db_session() as session:
-            # Build query
             query = session.query(PermissionGroup).order_by(PermissionGroup.group_name)
 
-            # Paginate query
             groups, total_count = paginate_query(query, page, per_page)
 
             # Batch load all user memberships for these groups in ONE query
@@ -50,7 +47,6 @@ async def list_groups(
                 .all()
             )
 
-            # Build lookup dictionary: group_name -> [users]
             users_by_group = defaultdict(list)
             for membership, user in all_memberships:
                 users_by_group[membership.group_name].append(
@@ -61,7 +57,6 @@ async def list_groups(
                     }
                 )
 
-            # Build group data using cached user lists
             groups_data = []
             for group in groups:
                 users_list = users_by_group[group.group_name]
@@ -76,11 +71,9 @@ async def list_groups(
                     }
                 )
 
-            # Build paginated response
             response = build_pagination_response(
                 groups_data, total_count, page, per_page
             )
-            # Keep "groups" key for backward compatibility
             return {"groups": response["items"], "pagination": response["pagination"]}
 
     except Exception as e:
@@ -98,12 +91,10 @@ async def create_group(
         group_name = data.get("group_name")
         display_name = data.get("display_name")
 
-        # Validate group name
         is_valid, error_msg = validate_group_name(group_name)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
 
-        # Validate display name (optional)
         is_valid, error_msg = validate_display_name(display_name)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
@@ -144,7 +135,6 @@ async def update_group(
             if not group:
                 raise HTTPException(status_code=404, detail="Group not found")
 
-            # Update fields
             if "display_name" in data:
                 group.display_name = data["display_name"]
             if "description" in data:
@@ -172,12 +162,10 @@ async def delete_group(
 ) -> dict[str, Any]:
     """Delete a permission group."""
     try:
-        # Prevent deletion of system groups
         if group_name == "all_users":
             raise HTTPException(status_code=403, detail="Cannot delete system group")
 
         with get_db_session() as session:
-            # Check if group exists
             group = (
                 session.query(PermissionGroup)
                 .filter(PermissionGroup.group_name == group_name)
@@ -187,15 +175,12 @@ async def delete_group(
             if not group:
                 raise HTTPException(status_code=404, detail="Group not found")
 
-            # Delete all user memberships
             session.query(UserGroup).filter(UserGroup.group_name == group_name).delete()
 
-            # Delete all agent permissions
             session.query(AgentGroupPermission).filter(
                 AgentGroupPermission.group_name == group_name
             ).delete()
 
-            # Delete the group itself
             session.delete(group)
             session.commit()
 
@@ -219,7 +204,6 @@ async def get_group_users(group_name: str) -> dict[str, Any]:
                 .all()
             )
 
-            # Batch load all users in one query to prevent N+1
             user_ids = [m.slack_user_id for m in memberships]
             if not user_ids:
                 return {"users": []}
@@ -228,10 +212,8 @@ async def get_group_users(group_name: str) -> dict[str, Any]:
                 session.query(User).filter(User.slack_user_id.in_(user_ids)).all()
             )
 
-            # Build lookup dictionary for O(1) access
             users_by_id = {u.slack_user_id: u for u in all_users}
 
-            # Build response using lookup dictionary
             users_data = []
             for membership in memberships:
                 user = users_by_id.get(membership.slack_user_id)
@@ -260,7 +242,6 @@ async def add_user_to_group(
 ) -> dict[str, Any]:
     """Add user to group."""
     try:
-        # Validate request body
         data = await request.json()
         if not data:
             raise HTTPException(status_code=400, detail="Request body is required")
@@ -280,12 +261,10 @@ async def add_user_to_group(
             raise HTTPException(status_code=400, detail="added_by must be a string")
 
         with get_db_session() as session:
-            # Check if user exists
             user = session.query(User).filter(User.slack_user_id == user_id).first()
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
 
-            # Check if already in group
             existing = (
                 session.query(UserGroup)
                 .filter(
@@ -297,7 +276,6 @@ async def add_user_to_group(
             if existing:
                 raise HTTPException(status_code=400, detail="User already in group")
 
-            # Add user to group
             new_membership = UserGroup(
                 slack_user_id=user_id, group_name=group_name, added_by=added_by
             )
@@ -323,7 +301,6 @@ async def remove_user_from_group(
         if not user_id:
             raise HTTPException(status_code=400, detail="user_id is required")
 
-        # Prevent manual removal from system groups
         if group_name == "all_users":
             raise HTTPException(
                 status_code=403, detail="Cannot manually remove users from system group"
@@ -378,7 +355,6 @@ async def grant_agent_to_group(
 ) -> dict[str, Any]:
     """Grant agent access to group."""
     try:
-        # Validate request body
         data = await request.json()
         if not data:
             raise HTTPException(status_code=400, detail="Request body is required")
@@ -398,7 +374,6 @@ async def grant_agent_to_group(
             raise HTTPException(status_code=400, detail="granted_by must be a string")
 
         with get_db_session() as session:
-            # Check if agent is system agent
             agent_metadata = (
                 session.query(AgentMetadata)
                 .filter(AgentMetadata.agent_name == agent_name)
@@ -415,7 +390,6 @@ async def grant_agent_to_group(
                     detail="System agents can only be granted to 'all_users' group",
                 )
 
-            # Check if group exists
             group = (
                 session.query(PermissionGroup)
                 .filter(PermissionGroup.group_name == group_name)
@@ -424,7 +398,6 @@ async def grant_agent_to_group(
             if not group:
                 raise HTTPException(status_code=404, detail="Group not found")
 
-            # Check if permission already exists
             existing = (
                 session.query(AgentGroupPermission)
                 .filter(
@@ -438,7 +411,6 @@ async def grant_agent_to_group(
                     status_code=400, detail="Permission already granted"
                 )
 
-            # Grant permission
             new_permission = AgentGroupPermission(
                 agent_name=agent_name,
                 group_name=group_name,
@@ -448,7 +420,6 @@ async def grant_agent_to_group(
             session.add(new_permission)
             session.commit()
 
-            # Audit log
             log_permission_action(
                 AuditAction.GRANT_PERMISSION,
                 "agent_group_permission",

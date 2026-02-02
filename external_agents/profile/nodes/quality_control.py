@@ -128,7 +128,7 @@ Do a quick inspection and return JSON only. Don't overthink it.
 
 
 def extract_citations_from_report(report: str) -> list[int]:
-    """Extract all citation numbers [1], [2], etc. from report."""
+    """Extract all citation numbers from report."""
     citations = re.findall(r"\[(\d+)\]", report)
     return sorted({int(c) for c in citations})
 
@@ -305,17 +305,7 @@ Generate the complete revised report now.
 
 
 def quality_control_router(state: ProfileAgentState) -> str:
-    """Route quality control results to either END or revision.
-
-    This function is used by add_conditional_edges to determine the next node.
-    It makes the evaluation loop visible in LangGraph Studio's graph visualization.
-
-    Args:
-        state: Current agent state with quality control results
-
-    Returns:
-        "end" to finish the workflow, or "revise" to loop back to final_report_generation
-    """
+    """Route quality control results to either END or revision."""
     passes_quality = state.get("passes_quality", False)
     max_revisions_exceeded = state.get("max_revisions_exceeded", False)
 

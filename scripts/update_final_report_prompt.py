@@ -23,7 +23,6 @@ load_dotenv()
 
 
 def get_enhanced_relationship_section() -> str:
-    """Get the enhanced relationship section with strict verification rules."""
     return """## Relationships via 8th Light Network
 
 **CRITICAL: STRICT RELATIONSHIP VERIFICATION RULES**
@@ -87,12 +86,6 @@ Internal knowledge base search did not identify any past projects, case studies,
 
 
 def update_langfuse_prompt(dry_run: bool = False) -> None:
-    """
-    Update the Final Report Generation prompt in Langfuse.
-
-    Args:
-        dry_run: If True, only show what would be updated without making changes
-    """
     # Initialize Langfuse client
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")

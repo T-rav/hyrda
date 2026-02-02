@@ -66,7 +66,6 @@ async def get_job(
 async def pause_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -83,7 +82,6 @@ async def pause_job(
 async def resume_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -100,7 +98,6 @@ async def resume_job(
 async def delete_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")

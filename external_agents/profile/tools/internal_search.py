@@ -173,8 +173,8 @@ class InternalSearchTool(BaseTool):
                     "Qdrant client not initialized - internal search unavailable"
                 )
 
-        except Exception as e:
-            logger.error(f"Failed to initialize internal search components: {e}")
+        except Exception:
+            logger.exception("Failed to initialize internal search components")
             logger.info("Internal search tool will be unavailable")
 
     async def _direct_qdrant_search(self, query: str, k: int = 100):

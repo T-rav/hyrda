@@ -127,32 +127,8 @@ class PortalSyncJob(BaseJob):
             "errors": [],
         }
 
-        # TODO: Implement Portal API integration once authentication is sorted out
-        # The Portal API endpoint and authentication details need to be confirmed
-        # with the Portal team before this can be fully implemented.
         logger.info("Portal sync job triggered but not yet implemented")
         return stats
-
-        # try:
-        #     # Initialize Pinecone
-        #     await self.vector_client.initialize()
-        #
-        #     # Sync employee profiles and skills
-        #     (
-        #         stats["employees_synced"],
-        #         stats["skills_synced"],
-        #     ) = await self._sync_employees()
-        #
-        #     # Close connections
-        #     await self.vector_client.close()
-        #
-        #     logger.info(f"✅ Portal sync completed: {stats}")
-        #     return stats
-        #
-        # except Exception as e:
-        #     logger.error(f"Portal sync failed: {e}")
-        #     stats["errors"].append(str(e))
-        #     raise
 
     async def _sync_employees(self) -> tuple[int, int]:
         """

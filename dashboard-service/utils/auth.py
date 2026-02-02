@@ -32,12 +32,10 @@ OAUTH_SCOPES = [
 ]
 
 
-class AuthError(Exception):
-    ...
+class AuthError(Exception): ...
 
 
 class AuditLogger:
-
     @staticmethod
     def log_auth_event(
         event_type: str,

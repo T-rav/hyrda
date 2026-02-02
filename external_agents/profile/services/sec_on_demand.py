@@ -185,18 +185,14 @@ class SECOnDemandFetcher:
 
     def _parse_html_filing(self, html_content: str) -> str:
         """Parse HTML filing and extract clean text."""
+        import re
+
         soup = BeautifulSoup(html_content, "html.parser")
 
-        # Remove script and style elements
         for element in soup(["script", "style", "head"]):
             element.decompose()
 
-        # Get text
         text = soup.get_text(separator="\n", strip=True)
-
-        # Clean up excessive whitespace
-        import re
-
         text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
         text = re.sub(r" +", " ", text)
 

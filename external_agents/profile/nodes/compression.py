@@ -14,18 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 async def compress_research(state: ResearcherState, config: RunnableConfig) -> dict:
-    """Pass through full research findings without compression.
-
-    Compression now happens only at final report generation if needed to fit context.
-    This preserves maximum detail in research notes.
-
-    Args:
-        state: Current researcher state
-        config: Runtime configuration
-
-    Returns:
-        Dict with compressed_research (full notes) and raw_notes
-    """
+    """Pass through full research findings without compression."""
     research_topic = state["research_topic"]
     messages = state["researcher_messages"]
     raw_notes = state.get("raw_notes", [])

@@ -315,7 +315,7 @@ class TestAgentClientInvokeAgent:
 
         with (
             patch("httpx.AsyncClient", return_value=mock_client),
-            pytest.raises(Exception),
+            pytest.raises(Exception),  # noqa: B017 - Testing generic exception propagation
         ):
             await client.invoke(agent_name, query, context)
 

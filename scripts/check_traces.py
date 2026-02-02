@@ -13,7 +13,6 @@ from services.langfuse_service import get_langfuse_service
 
 
 def main():
-    """Check recent traces in Langfuse."""
     langfuse_service = get_langfuse_service()
     if not langfuse_service or not langfuse_service.client:
         print("❌ Langfuse service not initialized")

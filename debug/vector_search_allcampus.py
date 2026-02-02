@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-Simple vector search script to emulate internal search tool behavior for AllCampus data.
-
-This script performs a semantic/vector search on the Qdrant vector database,
-mimicking how the internal_search_tool works when searching for AllCampus.
+Vector search script to emulate internal search tool behavior for AllCampus data.
 
 Usage:
     python debug/vector_search_allcampus.py
@@ -40,8 +37,6 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleVectorSearch:
-    """Simple vector search that emulates the internal search tool."""
-
     def __init__(self):
         # Get config from environment
         self.host = os.getenv("VECTOR_HOST", "localhost")
@@ -55,7 +50,6 @@ class SimpleVectorSearch:
         self.openai_client = None
 
     async def initialize(self):
-        """Initialize Qdrant and OpenAI clients."""
         print("=" * 70)
         print("🔍 VECTOR SEARCH FOR ALLCAMPUS DATA")
         print("=" * 70)
@@ -123,7 +117,6 @@ class SimpleVectorSearch:
             raise
 
     async def generate_embedding(self, text: str) -> list[float]:
-        """Generate embedding for a query using OpenAI."""
         try:
             logger.info(f"Generating embedding for query: '{text[:100]}...'")
 
@@ -142,11 +135,6 @@ class SimpleVectorSearch:
             raise
 
     async def search(self, query: str, limit: int = 10) -> list[dict]:
-        """
-        Perform vector similarity search on Qdrant.
-
-        This emulates the internal_search_tool's search behavior.
-        """
         print("🔍 PERFORMING VECTOR SEARCH")
         print("-" * 70)
         print(f"Query: {query}")
@@ -154,13 +142,11 @@ class SimpleVectorSearch:
         print()
 
         try:
-            # Step 1: Generate query embedding
             print("📊 Step 1: Generating query embedding...")
             query_embedding = await self.generate_embedding(query)
             print(f"✅ Generated embedding vector ({len(query_embedding)} dimensions)")
             print()
 
-            # Step 2: Search Qdrant
             print("🔍 Step 2: Searching vector database...")
             search_result = self.qdrant_client.search(
                 collection_name=self.collection_name,
@@ -174,7 +160,6 @@ class SimpleVectorSearch:
             print(f"✅ Found {len(search_result)} results")
             print()
 
-            # Step 3: Format results
             results = []
             for idx, point in enumerate(search_result, 1):
                 result = {
@@ -191,7 +176,6 @@ class SimpleVectorSearch:
             raise
 
     def print_results(self, results: list[dict], query: str):
-        """Print search results in a readable format."""
         print("=" * 70)
         print("📋 SEARCH RESULTS")
         print("=" * 70)
@@ -260,7 +244,6 @@ class SimpleVectorSearch:
 
 
 async def main():
-    """Main entry point."""
     import argparse
 
     parser = argparse.ArgumentParser(

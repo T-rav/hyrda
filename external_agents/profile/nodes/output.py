@@ -8,17 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 async def output_node(state: ProfileAgentState, config: RunnableConfig) -> dict:
-    """Emit final output with standardized contract.
-
-    This node runs after quality control passes and ensures the final
-    output (message, attachments) is properly emitted for Slack display.
-
-    Args:
-        state: Current profile agent state
-
-    Returns:
-        Dict with message and attachments fields
-    """
+    """Emit final output with standardized contract."""
     logger.info("Emitting final output for Slack display")
 
     # Return the standardized contract fields from state

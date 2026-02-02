@@ -17,7 +17,6 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 
 def inspect_metric_docs():
-    """Check metadata structure of metric documents."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

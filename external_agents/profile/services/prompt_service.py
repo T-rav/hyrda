@@ -47,15 +47,7 @@ class PromptService:
         self._prompt_cache: dict[str, str] = {}
 
     def get_system_prompt(self, force_refresh: bool = False) -> str:
-        """
-        Get the system prompt, preferring Langfuse template over local default
-
-        Args:
-            force_refresh: Force refresh from Langfuse even if cached
-
-        Returns:
-            The system prompt string
-        """
+        """Get the system prompt, preferring Langfuse template over local default."""
         # Return cached version unless force refresh
         if self._cached_system_prompt and not force_refresh:
             return self._cached_system_prompt

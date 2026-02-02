@@ -17,7 +17,6 @@ from qdrant_client import QdrantClient
 
 
 def count_sources():
-    """Count documents by source."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

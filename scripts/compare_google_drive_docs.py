@@ -17,7 +17,6 @@ from qdrant_client import QdrantClient
 
 
 def analyze_google_drive_docs():
-    """Analyze google_drive documents."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

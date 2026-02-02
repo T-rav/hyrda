@@ -8,7 +8,6 @@ from fastapi import APIRouter
 
 logger = logging.getLogger(__name__)
 
-# Create router
 router = APIRouter()
 
 
@@ -21,7 +20,6 @@ async def check_langsmith_proxy_status() -> dict:
     langchain_endpoint = os.getenv("LANGCHAIN_ENDPOINT", "")
     proxy_url = "http://langsmith-proxy:8003"
 
-    # Check if environment points to proxy
     is_configured = proxy_url in langchain_endpoint
 
     proxy_status = {
@@ -31,7 +29,6 @@ async def check_langsmith_proxy_status() -> dict:
     }
 
     if is_configured:
-        # Try to reach the proxy
         try:
             async with httpx.AsyncClient(timeout=2.0) as client:
                 response = await client.get(f"{proxy_url}/health")
@@ -46,7 +43,6 @@ async def check_langsmith_proxy_status() -> dict:
             proxy_status["message"] = f"⚠️ Configured but unreachable: {str(e)}"
             logger.debug(f"LangSmith proxy health check failed: {e}")
     else:
-        # Check if using LangSmith directly
         if (
             "langsmith" in langchain_endpoint.lower()
             or "smith.langchain" in langchain_endpoint.lower()
@@ -66,7 +62,6 @@ async def health_check():
     Returns:
         JSON response with status and LangSmith proxy information
     """
-    # Check LangSmith proxy status
     proxy_status = await check_langsmith_proxy_status()
 
     return {
@@ -84,8 +79,6 @@ async def ready_check():
     Returns:
         JSON response indicating if the service is ready to accept traffic
     """
-    # Basic readiness check - service is ready if it can respond
-    # Could be extended to check database connectivity, etc.
     return {
         "status": "ready",
         "service": "control-plane",

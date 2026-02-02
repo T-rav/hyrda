@@ -19,7 +19,6 @@ from qdrant_client import QdrantClient
 
 
 def clear_google_drive_docs():
-    """Clear only google_drive documents, keep metric docs."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

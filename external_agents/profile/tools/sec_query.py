@@ -109,8 +109,8 @@ class SECQueryTool(BaseTool):
             )
             logger.info(f"Initialized LLM: {llm_model}")
 
-        except Exception as e:
-            logger.error(f"Failed to initialize LLM: {e}")
+        except Exception:
+            logger.exception("Failed to initialize LLM")
             raise
 
     def _run(self, query: str, effort: str = "medium") -> str:

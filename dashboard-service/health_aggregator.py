@@ -28,7 +28,6 @@ def get_app_version() -> str:
 
 
 class HealthChecker:
-
     def __init__(
         self, settings: Settings, conversation_cache=None, langfuse_service=None
     ):

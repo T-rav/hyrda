@@ -152,9 +152,6 @@ class FastAPIAppFactory:
 
         # Initialize test database with tables
         import models.base
-        from models.oauth_credential import OAuthCredential
-        from models.task_metadata import TaskMetadata
-        from models.task_run import TaskRun
 
         # Create tables in the test database
         try:

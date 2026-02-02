@@ -32,9 +32,7 @@ class User(Base):
     family_name = Column(String(255), nullable=True)
 
     # Provider tracking
-    primary_provider = Column(
-        String(50), nullable=False, default="slack", index=True
-    )
+    primary_provider = Column(String(50), nullable=False, default="slack", index=True)
 
     # User status and role
     is_active = Column(Boolean, nullable=False, default=True)

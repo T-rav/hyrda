@@ -23,7 +23,6 @@ load_dotenv()
 
 
 async def create_internal_search_tool():
-    """Create internal search tool directly without importing agents."""
     # Direct imports to avoid loading the full agent system
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
     from langchain_qdrant import QdrantVectorStore
@@ -86,7 +85,6 @@ async def create_internal_search_tool():
 
 
 async def test_vail_resorts():
-    """Test the Vail Resorts query for false positives."""
     query = "profile Vail Resorts and highlight how our recent case study https://8thlight.com/case-studies/aspenware could be useful for them"
 
     print("=" * 80)
@@ -139,7 +137,6 @@ async def test_vail_resorts():
 
 
 async def test_simple_query():
-    """Test a simpler query without the Aspenware context."""
     print("\n" + "=" * 80)
     print("SIMPLE VAIL RESORTS TEST")
     print("=" * 80)
@@ -169,7 +166,6 @@ async def test_simple_query():
 
 
 async def main():
-    """Run all tests."""
     print("\n🔍 Starting Vail Resorts False Positive Tests (Standalone)\n")
 
     # Test 1: Simple query

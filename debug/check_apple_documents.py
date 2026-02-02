@@ -22,8 +22,6 @@ from services.vector_service import create_vector_store
 
 
 async def check_apple_documents():
-    """Check Apple documents in the vector database"""
-
     # Load settings
     settings = Settings()
 
@@ -56,7 +54,6 @@ async def check_apple_documents():
         print(f"Found {len(results)} total chunks mentioning Apple")
         print()
 
-        # Group by document title and analyze
         documents = {}
         apple_chunks = []
 
@@ -65,12 +62,10 @@ async def check_apple_documents():
             content = result.get("content", "")
             file_name = metadata.get("file_name", "Unknown")
 
-            # Check if this chunk contains "apple" (case insensitive)
             text_to_check = f"{file_name} {content}".lower()
             if "apple" in text_to_check:
                 apple_chunks.append(result)
 
-                # Group by document
                 if file_name not in documents:
                     documents[file_name] = []
                 documents[file_name].append(
@@ -89,12 +84,10 @@ async def check_apple_documents():
             print(f"📄 {doc_name}")
             print(f"   Chunks: {len(chunks)}")
 
-            # Check if Apple is in the title
             apple_in_title = "apple" in doc_name.lower()
             print(f"   Apple in title: {'✅ YES' if apple_in_title else '❌ NO'}")
 
-            # Show chunk details
-            for i, chunk in enumerate(chunks[:3]):  # Show first 3 chunks
+            for i, chunk in enumerate(chunks[:3]):
                 similarity = chunk["similarity"]
                 content_preview = chunk["content_preview"]
                 print(
