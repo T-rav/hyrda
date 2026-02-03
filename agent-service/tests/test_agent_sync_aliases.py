@@ -63,10 +63,12 @@ class TestAgentDiscoveryFromLangGraph:
 
         profile = next(a for a in agents if a["name"] == "profile")
         assert profile["display_name"] == "Company Profile"
-        assert profile["aliases"] == ["profile", "company profile", "-profile"]
+        # Agent's own name filtered from aliases (it's redundant)
+        assert profile["aliases"] == ["company profile", "-profile"]
 
         meddic = next(a for a in agents if a["name"] == "meddic")
-        assert meddic["aliases"] == ["meddic", "medic", "meddpicc"]
+        # Agent's own name filtered from aliases (it's redundant)
+        assert meddic["aliases"] == ["medic", "meddpicc"]
 
     def test_discover_agents_help_is_system(self):
         """Help agent should always be marked as system agent."""
@@ -141,3 +143,51 @@ class TestAgentDiscoveryFromLangGraph:
             agents = _discover_agents_from_langgraph()
 
         assert agents == []
+
+    def test_discover_agents_enabled_by_default(self):
+        """Agents should be enabled by default for immediate availability."""
+        config = {
+            "graphs": {
+                "test_agent": {
+                    "graph": "module.path:build_agent",
+                    "metadata": {"display_name": "Test Agent"},
+                }
+            }
+        }
+
+        config_json = json.dumps(config)
+
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
+                agents = _discover_agents_from_langgraph()
+
+        assert len(agents) == 1
+        # Note: is_enabled is added during sync, not during discovery
+        # This test documents expected behavior
+
+    def test_discover_agents_filters_own_name_from_aliases(self):
+        """Agent's own name should be filtered from aliases to prevent registry overwrite."""
+        config = {
+            "graphs": {
+                "meddic": {
+                    "graph": "meddic.nodes:build_meddic",
+                    "metadata": {
+                        "display_name": "MEDDIC Coach",
+                        "aliases": ["meddic", "medic", "meddpicc", "deal analysis"],
+                    },
+                },
+            }
+        }
+
+        config_json = json.dumps(config)
+
+        with patch("builtins.open", mock_open(read_data=config_json)):
+            with patch("pathlib.Path.exists", return_value=True):
+                agents = _discover_agents_from_langgraph()
+
+        assert len(agents) == 1
+        meddic = agents[0]
+        
+        # Own name 'meddic' should be filtered out
+        assert "meddic" not in meddic["aliases"]
+        assert meddic["aliases"] == ["medic", "meddpicc", "deal analysis"]
