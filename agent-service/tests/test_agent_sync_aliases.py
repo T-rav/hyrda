@@ -187,7 +187,7 @@ class TestAgentDiscoveryFromLangGraph:
 
         assert len(agents) == 1
         meddic = agents[0]
-        
+
         # Own name 'meddic' should be filtered out
         assert "meddic" not in meddic["aliases"]
         assert meddic["aliases"] == ["medic", "meddpicc", "deal analysis"]
