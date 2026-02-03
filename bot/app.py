@@ -84,13 +84,11 @@ async def maintain_presence(client: AsyncWebClient | WebClient) -> None:
     Uses asyncio.CancelledError to enable graceful shutdown without waiting
     for the full 5-minute sleep interval.
     """
+    # Presence maintenance disabled - requires users:write scope
     try:
         while True:
-            try:
-                await client.users_setPresence(presence="auto")  # type: ignore[misc]
-                logger.debug("Updated bot presence status")
-            except Exception as e:
-                logger.error(f"Error updating presence: {e}")
+            # await client.users_setPresence(presence="auto")
+            # logger.debug("Updated bot presence status")
 
             # Sleep for 5 minutes, but allow cancellation
             await asyncio.sleep(300)
@@ -180,12 +178,13 @@ async def run():
                 slack_service.bot_id = auth_test.get("user_id")
                 logger.info(f"Updated bot ID to: {slack_service.bot_id}")
 
-            # Set initial presence
-            await app.client.users_setPresence(presence="auto")
-            logger.info("Bot presence set to online")
+            # Note: Bot presence setting removed - requires users:write scope
+            # await app.client.users_setPresence(presence="auto")
+            # logger.info("Bot presence set to online")
 
-            # Start the presence maintenance task
-            presence_task = asyncio.create_task(maintain_presence(app.client))
+            # Presence maintenance disabled - requires users:write scope
+            # presence_task = asyncio.create_task(maintain_presence(app.client))
+            presence_task = None
 
         except Exception as e:
             logger.error(f"Error during startup: {e}")
@@ -203,13 +202,14 @@ async def run():
         logger.info("Shutdown signal received, cleaning up...")
 
         # Cancel background tasks
-        if "presence_task" in locals():
+        tasks_to_cancel = [handler_task]
+        if presence_task is not None:
             presence_task.cancel()
-        handler_task.cancel()
+            tasks_to_cancel.append(presence_task)
 
         # Wait for tasks to complete
         with contextlib.suppress(Exception):
-            await asyncio.gather(presence_task, handler_task, return_exceptions=True)
+            await asyncio.gather(*tasks_to_cancel, return_exceptions=True)
 
     except Exception as e:
         logger.error(f"Error in main application: {e}")
