@@ -126,6 +126,8 @@ def sync_agents_to_control_plane() -> None:
             )
             # Enable agents by default so they're immediately available
             agent_data["is_enabled"] = True
+            # Make agents visible in Slack by default
+            agent_data["is_slack_visible"] = True
             agents_to_register.append(agent_data)
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
