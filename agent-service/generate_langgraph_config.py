@@ -32,7 +32,7 @@ def load_json_config(path: Path) -> dict:
 
 def extract_graph_spec(spec):
     """Extract graph module:function string from spec.
-    
+
     Handles both simple format (string) and extended format (dict with 'graph' key).
     """
     if isinstance(spec, str):
@@ -46,7 +46,7 @@ def extract_graph_spec(spec):
 
 def generate_langgraph_config(output_path: Path):
     """Generate unified langgraph.json from system and custom configs.
-    
+
     Always outputs simple format: {"agent_name": "module:function"}
     This ensures compatibility with both production and langgraph dev mode.
     """
@@ -72,7 +72,7 @@ def generate_langgraph_config(output_path: Path):
         graph_spec = extract_graph_spec(spec)
         if graph_spec:
             merged["graphs"][name] = graph_spec
-            
+
     logger.info(f"Loaded {len(merged['graphs'])} system agents")
 
     # Add custom agents
@@ -80,7 +80,7 @@ def generate_langgraph_config(output_path: Path):
         graph_spec = extract_graph_spec(spec)
         if graph_spec:
             merged["graphs"][name] = graph_spec
-            
+
     custom_count = len(merged["graphs"]) - len(system_config.get("graphs", {}))
     if custom_count > 0:
         logger.info(f"Loaded {custom_count} custom agents")
