@@ -23,7 +23,7 @@ import httpx
 # Add shared directory to path
 sys.path.insert(0, str(__file__).rsplit("/", 3)[0])
 from shared.services.langfuse_service import get_langfuse_service
-from shared.utils.http_client import get_internal_service_url, get_secure_client
+from shared.utils.http_client import get_internal_service_url
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +72,9 @@ class AgentClient:
             return self._agent_cache[agent_name]
 
         # Query control-plane for all agents
+        # Use plain HTTP client for internal Docker network (no TLS needed)
         try:
-            async with get_secure_client(timeout=5.0) as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
                     f"{self.control_plane_url}/api/agents",
                     headers={"X-Service-Token": self.service_token},
