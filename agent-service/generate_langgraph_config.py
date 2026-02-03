@@ -64,7 +64,7 @@ def generate_langgraph_config(output_path: Path):
     # Paths
     agent_service_dir = Path(__file__).parent
     system_config_path = agent_service_dir / "agents" / "langgraph.json"
-    custom_config_path = agent_service_dir.parent / "custom_agents" / "langgraph.json"
+    custom_config_path = agent_service_dir / "custom_agents" / "langgraph.json"
 
     logger.info("Merging LangGraph configs...")
     logger.info(f"System config: {system_config_path}")
