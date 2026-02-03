@@ -365,6 +365,7 @@ services:
       - REPORTS_BUCKET=${REPORTS_BUCKET:-profile-reports}
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
+      - "9000:9000"  # LangGraph dev mode
     volumes:
       - ./custom_agents:/app/custom_agents:ro
       - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro

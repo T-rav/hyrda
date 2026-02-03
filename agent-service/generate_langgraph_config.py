@@ -5,7 +5,7 @@ Merges:
 - agent-service/agents/langgraph.json (system agents - always present)
 - custom_agents/langgraph.json (custom agents - optional, mounted externally)
 
-Output: agent-service/langgraph.json
+Output: agent-service/langgraph.json (simple format for langgraph dev compatibility)
 """
 
 import json
@@ -30,36 +30,26 @@ def load_json_config(path: Path) -> dict:
         return {}
 
 
-def merge_langgraph_configs(system_config: dict, custom_config: dict) -> dict:
-    """Merge system and custom agent configs.
+def extract_graph_spec(spec):
+    """Extract graph module:function string from spec.
 
-    Args:
-        system_config: Config from agent-service/agents/langgraph.json
-        custom_config: Config from custom_agents/langgraph.json
-
-    Returns:
-        Merged config with all agents
+    Handles both simple format (string) and extended format (dict with 'graph' key).
     """
-    merged = {"dependencies": [".", "../"], "graphs": {}, "env": "../.env"}
-
-    # Merge graphs from both configs
-    if "graphs" in system_config:
-        merged["graphs"].update(system_config["graphs"])
-        logger.info(f"Loaded {len(system_config['graphs'])} system agents")
-
-    if "graphs" in custom_config:
-        merged["graphs"].update(custom_config["graphs"])
-        logger.info(f"Loaded {len(custom_config['graphs'])} custom agents")
-
-    # Add custom_agents to dependencies if custom agents exist
-    if custom_config.get("graphs"):
-        merged["dependencies"].append("../custom_agents")
-
-    return merged
+    if isinstance(spec, str):
+        return spec
+    elif isinstance(spec, dict) and "graph" in spec:
+        return spec["graph"]
+    else:
+        logger.warning(f"Invalid spec format: {spec}")
+        return None
 
 
 def generate_langgraph_config(output_path: Path):
-    """Generate unified langgraph.json from system and custom configs."""
+    """Generate unified langgraph.json from system and custom configs.
+
+    Always outputs simple format: {"agent_name": "module:function"}
+    This ensures compatibility with both production and langgraph dev mode.
+    """
 
     # Paths
     agent_service_dir = Path(__file__).parent
@@ -74,19 +64,40 @@ def generate_langgraph_config(output_path: Path):
     system_config = load_json_config(system_config_path)
     custom_config = load_json_config(custom_config_path)
 
-    # Merge
-    merged_config = merge_langgraph_configs(system_config, custom_config)
+    # Build simple config (always string format for dev compatibility)
+    merged = {"dependencies": ["."], "graphs": {}, "env": "../.env"}
 
-    if not merged_config["graphs"]:
+    # Add system agents
+    for name, spec in system_config.get("graphs", {}).items():
+        graph_spec = extract_graph_spec(spec)
+        if graph_spec:
+            merged["graphs"][name] = graph_spec
+
+    logger.info(f"Loaded {len(merged['graphs'])} system agents")
+
+    # Add custom agents
+    for name, spec in custom_config.get("graphs", {}).items():
+        graph_spec = extract_graph_spec(spec)
+        if graph_spec:
+            merged["graphs"][name] = graph_spec
+
+    custom_count = len(merged["graphs"]) - len(system_config.get("graphs", {}))
+    if custom_count > 0:
+        logger.info(f"Loaded {custom_count} custom agents")
+        # ./custom_agents is correct for both production and langgraph dev
+        # langgraph.json is at /app/langgraph.json, custom_agents at /app/custom_agents
+        merged["dependencies"].append("./custom_agents")
+
+    if not merged["graphs"]:
         logger.error("No agents found in any config!")
         sys.exit(1)
 
     # Write merged config
-    output_path.write_text(json.dumps(merged_config, indent=2) + "\n")
+    output_path.write_text(json.dumps(merged, indent=2) + "\n")
 
     logger.info(f"Generated {output_path}")
-    logger.info(f"Total agents: {len(merged_config['graphs'])}")
-    for name in sorted(merged_config["graphs"].keys()):
+    logger.info(f"Total agents: {len(merged['graphs'])}")
+    for name in sorted(merged["graphs"].keys()):
         logger.info(f"  - {name}")
 
 
