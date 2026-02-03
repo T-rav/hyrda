@@ -122,7 +122,7 @@ test: $(VENV)
 	@cd $(BOT_DIR) && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration and not system_flow and not smoke" -q
 	@echo ""
 	@echo "$(BLUE)[2/6] Agent-service...$(RESET)"
-	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -q
+	@cd $(PROJECT_ROOT_DIR)agent-service && PYTHONPATH=. $(PYTHON) -m pytest -m "not integration" -q
 	@echo ""
 	@echo "$(BLUE)[3/6] Control-plane...$(RESET)"
 	@cd $(PROJECT_ROOT_DIR)control_plane && PYTHONPATH=. $(PYTHON) -m pytest -q

@@ -9,7 +9,7 @@ if not os.getenv("AGENT_SERVICE_TOKEN"):
 
 # Set CONTROL_PLANE_URL to localhost for integration tests
 if not os.getenv("CONTROL_PLANE_URL"):
-    os.environ["CONTROL_PLANE_URL"] = "https://localhost:6001"
+    os.environ["CONTROL_PLANE_URL"] = "http://localhost:6001"
 
 # Set API keys for tests (required for agent initialization)
 if not os.getenv("OPENAI_API_KEY"):

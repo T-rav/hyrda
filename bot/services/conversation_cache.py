@@ -664,9 +664,11 @@ def get_redis_client() -> redis.Redis | None:
         from config.settings import get_settings
 
         settings = get_settings()
-        redis_url = getattr(settings, 'cache', {}).get('redis_url', 'redis://redis:6379')
+        redis_url = getattr(settings, "cache", {}).get(
+            "redis_url", "redis://redis:6379"
+        )
         if not redis_url:
-            redis_url = 'redis://redis:6379'
+            redis_url = "redis://redis:6379"
         _cache_instance = ConversationCache(redis_url=redis_url)
 
     # Return the cached redis client if available
