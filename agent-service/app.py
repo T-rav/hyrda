@@ -46,7 +46,6 @@ def get_app_version() -> str:
 
 
 # Import agents after logging is configured
-from agents import agent_registry  # noqa: E402
 from api import agents_router  # noqa: E402
 
 
@@ -66,10 +65,14 @@ async def lifespan(app: FastAPI):
 
     sync_agents_to_control_plane()
 
-    # Log registered agents
-    from services import agent_registry as dynamic_registry
+    # Clear agent registry cache so we get fresh data after sync
+    from services import agent_registry
 
-    agents = dynamic_registry.list_agents()
+    agent_registry._cached_agents = None
+    agent_registry._cache_timestamp = 0
+
+    # Log registered agents
+    agents = agent_registry.list_agents()
     logger.info(f"Registered agents: {[a['name'] for a in agents]}")
 
     yield
@@ -150,6 +153,11 @@ app.get("/metrics")(create_metrics_endpoint())
 @app.get("/")
 async def root():
     """Root endpoint with service info."""
+    # Force refresh to ensure all workers see synced agents
+    from services import agent_registry as dynamic_registry
+
+    registry = dynamic_registry.get_agent_registry(force_refresh=True)
+    agents = [info for info in registry.values() if info.get("is_primary", False)]
     return {
         "service": "agent-service",
         "version": get_app_version(),
@@ -158,7 +166,7 @@ async def root():
                 "name": agent["name"],
                 "aliases": agent.get("aliases", []),
             }
-            for agent in agent_registry.list_agents()
+            for agent in agents
         ],
     }
 

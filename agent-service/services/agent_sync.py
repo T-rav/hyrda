@@ -56,13 +56,17 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 continue
 
             # Build agent data with defaults
+            # Filter out agent's own name from aliases (it's redundant)
+            aliases = metadata.get("aliases", [])
+            aliases = [a for a in aliases if a != agent_name]
+
             agent_data = {
                 "name": agent_name,
                 "display_name": metadata.get(
                     "display_name", agent_name.replace("_", " ").title()
                 ),
                 "description": metadata.get("description", f"Agent for {agent_name}"),
-                "aliases": metadata.get("aliases", []),
+                "aliases": aliases,
                 "is_system": False,  # Default: can be disabled by admins
             }
 
@@ -120,6 +124,8 @@ def sync_agents_to_control_plane() -> None:
             agent_data["endpoint_url"] = (
                 f"http://{agent_service_host}:8000/api/agents/{agent_data['name']}/invoke"
             )
+            # Enable agents by default so they're immediately available
+            agent_data["is_enabled"] = True
             agents_to_register.append(agent_data)
 
         control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
