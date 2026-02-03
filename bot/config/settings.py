@@ -268,3 +268,19 @@ class Settings(BaseSettings):
     model_config = ConfigDict(
         env_file="../.env", extra="ignore", env_file_encoding="utf-8"
     )  # type: ignore[assignment,typeddict-unknown-key]
+
+
+# Singleton instance for caching
+_settings_instance: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Get cached settings instance.
+
+    Returns:
+        Settings instance (cached singleton)
+    """
+    global _settings_instance  # noqa: PLW0603 - Singleton pattern
+    if _settings_instance is None:
+        _settings_instance = Settings()
+    return _settings_instance

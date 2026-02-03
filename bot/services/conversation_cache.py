@@ -647,3 +647,27 @@ class ConversationCache:
         if self.redis_client:
             await self.redis_client.aclose()
             self.redis_client = None
+
+
+# Singleton instance for module-level access
+_cache_instance: ConversationCache | None = None
+
+
+def get_redis_client() -> redis.Redis | None:
+    """Get Redis client from conversation cache.
+
+    Returns:
+        Redis client if available, None otherwise
+    """
+    global _cache_instance  # noqa: PLW0603 - Singleton pattern
+    if _cache_instance is None:
+        from config.settings import get_settings
+
+        settings = get_settings()
+        redis_url = getattr(settings, 'cache', {}).get('redis_url', 'redis://redis:6379')
+        if not redis_url:
+            redis_url = 'redis://redis:6379'
+        _cache_instance = ConversationCache(redis_url=redis_url)
+
+    # Return the cached redis client if available
+    return _cache_instance.redis_client
