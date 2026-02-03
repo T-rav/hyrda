@@ -32,15 +32,10 @@ OAUTH_SCOPES = [
 ]
 
 
-class AuthError(Exception):
-    """Authentication error."""
-
-    pass
+class AuthError(Exception): ...
 
 
 class AuditLogger:
-    """Audit logging for authentication events."""
-
     @staticmethod
     def log_auth_event(
         event_type: str,

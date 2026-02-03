@@ -22,7 +22,6 @@ from services.thread_tracking import (
 )
 
 
-# TDD Factory Patterns for ThreadTracking Testing
 class RedisClientFactory:
     """Factory for creating mock Redis clients"""
 

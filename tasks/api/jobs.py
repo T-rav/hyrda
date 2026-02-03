@@ -16,11 +16,6 @@ router = APIRouter(prefix="/api")
 
 @router.get("/scheduler/info")
 async def scheduler_info(request: Request, user: dict = Depends(get_current_user)):
-    """Get scheduler information.
-
-    Returns:
-        Scheduler status and configuration
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -29,11 +24,6 @@ async def scheduler_info(request: Request, user: dict = Depends(get_current_user
 
 @router.get("/jobs")
 async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
-    """List all jobs.
-
-    Returns:
-        Dictionary with list of all scheduled jobs
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -61,14 +51,6 @@ async def list_jobs(request: Request, user: dict = Depends(get_current_user)):
 async def get_job(
     request: Request, job_id: str, user: dict = Depends(get_current_user)
 ):
-    """Get specific job details.
-
-    Args:
-        job_id: Job identifier
-
-    Returns:
-        Job details
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -84,23 +66,6 @@ async def get_job(
 async def pause_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-    """Pause a job.
-
-    Security: Requires admin authentication verified from database.
-    Defense-in-depth: Re-checks admin status from DB, not just JWT.
-
-    Args:
-        job_id: Job identifier
-        user: Current authenticated user (verified as admin from database)
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: 401 if not authenticated, 403 if not admin
-    """
-    # Admin access already verified by require_admin_from_database dependency
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -117,23 +82,6 @@ async def pause_job(
 async def resume_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-    """Resume a job.
-
-    Security: Requires admin authentication verified from database.
-    Defense-in-depth: Re-checks admin status from DB, not just JWT.
-
-    Args:
-        job_id: Job identifier
-        user: Current authenticated user (verified as admin from database)
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: 401 if not authenticated, 403 if not admin
-    """
-    # Admin access already verified by require_admin_from_database dependency
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -150,23 +98,6 @@ async def resume_job(
 async def delete_job(
     request: Request, job_id: str, user: dict = Depends(require_admin_from_database)
 ):
-    """Delete a job and its associated metadata.
-
-    Security: Requires admin authentication verified from database.
-    Defense-in-depth: Re-checks admin status from DB, not just JWT.
-
-    Args:
-        job_id: Job identifier
-        user: Current authenticated user (verified as admin from database)
-
-    Returns:
-        Success message
-
-    Raises:
-        HTTPException: 401 if not authenticated, 403 if not admin
-    """
-    # Admin access already verified by require_admin_from_database dependency
-
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -195,18 +126,6 @@ async def delete_job(
 
 @router.post("/jobs")
 async def create_job(request: Request, user: dict = Depends(get_current_user)):
-    """Create a new job.
-
-    Request Body:
-        - job_type: Type of job to create
-        - job_id: Optional job identifier
-        - schedule: Schedule configuration
-        - parameters: Job parameters
-        - task_name: Optional custom task name
-
-    Returns:
-        Success message with job ID
-    """
     scheduler_service = request.app.state.scheduler_service
     job_registry = request.app.state.job_registry
 
@@ -275,17 +194,6 @@ async def create_job(request: Request, user: dict = Depends(get_current_user)):
 
 @router.put("/jobs/{job_id}")
 async def update_job(request: Request, job_id: str):
-    """Update an existing job.
-
-    Args:
-        job_id: Job identifier
-
-    Request Body:
-        Job configuration changes
-
-    Returns:
-        Success message
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -309,14 +217,6 @@ async def update_job(request: Request, job_id: str):
 
 @router.post("/jobs/{job_id}/retry")
 async def retry_job(request: Request, job_id: str):
-    """Retry/re-queue a failed job immediately.
-
-    Args:
-        job_id: Job identifier
-
-    Returns:
-        Success message
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -339,14 +239,6 @@ async def retry_job(request: Request, job_id: str):
 
 @router.post("/jobs/{job_id}/run-once")
 async def run_job_once(request: Request, job_id: str):
-    """Run a job once immediately (ad-hoc execution).
-
-    Args:
-        job_id: Job identifier
-
-    Returns:
-        Success message with one-time job ID
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -391,14 +283,6 @@ async def run_job_once(request: Request, job_id: str):
 
 @router.get("/jobs/{job_id}/history")
 async def get_job_history(request: Request, job_id: str):
-    """Get job execution history.
-
-    Args:
-        job_id: Job identifier
-
-    Returns:
-        Job execution history with statistics
-    """
     scheduler_service = request.app.state.scheduler_service
     if not scheduler_service:
         raise HTTPException(status_code=500, detail="Scheduler not initialized")
@@ -437,11 +321,6 @@ async def get_job_history(request: Request, job_id: str):
 
 @router.get("/job-types")
 async def list_job_types(request: Request, user: dict = Depends(get_current_user)):
-    """List available job types.
-
-    Returns:
-        Dictionary with list of available job types
-    """
     job_registry = request.app.state.job_registry
     if not job_registry:
         raise HTTPException(status_code=500, detail="Job registry not initialized")

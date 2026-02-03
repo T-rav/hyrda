@@ -1,7 +1,4 @@
-"""LibreChat usage tracking model for aggregating UI interactions.
-
-Tracks conversations and interactions from LibreChat UI to enable usage analytics.
-"""
+"""LibreChat usage tracking model."""
 
 from sqlalchemy import Column, DateTime, Integer, String, func
 
@@ -9,14 +6,6 @@ from .base import Base
 
 
 class LibreChatUsage(Base):
-    """Model for tracking LibreChat UI usage by user and conversation.
-
-    This enables aggregation of:
-    - Total interactions per user
-    - Conversation counts
-    - Usage patterns over time
-    """
-
     __tablename__ = "librechat_usage"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -54,7 +43,6 @@ class LibreChatUsage(Base):
         )
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for JSON serialization."""
         return {
             "id": self.id,
             "user_id": self.user_id,

@@ -26,7 +26,6 @@ from shared.utils.jwt_auth import (
 
 logger = logging.getLogger(__name__)
 
-# Create router
 router = APIRouter(prefix="/auth")
 
 
@@ -66,16 +65,13 @@ async def auth_start(request: Request, redirect: str | None = None):
     oauth_state = secrets.token_urlsafe(32)
     csrf_token = secrets.token_urlsafe(32)
 
-    # Store state in session
     request.session["oauth_state"] = oauth_state
     request.session["oauth_csrf"] = csrf_token
     request.session["oauth_redirect"] = redirect or "/"
 
-    # Create OAuth flow
     flow = get_flow(redirect_uri)
     flow.state = oauth_state
 
-    # Get authorization URL
     authorization_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="select_account",  # Show account picker, not consent screen every time
@@ -99,7 +95,6 @@ async def auth_callback(request: Request):
     service_base_url = os.getenv("CONTROL_PLANE_BASE_URL", "http://localhost:6001")
     redirect_uri = get_redirect_uri(service_base_url, "/auth/callback")
 
-    # Get state from session
     state = request.session.get("oauth_state")
     csrf_token = request.session.get("oauth_csrf")
     redirect_url = request.session.get("oauth_redirect", "/")
@@ -124,16 +119,13 @@ async def auth_callback(request: Request):
         )
 
     try:
-        # Create OAuth flow
         flow = get_flow(redirect_uri)
         flow.fetch_token(authorization_response=str(request.url))
 
-        # Get credentials and verify
         credentials = flow.credentials
         idinfo = verify_token(credentials.id_token)
         email = idinfo.get("email")
 
-        # Verify domain
         if not verify_domain(email):
             AuditLogger.log_auth_event(
                 "callback_failed",
@@ -143,7 +135,6 @@ async def auth_callback(request: Request):
             )
             raise HTTPException(status_code=403, detail="Access restricted")
 
-        # Look up user in database to get admin status and user_id
         from models import User, get_db_session
 
         is_admin = False
@@ -176,7 +167,6 @@ async def auth_callback(request: Request):
 
                     slack_client = WebClient(token=slack_token)
 
-                    # Look up user in Slack by email
                     response = slack_client.users_lookupByEmail(email=email)
 
                     if response["ok"] and response.get("user"):
@@ -186,12 +176,10 @@ async def auth_callback(request: Request):
                             "name"
                         )
 
-                        # Check if this is the first user (bootstrap admin)
                         user_count = db_session.query(User).count()
                         is_first_user = user_count == 0
-                        is_admin = is_first_user  # First user becomes admin
+                        is_admin = is_first_user
 
-                        # Create user in database
                         new_user = User(
                             slack_user_id=slack_user_id,
                             email=email,
@@ -210,7 +198,6 @@ async def auth_callback(request: Request):
                             "user_created_from_slack", email=email, success=True
                         )
                     else:
-                        # User not found in Slack - deny access
                         logger.warning(
                             f"User {email} not found in Slack - denying access"
                         )
@@ -237,7 +224,6 @@ async def auth_callback(request: Request):
                         detail="Unable to verify user access. Please contact your administrator.",
                     )
 
-        # Generate JWT token with is_admin and user_id
         user_name = idinfo.get("name")
         user_picture = idinfo.get("picture")
         jwt_token = create_access_token(
@@ -247,7 +233,6 @@ async def auth_callback(request: Request):
             additional_claims={"is_admin": is_admin, "user_id": user_id},
         )
 
-        # Store user info in session (for backward compatibility)
         request.session["user_email"] = email
         request.session["user_info"] = {
             "email": email,
@@ -255,7 +240,6 @@ async def auth_callback(request: Request):
             "picture": user_picture,
         }
 
-        # Clear OAuth state
         request.session.pop("oauth_state", None)
         request.session.pop("oauth_csrf", None)
         request.session.pop("oauth_redirect", None)
@@ -265,16 +249,11 @@ async def auth_callback(request: Request):
             email=email,
         )
 
-        # Create response with JWT token as HTTP-only cookie
         logger.info(f"Redirecting to: {redirect_url}")
 
-        # Add JWT token to redirect URL if redirecting to a different port (e.g., tasks service)
-        # Browsers don't share cookies across different ports, so we pass the token in URL
         from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
 
         parsed_url = urlparse(redirect_url)
-        # Check if we need to pass token in URL (for cross-port/domain redirects)
-        # We allow this for localhost/127.0.0.1 on different ports
         is_localhost = parsed_url.hostname in ("localhost", "127.0.0.1")
         current_port = request.url.port or (
             443 if request.url.scheme == "https" else 80
@@ -282,7 +261,6 @@ async def auth_callback(request: Request):
         target_port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
 
         if is_localhost and current_port != target_port:
-            # Redirecting to another service on localhost - add token as query param
             query_params = parse_qs(parsed_url.query)
             query_params["token"] = [jwt_token]
             new_query = urlencode(query_params, doseq=True)
@@ -304,10 +282,10 @@ async def auth_callback(request: Request):
         response.set_cookie(
             key="access_token",
             value=jwt_token,
-            httponly=True,  # Prevent XSS attacks
-            secure=False,  # Allow over HTTP for local dev
-            samesite="lax",  # CSRF protection
-            max_age=86400,  # 24 hours (matches JWT expiration)
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=86400,
         )
         logger.info(f"Set cookie for {email}")
 
@@ -341,7 +319,6 @@ async def get_token(request: Request):
         # Use token in subsequent requests:
         curl -H "Authorization: Bearer eyJ0eXAi..." http://localhost:5001/api/jobs
     """
-    # Check if user is authenticated via session
     user_email = request.session.get("user_email")
     user_info = request.session.get("user_info")
 
@@ -351,7 +328,6 @@ async def get_token(request: Request):
             detail="Not authenticated - please login first at /auth/callback",
         )
 
-    # Look up user in database to get admin status and user_id
     from models import User, get_db_session
 
     is_admin = False
@@ -370,7 +346,6 @@ async def get_token(request: Request):
                 f"User {user_email} not found in database - creating JWT without admin privileges"
             )
 
-    # Generate JWT token with is_admin and user_id
     jwt_token = create_access_token(
         user_email=user_email,
         user_name=user_info.get("name"),
@@ -399,7 +374,6 @@ async def logout(request: Request):
     """
     email = request.session.get("user_email")
 
-    # Try to extract and revoke JWT token
     token = request.cookies.get("access_token")
     if not token:
         auth_header = request.headers.get("Authorization")
@@ -413,7 +387,6 @@ async def logout(request: Request):
         else:
             logger.warning(f"Token revocation failed for {email} (Redis unavailable?)")
 
-    # Clear session
     request.session.clear()
 
     AuditLogger.log_auth_event(
@@ -421,9 +394,7 @@ async def logout(request: Request):
         email=email,
     )
 
-    # Redirect to logout success page with cookie cleared
     response = RedirectResponse(url="/auth/logged-out", status_code=302)
-    # Must match the parameters used when setting the cookie
     response.delete_cookie(
         key="access_token",
         path="/",

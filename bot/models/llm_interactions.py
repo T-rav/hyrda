@@ -21,8 +21,6 @@ class MessageRole(str, Enum):
 
 
 class ConversationMessage(BaseModel):
-    """Individual message in a conversation."""
-
     role: MessageRole
     content: str
     timestamp: datetime = Field(default_factory=datetime.now)
@@ -36,8 +34,6 @@ class ConversationMessage(BaseModel):
 
 @dataclass(frozen=True)
 class ConversationContext:
-    """Complete conversation context."""
-
     messages: list[ConversationMessage]
     channel_id: str
     thread_id: str | None = None
@@ -49,8 +45,6 @@ class ConversationContext:
 
 
 class LLMUsage(BaseModel):
-    """Token usage information from LLM providers."""
-
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
@@ -60,8 +54,6 @@ class LLMUsage(BaseModel):
 
 
 class LLMResponse(BaseModel):
-    """Complete LLM response with metadata."""
-
     content: str
     model: str
     provider: Literal["openai", "anthropic", "ollama"]
@@ -77,8 +69,6 @@ class LLMResponse(BaseModel):
 
 @dataclass(frozen=True)
 class RAGContext:
-    """Retrieved context for RAG operations."""
-
     chunks: list[str]
     sources: list[str]
     similarities: list[float]
@@ -89,8 +79,6 @@ class RAGContext:
 
 @dataclass(frozen=True)
 class GenerationRequest:
-    """Request for text generation."""
-
     prompt: str
     system_message: str | None = None
     context: RAGContext | None = None
@@ -103,8 +91,6 @@ class GenerationRequest:
 
 @dataclass(frozen=True)
 class GenerationResponse:
-    """Complete generation response."""
-
     content: str
     llm_response: LLMResponse
     total_processing_time_ms: float

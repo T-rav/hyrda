@@ -37,12 +37,10 @@ class GDriveIngestJob(BaseJob):
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
-        """Initialize the Google Drive ingestion job."""
         super().__init__(settings, **kwargs)
         self.validate_params()
 
     def validate_params(self) -> bool:
-        """Validate job parameters."""
         super().validate_params()
 
         # Must provide either folder_id or file_id
@@ -63,7 +61,6 @@ class GDriveIngestJob(BaseJob):
         return True
 
     async def _execute_job(self) -> dict[str, Any]:
-        """Execute the Google Drive ingestion job."""
         # Get job parameters
         folder_id = self.params.get("folder_id")
         file_id = self.params.get("file_id")

@@ -16,7 +16,6 @@ from qdrant_client import QdrantClient
 
 
 def find_metric_doc():
-    """Find and inspect a metric document."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

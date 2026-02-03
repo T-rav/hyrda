@@ -46,7 +46,6 @@ class LLMProvider(ABC):
 
     @abstractmethod
     async def close(self):
-        """Clean up resources"""
         pass
 
 
@@ -76,7 +75,6 @@ class OpenAIProvider(LLMProvider):
         prompt_template_version: str | None = None,
         tools: list[dict] | None = None,
     ) -> str | dict | None:
-        """Get response from OpenAI API"""
         start_time = time.time()
 
         try:
@@ -200,13 +198,11 @@ class OpenAIProvider(LLMProvider):
             return None
 
     async def close(self):
-        """Close OpenAI client"""
         if hasattr(self.client, "_client"):
             await self.client.close()
 
 
 def create_llm_provider(settings: LLMSettings) -> LLMProvider:
-    """Factory function to create LLM provider instances"""
     provider_name = settings.provider.lower()
 
     if provider_name == "openai":

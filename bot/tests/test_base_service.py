@@ -13,7 +13,6 @@ import pytest
 from services.base import BaseService, ManagedService
 
 
-# TDD Factory Patterns for Base Service Testing
 class MockBaseService(BaseService):
     """Mock implementation of BaseService for testing."""
 
@@ -163,10 +162,7 @@ class DependencyFactory:
 
 
 class TestBaseService:
-    """Test cases for BaseService using factory patterns."""
-
     def test_service_creation(self):
-        """Test basic service creation."""
         service = BaseServiceFactory.create_basic_service()
 
         assert service.service_name == "test_service"
@@ -175,7 +171,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_initialization(self):
-        """Test service initialization."""
         service = BaseServiceFactory.create_basic_service()
 
         await service.initialize()
@@ -185,7 +180,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_initialization_idempotent(self):
-        """Test that initialization can be called multiple times safely."""
         service = BaseServiceFactory.create_basic_service()
 
         # Initialize multiple times
@@ -198,7 +192,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_initialization_failure(self):
-        """Test handling of initialization failure."""
         service = BaseServiceFactory.create_service_with_init_failure()
 
         with pytest.raises(RuntimeError, match="Initialization failed"):
@@ -208,7 +201,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_close(self):
-        """Test service close."""
         service = BaseServiceFactory.create_basic_service()
         await service.initialize()
 
@@ -219,7 +211,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_close_idempotent(self):
-        """Test that close can be called multiple times safely."""
         service = BaseServiceFactory.create_basic_service()
         await service.initialize()
 
@@ -233,7 +224,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_close_failure(self):
-        """Test handling of close failure."""
         service = BaseServiceFactory.create_service_with_close_failure()
         await service.initialize()
 
@@ -245,7 +235,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_ensure_initialized(self):
-        """Test ensure_initialized method."""
         service = BaseServiceFactory.create_basic_service()
 
         # Should initialize if not initialized
@@ -259,7 +248,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_ensure_initialized_on_closed_service(self):
-        """Test ensure_initialized on closed service."""
         service = BaseServiceFactory.create_basic_service()
         await service.initialize()
         await service.close()
@@ -268,7 +256,6 @@ class TestBaseService:
             await service.ensure_initialized()
 
     def test_health_check(self):
-        """Test basic health check."""
         service = BaseServiceFactory.create_basic_service()
 
         health = service.health_check()
@@ -280,7 +267,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_health_check_initialized(self):
-        """Test health check on initialized service."""
         service = BaseServiceFactory.create_basic_service()
         await service.initialize()
 
@@ -291,7 +277,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_async_context_manager(self):
-        """Test service as async context manager."""
         service = BaseServiceFactory.create_basic_service()
 
         async with service as ctx_service:
@@ -302,7 +287,6 @@ class TestBaseService:
 
     @pytest.mark.asyncio
     async def test_concurrent_initialization(self):
-        """Test thread-safe initialization."""
         service = BaseServiceFactory.create_basic_service()
 
         # Start multiple concurrent initializations
@@ -312,7 +296,6 @@ class TestBaseService:
         assert service.is_initialized is True
 
     def test_service_repr(self):
-        """Test string representation."""
         service = BaseServiceFactory.create_basic_service()
         repr_str = repr(service)
 
@@ -323,7 +306,6 @@ class TestBaseService:
 
     @patch("logging.getLogger")
     def test_logging_setup(self, mock_get_logger):
-        """Test that logging is set up correctly."""
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
 
@@ -334,7 +316,6 @@ class TestBaseService:
         assert service.logger is mock_logger
 
     def test_log_operation(self):
-        """Test operation logging helper."""
         service = BaseServiceFactory.create_basic_service()
         service.logger = Mock()
 
@@ -350,7 +331,6 @@ class TestBaseService:
         assert call_args[1]["extra"]["success"] is True
 
     def test_log_error(self):
-        """Test error logging helper."""
         service = BaseServiceFactory.create_basic_service()
         service.logger = Mock()
 
@@ -402,10 +382,7 @@ class MockDependency:
 
 
 class TestManagedService:
-    """Test cases for ManagedService using factory patterns."""
-
     def test_dependency_management(self):
-        """Test dependency addition and retrieval."""
         service = ManagedServiceFactory.create_basic_service()
         dependency = DependencyFactory.create_basic_dependency("test_dep")
 
@@ -415,7 +392,6 @@ class TestManagedService:
         assert retrieved is dependency
 
     def test_get_nonexistent_dependency(self):
-        """Test getting nonexistent dependency raises error."""
         service = ManagedServiceFactory.create_basic_service()
 
         with pytest.raises(KeyError, match="Dependency 'nonexistent' not found"):
@@ -423,7 +399,6 @@ class TestManagedService:
 
     @pytest.mark.asyncio
     async def test_close_with_dependencies(self):
-        """Test that dependencies are closed when service closes."""
         dependencies = {
             "dep1": DependencyFactory.create_basic_dependency("dep1"),
             "dep2": DependencyFactory.create_basic_dependency("dep2"),
@@ -442,7 +417,6 @@ class TestManagedService:
         assert service.close_called is True
 
     def test_health_check_with_dependencies(self):
-        """Test health check includes dependency health."""
         dependency = DependencyFactory.create_basic_dependency("test_dep")
         service = ManagedServiceFactory.create_service_with_dependencies(
             {"test": dependency}
@@ -457,7 +431,6 @@ class TestManagedService:
 
     @pytest.mark.asyncio
     async def test_dependency_close_error_handling(self):
-        """Test handling of dependency close errors."""
         service = ManagedServiceFactory.create_basic_service()
 
         # Create dependency that fails to close using Mock (original behavior)

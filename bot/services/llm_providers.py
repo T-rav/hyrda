@@ -203,7 +203,6 @@ class OpenAIProvider(LLMProvider):
             return None
 
     async def close(self):
-        """Close OpenAI client"""
         if hasattr(self.client, "_client"):
             await self.client.close()
 

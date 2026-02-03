@@ -401,7 +401,9 @@ def test_generate_api_key_format():
 
     assert api_key.startswith("sa_")
     assert len(api_key) > 40  # sa_ + 32+ chars
-    assert api_key[3].isalnum()  # After prefix should be alphanumeric
+    assert (
+        api_key[3].isalnum() or api_key[3] in "-_"
+    )  # After prefix should be alphanumeric or URL-safe
 
 
 # Test: Admin-Only Access (should fail without admin auth)

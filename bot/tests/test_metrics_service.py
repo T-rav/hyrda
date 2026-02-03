@@ -15,7 +15,6 @@ from bot.services.metrics_service import (
 )
 
 
-# TDD Factory Patterns for Metrics Service Testing
 class MetricsServiceFactory:
     """Factory for creating MetricsService instances with different configurations"""
 

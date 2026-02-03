@@ -22,7 +22,7 @@ class ConductResearch(BaseModel):
 class ResearchComplete(BaseModel):
     """Signal that research is complete and ready for final report."""
 
-    pass
+    ...
 
 
 class ClarifyWithUser(BaseModel):

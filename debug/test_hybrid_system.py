@@ -37,8 +37,6 @@ from services.title_injection_service import (
 
 @dataclass
 class TestResult:
-    """Test result container"""
-
     name: str
     passed: bool
     message: str
@@ -46,27 +44,21 @@ class TestResult:
 
 
 class HybridSystemTester:
-    """Complete hybrid system test runner"""
-
     def __init__(self):
         self.results: list[TestResult] = []
         self.title_service = TitleInjectionService()
         self.chunk_processor = EnhancedChunkProcessor(self.title_service)
 
     def add_result(self, name: str, passed: bool, message: str, duration: float = 0.0):
-        """Add test result"""
         self.results.append(TestResult(name, passed, message, duration))
         status = "✅ PASS" if passed else "❌ FAIL"
         logger.info(f"{status} {name}: {message}")
 
     def test_title_injection_wiring(self):
-        """Test title injection service integration"""
         try:
             import time
 
             start = time.time()
-
-            # Test basic title injection
             texts = ["Machine learning is powerful."]
             metadata = [{"title": "ML Introduction", "author": "Jane Doe"}]
 
@@ -192,7 +184,7 @@ class HybridSystemTester:
                     return True
 
                 async def close(self):
-                    pass
+                    ...
 
             dense_store = MockStore("dense")
             sparse_store = MockStore("sparse")
@@ -399,7 +391,6 @@ class HybridSystemTester:
             self.add_result("Component Imports", False, f"Import error: {e}")
 
     async def run_all_tests(self):
-        """Run complete test suite"""
         logger.info("🚀 Starting Hybrid RAG System Test Suite")
         logger.info("=" * 60)
 
@@ -448,7 +439,6 @@ class HybridSystemTester:
 
 
 async def main():
-    """Run the test suite"""
     tester = HybridSystemTester()
     success = await tester.run_all_tests()
 

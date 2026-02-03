@@ -28,8 +28,6 @@ def get_app_version() -> str:
 
 
 class HealthChecker:
-    """Health check service for monitoring bot status"""
-
     def __init__(
         self, settings: Settings, conversation_cache=None, langfuse_service=None
     ):
@@ -800,7 +798,7 @@ class HealthChecker:
             }
         except ImportError:
             # Already handled above - pymysql not available
-            pass
+            logger.debug("pymysql not available for database health check")
         except Exception as e:
             services["database"] = {
                 "name": "MySQL Database",

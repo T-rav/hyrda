@@ -27,7 +27,6 @@ load_dotenv()
 
 
 async def test_vail_resorts_query():
-    """Test the exact query that's causing false positives in production."""
     from bot.agents.company_profile.tools.internal_search import internal_search_tool
 
     query = "profile Vail Resorts and highlight how our recent case study https://8thlight.com/case-studies/aspenware could be useful for them"
@@ -93,7 +92,6 @@ async def test_vail_resorts_query():
 
 
 async def test_internal_search_tool_only():
-    """Test just the internal_search_tool (not the full ProfileAgent)."""
     from bot.agents.company_profile.tools.internal_search import internal_search_tool
 
     print("\n" + "=" * 80)

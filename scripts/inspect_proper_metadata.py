@@ -16,7 +16,6 @@ from qdrant_client import QdrantClient
 
 
 def inspect_proper_metadata():
-    """Check metadata structure of proper documents."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

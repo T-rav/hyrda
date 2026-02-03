@@ -15,7 +15,6 @@ from agents.company_profile.tools.internal_search import InternalSearchTool
 
 
 async def test_real_world():
-    """Test edge cases with actual vector database."""
     tool = InternalSearchTool()
 
     edge_cases = [

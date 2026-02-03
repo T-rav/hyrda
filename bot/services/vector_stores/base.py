@@ -19,7 +19,6 @@ class VectorStore(ABC):
 
     @abstractmethod
     async def initialize(self):
-        """Initialize the vector store"""
         pass
 
     @abstractmethod
@@ -29,7 +28,6 @@ class VectorStore(ABC):
         embeddings: list[list[float]],
         metadata: list[dict[str, Any]] | None = None,
     ):
-        """Add documents to the vector store"""
         pass
 
     @abstractmethod
@@ -39,15 +37,12 @@ class VectorStore(ABC):
         limit: int = 5,
         similarity_threshold: float = 0.7,
     ) -> list[dict[str, Any]]:
-        """Search for similar documents"""
         pass
 
     @abstractmethod
     async def delete_documents(self, document_ids: list[str]):
-        """Delete documents from the vector store"""
         pass
 
     @abstractmethod
     async def close(self):
-        """Clean up resources"""
         pass

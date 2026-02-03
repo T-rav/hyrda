@@ -46,17 +46,14 @@ class WebsiteScrapeJob(BaseJob):
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
-        """Initialize the website scraping job."""
         super().__init__(settings, **kwargs)
 
-        # Initialize embedding and vector clients for direct Qdrant access
         self.embedding_client = OpenAIEmbeddings()
         self.vector_client = QdrantClient()
 
         self.validate_params()
 
     def validate_params(self) -> bool:
-        """Validate job parameters."""
         super().validate_params()
 
         # Validate website_url format
@@ -67,10 +64,6 @@ class WebsiteScrapeJob(BaseJob):
         return True
 
     def _create_ssl_context(self) -> ssl.SSLContext:
-        """Create SSL context with proper certificate validation.
-
-        Handles differences between Linux and macOS certificate paths.
-        """
         ssl_context = ssl.create_default_context()
 
         # Try to load system CA bundle (Linux path)
@@ -83,15 +76,6 @@ class WebsiteScrapeJob(BaseJob):
     async def _fetch_sitemap(
         self, sitemap_url: str, auth_headers: dict[str, str] | None = None
     ) -> list[str]:
-        """Fetch and parse sitemap.xml to get list of URLs.
-
-        Args:
-            sitemap_url: URL to sitemap.xml
-            auth_headers: Optional authentication headers (e.g. OAuth Bearer token)
-
-        Returns:
-            List of page URLs from sitemap
-        """
         logger.info(f"Fetching sitemap from: {sitemap_url}")
 
         # Use system CA bundle for SSL verification
@@ -149,17 +133,6 @@ class WebsiteScrapeJob(BaseJob):
         auth_headers: dict[str, str] | None = None,
         conditional_headers: dict[str, str] | None = None,
     ) -> dict[str, Any] | None:
-        """Scrape a single page and extract text content.
-
-        Args:
-            url: URL to scrape
-            auth_headers: Optional authentication headers (e.g. OAuth Bearer token)
-            conditional_headers: Optional HTTP conditional headers (If-Modified-Since, If-None-Match)
-
-        Returns:
-            Dict with content and metadata, or None if failed.
-            Returns special dict with 'not_modified': True if server returns 304.
-        """
         logger.debug(f"Scraping page: {url}")
 
         # Use system CA bundle for SSL verification
@@ -224,16 +197,6 @@ class WebsiteScrapeJob(BaseJob):
     def _filter_urls(
         self, urls: list[str], include_patterns: list[str], exclude_patterns: list[str]
     ) -> list[str]:
-        """Filter URLs based on include/exclude patterns.
-
-        Args:
-            urls: List of URLs to filter
-            include_patterns: List of URL patterns to include (substring match)
-            exclude_patterns: List of URL patterns to exclude (substring match)
-
-        Returns:
-            Filtered list of URLs
-        """
         filtered = urls
 
         # Apply include patterns
@@ -262,20 +225,6 @@ class WebsiteScrapeJob(BaseJob):
         exclude_patterns: list[str],
         auth_headers: dict[str, str] | None = None,
     ) -> list[str]:
-        """Crawl website by following internal links (fallback when no sitemap).
-
-        Uses Crawlee library for robust web crawling with automatic link discovery.
-
-        Args:
-            start_url: Starting URL to crawl from
-            max_pages: Maximum number of pages to discover (None = unlimited)
-            include_patterns: URL patterns to include
-            exclude_patterns: URL patterns to exclude
-            auth_headers: Optional authentication headers
-
-        Returns:
-            List of discovered page URLs
-        """
         # Import Crawlee only when needed (avoids import at top level)
         from crawlee.crawlers import (  # noqa: PLC0415
             BeautifulSoupCrawler,
@@ -288,7 +237,6 @@ class WebsiteScrapeJob(BaseJob):
         discovered_urls = []
 
         async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
-            """Handle each crawled page."""
             url = context.request.url
 
             # Apply include/exclude patterns
@@ -347,14 +295,11 @@ class WebsiteScrapeJob(BaseJob):
         return discovered_urls
 
     async def _execute_job(self) -> dict[str, Any]:
-        """Execute the website scraping job."""
         tracking_service = WebPageTrackingService()
 
-        # Initialize vector client before use
         logger.info("Initializing vector database connection...")
         await self.vector_client.initialize()
 
-        # Get job parameters
         website_url = self.params.get("website_url")
         sitemap_url = self.params.get("sitemap_url")
         max_pages = self.params.get("max_pages", None)  # None = unlimited
@@ -364,7 +309,6 @@ class WebsiteScrapeJob(BaseJob):
         force_rescrape = self.params.get("force_rescrape", False)
         credential_id = self.params.get("credential_id")
 
-        # Load OAuth credential if provided (for authenticated scraping)
         auth_headers = {}
         if credential_id:
             logger.info(f"Loading OAuth credential: {credential_id}")
@@ -453,7 +397,6 @@ class WebsiteScrapeJob(BaseJob):
                 logger.error(f"Failed to load OAuth credential: {e}")
                 raise ValueError(f"OAuth credential loading failed: {e}") from e
 
-        # Determine sitemap URL (try common locations if not provided)
         if not sitemap_url:
             base_url = website_url.rstrip("/")
             sitemap_url = f"{base_url}/sitemap.xml"
@@ -464,7 +407,6 @@ class WebsiteScrapeJob(BaseJob):
             f"sitemap={sitemap_url}, max_pages={max_pages or 'unlimited'}"
         )
 
-        # Fetch sitemap URLs
         urls = await self._fetch_sitemap(sitemap_url, auth_headers)
 
         if not urls:
@@ -493,7 +435,6 @@ class WebsiteScrapeJob(BaseJob):
                     f"and manual crawling from {website_url} found no pages."
                 )
 
-        # Filter URLs
         if include_patterns or exclude_patterns:
             original_count = len(urls)
             urls = self._filter_urls(urls, include_patterns, exclude_patterns)
@@ -502,20 +443,17 @@ class WebsiteScrapeJob(BaseJob):
                 f"(include={include_patterns}, exclude={exclude_patterns})"
             )
 
-        # Limit number of pages (if max_pages is specified)
         if max_pages is not None and len(urls) > max_pages:
             logger.info(f"Limiting to {max_pages} pages (found {len(urls)})")
             urls = urls[:max_pages]
         else:
             logger.info(f"Processing all {len(urls)} URLs from sitemap (no limit)")
 
-        # COST OPTIMIZATION: Use HTTP conditional requests to avoid downloading unchanged pages
         domain = tracking_service.extract_domain(website_url)
         scraped_pages = []
         failed_count = 0
         not_modified_count = 0
 
-        # STEP 1: Scrape with conditional headers (If-Modified-Since, If-None-Match)
         for i, url in enumerate(urls, 1):
             logger.info(f"Scraping page {i}/{len(urls)}: {url}")
 
@@ -548,7 +486,6 @@ class WebsiteScrapeJob(BaseJob):
             f"{failed_count} failed. Now checking content hashes..."
         )
 
-        # STEP 2: Check content hash to filter unchanged pages (catches changes when server doesn't support 304)
         pages_to_embed = []
         skipped_count = 0
 
@@ -567,7 +504,6 @@ class WebsiteScrapeJob(BaseJob):
 
             pages_to_embed.append(page)
 
-        # Update skipped count to include 304 responses
         total_skipped = skipped_count + not_modified_count
 
         logger.info(
@@ -577,7 +513,6 @@ class WebsiteScrapeJob(BaseJob):
             f"total savings: {total_skipped}/{len(urls)} pages"
         )
 
-        # Detect removed pages (in DB but not in sitemap)
         removed_count = 0
         if not force_rescrape:
             logger.info(f"Checking for removed pages on {domain}...")
@@ -602,7 +537,6 @@ class WebsiteScrapeJob(BaseJob):
             if removed_count > 0:
                 logger.info(f"Marked {removed_count} pages as removed")
 
-        # Index into Qdrant (only new/changed pages)
         texts = []
         metadata_list = []
         vector_ids = []
@@ -705,7 +639,6 @@ class WebsiteScrapeJob(BaseJob):
                 )
                 # Don't fail entire job on tracking errors
 
-        # Return result summary
         total_processed = len(scraped_pages) + total_skipped + failed_count
         return {
             # Standardized fields for task run tracking

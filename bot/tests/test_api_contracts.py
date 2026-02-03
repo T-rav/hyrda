@@ -14,7 +14,6 @@ from bot.health import HealthChecker
 from config.settings import Settings
 
 
-# TDD Factory Patterns for API Contract Testing
 class APIContractFactory:
     """Factory for creating API contract test data and configurations"""
 
@@ -43,10 +42,7 @@ class APIContractFactory:
 
 
 class TestHealthAPIContracts(AioHTTPTestCase):
-    """Test health API endpoint contracts to prevent dashboard breakage"""
-
     async def get_application(self):
-        """Create test application"""
         # Mock settings
         settings = Mock(spec=Settings)
         settings.health_port = 8080
@@ -74,7 +70,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         return app
 
     async def test_health_endpoint_contract(self):
-        """Test /api/health returns expected JSON structure"""
         resp = await self.client.request("GET", "/api/health")
         assert resp.status == 200
         assert resp.content_type == "application/json"
@@ -96,7 +91,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
         assert data["status"] in ["healthy", "unhealthy"]
 
     async def test_metrics_endpoint_contract(self):
-        """Test /api/metrics returns expected JSON structure for dashboard"""
         resp = await self.client.request("GET", "/api/metrics")
         assert resp.status == 200
         assert resp.content_type == "application/json"
@@ -119,7 +113,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                 assert "enabled" in service_info or "available" in service_info
 
     async def test_services_health_contract(self):
-        """Test /api/services/health returns expected structure"""
         with patch("bot.health.get_metrics_service") as mock_metrics:
             mock_metrics.return_value = Mock()
 
@@ -142,7 +135,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
             assert data["status"] in ["healthy", "degraded", "unhealthy"]
 
     async def test_usage_metrics_contract(self):
-        """Test /api/metrics/usage returns expected structure for dashboard charts"""
         with patch("bot.health.get_metrics_service") as mock_metrics:
             mock_service = Mock()
             mock_service.get_usage_metrics.return_value = {
@@ -175,7 +167,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
                 )
 
     async def test_user_import_endpoint_contract(self):
-        """Test /api/users/import POST endpoint contract"""
         test_payload = {
             "users": [
                 {"id": "U123", "name": "Test User", "email": "test@example.com"},
@@ -201,7 +192,6 @@ class TestHealthAPIContracts(AioHTTPTestCase):
             assert field in data, f"Missing response field: {field}"
 
     async def test_ingest_completed_webhook_contract(self):
-        """Test /api/ingest/completed webhook endpoint contract"""
         test_payload = {
             "job_id": "ingest-123",
             "status": "completed",

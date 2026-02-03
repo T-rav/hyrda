@@ -7,8 +7,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class CacheStats(BaseModel):
-    """Cache statistics and health information."""
-
     model_config = ConfigDict(frozen=True)
 
     hit_rate_percent: float
@@ -23,8 +21,6 @@ class CacheStats(BaseModel):
 
 @dataclass(frozen=True)
 class ThreadInfo:
-    """Slack thread information and participation status."""
-
     exists: bool
     message_count: int
     bot_is_participant: bool

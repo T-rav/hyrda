@@ -4,10 +4,7 @@ import re
 
 
 class TestAgentDetection:
-    """Test agent query detection with dynamic patterns."""
-
     def test_profile_agent_detection(self):
-        """Test that 'profile costco' is detected as an agent query."""
         # Patterns that should be generated from agent service
         agent_patterns = [
             "^/profile",  # /profile
@@ -37,7 +34,6 @@ class TestAgentDetection:
             )
 
     def test_meddic_agent_detection(self):
-        """Test that MEDDIC queries are detected."""
         agent_patterns = [
             "^/meddic",
             "^meddic\\s",
@@ -60,7 +56,6 @@ class TestAgentDetection:
             )
 
     def test_pattern_escaping(self):
-        """Test that regex patterns are properly escaped."""
         # The pattern should use \\s not just \s in the string
         pattern = "^profile\\s"  # This is correct
 
@@ -72,7 +67,6 @@ class TestAgentDetection:
         )
 
     def test_case_insensitive_matching(self):
-        """Test that agent detection is case-insensitive."""
         agent_patterns = ["^profile\\s"]
 
         test_queries = [

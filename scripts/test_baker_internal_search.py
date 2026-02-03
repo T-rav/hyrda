@@ -18,7 +18,6 @@ from agents.company_profile.tools.internal_search import InternalSearchTool
 
 
 async def main():
-    """Test internal search for Baker College."""
     tool = InternalSearchTool()
 
     print("=" * 80)

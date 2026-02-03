@@ -15,11 +15,8 @@ from agents.company_profile.tools.internal_search import InternalSearchTool
 
 
 async def test_extraction_logic():
-    """Test the company name extraction logic directly."""
-
     # Simulate the extraction logic
     def extract_company_name(query: str) -> str:
-        """Replicate the extraction logic from internal_search.py."""
         company_name = None
         q_lower = query.lower()
 

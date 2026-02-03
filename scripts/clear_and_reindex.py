@@ -18,7 +18,6 @@ from qdrant_client import QdrantClient
 
 
 def clear_collection():
-    """Clear all documents from the collection."""
     client = QdrantClient(
         host=os.getenv('VECTOR_HOST', 'localhost'),
         port=int(os.getenv('VECTOR_PORT', 6333)),

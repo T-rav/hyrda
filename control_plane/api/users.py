@@ -1,4 +1,4 @@
-"""User management endpoints - FastAPI version."""
+"""User management endpoints."""
 
 import logging
 import os
@@ -27,7 +27,6 @@ router = APIRouter(
 )
 
 
-# Pydantic models for request/response
 class UserAdminUpdate(BaseModel):
     """UserAdminUpdate class."""
 
@@ -54,7 +53,6 @@ async def get_current_user_endpoint(request: Request) -> dict[str, Any]:
     try:
         from dependencies.auth import get_current_user as get_current_user_auth
 
-        # Use JWT-aware auth (supports both JWT and session)
         user_info = await get_current_user_auth(request)
 
         return {
@@ -116,16 +114,13 @@ async def list_users(request: Request) -> dict[str, Any]:
         JSON response with paginated users and pagination metadata
     """
     try:
-        # Get pagination parameters
         page, per_page = get_pagination_params(
             request, default_per_page=50, max_per_page=100
         )
 
         with get_db_session() as session:
-            # Build query
             query = session.query(User).order_by(User.email)
 
-            # Paginate query
             users, total_count = paginate_query(query, page, per_page)
 
             # Batch load all group memberships for these users in ONE query
@@ -140,7 +135,6 @@ async def list_users(request: Request) -> dict[str, Any]:
                 .all()
             )
 
-            # Build lookup dictionary: user_id -> [groups]
             memberships_by_user = defaultdict(list)
             for membership, group in all_memberships:
                 memberships_by_user[membership.slack_user_id].append(
@@ -150,7 +144,6 @@ async def list_users(request: Request) -> dict[str, Any]:
                     }
                 )
 
-            # Build user data using cached memberships
             users_data = []
             for user in users:
                 groups = memberships_by_user[user.slack_user_id]
@@ -170,11 +163,9 @@ async def list_users(request: Request) -> dict[str, Any]:
                     }
                 )
 
-            # Build paginated response
             response = build_pagination_response(
                 users_data, total_count, page, per_page
             )
-            # Keep "users" key for backward compatibility
             return {"users": response["items"], "pagination": response["pagination"]}
 
     except Exception as e:
@@ -197,7 +188,6 @@ async def sync_users(
     try:
         from services.user_sync import sync_users_from_provider
 
-        # Get provider type from request body or use configured default
         provider_type = body.provider if body else None
 
         stats = sync_users_from_provider(provider_type=provider_type)
@@ -234,22 +224,16 @@ async def update_user_admin_status(
         new_admin_status = body.is_admin
 
         with get_db_session() as db_session:
-            # Use explicit transaction with row-level locking to prevent race conditions
-            # This ensures only ONE request can bootstrap the first admin
             with db_session.begin():
-                # Lock ALL admin records to prevent concurrent bootstrap
-                # This prevents TOCTOU (Time-of-Check to Time-of-Use) vulnerability
                 existing_admins = (
                     db_session.query(User).filter(User.is_admin).with_for_update().all()
                 )
 
                 admin_count = len(existing_admins)
 
-                # If no admins exist, allow bootstrap (first admin creation)
                 if admin_count == 0:
                     logger.info("No admins exist - allowing bootstrap admin creation")
                 else:
-                    # Otherwise, require current user to be admin (JWT-aware)
                     current_user_info = await get_current_user_auth(request)
                     current_user_email = current_user_info.get("email")
 
@@ -267,7 +251,6 @@ async def update_user_admin_status(
                             detail="Only admins can manage admin status",
                         )
 
-                # Update the target user by Slack user ID (also with lock)
                 user = (
                     db_session.query(User)
                     .filter(User.slack_user_id == user_id)
@@ -306,14 +289,12 @@ async def get_user_permissions(user_id: str) -> dict:
     """Get user's agent permissions (direct + inherited from groups)."""
     try:
         with get_db_session() as session:
-            # Get user's direct permissions
             direct_permissions = (
                 session.query(AgentPermission)
                 .filter(AgentPermission.slack_user_id == user_id)
                 .all()
             )
 
-            # Get user's group memberships
             user_groups = (
                 session.query(UserGroup.group_name)
                 .filter(UserGroup.slack_user_id == user_id)
@@ -321,7 +302,6 @@ async def get_user_permissions(user_id: str) -> dict:
             )
             group_names = [g.group_name for g in user_groups]
 
-            # Get permissions from all groups the user belongs to
             from models import AgentGroupPermission
 
             group_permissions = []
@@ -332,11 +312,9 @@ async def get_user_permissions(user_id: str) -> dict:
                     .all()
                 )
 
-            # Combine direct and inherited permissions (deduplicate by agent_name)
             all_agent_names = set()
             permissions_list = []
 
-            # Add direct permissions
             for p in direct_permissions:
                 if p.agent_name not in all_agent_names:
                     all_agent_names.add(p.agent_name)
@@ -349,7 +327,6 @@ async def get_user_permissions(user_id: str) -> dict:
                         }
                     )
 
-            # Add inherited group permissions
             for p in group_permissions:
                 if p.agent_name not in all_agent_names:
                     all_agent_names.add(p.agent_name)
@@ -382,12 +359,10 @@ async def grant_user_permission(
         granted_by = body.granted_by
 
         with get_db_session() as session:
-            # Check if user exists
             user = session.query(User).filter(User.slack_user_id == user_id).first()
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
 
-            # Check if permission already exists
             existing = (
                 session.query(AgentPermission)
                 .filter(
@@ -401,7 +376,6 @@ async def grant_user_permission(
                     status_code=400, detail="Permission already granted"
                 )
 
-            # Grant permission
             new_permission = AgentPermission(
                 agent_name=agent_name,
                 slack_user_id=user_id,

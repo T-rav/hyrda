@@ -7,8 +7,6 @@ from .security_base import SecurityBase
 
 
 class AgentMetadata(SecurityBase):
-    """Model for storing agent configuration and metadata."""
-
     __tablename__ = "agent_metadata"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -1,4 +1,4 @@
-"""Agent management endpoints - FastAPI version."""
+"""Agent management endpoints."""
 
 import logging
 import os
@@ -30,7 +30,6 @@ from utils.validation import validate_agent_name, validate_display_name
 
 logger = logging.getLogger(__name__)
 
-# Create router with authentication required for user endpoints
 router = APIRouter(
     prefix="/api/agents",
     tags=["agents"],
@@ -53,23 +52,19 @@ async def list_agents(request: Request) -> dict[str, Any]:
         per_page: Items per page (default: 50, max: 100)
     """
     try:
-        # Check if we should include deleted agents
         include_deleted = (
             request.query_params.get("include_deleted", "false").lower() == "true"
         )
 
-        # Get pagination parameters - pass request for query params
         page, per_page = get_pagination_params(
             request, default_per_page=50, max_per_page=100
         )
 
         with get_db_session() as session:
-            # Get agents from database, filtering deleted by default
             query = session.query(AgentMetadata).order_by(AgentMetadata.agent_name)
             if not include_deleted:
                 query = query.filter(~AgentMetadata.is_deleted)
 
-            # Paginate query
             agents, total_count = paginate_query(query, page, per_page)
 
             # Batch load group counts for all agents in ONE query using GROUP BY
@@ -84,10 +79,8 @@ async def list_agents(request: Request) -> dict[str, Any]:
                 .all()
             )
 
-            # Build lookup dictionary: agent_name -> count
             group_counts = dict(group_counts_query)
 
-            # Build agent data using cached counts
             agents_data = []
             for agent in agents:
                 group_count = group_counts.get(agent.agent_name, 0)
@@ -110,11 +103,9 @@ async def list_agents(request: Request) -> dict[str, Any]:
                     }
                 )
 
-            # Build paginated response
             response = build_pagination_response(
                 agents_data, total_count, page, per_page
             )
-            # Keep "agents" key for backward compatibility
             return {"agents": response["items"], "pagination": response["pagination"]}
 
     except Exception as e:
@@ -152,14 +143,12 @@ async def register_agent(
         is_system = data.get("is_system", False)
         endpoint_url = data.get("endpoint_url")  # HTTP endpoint for invocation
 
-        # Validate agent name
         is_valid, error_msg = validate_agent_name(agent_name)
         if not is_valid:
             raise HTTPException(
                 status_code=400, detail=validation_error(error_msg, field="name")
             )
 
-        # Validate display name (optional)
         is_valid, error_msg = validate_display_name(display_name)
         if not is_valid:
             raise HTTPException(
@@ -168,10 +157,7 @@ async def register_agent(
             )
 
         with get_db_session() as session:
-            # Use explicit transaction to ensure lock is properly held
             with session.begin():
-                # Check if agent exists (deleted or not)
-                # Use row-level locking to prevent race conditions
                 agent = (
                     session.query(AgentMetadata)
                     .filter(AgentMetadata.agent_name == agent_name)
@@ -179,9 +165,7 @@ async def register_agent(
                     .first()
                 )
 
-                # Validate uniqueness: ensure no non-deleted agent with same name exists
                 if agent and agent.is_deleted:
-                    # Before reactivating, double-check no active agent with same name exists
                     existing_active = (
                         session.query(AgentMetadata)
                         .filter(
@@ -199,13 +183,9 @@ async def register_agent(
                             },
                         )
 
-                # Check for conflict: non-deleted agent with same name
                 if agent and not agent.is_deleted:
-                    # Update existing active agent
-                    # NOTE: Preserve admin-customized aliases (don't overwrite with agent defaults)
                     agent.display_name = display_name
                     agent.description = description
-                    # Only update aliases if admin hasn't customized them
                     if not agent.aliases_customized:
                         agent.set_aliases(aliases)
                         logger.info(
@@ -220,13 +200,11 @@ async def register_agent(
                     logger.info(f"Updated agent '{agent_name}' in database")
                     action = "updated"
                 elif agent and agent.is_deleted:
-                    # Reactivate deleted agent (undelete and update)
                     agent.is_deleted = False
-                    agent.is_enabled = True  # Re-enable when reactivating
-                    agent.is_slack_visible = True  # Default to visible in Slack
+                    agent.is_enabled = True
+                    agent.is_slack_visible = True
                     agent.display_name = display_name
                     agent.description = description
-                    # Reset aliases on reactivation (agent was deleted, start fresh)
                     agent.set_aliases(aliases)
                     agent.aliases_customized = False
                     agent.is_system = is_system
@@ -234,7 +212,6 @@ async def register_agent(
                     logger.info(f"Reactivated deleted agent '{agent_name}'")
                     action = "reactivated"
                 else:
-                    # Create new agent (default enabled and visible in Slack)
                     agent = AgentMetadata(
                         agent_name=agent_name,
                         display_name=display_name,
@@ -268,12 +245,10 @@ async def register_agent(
 async def get_agent_details(agent_name: str) -> dict[str, Any]:
     """Get detailed information about a specific agent."""
     try:
-        # Get authorized users and groups from database
         authorized_user_ids = []
         authorized_group_names = []
 
         with get_db_session() as session:
-            # Get direct user permissions
             user_perms = (
                 session.query(AgentPermission)
                 .filter(AgentPermission.agent_name == agent_name)
@@ -281,7 +256,6 @@ async def get_agent_details(agent_name: str) -> dict[str, Any]:
             )
             authorized_user_ids = [p.slack_user_id for p in user_perms]
 
-            # Get group permissions
             group_perms = (
                 session.query(AgentGroupPermission)
                 .filter(AgentGroupPermission.agent_name == agent_name)
@@ -289,7 +263,6 @@ async def get_agent_details(agent_name: str) -> dict[str, Any]:
             )
             authorized_group_names = [p.group_name for p in group_perms]
 
-            # Get agent metadata for enabled state and system status
             metadata = (
                 session.query(AgentMetadata)
                 .filter(AgentMetadata.agent_name == agent_name)
@@ -361,7 +334,6 @@ async def delete_agent(
 
             logger.info(f"Soft deleted agent '{agent_name}'")
 
-            # Audit log
             log_agent_action(
                 AuditAction.AGENT_DELETE,
                 agent_name,
@@ -403,7 +375,6 @@ async def get_agent_usage(agent_name: str) -> dict[str, Any]:
         agent_invocations = data.get("agent_invocations", {})
         by_agent = agent_invocations.get("by_agent", {})
 
-        # Get stats for this specific agent
         total = by_agent.get(agent_name, 0)
 
         return {
@@ -429,7 +400,6 @@ async def toggle_agent_enabled(
     """
     try:
         with get_db_session() as session:
-            # Get or create agent metadata
             agent_metadata = (
                 session.query(AgentMetadata)
                 .filter(AgentMetadata.agent_name == agent_name)
@@ -445,7 +415,6 @@ async def toggle_agent_enabled(
                 )
                 session.add(agent_metadata)
 
-            # Prevent disabling system agents
             if agent_metadata.is_system and agent_metadata.is_enabled:
                 raise HTTPException(
                     status_code=403,
@@ -455,7 +424,6 @@ async def toggle_agent_enabled(
                     },
                 )
 
-            # Toggle the enabled state
             agent_metadata.is_enabled = not agent_metadata.is_enabled
             session.commit()
 
@@ -496,7 +464,6 @@ async def toggle_agent_slack_visibility(
                     status_code=404, detail=not_found_error("Agent", agent_name)
                 )
 
-            # Toggle Slack visibility
             agent_metadata.is_slack_visible = not agent_metadata.is_slack_visible
             session.commit()
 
@@ -532,14 +499,12 @@ async def update_agent_aliases(
         data = await request.json()
         aliases = data.get("aliases", [])
 
-        # Validate aliases
         if not isinstance(aliases, list):
             raise HTTPException(
                 status_code=400,
                 detail=validation_error("aliases must be a list", field="aliases"),
             )
 
-        # Validate each alias (alphanumeric, spaces, hyphens, underscores)
         import re
 
         for alias in aliases:
@@ -564,14 +529,12 @@ async def update_agent_aliases(
                     status_code=404, detail=not_found_error("Agent", agent_name)
                 )
 
-            # Update aliases and mark as customized
             agent_metadata.set_aliases(aliases)
             agent_metadata.aliases_customized = True
             session.commit()
 
             logger.info(f"Admin updated aliases for agent '{agent_name}': {aliases}")
 
-            # Audit log
             log_agent_action(
                 AuditAction.AGENT_UPDATE,
                 agent_name,
@@ -603,7 +566,6 @@ async def check_alias_conflicts(agent_name: str) -> dict[str, Any]:
     """
     try:
         with get_db_session() as session:
-            # Get this agent
             agent = (
                 session.query(AgentMetadata)
                 .filter(

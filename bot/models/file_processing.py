@@ -61,8 +61,6 @@ class ProcessingStatus(str, Enum):
 
 
 class FileMetadata(BaseModel):
-    """Rich file metadata with type safety."""
-
     file_id: str
     filename: str
     file_type: FileType
@@ -83,8 +81,6 @@ class FileMetadata(BaseModel):
 
 @dataclass(frozen=True)
 class ProcessingResult:
-    """Result of file processing operation."""
-
     file_metadata: FileMetadata
     status: ProcessingStatus
     content: str | None = None
@@ -98,8 +94,6 @@ class ProcessingResult:
 
 @dataclass(frozen=True)
 class SlackFileInfo:
-    """Slack file attachment information."""
-
     id: str
     name: str
     title: str | None
@@ -117,11 +111,9 @@ class SlackFileInfo:
 
     @property
     def file_type(self) -> FileType:
-        """Get FileType enum from filetype string."""
         if self.filetype:
             return FileType.from_extension(f".{self.filetype}")
         elif self.mimetype:
-            # Map common MIME types
             mime_map = {
                 "application/pdf": FileType.PDF,
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": FileType.DOCX,
@@ -138,8 +130,6 @@ class SlackFileInfo:
 
 @dataclass(frozen=True)
 class DocumentChunk:
-    """Individual document chunk with metadata."""
-
     content: str
     chunk_id: str
     document_id: str
@@ -152,8 +142,6 @@ class DocumentChunk:
 
 
 class EmbeddingResult(BaseModel):
-    """Result of text embedding operation."""
-
     text: str
     embedding: list[float]
     model_name: str

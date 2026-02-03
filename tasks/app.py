@@ -131,7 +131,7 @@ async def lifespan(app: FastAPI):
             redis_client.delete("insightmesh:scheduler:lock")
             logger.info("Released Redis scheduler lock")
         except Exception:
-            pass
+            logger.warning("Failed to release Redis scheduler lock")
 
 
 def register_routers(app: FastAPI) -> None:

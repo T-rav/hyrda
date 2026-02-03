@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from services.formatting import MessageFormatter
 
 
-# TDD Factory Patterns for Message Formatting Testing
 class TextDataFactory:
     """Factory for creating different types of text data for testing"""
 
@@ -122,11 +121,8 @@ class TextDataFactory:
 
 
 class TestMessageFormatter:
-    """Tests for the MessageFormatter class using factory patterns"""
-
     @pytest.mark.asyncio
     async def test_format_markdown_for_slack(self):
-        """Test markdown conversion using slackify-markdown library"""
         input_text = "**Bold text** and *italic text*"
         result = MessageFormatter.format_markdown_for_slack(input_text)
 
@@ -136,7 +132,6 @@ class TestMessageFormatter:
 
     @pytest.mark.asyncio
     async def test_format_for_slack_with_sources(self):
-        """Test formatting of source citations"""
         input_text = TextDataFactory.create_text_with_sources()
         expected = TextDataFactory.create_slack_formatted_sources()
 
@@ -145,7 +140,6 @@ class TestMessageFormatter:
 
     @pytest.mark.asyncio
     async def test_format_for_slack_with_custom_sources(self):
-        """Test formatting of source citations with custom sources"""
         custom_sources = {
             "API Documentation": "https://api.example.com/docs",
             "User Guide": "https://guide.example.com",
@@ -162,7 +156,6 @@ class TestMessageFormatter:
 
     @pytest.mark.asyncio
     async def test_format_for_slack_without_sources(self):
-        """Test formatting of text without sources"""
         input_text = TextDataFactory.create_text_without_sources()
         expected = input_text  # Should be unchanged
 
@@ -171,7 +164,6 @@ class TestMessageFormatter:
 
     @pytest.mark.asyncio
     async def test_format_message_complete(self):
-        """Test complete message formatting pipeline"""
         input_text = TextDataFactory.create_complex_message_text()
         expected = TextDataFactory.create_formatted_complex_message()
 
@@ -180,7 +172,6 @@ class TestMessageFormatter:
 
     @pytest.mark.asyncio
     async def test_format_message_with_custom_complex_content(self):
-        """Test complete message formatting with custom content"""
         custom_code = "async def process():\n    await task()"
         custom_items = ["Task 1", "Task 2"]
         custom_sources = {"Process Guide": "https://process.example.com"}

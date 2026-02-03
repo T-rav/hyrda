@@ -9,14 +9,11 @@ from .base import Base
 
 
 class AgentMetadata(Base):
-    """Model for storing agent configuration and metadata."""
-
     __tablename__ = "agent_metadata"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
     # Agent identification
-    # Note: unique constraint only applies to non-deleted agents (see __table_args__)
     agent_name = Column(String(50), nullable=False, index=True)
     display_name = Column(String(100), nullable=True)
     description = Column(Text, nullable=True)
@@ -55,10 +52,6 @@ class AgentMetadata(Base):
         DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
 
-    # Note: Uniqueness of agent_name among non-deleted agents is enforced
-    # in the application layer (see register_agent endpoint)
-    # This allows reusing agent names after soft deletion
-
     def __repr__(self) -> str:
         return (
             f"<AgentMetadata(agent_name={self.agent_name}, is_enabled={self.is_enabled}, "
@@ -66,7 +59,6 @@ class AgentMetadata(Base):
         )
 
     def get_aliases(self) -> list[str]:
-        """Get aliases as a list."""
         if not self.aliases:
             return []
         try:
@@ -75,11 +67,9 @@ class AgentMetadata(Base):
             return []
 
     def set_aliases(self, aliases: list[str]) -> None:
-        """Set aliases from a list."""
         self.aliases = json.dumps(aliases) if aliases else None
 
     def to_dict(self) -> dict:
-        """Convert to dictionary for API responses."""
         return {
             "name": self.agent_name,
             "display_name": self.display_name,

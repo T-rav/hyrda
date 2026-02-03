@@ -6,8 +6,6 @@ import logging
 import time
 
 from config.settings import Settings
-
-# Hybrid search removed
 from services.langfuse_service import (
     initialize_langfuse_service,
     observe,
@@ -33,7 +31,6 @@ class LLMService:
         # Initialize prompt service for system prompts
         self.prompt_service = PromptService(settings)
 
-        # Hybrid search removed - always use standard RAG
         self.rag_service = RAGService(settings)
         self.use_hybrid = False
         logger.info("Using standard RAG service")
@@ -54,7 +51,6 @@ class LLMService:
             logger.info("Langfuse observability disabled")
 
     async def initialize(self):
-        """Initialize RAG service"""
         await self.rag_service.initialize()
 
     @observe(name="llm_service_response", as_type="generation")
@@ -192,11 +188,9 @@ class LLMService:
             return (0, len(documents))
 
     async def get_system_status(self) -> dict:
-        """Get system status information"""
         return await self.rag_service.get_system_status()
 
     async def close(self):
-        """Clean up resources"""
         await self.rag_service.close()
 
         # Close Langfuse service
@@ -226,11 +220,11 @@ async def create_llm_service(llm_settings) -> LLMService:
         # Override with provided LLM settings if different
         if hasattr(llm_settings, "model"):
             settings.llm = llm_settings
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to load full settings, using minimal: {e}")
+
         # Fallback: create minimal settings structure
         class MinimalSettings:
-            """MinimalSettings class."""
-
             def __init__(self):
                 self.llm = llm_settings
                 # Add minimal required attributes

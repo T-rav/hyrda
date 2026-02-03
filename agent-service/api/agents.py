@@ -185,7 +185,9 @@ async def invoke_agent(
             auth_type = "jwt"
             logger.info(f"User {user_id} authenticated via JWT")
         except HTTPException:
-            pass  # Not a valid JWT, try next method
+            logger.debug(
+                "JWT authentication failed, trying next method"
+            )  # Not a valid JWT, try next method
 
     # Try service account API key (external API integration)
     if not auth_type:
@@ -444,7 +446,9 @@ async def stream_agent(
             auth_type = "jwt"
             logger.info(f"User {user_id} authenticated via JWT for streaming")
         except HTTPException:
-            pass  # Not a valid JWT, try next method
+            logger.debug(
+                "JWT authentication failed for streaming, trying next method"
+            )  # Not a valid JWT, try next method
 
     # Try service account API key (external API integration)
     if not auth_type:

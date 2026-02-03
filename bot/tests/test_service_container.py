@@ -34,18 +34,13 @@ class MockService:
 
 
 class TestServiceContainer:
-    """Test cases for ServiceContainer."""
-
     @pytest.fixture
     async def container(self):
-        """Create a fresh container for each test."""
         container = ServiceContainer()
         yield container
         await container.close_all()
 
     def test_register_factory(self, container):
-        """Test factory registration."""
-
         def create_mock_service():
             return MockService("test")
 
@@ -55,7 +50,6 @@ class TestServiceContainer:
         assert MockService in container._factories
 
     def test_register_singleton(self, container):
-        """Test singleton registration."""
         service = MockService("singleton")
         container.register_singleton(MockService, service)
 
@@ -64,8 +58,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_get_service_lazy_initialization(self, container):
-        """Test lazy service creation."""
-
         def create_mock_service():
             return MockService("lazy")
 
@@ -84,8 +76,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_get_service_singleton_behavior(self, container):
-        """Test that services are singletons."""
-
         def create_mock_service():
             return MockService("singleton")
 
@@ -100,14 +90,11 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_get_unregistered_service(self, container):
-        """Test getting unregistered service raises error."""
         with pytest.raises(ValueError, match="No factory registered"):
             await container.get(MockService)
 
     @pytest.mark.asyncio
     async def test_async_factory(self, container):
-        """Test async factory functions."""
-
         async def create_async_service():
             service = MockService("async")
             await service.initialize()
@@ -120,7 +107,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_concurrent_initialization(self, container):
-        """Test thread-safe concurrent initialization."""
         initialization_count = 0
 
         async def create_service():
@@ -145,7 +131,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_close_all_services(self, container):
-        """Test graceful service shutdown."""
         services_created = []
 
         class Service0:
@@ -205,7 +190,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_health_check(self, container):
-        """Test health check functionality."""
         container.register_factory(MockService, lambda: MockService("healthy"))
 
         # Create service
@@ -220,7 +204,6 @@ class TestServiceContainer:
         assert health["services"]["MockService"]["status"] == "healthy"
 
     def test_list_services(self, container):
-        """Test service listing functionality."""
         # Register but don't create
         container.register_factory(MockService, lambda: MockService("test"))
 
@@ -230,8 +213,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_error_handling_in_factory(self, container):
-        """Test error handling during service creation."""
-
         def failing_factory():
             raise ValueError("Factory failed")
 
@@ -242,7 +223,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_closed_container_operations(self, container):
-        """Test operations on closed container."""
         await container.close_all()
 
         # Should raise errors
@@ -254,8 +234,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_service_with_no_initialize_method(self, container):
-        """Test services without initialize method."""
-
         class SimpleService:
             def __init__(self):
                 self.created = True
@@ -267,8 +245,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_service_initialization_failure(self, container):
-        """Test handling of service initialization failure."""
-
         class FailingService:
             async def initialize(self):
                 raise RuntimeError("Initialization failed")
@@ -280,8 +256,6 @@ class TestServiceContainer:
 
     @pytest.mark.asyncio
     async def test_service_close_failure(self, container):
-        """Test handling of service close failure."""
-
         class FailingCloseService:
             def __init__(self):
                 self.initialized = False

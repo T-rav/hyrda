@@ -22,14 +22,6 @@ load_dotenv(ROOT_DIR / ".env")
 
 
 def extract_relationship_section(report: str) -> str | None:
-    """Extract the Relationships section from a final report.
-
-    Args:
-        report: Full markdown report text
-
-    Returns:
-        The Relationships section content or None if not found
-    """
     # Find the Relationships section
     match = re.search(
         r"## Relationships via 8th Light Network\s*\n(.*?)(?=\n## |\Z)",
@@ -42,14 +34,6 @@ def extract_relationship_section(report: str) -> str | None:
 
 
 def has_false_positive_language(relationship_section: str) -> tuple[bool, list[str]]:
-    """Check if the relationship section contains forbidden language that indicates hallucination.
-
-    Args:
-        relationship_section: The extracted relationship section text
-
-    Returns:
-        Tuple of (has_forbidden_language, list_of_found_phrases)
-    """
     forbidden_phrases = [
         "we may have worked",
         "potential relationship",
@@ -71,14 +55,6 @@ def has_false_positive_language(relationship_section: str) -> tuple[bool, list[s
 
 
 def has_explicit_status(relationship_section: str) -> tuple[bool, str | None]:
-    """Check if the relationship section has explicit status declaration.
-
-    Args:
-        relationship_section: The extracted relationship section text
-
-    Returns:
-        Tuple of (has_status, status_value) where status_value is 'existing' or 'none'
-    """
     section_lower = relationship_section.lower()
 
     # Look for explicit status declarations

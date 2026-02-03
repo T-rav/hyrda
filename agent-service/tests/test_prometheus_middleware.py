@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import contextlib
 
-from shared.middleware.prometheus_metrics import (  # noqa: E402
+from shared.middleware.prometheus_metrics import (
     PrometheusMetricsMiddleware,
     create_metrics_endpoint,
 )
@@ -30,8 +30,8 @@ def clear_prometheus_registry():
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
-        except Exception:
-            pass  # Ignore if already unregistered
+        except Exception:  # Collector may not be registered
+            pass
     yield
     # Cleanup after test
     collectors = list(REGISTRY._collector_to_names.keys())

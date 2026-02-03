@@ -29,15 +29,6 @@ async def list_task_runs(
     ),
     user: dict = Depends(get_current_user),
 ):
-    """List recent task runs with pagination.
-
-    Query Parameters:
-        page: Page number (1-indexed, default: 1)
-        per_page: Items per page (default: 50, max: 100)
-
-    Returns:
-        JSON response with task runs and pagination metadata
-    """
     try:
         # Cap per_page at MAX_PAGE_SIZE (silent capping for better UX)
         per_page = min(per_page, MAX_PAGE_SIZE)

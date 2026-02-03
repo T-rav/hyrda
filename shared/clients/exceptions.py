@@ -4,7 +4,7 @@
 class RetrievalError(Exception):
     """Base exception for retrieval errors."""
 
-    pass
+    ...
 
 
 class RetrievalAuthError(RetrievalError):

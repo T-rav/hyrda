@@ -15,8 +15,6 @@ except ImportError:
 
 
 async def check_elasticsearch():
-    """Check Elasticsearch cluster and document counts"""
-
     # Configuration
     es_url = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
     base_index = os.getenv("VECTOR_COLLECTION_NAME", "insightmesh-knowledge-base")
@@ -126,7 +124,6 @@ async def check_elasticsearch():
 
 
 def main():
-    """Main function"""
     print("🚀 Elasticsearch Document Checker")
     print(f"⏰ Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()

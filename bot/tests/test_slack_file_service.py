@@ -14,7 +14,6 @@ from bot_types import SlackFileInfo
 from services.slack_file_service import SlackFileService
 
 
-# TDD Factory Patterns for Slack File Service Testing
 class SlackFileInfoFactory:
     """Factory for creating SlackFileInfo test data"""
 

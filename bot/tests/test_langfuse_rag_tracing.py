@@ -9,7 +9,6 @@ from unittest.mock import Mock
 import pytest
 
 
-# TDD Factory Patterns for Langfuse RAG Tracing Testing
 class TestDataFactory:
     """Factory for creating test data for langfuse RAG tracing tests"""
 
@@ -17,12 +16,8 @@ class TestDataFactory:
 
 
 class TestLangfuseRAGTracing:
-    """Test Langfuse tracing in RAG service"""
-
     @pytest.mark.asyncio
     async def test_langfuse_tracing_logic(self):
-        """Test that our Langfuse tracing integration logic works"""
-
         # Mock Langfuse service
         mock_langfuse_service = Mock()
         mock_langfuse_service.trace_retrieval = Mock()

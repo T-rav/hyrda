@@ -81,8 +81,8 @@ class TavilyClient:
                 logger.info(f"Tavily search returned {len(results)} results")
                 return results
 
-        except Exception as e:
-            logger.error(f"Tavily search failed: {e}")
+        except Exception:
+            logger.exception("Tavily search failed")
             return []
 
     async def scrape_url(self, url: str) -> dict[str, Any]:

@@ -7,8 +7,6 @@ from .base import Base
 
 
 class AgentPermission(Base):
-    """Model for storing user permissions for agents."""
-
     __tablename__ = "agent_permissions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -1,4 +1,3 @@
-"""Just show the output."""
 import os
 from dotenv import load_dotenv
 import requests

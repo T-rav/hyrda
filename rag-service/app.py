@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
 
         await close_search_clients()
     except Exception:
-        pass
+        logger.warning("Failed to close search clients during shutdown")
 
 
 # Create FastAPI app
@@ -104,6 +104,7 @@ def get_app_version() -> str:
             return version_file.read_text().strip()
         return "0.0.0"
     except Exception:
+        logger.debug("Failed to read version file, using default version")
         return "0.0.0"
 
 

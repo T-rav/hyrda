@@ -38,20 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 def start_router(state: ProfileAgentState) -> Literal["answer_question", "clarify_with_user"]:
-    """Route to Q&A node if report exists, otherwise full workflow.
-
-    Routing priority (inspired by MEDDIC agent):
-    1. followup_mode=True → Q&A (user in active conversation)
-    2. final_report exists → Q&A (follow-up after report)
-    3. No report → Full workflow (initial request)
-
-    Args:
-        state: Current profile agent state
-
-    Returns:
-        "answer_question" if in follow-up mode or report exists
-        "clarify_with_user" if no report (initial profile request)
-    """
+    """Route to Q&A node if report exists, otherwise full workflow."""
     followup_mode = state.get("followup_mode", False)
     final_report = state.get("final_report", "")
 
@@ -73,17 +60,7 @@ def start_router(state: ProfileAgentState) -> Literal["answer_question", "clarif
 
 
 def build_researcher_subgraph() -> CompiledStateGraph:
-    """Build and compile the researcher subgraph.
-
-    The researcher subgraph handles individual research tasks with tool calling.
-    It consists of:
-    - researcher: Makes LLM calls with tools (web search, scrape, internal search)
-    - researcher_tools: Executes tool calls
-    - compress_research: Compresses findings into summary
-
-    Returns:
-        Compiled researcher subgraph
-    """
+    """Build and compile the researcher subgraph."""
     researcher_builder = StateGraph(
         ResearcherState, output_schema=ResearcherOutputState
     )
@@ -106,16 +83,7 @@ def build_researcher_subgraph() -> CompiledStateGraph:
 
 
 def build_supervisor_subgraph() -> CompiledStateGraph:
-    """Build and compile the supervisor subgraph.
-
-    The supervisor subgraph coordinates multiple researchers in parallel.
-    It consists of:
-    - supervisor: Delegates research tasks using ConductResearch tool
-    - supervisor_tools: Executes tool calls and launches researchers
-
-    Returns:
-        Compiled supervisor subgraph
-    """
+    """Build and compile the supervisor subgraph."""
     supervisor_builder = StateGraph(SupervisorState)
 
     # Add nodes
@@ -133,22 +101,7 @@ def build_supervisor_subgraph() -> CompiledStateGraph:
 
 
 def build_profile_researcher(checkpointer=None) -> CompiledStateGraph:
-    """Build and compile the main profile researcher graph.
-
-    The main graph orchestrates the entire deep research process:
-    1. clarify_with_user: Check if user query needs clarification
-    2. write_research_brief: Generate structured research plan
-    3. validate_research_brief: Validate brief quality (with revision loop)
-    4. research_supervisor: Delegate and coordinate research tasks
-    5. final_report_generation: Synthesize findings into final report
-    6. quality_control: Validate final report (with revision loop)
-
-    Args:
-        checkpointer: Optional checkpointer for state persistence (MemorySaver, etc.)
-
-    Returns:
-        Compiled profile researcher graph
-    """
+    """Build and compile the main profile researcher graph."""
     # Build supervisor subgraph
     supervisor_subgraph = build_supervisor_subgraph()
 

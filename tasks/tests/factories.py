@@ -152,19 +152,11 @@ class FastAPIAppFactory:
 
         # Initialize test database with tables
         import models.base
-        from models.oauth_credential import OAuthCredential
-        from models.task_metadata import TaskMetadata
-        from models.task_run import TaskRun
 
         # Create tables in the test database
         try:
             test_task_db = os.getenv("TASK_DATABASE_URL", "sqlite:///:memory:")
             models.base.init_db(test_task_db)
-
-            # Import models to register them with Base.metadata before create_all
-            from models.oauth_credential import OAuthCredential  # noqa: F401
-            from models.task_metadata import TaskMetadata  # noqa: F401
-            from models.task_run import TaskRun  # noqa: F401
 
             models.base.Base.metadata.create_all(bind=models.base._engine)
 

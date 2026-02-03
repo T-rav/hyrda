@@ -17,7 +17,6 @@ load_dotenv()
 
 
 async def debug_metadata():
-    """Compare direct Qdrant vs LangChain metadata retrieval."""
     from qdrant_client import QdrantClient
 
     # Get a recent document ID from logs (pass as argument or use default)

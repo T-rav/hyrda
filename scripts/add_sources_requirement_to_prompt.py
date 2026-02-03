@@ -21,7 +21,6 @@ load_dotenv()
 
 
 def get_sources_section_requirement() -> str:
-    """Get the sources section requirement text to add to prompt."""
     return """
 ## CRITICAL: Sources Section (Required)
 
@@ -61,12 +60,6 @@ At the end of your report, add a `## Sources` section that lists ALL sources use
 
 
 def update_langfuse_prompt(dry_run: bool = False) -> None:
-    """
-    Update the Final Report Generation prompt in Langfuse.
-
-    Args:
-        dry_run: If True, only show what would be updated without making changes
-    """
     # Initialize Langfuse client
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")

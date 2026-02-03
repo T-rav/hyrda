@@ -56,19 +56,14 @@ class UserIdentity(Base):
 
     # Composite indexes for common query patterns
     __table_args__ = (
-        # Composite unique index for provider lookups (provider_type + provider_user_id)
-        # Matches existing migration: 0003_add_multi_provider_support.py:65-70
         Index(
             "uq_user_identities_provider_user",
             "provider_type",
             "provider_user_id",
             unique=True,
         ),
-        # Composite index for active identity queries (provider_type + is_active)
-        # Used by user_sync.py:221-223 to find all active identities for a provider
         Index("ix_user_identities_provider_active", "provider_type", "is_active"),
     )
 
     def __repr__(self) -> str:
-        """Return string representation of identity."""
         return f"<UserIdentity(provider='{self.provider_type}', email='{self.provider_email}', primary={self.is_primary})>"

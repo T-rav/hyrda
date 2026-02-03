@@ -27,13 +27,6 @@ class BaseService(ABC):
     """
 
     def __init__(self, service_name: str | None = None):
-        """
-        Initialize base service.
-
-        Args:
-            service_name: Optional service name override for logging
-
-        """
         self._service_name = service_name or self.__class__.__name__
         self.logger = logging.getLogger(self.__class__.__module__)
         self._initialized = False
@@ -42,17 +35,14 @@ class BaseService(ABC):
 
     @property
     def service_name(self) -> str:
-        """Get the service name."""
         return self._service_name
 
     @property
     def is_initialized(self) -> bool:
-        """Check if the service is initialized."""
         return self._initialized
 
     @property
     def is_closed(self) -> bool:
-        """Check if the service is closed."""
         return self._closed
 
     async def initialize(self) -> None:
@@ -79,12 +69,8 @@ class BaseService(ABC):
 
     @abstractmethod
     async def _initialize(self) -> None:
-        """
-        Service-specific initialization logic.
-
-        Override this method in subclasses to implement initialization.
-        """
-        pass
+        """Service-specific initialization - override in subclasses."""
+        ...
 
     async def close(self) -> None:
         """
@@ -107,13 +93,8 @@ class BaseService(ABC):
             self._closed = True
 
     async def _close(self) -> None:  # noqa: B027
-        """
-        Service-specific cleanup logic.
-
-        Override this method in subclasses to implement cleanup.
-        Default implementation does nothing.
-        """
-        # Default implementation - subclasses can override
+        """Service-specific cleanup - override in subclasses."""
+        ...
 
     def health_check(self) -> HealthCheckResponse:
         """
@@ -184,16 +165,13 @@ class BaseService(ABC):
         )
 
     async def __aenter__(self):
-        """Async context manager entry."""
         await self.ensure_initialized()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
         await self.close()
 
     def __repr__(self) -> str:
-        """String representation of the service."""
         return (
             f"{self.__class__.__name__}("
             f"name={self._service_name}, "
@@ -244,7 +222,6 @@ class ManagedService(BaseService):
         return self._dependencies[name]
 
     async def _close(self) -> None:
-        """Close managed service and dependencies."""
         # Close dependencies in reverse order
         for name, service in reversed(list(self._dependencies.items())):
             try:
@@ -260,7 +237,6 @@ class ManagedService(BaseService):
         await super()._close()
 
     def health_check(self) -> HealthCheckResponse:
-        """Health check including dependencies."""
         base_health = super().health_check()
         dependencies = {}
 

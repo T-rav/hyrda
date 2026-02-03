@@ -20,7 +20,6 @@ load_dotenv()
 
 
 def main():
-    """Main CLI entry point"""
     print("🚀 Vector Database Index Initialization")
     print("=" * 50)
     print()

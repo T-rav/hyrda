@@ -15,12 +15,8 @@ from utils.decorators import (
 
 
 class TestHandleServiceErrors:
-    """Tests for handle_service_errors decorator."""
-
     @pytest.mark.asyncio
     async def test_async_function_success(self):
-        """Test decorator with successful async function."""
-
         class TestService:
             @handle_service_errors()
             async def test_method(self):
@@ -32,8 +28,6 @@ class TestHandleServiceErrors:
         assert result == "success"
 
     def test_sync_function_success(self):
-        """Test decorator with successful sync function."""
-
         class TestService:
             @handle_service_errors()
             def test_method(self):
@@ -46,8 +40,6 @@ class TestHandleServiceErrors:
 
     @pytest.mark.asyncio
     async def test_async_function_error_returns_default(self):
-        """Test async function returns default value on error."""
-
         class TestService:
             @handle_service_errors(default_return=[])
             async def test_method(self):
@@ -59,8 +51,6 @@ class TestHandleServiceErrors:
         assert result == []
 
     def test_sync_function_error_returns_default(self):
-        """Test sync function returns default value on error."""
-
         class TestService:
             @handle_service_errors(default_return={})
             def test_method(self):
@@ -73,8 +63,6 @@ class TestHandleServiceErrors:
 
     @pytest.mark.asyncio
     async def test_async_reraise_specific_exception(self):
-        """Test async function reraises specific exceptions."""
-
         class TestService:
             @handle_service_errors(default_return=None, reraise_on=(ValueError,))
             async def test_method(self):
@@ -86,8 +74,6 @@ class TestHandleServiceErrors:
             await service.test_method()
 
     def test_sync_reraise_specific_exception(self):
-        """Test sync function reraises specific exceptions."""
-
         class TestService:
             @handle_service_errors(default_return=None, reraise_on=(ValueError,))
             def test_method(self):
@@ -100,8 +86,6 @@ class TestHandleServiceErrors:
 
     @pytest.mark.asyncio
     async def test_async_custom_log_error_method(self):
-        """Test async function uses custom _log_error method if available."""
-
         class TestService:
             def __init__(self):
                 self.logged_errors = []
@@ -122,8 +106,6 @@ class TestHandleServiceErrors:
         assert "Test error" in service.logged_errors[0][1]
 
     def test_sync_custom_log_error_method(self):
-        """Test sync function uses custom _log_error method if available."""
-
         class TestService:
             def __init__(self):
                 self.logged_errors = []
@@ -144,8 +126,6 @@ class TestHandleServiceErrors:
 
     @pytest.mark.asyncio
     async def test_async_record_error_metric(self):
-        """Test async function records error metric if method available."""
-
         class TestService:
             def __init__(self):
                 self.recorded_errors = []
@@ -164,8 +144,6 @@ class TestHandleServiceErrors:
         assert service.recorded_errors[0] == ("test_method", "ValueError")
 
     def test_sync_record_error_metric(self):
-        """Test sync function records error metric if method available."""
-
         class TestService:
             def __init__(self):
                 self.recorded_errors = []
@@ -186,8 +164,6 @@ class TestHandleServiceErrors:
     @patch("utils.decorators.logger")
     @pytest.mark.asyncio
     async def test_async_default_logging(self, mock_logger):
-        """Test async function uses default logger when no custom logging."""
-
         class TestService:
             @handle_service_errors()
             async def test_method(self):
@@ -204,8 +180,6 @@ class TestHandleServiceErrors:
 
     @patch("utils.decorators.logger")
     def test_sync_default_logging(self, mock_logger):
-        """Test sync function uses default logger when no custom logging."""
-
         class TestService:
             @handle_service_errors()
             def test_method(self):
@@ -218,8 +192,6 @@ class TestHandleServiceErrors:
 
     @pytest.mark.asyncio
     async def test_async_no_logging_when_disabled(self):
-        """Test async function doesn't log when log_errors=False."""
-
         class TestService:
             def __init__(self):
                 self.logged = False
@@ -238,12 +210,8 @@ class TestHandleServiceErrors:
 
 
 class TestRetryOnFailure:
-    """Tests for retry_on_failure decorator."""
-
     @pytest.mark.asyncio
     async def test_async_success_on_first_attempt(self):
-        """Test async function succeeds on first attempt."""
-
         class TestService:
             @retry_on_failure(max_attempts=3)
             async def test_method(self):
@@ -255,8 +223,6 @@ class TestRetryOnFailure:
         assert result == "success"
 
     def test_sync_success_on_first_attempt(self):
-        """Test sync function succeeds on first attempt."""
-
         class TestService:
             @retry_on_failure(max_attempts=3)
             def test_method(self):
@@ -269,8 +235,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_retry_and_succeed(self):
-        """Test async function retries and eventually succeeds."""
-
         class TestService:
             def __init__(self):
                 self.attempts = 0
@@ -289,8 +253,6 @@ class TestRetryOnFailure:
         assert service.attempts == 3
 
     def test_sync_retry_and_succeed(self):
-        """Test sync function retries and eventually succeeds."""
-
         class TestService:
             def __init__(self):
                 self.attempts = 0
@@ -310,8 +272,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_all_retries_fail(self):
-        """Test async function fails after all retries."""
-
         class TestService:
             @retry_on_failure(max_attempts=2, delay=0.01)
             async def test_method(self):
@@ -323,8 +283,6 @@ class TestRetryOnFailure:
             await service.test_method()
 
     def test_sync_all_retries_fail(self):
-        """Test sync function fails after all retries."""
-
         class TestService:
             @retry_on_failure(max_attempts=2, delay=0.01)
             def test_method(self):
@@ -337,8 +295,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_exponential_backoff(self):
-        """Test async function uses exponential backoff."""
-
         class TestService:
             def __init__(self):
                 self.attempts = []
@@ -366,8 +322,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_custom_log_operation(self):
-        """Test async function uses custom _log_operation for retries."""
-
         class TestService:
             def __init__(self):
                 self.log_entries = []
@@ -389,8 +343,6 @@ class TestRetryOnFailure:
         assert "retry_test_method" in service.log_entries[0][0]
 
     def test_sync_custom_log_operation(self):
-        """Test sync function uses custom _log_operation for retries."""
-
         class TestService:
             def __init__(self):
                 self.log_entries = []
@@ -411,8 +363,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_custom_log_error_final_failure(self):
-        """Test async function logs final failure."""
-
         class TestService:
             def __init__(self):
                 self.error_logs = []
@@ -436,8 +386,6 @@ class TestRetryOnFailure:
 
     @pytest.mark.asyncio
     async def test_async_specific_exceptions_only(self):
-        """Test async function only retries on specific exceptions."""
-
         class TestService:
             def __init__(self):
                 self.attempts = 0
@@ -457,12 +405,8 @@ class TestRetryOnFailure:
 
 
 class TestMeasurePerformance:
-    """Tests for measure_performance decorator."""
-
     @pytest.mark.asyncio
     async def test_async_function_performance_tracking(self):
-        """Test async function tracks performance."""
-
         class TestService:
             def __init__(self):
                 self.operations = []
@@ -485,8 +429,6 @@ class TestMeasurePerformance:
         assert service.operations[0][1]["success"] is True
 
     def test_sync_function_performance_tracking(self):
-        """Test sync function tracks performance."""
-
         class TestService:
             def __init__(self):
                 self.operations = []
@@ -508,8 +450,6 @@ class TestMeasurePerformance:
 
     @pytest.mark.asyncio
     async def test_async_custom_operation_name(self):
-        """Test async function with custom operation name."""
-
         class TestService:
             def __init__(self):
                 self.operations = []
@@ -528,8 +468,6 @@ class TestMeasurePerformance:
 
     @pytest.mark.asyncio
     async def test_async_performance_on_error(self):
-        """Test async function tracks performance even on error."""
-
         class TestService:
             def __init__(self):
                 self.operations = []
@@ -551,8 +489,6 @@ class TestMeasurePerformance:
         assert service.operations[0][1]["success"] is False
 
     def test_sync_performance_on_error(self):
-        """Test sync function tracks performance even on error."""
-
         class TestService:
             def __init__(self):
                 self.operations = []
@@ -574,8 +510,6 @@ class TestMeasurePerformance:
 
     @pytest.mark.asyncio
     async def test_async_record_performance_metric(self):
-        """Test async function records performance metric."""
-
         class TestService:
             def __init__(self):
                 self.metrics = []
@@ -600,12 +534,8 @@ class TestMeasurePerformance:
 
 
 class TestCircuitBreaker:
-    """Tests for circuit_breaker decorator."""
-
     @pytest.mark.asyncio
     async def test_async_circuit_closed_on_success(self):
-        """Test async function keeps circuit closed on success."""
-
         class TestService:
             @circuit_breaker(failure_threshold=3)
             async def test_method(self):
@@ -621,8 +551,6 @@ class TestCircuitBreaker:
         assert result == "success"
 
     def test_sync_circuit_closed_on_success(self):
-        """Test sync function keeps circuit closed on success."""
-
         class TestService:
             @circuit_breaker(failure_threshold=3)
             def test_method(self):
@@ -635,8 +563,6 @@ class TestCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_async_circuit_opens_after_threshold(self):
-        """Test async circuit opens after failure threshold."""
-
         class TestService:
             @circuit_breaker(failure_threshold=3, timeout=1.0)
             async def test_method(self):
@@ -654,8 +580,6 @@ class TestCircuitBreaker:
             await service.test_method()
 
     def test_sync_circuit_opens_after_threshold(self):
-        """Test sync circuit opens after failure threshold."""
-
         class TestService:
             @circuit_breaker(failure_threshold=3, timeout=1.0)
             def test_method(self):
@@ -672,8 +596,6 @@ class TestCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_async_circuit_half_open_after_timeout(self):
-        """Test async circuit transitions to half-open after timeout."""
-
         class TestService:
             def __init__(self):
                 self.attempts = 0
@@ -709,8 +631,6 @@ class TestCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_async_circuit_specific_exceptions(self):
-        """Test async circuit only triggers on specific exceptions."""
-
         class TestService:
             def __init__(self):
                 self.call_count = 0
@@ -736,8 +656,6 @@ class TestCircuitBreaker:
 
     @pytest.mark.asyncio
     async def test_async_circuit_logs_on_open(self):
-        """Test async circuit logs when opening."""
-
         class TestService:
             def __init__(self):
                 self.error_logs = []
@@ -763,8 +681,6 @@ class TestCircuitBreaker:
         assert service.error_logs[0][1]["threshold"] == 2
 
     def test_sync_circuit_half_open_recovery(self):
-        """Test sync circuit recovers in half-open state."""
-
         class TestService:
             def __init__(self):
                 self.attempts = 0

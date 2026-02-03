@@ -202,14 +202,7 @@ Validate the brief and return JSON only.
 
 
 def count_questions_in_brief(brief: str) -> int:
-    """Count question marks in research brief as proxy for question count.
-
-    Args:
-        brief: Research brief text
-
-    Returns:
-        Number of questions found
-    """
+    """Count question marks in research brief as proxy for question count."""
     # Count lines ending with '?'
     lines = brief.split("\n")
     question_count = sum(1 for line in lines if line.strip().endswith("?"))

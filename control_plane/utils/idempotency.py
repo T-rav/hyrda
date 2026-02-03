@@ -25,32 +25,10 @@ DEFAULT_TTL_HOURS = 24
 
 
 async def get_idempotency_key(request: Request) -> str | None:
-    """Get idempotency key from request headers.
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        Idempotency key if present, None otherwise
-
-    Headers:
-        Idempotency-Key: Unique identifier for this request
-    """
     return request.headers.get("Idempotency-Key")
 
 
 async def generate_request_hash(request: Request) -> str:
-    """Generate a hash of the request for additional safety.
-
-    Combines method, path, and body to ensure the same idempotency key
-    isn't used for different requests.
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        SHA256 hash of request details
-    """
     body = await request.body()
     request_data = {
         "method": request.method,
@@ -62,24 +40,6 @@ async def generate_request_hash(request: Request) -> str:
 
 
 async def check_idempotency(request: Request) -> tuple[bool, JSONResponse | None]:
-    """Check if request has already been processed.
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        Tuple of (is_duplicate, cached_response):
-        - (False, None) if this is a new request
-        - (True, JSONResponse) if this is a duplicate with cached response
-
-    Example:
-        >>> is_duplicate, cached_response = await check_idempotency(request)
-        >>> if is_duplicate:
-        ...     return cached_response
-        >>> # Process request normally
-        >>> result = process_request()
-        >>> await store_idempotency(request, result, 201)
-    """
     idempotency_key = await get_idempotency_key(request)
     if not idempotency_key:
         # No idempotency key provided, process normally
@@ -110,18 +70,6 @@ async def store_idempotency(
     status_code: int,
     ttl_hours: int = DEFAULT_TTL_HOURS,
 ) -> None:
-    """Store response for future idempotency checks.
-
-    Args:
-        request: FastAPI Request object
-        response_body: Response data to cache
-        status_code: HTTP status code
-        ttl_hours: Time to live in hours (default: 24)
-
-    Example:
-        >>> result = {"status": "created", "agent_name": "profile"}
-        >>> await store_idempotency(request, result, 201)
-    """
     idempotency_key = await get_idempotency_key(request)
     if not idempotency_key:
         return
@@ -153,7 +101,6 @@ async def store_idempotency(
 
 
 def _cleanup_expired_keys() -> None:
-    """Remove expired idempotency keys from cache."""
     now = datetime.now(timezone.utc)
     expired_keys = [
         key for key, (_, expires_at) in _idempotency_cache.items() if expires_at < now
@@ -167,23 +114,6 @@ def _cleanup_expired_keys() -> None:
 
 
 def require_idempotency(ttl_hours: int = DEFAULT_TTL_HOURS):
-    """Decorator to add idempotency support to a FastAPI endpoint.
-
-    Usage:
-        @router.post("/api/resource")
-        @require_idempotency(ttl_hours=24)
-        async def create_resource(request: Request):
-            # Your endpoint logic
-            return {"status": "created"}
-
-    Args:
-        ttl_hours: Time to live for idempotency keys (default: 24)
-
-    Note:
-        The decorated function must be async and accept a Request parameter.
-        The function should return a dict that will be cached.
-    """
-
     def decorator(f: Callable) -> Callable:
         @wraps(f)
         async def wrapper(*args, **kwargs):
@@ -222,8 +152,10 @@ def require_idempotency(ttl_hours: int = DEFAULT_TTL_HOURS):
                         await store_idempotency(
                             request, body_dict, result.status_code, ttl_hours
                         )
-                    except (json.JSONDecodeError, AttributeError):
-                        pass
+                    except (json.JSONDecodeError, AttributeError) as e:
+                        logger.debug(
+                            f"Failed to decode JSONResponse body for idempotency: {e}"
+                        )
 
             return result
 

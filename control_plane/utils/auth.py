@@ -62,14 +62,10 @@ def validate_oauth_config() -> None:
 
 
 class AuthError(Exception):
-    """Authentication error."""
-
     pass
 
 
 class AuditLogger:
-    """Audit logging for authentication events."""
-
     @staticmethod
     def log_auth_event(
         event_type: str,
@@ -80,7 +76,6 @@ class AuditLogger:
         error: Optional[str] = None,
         path: Optional[str] = None,
     ) -> None:
-        """Log authentication event for auditing."""
         log_data = {
             "timestamp": datetime.now(UTC).isoformat(),
             "event_type": event_type,
@@ -102,12 +97,10 @@ class AuditLogger:
 def get_redirect_uri(
     service_base_url: str, callback_path: str = "/auth/callback"
 ) -> str:
-    """Get OAuth redirect URI for a service."""
     return f"{service_base_url.rstrip('/')}{callback_path}"
 
 
 def verify_domain(email: str) -> bool:
-    """Verify that email belongs to allowed domain."""
     if not email:
         return False
     # Allow all domains if wildcard is configured
@@ -117,7 +110,6 @@ def verify_domain(email: str) -> bool:
 
 
 def get_flow(redirect_uri: str) -> Flow:
-    """Create OAuth flow."""
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise AuthError(
             "Google OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET"
@@ -138,7 +130,6 @@ def get_flow(redirect_uri: str) -> Flow:
 
 
 def verify_token(token: str) -> dict[str, Any]:
-    """Verify Google ID token and return user info."""
     try:
         from google.auth.transport.requests import Request as GoogleRequest
 
@@ -152,12 +143,9 @@ def verify_token(token: str) -> dict[str, Any]:
 
 
 class FastAPIAuthMiddleware:
-    """FastAPI middleware for Google OAuth authentication."""
-
     def __init__(
         self, app: Any, service_base_url: str, callback_path: str = "/auth/callback"
     ):
-        """Initialize FastAPI auth middleware."""
         self.app = app
         self.service_base_url = service_base_url
         self.callback_path = callback_path
@@ -166,14 +154,12 @@ class FastAPIAuthMiddleware:
         self._setup_routes()
 
     def _setup_routes(self) -> None:
-        """Setup auth routes."""
         import secrets
 
         from fastapi.responses import JSONResponse, RedirectResponse
 
         @self.app.get(self.login_path)
         async def auth_login(request: Request) -> RedirectResponse:
-            """Initiate OAuth login."""
             redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
             flow = get_flow(redirect_uri)
             authorization_url, state = flow.authorization_url(
@@ -200,7 +186,6 @@ class FastAPIAuthMiddleware:
         async def auth_callback(
             request: Request,
         ) -> RedirectResponse | JSONResponse:
-            """Handle OAuth callback."""
             redirect_uri = get_redirect_uri(self.service_base_url, self.callback_path)
             state = request.session.get("oauth_state")
             csrf_token = request.session.get("oauth_csrf")
@@ -308,7 +293,6 @@ class FastAPIAuthMiddleware:
 
         @self.app.post(self.logout_path)
         async def auth_logout(request: Request) -> JSONResponse:
-            """Handle logout."""
             email = request.session.get("user_email")
             request.session.clear()
             AuditLogger.log_auth_event(
@@ -318,7 +302,6 @@ class FastAPIAuthMiddleware:
             return JSONResponse(content={"message": "Logged out successfully"})
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
-        """ASGI middleware to check authentication on requests."""
         from starlette.datastructures import URL
         from starlette.requests import Request
         from starlette.responses import RedirectResponse
@@ -375,12 +358,10 @@ class FastAPIAuthMiddleware:
 
 
 def fastapi_require_auth(func: Callable) -> Callable:
-    """FastAPI dependency for requiring authentication."""
     from fastapi import HTTPException
 
     @wraps(func)
     async def wrapper(request: Request, *args: Any, **kwargs: Any) -> Any:
-        """Check authentication."""
         # Check session for user_email
         if not hasattr(request, "session") or "user_email" not in request.session:
             raise HTTPException(status_code=401, detail="Not authenticated")

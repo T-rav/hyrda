@@ -36,7 +36,6 @@ class MetricSyncJob(BaseJob):
     ]
 
     def __init__(self, settings: TasksSettings, **kwargs: Any):
-        """Initialize the Metric.ai sync job."""
         super().__init__(settings, **kwargs)
 
         # Initialize clients
@@ -56,19 +55,16 @@ class MetricSyncJob(BaseJob):
         self.data_db_url = self.settings.data_database_url
 
     def _get_data_session(self):
-        """Create database session for insightmesh_data database."""
         data_engine = create_engine(self.data_db_url)
         DataSession = sessionmaker(bind=data_engine)
         return DataSession()
 
     def _compute_content_hash(self, content: str) -> str:
-        """Compute MD5 hash of content for change detection."""
         return hashlib.md5(content.encode("utf-8")).hexdigest()
 
     def _check_needs_update(
         self, metric_id: str, data_type: str, content_hash: str
     ) -> bool:
-        """Check if record needs updating based on content hash."""
         session = None
         try:
             data_engine = create_engine(self.data_db_url)
@@ -97,16 +93,6 @@ class MetricSyncJob(BaseJob):
                 session.close()
 
     def _write_metric_records(self, records: list[dict[str, Any]]) -> int:
-        """
-        Write metric records to the insightmesh_data database.
-
-        Args:
-            records: List of dicts with keys: metric_id, data_type, vector_id,
-                    vector_namespace, content_snapshot, content_hash
-
-        Returns:
-            Number of records written
-        """
         session = None
         try:
             # Create engine and session without context manager
@@ -175,7 +161,6 @@ class MetricSyncJob(BaseJob):
                 session.close()
 
     async def _execute_job(self) -> dict[str, Any]:
-        """Execute the Metric.ai data sync."""
         stats = {
             "employees_synced": 0,
             "projects_synced": 0,
@@ -210,7 +195,6 @@ class MetricSyncJob(BaseJob):
             raise
 
     async def _sync_employees(self) -> int:
-        """Sync employee data from Metric.ai to Qdrant."""
         logger.info("Syncing employees from Metric.ai...")
 
         employees = self.metric_client.get_employees()
@@ -353,7 +337,6 @@ class MetricSyncJob(BaseJob):
         return len(texts)
 
     async def _sync_projects(self) -> int:
-        """Sync project data from Metric.ai to Qdrant."""
         logger.info("Syncing projects from Metric.ai...")
 
         projects = self.metric_client.get_projects()
@@ -477,7 +460,6 @@ class MetricSyncJob(BaseJob):
         return len(texts)
 
     async def _sync_clients(self) -> int:
-        """Sync client data from Metric.ai to Qdrant."""
         logger.info("Syncing clients from Metric.ai...")
 
         clients = self.metric_client.get_clients()

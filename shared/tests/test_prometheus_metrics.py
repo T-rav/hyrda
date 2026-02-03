@@ -28,15 +28,15 @@ def clear_prometheus_registry():
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
-        except Exception:
-            pass  # Ignore if already unregistered
+        except Exception:  # Already unregistered
+            pass
     yield
     # Cleanup after test
     collectors = list(REGISTRY._collector_to_names.keys())
     for collector in collectors:
         try:
             REGISTRY.unregister(collector)
-        except Exception:
+        except Exception:  # Already unregistered
             pass
 
 

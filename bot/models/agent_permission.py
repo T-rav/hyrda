@@ -7,8 +7,6 @@ from .security_base import SecurityBase
 
 
 class AgentPermission(SecurityBase):
-    """Model for storing user permissions for agents."""
-
     __tablename__ = "agent_permissions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

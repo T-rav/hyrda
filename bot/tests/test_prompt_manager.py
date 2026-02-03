@@ -5,7 +5,7 @@ Tests user prompt management and context injection functionality.
 
 from unittest.mock import Mock, patch
 
-from handlers.prompt_manager import get_user_system_prompt
+from handlers.message_handlers import get_user_system_prompt
 
 
 class TestPromptManager:
@@ -13,7 +13,7 @@ class TestPromptManager:
 
     def test_get_user_system_prompt_no_service(self):
         """Test prompt retrieval when PromptService unavailable"""
-        with patch("handlers.prompt_manager.get_prompt_service", return_value=None):
+        with patch("handlers.message_handlers.get_prompt_service", return_value=None):
             result = get_user_system_prompt()
             assert len(result) > 0
             assert "Insight Mesh" in result or "assistant" in result.lower()
@@ -24,7 +24,7 @@ class TestPromptManager:
         mock_service.get_system_prompt.return_value = "Custom system prompt"
 
         with patch(
-            "handlers.prompt_manager.get_prompt_service", return_value=mock_service
+            "handlers.message_handlers.get_prompt_service", return_value=mock_service
         ):
             result = get_user_system_prompt()
             assert result == "Custom system prompt"
@@ -44,7 +44,7 @@ class TestPromptManager:
 
         with (
             patch(
-                "handlers.prompt_manager.get_prompt_service",
+                "handlers.message_handlers.get_prompt_service",
                 return_value=mock_prompt_service,
             ),
             patch(
@@ -70,7 +70,7 @@ class TestPromptManager:
 
         with (
             patch(
-                "handlers.prompt_manager.get_prompt_service",
+                "handlers.message_handlers.get_prompt_service",
                 return_value=mock_prompt_service,
             ),
             patch(
@@ -93,7 +93,7 @@ class TestPromptManager:
 
         with (
             patch(
-                "handlers.prompt_manager.get_prompt_service",
+                "handlers.message_handlers.get_prompt_service",
                 return_value=mock_prompt_service,
             ),
             patch(
@@ -119,7 +119,7 @@ class TestPromptManager:
 
         with (
             patch(
-                "handlers.prompt_manager.get_prompt_service",
+                "handlers.message_handlers.get_prompt_service",
                 return_value=mock_prompt_service,
             ),
             patch(

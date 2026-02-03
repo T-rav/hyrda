@@ -128,38 +128,18 @@ Do a quick inspection and return JSON only. Don't overthink it.
 
 
 def extract_citations_from_report(report: str) -> list[int]:
-    """Extract all citation numbers [1], [2], etc. from report.
-
-    Args:
-        report: Markdown report text
-
-    Returns:
-        Sorted list of unique citation numbers found
-    """
-    # Find all [N] citations in the report
+    """Extract all citation numbers from report."""
     citations = re.findall(r"\[(\d+)\]", report)
-    # Convert to integers, deduplicate, and sort
     return sorted({int(c) for c in citations})
 
 
 def count_sources_in_section(report: str) -> int:
-    """Count number of source entries in ## Sources section.
-
-    Args:
-        report: Markdown report text
-
-    Returns:
-        Number of sources listed (0 if section missing)
-    """
-    # Find ## Sources section
+    """Count number of source entries in ## Sources section."""
     sources_match = re.search(r"## Sources\s*\n(.*)", report, re.DOTALL)
     if not sources_match:
         return 0
 
     sources_section = sources_match.group(1)
-
-    # Count numbered entries (1. ... 2. ... 3. ...)
-    # Match lines starting with digits followed by period
     source_entries = re.findall(r"^\d+\.\s+", sources_section, re.MULTILINE)
 
     return len(source_entries)
@@ -241,12 +221,10 @@ async def quality_control_node(
         issues = evaluation.get("issues", [])
         revision_instructions = evaluation.get("revision_instructions", "")
 
-        # Extract sources check details with null safety
         sources_check = evaluation.get("sources_check") or {}
         sources_count_judge = sources_check.get("sources_count", 0)
         has_adequate_sources = sources_check.get("has_adequate_sources", False)
 
-        # Extract focus alignment check details with null safety
         focus_alignment = evaluation.get("focus_alignment_check") or {}
         alignment_notes = focus_alignment.get("alignment_notes", "")
 
@@ -327,17 +305,7 @@ Generate the complete revised report now.
 
 
 def quality_control_router(state: ProfileAgentState) -> str:
-    """Route quality control results to either END or revision.
-
-    This function is used by add_conditional_edges to determine the next node.
-    It makes the evaluation loop visible in LangGraph Studio's graph visualization.
-
-    Args:
-        state: Current agent state with quality control results
-
-    Returns:
-        "end" to finish the workflow, or "revise" to loop back to final_report_generation
-    """
+    """Route quality control results to either END or revision."""
     passes_quality = state.get("passes_quality", False)
     max_revisions_exceeded = state.get("max_revisions_exceeded", False)
 

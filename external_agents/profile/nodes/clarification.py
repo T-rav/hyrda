@@ -103,6 +103,6 @@ async def clarify_with_user(
                 },
             )
 
-    except Exception as e:
-        logger.error(f"Clarification error: {e}, proceeding anyway")
+    except Exception:
+        logger.exception("Clarification failed, proceeding anyway")
         return Command(goto="write_research_brief", update={})

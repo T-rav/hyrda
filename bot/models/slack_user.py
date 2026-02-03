@@ -7,8 +7,6 @@ from .base import Base
 
 
 class SlackUser(Base):
-    """Model for storing Slack user information."""
-
     __tablename__ = "slack_users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

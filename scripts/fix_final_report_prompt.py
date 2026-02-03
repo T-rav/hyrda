@@ -20,7 +20,6 @@ load_dotenv()
 
 
 def get_fixed_relationship_section() -> str:
-    """Get the FIXED relationship section that trusts internal search."""
     return """## Relationships via 8th Light Network
 
 **CRITICAL: TRUST THE INTERNAL SEARCH RESULTS**
@@ -65,7 +64,6 @@ The internal search tool has ALREADY analyzed the knowledge base and determined 
 
 
 def fix_langfuse_prompt() -> None:
-    """Fix the Final Report Generation prompt in Langfuse."""
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
     host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")

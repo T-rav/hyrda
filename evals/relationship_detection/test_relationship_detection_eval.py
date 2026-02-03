@@ -65,10 +65,6 @@ async def test_internal_kb_relationship_detection_context_and_prompt():
 async def _format_context_safely(
     research_brief: str, notes: list[str], profile_type: str
 ) -> str:
-    """Helper that calls format_research_context while avoiding the LLM pruning path."""
-    # The pruning branch only triggers if sources > max_sources; keep it small to avoid LLM calls
-    # Also sanitize to ensure our test is deterministic
-    # Note: The function itself does not depend on external services in the non-pruning path
     formatted = await format_research_context(
         research_brief, notes, profile_type, max_sources=25
     )

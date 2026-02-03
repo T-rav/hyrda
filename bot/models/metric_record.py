@@ -7,8 +7,6 @@ from .base import Base
 
 
 class MetricRecord(Base):
-    """Staging table to track what has been synced from Metric.ai to Pinecone."""
-
     __tablename__ = "metric_records"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

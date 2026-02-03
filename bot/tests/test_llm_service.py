@@ -11,7 +11,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from services.llm_service import LLMService
 
 
-# TDD Factory Patterns for LLM Service Testing
 class LLMSettingsFactory:
     """Factory for creating LLM service settings with different configurations"""
 

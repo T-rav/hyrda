@@ -24,10 +24,8 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
             event = body["event"]
             channel_id = event["channel"]
             thread_ts = event.get("thread_ts")
-            # User ID not currently used but available for future features
             _user_id = event.get("user")
 
-            # Send a welcome message
             await slack_service.send_message(
                 channel=channel_id,
                 text="👋 Hello! I'm Insight Mesh Assistant. I can help answer questions about your data or start agent processes for you.",
@@ -50,8 +48,6 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 else text
             )
             channel = event["channel"]
-
-            # Always use the original message timestamp as thread_ts if not already in a thread
             thread_ts = event.get("thread_ts", event.get("ts"))
 
             logger.info(
@@ -67,10 +63,9 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 thread_ts=thread_ts,
                 files=body["event"].get("files", []),
                 conversation_cache=conversation_cache,
-                message_ts=event.get("ts"),  # Unique message timestamp
+                message_ts=event.get("ts"),
             )
 
-            # Record usage after successful handling
             await _record_usage(user_id, thread_ts, channel, "app_mention")
         except Exception as e:
             await handle_error(
@@ -88,12 +83,10 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
         try:
             event = body["event"]
 
-            # Log key message details
             logger.debug(
                 f"Message event: channel={event.get('channel')}, user={event.get('user')}, thread_ts={event.get('thread_ts')}"
             )
 
-            # Skip if it's from a bot
             if event.get("bot_id") or event.get("subtype") == "bot_message":
                 logger.info("Skipping bot message")
                 return
@@ -113,10 +106,8 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
                 f"Processing message: channel_type={channel_type}, thread_ts={thread_ts}, text='{text}'"
             )
 
-            # Extract files if present
             files = event.get("files", [])
 
-            # Process message based on context
             await process_message_by_context(
                 user_id=user_id,
                 channel=channel,
@@ -132,7 +123,6 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
 
         except Exception as e:
             logger.error(f"Error in message event handler: {e}")
-
             logger.error(f"Message handler error: {traceback.format_exc()}")
 
 
@@ -142,14 +132,7 @@ async def _record_usage(
     channel: str,
     interaction_type: str = "message",
 ) -> None:
-    """Record usage for bot interaction.
-
-    Args:
-        user_id: Slack user ID
-        thread_ts: Thread timestamp
-        channel: Channel ID
-        interaction_type: Type of interaction
-    """
+    """Record usage for bot interaction."""
     try:
         from config.settings import get_settings
 
@@ -167,7 +150,6 @@ async def _record_usage(
             interaction_type=interaction_type,
         )
     except Exception as e:
-        # Don't fail the message handling if usage tracking fails
         logger.warning(f"Failed to record usage: {e}")
 
 
@@ -189,10 +171,8 @@ async def process_message_by_context(
         f"Processing message: channel_type={channel_type}, thread_ts={thread_ts}"
     )
 
-    # Determine effective thread_ts for tracking
     effective_thread_ts = thread_ts or ts
 
-    # Check if message is in a DM
     if channel_type == "im":
         logger.info("Processing DM message")
         await handle_message(
@@ -205,17 +185,14 @@ async def process_message_by_context(
             files=files,
             conversation_cache=conversation_cache,
         )
-        # Record usage after successful handling
         await _record_usage(user_id, effective_thread_ts, channel, "dm_message")
         return
 
-    # Check if message mentions the bot (in any context)
     bot_id = slack_service.bot_id
     is_mention = f"<@{bot_id}>" in text if bot_id else False
 
     if is_mention:
         logger.info("Processing message with bot mention")
-        # Extract text after mention
         clean_text = text.split(">", 1)[-1].strip() if ">" in text else text
         await handle_message(
             text=clean_text,
@@ -227,19 +204,15 @@ async def process_message_by_context(
             files=files,
             conversation_cache=conversation_cache,
         )
-        # Record usage after successful handling
         await _record_usage(user_id, effective_thread_ts, channel, "mention")
         return
 
-    # If in thread, check if bot should respond
     if thread_ts:
         logger.info("Message is in a thread, checking participation")
 
         try:
-            # Check if bot is already a participant in this thread
             thread_info = await slack_service.get_thread_info(channel, thread_ts)
 
-            # Only respond if the bot is already a participant in this thread
             if thread_info.bot_is_participant:
                 logger.info("Bot responding to thread message")
                 await handle_message(
@@ -252,13 +225,11 @@ async def process_message_by_context(
                     files=files,
                     conversation_cache=conversation_cache,
                 )
-                # Record usage after successful handling
                 await _record_usage(user_id, thread_ts, channel, "thread_reply")
             else:
                 logger.debug("Bot is not a participant in this thread, ignoring")
         except Exception as e:
             logger.error(f"Error checking thread history: {e}")
-            # On permission errors, respond anyway since we can't verify participation
             await handle_message(
                 text=text,
                 user_id=user_id,
@@ -269,7 +240,6 @@ async def process_message_by_context(
                 files=files,
                 conversation_cache=conversation_cache,
             )
-            # Record usage after successful handling
             await _record_usage(user_id, thread_ts, channel, "thread_reply")
         return
 

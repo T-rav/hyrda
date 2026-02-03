@@ -9,11 +9,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class GDriveIngestParams(BaseModel):
-    """Parameters for Google Drive ingestion job.
-
-    Security: Validates folder/file IDs, credential IDs, and metadata structure.
-    """
-
     folder_id: str | None = Field(
         None,
         min_length=1,
@@ -37,10 +32,6 @@ class GDriveIngestParams(BaseModel):
     @field_validator("metadata")
     @classmethod
     def validate_metadata(cls, v: dict[str, Any]) -> dict[str, Any]:
-        """Validate metadata structure and size.
-
-        Security: Prevents metadata injection and DoS via large payloads.
-        """
         if not isinstance(v, dict):
             raise ValueError("metadata must be a dictionary")
 
@@ -65,10 +56,6 @@ class GDriveIngestParams(BaseModel):
 
     @model_validator(mode="after")
     def validate_source(self):
-        """Validate that exactly one of folder_id or file_id is provided.
-
-        Security: Prevents ambiguous requests and ensures clear intent.
-        """
         folder_id = self.folder_id
         file_id = self.file_id
 
@@ -93,24 +80,6 @@ JOB_PARAM_SCHEMAS: dict[str, type[BaseModel]] = {
 
 
 def validate_job_params(job_type: str, params: dict[str, Any]) -> dict[str, Any]:
-    """Validate job parameters against schema.
-
-    Args:
-        job_type: Type of job (e.g., "google_drive_ingest")
-        params: Job parameters to validate
-
-    Returns:
-        Validated parameters dictionary
-
-    Raises:
-        ValueError: If job type unknown or parameters invalid
-
-    Security:
-    - Validates parameter types and structure
-    - Enforces size limits
-    - Prevents injection attacks
-    - Returns sanitized parameters
-    """
     if job_type not in JOB_PARAM_SCHEMAS:
         # Unknown job type - allow but log warning
         # (for extensibility with external job types)

@@ -31,14 +31,7 @@ class MeddpiccConfiguration(BaseModel):
     def from_runnable_config(
         cls, config: RunnableConfig | None = None
     ) -> "MeddpiccConfiguration":
-        """Load configuration from environment variables or RunnableConfig.
-
-        Args:
-            config: Optional RunnableConfig from LangGraph
-
-        Returns:
-            MeddpiccConfiguration instance with merged settings
-        """
+        """Load configuration from environment variables or RunnableConfig."""
         # Start with defaults
         settings = {}
 
@@ -66,9 +59,5 @@ class MeddpiccConfiguration(BaseModel):
 
     @classmethod
     def from_env(cls) -> "MeddpiccConfiguration":
-        """Load configuration from environment variables only.
-
-        Returns:
-            MeddpiccConfiguration instance
-        """
+        """Load configuration from environment variables only."""
         return cls.from_runnable_config(None)

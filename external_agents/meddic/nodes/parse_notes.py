@@ -17,14 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def extract_urls(text: str) -> list[str]:
-    """Extract URLs from text.
-
-    Args:
-        text: Text to extract URLs from
-
-    Returns:
-        List of URLs found in text
-    """
+    """Extract URLs from text."""
     # URL regex pattern
     url_pattern = r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"
     urls = re.findall(url_pattern, text)

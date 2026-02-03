@@ -414,7 +414,6 @@ _retrieval_service: RetrievalService | None = None
 
 
 def get_retrieval_service() -> RetrievalService:
-    """Get global retrieval service instance."""
     global _retrieval_service
     if _retrieval_service is None:
         from copy import deepcopy

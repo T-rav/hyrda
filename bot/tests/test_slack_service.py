@@ -15,7 +15,6 @@ from services.slack_service import SlackService
 from tests.utils.builders.thread_history_builder import ThreadHistoryBuilder
 
 
-# TDD Factory Patterns for Slack Service Testing
 class SlackSettingsFactory:
     """Factory for creating Slack service settings with different configurations"""
 

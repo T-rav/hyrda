@@ -6,8 +6,6 @@ import logging
 import time
 
 from config.settings import Settings
-
-# Hybrid search removed
 from services.langfuse_service import (
     initialize_langfuse_service,
     observe,
@@ -53,10 +51,8 @@ class LLMService:
         else:
             logger.info("Langfuse observability disabled")
 
-    async def initialize(self):
-        """Initialize RAG service (no-op for HTTP client)"""
-        # RAG service initializes itself - no action needed for HTTP client
-        pass
+    async def initialize(self) -> None:
+        """RAG service is stateless HTTP client - no initialization needed."""
 
     @observe(name="llm_service_response", as_type="generation")
     async def get_response(
@@ -178,7 +174,6 @@ class LLMService:
         user_id: str | None = None,
         conversation_id: str | None = None,
     ) -> str | None:
-        """Get response without RAG retrieval"""
         return await self.get_response(
             messages,
             user_id,
@@ -187,8 +182,6 @@ class LLMService:
             document_content=None,
             document_filename=None,
         )
-
-    # Document ingestion and system status removed - handled by separate services
 
     async def close(self):
         """Clean up resources"""
@@ -202,38 +195,23 @@ class LLMService:
 
 
 async def create_llm_service(llm_settings) -> LLMService:
-    """
-    Factory function to create and initialize an LLM service instance
-
-    Args:
-        llm_settings: LLM settings object
-
-    Returns:
-        Initialized LLMService instance
-
-    """
-    # Create a minimal settings object with just the LLM settings
-    # This is needed for contextual retrieval functionality
+    """Factory function to create and initialize an LLM service instance."""
     from config.settings import Settings
 
-    # Create a full settings object to ensure all dependencies are available
     try:
         settings = Settings()
-        # Override with provided LLM settings if different
         if hasattr(llm_settings, "model"):
             settings.llm = llm_settings
     except Exception:
-        # Fallback: create minimal settings structure
+        # Fallback: create minimal settings structure when full settings unavailable
         class MinimalSettings:
             def __init__(self):
                 self.llm = llm_settings
-                # Add minimal required attributes
                 self.langfuse = type("obj", (object,), {"enabled": False})()
                 self.vector = type("obj", (object,), {"enabled": True})()
 
         settings = MinimalSettings()
 
-    # Create and initialize the service
     service = LLMService(settings)
     await service.initialize()
     return service

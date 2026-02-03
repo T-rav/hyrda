@@ -1,7 +1,4 @@
-"""Service Account API endpoints for external integration management.
-
-Allows admin users to create, list, revoke, and manage API keys for external systems.
-"""
+"""Service Account API endpoints for external integration management."""
 
 import logging
 import os
@@ -20,7 +17,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/service-accounts", tags=["service-accounts"])
 
 
-# Request/Response models
 class ServiceAccountCreate(BaseModel):
     """Request to create a new service account."""
 
@@ -86,12 +82,10 @@ class ServiceAccountCreateResponse(ServiceAccountResponse):
     )
 
 
-# Helper function to parse service account
 def _parse_service_account(account: ServiceAccount) -> dict:
     """Parse service account ORM model to dict with JSON fields decoded."""
     import json
 
-    # Parse allowed_agents from JSON string
     allowed_agents_list = None
     if account.allowed_agents:
         try:
@@ -122,7 +116,6 @@ def _parse_service_account(account: ServiceAccount) -> dict:
     }
 
 
-# Endpoints
 @router.post("", response_model=ServiceAccountCreateResponse)
 async def create_service_account(
     data: ServiceAccountCreate,
@@ -143,7 +136,6 @@ async def create_service_account(
         HTTPException: 400 if name already exists, 403 if not admin
     """
     with get_db_session() as db:
-        # Check if name already exists
         existing = (
             db.query(ServiceAccount).filter(ServiceAccount.name == data.name).first()
         )
@@ -152,15 +144,12 @@ async def create_service_account(
                 status_code=400, detail=f"Service account '{data.name}' already exists"
             )
 
-        # Generate API key and hash it
         api_key = generate_api_key()
         api_key_hash = bcrypt.hashpw(api_key.encode(), bcrypt.gensalt()).decode()
-        api_key_prefix = api_key[:8]  # First 8 chars for identification
+        api_key_prefix = api_key[:8]
 
-        # Get admin user email
         admin_email = admin_user.get("email", "unknown")
 
-        # Create service account
         import json
 
         service_account = ServiceAccount(
@@ -186,9 +175,8 @@ async def create_service_account(
 
         logger.info(f"Created service account '{data.name}' by {admin_email}")
 
-        # Parse service account and add API key
         response_dict = _parse_service_account(service_account)
-        response_dict["api_key"] = api_key  # Only time it's visible
+        response_dict["api_key"] = api_key
 
         return ServiceAccountCreateResponse(**response_dict)
 
@@ -218,7 +206,6 @@ async def list_service_accounts(
 
         accounts = query.order_by(ServiceAccount.created_at.desc()).all()
 
-        # Parse service accounts with JSON fields decoded
         return [
             ServiceAccountResponse(**_parse_service_account(account))
             for account in accounts
@@ -291,12 +278,10 @@ async def update_service_account(
                 status_code=400, detail="Cannot update revoked service account"
             )
 
-        # Track if we're deactivating the account
         was_deactivated = False
         if data.is_active is not None and not data.is_active and account.is_active:
             was_deactivated = True
 
-        # Update fields
         import json
 
         if data.description is not None:
@@ -304,7 +289,6 @@ async def update_service_account(
         if data.scopes is not None:
             account.scopes = data.scopes
         if data.allowed_agents is not None:
-            # Empty array = no access, None = no change
             account.allowed_agents = json.dumps(data.allowed_agents)
         if data.rate_limit is not None:
             account.rate_limit = data.rate_limit
@@ -318,7 +302,6 @@ async def update_service_account(
 
         logger.info(f"Updated service account '{account.name}' (ID: {account_id})")
 
-        # Invalidate cache if account was deactivated
         if was_deactivated:
             try:
                 import redis
@@ -379,7 +362,6 @@ async def revoke_service_account(
                 status_code=400, detail="Service account already revoked"
             )
 
-        # Revoke
         admin_email = admin_user.get("email", "unknown")
         account.is_revoked = True
         account.is_active = False
@@ -394,17 +376,12 @@ async def revoke_service_account(
             f"Revoked service account '{account.name}' by {admin_email}: {reason}"
         )
 
-        # Invalidate all cached validations for this account
-        # We can't compute the exact cache key (don't have plaintext API key)
-        # So we'll store account_id in cache keys we can invalidate
         try:
             import redis
 
             redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
             redis_client = redis.from_url(redis_url, decode_responses=True)
 
-            # Clear validation cache using account_id
-            # This is a secondary cache entry we maintain
             cache_keys_key = f"service_account:cache_keys:{account_id}"
             cached_keys = redis_client.smembers(cache_keys_key)
 
@@ -429,7 +406,6 @@ async def revoke_service_account(
 
         import json
 
-        # Parse allowed_agents before creating Pydantic model
         allowed_agents_parsed = None
         if account.allowed_agents:
             try:
@@ -437,7 +413,6 @@ async def revoke_service_account(
             except json.JSONDecodeError:
                 allowed_agents_parsed = None
 
-        # Create response dict with parsed values
         response_dict = {
             "id": account.id,
             "name": account.name,
@@ -495,7 +470,6 @@ async def delete_service_account(
             f"Permanently deleted service account '{name}' (ID: {account_id})"
         )
 
-        # Invalidate all cached validations for this account
         try:
             import redis
 
@@ -522,7 +496,6 @@ async def delete_service_account(
         return {"message": f"Service account '{name}' deleted permanently"}
 
 
-# Validation endpoint for external services (agent-service, etc.)
 class ServiceAccountValidateRequest(BaseModel):
     """Request to validate a service account API key."""
 
@@ -554,12 +527,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
     """
     import hashlib
 
-    # This endpoint requires service-to-service authentication
-    # (agent-service must authenticate to call this)
-    # NOTE: verify_service_auth is not a dependency here because we need custom logic
-    # It will be checked in the calling service
-
-    # Try Redis cache first (avoid expensive bcrypt verification)
     try:
         import json
 
@@ -568,18 +535,15 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
         redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
         redis_client = redis.from_url(redis_url, decode_responses=True)
 
-        # Create cache key from API key hash (don't store plaintext key in Redis!)
         api_key_hash = hashlib.sha256(data.api_key.encode()).hexdigest()
         cache_key = f"service_account:validated:{api_key_hash}"
 
-        # Check cache
         cached_data = redis_client.get(cache_key)
         if cached_data:
             logger.debug("Service account validation cache HIT")
             cached = json.loads(cached_data)
             account_id = cached["account_id"]
 
-            # Fetch account from DB (still need to check revocation/expiration/rate limits)
             with get_db_session() as db:
                 service_account = (
                     db.query(ServiceAccount)
@@ -596,9 +560,7 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
 
         else:
             logger.debug("Service account validation cache MISS")
-            # Cache miss - do full validation including bcrypt
             with get_db_session() as db:
-                # Fast lookup by prefix
                 api_key_prefix = data.api_key[:8]
                 accounts = (
                     db.query(ServiceAccount)
@@ -606,7 +568,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                     .all()
                 )
 
-                # Find matching account by verifying hash (expensive!)
                 service_account = None
                 for account in accounts:
                     if bcrypt.checkpw(
@@ -618,7 +579,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                 if not service_account:
                     raise HTTPException(status_code=401, detail="Invalid API key")
 
-                # Cache the validated account_id for 60 seconds
                 try:
                     redis_client.setex(
                         cache_key,
@@ -631,8 +591,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                         ),
                     )
 
-                    # Also maintain a set of cache keys for this account
-                    # This allows us to invalidate all caches when account is revoked
                     cache_keys_set = f"service_account:cache_keys:{service_account.id}"
                     redis_client.sadd(cache_keys_set, cache_key)
                     redis_client.expire(cache_keys_set, 3600)  # 1 hour TTL
@@ -644,10 +602,8 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                     logger.warning(f"Failed to cache service account validation: {e}")
 
     except redis.ConnectionError as e:
-        # Redis unavailable - fall back to direct DB lookup
         logger.warning(f"Redis unavailable for validation caching: {e}")
         with get_db_session() as db:
-            # Fast lookup by prefix
             api_key_prefix = data.api_key[:8]
             accounts = (
                 db.query(ServiceAccount)
@@ -655,7 +611,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                 .all()
             )
 
-            # Find matching account by verifying hash
             service_account = None
             for account in accounts:
                 if bcrypt.checkpw(data.api_key.encode(), account.api_key_hash.encode()):
@@ -665,45 +620,33 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
             if not service_account:
                 raise HTTPException(status_code=401, detail="Invalid API key")
 
-    # At this point, service_account is set from either cache or DB
-    # Now perform security checks (always fresh, never cached)
-
-    # Check if revoked
     if service_account.is_revoked:
         raise HTTPException(
             status_code=403,
             detail=f"API key revoked: {service_account.revoke_reason or 'No reason provided'}",
         )
 
-    # Check if active
     if not service_account.is_active:
         raise HTTPException(status_code=403, detail="API key is inactive")
 
-    # Check if expired
     if service_account.is_expired():
         raise HTTPException(status_code=403, detail="API key has expired")
 
-    # Check rate limit using Redis (sliding window algorithm)
     try:
         import redis
 
         redis_url = os.getenv("CACHE_REDIS_URL", "redis://localhost:6379")
         redis_client = redis.from_url(redis_url, decode_responses=True)
 
-        # Use sliding window rate limiting with Redis
-        # Key format: rate_limit:service_account:{id}:{hour}
         current_time = datetime.now(timezone.utc)
         current_hour = current_time.replace(minute=0, second=0, microsecond=0)
         rate_limit_key = f"rate_limit:service_account:{service_account.id}:{current_hour.isoformat()}"
 
-        # Increment request count
         request_count = redis_client.incr(rate_limit_key)
 
-        # Set expiration on first request (1 hour TTL)
         if request_count == 1:
-            redis_client.expire(rate_limit_key, 3600)  # 1 hour in seconds
+            redis_client.expire(rate_limit_key, 3600)
 
-        # Check if rate limit exceeded
         if request_count > service_account.rate_limit:
             logger.warning(
                 f"Rate limit exceeded for service account '{service_account.name}' "
@@ -721,10 +664,8 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
         )
 
     except redis.ConnectionError as e:
-        # Redis unavailable - fall back to database-based rate limiting
         logger.warning(f"Redis unavailable for rate limiting, using DB fallback: {e}")
 
-        # Simple DB-based fallback (less accurate but works without Redis)
         current_hour = datetime.now(timezone.utc).replace(
             minute=0, second=0, microsecond=0
         )
@@ -744,7 +685,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
                         detail=f"Rate limit exceeded: {service_account.rate_limit} requests/hour",
                     )
 
-    # Update usage stats (must be in DB context)
     with get_db_session() as db:
         # Re-fetch to update
         account = (
@@ -758,7 +698,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
             account.last_request_ip = data.client_ip
             db.commit()
 
-        # Parse allowed_agents
         import json
 
         allowed_agents_list = None
@@ -768,7 +707,6 @@ async def validate_service_account(data: ServiceAccountValidateRequest):
             except json.JSONDecodeError:
                 allowed_agents_list = None
 
-        # Return account details (without sensitive fields)
         return {
             "id": service_account.id,
             "name": service_account.name,

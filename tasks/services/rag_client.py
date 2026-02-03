@@ -158,4 +158,4 @@ class RAGIngestClient:
 class RAGIngestError(Exception):
     """Exception raised when RAG ingestion operations fail."""
 
-    pass
+    ...
