@@ -355,7 +355,6 @@ services:
     environment:
       - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
       - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
-      - EXTERNAL_AGENTS_PATH=/app/external_agents
       - VECTOR_HOST=qdrant
       - VECTOR_PORT=6333
       - VECTOR_API_KEY=${VECTOR_API_KEY:-}
@@ -367,7 +366,7 @@ services:
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
-      - ./external_agents:/app/external_agents:ro
+      - ./custom_agents:/app/custom_agents:ro
       - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
       - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
     depends_on:
