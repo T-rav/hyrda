@@ -31,7 +31,7 @@ async def get_current_user(request: Request) -> dict:
 
     # Proxy auth check to control-plane
     control_plane_url = os.getenv(
-        "CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001"
+        "CONTROL_PLANE_INTERNAL_URL", "https://control-plane:6001"
     )
 
     try:
@@ -103,7 +103,7 @@ async def verify_admin_from_database(user_email: str) -> bool:
     import httpx
 
     control_plane_url = os.getenv(
-        "CONTROL_PLANE_INTERNAL_URL", "https://control_plane:6001"
+        "CONTROL_PLANE_INTERNAL_URL", "https://control-plane:6001"
     )
 
     try:

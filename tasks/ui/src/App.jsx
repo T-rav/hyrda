@@ -122,9 +122,9 @@ function DashboardContent() {
     setLoading(true)
     try {
       const [jobsRes, runsRes, schedulerRes] = await Promise.all([
-        fetch('/api/jobs').then(r => r.json()),
-        fetch('/api/task-runs').then(r => r.json()),
-        fetch('/api/scheduler/info').then(r => r.json())
+        fetch('/api/jobs', { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/task-runs', { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/scheduler/info', { credentials: 'include' }).then(r => r.json())
       ])
 
       setData({
@@ -298,7 +298,7 @@ function TasksContent({ showNotification }) {
   const loadTasks = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/jobs')
+      const response = await fetch('/api/jobs', { credentials: 'include' })
       const data = await response.json()
       setTasks(data.jobs || [])
     } catch (error) {
@@ -360,7 +360,7 @@ function TasksContent({ showNotification }) {
       let response
       switch (action) {
         case 'pause':
-          response = await fetch(`/api/jobs/${taskId}/pause`, { method: 'POST' })
+          response = await fetch(`/api/jobs/${taskId}/pause`, { method: 'POST', credentials: 'include' })
           if (response && response.ok) {
             const task = tasks.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
@@ -371,7 +371,7 @@ function TasksContent({ showNotification }) {
           }
           break
         case 'resume':
-          response = await fetch(`/api/jobs/${taskId}/resume`, { method: 'POST' })
+          response = await fetch(`/api/jobs/${taskId}/resume`, { method: 'POST', credentials: 'include' })
           if (response && response.ok) {
             const task = tasks.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
@@ -382,7 +382,7 @@ function TasksContent({ showNotification }) {
           }
           break
         case 'run-once':
-          response = await fetch(`/api/jobs/${taskId}/run-once`, { method: 'POST' })
+          response = await fetch(`/api/jobs/${taskId}/run-once`, { method: 'POST', credentials: 'include' })
           if (response && response.ok) {
             const task = tasks.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
@@ -396,7 +396,7 @@ function TasksContent({ showNotification }) {
           const task = tasks.find(t => t.id === taskId)
           const taskName = getTaskDisplayName(task)
           if (window.confirm(`Are you sure you want to delete ${taskName}?`)) {
-            response = await fetch(`/api/jobs/${taskId}`, { method: 'DELETE' })
+            response = await fetch(`/api/jobs/${taskId}`, { method: 'DELETE', credentials: 'include' })
             if (response && response.ok) {
               showNotification(`${taskName} deleted successfully`, 'success')
               await loadTasks()
@@ -411,7 +411,7 @@ function TasksContent({ showNotification }) {
         case 'view':
           // Load task details and show modal
           try {
-            const taskResponse = await fetch(`/api/jobs/${taskId}`)
+            const taskResponse = await fetch(`/api/jobs/${taskId}`, { credentials: 'include' })
             if (taskResponse.ok) {
               const taskData = await taskResponse.json()
               setSelectedTask(taskData)
@@ -841,7 +841,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
   React.useEffect(() => {
     const loadTaskTypes = async () => {
       try {
-        const response = await fetch('/api/job-types')
+        const response = await fetch('/api/job-types', { credentials: 'include' })
         const data = await response.json()
         setTaskTypes(data.job_types || [])
       } catch (error) {
@@ -993,6 +993,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify(taskData)
       })
 
@@ -1325,13 +1326,15 @@ function TaskParameters({ taskType, taskTypes }) {
 
   const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
 
-  // Special handling for Google Drive ingestion - show credential selector
+  // Special handling for jobs that require credentials
   const isGDriveIngest = taskType === 'gdrive_ingest'
+  const isWebsiteScrape = taskType === 'website_scrape'
+  const needsCredentials = isGDriveIngest || isWebsiteScrape
 
-  // Load available credentials for gdrive_ingest tasks
+  // Load available credentials for jobs that need authentication
   React.useEffect(() => {
-    if (isGDriveIngest) {
-      fetch('/api/credentials')
+    if (needsCredentials) {
+      fetch('/api/credentials', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           setAvailableCredentials(data.credentials || [])
@@ -1344,7 +1347,7 @@ function TaskParameters({ taskType, taskTypes }) {
           logError('Error loading credentials:', err)
         })
     }
-  }, [isGDriveIngest])
+  }, [needsCredentials])
 
   if (!selectedTaskType) {
     return (
@@ -1356,8 +1359,8 @@ function TaskParameters({ taskType, taskTypes }) {
   }
 
   const renderParameter = (param, isRequired = false) => {
-    // Skip credentials_file, token_file, and credential_id for gdrive_ingest (handled separately)
-    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
+    // Skip credentials_file, token_file, and credential_id for jobs that use credential selector (handled separately)
+    if (needsCredentials && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
       return null
     }
 
@@ -1603,26 +1606,30 @@ function TaskParameters({ taskType, taskTypes }) {
 
   return (
     <div>
-      {/* Google Drive Credential Selection */}
-      {isGDriveIngest && (
+      {/* OAuth Credential Selection */}
+      {needsCredentials && (
         <div className="mb-4">
-          <h6>Google Drive Authentication</h6>
+          <h6>{isGDriveIngest ? 'Google Drive Authentication' : 'Authentication'}</h6>
 
           {availableCredentials.length === 0 ? (
-            <div className="alert alert-warning">
-              <small>No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.</small>
+            <div className={isGDriveIngest ? 'alert alert-warning' : 'alert alert-info'}>
+              <small>
+                {isGDriveIngest
+                  ? 'No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.'
+                  : 'No credentials found. Add one in the Credentials tab if you need to scrape protected pages.'}
+              </small>
             </div>
           ) : (
             <div className="mb-3">
               <label className="form-label">
-                Select Credential <span className="text-danger">*</span>
+                Select Credential {isGDriveIngest && <span className="text-danger">*</span>}
               </label>
               <select
                 className="form-select"
                 id="param_credential_id"
                 value={selectedCredential}
                 onChange={(e) => setSelectedCredential(e.target.value)}
-                required
+                required={isGDriveIngest}
               >
                 <option value="">Choose a credential...</option>
                 {availableCredentials.map((cred) => (
@@ -1633,7 +1640,9 @@ function TaskParameters({ taskType, taskTypes }) {
               </select>
               <div className="form-text">
                 <small className="text-muted">
-                  Select which Google account to use for this task
+                  {isGDriveIngest
+                    ? 'Select which Google account to use for this task'
+                    : 'Optional: Select OAuth credential for accessing protected pages (e.g., Google Sites)'}
                 </small>
               </div>
             </div>

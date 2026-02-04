@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
 import { logError } from '../utils/logger'
 
-// API base URL - tasks service runs on port 5001
-const API_BASE = 'http://localhost:5001/api'
-// Bot API base URL for RAG metrics
+// Use relative URLs since the UI is served from the same nginx server
+// This automatically uses the same protocol (HTTP/HTTPS) as the page
+const API_BASE = '/api'
+// Bot API base URL for RAG metrics (external service, use absolute URL)
 const BOT_API_BASE = 'http://localhost:8080/api'
 
 export function useTasksData() {

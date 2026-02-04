@@ -154,10 +154,10 @@ describe('App Component', () => {
       expect(screen.getByText('Scheduler Status')).toBeInTheDocument()
     })
 
-    // Check if API calls were made
-    expect(global.fetch).toHaveBeenCalledWith('/api/jobs')
-    expect(global.fetch).toHaveBeenCalledWith('/api/task-runs')
-    expect(global.fetch).toHaveBeenCalledWith('/api/scheduler/info')
+    // Check if API calls were made with credentials
+    expect(global.fetch).toHaveBeenCalledWith('/api/jobs', { credentials: 'include' })
+    expect(global.fetch).toHaveBeenCalledWith('/api/task-runs', { credentials: 'include' })
+    expect(global.fetch).toHaveBeenCalledWith('/api/scheduler/info', { credentials: 'include' })
   })
 
   test('displays notification when shown', async () => {
