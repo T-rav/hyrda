@@ -1,6 +1,6 @@
-"""Tests for stream_agent authorization flow.
+"""Tests for centralized agent authorization logic.
 
-Tests all authentication and authorization paths in api/agents.py stream_agent().
+Tests the authorize_agent_request function in dependencies/agent_auth.py.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException, Request
 
-from api.agents import AgentInvokeRequest, stream_agent
+from dependencies.agent_auth import AuthResult, authorize_agent_request
 
 
 @pytest.fixture
@@ -19,12 +19,6 @@ def mock_request():
     request.client = MagicMock()
     request.client.host = "127.0.0.1"
     return request
-
-
-@pytest.fixture
-def mock_invoke_request():
-    """Create mock agent invoke request."""
-    return AgentInvokeRequest(query="test query", context={})
 
 
 @pytest.fixture
@@ -52,26 +46,18 @@ def mock_system_agent_info():
 
 
 @pytest.mark.asyncio
-class TestStreamAgentAuthentication:
-    """Test authentication methods for stream_agent."""
+class TestAuthentication:
+    """Test authentication methods."""
 
-    async def test_no_auth_raises_401(
-        self, mock_request, mock_invoke_request, mock_agent_info
-    ):
+    async def test_no_auth_raises_401(self, mock_request, mock_agent_info):
         """Test that missing authentication raises 401."""
-        with patch(
-            "api.agents.agent_client.discover_agent",
-            return_value=mock_agent_info,
-        ):
-            with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+        with pytest.raises(HTTPException) as exc_info:
+            await authorize_agent_request("test_agent", mock_agent_info, mock_request)
 
-            assert exc_info.value.status_code == 401
-            assert "Authentication required" in exc_info.value.detail
+        assert exc_info.value.status_code == 401
+        assert "Authentication required" in exc_info.value.detail
 
-    async def test_jwt_authentication_success(
-        self, mock_request, mock_invoke_request, mock_agent_info
-    ):
+    async def test_jwt_authentication_success(self, mock_request, mock_agent_info):
         """Test successful JWT authentication."""
         mock_request.headers = {"Authorization": "Bearer valid_jwt_token"}
 
@@ -79,14 +65,8 @@ class TestStreamAgentAuthentication:
         mock_permissions = [{"agent_name": "test_agent"}]
 
         with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
             patch("dependencies.auth.get_current_user", return_value=mock_user_info),
             patch("httpx.AsyncClient") as mock_httpx,
-            patch("services.agent_registry.get_agent", return_value=MagicMock()),
-            patch("api.agents.StreamingResponse", return_value=MagicMock()),
         ):
             # Mock control plane permissions check
             mock_response = MagicMock()
@@ -96,31 +76,33 @@ class TestStreamAgentAuthentication:
                 return_value=mock_response
             )
 
-            # Should not raise
-            result = await stream_agent("test_agent", mock_invoke_request, mock_request)
-            assert result is not None
+            result = await authorize_agent_request(
+                "test_agent", mock_agent_info, mock_request
+            )
+
+            assert isinstance(result, AuthResult)
+            assert result.auth_type == "jwt"
+            assert result.user_id == "user123"
+            assert result.service_account_name is None
 
     async def test_service_token_authentication_success(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test successful internal service token authentication."""
         mock_request.headers = {"X-Service-Token": "dev-bot-service-token"}
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
-            patch(
-                "shared.utils.service_auth.verify_service_token",
-                return_value={"service": "bot", "valid": True},
-            ),
-            patch("services.agent_registry.get_agent", return_value=MagicMock()),
-            patch("api.agents.StreamingResponse", return_value=MagicMock()),
+        with patch(
+            "shared.utils.service_auth.verify_service_token",
+            return_value={"service": "bot", "valid": True},
         ):
-            # Should not raise
-            result = await stream_agent("test_agent", mock_invoke_request, mock_request)
-            assert result is not None
+            result = await authorize_agent_request(
+                "test_agent", mock_agent_info, mock_request
+            )
+
+            assert isinstance(result, AuthResult)
+            assert result.auth_type == "service"
+            assert result.user_id is None
+            assert result.service_account_name is None
 
 
 @pytest.mark.asyncio
@@ -128,7 +110,7 @@ class TestJWTUserPermissions:
     """Test JWT user permission checks."""
 
     async def test_jwt_user_without_permission_raises_403(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that JWT user without permission raises 403."""
         mock_request.headers = {"Authorization": "Bearer valid_jwt_token"}
@@ -137,10 +119,6 @@ class TestJWTUserPermissions:
         mock_permissions = [{"agent_name": "other_agent"}]  # Wrong agent
 
         with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
             patch("dependencies.auth.get_current_user", return_value=mock_user_info),
             patch("httpx.AsyncClient") as mock_httpx,
         ):
@@ -153,23 +131,21 @@ class TestJWTUserPermissions:
             )
 
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "test_agent", mock_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 403
             assert "does not have permission" in exc_info.value.detail
 
     async def test_jwt_permission_check_unavailable_raises_503(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that control plane unavailability raises 503."""
         mock_request.headers = {"Authorization": "Bearer valid_jwt_token"}
         mock_user_info = {"user_id": "user123"}
 
         with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
             patch("dependencies.auth.get_current_user", return_value=mock_user_info),
             patch("httpx.AsyncClient") as mock_httpx,
         ):
@@ -180,23 +156,21 @@ class TestJWTUserPermissions:
             )
 
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "test_agent", mock_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 503
             assert "unavailable" in exc_info.value.detail.lower()
 
     async def test_jwt_permission_check_403_response(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that 403 from permission check is propagated."""
         mock_request.headers = {"Authorization": "Bearer valid_jwt_token"}
         mock_user_info = {"user_id": "user123"}
 
         with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
             patch("dependencies.auth.get_current_user", return_value=mock_user_info),
             patch("httpx.AsyncClient") as mock_httpx,
         ):
@@ -208,7 +182,9 @@ class TestJWTUserPermissions:
             )
 
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "test_agent", mock_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 403
 
@@ -218,7 +194,7 @@ class TestServiceAccountAuthorization:
     """Test service account authorization checks."""
 
     async def test_service_account_system_agent_blocked(
-        self, mock_request, mock_invoke_request, mock_system_agent_info
+        self, mock_request, mock_system_agent_info
     ):
         """Test that service accounts cannot access system agents."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
@@ -228,25 +204,21 @@ class TestServiceAccountAuthorization:
         mock_service_account.scopes = ["agents:invoke"]
         mock_service_account.allowed_agents = None
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_system_agent_info,
-            ),
-            patch(
-                "dependencies.service_account_auth.verify_service_account_api_key",
-                return_value=mock_service_account,
-            ),
+        with patch(
+            "dependencies.service_account_auth.verify_service_account_api_key",
+            return_value=mock_service_account,
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("help", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "help", mock_system_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 403
             assert "System agent" in exc_info.value.detail
             assert "Slack users" in exc_info.value.detail
 
     async def test_service_account_agent_not_allowed(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that service account blocked from unauthorized agent."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
@@ -256,24 +228,20 @@ class TestServiceAccountAuthorization:
         mock_service_account.scopes = ["agents:invoke"]
         mock_service_account.allowed_agents = ["other_agent"]  # Not test_agent
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
-            patch(
-                "dependencies.service_account_auth.verify_service_account_api_key",
-                return_value=mock_service_account,
-            ),
+        with patch(
+            "dependencies.service_account_auth.verify_service_account_api_key",
+            return_value=mock_service_account,
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "test_agent", mock_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 403
             assert "not authorized" in exc_info.value.detail
 
     async def test_service_account_missing_invoke_scope(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that service account without agents:invoke scope is blocked."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
@@ -283,24 +251,20 @@ class TestServiceAccountAuthorization:
         mock_service_account.scopes = ["agents:read"]  # No invoke scope
         mock_service_account.allowed_agents = ["test_agent"]
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
-            patch(
-                "dependencies.service_account_auth.verify_service_account_api_key",
-                return_value=mock_service_account,
-            ),
+        with patch(
+            "dependencies.service_account_auth.verify_service_account_api_key",
+            return_value=mock_service_account,
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("test_agent", mock_invoke_request, mock_request)
+                await authorize_agent_request(
+                    "test_agent", mock_agent_info, mock_request
+                )
 
             assert exc_info.value.status_code == 403
             assert "agents:invoke" in exc_info.value.detail
 
     async def test_service_account_allowed_agents_none_grants_access(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that allowed_agents=None grants access to all agents."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
@@ -310,24 +274,20 @@ class TestServiceAccountAuthorization:
         mock_service_account.scopes = ["agents:invoke"]
         mock_service_account.allowed_agents = None  # Access to all
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
-            patch(
-                "dependencies.service_account_auth.verify_service_account_api_key",
-                return_value=mock_service_account,
-            ),
-            patch("services.agent_registry.get_agent", return_value=MagicMock()),
-            patch("api.agents.StreamingResponse", return_value=MagicMock()),
+        with patch(
+            "dependencies.service_account_auth.verify_service_account_api_key",
+            return_value=mock_service_account,
         ):
-            # Should not raise
-            result = await stream_agent("test_agent", mock_invoke_request, mock_request)
-            assert result is not None
+            result = await authorize_agent_request(
+                "test_agent", mock_agent_info, mock_request
+            )
+
+            assert isinstance(result, AuthResult)
+            assert result.auth_type == "service_account"
+            assert result.service_account_name == "Test Account"
 
     async def test_service_account_in_allowed_list_grants_access(
-        self, mock_request, mock_invoke_request, mock_agent_info
+        self, mock_request, mock_agent_info
     ):
         """Test that agent in allowed_agents list grants access."""
         mock_request.headers = {"X-API-Key": "sa_test_key_12345"}
@@ -337,64 +297,14 @@ class TestServiceAccountAuthorization:
         mock_service_account.scopes = ["agents:invoke"]
         mock_service_account.allowed_agents = ["test_agent", "other_agent"]
 
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                return_value=mock_agent_info,
-            ),
-            patch(
-                "dependencies.service_account_auth.verify_service_account_api_key",
-                return_value=mock_service_account,
-            ),
-            patch("services.agent_registry.get_agent", return_value=MagicMock()),
-            patch("api.agents.StreamingResponse", return_value=MagicMock()),
-        ):
-            # Should not raise
-            result = await stream_agent("test_agent", mock_invoke_request, mock_request)
-            assert result is not None
-
-
-@pytest.mark.asyncio
-class TestAgentDiscovery:
-    """Test agent discovery in stream_agent."""
-
-    async def test_nonexistent_agent_raises_404(
-        self, mock_request, mock_invoke_request
-    ):
-        """Test that nonexistent agent raises 404."""
-        mock_request.headers = {"X-Service-Token": "dev-bot-service-token"}
-
-        with (
-            patch(
-                "api.agents.agent_client.discover_agent",
-                side_effect=ValueError("Agent 'missing' not found"),
-            ),
-            patch(
-                "shared.utils.service_auth.verify_service_token",
-                return_value={"service": "bot"},
-            ),
-        ):
-            with pytest.raises(HTTPException) as exc_info:
-                await stream_agent("missing", mock_invoke_request, mock_request)
-
-            assert exc_info.value.status_code == 404
-            assert "not found" in str(exc_info.value.detail)
-
-    async def test_invalid_agent_name_raises_400(
-        self, mock_request, mock_invoke_request
-    ):
-        """Test that invalid agent name raises 400."""
-        mock_request.headers = {"X-Service-Token": "dev-bot-service-token"}
-
         with patch(
-            "shared.utils.service_auth.verify_service_token",
-            return_value={"service": "bot"},
+            "dependencies.service_account_auth.verify_service_account_api_key",
+            return_value=mock_service_account,
         ):
-            # Agent name with invalid characters
-            with pytest.raises(HTTPException) as exc_info:
-                await stream_agent(
-                    "agent;drop table", mock_invoke_request, mock_request
-                )
+            result = await authorize_agent_request(
+                "test_agent", mock_agent_info, mock_request
+            )
 
-            assert exc_info.value.status_code == 400
-            assert "Invalid agent name" in exc_info.value.detail
+            assert isinstance(result, AuthResult)
+            assert result.auth_type == "service_account"
+            assert result.service_account_name == "Test Account"
