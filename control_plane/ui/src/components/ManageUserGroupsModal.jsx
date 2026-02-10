@@ -1,11 +1,44 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, Plus, Trash2, Users as UsersIcon, Shield } from 'lucide-react'
 
 function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFromGroup }) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [localGroups, setLocalGroups] = useState(new Set())
 
-  // Create set of group names user is already in
-  const userGroupNames = new Set((user.groups || []).map(g => g.group_name))
+  // Sync local groups with user.groups prop
+  useEffect(() => {
+    setLocalGroups(new Set((user.groups || []).map(g => g.group_name)))
+  }, [user.groups])
+
+  const handleAdd = async (groupName, userId) => {
+    // Optimistically update UI
+    setLocalGroups(prev => new Set([...prev, groupName]))
+    try {
+      await onAddToGroup(groupName, userId)
+    } catch (error) {
+      // Revert on error
+      setLocalGroups(prev => {
+        const next = new Set(prev)
+        next.delete(groupName)
+        return next
+      })
+    }
+  }
+
+  const handleRemove = async (groupName, userId) => {
+    // Optimistically update UI
+    setLocalGroups(prev => {
+      const next = new Set(prev)
+      next.delete(groupName)
+      return next
+    })
+    try {
+      await onRemoveFromGroup(groupName, userId)
+    } catch (error) {
+      // Revert on error
+      setLocalGroups(prev => new Set([...prev, groupName]))
+    }
+  }
 
   const filteredGroups = groups.filter(group =>
     (group.display_name || group.group_name).toLowerCase().includes(searchTerm.toLowerCase())
@@ -40,7 +73,7 @@ function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFr
 
           <div className="user-selection-list">
             {filteredGroups.map(group => {
-              const isMember = userGroupNames.has(group.group_name)
+              const isMember = localGroups.has(group.group_name)
               const isSystemGroup = group.group_name === 'all_users'
 
               return (
@@ -59,7 +92,7 @@ function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFr
                   <div>
                     {!isMember && !isSystemGroup && (
                       <button
-                        onClick={() => onAddToGroup(group.group_name, user.slack_user_id)}
+                        onClick={() => handleAdd(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-primary"
                       >
                         <Plus size={14} />
@@ -68,7 +101,7 @@ function ManageUserGroupsModal({ user, groups, onClose, onAddToGroup, onRemoveFr
                     )}
                     {isMember && !isSystemGroup && (
                       <button
-                        onClick={() => onRemoveFromGroup(group.group_name, user.slack_user_id)}
+                        onClick={() => handleRemove(group.group_name, user.slack_user_id)}
                         className="btn-sm btn-danger"
                       >
                         <Trash2 size={14} />

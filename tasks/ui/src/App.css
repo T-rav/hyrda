@@ -1430,3 +1430,154 @@ body {
 .text-secondary {
   color: #6b7280 !important;
 }
+
+/* Toggle Switch Component Styles */
+.toggle-switch-wrapper {
+  margin-bottom: 1rem;
+}
+
+.toggle-switch-wrapper .form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.toggle-switch.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e5e7eb;
+  border-radius: 28px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #10b981;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+}
+
+.toggle-switch input:checked:disabled + .toggle-slider {
+  background-color: #6ee7b7;
+}
+
+.toggle-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.toggle-label.active {
+  color: #10b981;
+}
+
+/* Task Parameters in Read-Only Mode */
+.task-parameters-readonly .form-control {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.task-parameters-readonly .toggle-switch {
+  pointer-events: none;
+}
+
+/* Schedule Preset Buttons */
+.schedule-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.schedule-presets .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Modal Improvements */
+.modal-lg {
+  max-width: 800px;
+}
+
+.modal-body .form-label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.modal-body h6 {
+  color: #4b5563;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Parameter Section Styling */
+.parameter-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.parameter-section h6 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #374151;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}

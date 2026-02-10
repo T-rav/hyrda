@@ -233,7 +233,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 <small>
                   <strong>Simple setup:</strong><br />
                   1. Enter a name for this credential<br />
-                  2. Click "Connect Google Drive"<br />
+                  2. Click "Connect Google"<br />
                   3. Sign in with your Google account<br />
                   That's it - no files to upload!
                 </small>
@@ -255,41 +255,46 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               </div>
 
-              {!authInProgress && (
-                <button
-                  type="button"
-                  className="btn btn-primary w-100"
-                  onClick={handleOAuthClick}
-                  disabled={!name}
-                >
-                  <ExternalLink size={16} className="me-1" />
-                  Connect Google Drive
-                </button>
-              )}
-
-              {authInProgress && (
-                <div className="alert alert-info mb-0">
-                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
-                  Waiting for Google authentication...
-                </div>
-              )}
-
               {error && (
-                <div className="alert alert-danger mt-3 mb-0">
+                <div className="alert alert-danger mb-3">
                   <AlertCircle size={16} className="me-2" />
                   {error}
                 </div>
               )}
             </div>
-            <div className="card-footer d-flex justify-content-end">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={onClose}
-                disabled={authInProgress}
-              >
-                Cancel
-              </button>
+            <div className="card-footer d-flex flex-column gap-2">
+              {!authInProgress ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary w-100"
+                    onClick={handleOAuthClick}
+                    disabled={!name}
+                  >
+                    <ExternalLink size={16} className="me-1" />
+                    Connect Google
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary w-100"
+                    onClick={onClose}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <div className="alert alert-info mb-0">
+                  <div className="spinner-border spinner-border-sm me-2" role="status"></div>
+                  Waiting for Google authentication...
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-secondary float-end"
+                    onClick={onClose}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
     </div>
   )

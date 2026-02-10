@@ -1,11 +1,44 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { X, CheckCircle, Trash2, Shield } from 'lucide-react'
 
 function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant, onRevoke }) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [localPermissions, setLocalPermissions] = useState(new Set())
 
-  // Create set of agent names user already has access to
-  const permittedAgentNames = new Set(userPermissions)
+  // Sync local permissions with userPermissions prop
+  useEffect(() => {
+    setLocalPermissions(new Set(userPermissions))
+  }, [userPermissions])
+
+  const handleGrant = async (agentName) => {
+    // Optimistically update UI
+    setLocalPermissions(prev => new Set([...prev, agentName]))
+    try {
+      await onGrant(agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalPermissions(prev => {
+        const next = new Set(prev)
+        next.delete(agentName)
+        return next
+      })
+    }
+  }
+
+  const handleRevoke = async (agentName) => {
+    // Optimistically update UI
+    setLocalPermissions(prev => {
+      const next = new Set(prev)
+      next.delete(agentName)
+      return next
+    })
+    try {
+      await onRevoke(agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalPermissions(prev => new Set([...prev, agentName]))
+    }
+  }
 
   const filteredAgents = agents.filter(agent =>
     agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -35,7 +68,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
 
           <div className="user-selection-list">
             {filteredAgents.map(agent => {
-              const hasAccess = permittedAgentNames.has(agent.name)
+              const hasAccess = localPermissions.has(agent.name)
 
               return (
                 <div key={agent.name} className="user-selection-item">
@@ -49,7 +82,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
                   <div>
                     {!hasAccess && (
                       <button
-                        onClick={() => onGrant(agent.name)}
+                        onClick={() => handleGrant(agent.name)}
                         className="btn-sm btn-primary"
                       >
                         <CheckCircle size={14} />
@@ -58,7 +91,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
                     )}
                     {hasAccess && (
                       <button
-                        onClick={() => onRevoke(agent.name)}
+                        onClick={() => handleRevoke(agent.name)}
                         className="btn-sm btn-danger"
                       >
                         <Trash2 size={14} />

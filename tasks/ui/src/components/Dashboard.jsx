@@ -90,7 +90,6 @@ function Dashboard({ onError, setLoading }) {
 
   // Calculate scheduler stats
   const totalRuns = taskRunsData.length
-  const successfulRuns = taskRunsData.filter(run => run.status === 'success').length
 
   // Calculate RAG query stats
   const totalQueries = ragMetrics.total_queries || 0

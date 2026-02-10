@@ -1,13 +1,46 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Users, X, Plus, Trash2, Shield } from 'lucide-react'
 
 function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle, onDelete }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [localAuthorizedGroups, setLocalAuthorizedGroups] = useState(new Set())
 
-  // Create set of authorized group names
-  const authorizedGroupNames = new Set(agent.authorized_group_names || [])
+  // Sync local authorized groups with agent.authorized_group_names prop
+  useEffect(() => {
+    setLocalAuthorizedGroups(new Set(agent.authorized_group_names || []))
+  }, [agent.authorized_group_names])
+
+  const handleGrant = async (groupName, agentName) => {
+    // Optimistically update UI
+    setLocalAuthorizedGroups(prev => new Set([...prev, groupName]))
+    try {
+      await onGrantToGroup(groupName, agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalAuthorizedGroups(prev => {
+        const next = new Set(prev)
+        next.delete(groupName)
+        return next
+      })
+    }
+  }
+
+  const handleRevoke = async (groupName, agentName) => {
+    // Optimistically update UI
+    setLocalAuthorizedGroups(prev => {
+      const next = new Set(prev)
+      next.delete(groupName)
+      return next
+    })
+    try {
+      await onRevokeFromGroup(groupName, agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalAuthorizedGroups(prev => new Set([...prev, groupName]))
+    }
+  }
 
   // For system agents, only show all_users group
   const filteredGroups = groups
@@ -100,7 +133,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
 
               <div className="user-selection-list">
             {filteredGroups.map(group => {
-              const hasAccess = authorizedGroupNames.has(group.group_name)
+              const hasAccess = localAuthorizedGroups.has(group.group_name)
               const isSystemGroup = group.group_name === 'all_users'
 
               return (
@@ -126,7 +159,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                   <div>
                     {!hasAccess && !agent.is_system && (
                       <button
-                        onClick={() => onGrantToGroup(group.group_name, agent.name)}
+                        onClick={() => handleGrant(group.group_name, agent.name)}
                         className="btn-sm btn-primary"
                       >
                         <Plus size={14} />
@@ -135,7 +168,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                     )}
                     {hasAccess && !(agent.is_system && isSystemGroup) && (
                       <button
-                        onClick={() => onRevokeFromGroup(group.group_name, agent.name)}
+                        onClick={() => handleRevoke(group.group_name, agent.name)}
                         className="btn-sm btn-danger"
                       >
                         <Trash2 size={14} />
