@@ -227,7 +227,7 @@ class TestServiceContainer:
 
         # Should raise errors
         with pytest.raises(RuntimeError, match="closed container"):
-            container.register_factory(MockService, lambda: MockService())
+            container.register_factory(MockService, MockService)
 
         with pytest.raises(RuntimeError, match="closed container"):
             await container.get(MockService)

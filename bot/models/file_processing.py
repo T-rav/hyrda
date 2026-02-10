@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class FileType(str, Enum):
+class FileType(StrEnum):
     """Supported file types for processing."""
 
     PDF = "pdf"
@@ -50,7 +50,7 @@ class FileType(str, Enum):
         return ext_map.get(extension.lower(), cls.UNKNOWN)
 
 
-class ProcessingStatus(str, Enum):
+class ProcessingStatus(StrEnum):
     """File processing status."""
 
     PENDING = "pending"

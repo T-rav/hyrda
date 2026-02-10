@@ -1,9 +1,9 @@
 """Slack enumeration types"""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class SlackEventType(str, Enum):
+class SlackEventType(StrEnum):
     """Types of Slack events we handle."""
 
     MESSAGE = "message"
@@ -16,7 +16,7 @@ class SlackEventType(str, Enum):
     THREAD_REPLY = "thread_reply"
 
 
-class MessageSubtype(str, Enum):
+class MessageSubtype(StrEnum):
     """Slack message subtypes."""
 
     BOT_MESSAGE = "bot_message"

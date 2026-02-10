@@ -125,7 +125,7 @@ class TavilyClient:
                 return {
                     "success": True,
                     "url": url,
-                    "title": url.split("/")[-1],  # Simple title fallback
+                    "title": url.rsplit("/", maxsplit=1)[-1],  # Simple title fallback
                     "content": content,
                 }
 
