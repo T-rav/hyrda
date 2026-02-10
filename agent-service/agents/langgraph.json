@@ -4,7 +4,7 @@
     "../../../"
   ],
   "graphs": {
-    "research": "agents.research.research_agent:research_agent"
+    "research": "agents.research.nodes.graph_builder:build_research_agent"
   },
   "env": "../../../.env"
 }

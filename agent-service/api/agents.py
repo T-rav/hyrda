@@ -56,44 +56,31 @@ class AgentListResponse(BaseModel):
     "", response_model=AgentListResponse, dependencies=[Depends(require_service_auth)]
 )
 async def list_agents():
-    """List all available agents from control plane.
+    """List all available agents from local registry.
+
+    Returns agents from langgraph.json (source of truth).
+    Control plane is checked for authorization during agent invocation.
 
     Returns:
         List of agent names and their metadata
     """
-    import os
-
-    import httpx
-
-    control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control-plane:6001")
-    service_token = os.getenv("AGENT_SERVICE_TOKEN", "dev-agent-service-token")
+    from services import agent_registry
 
     try:
-        async with httpx.AsyncClient(verify=False) as client:  # nosec B501 - Internal Docker network with self-signed certs
-            response = await client.get(
-                f"{control_plane_url}/api/agents",
-                headers={"X-Service-Token": service_token},
-                timeout=5.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-            agents = data.get("agents", [])
-
+        agents = agent_registry.list_agents()
         return AgentListResponse(
             agents=[
                 {
-                    "name": agent.get("name"),
-                    "aliases": agent.get("aliases", []),
-                    "description": agent.get("description", "No description"),
+                    "name": a["name"],
+                    "aliases": a.get("aliases", []),
+                    "description": a.get("description", "No description"),
                 }
-                for agent in agents
+                for a in agents
             ]
         )
     except Exception as e:
-        logger.error(f"Failed to list agents from control plane: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=503, detail="Failed to retrieve agents from control plane"
-        )
+        logger.error(f"Failed to list agents: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list agents: {str(e)}")
 
 
 @router.get("/{agent_name}", dependencies=[Depends(require_service_auth)])

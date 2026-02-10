@@ -39,24 +39,25 @@ class ExternalAgentLoader:
 
         Args:
             external_agents_path: Path to external agents directory.
-                                  Defaults to EXTERNAL_AGENTS_PATH env var.
+                                  Defaults to /app/custom_agents
         """
-        self.external_path = external_agents_path or os.getenv("EXTERNAL_AGENTS_PATH")
+        self.external_path = external_agents_path or os.getenv(
+            "EXTERNAL_AGENTS_PATH", "/app/custom_agents"
+        )
         self._loaded_agents: dict[str, type] = {}
         self._agent_modules: dict[str, Any] = {}  # Track modules for reload
 
-        if self.external_path:
-            logger.info(f"External agent loader initialized: {self.external_path}")
-        else:
-            logger.info(
-                "No external agents path configured (EXTERNAL_AGENTS_PATH not set)"
-            )
+        logger.info(f"External agent loader initialized: {self.external_path}")
 
     def discover_agents(self) -> dict[str, type]:
         """Discover and load all agents from external directory.
 
+        Supports both:
+        - LangGraph agents defined in langgraph.json (primary)
+        - Legacy agent.py files (fallback)
+
         Returns:
-            Dict mapping agent names to agent classes
+            Dict mapping agent names to agent classes/instances
         """
         if not self.external_path:
             return {}
@@ -68,14 +69,44 @@ class ExternalAgentLoader:
 
         discovered = {}
 
-        # Scan for agent directories
+        # First, try to load from langgraph.json (LangGraph agents)
+        langgraph_json = external_dir / "langgraph.json"
+        if langgraph_json.exists():
+            try:
+                import json
+
+                config = json.loads(langgraph_json.read_text())
+                graphs = config.get("graphs", {})
+
+                # Add custom_agents to Python path
+                if str(external_dir.parent) not in sys.path:
+                    sys.path.insert(0, str(external_dir.parent))
+                if str(external_dir) not in sys.path:
+                    sys.path.insert(0, str(external_dir))
+
+                for agent_name, graph_spec in graphs.items():
+                    try:
+                        agent_instance = self._load_langgraph_agent(
+                            agent_name, graph_spec
+                        )
+                        if agent_instance:
+                            discovered[agent_name] = agent_instance
+                            logger.info(f"✅ Loaded LangGraph agent: {agent_name}")
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Failed to load LangGraph agent {agent_name}: {e}",
+                            exc_info=True,
+                        )
+            except Exception as e:
+                logger.error(f"Failed to parse langgraph.json: {e}", exc_info=True)
+
+        # Fallback: scan for legacy agent.py files
         for agent_dir in external_dir.iterdir():
             if not agent_dir.is_dir() or agent_dir.name.startswith("_"):
                 continue
 
             agent_file = agent_dir / "agent.py"
             if not agent_file.exists():
-                logger.warning(f"Skipping {agent_dir.name}: No agent.py found")
                 continue
 
             try:
@@ -90,6 +121,45 @@ class ExternalAgentLoader:
 
         self._loaded_agents = discovered
         return discovered
+
+    def _load_langgraph_agent(self, agent_name: str, graph_spec: str | dict) -> Any:
+        """Load LangGraph agent from module:function spec.
+
+        Args:
+            agent_name: Name of the agent
+            graph_spec: Either "module:function" or {"graph": "module:function"}
+
+        Returns:
+            Compiled graph instance
+        """
+        import importlib
+
+        # Extract module:function string
+        if isinstance(graph_spec, dict):
+            spec_str = graph_spec.get("graph")
+        else:
+            spec_str = graph_spec
+
+        if not spec_str or ":" not in spec_str:
+            logger.error(f"Invalid graph spec for {agent_name}: {graph_spec}")
+            return None
+
+        module_path, function_name = spec_str.split(":", 1)
+
+        # Import and call builder function
+        try:
+            module = importlib.import_module(module_path)
+            builder = getattr(module, function_name, None)
+            if not builder:
+                logger.error(
+                    f"Builder function {function_name} not found in {module_path}"
+                )
+                return None
+
+            return builder()
+        except Exception as e:
+            logger.error(f"Failed to build {agent_name}: {e}", exc_info=True)
+            return None
 
     def _load_agent_module(self, agent_name: str, agent_file: Path) -> type | None:
         """Load agent class from Python file.
