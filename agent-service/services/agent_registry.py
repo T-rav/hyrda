@@ -116,10 +116,11 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
 
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
+        control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control-plane:6001")
 
+        # nosemgrep: python.requests.security.disabled-cert-validation.disabled-cert-validation
         response = requests.get(
-            f"{control_plane_url}/api/agents",
+            f"{control_plane_url}/api/agents",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-with-http.request-with-http
             timeout=5,
             verify=False,  # nosec B501 - Internal Docker network with self-signed certs
         )
@@ -139,6 +140,7 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
                             ),
                             "description": agent.get("description", ""),
                             "aliases": agent.get("aliases", []),
+                            "is_enabled": agent.get("is_enabled", True),
                             "requires_admin": agent.get("requires_admin", False),
                             "is_system": agent.get("is_system", False),
                         }

@@ -180,6 +180,38 @@ def test_get_agent_registry_control_plane_unavailable():
             assert "agent1" in result
 
 
+def test_get_agent_registry_merges_is_enabled_from_control_plane():
+    """Test that is_enabled from control plane overrides local default."""
+    mock_agents = {"agent1": MagicMock()}
+
+    with patch("services.agent_registry._load_agent_classes") as mock_load:
+        mock_load.return_value = mock_agents
+
+        # Mock control plane response with is_enabled=False
+        with patch("requests.get") as mock_get:
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "agents": [
+                    {
+                        "name": "agent1",
+                        "display_name": "Agent One",
+                        "description": "Test agent",
+                        "aliases": [],
+                        "is_enabled": False,  # Disabled in control plane
+                        "requires_admin": False,
+                        "is_system": False,
+                    }
+                ]
+            }
+            mock_get.return_value = mock_response
+
+            result = agent_registry.get_agent_registry(force_refresh=True)
+
+            # Verify is_enabled was updated from control plane
+            assert result["agent1"]["is_enabled"] is False
+
+
 def test_list_agents():
     """Test list_agents returns primary agents only."""
     mock_registry = {
