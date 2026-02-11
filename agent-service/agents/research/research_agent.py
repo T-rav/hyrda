@@ -6,11 +6,24 @@ as LangGraph platform provides persistence automatically.
 
 import logging
 
+from ..metadata import agent_metadata
 from .nodes.graph_builder import build_research_agent
 
 logger = logging.getLogger(__name__)
 
+
 # Create the main graph instance (no checkpointer for production/Studio)
-research_agent = build_research_agent()
+@agent_metadata(
+    display_name="Research Agent",
+    description="Deep research agent for comprehensive company analysis",
+    aliases=["research", "deep_research"],
+    is_system=True,
+)
+def _build():
+    """Build and return research agent graph."""
+    return build_research_agent()
+
+
+research_agent = _build()
 
 logger.info("Research agent graph compiled successfully")

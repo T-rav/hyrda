@@ -19,11 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 def _discover_agents_from_langgraph() -> list[dict]:
-    """Discover agents from merged langgraph.json.
+    """Discover agents from langgraph.json and extract decorator metadata.
 
-    Supports two formats:
-    1. Simple: "agent_name": "module.path:function"
-    2. Extended: "agent_name": {"graph": "module.path:function", "metadata": {...}}
+    langgraph.json uses simple format: "agent_name": "module.path:function"
+    Metadata is extracted from @agent_metadata decorator on the agent graph.
 
     Returns:
         List of agent metadata dicts with name, display_name, aliases, description, is_system
@@ -41,19 +40,43 @@ def _discover_agents_from_langgraph() -> list[dict]:
         graphs = config.get("graphs", {})
         agents = []
 
-        for agent_name, agent_config in graphs.items():
-            # Parse agent config (supports both string and dict formats)
-            if isinstance(agent_config, str):
-                # Simple format: "agent_name": "module:function"
-                metadata = {}
-            elif isinstance(agent_config, dict):
-                # Extended format: "agent_name": {"graph": "...", "metadata": {...}}
-                metadata = agent_config.get("metadata", {})
+        for agent_name, agent_spec in graphs.items():
+            # Extract module path from spec
+            if isinstance(agent_spec, str):
+                # Simple format: "module.path:function"
+                module_path = agent_spec
+            elif isinstance(agent_spec, dict):
+                # Extended format: {"graph": "module.path:function"}
+                module_path = agent_spec.get("graph")
             else:
                 logger.warning(
                     f"Invalid config format for agent '{agent_name}', skipping"
                 )
                 continue
+
+            # Import agent module to extract metadata from decorator
+            metadata = {}
+            if not module_path:
+                logger.warning(f"No module path for agent '{agent_name}', skipping")
+                continue
+
+            try:
+                module_name, attr_name = module_path.rsplit(":", 1)
+                # Import the module
+                import importlib
+
+                module = importlib.import_module(
+                    module_name
+                )  # nosemgrep: python.lang.security.audit.non-literal-import.non-literal-import
+                agent_obj = getattr(module, attr_name)
+
+                # Extract metadata from decorator if present
+                if hasattr(agent_obj, "__agent_metadata__"):
+                    metadata = agent_obj.__agent_metadata__
+            except Exception as e:
+                logger.warning(
+                    f"Could not extract metadata for agent '{agent_name}': {e}"
+                )
 
             # Build agent data with defaults
             # Filter out agent's own name from aliases (it's redundant)
@@ -67,32 +90,8 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 ),
                 "description": metadata.get("description", f"Agent for {agent_name}"),
                 "aliases": aliases,
-                "is_system": False,  # Default: can be disabled by admins
+                "is_system": metadata.get("is_system", False),
             }
-
-            # Special case: "research" is always a system agent
-            if agent_name == "research":
-                agent_data["is_system"] = True
-                # Use metadata if provided, otherwise use defaults
-                if not metadata.get("display_name"):
-                    agent_data["display_name"] = "Research Agent"
-                if not metadata.get("description"):
-                    agent_data["description"] = (
-                        "Deep research agent for comprehensive company analysis"
-                    )
-                if not metadata.get("aliases"):
-                    agent_data["aliases"] = ["research", "deep_research"]
-
-            # Special case: "help" agent metadata
-            if agent_name == "help":
-                if not metadata.get("display_name"):
-                    agent_data["display_name"] = "Help Agent"
-                if not metadata.get("description"):
-                    agent_data["description"] = (
-                        "List available bot agents and their aliases (filtered by your access)"
-                    )
-                if not metadata.get("aliases"):
-                    agent_data["aliases"] = ["help", "agents"]
 
             agents.append(agent_data)
 

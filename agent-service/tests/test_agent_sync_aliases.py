@@ -31,33 +31,48 @@ class TestAgentDiscoveryFromLangGraph:
         assert agents[0]["is_system"] is False
 
     def test_discover_agents_extended_format_with_aliases(self):
-        """Should parse extended format with metadata including aliases."""
+        """Should extract metadata from @agent_metadata decorator."""
         config = {
             "graphs": {
-                "profile": {
-                    "graph": "profiler.nodes:build_profile",
-                    "metadata": {
-                        "display_name": "Company Profile",
-                        "description": "Generate company profiles",
-                        "aliases": ["profile", "company profile", "-profile"],
-                    },
-                },
-                "meddic": {
-                    "graph": "meddic.nodes:build_meddic",
-                    "metadata": {
-                        "display_name": "MEDDIC Coach",
-                        "description": "Deal coaching",
-                        "aliases": ["meddic", "medic", "meddpicc"],
-                    },
-                },
+                "profile": "profiler.nodes:build_profile",
+                "meddic": "meddic.nodes:build_meddic",
             }
+        }
+
+        # Create mock objects with decorator metadata
+        mock_profile = type("MockGraph", (), {})()
+        mock_profile.__agent_metadata__ = {
+            "display_name": "Company Profile",
+            "description": "Generate company profiles",
+            "aliases": ["profile", "company profile", "-profile"],
+            "is_system": False,
+        }
+
+        mock_meddic = type("MockGraph", (), {})()
+        mock_meddic.__agent_metadata__ = {
+            "display_name": "MEDDIC Coach",
+            "description": "Deal coaching",
+            "aliases": ["meddic", "medic", "meddpicc"],
+            "is_system": False,
         }
 
         config_json = json.dumps(config)
 
+        def mock_import(name):
+            if name == "profiler.nodes":
+                m = type("Module", (), {})()
+                m.build_profile = mock_profile
+                return m
+            elif name == "meddic.nodes":
+                m = type("Module", (), {})()
+                m.build_meddic = mock_meddic
+                return m
+            raise ImportError(f"No module named '{name}'")
+
         with patch("builtins.open", mock_open(read_data=config_json)):
             with patch("pathlib.Path.exists", return_value=True):
-                agents = _discover_agents_from_langgraph()
+                with patch("importlib.import_module", side_effect=mock_import):
+                    agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 2
 
@@ -71,46 +86,76 @@ class TestAgentDiscoveryFromLangGraph:
         assert meddic["aliases"] == ["medic", "meddpicc"]
 
     def test_discover_agents_research_is_system(self):
-        """Research agent should always be marked as system agent."""
+        """Research agent decorator should mark it as system agent."""
         config = {
-            "graphs": {
-                "research": {
-                    "graph": "agents.research.research_agent:research_agent",
-                    "metadata": {
-                        "display_name": "Research Agent",
-                        "aliases": ["research"],
-                    },
-                }
-            }
+            "graphs": {"research": "agents.research.research_agent:research_agent"}
+        }
+
+        # Mock research agent with decorator metadata
+        mock_research = type("MockGraph", (), {})()
+        mock_research.__agent_metadata__ = {
+            "display_name": "Research Agent",
+            "description": "Deep research agent",
+            "aliases": ["research", "deep_research"],
+            "is_system": True,  # System agents can't be disabled
         }
 
         config_json = json.dumps(config)
 
+        def mock_import(name):
+            if name == "agents.research.research_agent":
+                m = type("Module", (), {})()
+                m.research_agent = mock_research
+                return m
+            raise ImportError(f"No module named '{name}'")
+
         with patch("builtins.open", mock_open(read_data=config_json)):
             with patch("pathlib.Path.exists", return_value=True):
-                agents = _discover_agents_from_langgraph()
+                with patch("importlib.import_module", side_effect=mock_import):
+                    agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 1
         assert agents[0]["is_system"] is True
         assert agents[0]["name"] == "research"
 
     def test_discover_agents_mixed_formats(self):
-        """Should handle mixed simple and extended formats."""
+        """Should handle agents with and without decorator metadata."""
         config = {
             "graphs": {
                 "simple_agent": "simple.module:build",
-                "extended_agent": {
-                    "graph": "extended.module:build",
-                    "metadata": {"aliases": ["ext", "extended"]},
-                },
+                "extended_agent": "extended.module:build",
             }
+        }
+
+        # Simple agent has no decorator metadata
+        mock_simple = type("MockGraph", (), {})()
+
+        # Extended agent has decorator metadata
+        mock_extended = type("MockGraph", (), {})()
+        mock_extended.__agent_metadata__ = {
+            "display_name": "Extended Agent",
+            "description": "Has metadata",
+            "aliases": ["ext", "extended"],
+            "is_system": False,
         }
 
         config_json = json.dumps(config)
 
+        def mock_import(name):
+            if name == "simple.module":
+                m = type("Module", (), {})()
+                m.build = mock_simple
+                return m
+            elif name == "extended.module":
+                m = type("Module", (), {})()
+                m.build = mock_extended
+                return m
+            raise ImportError(f"No module named '{name}'")
+
         with patch("builtins.open", mock_open(read_data=config_json)):
             with patch("pathlib.Path.exists", return_value=True):
-                agents = _discover_agents_from_langgraph()
+                with patch("importlib.import_module", side_effect=mock_import):
+                    agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 2
 
@@ -169,21 +214,32 @@ class TestAgentDiscoveryFromLangGraph:
         """Agent's own name should be filtered from aliases to prevent registry overwrite."""
         config = {
             "graphs": {
-                "meddic": {
-                    "graph": "meddic.nodes:build_meddic",
-                    "metadata": {
-                        "display_name": "MEDDIC Coach",
-                        "aliases": ["meddic", "medic", "meddpicc", "deal analysis"],
-                    },
-                },
+                "meddic": "meddic.nodes:build_meddic",
             }
+        }
+
+        # Mock with decorator metadata including own name in aliases
+        mock_meddic = type("MockGraph", (), {})()
+        mock_meddic.__agent_metadata__ = {
+            "display_name": "MEDDIC Coach",
+            "description": "Deal coaching",
+            "aliases": ["meddic", "medic", "meddpicc", "deal analysis"],
+            "is_system": False,
         }
 
         config_json = json.dumps(config)
 
+        def mock_import(name):
+            if name == "meddic.nodes":
+                m = type("Module", (), {})()
+                m.build_meddic = mock_meddic
+                return m
+            raise ImportError(f"No module named '{name}'")
+
         with patch("builtins.open", mock_open(read_data=config_json)):
             with patch("pathlib.Path.exists", return_value=True):
-                agents = _discover_agents_from_langgraph()
+                with patch("importlib.import_module", side_effect=mock_import):
+                    agents = _discover_agents_from_langgraph()
 
         assert len(agents) == 1
         meddic = agents[0]
