@@ -179,9 +179,18 @@ function DashboardContent() {
     setLoading(true)
     try {
       const [jobsRes, runsRes, schedulerRes] = await Promise.all([
-        fetch('/api/jobs', { credentials: 'include' }).then(r => r.json()),
-        fetch('/api/task-runs', { credentials: 'include' }).then(r => r.json()),
-        fetch('/api/scheduler/info', { credentials: 'include' }).then(r => r.json())
+        fetch('/api/jobs', { credentials: 'include' }).then(async r => {
+          if (!r.ok) throw new Error(`Failed to load jobs: ${r.status}`)
+          return r.json()
+        }),
+        fetch('/api/task-runs', { credentials: 'include' }).then(async r => {
+          if (!r.ok) throw new Error(`Failed to load task runs: ${r.status}`)
+          return r.json()
+        }),
+        fetch('/api/scheduler/info', { credentials: 'include' }).then(async r => {
+          if (!r.ok) throw new Error(`Failed to load scheduler info: ${r.status}`)
+          return r.json()
+        })
       ])
 
       setData({
@@ -191,6 +200,12 @@ function DashboardContent() {
       })
     } catch (error) {
       logError('Error loading data:', error)
+      // Set empty data on error to prevent showing stale data
+      setData({
+        jobs: [],
+        taskRuns: [],
+        scheduler: { running: false }
+      })
     } finally {
       setLoading(false)
     }
@@ -354,10 +369,14 @@ function TasksContent({ showNotification }) {
     setLoading(true)
     try {
       const response = await fetch('/api/jobs', { credentials: 'include' })
+      if (!response.ok) {
+        throw new Error(`Failed to load tasks: ${response.status}`)
+      }
       const data = await response.json()
       setTasks(data.jobs || [])
     } catch (error) {
       logError('Error loading tasks:', error)
+      setTasks([])
     } finally {
       setLoading(false)
     }

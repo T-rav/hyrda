@@ -218,7 +218,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
               </label>
               <div className="row">
                 <div className="col-md-4">
-                  <label className="form-label d-flex align-items-center" style={{ visibility: 'hidden', height: '1.5rem' }}>
+                  <label className="form-label d-flex align-items-center" style={{ visibility: 'hidden' }}>
                     <Activity size={14} className="me-1" />
                     Type
                   </label>
