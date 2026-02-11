@@ -790,6 +790,18 @@ body {
   text-align: center;
 }
 
+/* Ensure consistent vertical alignment for table cell content */
+.table td {
+  vertical-align: middle;
+}
+
+/* Fix badge alignment in table cells */
+.table td .badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
 /* Tooltip styles */
 .btn[title] {
   position: relative;

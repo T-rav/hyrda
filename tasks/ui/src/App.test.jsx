@@ -157,7 +157,7 @@ describe('App Component', () => {
     expect(screen.getByRole('button', { name: /dashboard/i })).not.toHaveClass('active')
   })
 
-  test('REGRESSION: data persists when switching tabs (lifted state)', async () => {
+  test('REGRESSION: data persists when switching tabs (shared state)', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -168,15 +168,15 @@ describe('App Component', () => {
 
     const callsAfterDashboard = global.fetch.mock.calls.length
 
-    // Switch to Tasks tab (first time - will load tasks data)
+    // Switch to Tasks tab - should NOT make new API calls (jobs already loaded by Dashboard)
     await user.click(screen.getByRole('button', { name: /tasks/i }))
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /tasks/i })).toHaveClass('active')
     })
 
     const callsAfterFirstTasksSwitch = global.fetch.mock.calls.length
-    // Tasks tab loads on first mount (tasks array was empty)
-    expect(callsAfterFirstTasksSwitch).toBeGreaterThan(callsAfterDashboard)
+    // CRITICAL: Tasks tab should NOT fetch (jobs already loaded from Dashboard - shared state!)
+    expect(callsAfterFirstTasksSwitch).toBe(callsAfterDashboard)
 
     // Switch back to Dashboard tab
     await user.click(screen.getByRole('button', { name: /dashboard/i }))
@@ -195,7 +195,7 @@ describe('App Component', () => {
     })
 
     const callsAfterSecondTasksSwitch = global.fetch.mock.calls.length
-    // CRITICAL: Tasks should NOT re-fetch (state was preserved from first visit)
+    // CRITICAL: Tasks should NOT re-fetch (state was preserved)
     expect(callsAfterSecondTasksSwitch).toBe(callsAfterReturnToDashboard)
 
     // Verify data is still displayed after all tab switches
@@ -203,6 +203,11 @@ describe('App Component', () => {
     await waitFor(() => {
       expect(screen.getByText('Scheduler Status')).toBeInTheDocument()
     })
+
+    // SUMMARY: Dashboard loads data once (3 API calls), then ALL tab switches use shared state
+    // Total API calls should be 4: auth/me + 3 dashboard data calls, NO additional calls
+    const finalFetchCount = global.fetch.mock.calls.length
+    expect(finalFetchCount).toBe(callsAfterDashboard) // No new calls after initial load
   })
 
   test('loads and displays dashboard data', async () => {

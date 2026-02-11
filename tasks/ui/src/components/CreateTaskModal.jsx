@@ -151,8 +151,6 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
     { label: 'Hourly', value: '0 * * * *' },
     { label: 'Daily at midnight', value: '0 0 * * *' },
     { label: 'Daily at 9am', value: '0 9 * * *' },
-    { label: 'Weekly (Mon 9am)', value: '0 9 * * 1' },
-    { label: 'Monthly (1st)', value: '0 0 1 * *' },
   ]
 
   return (
@@ -235,7 +233,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 </div>
                 <div className="col-md-8">
                   {triggerType === 'interval' && (
-                    <div>
+                    <div className="pt-4">
                       <div className="row g-3">
                         <div className="col-4">
                           <label htmlFor="hours" className="form-label d-flex align-items-center">
@@ -299,19 +297,11 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                   )}
                   {triggerType === 'cron' && (
                     <div>
-                      <div className="mb-2">
-                        <small className="text-muted">Quick presets: </small>
-                        {cronPresets.map((preset) => (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary me-1 mt-1"
-                            onClick={() => setCronExpression(preset.value)}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
+                      {/* Hidden label for alignment with left column */}
+                      <label className="form-label d-flex align-items-center" style={{ visibility: 'hidden' }}>
+                        <Activity size={14} className="me-1" />
+                        Cron
+                      </label>
                       <input
                         type="text"
                         className="form-control"
@@ -324,10 +314,28 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                       <div className="form-text mt-1">
                         <small>Format: minute hour day month day_of_week (e.g., &quot;0 0 * * *&quot; for daily at midnight)</small>
                       </div>
+                      <div className="mt-2">
+                        <small className="text-muted">Quick presets: </small>
+                        {cronPresets.map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            className="btn btn-sm btn-outline-secondary me-1 mt-1"
+                            onClick={() => setCronExpression(preset.value)}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   {triggerType === 'date' && (
                     <div>
+                      {/* Hidden label for alignment with left column */}
+                      <label className="form-label d-flex align-items-center" style={{ visibility: 'hidden' }}>
+                        <Activity size={14} className="me-1" />
+                        Date & Time
+                      </label>
                       <input
                         type="datetime-local"
                         className="form-control"

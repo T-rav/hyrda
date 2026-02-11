@@ -553,6 +553,15 @@ function TaskParameters({
           100
         )
 
+      case 'force_rescrape':
+        return renderBooleanParam(
+          param,
+          isRequired,
+          'Force Rescrape',
+          'Rescrape pages even if they have already been processed',
+          false
+        )
+
       // Generic fallback for unknown parameters
       default:
         return renderTextParam(

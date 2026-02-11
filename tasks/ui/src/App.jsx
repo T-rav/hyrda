@@ -5,7 +5,7 @@ import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
 import './App.css'
 import { logError } from './utils/logger'
-import { setupTokenRefresh } from './utils/tokenRefresh'
+import { setupTokenRefresh, fetchWithTokenRefresh } from './utils/tokenRefresh'
 
 // Custom hook for managing document title
 function useDocumentTitle(title) {
@@ -23,13 +23,11 @@ function App() {
   const [notification, setNotification] = useState(null)
   const [currentUserEmail, setCurrentUserEmail] = useState(null)
 
-  // Lifted state for dashboard (persists across tab switches)
-  const [dashboardData, setDashboardData] = useState(null)
-  const [dashboardLoading, setDashboardLoading] = useState(false)
-
-  // Lifted state for tasks (persists across tab switches)
-  const [tasks, setTasks] = useState([])
-  const [tasksLoading, setTasksLoading] = useState(false)
+  // Lifted state - SHARED between Dashboard and Tasks
+  const [jobs, setJobs] = useState([])
+  const [taskRuns, setTaskRuns] = useState([])
+  const [scheduler, setScheduler] = useState({})
+  const [loading, setLoading] = useState(false)
 
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
@@ -43,7 +41,6 @@ function App() {
         })
         if (!response.ok) {
           // Not authenticated - redirect to control plane login with redirect back to tasks
-          console.log('Not authenticated, redirecting to control plane login')
           window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
           return
         }
@@ -148,19 +145,23 @@ function App() {
         {activeTab === 'dashboard' && (
           <DashboardContent
             showNotification={showNotification}
-            data={dashboardData}
-            setData={setDashboardData}
-            loading={dashboardLoading}
-            setLoading={setDashboardLoading}
+            jobs={jobs}
+            setJobs={setJobs}
+            taskRuns={taskRuns}
+            setTaskRuns={setTaskRuns}
+            scheduler={scheduler}
+            setScheduler={setScheduler}
+            loading={loading}
+            setLoading={setLoading}
           />
         )}
         {activeTab === 'tasks' && (
           <TasksContent
             showNotification={showNotification}
-            tasks={tasks}
-            setTasks={setTasks}
-            loading={tasksLoading}
-            setLoading={setTasksLoading}
+            jobs={jobs}
+            setJobs={setJobs}
+            loading={loading}
+            setLoading={setLoading}
           />
         )}
         {activeTab === 'credentials' && <CredentialsManager />}
@@ -189,53 +190,39 @@ function App() {
 }
 
 // Dashboard Component with Real API Data
-function DashboardContent({ showNotification, data, setData, loading, setLoading }) {
+function DashboardContent({ showNotification, jobs, setJobs, taskRuns, setTaskRuns, scheduler, setScheduler, loading, setLoading }) {
   const [showAllRuns, setShowAllRuns] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const recordsPerPage = 20
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
 
-  // Initialize data if null
-  if (!data) {
-    data = {
-      jobs: [],
-      taskRuns: [],
-      scheduler: {}
-    }
-  }
-
   const loadData = async () => {
     setLoading(true)
     try {
       const [jobsRes, runsRes, schedulerRes] = await Promise.all([
-        fetch('/api/jobs', { credentials: 'include' }).then(async r => {
+        fetchWithTokenRefresh('/api/jobs').then(async r => {
           if (!r.ok) throw new Error(`Failed to load jobs: ${r.status}`)
           return r.json()
         }),
-        fetch('/api/task-runs', { credentials: 'include' }).then(async r => {
+        fetchWithTokenRefresh('/api/task-runs').then(async r => {
           if (!r.ok) throw new Error(`Failed to load task runs: ${r.status}`)
           return r.json()
         }),
-        fetch('/api/scheduler/info', { credentials: 'include' }).then(async r => {
+        fetchWithTokenRefresh('/api/scheduler/info').then(async r => {
           if (!r.ok) throw new Error(`Failed to load scheduler info: ${r.status}`)
           return r.json()
         })
       ])
 
-      setData({
-        jobs: jobsRes.jobs || [],
-        taskRuns: runsRes.task_runs || [],
-        scheduler: schedulerRes
-      })
+      setJobs(jobsRes.jobs || [])
+      setTaskRuns(runsRes.task_runs || [])
+      setScheduler(schedulerRes)
     } catch (error) {
       logError('Error loading data:', error)
-      // Set empty data on error to prevent showing stale data
-      setData({
-        jobs: [],
-        taskRuns: [],
-        scheduler: { running: false }
-      })
+      setJobs([])
+      setTaskRuns([])
+      setScheduler({ running: false })
     } finally {
       setLoading(false)
     }
@@ -243,7 +230,7 @@ function DashboardContent({ showNotification, data, setData, loading, setLoading
 
   // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    if (!data || (data.jobs.length === 0 && data.taskRuns.length === 0 && !loading)) {
+    if (jobs.length === 0 && taskRuns.length === 0) {
       loadData()
     }
   }, [])
@@ -270,12 +257,12 @@ function DashboardContent({ showNotification, data, setData, loading, setLoading
   }
 
   // Calculate statistics
-  const totalTasks = data.jobs.length
-  const activeTasks = data.jobs.filter(job => job.next_run_time).length
-  const pausedTasks = data.jobs.filter(job => !job.next_run_time).length
+  const totalTasks = jobs.length
+  const activeTasks = jobs.filter(job => job.next_run_time).length
+  const pausedTasks = jobs.filter(job => !job.next_run_time).length
 
   // Calculate next run
-  const nextRuns = data.jobs
+  const nextRuns = jobs
     .filter(job => job.next_run_time)
     .map(job => new Date(job.next_run_time))
     .sort((a, b) => a - b)
@@ -289,8 +276,8 @@ function DashboardContent({ showNotification, data, setData, loading, setLoading
   })() : 'None'
 
   // Calculate success rate
-  const totalRuns = data.taskRuns.length
-  const successfulRuns = data.taskRuns.filter(run => run.status === 'success').length
+  const totalRuns = taskRuns.length
+  const successfulRuns = taskRuns.filter(run => run.status === 'success').length
   const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0
 
   return (
@@ -375,7 +362,7 @@ function DashboardContent({ showNotification, data, setData, loading, setLoading
           </button>
         </div>
         <RecentRunsTable
-          taskRuns={data.taskRuns}
+          taskRuns={taskRuns}
           showAllRuns={showAllRuns}
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
@@ -387,7 +374,7 @@ function DashboardContent({ showNotification, data, setData, loading, setLoading
 }
 
 // Full Tasks Component with Management
-function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }) {
+function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) {
   const [actionLoading, setActionLoading] = useState({})
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -398,15 +385,15 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
   const loadTasks = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/jobs', { credentials: 'include' })
+      const response = await fetchWithTokenRefresh('/api/jobs')
       if (!response.ok) {
         throw new Error(`Failed to load tasks: ${response.status}`)
       }
       const data = await response.json()
-      setTasks(data.jobs || [])
+      setJobs(data.jobs || [])
     } catch (error) {
       logError('Error loading tasks:', error)
-      setTasks([])
+      setJobs([])
     } finally {
       setLoading(false)
     }
@@ -414,7 +401,7 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
 
   // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    if (tasks.length === 0 && !loading) {
+    if (jobs.length === 0) {
       loadTasks()
     }
   }, [])
@@ -464,9 +451,9 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
       let response
       switch (action) {
         case 'pause':
-          response = await fetch(`/api/jobs/${taskId}/pause`, { method: 'POST', credentials: 'include' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/pause`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} paused successfully`, 'success')
             await loadTasks()
@@ -475,9 +462,9 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
           }
           break
         case 'resume':
-          response = await fetch(`/api/jobs/${taskId}/resume`, { method: 'POST', credentials: 'include' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/resume`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} resumed successfully`, 'success')
             await loadTasks()
@@ -486,9 +473,9 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
           }
           break
         case 'run-once':
-          response = await fetch(`/api/jobs/${taskId}/run-once`, { method: 'POST', credentials: 'include' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/run-once`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} triggered successfully`, 'success')
             await loadTasks()
@@ -497,10 +484,10 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
           }
           break
         case 'delete':
-          const task = tasks.find(t => t.id === taskId)
+          const task = jobs.find(t => t.id === taskId)
           const taskName = getTaskDisplayName(task)
           if (window.confirm(`Are you sure you want to delete ${taskName}?`)) {
-            response = await fetch(`/api/jobs/${taskId}`, { method: 'DELETE', credentials: 'include' })
+            response = await fetchWithTokenRefresh(`/api/jobs/${taskId}`, { method: 'DELETE' })
             if (response && response.ok) {
               showNotification(`${taskName} deleted successfully`, 'success')
               await loadTasks()
@@ -515,7 +502,7 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
         case 'view':
           // Load task details and show modal
           try {
-            const taskResponse = await fetch(`/api/jobs/${taskId}`, { credentials: 'include' })
+            const taskResponse = await fetchWithTokenRefresh(`/api/jobs/${taskId}`)
             if (taskResponse.ok) {
               const taskData = await taskResponse.json()
               setSelectedTask(taskData)
@@ -599,12 +586,12 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
           <div className="header-title">
             <ListChecks size={24} />
             <h3>All Tasks</h3>
-            <span className="badge bg-primary ms-2">{tasks.length}</span>
+            <span className="badge bg-primary ms-2">{jobs.length}</span>
           </div>
         </div>
 
         <div className="table-container">
-          {tasks.length === 0 ? (
+          {jobs.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">📋</div>
               <p>No tasks scheduled</p>
@@ -632,7 +619,7 @@ function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task) => (
+                {jobs.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
