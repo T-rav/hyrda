@@ -70,15 +70,15 @@ class TestAgentDiscoveryFromLangGraph:
         # Agent's own name filtered from aliases (it's redundant)
         assert meddic["aliases"] == ["medic", "meddpicc"]
 
-    def test_discover_agents_help_is_system(self):
-        """Help agent should always be marked as system agent."""
+    def test_discover_agents_research_is_system(self):
+        """Research agent should always be marked as system agent."""
         config = {
             "graphs": {
-                "help": {
-                    "graph": "help.agent:build_help",
+                "research": {
+                    "graph": "agents.research.research_agent:research_agent",
                     "metadata": {
-                        "display_name": "Help Agent",
-                        "aliases": ["help", "agents"],
+                        "display_name": "Research Agent",
+                        "aliases": ["research"],
                     },
                 }
             }
@@ -92,7 +92,7 @@ class TestAgentDiscoveryFromLangGraph:
 
         assert len(agents) == 1
         assert agents[0]["is_system"] is True
-        assert agents[0]["name"] == "help"
+        assert agents[0]["name"] == "research"
 
     def test_discover_agents_mixed_formats(self):
         """Should handle mixed simple and extended formats."""

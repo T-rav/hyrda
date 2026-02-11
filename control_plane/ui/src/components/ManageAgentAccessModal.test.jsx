@@ -21,7 +21,6 @@ describe('ManageAgentAccessModal', () => {
   const mockOnGrantToGroup = jest.fn()
   const mockOnRevokeFromGroup = jest.fn()
   const mockOnToggle = jest.fn()
-  const mockOnDelete = jest.fn()
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -36,7 +35,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -54,7 +53,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -70,7 +69,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -87,7 +86,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -105,7 +104,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -128,7 +127,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -151,7 +150,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -180,7 +179,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -209,7 +208,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -243,7 +242,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 
@@ -260,7 +259,7 @@ describe('ManageAgentAccessModal', () => {
         onGrantToGroup={mockOnGrantToGroup}
         onRevokeFromGroup={mockOnRevokeFromGroup}
         onToggle={mockOnToggle}
-        onDelete={mockOnDelete}
+
       />
     )
 

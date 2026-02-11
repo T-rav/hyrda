@@ -70,18 +70,16 @@ def _discover_agents_from_langgraph() -> list[dict]:
                 "is_system": False,  # Default: can be disabled by admins
             }
 
-            # Special case: "help" is always a system agent
-            if agent_name == "help":
+            # Special case: "research" is always a system agent
+            if agent_name == "research":
                 agent_data["is_system"] = True
                 # Use metadata if provided, otherwise use defaults
                 if not metadata.get("display_name"):
-                    agent_data["display_name"] = "Help Agent"
+                    agent_data["display_name"] = "Research Agent"
                 if not metadata.get("description"):
                     agent_data["description"] = (
-                        "List available bot agents and their aliases"
+                        "Deep research agent for comprehensive company analysis"
                     )
-                if not metadata.get("aliases"):
-                    agent_data["aliases"] = ["help", "agents"]
 
             agents.append(agent_data)
 
@@ -150,7 +148,7 @@ def sync_agents_to_control_plane() -> None:
                     json=agent_data,
                     headers=headers,
                     timeout=5,
-                    verify=False,  # nosec B501 - Internal Docker network with self-signed certs
+                    verify=False,  # nosec B501 - Internal Docker network with self-signed certs  # nosemgrep: python.requests.security.disabled-cert-validation.disabled-cert-validation, python.lang.security.audit.insecure-transport.requests.request-with-http.request-with-http
                 )
                 if response.status_code == 200:
                     logger.info(
