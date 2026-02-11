@@ -262,24 +262,24 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               )}
             </div>
-            <div className="card-footer d-flex flex-column gap-2">
+            <div className="card-footer d-flex justify-content-end gap-2">
               {!authInProgress ? (
                 <>
                   <button
                     type="button"
-                    className="btn btn-outline-primary w-100"
+                    className="btn btn-outline-secondary"
+                    onClick={onClose}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
                     onClick={handleOAuthClick}
                     disabled={!name}
                   >
                     <ExternalLink size={16} className="me-1" />
                     Connect Google
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-outline-secondary w-100"
-                    onClick={onClose}
-                  >
-                    Cancel
                   </button>
                 </>
               ) : (
