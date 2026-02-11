@@ -1,6 +1,8 @@
 #!/bin/bash
 # Run LangGraph dev mode with Studio UI on port 9000
 # Regular agent-service continues running on port 8000
+#
+# The langgraph.json extended format works for both production and dev mode
 
 set -e
 
@@ -19,17 +21,14 @@ fi
 echo "1. Installing langgraph-cli..."
 docker exec insightmesh-agent-service pip install "langgraph-cli[inmem]" -q 2>/dev/null || true
 
-# Regenerate langgraph.json with correct dependencies
-echo "2. Regenerating langgraph.json..."
-docker exec insightmesh-agent-service python3 /app/generate_langgraph_config.py
-
 echo ""
-echo "3. Starting LangGraph dev server on port ${DEV_PORT}..."
+echo "2. Starting LangGraph dev server on port ${DEV_PORT}..."
 echo ""
 echo "   API:        http://localhost:${DEV_PORT}"
 echo "   Studio UI:  https://smith.langchain.com/studio/?baseUrl=http://localhost:${DEV_PORT}"
 echo "   API Docs:   http://localhost:${DEV_PORT}/docs"
 echo ""
+echo "   Available agents: research, help"
 echo "   Regular agent-service still running on port 8000"
 echo ""
 echo "   Press Ctrl+C to stop"
