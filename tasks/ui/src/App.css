@@ -11,6 +11,8 @@ body {
 .app {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header */
@@ -94,6 +96,58 @@ body {
   height: 24px;
   background: rgba(139, 92, 246, 0.2);
   margin: 0 0.5rem;
+}
+
+.logout-dropdown {
+  position: relative;
+}
+
+.nav-link.logout-btn {
+  margin-left: 0.5rem;
+  color: #ef4444;
+}
+
+.nav-link.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.logout-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #1e293b;
+  font-size: 0.875rem;
+  cursor: default;
+}
+
+.dropdown-item.user-email {
+  color: #8b5cf6;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .nav-link.monitoring-link {
@@ -316,7 +370,7 @@ body {
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding: 1rem 0;
-  margin-top: 2rem;
+  margin-top: auto;
   text-align: center;
 }
 
@@ -372,9 +426,11 @@ body {
 
 /* Tasks-specific styles */
 .main-content {
+  flex: 1;
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
+  width: 100%;
 }
 
 .glass-card {

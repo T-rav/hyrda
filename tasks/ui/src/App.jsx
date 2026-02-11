@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
@@ -20,9 +20,37 @@ function useDocumentTitle(title) {
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState(null)
 
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
+
+  // Check authentication on mount
+  React.useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch('/auth/me', {
+          credentials: 'include'
+        })
+        if (!response.ok) {
+          // Not authenticated - redirect to control plane login with redirect back to tasks
+          console.log('Not authenticated, redirecting to control plane login')
+          window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+          return
+        }
+        const data = await response.json()
+        if (data.email) {
+          setCurrentUserEmail(data.email)
+        }
+      } catch (error) {
+        logError('Auth check failed:', error)
+        window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+        return
+      }
+    }
+
+    verifyAuth()
+  }, [])
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
@@ -31,6 +59,15 @@ function App() {
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type })
     setTimeout(() => setNotification(null), 3000)
+  }
+
+  const handleLogout = () => {
+    // POST to logout endpoint
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = 'https://localhost:6001/auth/logout'
+    document.body.appendChild(form)
+    form.submit()
   }
 
   return (
@@ -74,6 +111,24 @@ function App() {
               Health
             </a>
             <div className="nav-divider"></div>
+            <div className="logout-dropdown">
+              <button
+                className="nav-link logout-btn"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+              {currentUserEmail && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-item user-email">
+                    <User size={16} />
+                    {currentUserEmail}
+                  </div>
+                </div>
+              )}
+            </div>
           </nav>
         </div>
       </header>
@@ -85,7 +140,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>InsightMesh Tasks v1.0.0</p>
+        <p>InsightMesh Tasks</p>
       </footer>
 
       {/* Notification */}

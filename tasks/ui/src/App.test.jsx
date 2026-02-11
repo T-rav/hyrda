@@ -57,6 +57,12 @@ describe('App Component', () => {
 
     // Setup default fetch mocks
     global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
       if (url.includes('/api/jobs')) {
         return Promise.resolve({
           ok: true,
@@ -89,7 +95,8 @@ describe('App Component', () => {
     render(<App />)
 
     // Test the main header title
-    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    expect(titles.find(el => el.tagName === 'H1')).toBeInTheDocument()
 
     // Test navigation elements
     expect(screen.getByRole('button', { name: /dashboard/i })).toBeInTheDocument()
@@ -101,19 +108,22 @@ describe('App Component', () => {
     render(<App />)
 
     // Verify the main header title is exactly "InsightMesh Tasks"
-    const mainTitle = screen.getByText('InsightMesh Tasks')
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    const mainTitle = titles.find(el => el.tagName === 'H1')
     expect(mainTitle).toBeInTheDocument()
-    expect(mainTitle.tagName).toBe('H1')
 
-    // Verify footer title consistency
-    expect(screen.getByText('InsightMesh Tasks v1.0.0')).toBeInTheDocument()
+    // Verify footer exists with correct text
+    const footer = document.querySelector('.footer')
+    expect(footer).toBeInTheDocument()
+    expect(footer.textContent).toContain('InsightMesh Tasks')
   })
 
   test('verifies Tasks Dashboard title does not change unexpectedly', () => {
     render(<App />)
 
     // This test ensures the title remains "InsightMesh Tasks" and not something else
-    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    expect(titles.find(el => el.tagName === 'H1')).toBeInTheDocument()
 
     // Ensure it's not the Health Dashboard title
     expect(screen.queryByText('InsightMesh Health Dashboard')).not.toBeInTheDocument()
@@ -176,7 +186,8 @@ describe('App Component', () => {
     render(<App />)
 
     // The app should still render even with API errors
-    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    expect(titles.find(el => el.tagName === 'H1')).toBeInTheDocument()
   })
 
   test('auto-refresh functionality works', async () => {
@@ -211,6 +222,12 @@ describe('Tasks Dashboard Title Consistency Tests', () => {
     vi.clearAllMocks()
 
     global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
       if (url.includes('/api/jobs')) {
         return Promise.resolve({
           ok: true,
@@ -245,15 +262,18 @@ describe('Tasks Dashboard Title Consistency Tests', () => {
     })
 
     // Verify all title-related elements are consistent
-    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
-    expect(screen.getByText('InsightMesh Tasks v1.0.0')).toBeInTheDocument()
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    expect(titles.length).toBeGreaterThanOrEqual(2) // Header and footer
+    expect(titles.find(el => el.tagName === 'H1')).toBeInTheDocument()
+    expect(document.querySelector('.footer')).toBeInTheDocument()
   })
 
   test('prevents accidental title changes to Health Dashboard', () => {
     render(<App />)
 
     // Ensure Tasks Dashboard elements are present
-    expect(screen.getByText('InsightMesh Tasks')).toBeInTheDocument()
+    const titles = screen.getAllByText('InsightMesh Tasks')
+    expect(titles.find(el => el.tagName === 'H1')).toBeInTheDocument()
 
     // Ensure Health Dashboard elements are NOT present
     expect(screen.queryByText('InsightMesh Health Dashboard')).not.toBeInTheDocument()
@@ -276,6 +296,12 @@ describe('Tasks Dashboard Title Consistency Tests', () => {
 describe('Dashboard Content', () => {
   beforeEach(() => {
     global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
       if (url.includes('/api/jobs')) {
         return Promise.resolve({
           ok: true,
@@ -317,9 +343,271 @@ describe('Dashboard Content', () => {
   })
 })
 
+describe('Authentication', () => {
+  beforeEach(() => {
+    // Mock window.location
+    delete window.location
+    window.location = { href: '' }
+  })
+
+  test('redirects to control plane login when not authenticated', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          json: () => Promise.resolve({ detail: 'Not authenticated' })
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+    })
+  })
+
+  test('loads user email when authenticated', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobs)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/auth/me', { credentials: 'include' })
+    })
+
+    // Should not redirect since auth succeeded
+    expect(window.location.href).toBe('')
+  })
+
+  test('displays logout button when authenticated', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobs)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument()
+    })
+  })
+
+  test('redirects to control plane on auth check failure', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.reject(new Error('Network error'))
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+    })
+  })
+
+  test('logout button submits form to control plane logout endpoint', async () => {
+    const user = userEvent.setup()
+
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobs)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    // Mock form.submit()
+    const mockSubmit = vi.fn()
+    HTMLFormElement.prototype.submit = mockSubmit
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument()
+    })
+
+    const logoutButton = screen.getByRole('button', { name: /logout/i })
+    await user.click(logoutButton)
+
+    // Should create and submit a form to logout endpoint
+    expect(mockSubmit).toHaveBeenCalled()
+
+    // Verify form was created with correct action
+    const forms = document.querySelectorAll('form')
+    const logoutForm = Array.from(forms).find(form => form.action.includes('/auth/logout'))
+    expect(logoutForm).toBeDefined()
+    expect(logoutForm.method.toLowerCase()).toBe('post')
+    expect(logoutForm.action).toContain('https://localhost:6001/auth/logout')
+  })
+
+  test('sets user email state when authenticated', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'user@test.com', authenticated: true })
+        })
+      }
+      if (url.includes('/api/jobs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockJobs)
+        })
+      }
+      if (url.includes('/api/task-runs')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockTaskRuns)
+        })
+      }
+      if (url.includes('/api/scheduler/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(mockSchedulerInfo)
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /logout/i })).toBeInTheDocument()
+    })
+
+    // Wait for email to be rendered in dropdown
+    await waitFor(() => {
+      const emailElement = document.querySelector('.user-email')
+      expect(emailElement).toBeTruthy()
+      expect(emailElement.textContent).toContain('user@test.com')
+    })
+  })
+
+  test('redirects when authentication fails', async () => {
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: false,
+          status: 401,
+          json: () => Promise.resolve({ detail: 'Not authenticated' })
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({})
+      })
+    })
+
+    render(<App />)
+
+    // Should redirect to control plane login when not authenticated
+    await waitFor(() => {
+      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+    })
+  })
+})
+
 describe('Tasks Content', () => {
   beforeEach(() => {
     global.fetch = vi.fn().mockImplementation((url) => {
+      if (url.includes('/auth/me')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ email: 'test@example.com', authenticated: true })
+        })
+      }
       if (url.includes('/api/jobs')) {
         return Promise.resolve({
           ok: true,
