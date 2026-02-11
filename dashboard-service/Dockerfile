@@ -9,6 +9,11 @@ RUN npm run build
 # Stage 2: Python application
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
+# Build arguments for versioning
+ARG VERSION=0.0.0
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 # Use bash with pipefail
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -41,7 +46,16 @@ RUN pip install --no-cache-dir --upgrade pip wheel setuptools && \
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
-    ENVIRONMENT=production
+    ENVIRONMENT=production \
+    APP_VERSION=${VERSION} \
+    GIT_SHA=${GIT_SHA} \
+    BUILD_DATE=${BUILD_DATE}
+
+# Add OCI labels for versioning
+LABEL org.opencontainers.image.title="InsightMesh Dashboard Service" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 # Expose dashboard port
 EXPOSE 8080

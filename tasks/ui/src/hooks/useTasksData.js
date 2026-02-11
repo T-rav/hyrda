@@ -16,11 +16,13 @@ export function useTasksData() {
   const [error, setError] = useState(null)
 
   // Generic API call function
-  const apiCall = useCallback(async (endpoint) => {
+  const apiCall = useCallback(async (endpoint, options = {}) => {
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
+      ...options,
     })
 
     if (!response.ok) {

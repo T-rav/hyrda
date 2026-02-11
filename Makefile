@@ -13,6 +13,30 @@ PIP ?= $(VENV)/bin/pip
 ENV_FILE := $(PROJECT_ROOT_DIR).env
 IMAGE ?= insight-mesh-slack-bot
 
+# Version management
+VERSION_FILE := $(PROJECT_ROOT_DIR).version
+VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo "0.0.0")
+GIT_SHA := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Docker registry configuration
+# Override these with environment variables or make arguments:
+#   make docker-push REGISTRY=ghcr.io/myorg
+REGISTRY ?= localhost
+IMAGE_PREFIX ?= insightmesh
+
+# Full image names with registry and version
+BOT_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-bot:$(VERSION)
+AGENT_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:$(VERSION)
+CONTROL_PLANE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:$(VERSION)
+TASKS_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-tasks:$(VERSION)
+RAG_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:$(VERSION)
+DASHBOARD_SERVICE_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:$(VERSION)
+LANGSMITH_PROXY_IMAGE := $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:$(VERSION)
+
+# All images for batch operations
+ALL_IMAGES := $(BOT_IMAGE) $(AGENT_SERVICE_IMAGE) $(CONTROL_PLANE_IMAGE) $(TASKS_IMAGE) $(RAG_SERVICE_IMAGE) $(DASHBOARD_SERVICE_IMAGE) $(LANGSMITH_PROXY_IMAGE)
+
 # Find Python command with ruff installed (for linting) - prioritize env var, then venv
 PYTHON_LINT ?= $(shell \
     if [ -n "$$PYTHON" ] && $$PYTHON -m ruff --version >/dev/null 2>&1; then \
@@ -34,7 +58,7 @@ YELLOW := \033[0;33m
 BLUE := \033[0;34m
 RESET := \033[0m
 
-.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status librechat-build setup-ssl
+.PHONY: help install run test lint lint-check ci docker-build start stop restart status clean security db-start db-stop db-migrate db-upgrade db-downgrade db-reset db-status librechat-build setup-ssl version version-bump docker-tag docker-push docker-push-latest release
 
 help:
 	@echo "$(BLUE)InsightMesh - Essential Commands$(RESET)"
@@ -59,6 +83,13 @@ help:
 	@echo "  make docker-build Build all Docker images"
 	@echo "  make security     Run security scans (Bandit + Trivy)"
 	@echo "  make clean        Remove caches and artifacts"
+	@echo ""
+	@echo "$(GREEN)Version & Release:$(RESET)"
+	@echo "  make version          Show current version"
+	@echo "  make version-bump     Bump version (patch|minor|major)"
+	@echo "  make docker-tag       Tag images with version"
+	@echo "  make docker-push      Push images to registry"
+	@echo "  make release          Full release: tag, build, push"
 	@echo ""
 	@echo "$(GREEN)Database Management:$(RESET)"
 	@echo "  db-start        🐳 Start MySQL databases (main docker-compose.yml)"
@@ -187,6 +218,129 @@ lint-check:
 
 # Removed redundant Docker targets - use start/stop/restart/status instead
 
+# ===== VERSION MANAGEMENT =====
+
+version:
+	@echo "$(BLUE)InsightMesh Version Information$(RESET)"
+	@echo "  Version:     $(GREEN)$(VERSION)$(RESET)"
+	@echo "  Git SHA:     $(YELLOW)$(GIT_SHA)$(RESET)"
+	@echo "  Build Date:  $(YELLOW)$(BUILD_DATE)$(RESET)"
+	@echo "  Registry:    $(YELLOW)$(REGISTRY)$(RESET)"
+	@echo ""
+	@echo "$(BLUE)Docker Images:$(RESET)"
+	@echo "  Bot:              $(BOT_IMAGE)"
+	@echo "  Agent Service:    $(AGENT_SERVICE_IMAGE)"
+	@echo "  Control Plane:    $(CONTROL_PLANE_IMAGE)"
+	@echo "  Tasks:            $(TASKS_IMAGE)"
+	@echo "  RAG Service:      $(RAG_SERVICE_IMAGE)"
+	@echo "  Dashboard:        $(DASHBOARD_SERVICE_IMAGE)"
+	@echo "  LangSmith Proxy:  $(LANGSMITH_PROXY_IMAGE)"
+
+version-bump:
+	@echo "$(BLUE)Current version: $(VERSION)$(RESET)"
+	@read -p "Bump type (patch|minor|major): " bump_type; \
+	current_version=$(VERSION); \
+	major=$$(echo $$current_version | cut -d. -f1); \
+	minor=$$(echo $$current_version | cut -d. -f2); \
+	patch=$$(echo $$current_version | cut -d. -f3); \
+	case "$$bump_type" in \
+		major) major=$$((major + 1)); minor=0; patch=0;; \
+		minor) minor=$$((minor + 1)); patch=0;; \
+		patch) patch=$$((patch + 1));; \
+		*) echo "$(RED)Invalid bump type. Use: patch, minor, or major$(RESET)"; exit 1;; \
+	esac; \
+	new_version="$${major}.$${minor}.$${patch}"; \
+	echo "$$new_version" > $(VERSION_FILE); \
+	echo "$(GREEN)✅ Version bumped: $$current_version → $$new_version$(RESET)"; \
+	echo "$(YELLOW)Don't forget to commit the .version file!$(RESET)"
+
+# ===== DOCKER BUILD & PUBLISH =====
+
+# Build with version args injected
+docker-build-versioned: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
+	@echo "$(BLUE)🔨 Building versioned Docker images (v$(VERSION))...$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && \
+	DOCKER_BUILDKIT=1 docker compose build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_SHA=$(GIT_SHA) \
+		--build-arg BUILD_DATE=$(BUILD_DATE)
+	cd $(PROJECT_ROOT_DIR) && \
+	docker compose -f docker-compose.librechat.yml build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_SHA=$(GIT_SHA) \
+		--build-arg BUILD_DATE=$(BUILD_DATE)
+	@echo "$(GREEN)✅ All images built with version $(VERSION)$(RESET)"
+
+# Tag local images with registry prefix and version
+docker-tag:
+	@echo "$(BLUE)🏷️  Tagging images for registry...$(RESET)"
+	@echo "$(YELLOW)Tagging bot...$(RESET)"
+	docker tag insightmesh-bot:latest $(BOT_IMAGE)
+	docker tag insightmesh-bot:latest $(REGISTRY)/$(IMAGE_PREFIX)-bot:latest
+	@echo "$(YELLOW)Tagging agent-service...$(RESET)"
+	docker tag insightmesh-agent-service:latest $(AGENT_SERVICE_IMAGE)
+	docker tag insightmesh-agent-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:latest
+	@echo "$(YELLOW)Tagging control-plane...$(RESET)"
+	docker tag insightmesh-control-plane:latest $(CONTROL_PLANE_IMAGE)
+	docker tag insightmesh-control-plane:latest $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:latest
+	@echo "$(YELLOW)Tagging tasks...$(RESET)"
+	docker tag insightmesh-tasks:latest $(TASKS_IMAGE)
+	docker tag insightmesh-tasks:latest $(REGISTRY)/$(IMAGE_PREFIX)-tasks:latest
+	@echo "$(YELLOW)Tagging rag-service...$(RESET)"
+	docker tag insightmesh-rag-service:latest $(RAG_SERVICE_IMAGE)
+	docker tag insightmesh-rag-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:latest
+	@echo "$(YELLOW)Tagging dashboard-service...$(RESET)"
+	docker tag insightmesh-dashboard-service:latest $(DASHBOARD_SERVICE_IMAGE)
+	docker tag insightmesh-dashboard-service:latest $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:latest
+	@echo "$(YELLOW)Tagging langsmith-proxy...$(RESET)"
+	docker tag insightmesh-langsmith-proxy:latest $(LANGSMITH_PROXY_IMAGE)
+	docker tag insightmesh-langsmith-proxy:latest $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
+	@echo "$(GREEN)✅ All images tagged for registry$(RESET)"
+
+# Push all images to registry
+docker-push:
+	@echo "$(BLUE)📤 Pushing images to registry: $(REGISTRY)$(RESET)"
+	@if [ "$(REGISTRY)" = "localhost" ]; then \
+		echo "$(RED)❌ Error: REGISTRY not set. Use: make docker-push REGISTRY=ghcr.io/yourorg$(RESET)"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Logging into registry (if needed)...$(RESET)"
+	@echo "$(YELLOW)Pushing version $(VERSION) tags...$(RESET)"
+	docker push $(BOT_IMAGE)
+	docker push $(AGENT_SERVICE_IMAGE)
+	docker push $(CONTROL_PLANE_IMAGE)
+	docker push $(TASKS_IMAGE)
+	docker push $(RAG_SERVICE_IMAGE)
+	docker push $(DASHBOARD_SERVICE_IMAGE)
+	docker push $(LANGSMITH_PROXY_IMAGE)
+	@echo "$(YELLOW)Pushing latest tags...$(RESET)"
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-bot:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-agent-service:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-control-plane:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-tasks:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-rag-service:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-dashboard-service:latest
+	docker push $(REGISTRY)/$(IMAGE_PREFIX)-langsmith-proxy:latest
+	@echo "$(GREEN)✅ All images pushed to $(REGISTRY)$(RESET)"
+
+# Full release workflow: bump (optional), build, tag, push
+release:
+	@echo "$(BLUE)🚀 Starting release workflow$(RESET)"
+	@echo "$(BLUE)Current version: $(VERSION)$(RESET)"
+	@read -p "Bump version? (patch|minor|major|no): " bump; \
+	if [ "$$bump" != "no" ]; then \
+		$(MAKE) version-bump; \
+		VERSION=$$(cat $(VERSION_FILE)); \
+	fi
+	@echo "$(BLUE)Building images...$(RESET)"
+	$(MAKE) docker-build-versioned
+	@echo "$(BLUE)Tagging images...$(RESET)"
+	$(MAKE) docker-tag
+	@echo "$(BLUE)Pushing to registry...$(RESET)"
+	$(MAKE) docker-push
+	@echo "$(GREEN)✅ Release $(VERSION) complete!$(RESET)"
+	@echo "$(YELLOW)To deploy, update docker-compose.prod.yml with version $(VERSION)$(RESET)"
+
 # Build React UIs (required for Docker images)
 health-ui:
 	@echo "$(BLUE)Building React health dashboard...$(RESET)"
@@ -218,8 +372,15 @@ setup-ssl:
 
 docker-build: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
-	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=0 docker compose build
-	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.librechat.yml build
+	@echo "$(YELLOW)Version: $(VERSION) | SHA: $(GIT_SHA) | Date: $(BUILD_DATE)$(RESET)"
+	cd $(PROJECT_ROOT_DIR) && DOCKER_BUILDKIT=1 docker compose build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_SHA=$(GIT_SHA) \
+		--build-arg BUILD_DATE=$(BUILD_DATE)
+	cd $(PROJECT_ROOT_DIR) && docker compose -f docker-compose.librechat.yml build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_SHA=$(GIT_SHA) \
+		--build-arg BUILD_DATE=$(BUILD_DATE)
 	@echo "$(GREEN)✅ All images built successfully!$(RESET)"
 
 # Start full Docker stack

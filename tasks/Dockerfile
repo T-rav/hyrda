@@ -1,6 +1,11 @@
 # Use Python 3.11 slim image
 FROM public.ecr.aws/docker/library/python:3.11-slim
 
+# Build arguments for versioning
+ARG VERSION=0.0.0
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 # Install security updates and dependencies including nginx and ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
@@ -58,7 +63,16 @@ ENV PYTHONUNBUFFERED=1 \
     EDGAR_LOCAL_DATA_DIR=/app/.edgar \
     SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
-    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    APP_VERSION=${VERSION} \
+    GIT_SHA=${GIT_SHA} \
+    BUILD_DATE=${BUILD_DATE}
+
+# Add OCI labels for versioning
+LABEL org.opencontainers.image.title="InsightMesh Tasks" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 # Expose nginx port
 EXPOSE 5001
