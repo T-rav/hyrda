@@ -45,9 +45,11 @@ async function refreshAccessToken() {
       return true
     }
 
+    // eslint-disable-next-line no-console
     console.error('Token refresh failed:', response.status)
     return false
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Token refresh error:', error)
     return false
   }
@@ -143,6 +145,7 @@ export function setupTokenRefresh() {
         await refreshAccessToken()
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Token check error:', error)
     }
   }, 5 * 60 * 1000) // Every 5 minutes
