@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react'
 
 /**
- * Textarea component with consistent styling and accessibility
+ * Textarea component with Bootstrap-style classes
  *
  * @typedef {Object} TextareaProps
  * @property {string} [value] - Textarea value
@@ -45,23 +45,22 @@ const Textarea = forwardRef(function Textarea({
   const hasError = Boolean(error)
 
   const wrapperClasses = [
-    'input-wrapper',
+    'mb-4',
     className,
   ].filter(Boolean).join(' ')
 
   const textareaClasses = [
-    'input',
-    'textarea',
-    hasError && 'input-error',
-    !resize && 'textarea-no-resize',
+    'form-control',
+    hasError && 'is-invalid',
+    !resize && 'no-resize',
   ].filter(Boolean).join(' ')
 
   return (
     <div className={wrapperClasses}>
       {label && (
-        <label htmlFor={textareaId} className="input-label">
+        <label htmlFor={textareaId} className="form-label">
           {label}
-          {required && <span className="input-required" aria-hidden="true"> *</span>}
+          {required && <span className="text-danger ms-1">*</span>}
         </label>
       )}
       <textarea
@@ -77,19 +76,18 @@ const Textarea = forwardRef(function Textarea({
         className={textareaClasses}
         aria-invalid={hasError}
         aria-describedby={ariaDescribedBy}
-        aria-required={required}
         autoFocus={autoFocus}
         {...rest}
       />
       {hint && !error && (
-        <span id={hintId} className="input-hint">
+        <div id={hintId} className="form-text">
           {hint}
-        </span>
+        </div>
       )}
       {error && (
-        <span id={errorId} className="input-error-message" role="alert">
+        <div id={errorId} className="invalid-feedback" role="alert">
           {error}
-        </span>
+        </div>
       )}
     </div>
   )

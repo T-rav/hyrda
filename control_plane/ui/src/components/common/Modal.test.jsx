@@ -55,7 +55,7 @@ describe('Modal', () => {
           Content
         </Modal>
       )
-      expect(screen.getByLabelText('Close modal')).toBeInTheDocument()
+      expect(screen.getByLabelText('Close')).toBeInTheDocument()
     })
 
     it('hides close button when showCloseButton is false', () => {
@@ -64,7 +64,7 @@ describe('Modal', () => {
           Content
         </Modal>
       )
-      expect(screen.queryByLabelText('Close modal')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Close')).not.toBeInTheDocument()
     })
 
     it('applies size class correctly', () => {
@@ -188,7 +188,7 @@ describe('Modal', () => {
           Content
         </Modal>
       )
-      fireEvent.click(screen.getByLabelText('Close modal'))
+      fireEvent.click(screen.getByLabelText('Close'))
       expect(mockOnClose).toHaveBeenCalledTimes(1)
     })
 

@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import Button from './Button'
 
 /**
- * Reusable Modal component with consistent styling and accessibility
+ * Reusable Modal component with Bootstrap-style classes
  *
  * @typedef {Object} ModalProps
  * @property {boolean} isOpen - Whether the modal is visible
@@ -70,18 +70,13 @@ function Modal({
   // Handle body scroll lock and focus management
   useEffect(() => {
     if (isOpen) {
-      // Save current focus
       previousActiveElement.current = document.activeElement
-      // Lock body scroll
       document.body.style.overflow = 'hidden'
-      // Focus the modal content
       if (contentRef.current) {
         contentRef.current.focus()
       }
     } else {
-      // Restore body scroll
       document.body.style.overflow = ''
-      // Restore focus
       if (previousActiveElement.current) {
         previousActiveElement.current.focus()
       }
@@ -123,19 +118,18 @@ function Modal({
         tabIndex={-1}
       >
         <div className="modal-header">
-          <h2 id="modal-title" className="modal-title">
+          <h5 id="modal-title" className="modal-title">
             {title}
-          </h2>
+          </h5>
           {showCloseButton && (
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
+              className="modal-close"
               onClick={onClose}
-              ariaLabel="Close modal"
-              className="modal-close-btn"
+              aria-label="Close"
             >
               <X size={20} />
-            </Button>
+            </button>
           )}
         </div>
 

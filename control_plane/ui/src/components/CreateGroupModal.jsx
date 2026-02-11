@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Plus } from 'lucide-react'
 import Modal from './common/Modal'
 import Input from './common/Input'
 import Textarea from './common/Textarea'
@@ -51,7 +52,12 @@ function CreateGroupModal({ onClose, onCreate }) {
     <Modal
       isOpen={true}
       onClose={onClose}
-      title="Create New Group"
+      title={
+        <>
+          <Plus size={20} className="me-2" />
+          Create New Group
+        </>
+      }
       size="md"
     >
       <form onSubmit={handleSubmit}>

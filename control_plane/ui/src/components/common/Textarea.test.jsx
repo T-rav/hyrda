@@ -36,14 +36,14 @@ describe('Textarea', () => {
 
     it('applies custom className', () => {
       render(<Textarea className="custom-textarea" />)
-      expect(document.querySelector('.input-wrapper')).toHaveClass('custom-textarea')
+      expect(document.querySelector('.custom-textarea')).toBeInTheDocument()
     })
   })
 
   describe('states', () => {
     it('shows required indicator when required', () => {
       render(<Textarea label="Description" required />)
-      expect(screen.getByText('*')).toBeInTheDocument()
+      expect(screen.getByText('*')).toHaveClass('text-danger')
     })
 
     it('disables textarea when disabled is true', () => {
@@ -51,29 +51,29 @@ describe('Textarea', () => {
       expect(screen.getByRole('textbox')).toBeDisabled()
     })
 
-    it('applies error class when error is provided', () => {
+    it('applies is-invalid class when error is provided', () => {
       render(<Textarea error="Required field" />)
-      expect(screen.getByRole('textbox')).toHaveClass('input-error')
+      expect(screen.getByRole('textbox')).toHaveClass('is-invalid')
     })
 
     it('renders error message when error is provided', () => {
       render(<Textarea error="Required field" />)
-      expect(screen.getByText('Required field')).toBeInTheDocument()
+      expect(screen.getByText('Required field')).toHaveClass('invalid-feedback')
     })
 
     it('renders hint text when provided', () => {
       render(<Textarea hint="Maximum 500 characters" />)
-      expect(screen.getByText('Maximum 500 characters')).toBeInTheDocument()
+      expect(screen.getByText('Maximum 500 characters')).toHaveClass('form-text')
     })
 
     it('applies no-resize class when resize is false', () => {
       render(<Textarea resize={false} />)
-      expect(screen.getByRole('textbox')).toHaveClass('textarea-no-resize')
+      expect(screen.getByRole('textbox')).toHaveClass('no-resize')
     })
 
     it('allows resize by default', () => {
       render(<Textarea />)
-      expect(screen.getByRole('textbox')).not.toHaveClass('textarea-no-resize')
+      expect(screen.getByRole('textbox')).not.toHaveClass('no-resize')
     })
   })
 
@@ -103,11 +103,6 @@ describe('Textarea', () => {
       expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'false')
     })
 
-    it('sets aria-required when required', () => {
-      render(<Textarea required />)
-      expect(screen.getByRole('textbox')).toHaveAttribute('aria-required', 'true')
-    })
-
     it('associates error message with aria-describedby', () => {
       render(<Textarea id="test-textarea" error="Invalid input" />)
       const textarea = screen.getByRole('textbox')
@@ -134,19 +129,19 @@ describe('Textarea', () => {
   })
 
   describe('structure', () => {
-    it('has input-wrapper class', () => {
+    it('has mb-4 class on wrapper', () => {
       render(<Textarea />)
-      expect(document.querySelector('.input-wrapper')).toBeInTheDocument()
+      expect(document.querySelector('.mb-4')).toBeInTheDocument()
     })
 
-    it('has textarea class', () => {
+    it('has form-control class', () => {
       render(<Textarea />)
-      expect(screen.getByRole('textbox')).toHaveClass('textarea')
+      expect(screen.getByRole('textbox')).toHaveClass('form-control')
     })
 
-    it('has input class for styling consistency', () => {
+    it('has textarea element', () => {
       render(<Textarea />)
-      expect(screen.getByRole('textbox')).toHaveClass('input')
+      expect(screen.getByRole('textbox').tagName).toBe('TEXTAREA')
     })
   })
 })

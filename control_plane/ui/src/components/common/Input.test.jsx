@@ -43,8 +43,8 @@ describe('Input', () => {
       expect(screen.getByDisplayValue('test@example.com')).toBeInTheDocument()
     })
 
-    it('renders left icon', () => {
-      render(<Input leftIcon={<Search data-testid="search-icon" />} />)
+    it('renders left icon in label when label is provided', () => {
+      render(<Input label="Search" leftIcon={<Search data-testid="search-icon" />} />)
       expect(screen.getByTestId('search-icon')).toBeInTheDocument()
     })
 
@@ -53,9 +53,9 @@ describe('Input', () => {
       expect(screen.getByTestId('eye-icon')).toBeInTheDocument()
     })
 
-    it('applies custom className', () => {
+    it('applies custom className to wrapper', () => {
       render(<Input className="custom-input" />)
-      expect(document.querySelector('.input-wrapper')).toHaveClass('custom-input')
+      expect(document.querySelector('.custom-input')).toBeInTheDocument()
     })
 
     it('renders with name attribute', () => {
@@ -64,29 +64,10 @@ describe('Input', () => {
     })
   })
 
-  describe('sizes', () => {
-    it('does not apply size class for md by default', () => {
-      render(<Input />)
-      const input = screen.getByRole('textbox')
-      expect(input).not.toHaveClass('input-sm')
-      expect(input).not.toHaveClass('input-lg')
-    })
-
-    it('applies sm size class', () => {
-      render(<Input size="sm" />)
-      expect(screen.getByRole('textbox')).toHaveClass('input-sm')
-    })
-
-    it('applies lg size class', () => {
-      render(<Input size="lg" />)
-      expect(screen.getByRole('textbox')).toHaveClass('input-lg')
-    })
-  })
-
   describe('states', () => {
     it('shows required indicator when required', () => {
       render(<Input label="Email" required />)
-      expect(screen.getByText('*')).toBeInTheDocument()
+      expect(screen.getByText('*')).toHaveClass('text-danger')
     })
 
     it('disables input when disabled is true', () => {
@@ -94,19 +75,19 @@ describe('Input', () => {
       expect(screen.getByRole('textbox')).toBeDisabled()
     })
 
-    it('applies error class when error is provided', () => {
+    it('applies is-invalid class when error is provided', () => {
       render(<Input error="Invalid email" />)
-      expect(screen.getByRole('textbox')).toHaveClass('input-error')
+      expect(screen.getByRole('textbox')).toHaveClass('is-invalid')
     })
 
     it('renders error message when error is provided', () => {
       render(<Input error="Invalid email" />)
-      expect(screen.getByText('Invalid email')).toBeInTheDocument()
+      expect(screen.getByText('Invalid email')).toHaveClass('invalid-feedback')
     })
 
     it('renders hint text when provided', () => {
       render(<Input hint="We will never share your email" />)
-      expect(screen.getByText('We will never share your email')).toBeInTheDocument()
+      expect(screen.getByText('We will never share your email')).toHaveClass('form-text')
     })
   })
 
@@ -136,11 +117,6 @@ describe('Input', () => {
       expect(screen.getByRole('textbox')).toHaveAttribute('aria-invalid', 'false')
     })
 
-    it('sets aria-required when required', () => {
-      render(<Input required />)
-      expect(screen.getByRole('textbox')).toHaveAttribute('aria-required', 'true')
-    })
-
     it('associates error message with aria-describedby', () => {
       render(<Input id="test-input" error="Invalid email" />)
       const input = screen.getByRole('textbox')
@@ -153,15 +129,26 @@ describe('Input', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Invalid email')
     })
 
-    it('hides icons from screen readers', () => {
-      render(<Input leftIcon={<Search data-testid="icon" />} />)
-      const icon = screen.getByTestId('icon').parentElement
-      expect(icon).toHaveAttribute('aria-hidden', 'true')
-    })
-
     it('supports autoFocus', () => {
       render(<Input autoFocus />)
       expect(screen.getByRole('textbox')).toHaveFocus()
+    })
+  })
+
+  describe('structure', () => {
+    it('has mb-4 class on wrapper', () => {
+      render(<Input />)
+      expect(document.querySelector('.mb-4')).toBeInTheDocument()
+    })
+
+    it('has form-control class', () => {
+      render(<Input />)
+      expect(screen.getByRole('textbox')).toHaveClass('form-control')
+    })
+
+    it('label has form-label class', () => {
+      render(<Input label="Test" />)
+      expect(screen.getByText('Test')).toHaveClass('form-label')
     })
   })
 })

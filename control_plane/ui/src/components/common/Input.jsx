@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react'
 
 /**
- * Input component with consistent styling and accessibility
+ * Input component with Bootstrap-style classes
  *
  * @typedef {Object} InputProps
  * @property {string} [type='text'] - Input type
@@ -11,7 +11,6 @@ import React, { forwardRef } from 'react'
  * @property {string} [label] - Label text
  * @property {string} [error] - Error message
  * @property {string} [hint] - Help text
- * @property {string} [size='md'] - Input size (sm, md, lg)
  * @property {boolean} [required=false] - Required field
  * @property {boolean} [disabled=false] - Disabled state
  * @property {React.ReactNode} [leftIcon] - Icon to display before input
@@ -22,12 +21,6 @@ import React, { forwardRef } from 'react'
  * @property {boolean} [autoFocus=false] - Auto focus on mount
  */
 
-const SIZES = {
-  sm: 'input-sm',
-  md: '',
-  lg: 'input-lg',
-}
-
 const Input = forwardRef(function Input({
   type = 'text',
   value,
@@ -36,7 +29,6 @@ const Input = forwardRef(function Input({
   label,
   error,
   hint,
-  size = 'md',
   required = false,
   disabled = false,
   leftIcon,
@@ -52,38 +44,43 @@ const Input = forwardRef(function Input({
   const hintId = hint ? `${inputId}-hint` : undefined
 
   const ariaDescribedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined
-
-  const sizeClass = SIZES[size] || ''
   const hasError = Boolean(error)
   const hasLeftIcon = Boolean(leftIcon)
   const hasRightIcon = Boolean(rightIcon)
 
   const wrapperClasses = [
-    'input-wrapper',
-    hasLeftIcon && 'input-has-left-icon',
-    hasRightIcon && 'input-has-right-icon',
+    'mb-4',
     className,
   ].filter(Boolean).join(' ')
 
   const inputClasses = [
-    'input',
-    sizeClass,
-    hasError && 'input-error',
-    hasLeftIcon && 'input-with-left-icon',
-    hasRightIcon && 'input-with-right-icon',
+    'form-control',
+    hasError && 'is-invalid',
+    hasLeftIcon && 'ps-5',
+    hasRightIcon && 'pe-5',
   ].filter(Boolean).join(' ')
 
   return (
     <div className={wrapperClasses}>
       {label && (
-        <label htmlFor={inputId} className="input-label">
+        <label htmlFor={inputId} className="form-label">
+          {leftIcon && <span className="me-1">{leftIcon}</span>}
           {label}
-          {required && <span className="input-required" aria-hidden="true"> *</span>}
+          {required && <span className="text-danger ms-1">*</span>}
         </label>
       )}
-      <div className="input-container">
-        {leftIcon && (
-          <span className="input-icon input-icon-left" aria-hidden="true">
+      <div className="position-relative">
+        {leftIcon && !label && (
+          <span
+            className="position-absolute"
+            style={{
+              left: '0.75rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#9ca3af',
+              pointerEvents: 'none'
+            }}
+          >
             {leftIcon}
           </span>
         )}
@@ -100,25 +97,33 @@ const Input = forwardRef(function Input({
           className={inputClasses}
           aria-invalid={hasError}
           aria-describedby={ariaDescribedBy}
-          aria-required={required}
           autoFocus={autoFocus}
           {...rest}
         />
         {rightIcon && (
-          <span className="input-icon input-icon-right" aria-hidden="true">
+          <span
+            className="position-absolute"
+            style={{
+              right: '0.75rem',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#9ca3af',
+              pointerEvents: 'none'
+            }}
+          >
             {rightIcon}
           </span>
         )}
       </div>
       {hint && !error && (
-        <span id={hintId} className="input-hint">
+        <div id={hintId} className="form-text">
           {hint}
-        </span>
+        </div>
       )}
       {error && (
-        <span id={errorId} className="input-error-message" role="alert">
+        <div id={errorId} className="invalid-feedback" role="alert">
           {error}
-        </span>
+        </div>
       )}
     </div>
   )

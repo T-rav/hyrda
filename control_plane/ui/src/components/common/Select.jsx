@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 
 /**
- * Select component with consistent styling and accessibility
+ * Select component with Bootstrap-style classes
  *
  * @typedef {Object} SelectOption
  * @property {string} value - Option value
@@ -47,26 +47,24 @@ const Select = forwardRef(function Select({
   const hasError = Boolean(error)
 
   const wrapperClasses = [
-    'input-wrapper',
-    'select-wrapper',
+    'mb-4',
     className,
   ].filter(Boolean).join(' ')
 
   const selectClasses = [
-    'input',
-    'select',
-    hasError && 'input-error',
+    'form-select',
+    hasError && 'is-invalid',
   ].filter(Boolean).join(' ')
 
   return (
     <div className={wrapperClasses}>
       {label && (
-        <label htmlFor={selectId} className="input-label">
+        <label htmlFor={selectId} className="form-label">
           {label}
-          {required && <span className="input-required" aria-hidden="true"> *</span>}
+          {required && <span className="text-danger ms-1">*</span>}
         </label>
       )}
-      <div className="select-container">
+      <div className="position-relative">
         <select
           ref={ref}
           id={selectId}
@@ -78,7 +76,6 @@ const Select = forwardRef(function Select({
           className={selectClasses}
           aria-invalid={hasError}
           aria-describedby={ariaDescribedBy}
-          aria-required={required}
           {...rest}
         >
           {placeholder && (
@@ -96,19 +93,16 @@ const Select = forwardRef(function Select({
             </option>
           ))}
         </select>
-        <span className="select-icon" aria-hidden="true">
-          <ChevronDown size={16} />
-        </span>
       </div>
       {hint && !error && (
-        <span id={hintId} className="input-hint">
+        <div id={hintId} className="form-text">
           {hint}
-        </span>
+        </div>
       )}
       {error && (
-        <span id={errorId} className="input-error-message" role="alert">
+        <div id={errorId} className="invalid-feedback" role="alert">
           {error}
-        </span>
+        </div>
       )}
     </div>
   )

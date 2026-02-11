@@ -57,22 +57,22 @@ describe('Select', () => {
 
     it('shows required indicator on label', () => {
       render(<Select label="Choose" options={mockOptions} required />)
-      expect(screen.getByText('*')).toBeInTheDocument()
+      expect(screen.getByText('*')).toHaveClass('text-danger')
     })
 
-    it('applies error class when error is provided', () => {
+    it('applies is-invalid class when error is provided', () => {
       render(<Select options={mockOptions} error="Selection required" />)
-      expect(screen.getByRole('combobox')).toHaveClass('input-error')
+      expect(screen.getByRole('combobox')).toHaveClass('is-invalid')
     })
 
     it('renders error message when error is provided', () => {
       render(<Select options={mockOptions} error="Selection required" />)
-      expect(screen.getByText('Selection required')).toBeInTheDocument()
+      expect(screen.getByText('Selection required')).toHaveClass('invalid-feedback')
     })
 
     it('renders hint text when provided', () => {
       render(<Select options={mockOptions} hint="Choose wisely" />)
-      expect(screen.getByText('Choose wisely')).toBeInTheDocument()
+      expect(screen.getByText('Choose wisely')).toHaveClass('form-text')
     })
   })
 
@@ -112,19 +112,19 @@ describe('Select', () => {
   })
 
   describe('structure', () => {
-    it('has select-wrapper class', () => {
+    it('has mb-4 class on wrapper', () => {
       render(<Select options={mockOptions} />)
-      expect(document.querySelector('.select-wrapper')).toBeInTheDocument()
+      expect(document.querySelector('.mb-4')).toBeInTheDocument()
     })
 
-    it('has select-container for positioning', () => {
+    it('has form-select class', () => {
       render(<Select options={mockOptions} />)
-      expect(document.querySelector('.select-container')).toBeInTheDocument()
+      expect(screen.getByRole('combobox')).toHaveClass('form-select')
     })
 
-    it('has chevron icon', () => {
-      render(<Select options={mockOptions} />)
-      expect(document.querySelector('.select-icon')).toBeInTheDocument()
+    it('label has form-label class', () => {
+      render(<Select label="Test" options={mockOptions} />)
+      expect(screen.getByText('Test')).toHaveClass('form-label')
     })
   })
 })
