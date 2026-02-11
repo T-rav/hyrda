@@ -4,7 +4,22 @@
     "../../../"
   ],
   "graphs": {
-    "research": "agents.research.nodes.graph_builder:build_research_agent"
+    "research": {
+      "graph": "agents.research.research_agent:research_agent",
+      "metadata": {
+        "display_name": "Research Agent",
+        "description": "Deep research agent for comprehensive company analysis",
+        "aliases": ["research", "deep_research"]
+      }
+    },
+    "help": {
+      "graph": "agents.help.help_agent:help_agent",
+      "metadata": {
+        "display_name": "Help Agent",
+        "description": "List available bot agents and their aliases (filtered by your access)",
+        "aliases": ["help", "agents"]
+      }
+    }
   },
   "env": "../../../.env"
 }
