@@ -167,12 +167,11 @@ body {
 }
 
 .content-section {
-  background: rgba(255, 255, 255, 0.95);
+  background: white;
   border-radius: 12px;
   padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .section-header {
@@ -181,7 +180,7 @@ body {
   align-items: center;
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .section-header h2 {
@@ -592,16 +591,21 @@ textarea.form-control.no-resize {
 }
 
 /* ============================================================================
-   CARDS (Glass-morphism style)
+   CARDS (Solid white like Tasks UI)
    ============================================================================ */
 
 .card {
-  background: rgba(255, 255, 255, 0.95);
+  background: white;
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .card-outlined {
@@ -617,7 +621,7 @@ textarea.form-control.no-resize {
 
 .card-hoverable:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .card-clickable {
@@ -629,8 +633,8 @@ textarea.form-control.no-resize {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
-  background: rgba(248, 250, 252, 0.8);
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .card-title {
@@ -650,18 +654,17 @@ textarea.form-control.no-resize {
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid rgba(139, 92, 246, 0.1);
-  background: rgba(248, 250, 252, 0.8);
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 /* Glass card variant */
 .glass-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: white;
   border-radius: 12px;
   padding: 1.5rem;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
 /* ============================================================================
@@ -998,18 +1001,17 @@ textarea.form-control.no-resize {
 
 /* Agent Card */
 .agent-card {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1.25rem;
-  transition: all 0.2s;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .agent-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
 .agent-card-header {
@@ -1063,7 +1065,7 @@ textarea.form-control.no-resize {
   justify-content: space-between;
   align-items: center;
   padding-top: 1rem;
-  border-top: 1px solid rgba(139, 92, 246, 0.1);
+  border-top: 1px solid #f1f5f9;
 }
 
 .agent-stats {
@@ -1193,7 +1195,7 @@ textarea.form-control.no-resize {
   align-items: center;
   gap: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(139, 92, 246, 0.1);
+  border-top: 1px solid #f1f5f9;
 }
 
 .group-stats {
@@ -1620,18 +1622,17 @@ textarea.form-control.no-resize {
 }
 
 .service-account-card {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: white;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 1.25rem;
-  transition: all 0.2s;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .service-account-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
 .service-account-header {
@@ -1666,8 +1667,8 @@ textarea.form-control.no-resize {
   gap: 0.5rem;
   align-items: center;
   padding: 0.75rem 0;
-  border-top: 1px solid rgba(139, 92, 246, 0.1);
-  border-bottom: 1px solid rgba(139, 92, 246, 0.1);
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
   margin-bottom: 0.75rem;
 }
 
@@ -1700,13 +1701,12 @@ textarea.form-control.no-resize {
 .empty-card {
   max-width: 500px;
   width: 100%;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 1rem;
+  background: white;
+  border-radius: 12px;
   padding: 2.5rem 2rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   text-align: center;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid #e2e8f0;
 }
 
 .empty-icon-wrapper {
