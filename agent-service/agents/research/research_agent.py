@@ -12,18 +12,16 @@ from .nodes.graph_builder import build_research_agent
 logger = logging.getLogger(__name__)
 
 
-# Create the main graph instance (no checkpointer for production/Studio)
+# Export the agent builder function (callable)
 @agent_metadata(
     display_name="Research Agent",
     description="Deep research agent for comprehensive company analysis",
     aliases=["research", "deep_research"],
     is_system=True,
 )
-def _build():
+def research_agent():
     """Build and return research agent graph."""
     return build_research_agent()
 
 
-research_agent = _build()
-
-logger.info("Research agent graph compiled successfully")
+logger.info("Research agent builder loaded")
