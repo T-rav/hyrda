@@ -267,19 +267,19 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 <>
                   <button
                     type="button"
-                    className="btn btn-outline-secondary"
-                    onClick={onClose}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
                     className="btn btn-primary"
                     onClick={handleOAuthClick}
                     disabled={!name}
                   >
                     <ExternalLink size={16} className="me-1" />
                     Connect Google
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary"
+                    onClick={onClose}
+                  >
+                    Cancel
                   </button>
                 </>
               ) : (
