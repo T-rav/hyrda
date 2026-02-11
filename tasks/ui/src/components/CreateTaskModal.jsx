@@ -216,8 +216,12 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 <Activity size={16} className="me-1" />
                 Schedule
               </label>
-              <div className="row align-items-end">
+              <div className="row">
                 <div className="col-md-4">
+                  <label className="form-label d-flex align-items-center" style={{ visibility: 'hidden', height: '1.5rem' }}>
+                    <Activity size={14} className="me-1" />
+                    Type
+                  </label>
                   <select
                     className="form-select"
                     value={triggerType}
