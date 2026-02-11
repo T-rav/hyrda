@@ -190,7 +190,7 @@ function App() {
 }
 
 // Dashboard Component with Real API Data
-function DashboardContent({ showNotification, jobs, setJobs, taskRuns, setTaskRuns, scheduler, setScheduler, loading, setLoading }) {
+function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, loading, setLoading }) {
   const [showAllRuns, setShowAllRuns] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const recordsPerPage = 20
@@ -233,6 +233,7 @@ function DashboardContent({ showNotification, jobs, setJobs, taskRuns, setTaskRu
     if (jobs.length === 0 && taskRuns.length === 0) {
       loadData()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh effect
@@ -250,6 +251,7 @@ function DashboardContent({ showNotification, jobs, setJobs, taskRuns, setTaskRu
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh])
 
   const toggleAutoRefresh = () => {
@@ -404,6 +406,7 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
     if (jobs.length === 0) {
       loadTasks()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh effect
@@ -421,6 +424,7 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh])
 
   const toggleAutoRefresh = () => {

@@ -41,16 +41,14 @@ async function refreshAccessToken() {
     })
 
     if (response.ok) {
-      const data = await response.json()
       // New access token is automatically set in cookie by server
-      console.log('✅ Access token refreshed successfully')
       return true
     }
 
-    console.error('❌ Token refresh failed:', response.status)
+    console.error('Token refresh failed:', response.status)
     return false
   } catch (error) {
-    console.error('❌ Token refresh error:', error)
+    console.error('Token refresh error:', error)
     return false
   }
 }
@@ -113,7 +111,6 @@ export async function fetchWithTokenRefresh(url, options = {}) {
         onTokenRefreshed(true)
       } else {
         // Refresh failed - redirect to login
-        console.log('Token refresh failed, redirecting to login')
         onTokenRefreshed(null)
         window.location.href =
           'https://localhost:6001/auth/start?redirect=https://localhost:5001'
@@ -143,7 +140,6 @@ export function setupTokenRefresh() {
 
       if (!response.ok) {
         // Session invalid - try to refresh
-        console.log('Session check failed, attempting token refresh')
         await refreshAccessToken()
       }
     } catch (error) {
