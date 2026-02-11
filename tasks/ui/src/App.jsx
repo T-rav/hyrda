@@ -5,6 +5,7 @@ import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
 import './App.css'
 import { logError } from './utils/logger'
+import { setupTokenRefresh } from './utils/tokenRefresh'
 
 // Custom hook for managing document title
 function useDocumentTitle(title) {
@@ -50,6 +51,8 @@ function App() {
     }
 
     verifyAuth()
+    // Setup automatic token refresh (checks token every 5 minutes)
+    setupTokenRefresh()
   }, [])
 
   const handleTabChange = (tab) => {

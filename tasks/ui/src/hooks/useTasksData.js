@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { logError } from '../utils/logger'
+import { fetchWithTokenRefresh } from '../utils/tokenRefresh'
 
 // Use relative URLs since the UI is served from the same nginx server
 // This automatically uses the same protocol (HTTP/HTTPS) as the page
@@ -15,9 +16,9 @@ export function useTasksData() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Generic API call function
+  // Generic API call function with automatic token refresh
   const apiCall = useCallback(async (endpoint, options = {}) => {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+    const response = await fetchWithTokenRefresh(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
       },
@@ -68,7 +69,7 @@ export function useTasksData() {
   // Load RAG metrics from bot service
   const loadRagMetrics = useCallback(async () => {
     try {
-      const response = await fetch(`${BOT_API_BASE}/metrics`, {
+      const response = await fetchWithTokenRefresh(`${BOT_API_BASE}/metrics`, {
         headers: {
           'Content-Type': 'application/json',
         },
