@@ -157,6 +157,54 @@ describe('App Component', () => {
     expect(screen.getByRole('button', { name: /dashboard/i })).not.toHaveClass('active')
   })
 
+  test('REGRESSION: data persists when switching tabs (lifted state)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Wait for initial dashboard data to load (3 API calls: jobs, task-runs, scheduler/info)
+    await waitFor(() => {
+      expect(screen.getByText('Scheduler Status')).toBeInTheDocument()
+    })
+
+    const callsAfterDashboard = global.fetch.mock.calls.length
+
+    // Switch to Tasks tab (first time - will load tasks data)
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /tasks/i })).toHaveClass('active')
+    })
+
+    const callsAfterFirstTasksSwitch = global.fetch.mock.calls.length
+    // Tasks tab loads on first mount (tasks array was empty)
+    expect(callsAfterFirstTasksSwitch).toBeGreaterThan(callsAfterDashboard)
+
+    // Switch back to Dashboard tab
+    await user.click(screen.getByRole('button', { name: /dashboard/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Scheduler Status')).toBeInTheDocument()
+    })
+
+    const callsAfterReturnToDashboard = global.fetch.mock.calls.length
+    // CRITICAL: Dashboard should NOT re-fetch (state was preserved)
+    expect(callsAfterReturnToDashboard).toBe(callsAfterFirstTasksSwitch)
+
+    // Switch to Tasks tab AGAIN
+    await user.click(screen.getByRole('button', { name: /tasks/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /tasks/i })).toHaveClass('active')
+    })
+
+    const callsAfterSecondTasksSwitch = global.fetch.mock.calls.length
+    // CRITICAL: Tasks should NOT re-fetch (state was preserved from first visit)
+    expect(callsAfterSecondTasksSwitch).toBe(callsAfterReturnToDashboard)
+
+    // Verify data is still displayed after all tab switches
+    await user.click(screen.getByRole('button', { name: /dashboard/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Scheduler Status')).toBeInTheDocument()
+    })
+  })
+
   test('loads and displays dashboard data', async () => {
     render(<App />)
 

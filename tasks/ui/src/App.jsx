@@ -23,6 +23,14 @@ function App() {
   const [notification, setNotification] = useState(null)
   const [currentUserEmail, setCurrentUserEmail] = useState(null)
 
+  // Lifted state for dashboard (persists across tab switches)
+  const [dashboardData, setDashboardData] = useState(null)
+  const [dashboardLoading, setDashboardLoading] = useState(false)
+
+  // Lifted state for tasks (persists across tab switches)
+  const [tasks, setTasks] = useState([])
+  const [tasksLoading, setTasksLoading] = useState(false)
+
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
 
@@ -137,8 +145,24 @@ function App() {
       </header>
 
       <main className="main-content">
-        {activeTab === 'dashboard' && <DashboardContent showNotification={showNotification} />}
-        {activeTab === 'tasks' && <TasksContent showNotification={showNotification} />}
+        {activeTab === 'dashboard' && (
+          <DashboardContent
+            showNotification={showNotification}
+            data={dashboardData}
+            setData={setDashboardData}
+            loading={dashboardLoading}
+            setLoading={setDashboardLoading}
+          />
+        )}
+        {activeTab === 'tasks' && (
+          <TasksContent
+            showNotification={showNotification}
+            tasks={tasks}
+            setTasks={setTasks}
+            loading={tasksLoading}
+            setLoading={setTasksLoading}
+          />
+        )}
         {activeTab === 'credentials' && <CredentialsManager />}
       </main>
 
@@ -165,18 +189,21 @@ function App() {
 }
 
 // Dashboard Component with Real API Data
-function DashboardContent() {
-  const [loading, setLoading] = useState(false)
+function DashboardContent({ showNotification, data, setData, loading, setLoading }) {
   const [showAllRuns, setShowAllRuns] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const recordsPerPage = 20
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
-  const [data, setData] = useState({
-    jobs: [],
-    taskRuns: [],
-    scheduler: {}
-  })
+
+  // Initialize data if null
+  if (!data) {
+    data = {
+      jobs: [],
+      taskRuns: [],
+      scheduler: {}
+    }
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -214,9 +241,11 @@ function DashboardContent() {
     }
   }
 
-  // Load data on component mount
+  // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    loadData()
+    if (!data || (data.jobs.length === 0 && data.taskRuns.length === 0 && !loading)) {
+      loadData()
+    }
   }, [])
 
   // Auto-refresh effect
@@ -234,7 +263,7 @@ function DashboardContent() {
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
-  }, [autoRefresh, refreshInterval])
+  }, [autoRefresh])
 
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh)
@@ -358,9 +387,7 @@ function DashboardContent() {
 }
 
 // Full Tasks Component with Management
-function TasksContent({ showNotification }) {
-  const [loading, setLoading] = useState(false)
-  const [tasks, setTasks] = useState([])
+function TasksContent({ showNotification, tasks, setTasks, loading, setLoading }) {
   const [actionLoading, setActionLoading] = useState({})
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -385,9 +412,11 @@ function TasksContent({ showNotification }) {
     }
   }
 
-  // Load data on component mount
+  // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    loadTasks()
+    if (tasks.length === 0 && !loading) {
+      loadTasks()
+    }
   }, [])
 
   // Auto-refresh effect
@@ -405,7 +434,7 @@ function TasksContent({ showNotification }) {
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
-  }, [autoRefresh, refreshInterval])
+  }, [autoRefresh])
 
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh)
