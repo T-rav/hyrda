@@ -214,20 +214,55 @@ function AddCredentialModal({ onClose, onSuccess }) {
   }
 
   return (
-    <div className="glass-card">
-      <div className="card-header d-flex justify-content-between align-items-center">
-        <div className="header-title">
-          <Key size={20} />
-          <h5 className="mb-0">Add Google OAuth Credential</h5>
-        </div>
-        <button
-          type="button"
-          className="btn-close"
-          onClick={onClose}
-          aria-label="Close"
-        ></button>
-      </div>
-      <div className="card-body">
+    <>
+      {/* Modal backdrop */}
+      <div
+        className="modal-backdrop show"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 1040
+        }}
+        onClick={onClose}
+      ></div>
+
+      {/* Modal dialog */}
+      <div
+        className="modal show"
+        tabIndex="-1"
+        role="dialog"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          overflow: 'auto',
+          zIndex: 1050
+        }}
+      >
+        <div className="modal-dialog" role="document" style={{ margin: 0, maxWidth: '600px', width: '90%' }}>
+          <div className="modal-content glass-card">
+            <div className="modal-header">
+              <div className="header-title">
+                <Key size={20} />
+                <h5 className="modal-title">Add Google OAuth Credential</h5>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={onClose}
+                aria-label="Close"
+              ></button>
+            </div>
+            <div className="modal-body">
               <div className="alert alert-info">
                 <AlertCircle size={16} className="me-2" />
                 <small>
@@ -262,7 +297,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               )}
             </div>
-            <div className="card-footer d-flex justify-content-end gap-2">
+            <div className="modal-footer">
               {!authInProgress ? (
                 <>
                   <button
@@ -283,7 +318,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
                   </button>
                 </>
               ) : (
-                <div className="alert alert-info mb-0">
+                <div className="alert alert-info mb-0 w-100">
                   <div className="spinner-border spinner-border-sm me-2" role="status"></div>
                   Waiting for Google authentication...
                   <button
@@ -296,7 +331,10 @@ function AddCredentialModal({ onClose, onSuccess }) {
                 </div>
               )}
             </div>
-    </div>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
