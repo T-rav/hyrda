@@ -80,6 +80,19 @@ def _discover_agents_from_langgraph() -> list[dict]:
                     agent_data["description"] = (
                         "Deep research agent for comprehensive company analysis"
                     )
+                if not metadata.get("aliases"):
+                    agent_data["aliases"] = ["research", "deep_research"]
+
+            # Special case: "help" agent metadata
+            if agent_name == "help":
+                if not metadata.get("display_name"):
+                    agent_data["display_name"] = "Help Agent"
+                if not metadata.get("description"):
+                    agent_data["description"] = (
+                        "List available bot agents and their aliases (filtered by your access)"
+                    )
+                if not metadata.get("aliases"):
+                    agent_data["aliases"] = ["help", "agents"]
 
             agents.append(agent_data)
 
