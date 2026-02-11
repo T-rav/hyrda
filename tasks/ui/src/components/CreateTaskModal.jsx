@@ -216,7 +216,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 <Activity size={16} className="me-1" />
                 Schedule
               </label>
-              <div className="row">
+              <div className="row align-items-end">
                 <div className="col-md-4">
                   <select
                     className="form-select"
