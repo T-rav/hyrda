@@ -216,7 +216,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                 <Activity size={16} className="me-1" />
                 Schedule
               </label>
-              <div className="row align-items-end">
+              <div className="row">
                 <div className="col-md-4">
                   <select
                     className="form-select"
@@ -308,10 +308,6 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                           </button>
                         ))}
                       </div>
-                      <label htmlFor="cronExpression" className="form-label">
-                        <Activity size={16} className="me-1" />
-                        Cron Expression
-                      </label>
                       <input
                         type="text"
                         className="form-control"
@@ -321,17 +317,13 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                         placeholder="0 0 * * *"
                         title="Cron expression (minute hour day month day_of_week)"
                       />
-                      <div className="form-text">
+                      <div className="form-text mt-1">
                         <small>Format: minute hour day month day_of_week (e.g., &quot;0 0 * * *&quot; for daily at midnight)</small>
                       </div>
                     </div>
                   )}
                   {triggerType === 'date' && (
                     <div>
-                      <label htmlFor="runDate" className="form-label">
-                        <Activity size={16} className="me-1" />
-                        Run Date & Time
-                      </label>
                       <input
                         type="datetime-local"
                         className="form-control"
@@ -339,7 +331,7 @@ function CreateTaskModal({ onClose, onTaskCreated }) {
                         value={runDate}
                         onChange={(e) => setRunDate(e.target.value)}
                       />
-                      <div className="form-text">
+                      <div className="form-text mt-1">
                         <small>Select the specific date and time to run this task</small>
                       </div>
                     </div>
