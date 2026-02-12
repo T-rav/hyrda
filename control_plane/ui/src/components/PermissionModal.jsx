@@ -106,7 +106,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="btn-outline-secondary">
+          <button onClick={onClose} className="btn btn-outline-secondary">
             Close
           </button>
         </div>

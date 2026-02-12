@@ -25,7 +25,7 @@ function ConfirmDialog({ isOpen, onClose, onConfirm, title, message, confirmText
         </div>
 
         <div className="modal-footer">
-          <button type="button" className="btn-outline-secondary" onClick={onClose}>
+          <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
             Cancel
           </button>
           <button

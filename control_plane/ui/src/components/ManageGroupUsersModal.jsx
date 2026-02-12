@@ -122,7 +122,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="btn-outline-primary">
+          <button onClick={onClose} className="btn btn-outline-primary">
             Done
           </button>
         </div>

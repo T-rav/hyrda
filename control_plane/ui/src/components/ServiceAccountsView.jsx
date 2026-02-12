@@ -29,11 +29,11 @@ function ServiceAccountsView({
       <div className="section-header">
         <h2>Service Accounts ({activeAccounts.length})</h2>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <button className="btn-outline-secondary" onClick={onRefresh} disabled={loading}>
+          <button className="btn btn-outline-secondary" onClick={onRefresh} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
             Refresh
           </button>
-          <button className="btn-outline-primary" onClick={() => setShowCreateModal(true)}>
+          <button className="btn btn-outline-primary" onClick={() => setShowCreateModal(true)}>
             <Plus size={16} />
             Create Service Account
           </button>
@@ -52,7 +52,7 @@ function ServiceAccountsView({
               Service accounts allow external systems like HubSpot, Salesforce, or custom apps to call agents via API keys.
             </p>
             <button
-              className="btn-outline-primary btn-lg"
+              className="btn btn-outline-primary btn-lg"
               onClick={() => setShowCreateModal(true)}
               style={{ marginTop: '1.25rem' }}
             >

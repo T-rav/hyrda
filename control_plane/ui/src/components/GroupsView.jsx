@@ -154,7 +154,7 @@ function GroupsView({
         <div className="empty-state">
           <Users size={48} />
           <p>No groups created yet</p>
-          <button onClick={() => setShowCreateGroup(true)} className="btn-outline-primary">
+          <button onClick={() => setShowCreateGroup(true)} className="btn btn-outline-primary">
             Create Your First Group
           </button>
         </div>

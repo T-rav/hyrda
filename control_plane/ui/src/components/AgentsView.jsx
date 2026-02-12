@@ -19,7 +19,7 @@ function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, onF
     return (
       <div className="error-container">
         <p className="error">Error: {error}</p>
-        <button onClick={onRefresh} className="btn-outline-primary">
+        <button onClick={onRefresh} className="btn btn-outline-primary">
           Retry
         </button>
       </div>
@@ -30,7 +30,7 @@ function AgentsView({ agents, groups, loading, error, usageStats, onRefresh, onF
     <div className="content-section">
       <div className="section-header">
         <h2>Registered Agents ({agents.length})</h2>
-        <button onClick={onRefresh} className="btn-outline-secondary">
+        <button onClick={onRefresh} className="btn btn-outline-secondary">
           <RefreshCw size={16} />
           Refresh
         </button>
