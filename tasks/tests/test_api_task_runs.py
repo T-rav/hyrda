@@ -119,13 +119,13 @@ class TestListTaskRunsEndpoint:
         mock_context.__exit__.return_value = None
         mock_db_session.return_value = mock_context
 
-        # Request 500 items per page (should be capped at 100)
-        response = authenticated_client.get("/api/task-runs?per_page=500")
+        # Request 1000 items per page (should be capped at 500)
+        response = authenticated_client.get("/api/task-runs?per_page=1000")
 
         assert response.status_code == 200
         data = response.json()
-        # Should be silently capped at MAX_PAGE_SIZE (100)
-        assert data["pagination"]["per_page"] == 100
+        # Should be silently capped at MAX_PAGE_SIZE (500)
+        assert data["pagination"]["per_page"] == 500
 
     @patch("api.task_runs.get_db_session")
     def test_list_task_runs_with_custom_task_name(

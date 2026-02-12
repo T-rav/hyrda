@@ -265,7 +265,8 @@ class WebsiteScrapeJob(BaseJob):
             f"Checking/enqueueing jobs for {len(doc_ids)} discovered Google Docs..."
         )
 
-        from jobs.job_registry import get_job_registry
+        # Import here to avoid circular dependency
+        from jobs.job_registry import get_job_registry  # noqa: PLC0415
 
         job_registry = get_job_registry()
         created_count = 0
@@ -331,7 +332,7 @@ class WebsiteScrapeJob(BaseJob):
         exclude_patterns: list[str],
         auth_headers: dict[str, str] | None = None,
     ) -> list[str]:
-        # Import Crawlee only when needed (avoids import at top level)
+        # Import Crawlee only when needed
         import asyncio  # noqa: PLC0415
 
         from crawlee.crawlers import (  # noqa: PLC0415
@@ -450,9 +451,9 @@ class WebsiteScrapeJob(BaseJob):
         try:
             await crawler.run([start_url])
         except Exception as e:
-            logger.error(f"Crawler error: {e}")
-            import traceback
+            import traceback  # noqa: PLC0415
 
+            logger.error(f"Crawler error: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
 
         logger.info(
