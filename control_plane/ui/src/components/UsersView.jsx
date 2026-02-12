@@ -80,7 +80,7 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
               <td>
                 <button
                   onClick={() => handleAdminToggle(user)}
-                  className={`btn-small ${user.is_admin ? 'btn-danger' : 'btn-primary'}`}
+                  className={`btn btn-small ${user.is_admin ? 'btn-outline-danger' : 'btn-outline-primary'}`}
                   disabled={updatingAdmin === user.id || (!hasAdmins ? false : !isCurrentUserAdmin)}
                   title={!hasAdmins ? 'Create first admin' : (isCurrentUserAdmin ? 'Toggle admin status' : 'Only admins can change admin status')}
                   style={{ minWidth: '80px' }}

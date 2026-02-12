@@ -21,6 +21,7 @@ function CreateGroupModal({ onClose, onCreate }) {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const formId = 'create-group-form'
 
   // Auto-generate group_name from display_name (slugify)
   const generateGroupName = (displayName) => {
@@ -48,6 +49,28 @@ function CreateGroupModal({ onClose, onCreate }) {
 
   const isFormValid = formData.display_name.trim().length > 0
 
+  const footer = (
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={onClose}
+        disabled={isSubmitting}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        variant="primary"
+        isLoading={isSubmitting}
+        disabled={!isFormValid}
+        form={formId}
+      >
+        Create Group
+      </Button>
+    </>
+  )
+
   return (
     <Modal
       isOpen={true}
@@ -59,8 +82,10 @@ function CreateGroupModal({ onClose, onCreate }) {
         </>
       }
       size="md"
+      footer={footer}
+      hideDefaultFooter={true}
     >
-      <form onSubmit={handleSubmit}>
+      <form id={formId} onSubmit={handleSubmit}>
         <Input
           label="Group Name"
           value={formData.display_name}
@@ -79,25 +104,6 @@ function CreateGroupModal({ onClose, onCreate }) {
           rows={3}
           hint="Optional description to help identify this group"
         />
-
-        <div className="modal-footer" style={{ margin: '0 -1.5rem -1.5rem' }}>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={onClose}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={isSubmitting}
-            disabled={!isFormValid}
-          >
-            Create Group
-          </Button>
-        </div>
       </form>
     </Modal>
   )

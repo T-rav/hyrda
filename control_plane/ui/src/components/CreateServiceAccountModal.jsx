@@ -56,7 +56,7 @@ function CreateServiceAccountModal({ onClose, onCreate, agents, createdApiKey, o
               <Key size={24} />
               Service Account Created!
             </h2>
-            <button className="btn-icon" onClick={onClose}>
+            <button className="modal-close" onClick={onClose}>
               <X size={20} />
             </button>
           </div>
@@ -102,7 +102,7 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
             </div>
           </div>
 
-          <div className="modal-footer">
+          <div className="modal-actions">
             <button
               className="btn btn-outline-primary"
               onClick={() => {
@@ -121,13 +121,13 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
   // Otherwise, show the creation form
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>
             <Key size={24} />
             Create Service Account
           </h2>
-          <button className="btn-icon" onClick={onClose}>
+          <button className="modal-close" onClick={onClose}>
             <X size={20} />
           </button>
         </div>
@@ -254,7 +254,7 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
             </div>
           </div>
 
-          <div className="modal-footer">
+          <div className="modal-actions">
             <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
               Cancel
             </button>

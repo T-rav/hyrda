@@ -427,7 +427,13 @@ body {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+}
+
+.modal-content > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .modal-content.modal-sm {
@@ -450,8 +456,8 @@ body {
 }
 
 .modal-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e9ecef;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -460,9 +466,9 @@ body {
 
 .modal-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: #1a202c;
+  color: #1f2937;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -471,19 +477,18 @@ body {
 .modal-close {
   background: none;
   border: none;
-  padding: 0.5rem;
+  padding: 0.25rem;
   cursor: pointer;
-  border-radius: 0.375rem;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #6b7280;
   transition: all 0.2s;
+  margin: -0.25rem;
 }
 
 .modal-close:hover {
-  background: #f3f4f6;
-  color: #374151;
+  color: #1f2937;
 }
 
 .modal-close-btn {
@@ -492,8 +497,9 @@ body {
 
 .modal-body {
   padding: 1.5rem;
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .modal-footer {
@@ -502,7 +508,18 @@ body {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  background: #f8f9fa;
+  min-height: fit-content;
+}
+
+.modal-actions {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex: 0 0 auto;
   background: #f8f9fa;
 }
 

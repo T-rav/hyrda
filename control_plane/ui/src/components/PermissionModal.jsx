@@ -83,7 +83,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
                     {!hasAccess && (
                       <button
                         onClick={() => handleGrant(agent.name)}
-                        className="btn-sm btn-outline-primary"
+                        className="btn btn-sm btn-outline-primary"
                       >
                         <CheckCircle size={14} />
                         Grant
@@ -92,7 +92,7 @@ function PermissionModal({ title, agents, userPermissions = [], onClose, onGrant
                     {hasAccess && (
                       <button
                         onClick={() => handleRevoke(agent.name)}
-                        className="btn-sm btn-outline-danger"
+                        className="btn btn-sm btn-outline-danger"
                       >
                         <Trash2 size={14} />
                         Revoke

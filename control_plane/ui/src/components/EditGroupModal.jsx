@@ -22,29 +22,33 @@ function EditGroupModal({ group, onClose, onUpdate }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label>Group Name</label>
-            <input
-              type="text"
-              value={formData.display_name}
-              onChange={e => setFormData({ ...formData, display_name: e.target.value })}
-              placeholder="Data Analysts"
-              required
-            />
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label>Group Name</label>
+              <input
+                type="text"
+                className="form-control"
+                value={formData.display_name}
+                onChange={e => setFormData({ ...formData, display_name: e.target.value })}
+                placeholder="Data Analysts"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Description (optional)</label>
+              <textarea
+                className="form-control"
+                value={formData.description}
+                onChange={e => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Team members who analyze data"
+                rows={3}
+              />
+            </div>
           </div>
 
-          <div className="form-group">
-            <label>Description (optional)</label>
-            <textarea
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Team members who analyze data"
-              rows={3}
-            />
-          </div>
-
-          <div className="modal-actions">
+          <div className="modal-footer">
             <button type="button" onClick={onClose} className="btn btn-outline-secondary">
               Cancel
             </button>
