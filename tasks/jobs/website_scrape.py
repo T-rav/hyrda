@@ -3,7 +3,9 @@
 import contextlib
 import json
 import logging
+import re
 import ssl
+import tempfile
 import uuid as uuid_lib
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -217,6 +219,129 @@ class WebsiteScrapeJob(BaseJob):
 
         return filtered
 
+    def _extract_google_doc_id(self, url: str) -> tuple[str | None, str | None]:
+        """
+        Extract Google Workspace document ID and type from URL.
+
+        Returns:
+            Tuple of (document_id, doc_type) or (None, None) if not a Google doc
+            doc_type can be: 'document', 'spreadsheets', 'presentation', 'file'
+        """
+        # Patterns for Google Workspace URLs
+        patterns = [
+            (r"docs\.google\.com/document/d/([a-zA-Z0-9_-]+)", "document"),
+            (r"docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)", "spreadsheets"),
+            (r"docs\.google\.com/presentation/d/([a-zA-Z0-9_-]+)", "presentation"),
+            (r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", "file"),
+        ]
+
+        for pattern, doc_type in patterns:
+            match = re.search(pattern, url)
+            if match:
+                doc_id = match.group(1)
+                logger.debug(f"Detected Google {doc_type}: {doc_id} from {url}")
+                return doc_id, doc_type
+
+        return None, None
+
+    async def _ingest_google_docs(
+        self, doc_ids: set[str], token_json: str, metadata: dict | None = None
+    ) -> tuple[int, int, int]:
+        """
+        Ingest Google Workspace documents using the existing GDrive infrastructure.
+
+        Args:
+            doc_ids: Set of Google document IDs to ingest
+            token_json: OAuth token JSON string
+            metadata: Additional metadata to add to documents
+
+        Returns:
+            Tuple of (success_count, error_count, skipped_count)
+        """
+        if not doc_ids:
+            return 0, 0, 0
+
+        logger.info(f"Ingesting {len(doc_ids)} Google Workspace documents...")
+
+        try:
+            from services.gdrive.ingestion_orchestrator import IngestionOrchestrator
+
+            # Create temporary token file for orchestrator
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".json", delete=False
+            ) as f:
+                f.write(token_json)
+                token_file = f.name
+
+            try:
+                # Get OpenAI API key for audio/video transcription
+                import os
+
+                openai_api_key = os.getenv("OPENAI_API_KEY")
+
+                # Initialize orchestrator
+                orchestrator = IngestionOrchestrator(
+                    credentials_file=None,
+                    token_file=token_file,
+                    openai_api_key=openai_api_key,
+                )
+
+                # Authenticate
+                if not orchestrator.authenticate():
+                    raise RuntimeError("Google Drive authentication failed")
+
+                # Set services (reuse existing vector and embedding clients)
+                orchestrator.set_services(
+                    self.vector_client,
+                    self.embedding_client,
+                    llm_service=None,
+                    enable_contextual_retrieval=False,
+                )
+
+                # Get file info for each document ID
+                files = []
+                for doc_id in doc_ids:
+                    try:
+                        file_info = (
+                            orchestrator.google_drive_client.api_service.service.files()
+                            .get(
+                                fileId=doc_id,
+                                fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime",
+                                supportsAllDrives=True,
+                            )
+                            .execute()
+                        )
+                        # Add folder path context
+                        file_info["folder_path"] = "/website_scrape"
+                        file_info["folder_id"] = (
+                            file_info.get("parents", [""])[0]
+                            if file_info.get("parents")
+                            else ""
+                        )
+                        files.append(file_info)
+                    except Exception as e:
+                        logger.warning(f"Failed to get info for doc {doc_id}: {e}")
+
+                # Ingest files using orchestrator (includes deduplication)
+                (
+                    success_count,
+                    error_count,
+                    skipped_count,
+                ) = await orchestrator.ingest_files(files, metadata=metadata)
+
+                return success_count, error_count, skipped_count
+
+            finally:
+                # Clean up temporary token file
+                import os
+
+                if os.path.exists(token_file):
+                    os.unlink(token_file)
+
+        except Exception as e:
+            logger.error(f"Error ingesting Google docs: {e}")
+            return 0, len(doc_ids), 0
+
     async def _crawl_site(
         self,
         start_url: str,
@@ -238,6 +363,9 @@ class WebsiteScrapeJob(BaseJob):
 
         # Track discovered URLs
         discovered_urls = []
+
+        # Track discovered Google Docs
+        discovered_google_docs = set()
 
         # Track rate limit backoff
         rate_limit_backoff_count = 0
@@ -262,6 +390,19 @@ class WebsiteScrapeJob(BaseJob):
             logger.debug(
                 f"Discovered: {url} ({len(discovered_urls)}/{max_pages or 'unlimited'})"
             )
+
+            # Check if this URL contains Google Docs links
+            soup = context.soup
+            if soup:
+                # Find all links in the page
+                for link in soup.find_all("a", href=True):
+                    href = link["href"]
+                    doc_id, doc_type = self._extract_google_doc_id(href)
+                    if doc_id:
+                        discovered_google_docs.add(doc_id)
+                        logger.info(
+                            f"📄 Found Google {doc_type}: {doc_id} on page {url}"
+                        )
 
             # Enqueue links from this page (Crawlee handles deduplication)
             await context.enqueue_links(
@@ -328,8 +469,11 @@ class WebsiteScrapeJob(BaseJob):
             except Exception as e:
                 logger.error(f"Crawler error: {e}")
 
-        logger.info(f"Crawling complete: discovered {len(discovered_urls)} pages")
-        return discovered_urls
+        logger.info(
+            f"Crawling complete: discovered {len(discovered_urls)} pages, "
+            f"{len(discovered_google_docs)} Google Docs"
+        )
+        return discovered_urls, discovered_google_docs
 
     async def _execute_job(self) -> dict[str, Any]:
         tracking_service = WebPageTrackingService()
@@ -452,13 +596,16 @@ class WebsiteScrapeJob(BaseJob):
             alternative_url = f"{website_url.rstrip('/')}/sitemap_index.xml"
             urls = await self._fetch_sitemap(alternative_url, auth_headers)
 
+        # Track discovered Google Docs
+        discovered_google_docs = set()
+
         # If no sitemap found, fall back to manual crawling
         if not urls:
             logger.info(
                 "No sitemap found, falling back to manual site crawling from base URL"
             )
             # website_url is guaranteed to be a string by validate_params()
-            urls = await self._crawl_site(
+            urls, discovered_google_docs = await self._crawl_site(
                 start_url=str(website_url),
                 max_pages=max_pages,
                 include_patterns=include_patterns,
@@ -676,16 +823,78 @@ class WebsiteScrapeJob(BaseJob):
                 )
                 # Don't fail entire job on tracking errors
 
-        total_processed = len(scraped_pages) + total_skipped + failed_count
+        # Ingest discovered Google Docs if any and auth is available
+        google_docs_success = 0
+        google_docs_error = 0
+        google_docs_skipped = 0
+
+        if discovered_google_docs and credential_id:
+            logger.info(
+                f"📄 Ingesting {len(discovered_google_docs)} discovered Google Workspace documents..."
+            )
+            try:
+                # Get token for Google Docs ingestion (same as used for crawling)
+                with get_db_session() as db_session:
+                    credential = (
+                        db_session.query(OAuthCredential)
+                        .filter(OAuthCredential.credential_id == credential_id)
+                        .first()
+                    )
+                    if credential:
+                        encryption_service = get_encryption_service()
+                        token_json = encryption_service.decrypt(
+                            credential.encrypted_token
+                        )
+
+                        (
+                            google_docs_success,
+                            google_docs_error,
+                            google_docs_skipped,
+                        ) = await self._ingest_google_docs(
+                            discovered_google_docs, token_json, metadata
+                        )
+
+                        logger.info(
+                            f"Google Docs ingestion complete: success={google_docs_success}, "
+                            f"skipped={google_docs_skipped}, error={google_docs_error}"
+                        )
+            except Exception as e:
+                logger.error(f"Error ingesting Google Docs: {e}")
+                google_docs_error = len(discovered_google_docs)
+        elif discovered_google_docs and not credential_id:
+            logger.warning(
+                f"Found {len(discovered_google_docs)} Google Docs but no credential_id provided - skipping"
+            )
+
+        total_processed = (
+            len(scraped_pages)
+            + total_skipped
+            + failed_count
+            + len(discovered_google_docs)
+        )
+        total_success = len(pages_to_embed) + google_docs_success
+        total_failed = failed_count + google_docs_error
+
+        message_parts = [
+            f"Embedded {len(pages_to_embed)} new/changed pages",
+            f"skipped {not_modified_count} (304)",
+            f"{skipped_count} (hash)",
+            f"removed {removed_count}",
+        ]
+        if discovered_google_docs:
+            message_parts.append(
+                f"Google Docs: {google_docs_success} success, {google_docs_skipped} skipped, {google_docs_error} error"
+            )
+
         return {
             # Standardized fields for task run tracking
             "records_processed": total_processed,
-            "records_success": len(pages_to_embed),
-            "records_failed": failed_count,
+            "records_success": total_success,
+            "records_failed": total_failed,
             # Job-specific details
-            "records_skipped": total_skipped,
+            "records_skipped": total_skipped + google_docs_skipped,
             "success": True,
-            "message": f"Embedded {len(pages_to_embed)} new/changed, skipped {not_modified_count} (304), {skipped_count} (hash), removed {removed_count}",
+            "message": ", ".join(message_parts),
             "website_url": website_url,
             "sitemap_url": sitemap_url,
             "pages_scraped": len(scraped_pages),
@@ -698,6 +907,10 @@ class WebsiteScrapeJob(BaseJob):
             "pages_indexed": success_count,
             "index_errors": error_count,
             "force_rescrape": force_rescrape,
+            "google_docs_discovered": len(discovered_google_docs),
+            "google_docs_success": google_docs_success,
+            "google_docs_skipped": google_docs_skipped,
+            "google_docs_error": google_docs_error,
             "details": {
                 "total_urls_in_sitemap": len(urls),
                 "urls_filtered_out": len(urls)
