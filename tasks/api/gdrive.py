@@ -64,11 +64,10 @@ async def initiate_gdrive_auth(request: Request):
         if ingest_path not in sys.path:
             sys.path.insert(0, ingest_path)
 
-        # Define scopes (includes Drive + Sites for website scraping)
+        # Define scopes
         scopes = [
             "https://www.googleapis.com/auth/drive.readonly",
             "https://www.googleapis.com/auth/drive.metadata.readonly",
-            "https://www.googleapis.com/auth/sites.readonly",  # For Google Sites access
         ]
 
         # Get OAuth app credentials from environment (shared for all users)
@@ -146,11 +145,10 @@ async def gdrive_auth_callback(request: Request):
         if ingest_path not in sys.path:
             sys.path.insert(0, ingest_path)
 
-        # Define scopes (includes Drive + Sites for website scraping)
+        # Define scopes
         scopes = [
             "https://www.googleapis.com/auth/drive.readonly",
             "https://www.googleapis.com/auth/drive.metadata.readonly",
-            "https://www.googleapis.com/auth/sites.readonly",  # For Google Sites access
         ]
 
         # Get OAuth app credentials from environment (shared for all users)
