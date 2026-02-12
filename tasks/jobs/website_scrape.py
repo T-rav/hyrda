@@ -430,7 +430,6 @@ class WebsiteScrapeJob(BaseJob):
             crawler_config = {
                 "max_requests_per_crawl": max_pages,
                 "max_request_retries": 5,
-                "max_requests_per_minute": 30,
                 "request_handler": request_handler,
                 "error_handler": error_handler,
                 # Configure default headers for all requests
@@ -442,7 +441,6 @@ class WebsiteScrapeJob(BaseJob):
             crawler = BeautifulSoupCrawler(
                 max_requests_per_crawl=max_pages,
                 max_request_retries=5,
-                max_requests_per_minute=30,
                 request_handler=request_handler,
                 error_handler=error_handler,
             )
