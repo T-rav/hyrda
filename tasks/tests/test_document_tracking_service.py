@@ -151,7 +151,9 @@ class TestWebPageTrackingService:
 
         service = WebPageTrackingService()
 
-        with patch("services.web_page_tracking_service.get_db_session") as mock_session:
+        with patch(
+            "services.web_page_tracking_service.get_data_db_session"
+        ) as mock_session:
             mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = None
 
             headers = service.get_conditional_headers("https://example.com/page")
@@ -171,7 +173,9 @@ class TestWebPageTrackingService:
         mock_page.last_modified = "Mon, 01 Jan 2024 12:00:00 GMT"
         mock_page.etag = None
 
-        with patch("services.web_page_tracking_service.get_db_session") as mock_session:
+        with patch(
+            "services.web_page_tracking_service.get_data_db_session"
+        ) as mock_session:
             mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
 
             headers = service.get_conditional_headers("https://example.com/page")
@@ -191,7 +195,9 @@ class TestWebPageTrackingService:
         mock_page.last_modified = None
         mock_page.etag = '"abc123"'
 
-        with patch("services.web_page_tracking_service.get_db_session") as mock_session:
+        with patch(
+            "services.web_page_tracking_service.get_data_db_session"
+        ) as mock_session:
             mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
 
             headers = service.get_conditional_headers("https://example.com/page")
@@ -211,7 +217,9 @@ class TestWebPageTrackingService:
         mock_page.last_modified = "Mon, 01 Jan 2024 12:00:00 GMT"
         mock_page.etag = '"abc123"'
 
-        with patch("services.web_page_tracking_service.get_db_session") as mock_session:
+        with patch(
+            "services.web_page_tracking_service.get_data_db_session"
+        ) as mock_session:
             mock_session.return_value.__enter__.return_value.query.return_value.filter_by.return_value.first.return_value = mock_page
 
             headers = service.get_conditional_headers("https://example.com/page")
