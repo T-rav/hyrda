@@ -42,24 +42,23 @@ function GroupCard({ group, onEdit, onManageUsers, onManageAgents, onDelete }) {
 
       <div className="group-footer">
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn-link" onClick={() => onEdit(group)}>
+          <button className="btn btn-sm btn-outline-primary" onClick={() => onEdit(group)}>
             <Edit size={16} />
             Edit
           </button>
-          <button className="btn-link" onClick={() => onManageUsers(group)}>
+          <button className="btn btn-sm btn-outline-primary" onClick={() => onManageUsers(group)}>
             <UserPlus size={16} />
             Manage Users
           </button>
-          <button className="btn-link" onClick={() => onManageAgents(group)}>
+          <button className="btn btn-sm btn-outline-primary" onClick={() => onManageAgents(group)}>
             <Bot size={16} />
             Manage Agents
           </button>
         </div>
         {group.group_name !== 'all_users' && (
           <button
-            className="btn-link"
+            className="btn btn-sm btn-outline-danger"
             onClick={handleDelete}
-            style={{ color: '#dc2626' }}
             title="Delete group"
           >
             <Trash2 size={16} />

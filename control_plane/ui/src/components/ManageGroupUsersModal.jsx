@@ -94,7 +94,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
                     {!isSystemGroup && !isInGroup && (
                       <button
                         onClick={() => handleAdd(user.slack_user_id)}
-                        className="btn-sm btn-primary"
+                        className="btn-sm btn-outline-primary"
                       >
                         <Plus size={14} />
                         Add
@@ -103,7 +103,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
                     {!isSystemGroup && isInGroup && (
                       <button
                         onClick={() => handleRemove(user.slack_user_id)}
-                        className="btn-sm btn-danger"
+                        className="btn-sm btn-outline-danger"
                       >
                         <Trash2 size={14} />
                         Remove
@@ -122,7 +122,7 @@ function ManageGroupUsersModal({ group, users, onClose, onAddUser, onRemoveUser 
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="btn-primary">
+          <button onClick={onClose} className="btn-outline-primary">
             Done
           </button>
         </div>

@@ -45,10 +45,10 @@ function EditGroupModal({ group, onClose, onUpdate }) {
           </div>
 
           <div className="modal-actions">
-            <button type="button" onClick={onClose} className="btn-secondary">
+            <button type="button" onClick={onClose} className="btn-outline-secondary">
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
+            <button type="submit" className="btn-outline-primary">
               Save Changes
             </button>
           </div>

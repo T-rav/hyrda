@@ -146,7 +146,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                     {!hasAccess && !agent.is_system && (
                       <button
                         onClick={() => handleGrant(group.group_name, agent.name)}
-                        className="btn-sm btn-primary"
+                        className="btn-sm btn-outline-primary"
                       >
                         <Plus size={14} />
                         Grant
@@ -155,7 +155,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                     {hasAccess && !(agent.is_system && isSystemGroup) && (
                       <button
                         onClick={() => handleRevoke(group.group_name, agent.name)}
-                        className="btn-sm btn-danger"
+                        className="btn-sm btn-outline-danger"
                       >
                         <Trash2 size={14} />
                         Revoke
@@ -176,7 +176,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
         </div>
 
         <div className="modal-actions">
-          <button onClick={onClose} className="btn-primary">
+          <button onClick={onClose} className="btn-outline-primary">
             Done
           </button>
         </div>

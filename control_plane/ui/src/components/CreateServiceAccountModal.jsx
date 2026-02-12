@@ -104,7 +104,7 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
 
           <div className="modal-footer">
             <button
-              className="btn-primary"
+              className="btn-outline-primary"
               onClick={() => {
                 onAcknowledge()
                 onClose()
@@ -172,7 +172,7 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
                 <label style={{ margin: 0 }}>Allowed Agents</label>
                 <button
                   type="button"
-                  className="btn-secondary btn-sm"
+                  className="btn-outline-secondary btn-sm"
                   onClick={() => {
                     const nonSystemAgents = agents.filter((agent) => !agent.is_system)
                     const allAgentNames = nonSystemAgents.map((agent) => agent.name)
@@ -255,10 +255,10 @@ curl -X POST http://agent-service:8000/api/agents/profile_researcher/invoke \\
           </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-outline-secondary" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
+            <button type="submit" className="btn-outline-primary">
               <Key size={16} />
               Create Service Account
             </button>
