@@ -398,7 +398,7 @@ async def get_agent_usage(agent_name: str) -> dict[str, Any]:
 
         agent_service_url = os.getenv("AGENT_SERVICE_URL", "http://agent_service:8000")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=False) as client:
             response = await client.get(f"{agent_service_url}/api/metrics", timeout=5)
 
         if response.status_code != 200:
