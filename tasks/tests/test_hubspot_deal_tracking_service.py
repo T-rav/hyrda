@@ -157,7 +157,7 @@ class TestDealChangeDetection:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -188,7 +188,7 @@ class TestDealChangeDetection:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -216,7 +216,7 @@ class TestDealChangeDetection:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -243,7 +243,7 @@ class TestRecordDealIngestion:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -273,7 +273,7 @@ class TestRecordDealIngestion:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -302,7 +302,7 @@ class TestRecordDealIngestion:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -348,7 +348,7 @@ class TestGetDealByHubspotId:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -369,7 +369,7 @@ class TestGetDealByHubspotId:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -392,7 +392,7 @@ class TestMarkDealRemoved:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -412,7 +412,7 @@ class TestMarkDealRemoved:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
@@ -451,7 +451,7 @@ class TestGetAllSyncedDeals:
         mock_session.query.return_value = mock_query
 
         with patch(
-            "services.hubspot_deal_tracking_service.get_db_session"
+            "services.hubspot_deal_tracking_service.get_data_db_session"
         ) as mock_get_session:
             mock_get_session.return_value.__enter__.return_value = mock_session
 
