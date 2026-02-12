@@ -109,7 +109,7 @@ describe('useTasksData', () => {
       fetchMock
         .mockResolvedValueOnce({ ok: true, json: async () => ({ running: true }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ jobs: [{ id: '1' }] }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ task_runs: [{ id: 'r1' }] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ task_runs: [{ id: 'r1' }], pagination: { total: 1 } }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ rag_performance: { queries: 100 } }) })
 
       const { result } = renderHook(() => useTasksData())
@@ -125,7 +125,47 @@ describe('useTasksData', () => {
       expect(result.current.schedulerData).toEqual({ running: true })
       expect(result.current.tasksData).toEqual([{ id: '1' }])
       expect(result.current.taskRunsData).toEqual([{ id: 'r1' }])
+      expect(result.current.taskRunsTotal).toEqual(1)
       expect(result.current.ragMetrics).toEqual({ queries: 100 })
+    })
+
+    it('should pass pagination parameters to task-runs endpoint', async () => {
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ running: true }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ jobs: [{ id: '1' }] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ task_runs: [{ id: 'r1' }], pagination: { total: 50 } }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ rag_performance: { queries: 100 } }) })
+
+      const { result } = renderHook(() => useTasksData())
+
+      await act(async () => {
+        await result.current.refreshData(2, 100)
+      })
+
+      // Find the task-runs call
+      const taskRunsCall = fetchMock.mock.calls.find(
+        call => call[0].includes('/task-runs')
+      )
+
+      expect(taskRunsCall).toBeDefined()
+      expect(taskRunsCall[0]).toContain('page=2')
+      expect(taskRunsCall[0]).toContain('per_page=100')
+    })
+
+    it('should set total from pagination response', async () => {
+      fetchMock
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ running: true }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ jobs: [{ id: '1' }] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ task_runs: [{ id: 'r1' }], pagination: { total: 4647 } }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ rag_performance: { queries: 100 } }) })
+
+      const { result } = renderHook(() => useTasksData())
+
+      await act(async () => {
+        await result.current.refreshData()
+      })
+
+      expect(result.current.taskRunsTotal).toEqual(4647)
     })
 
   })

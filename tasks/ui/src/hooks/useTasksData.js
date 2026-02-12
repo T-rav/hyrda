@@ -8,6 +8,8 @@ const API_BASE = '/api'
 // Bot API base URL for RAG metrics (external service, use absolute URL)
 const BOT_API_BASE = 'http://localhost:8080/api'
 
+const DEFAULT_PER_PAGE = 50
+
 export function useTasksData() {
   const [schedulerData, setSchedulerData] = useState({})
   const [tasksData, setTasksData] = useState([])

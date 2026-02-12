@@ -8,7 +8,7 @@ const statusStyles = {
   cancelled: { class: 'bg-secondary', icon: 'ban' }
 }
 
-function TasksTable({ taskRuns, showAll, currentPage, recordsPerPage, onPageChange }) {
+function TasksTable({ taskRuns, showAll, currentPage, recordsPerPage, onPageChange, total = 0 }) {
   if (!taskRuns || taskRuns.length === 0) {
     return (
       <div className="table-container">
@@ -20,20 +20,16 @@ function TasksTable({ taskRuns, showAll, currentPage, recordsPerPage, onPageChan
     )
   }
 
-  // Calculate displayed runs
-  let displayedRuns
-  if (showAll) {
-    const startIndex = (currentPage - 1) * recordsPerPage
-    const endIndex = startIndex + recordsPerPage
-    displayedRuns = taskRuns.slice(startIndex, endIndex)
-  } else {
-    displayedRuns = taskRuns.slice(0, 5)
-  }
+  // Use provided total or fallback to current data length
+  const totalRecords = total || taskRuns.length
 
-  // Pagination info
-  const totalPages = Math.ceil(taskRuns.length / recordsPerPage)
+  // Display all runs since API already paginated
+  const displayedRuns = showAll ? taskRuns : taskRuns.slice(0, 5)
+
+  // Pagination info based on total from API
+  const totalPages = Math.ceil(totalRecords / recordsPerPage)
   const startRecord = (currentPage - 1) * recordsPerPage + 1
-  const endRecord = Math.min(currentPage * recordsPerPage, taskRuns.length)
+  const endRecord = Math.min(currentPage * recordsPerPage, totalRecords)
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A'
@@ -97,7 +93,7 @@ function TasksTable({ taskRuns, showAll, currentPage, recordsPerPage, onPageChan
         <div className="pagination-controls">
           <div className="pagination-info">
             <span className="text-muted">
-              Showing {startRecord}-{endRecord} of {taskRuns.length} runs
+              Showing {startRecord}-{endRecord} of {totalRecords.toLocaleString()} runs
             </span>
           </div>
           <nav className="pagination-nav">

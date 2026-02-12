@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   LayoutDashboard,
   ListChecks,
@@ -34,6 +34,11 @@ function Dashboard({ onError, setLoading }) {
     loadTaskRuns
   } = useTasksData()
 
+  // Update refresh function signature to accept per_page
+  const handleRefresh = useCallback(() => {
+    refreshData(currentPage, recordsPerPage)
+  }, [refreshData, currentPage, recordsPerPage])
+
   // Handle errors
   useEffect(() => {
     if (error) {
@@ -50,17 +55,19 @@ function Dashboard({ onError, setLoading }) {
   useEffect(() => {
     let interval
     if (autoRefresh) {
-      interval = setInterval(refreshData, 5000)
+      interval = setInterval(() => {
+        refreshData(currentPage, recordsPerPage)
+      }, 5000)
     }
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [autoRefresh, refreshData])
+  }, [autoRefresh, refreshData, currentPage, recordsPerPage])
 
-  // Initial load
+  // Initial load - fetch first page with correct page size
   useEffect(() => {
-    refreshData()
-  }, [refreshData])
+    refreshData(1, recordsPerPage)
+  }, [refreshData, recordsPerPage])
 
   const toggleAutoRefresh = () => {
     setAutoRefresh(!autoRefresh)
@@ -122,7 +129,7 @@ function Dashboard({ onError, setLoading }) {
             </button>
             <button
               className="btn btn-outline-secondary"
-              onClick={refreshData}
+              onClick={handleRefresh}
               disabled={loading}
             >
               <RefreshCw size={16} className={loading ? 'spinning' : ''} />
@@ -212,6 +219,7 @@ function Dashboard({ onError, setLoading }) {
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
           onPageChange={handlePageChange}
+          total={taskRunsTotal}
         />
       </div>
     </div>
