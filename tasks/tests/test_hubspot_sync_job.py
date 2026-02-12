@@ -1,6 +1,7 @@
 """Tests for HubSpot sync job (jobs/hubspot_sync.py).
 
-Tests focus on validation logic, parameter handling, and mocked API interactions.
+Tests focus on validation logic, parameter handling, mocked API interactions,
+document building, owner fetching, and vector ingestion.
 """
 
 import json
@@ -9,7 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from config.settings import TasksSettings
-from jobs.hubspot_sync import HubSpotSyncJob
+from jobs.hubspot_sync import DEAL_PROPERTIES, HubSpotSyncJob
 
 
 @pytest.fixture
@@ -39,6 +40,14 @@ class TestHubSpotSyncJobValidation:
         """Test job defines optional params correctly."""
         job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
         assert "limit" in job.OPTIONAL_PARAMS
+        assert "skip_vector_ingestion" in job.OPTIONAL_PARAMS
+
+    def test_skip_vector_ingestion_param(self, mock_settings):
+        """Test job accepts skip_vector_ingestion parameter."""
+        job = HubSpotSyncJob(
+            mock_settings, credential_id="test-cred", skip_vector_ingestion=True
+        )
+        assert job.params["skip_vector_ingestion"] is True
 
     def test_stores_credential_id(self, mock_settings):
         """Test job stores credential_id parameter."""
@@ -157,14 +166,37 @@ class TestHubSpotSyncJobExecution:
     @pytest.mark.asyncio
     async def test_execute_job_success(self, mock_settings):
         """Test successful job execution with mocked API."""
-        job = HubSpotSyncJob(mock_settings, credential_id="test-cred", limit=10)
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            limit=10,
+            skip_vector_ingestion=True,
+        )
 
-        # Mock credential loading
         with patch.object(job, "_load_credentials", return_value="test-token"):
-            # Mock the HTTP client
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "New Business",
+                        "stages": [
+                            {
+                                "id": "won-stage-id",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search response (POST)
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
                 "results": [
                     {
                         "id": "deal-1",
@@ -172,18 +204,22 @@ class TestHubSpotSyncJobExecution:
                             "dealname": "Test Deal",
                             "amount": "10000",
                             "closedate": "2024-01-15",
-                            "dealstage": "closedwon",
-                            "pipeline": "default",
+                            "dealstage": "won-stage-id",
                         },
-                        "associations": {"companies": {"results": []}},
                     }
                 ],
                 "paging": {},
             }
 
+            # Mock associations response
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
             with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_client.get.return_value = mock_response
+                mock_client.get.side_effect = [pipelines_response, assoc_response]
+                mock_client.post.return_value = search_response
                 mock_client_class.return_value.__aenter__.return_value = mock_client
 
                 result = await job._execute_job()
@@ -196,73 +232,104 @@ class TestHubSpotSyncJobExecution:
 
     @pytest.mark.asyncio
     async def test_execute_job_filters_closed_won_deals(self, mock_settings):
-        """Test that job filters for closed won deals only."""
-        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+        """Test that job uses search API for won deals only."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            skip_vector_ingestion=True,
+        )
 
         with patch.object(job, "_load_credentials", return_value="test-token"):
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "Pipeline",
+                        "stages": [
+                            {
+                                "id": "won-stage",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search returns only Won deals (search API filters)
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
                 "results": [
                     {
                         "id": "deal-1",
                         "properties": {
                             "dealname": "Won Deal",
                             "amount": "5000",
-                            "dealstage": "closedwon",
+                            "dealstage": "won-stage",
                         },
-                        "associations": {},
-                    },
-                    {
-                        "id": "deal-2",
-                        "properties": {
-                            "dealname": "Lost Deal",
-                            "amount": "3000",
-                            "dealstage": "closedlost",
-                        },
-                        "associations": {},
-                    },
-                    {
-                        "id": "deal-3",
-                        "properties": {
-                            "dealname": "Open Deal",
-                            "amount": "8000",
-                            "dealstage": "negotiation",
-                        },
-                        "associations": {},
-                    },
+                    }
                 ],
                 "paging": {},
             }
 
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
             with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_client.get.return_value = mock_response
+                mock_client.get.side_effect = [pipelines_response, assoc_response]
+                mock_client.post.return_value = search_response
                 mock_client_class.return_value.__aenter__.return_value = mock_client
 
                 result = await job._execute_job()
 
-                # Should only include closed won deal
                 assert result["records_processed"] == 1
                 assert result["deals"][0]["deal_name"] == "Won Deal"
 
     @pytest.mark.asyncio
-    async def test_execute_job_api_error(self, mock_settings):
-        """Test handling of HubSpot API errors."""
-        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+    async def test_execute_job_no_won_stages(self, mock_settings):
+        """Test handling when no Won stages are found."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            skip_vector_ingestion=True,
+        )
 
         with patch.object(job, "_load_credentials", return_value="test-token"):
-            mock_response = Mock()
-            mock_response.status_code = 401
-            mock_response.text = "Unauthorized"
+            # Mock pipelines with no Won stages
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "Pipeline",
+                        "stages": [
+                            {
+                                "id": "open-stage",
+                                "label": "Open",
+                                "metadata": {"isClosed": "false"},
+                            }
+                        ],
+                    }
+                ]
+            }
 
             with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
-                mock_client.get.return_value = mock_response
+                mock_client.get.return_value = pipelines_response
                 mock_client_class.return_value.__aenter__.return_value = mock_client
 
-                with pytest.raises(Exception, match="HubSpot API error: 401"):
-                    await job._execute_job()
+                result = await job._execute_job()
+
+                # Should return empty since no Won stages found
+                assert result["records_processed"] == 0
+                assert len(result["deals"]) == 0
 
 
 class TestHubSpotSyncJobCompanyEnrichment:
@@ -396,3 +463,455 @@ class TestHubSpotSyncJobAttributes:
         assert hasattr(job, "params")
         assert hasattr(job, "_execute_job")
         assert hasattr(job, "_load_credentials")
+        assert hasattr(job, "_fetch_owner")
+        assert hasattr(job, "_build_deal_document")
+
+
+class TestHubSpotSyncJobOwnerFetching:
+    """Test deal owner fetching from HubSpot."""
+
+    @pytest.mark.asyncio
+    async def test_fetch_owner_success(self, mock_settings):
+        """Test successfully fetching owner details."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        owner_response = Mock()
+        owner_response.status_code = 200
+        owner_response.json.return_value = {
+            "firstName": "John",
+            "lastName": "Doe",
+            "email": "john.doe@company.com",
+        }
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = owner_response
+
+        result = await job._fetch_owner(
+            mock_client, {"Authorization": "Bearer test"}, "owner-123"
+        )
+
+        assert result is not None
+        assert result["firstName"] == "John"
+        assert result["lastName"] == "Doe"
+        assert result["email"] == "john.doe@company.com"
+
+    @pytest.mark.asyncio
+    async def test_fetch_owner_not_found(self, mock_settings):
+        """Test handling of non-existent owner."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        owner_response = Mock()
+        owner_response.status_code = 404
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = owner_response
+
+        result = await job._fetch_owner(mock_client, {}, "nonexistent-owner")
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_owner_handles_exception(self, mock_settings):
+        """Test owner fetch gracefully handles exceptions."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = Exception("Network error")
+
+        result = await job._fetch_owner(mock_client, {}, "owner-123")
+
+        assert result is None
+
+
+class TestHubSpotSyncJobDocumentBuilding:
+    """Test document building for vector storage."""
+
+    def test_build_deal_document_complete(self, mock_settings):
+        """Test building document with all fields."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        deal = {
+            "deal_id": "deal-123",
+            "deal_name": "Enterprise Deal",
+            "amount": 150000.0,
+            "close_date": "2024-03-15",
+            "company_name": "Acme Corp",
+            "company_domain": "acme.com",
+            "industry": "Technology",
+            "tech_stack": ["Python", "React", "AWS"],
+            "num_employees": "500",
+            "owner_name": "John Doe",
+            "owner_email": "john@company.com",
+            "currency": "USD",
+            "source": "Referral",
+            "qualified_services": "Software Development",
+            "practice_studio": "Engineering",
+        }
+
+        result = job._build_deal_document(deal)
+
+        # Check content includes all fields
+        assert "Client: Acme Corp" in result["content"]
+        assert "Deal Owner: John Doe" in result["content"]
+        assert "Tech Stack: Python, React, AWS" in result["content"]
+        assert "Currency: USD" in result["content"]
+        assert "Source: Referral" in result["content"]
+        assert "Qualified Services: Software Development" in result["content"]
+        assert "Practice/Studio: Engineering" in result["content"]
+        assert "Team Size: 500" in result["content"]
+        assert "Close Date: 2024-03-15" in result["content"]
+        assert "Deal ID: deal-123" in result["content"]
+        assert "150,000.00" in result["content"]
+
+        # Check metadata
+        assert result["metadata"]["source"] == "hubspot"
+        assert result["metadata"]["type"] == "closed_deal"
+        assert result["metadata"]["deal_id"] == "deal-123"
+        assert result["metadata"]["client"] == "Acme Corp"
+        assert result["metadata"]["amount"] == 150000.0
+        assert result["metadata"]["currency"] == "USD"
+        assert result["metadata"]["deal_owner"] == "John Doe"
+        assert "ingested_at" in result["metadata"]
+
+    def test_build_deal_document_minimal(self, mock_settings):
+        """Test building document with minimal fields."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        deal = {
+            "deal_id": "deal-456",
+            "deal_name": "Minimal Deal",
+            "amount": 10000.0,
+        }
+
+        result = job._build_deal_document(deal)
+
+        # Should handle missing fields gracefully
+        assert "Client: Unknown" in result["content"]
+        assert "Deal Owner: Not specified" in result["content"]
+        assert "Tech Stack: Not specified" in result["content"]
+        assert "Currency: USD" in result["content"]  # Default currency
+
+        # Metadata should have defaults
+        assert result["metadata"]["currency"] == "USD"
+        assert result["metadata"]["tech_stack"] == []
+
+    def test_build_deal_document_empty_tech_stack(self, mock_settings):
+        """Test handling of empty tech stack."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        deal = {
+            "deal_id": "deal-789",
+            "deal_name": "No Tech Deal",
+            "amount": 5000.0,
+            "tech_stack": [],
+        }
+
+        result = job._build_deal_document(deal)
+
+        assert "Tech Stack: Not specified" in result["content"]
+
+
+class TestHubSpotSyncJobDealProperties:
+    """Test deal properties configuration."""
+
+    def test_deal_properties_includes_new_fields(self):
+        """Test that DEAL_PROPERTIES includes all required fields."""
+        # Core fields
+        assert "dealname" in DEAL_PROPERTIES
+        assert "amount" in DEAL_PROPERTIES
+        assert "closedate" in DEAL_PROPERTIES
+        assert "dealstage" in DEAL_PROPERTIES
+        assert "pipeline" in DEAL_PROPERTIES
+
+        # New fields for enhanced ingestion
+        assert "hubspot_owner_id" in DEAL_PROPERTIES
+        assert "deal_currency_code" in DEAL_PROPERTIES
+        assert "hs_analytics_source" in DEAL_PROPERTIES
+        assert "qualified_services" in DEAL_PROPERTIES
+        assert "practice_studio__cloned_" in DEAL_PROPERTIES
+        assert "deal_tech_stacks" in DEAL_PROPERTIES
+        assert "tam" in DEAL_PROPERTIES
+        assert "no_of_crafters_needed" in DEAL_PROPERTIES
+
+
+class TestHubSpotSyncJobVectorIngestion:
+    """Test vector ingestion integration."""
+
+    @pytest.mark.asyncio
+    async def test_execute_job_with_skip_vector_ingestion(self, mock_settings):
+        """Test job execution with skip_vector_ingestion=True."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            limit=5,
+            skip_vector_ingestion=True,
+        )
+
+        with patch.object(job, "_load_credentials", return_value="test-token"):
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "Pipeline",
+                        "stages": [
+                            {
+                                "id": "won-stage",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search response
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "deal-1",
+                        "properties": {
+                            "dealname": "Test Deal",
+                            "amount": "10000",
+                            "dealstage": "won-stage",
+                        },
+                    }
+                ],
+                "paging": {},
+            }
+
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
+            with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.get.side_effect = [pipelines_response, assoc_response]
+                mock_client.post.return_value = search_response
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                # Should not try to initialize vector clients
+                with (
+                    patch("jobs.hubspot_sync.HubSpotDealTrackingService"),
+                    patch("jobs.hubspot_sync.OpenAIEmbeddings") as mock_embeddings,
+                    patch("jobs.hubspot_sync.QdrantClient") as mock_qdrant,
+                ):
+                    result = await job._execute_job()
+
+                    # Vector clients should not be initialized
+                    mock_embeddings.assert_not_called()
+                    mock_qdrant.assert_not_called()
+
+                    assert result["status"] == "success"
+                    assert result["records_processed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_execute_job_with_vector_ingestion(self, mock_settings):
+        """Test job execution with vector ingestion enabled."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            limit=5,
+            skip_vector_ingestion=False,
+        )
+
+        with patch.object(job, "_load_credentials", return_value="test-token"):
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "New Business",
+                        "stages": [
+                            {
+                                "id": "won-stage-id",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search response (POST)
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "deal-1",
+                        "updatedAt": "2024-01-15T10:00:00Z",
+                        "properties": {
+                            "dealname": "Test Deal",
+                            "amount": "10000",
+                            "dealstage": "won-stage-id",
+                            "hubspot_owner_id": "owner-1",
+                        },
+                    }
+                ],
+                "paging": {},
+            }
+
+            # Mock associations response
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
+            # Mock owner response
+            owner_response = Mock()
+            owner_response.status_code = 200
+            owner_response.json.return_value = {
+                "firstName": "John",
+                "lastName": "Doe",
+                "email": "john@example.com",
+            }
+
+            with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                # GET: pipelines, associations, owner
+                mock_client.get.side_effect = [
+                    pipelines_response,
+                    assoc_response,
+                    owner_response,
+                ]
+                # POST: search
+                mock_client.post.return_value = search_response
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                # Mock the services
+                mock_tracking = Mock()
+                mock_tracking.check_deal_needs_reindex.return_value = (
+                    True,
+                    None,
+                )  # Needs indexing
+                mock_tracking.generate_base_uuid.return_value = "uuid-123"
+
+                mock_embeddings = Mock()
+                mock_embeddings.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+                mock_qdrant = AsyncMock()
+                mock_qdrant.initialize = AsyncMock()
+                mock_qdrant.upsert_with_namespace = AsyncMock()
+                mock_qdrant.close = AsyncMock()
+
+                with (
+                    patch(
+                        "jobs.hubspot_sync.HubSpotDealTrackingService",
+                        return_value=mock_tracking,
+                    ),
+                    patch(
+                        "jobs.hubspot_sync.OpenAIEmbeddings",
+                        return_value=mock_embeddings,
+                    ),
+                    patch("jobs.hubspot_sync.QdrantClient", return_value=mock_qdrant),
+                ):
+                    result = await job._execute_job()
+
+                    # Vector clients should be initialized
+                    mock_qdrant.initialize.assert_called_once()
+
+                    # Should have indexed the deal
+                    assert result["records_indexed"] == 1
+
+                    # Should have called upsert
+                    mock_qdrant.upsert_with_namespace.assert_called_once()
+
+                    # Should have recorded the ingestion
+                    mock_tracking.record_deal_ingestion.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_job_skips_unchanged_deals(self, mock_settings):
+        """Test that unchanged deals are skipped during vector ingestion."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            limit=5,
+        )
+
+        with patch.object(job, "_load_credentials", return_value="test-token"):
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "New Business",
+                        "stages": [
+                            {
+                                "id": "won-stage-id",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search response (POST)
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "deal-1",
+                        "properties": {
+                            "dealname": "Unchanged Deal",
+                            "amount": "10000",
+                            "dealstage": "won-stage-id",
+                        },
+                    }
+                ],
+                "paging": {},
+            }
+
+            # Mock associations response
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
+            with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.get.side_effect = [pipelines_response, assoc_response]
+                mock_client.post.return_value = search_response
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                # Mock tracking to say deal doesn't need reindexing
+                mock_tracking = Mock()
+                mock_tracking.check_deal_needs_reindex.return_value = (
+                    False,
+                    "existing-uuid",
+                )
+
+                mock_embeddings = Mock()
+                mock_qdrant = AsyncMock()
+                mock_qdrant.initialize = AsyncMock()
+                mock_qdrant.close = AsyncMock()
+
+                with (
+                    patch(
+                        "jobs.hubspot_sync.HubSpotDealTrackingService",
+                        return_value=mock_tracking,
+                    ),
+                    patch(
+                        "jobs.hubspot_sync.OpenAIEmbeddings",
+                        return_value=mock_embeddings,
+                    ),
+                    patch("jobs.hubspot_sync.QdrantClient", return_value=mock_qdrant),
+                ):
+                    result = await job._execute_job()
+
+                    # Deal was processed but skipped for indexing
+                    assert result["records_processed"] == 1
+                    assert result["records_skipped_unchanged"] == 1
+                    assert result["records_indexed"] == 0
+
+                    # Should not have called embed or upsert
+                    mock_embeddings.embed_batch.assert_not_called()
+                    mock_qdrant.upsert_with_namespace.assert_not_called()

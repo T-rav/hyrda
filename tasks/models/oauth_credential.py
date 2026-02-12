@@ -14,7 +14,7 @@ class OAuthCredential(Base):
     The encryption key is stored in environment variable OAUTH_ENCRYPTION_KEY.
     """
 
-    __tablename__ = "oauth_credentials"
+    __tablename__ = "task_credentials"
 
     credential_id = Column(String(191), primary_key=True)
     credential_name = Column(String(255), nullable=False)
@@ -29,7 +29,7 @@ class OAuthCredential(Base):
     )
     last_used_at = Column(DateTime, nullable=True)
 
-    __table_args__ = (Index("idx_oauth_provider", "provider"),)
+    __table_args__ = (Index("idx_task_credentials_provider", "provider"),)
 
     def to_dict(self) -> dict:
         """Convert to dictionary (excludes encrypted_token for security)."""

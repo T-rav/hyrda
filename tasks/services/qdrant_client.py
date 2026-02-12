@@ -106,6 +106,7 @@ class QdrantClient:
                 or doc_metadata.get("project_id")
                 or doc_metadata.get("client_id")
                 or doc_metadata.get("allocation_id")
+                or doc_metadata.get("deal_id")  # For HubSpot deals
                 or doc_metadata.get(
                     "chunk_id"
                 )  # For SEC filings and other chunked documents
@@ -116,7 +117,7 @@ class QdrantClient:
             id_hash = hashlib.md5(id_string.encode(), usedforsecurity=False).hexdigest()
             doc_id = str(uuid.UUID(id_hash))
 
-            # Add text and namespace to metadata
+            # Add text and namespace to metadata (text is standard field used by rag-service)
             doc_metadata["text"] = text
             doc_metadata["namespace"] = namespace
 
