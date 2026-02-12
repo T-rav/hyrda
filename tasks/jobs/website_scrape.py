@@ -5,7 +5,6 @@ import json
 import logging
 import re
 import ssl
-import tempfile
 import uuid as uuid_lib
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -244,103 +243,85 @@ class WebsiteScrapeJob(BaseJob):
 
         return None, None
 
-    async def _ingest_google_docs(
-        self, doc_ids: set[str], token_json: str, metadata: dict | None = None
-    ) -> tuple[int, int, int]:
+    def _enqueue_google_doc_jobs(
+        self, doc_ids: set[str], credential_id: str, metadata: dict | None = None
+    ) -> tuple[int, int]:
         """
-        Ingest Google Workspace documents using the existing GDrive infrastructure.
+        Enqueue daily recurring jobs for discovered Google Docs.
+        Checks if job already exists before creating to avoid duplicates.
 
         Args:
-            doc_ids: Set of Google document IDs to ingest
-            token_json: OAuth token JSON string
+            doc_ids: Set of Google document IDs
+            credential_id: OAuth credential ID to use for ingestion
             metadata: Additional metadata to add to documents
 
         Returns:
-            Tuple of (success_count, error_count, skipped_count)
+            Tuple of (created_count, skipped_count)
         """
         if not doc_ids:
-            return 0, 0, 0
+            return 0, 0
 
-        logger.info(f"Ingesting {len(doc_ids)} Google Workspace documents...")
+        logger.info(
+            f"Checking/enqueueing jobs for {len(doc_ids)} discovered Google Docs..."
+        )
 
-        try:
-            from services.gdrive.ingestion_orchestrator import IngestionOrchestrator
+        from jobs.job_registry import get_job_registry
 
-            # Create temporary token file for orchestrator
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False
-            ) as f:
-                f.write(token_json)
-                token_file = f.name
+        job_registry = get_job_registry()
+        created_count = 0
+        skipped_count = 0
 
-            try:
-                # Get OpenAI API key for audio/video transcription
-                import os
+        # Get all existing jobs to check for duplicates
+        existing_jobs = job_registry.scheduler_service.get_jobs()
 
-                openai_api_key = os.getenv("OPENAI_API_KEY")
+        for doc_id in doc_ids:
+            # Check if job already exists for this doc ID
+            job_exists = False
 
-                # Initialize orchestrator
-                orchestrator = IngestionOrchestrator(
-                    credentials_file=None,
-                    token_file=token_file,
-                    openai_api_key=openai_api_key,
-                )
+            for job in existing_jobs:
+                # Check if job ID matches this doc and file_id parameter matches
+                if (
+                    job.id
+                    and doc_id in job.id
+                    and "gdrive_ingest" in job.id
+                    and hasattr(job, "kwargs")
+                    and job.kwargs.get("params", {}).get("file_id") == doc_id
+                ):
+                    job_exists = True
+                    logger.debug(
+                        f"Job already exists for Google Doc {doc_id}, skipping"
+                    )
+                    skipped_count += 1
+                    break
 
-                # Authenticate
-                if not orchestrator.authenticate():
-                    raise RuntimeError("Google Drive authentication failed")
+            if not job_exists:
+                # Create new daily job for this doc
+                job_params = {
+                    "file_id": doc_id,
+                    "credential_id": credential_id,
+                    "metadata": {
+                        **(metadata or {}),
+                        "source": "website_scrape_auto_discovery",
+                    },
+                }
 
-                # Set services (reuse existing vector and embedding clients)
-                orchestrator.set_services(
-                    self.vector_client,
-                    self.embedding_client,
-                    llm_service=None,
-                    enable_contextual_retrieval=False,
-                )
+                schedule = {
+                    "trigger": "interval",
+                    "days": 1,  # Run once per day
+                }
 
-                # Get file info for each document ID
-                files = []
-                for doc_id in doc_ids:
-                    try:
-                        file_info = (
-                            orchestrator.google_drive_client.api_service.service.files()
-                            .get(
-                                fileId=doc_id,
-                                fields="id, name, mimeType, size, webViewLink, parents, owners, permissions, createdTime, modifiedTime",
-                                supportsAllDrives=True,
-                            )
-                            .execute()
-                        )
-                        # Add folder path context
-                        file_info["folder_path"] = "/website_scrape"
-                        file_info["folder_id"] = (
-                            file_info.get("parents", [""])[0]
-                            if file_info.get("parents")
-                            else ""
-                        )
-                        files.append(file_info)
-                    except Exception as e:
-                        logger.warning(f"Failed to get info for doc {doc_id}: {e}")
+                try:
+                    job_registry.create_job(
+                        job_type="gdrive_ingest",
+                        schedule=schedule,
+                        params=job_params,
+                    )
+                    logger.info(f"📄 Created daily job for Google Doc: {doc_id}")
+                    created_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to create job for doc {doc_id}: {e}")
 
-                # Ingest files using orchestrator (includes deduplication)
-                (
-                    success_count,
-                    error_count,
-                    skipped_count,
-                ) = await orchestrator.ingest_files(files, metadata=metadata)
-
-                return success_count, error_count, skipped_count
-
-            finally:
-                # Clean up temporary token file
-                import os
-
-                if os.path.exists(token_file):
-                    os.unlink(token_file)
-
-        except Exception as e:
-            logger.error(f"Error ingesting Google docs: {e}")
-            return 0, len(doc_ids), 0
+        return created_count, skipped_count
 
     async def _crawl_site(
         self,
@@ -823,57 +804,35 @@ class WebsiteScrapeJob(BaseJob):
                 )
                 # Don't fail entire job on tracking errors
 
-        # Ingest discovered Google Docs if any and auth is available
-        google_docs_success = 0
-        google_docs_error = 0
-        google_docs_skipped = 0
+        # Enqueue daily jobs for discovered Google Docs
+        google_docs_jobs_created = 0
+        google_docs_jobs_skipped = 0
 
         if discovered_google_docs and credential_id:
             logger.info(
-                f"📄 Ingesting {len(discovered_google_docs)} discovered Google Workspace documents..."
+                f"📄 Processing {len(discovered_google_docs)} discovered Google Workspace documents..."
             )
             try:
-                # Get token for Google Docs ingestion (same as used for crawling)
-                with get_db_session() as db_session:
-                    credential = (
-                        db_session.query(OAuthCredential)
-                        .filter(OAuthCredential.credential_id == credential_id)
-                        .first()
+                google_docs_jobs_created, google_docs_jobs_skipped = (
+                    self._enqueue_google_doc_jobs(
+                        discovered_google_docs, credential_id, metadata
                     )
-                    if credential:
-                        encryption_service = get_encryption_service()
-                        token_json = encryption_service.decrypt(
-                            credential.encrypted_token
-                        )
+                )
 
-                        (
-                            google_docs_success,
-                            google_docs_error,
-                            google_docs_skipped,
-                        ) = await self._ingest_google_docs(
-                            discovered_google_docs, token_json, metadata
-                        )
-
-                        logger.info(
-                            f"Google Docs ingestion complete: success={google_docs_success}, "
-                            f"skipped={google_docs_skipped}, error={google_docs_error}"
-                        )
+                logger.info(
+                    f"Google Docs job scheduling complete: {google_docs_jobs_created} jobs created, "
+                    f"{google_docs_jobs_skipped} already scheduled"
+                )
             except Exception as e:
-                logger.error(f"Error ingesting Google Docs: {e}")
-                google_docs_error = len(discovered_google_docs)
+                logger.error(f"Error enqueueing Google Docs jobs: {e}")
         elif discovered_google_docs and not credential_id:
             logger.warning(
                 f"Found {len(discovered_google_docs)} Google Docs but no credential_id provided - skipping"
             )
 
-        total_processed = (
-            len(scraped_pages)
-            + total_skipped
-            + failed_count
-            + len(discovered_google_docs)
-        )
-        total_success = len(pages_to_embed) + google_docs_success
-        total_failed = failed_count + google_docs_error
+        total_processed = len(scraped_pages) + total_skipped + failed_count
+        total_success = len(pages_to_embed)
+        total_failed = failed_count
 
         message_parts = [
             f"Embedded {len(pages_to_embed)} new/changed pages",
@@ -883,7 +842,7 @@ class WebsiteScrapeJob(BaseJob):
         ]
         if discovered_google_docs:
             message_parts.append(
-                f"Google Docs: {google_docs_success} success, {google_docs_skipped} skipped, {google_docs_error} error"
+                f"Google Docs: {google_docs_jobs_created} jobs created, {google_docs_jobs_skipped} already scheduled"
             )
 
         return {
@@ -892,7 +851,7 @@ class WebsiteScrapeJob(BaseJob):
             "records_success": total_success,
             "records_failed": total_failed,
             # Job-specific details
-            "records_skipped": total_skipped + google_docs_skipped,
+            "records_skipped": total_skipped,
             "success": True,
             "message": ", ".join(message_parts),
             "website_url": website_url,
@@ -908,9 +867,8 @@ class WebsiteScrapeJob(BaseJob):
             "index_errors": error_count,
             "force_rescrape": force_rescrape,
             "google_docs_discovered": len(discovered_google_docs),
-            "google_docs_success": google_docs_success,
-            "google_docs_skipped": google_docs_skipped,
-            "google_docs_error": google_docs_error,
+            "google_docs_jobs_created": google_docs_jobs_created,
+            "google_docs_jobs_skipped": google_docs_jobs_skipped,
             "details": {
                 "total_urls_in_sitemap": len(urls),
                 "urls_filtered_out": len(urls)
