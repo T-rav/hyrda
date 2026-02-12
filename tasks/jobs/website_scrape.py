@@ -226,15 +226,22 @@ class WebsiteScrapeJob(BaseJob):
         auth_headers: dict[str, str] | None = None,
     ) -> list[str]:
         # Import Crawlee only when needed (avoids import at top level)
+        import asyncio  # noqa: PLC0415
+
         from crawlee.crawlers import (  # noqa: PLC0415
             BeautifulSoupCrawler,
             BeautifulSoupCrawlingContext,
         )
+        from crawlee.errors import SessionError  # noqa: PLC0415
 
         logger.info(f"No sitemap found, crawling site starting from: {start_url}")
 
         # Track discovered URLs
         discovered_urls = []
+
+        # Track rate limit backoff
+        rate_limit_backoff_count = 0
+        backoff_delays = [60, 120, 180, 300, 600]  # 1min, 2min, 3min, 5min, 10min
 
         async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
             url = context.request.url
@@ -261,11 +268,41 @@ class WebsiteScrapeJob(BaseJob):
                 strategy="same-domain",  # Only follow links on same domain
             )
 
+        async def error_handler(
+            context: BeautifulSoupCrawlingContext, error: Exception
+        ) -> None:
+            """Handle errors including rate limiting with exponential backoff."""
+            nonlocal rate_limit_backoff_count
+
+            # Check if this is a rate limit error (HTTP 429)
+            if isinstance(error, SessionError) and "429" in str(error):
+                # Calculate backoff delay (use last delay if we've exhausted the list)
+                delay_index = min(rate_limit_backoff_count, len(backoff_delays) - 1)
+                delay_seconds = backoff_delays[delay_index]
+                rate_limit_backoff_count += 1
+
+                logger.warning(
+                    f"⏳ Rate limited (429) - backing off for {delay_seconds}s "
+                    f"(backoff #{rate_limit_backoff_count}): {context.request.url}"
+                )
+
+                # Wait for backoff period
+                await asyncio.sleep(delay_seconds)
+
+                # Re-enqueue the request to retry
+                await context.add_requests([context.request.url])
+                logger.info(f"Retrying after backoff: {context.request.url}")
+            else:
+                # For non-rate-limit errors, log and continue
+                logger.error(f"Crawl error for {context.request.url}: {error}")
+
         # Create crawler with custom configuration
         crawler = BeautifulSoupCrawler(
             max_requests_per_crawl=max_pages,  # Limit total pages
-            max_request_retries=2,
+            max_request_retries=5,  # Increase retries for rate-limited requests
+            max_requests_per_minute=30,  # Limit to 30 requests/min to avoid rate limits
             request_handler=request_handler,
+            error_handler=error_handler,
         )
 
         # Add OAuth headers using pre-navigation hook if needed
