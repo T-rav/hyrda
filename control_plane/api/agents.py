@@ -10,7 +10,13 @@ sys.path.insert(0, str(__file__).rsplit("/", 4)[0])
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from dependencies.service_auth import verify_service_auth
-from models import AgentGroupPermission, AgentMetadata, AgentPermission, get_db_session
+from models import (
+    AgentGroupPermission,
+    AgentMetadata,
+    AgentPermission,
+    ServiceAccount,
+    get_db_session,
+)
 from shared.utils.error_responses import (
     ErrorCode,
     internal_error,
@@ -81,9 +87,37 @@ async def list_agents(request: Request) -> dict[str, Any]:
 
             group_counts = dict(group_counts_query)
 
+            # Count service accounts that can access each agent
+            # Service accounts with allowed_agents=NULL can access all agents
+            # Service accounts with allowed_agents=JSON array can only access specific agents
+            service_accounts = (
+                session.query(ServiceAccount)
+                .filter(ServiceAccount.is_active, ~ServiceAccount.is_revoked)
+                .all()
+            )
+
+            import json
+
+            service_account_counts = {}
+            for agent_name in agent_names:
+                count = 0
+                for sa in service_accounts:
+                    if sa.allowed_agents is None:
+                        # Can access all agents
+                        count += 1
+                    else:
+                        try:
+                            allowed = json.loads(sa.allowed_agents)
+                            if isinstance(allowed, list) and agent_name in allowed:
+                                count += 1
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                service_account_counts[agent_name] = count
+
             agents_data = []
             for agent in agents:
                 group_count = group_counts.get(agent.agent_name, 0)
+                service_account_count = service_account_counts.get(agent.agent_name, 0)
 
                 agents_data.append(
                     {
@@ -100,6 +134,7 @@ async def list_agents(request: Request) -> dict[str, Any]:
                         "is_system": agent.is_system,
                         "is_deleted": agent.is_deleted,
                         "authorized_groups": group_count,
+                        "authorized_service_accounts": service_account_count,
                     }
                 )
 

@@ -1202,6 +1202,12 @@ textarea.form-control.no-resize {
   gap: 0.25rem;
 }
 
+.stat-badge.api-keys {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
 /* Loading & Error States */
 .loading {
   text-align: center;
