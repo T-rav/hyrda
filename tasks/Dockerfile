@@ -6,7 +6,7 @@ ARG VERSION=0.0.0
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 
-# Install security updates and dependencies including nginx, ffmpeg, and Playwright requirements
+# Install security updates and dependencies including nginx, ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
@@ -15,20 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
     ffmpeg \
-    # Playwright browser dependencies
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
@@ -54,8 +40,7 @@ COPY --chown=appuser:appuser ./shared /app/shared
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e . && \
-    playwright install chromium --with-deps
+    pip install --no-cache-dir -e .
 
 # Setup nginx configuration (as root)
 COPY tasks/nginx.conf /etc/nginx/sites-available/default
@@ -100,7 +85,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Use supervisor to manage both nginx and FastAPI
-# nosemgrep: dockerfile.security.missing-user.missing-user
 # Note: Supervisor runs as root to manage nginx (www-data) and FastAPI (appuser)
 # The actual services run as non-root users (see supervisord.conf)
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["/usr/bin/supervisord"]

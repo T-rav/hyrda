@@ -39,7 +39,6 @@ dependencies = [
     "lxml>=5.0.0",  # For XML parsing (sitemaps)
     "edgartools>=2.0.0",  # For parsing SEC filings (10-K, 10-Q, 8-K, etc.)
     "crawlee>=0.3.0",  # Web crawling with automatic link discovery
-    "playwright>=1.40.0",  # Browser automation for authenticated scraping
 
     # Database
     "sqlalchemy[asyncio]>=2.0.0",

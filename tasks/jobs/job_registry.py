@@ -9,6 +9,7 @@ from config.settings import TasksSettings
 from services.scheduler_service import SchedulerService
 
 from .gdrive_ingest import GDriveIngestJob
+from .hubspot_sync import HubSpotSyncJob
 from .metric_sync import MetricSyncJob
 from .slack_user_import import SlackUserImportJob
 from .website_scrape import WebsiteScrapeJob
@@ -60,6 +61,7 @@ def execute_job_by_type(
         "slack_user_import": SlackUserImportJob,
         "metric_sync": MetricSyncJob,
         "gdrive_ingest": GDriveIngestJob,
+        "hubspot_sync": HubSpotSyncJob,
         "website_scrape": WebsiteScrapeJob,
         "youtube_ingest": YouTubeIngestJob,
     }
@@ -172,6 +174,7 @@ class JobRegistry:
             "slack_user_import": SlackUserImportJob,
             "metric_sync": MetricSyncJob,
             "gdrive_ingest": GDriveIngestJob,
+            "hubspot_sync": HubSpotSyncJob,
             "website_scrape": WebsiteScrapeJob,
             "youtube_ingest": YouTubeIngestJob,
         }

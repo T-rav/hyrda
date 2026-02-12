@@ -324,128 +324,6 @@ class WebsiteScrapeJob(BaseJob):
 
         return created_count, skipped_count
 
-    async def _crawl_site_with_browser(
-        self,
-        start_url: str,
-        max_pages: int | None,
-        include_patterns: list[str],
-        exclude_patterns: list[str],
-        credential_id: str,
-    ) -> tuple[list[str], set[str]]:
-        """
-        Crawl site using Playwright browser automation for authenticated access.
-        Uses saved browser session from Google OAuth login.
-        """
-        from pathlib import Path  # noqa: PLC0415
-
-        from playwright.async_api import async_playwright  # noqa: PLC0415
-
-        logger.info(
-            f"Starting authenticated browser crawl from: {start_url} (credential: {credential_id})"
-        )
-
-        discovered_urls = []
-        discovered_google_docs = set()
-        visited_urls = set()
-
-        # Browser state directory (persistent across runs)
-        state_dir = Path(f"/tmp/playwright_state_{credential_id}")
-        state_dir.mkdir(parents=True, exist_ok=True)
-
-        async with async_playwright() as p:
-            # Launch browser with persistent context
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                storage_state=str(state_dir / "state.json")
-                if (state_dir / "state.json").exists()
-                else None
-            )
-
-            try:
-                # Navigate to start URL
-                page = await context.new_page()
-                logger.info(f"Navigating to: {start_url}")
-                await page.goto(start_url, wait_until="networkidle")
-
-                # Check if redirected to Google login
-                if "accounts.google.com" in page.url:
-                    logger.error(
-                        "Redirected to Google login - authentication required. "
-                        "Please log in manually first time to save session."
-                    )
-                    # TODO: Implement automated Google OAuth login
-                    raise Exception(
-                        "Authentication required - no saved browser session found"
-                    )
-
-                # Save authenticated state for future use
-                await context.storage_state(path=str(state_dir / "state.json"))
-                logger.info("Saved authenticated browser session")
-
-                # Crawl pages using BFS
-                to_visit = [start_url]
-
-                while to_visit and (
-                    max_pages is None or len(discovered_urls) < max_pages
-                ):
-                    url = to_visit.pop(0)
-
-                    if url in visited_urls:
-                        continue
-
-                    # Apply include/exclude patterns
-                    if include_patterns and not any(p in url for p in include_patterns):
-                        continue
-                    if exclude_patterns and any(p in url for p in exclude_patterns):
-                        continue
-
-                    visited_urls.add(url)
-                    discovered_urls.append(url)
-                    logger.info(
-                        f"Crawling {len(discovered_urls)}/{max_pages or 'unlimited'}: {url}"
-                    )
-
-                    # Navigate and extract links
-                    try:
-                        await page.goto(url, wait_until="networkidle", timeout=30000)
-
-                        # Extract all links
-                        links = await page.eval_on_selector_all(
-                            "a[href]",
-                            """(elements) => elements.map(e => e.href).filter(h => h.startsWith('http'))""",
-                        )
-
-                        # Filter same-domain links
-                        from urllib.parse import urlparse  # noqa: PLC0415
-
-                        base_domain = urlparse(start_url).netloc
-                        for link in links:
-                            link_domain = urlparse(link).netloc
-                            if link_domain == base_domain and link not in visited_urls:
-                                to_visit.append(link)
-
-                            # Check for Google Docs
-                            doc_id, doc_type = self._extract_google_doc_id(link)
-                            if doc_id:
-                                discovered_google_docs.add(doc_id)
-                                logger.info(
-                                    f"📄 Found Google {doc_type}: {doc_id} on page {url}"
-                                )
-
-                    except Exception as e:
-                        logger.error(f"Error crawling {url}: {e}")
-                        continue
-
-            finally:
-                await context.close()
-                await browser.close()
-
-        logger.info(
-            f"Browser crawl complete: {len(discovered_urls)} pages, "
-            f"{len(discovered_google_docs)} Google Docs"
-        )
-        return discovered_urls, discovered_google_docs
-
     async def _crawl_site(
         self,
         start_url: str,
@@ -712,27 +590,14 @@ class WebsiteScrapeJob(BaseJob):
                 "No sitemap found, falling back to manual site crawling from base URL"
             )
 
-            # Use browser-based crawling for Google Sites (requires authentication)
-            if credential_id and "sites.google.com" in str(website_url):
-                logger.info(
-                    "Detected Google Sites URL - using browser automation for authentication"
-                )
-                urls, discovered_google_docs = await self._crawl_site_with_browser(
-                    start_url=str(website_url),
-                    max_pages=max_pages,
-                    include_patterns=include_patterns,
-                    exclude_patterns=exclude_patterns,
-                    credential_id=credential_id,
-                )
-            else:
-                # website_url is guaranteed to be a string by validate_params()
-                urls, discovered_google_docs = await self._crawl_site(
-                    start_url=str(website_url),
-                    max_pages=max_pages,
-                    include_patterns=include_patterns,
-                    exclude_patterns=exclude_patterns,
-                    auth_headers=auth_headers,
-                )
+            # website_url is guaranteed to be a string by validate_params()
+            urls, discovered_google_docs = await self._crawl_site(
+                start_url=str(website_url),
+                max_pages=max_pages,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                auth_headers=auth_headers,
+            )
 
             if not urls:
                 raise ValueError(
