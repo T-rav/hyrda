@@ -386,6 +386,7 @@ class WebsiteScrapeJob(BaseJob):
                         )
 
             # Enqueue links from this page (Crawlee handles deduplication)
+            # Note: Auth headers need to be passed via user_data and then applied in request
             await context.enqueue_links(
                 strategy="same-domain",  # Only follow links on same domain
             )
@@ -418,37 +419,41 @@ class WebsiteScrapeJob(BaseJob):
                 # For non-rate-limit errors, log and continue
                 logger.error(f"Crawl error for {context.request.url}: {error}")
 
-        # Create crawler with custom configuration
-        crawler = BeautifulSoupCrawler(
-            max_requests_per_crawl=max_pages,  # Limit total pages
-            max_request_retries=5,  # Increase retries for rate-limited requests
-            max_requests_per_minute=30,  # Limit to 30 requests/min to avoid rate limits
-            request_handler=request_handler,
-            error_handler=error_handler,
-        )
-
-        # Add OAuth headers using pre-navigation hook if needed
+        # Configure crawler with auth headers baked into configuration
         if auth_headers:
-            # Use add_requests with custom headers
-            await crawler.add_requests(
-                [
-                    {
-                        "url": start_url,
-                        "headers": auth_headers,
-                    }
-                ]
+            logger.info(
+                "Configuring crawler with OAuth authentication for all requests"
             )
-            # Run crawler (requests already added)
-            try:
-                await crawler.run()
-            except Exception as e:
-                logger.error(f"Crawler error: {e}")
+
+            # Create configuration dict with headers
+            crawler_config = {
+                "max_requests_per_crawl": max_pages,
+                "max_request_retries": 5,
+                "max_requests_per_minute": 30,
+                "request_handler": request_handler,
+                "error_handler": error_handler,
+                # Configure default headers for all requests
+                "additional_http_headers": auth_headers,
+            }
+
+            crawler = BeautifulSoupCrawler(**crawler_config)
         else:
-            # Run crawler without auth headers
-            try:
-                await crawler.run([start_url])
-            except Exception as e:
-                logger.error(f"Crawler error: {e}")
+            crawler = BeautifulSoupCrawler(
+                max_requests_per_crawl=max_pages,
+                max_request_retries=5,
+                max_requests_per_minute=30,
+                request_handler=request_handler,
+                error_handler=error_handler,
+            )
+
+        # Run crawler
+        try:
+            await crawler.run([start_url])
+        except Exception as e:
+            logger.error(f"Crawler error: {e}")
+            import traceback
+
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
         logger.info(
             f"Crawling complete: discovered {len(discovered_urls)} pages, "
