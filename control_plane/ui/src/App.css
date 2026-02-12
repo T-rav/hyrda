@@ -1152,8 +1152,9 @@ textarea.form-control.no-resize {
 
 .agent-stats {
   display: flex;
+  flex-direction: column;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  align-items: flex-start;
 }
 
 .stat-badge {
