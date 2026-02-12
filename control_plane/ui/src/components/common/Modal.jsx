@@ -46,7 +46,7 @@ function Modal({
   isLoading = false,
   onConfirm,
   confirmText = 'Confirm',
-  confirmVariant = 'primary',
+  confirmVariant = 'secondary',
   cancelText = 'Cancel',
   hideDefaultFooter = false,
 }) {

@@ -53,7 +53,7 @@ function CreateGroupModal({ onClose, onCreate }) {
     <>
       <Button
         type="button"
-        variant="secondary"
+        variant="outline-secondary"
         onClick={onClose}
         disabled={isSubmitting}
       >
@@ -61,7 +61,7 @@ function CreateGroupModal({ onClose, onCreate }) {
       </Button>
       <Button
         type="submit"
-        variant="primary"
+        variant="secondary"
         isLoading={isSubmitting}
         disabled={!isFormValid}
         form={formId}
