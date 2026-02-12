@@ -43,7 +43,7 @@ function AgentCard({ agent, onClick, usageStats }) {
           </span>
           <span className="stat-badge api-keys">
             <Key size={14} />
-            {agent.authorized_service_accounts === 0
+            {(!agent.authorized_service_accounts || agent.authorized_service_accounts === 0)
               ? 'No API keys'
               : `${agent.authorized_service_accounts} ${agent.authorized_service_accounts === 1 ? 'API key' : 'API keys'}`}
           </span>

@@ -21,15 +21,17 @@ function Dashboard({ onError, setLoading }) {
   const [showAllRuns, setShowAllRuns] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const recordsPerPage = 20
+  const recordsPerPage = 100
 
   const {
     tasksData,
     taskRunsData,
+    taskRunsTotal,
     ragMetrics,
     loading,
     error,
-    refreshData
+    refreshData,
+    loadTaskRuns
   } = useTasksData()
 
   // Handle errors
@@ -69,6 +71,12 @@ function Dashboard({ onError, setLoading }) {
     setCurrentPage(1)
   }
 
+  // Handle page change - fetch new data from API
+  const handlePageChange = async (newPage) => {
+    setCurrentPage(newPage)
+    await loadTaskRuns(newPage, recordsPerPage)
+  }
+
   // Calculate statistics
   const totalTasks = tasksData.length
   const runningTasks = tasksData.filter(job => job.next_run_time).length
@@ -89,7 +97,7 @@ function Dashboard({ onError, setLoading }) {
   })() : 'None'
 
   // Calculate scheduler stats
-  const totalRuns = taskRunsData.length
+  const totalRuns = taskRunsTotal || taskRunsData.length
 
   // Calculate RAG query stats
   const totalQueries = ragMetrics.total_queries || 0
@@ -203,7 +211,7 @@ function Dashboard({ onError, setLoading }) {
           showAll={showAllRuns}
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
-          onPageChange={setCurrentPage}
+          onPageChange={handlePageChange}
         />
       </div>
     </div>

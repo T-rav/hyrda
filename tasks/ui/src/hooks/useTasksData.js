@@ -12,6 +12,7 @@ export function useTasksData() {
   const [schedulerData, setSchedulerData] = useState({})
   const [tasksData, setTasksData] = useState([])
   const [taskRunsData, setTaskRunsData] = useState([])
+  const [taskRunsTotal, setTaskRunsTotal] = useState(0)
   const [ragMetrics, setRagMetrics] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -55,14 +56,18 @@ export function useTasksData() {
     }
   }, [apiCall])
 
-  // Load task runs
-  const loadTaskRuns = useCallback(async () => {
+  // Load task runs with pagination support
+  const loadTaskRuns = useCallback(async (page = 1, perPage = 100) => {
     try {
-      const response = await apiCall('/task-runs')
+      const response = await apiCall(`/task-runs?page=${page}&per_page=${perPage}`)
       setTaskRunsData(response.task_runs || [])
+      setTaskRunsTotal(response.pagination?.total || 0)
+      return response.pagination
     } catch (error) {
       logError('Error loading task runs:', error)
       setTaskRunsData([])
+      setTaskRunsTotal(0)
+      return null
     }
   }, [apiCall])
 
@@ -89,7 +94,7 @@ export function useTasksData() {
   }, [])
 
   // Refresh all data
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (taskRunsPage = 1) => {
     setLoading(true)
     setError(null)
 
@@ -97,7 +102,7 @@ export function useTasksData() {
       await Promise.all([
         loadSchedulerInfo(),
         loadTasks(),
-        loadTaskRuns(),
+        loadTaskRuns(taskRunsPage),
         loadRagMetrics()
       ])
     } catch (error) {
@@ -149,10 +154,12 @@ export function useTasksData() {
     schedulerData,
     tasksData,
     taskRunsData,
+    taskRunsTotal,
     ragMetrics,
     loading,
     error,
     refreshData,
+    loadTaskRuns,
     pauseTask,
     resumeTask,
     deleteTask

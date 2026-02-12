@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/task-runs")
 
 # Pagination constants
 DEFAULT_PAGE_SIZE = 50
-MAX_PAGE_SIZE = 100  # Prevent DoS attacks by limiting max page size
+MAX_PAGE_SIZE = 500  # Allow up to 500 records per page for better UX
 
 
 @router.get("")
