@@ -175,12 +175,12 @@ function GDriveAuthButton({ taskId, credentialId, onAuthComplete }) {
 
       <button
         type="button"
-        className="btn btn-primary btn-sm d-flex align-items-center"
+        className="btn btn-outline-primary btn-sm d-flex align-items-center"
         onClick={handleAuthClick}
         disabled={authInProgress}
       >
         <ExternalLink size={16} className="me-1" />
-        {authInProgress ? 'Opening Google Login...' : 'Connect Google Drive'}
+        {authInProgress ? 'Opening Google Login...' : 'Connect Google'}
       </button>
 
       {authError && (

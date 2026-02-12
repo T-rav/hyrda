@@ -49,7 +49,10 @@ class AgentClient:
         self._agent_cache: dict[str, dict] = {}
 
     async def discover_agent(self, agent_name: str) -> dict[str, Any]:
-        """Discover agent from control-plane API.
+        """Discover agent from local registry.
+
+        Queries local agent_registry (langgraph.json) for agent info.
+        Control plane is used for authorization, not discovery.
 
         Args:
             agent_name: Name of agent to discover
@@ -65,27 +68,21 @@ class AgentClient:
             }
 
         Raises:
-            ValueError: If agent not found in control plane registry
+            ValueError: If agent not found in local registry
         """
         # Check cache first
         if agent_name in self._agent_cache:
             return self._agent_cache[agent_name]
 
-        # Query control-plane for all agents
-        # Use plain HTTP client for internal Docker network (no TLS needed)
+        # Query local agent registry (source of truth: langgraph.json)
+        from services import agent_registry
+
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{self.control_plane_url}/api/agents",
-                    headers={"X-Service-Token": self.service_token},
-                )
-                response.raise_for_status()
-                data = response.json()
-                agents = data.get("agents", [])
+            agents = agent_registry.list_agents()
         except Exception as e:
-            logger.error(f"Failed to query control plane for agents: {e}")
+            logger.error(f"Failed to query agent registry: {e}")
             raise ValueError(
-                f"Failed to discover agent '{agent_name}': Control plane unreachable"
+                f"Failed to discover agent '{agent_name}': Agent registry unavailable"
             )
 
         # Find agent by name or alias
@@ -101,42 +98,32 @@ class AgentClient:
 
         if not agent:
             raise ValueError(
-                f"Agent '{agent_name}' not found in control plane registry. "
-                "Not registered = not invokable."
+                f"Agent '{agent_name}' not found in registry. "
+                "Available agents: " + ", ".join([a["name"] for a in agents])
             )
 
         # Check if agent is enabled
-        if not agent.get("is_public", True):
+        if not agent.get("is_enabled", True):
             raise ValueError(f"Agent '{agent_name}' is disabled")
 
-        # Determine if cloud or embedded based on endpoint_url
-        endpoint_url = agent.get("endpoint_url")
-        if not endpoint_url:
-            raise ValueError(
-                f"Agent '{agent_name}' has no endpoint_url configured. "
-                "Cannot invoke agent without endpoint."
-            )
-
-        # Determine agent type based on endpoint or langgraph fields
-        is_cloud = bool(
-            agent.get("langgraph_assistant_id") or "langraph" in endpoint_url.lower()
+        # All agents are embedded (local langgraph.json) - not cloud
+        agent_name_normalized = agent.get("name")
+        endpoint_url = (
+            f"http://agent-service:8000/api/agents/{agent_name_normalized}/invoke"
         )
 
         agent_info = {
-            "agent_name": agent.get("name"),
-            "display_name": agent.get("display_name", agent.get("name")),
+            "agent_name": agent_name_normalized,
+            "display_name": agent.get("display_name", agent_name_normalized),
             "endpoint_url": endpoint_url,
-            "langgraph_assistant_id": agent.get("langgraph_assistant_id"),
-            "langgraph_url": agent.get("langgraph_url"),
-            "is_cloud": is_cloud,
+            "langgraph_assistant_id": None,
+            "langgraph_url": None,
+            "is_cloud": False,
         }
 
         # Cache and return
         self._agent_cache[agent_name] = agent_info
-        logger.info(
-            f"Discovered agent '{agent_name}' → "
-            f"{'cloud' if is_cloud else 'embedded'} at {endpoint_url}"
-        )
+        logger.info(f"Discovered agent '{agent_name}' → embedded at {endpoint_url}")
 
         return agent_info
 

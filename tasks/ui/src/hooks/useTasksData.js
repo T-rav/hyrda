@@ -1,25 +1,32 @@
 import { useState, useCallback } from 'react'
 import { logError } from '../utils/logger'
+import { fetchWithTokenRefresh } from '../utils/tokenRefresh'
 
-// API base URL - tasks service runs on port 5001
-const API_BASE = 'http://localhost:5001/api'
-// Bot API base URL for RAG metrics
+// Use relative URLs since the UI is served from the same nginx server
+// This automatically uses the same protocol (HTTP/HTTPS) as the page
+const API_BASE = '/api'
+// Bot API base URL for RAG metrics (external service, use absolute URL)
 const BOT_API_BASE = 'http://localhost:8080/api'
+
+const DEFAULT_PER_PAGE = 50
 
 export function useTasksData() {
   const [schedulerData, setSchedulerData] = useState({})
   const [tasksData, setTasksData] = useState([])
   const [taskRunsData, setTaskRunsData] = useState([])
+  const [taskRunsTotal, setTaskRunsTotal] = useState(0)
   const [ragMetrics, setRagMetrics] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Generic API call function
-  const apiCall = useCallback(async (endpoint) => {
-    const response = await fetch(`${API_BASE}${endpoint}`, {
+  // Generic API call function with automatic token refresh
+  const apiCall = useCallback(async (endpoint, options = {}) => {
+    const response = await fetchWithTokenRefresh(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
       },
+      credentials: 'include',
+      ...options,
     })
 
     if (!response.ok) {
@@ -51,24 +58,29 @@ export function useTasksData() {
     }
   }, [apiCall])
 
-  // Load task runs
-  const loadTaskRuns = useCallback(async () => {
+  // Load task runs with pagination support
+  const loadTaskRuns = useCallback(async (page = 1, perPage = 100) => {
     try {
-      const response = await apiCall('/task-runs')
+      const response = await apiCall(`/task-runs?page=${page}&per_page=${perPage}`)
       setTaskRunsData(response.task_runs || [])
+      setTaskRunsTotal(response.pagination?.total || 0)
+      return response.pagination
     } catch (error) {
       logError('Error loading task runs:', error)
       setTaskRunsData([])
+      setTaskRunsTotal(0)
+      return null
     }
   }, [apiCall])
 
   // Load RAG metrics from bot service
   const loadRagMetrics = useCallback(async () => {
     try {
-      const response = await fetch(`${BOT_API_BASE}/metrics`, {
+      const response = await fetchWithTokenRefresh(`${BOT_API_BASE}/metrics`, {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -84,7 +96,7 @@ export function useTasksData() {
   }, [])
 
   // Refresh all data
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (taskRunsPage = 1) => {
     setLoading(true)
     setError(null)
 
@@ -92,7 +104,7 @@ export function useTasksData() {
       await Promise.all([
         loadSchedulerInfo(),
         loadTasks(),
-        loadTaskRuns(),
+        loadTaskRuns(taskRunsPage),
         loadRagMetrics()
       ])
     } catch (error) {
@@ -144,10 +156,12 @@ export function useTasksData() {
     schedulerData,
     tasksData,
     taskRunsData,
+    taskRunsTotal,
     ragMetrics,
     loading,
     error,
     refreshData,
+    loadTaskRuns,
     pauseTask,
     resumeTask,
     deleteTask

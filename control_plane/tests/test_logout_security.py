@@ -104,9 +104,16 @@ class TestLogoutCookieDeletion:
 
             asyncio.run(logout(mock_request))
 
-            # Verify delete_cookie was called with correct parameters
-            mock_response.delete_cookie.assert_called_once_with(
+            # Verify delete_cookie was called for both access and refresh tokens (OAuth 2.0)
+            assert mock_response.delete_cookie.call_count == 2
+            mock_response.delete_cookie.assert_any_call(
                 key="access_token",
+                path="/",
+                httponly=True,
+                samesite="lax",
+            )
+            mock_response.delete_cookie.assert_any_call(
+                key="refresh_token",
                 path="/",
                 httponly=True,
                 samesite="lax",

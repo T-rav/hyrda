@@ -20,6 +20,11 @@ RUN npm run build
 # Stage 2: Python Flask API
 FROM python:3.11-slim
 
+# Build arguments for versioning
+ARG VERSION=0.0.0
+ARG GIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 # Suppress debconf/Perl warnings during apt-get
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -63,6 +68,12 @@ COPY --from=ui-builder /app/ui/dist ./ui/dist
 
 # Create logs directory
 RUN mkdir -p logs
+
+# Add OCI labels for versioning
+LABEL org.opencontainers.image.title="InsightMesh Control Plane" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
 
 # Expose port 6001
 EXPOSE 6001

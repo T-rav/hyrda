@@ -155,7 +155,10 @@ class TestWebsiteScrapeJobOAuthAuthentication:
                 job,
                 "_crawl_site",
                 new=AsyncMock(
-                    return_value=["https://sites.google.com/example/site/page1"]
+                    return_value=(
+                        ["https://sites.google.com/example/site/page1"],
+                        set(),
+                    )
                 ),
             ),
             patch.object(
@@ -248,7 +251,10 @@ class TestWebsiteScrapeJobOAuthAuthentication:
                 job,
                 "_crawl_site",
                 new=AsyncMock(
-                    return_value=["https://sites.google.com/example/site/page1"]
+                    return_value=(
+                        ["https://sites.google.com/example/site/page1"],
+                        set(),
+                    )
                 ),
             ),
             patch.object(
@@ -369,7 +375,10 @@ class TestWebsiteScrapeJobOAuthAuthentication:
                 job,
                 "_crawl_site",
                 new=AsyncMock(
-                    return_value=["https://sites.google.com/example/site/page1"]
+                    return_value=(
+                        ["https://sites.google.com/example/site/page1"],
+                        set(),
+                    )
                 ),
             ),
             patch.object(

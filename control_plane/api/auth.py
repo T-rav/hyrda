@@ -20,8 +20,12 @@ from utils.rate_limit import rate_limit
 sys.path.insert(0, "/app")  # Add app root to path for shared imports
 from shared.utils.jwt_auth import (
     create_access_token,
+    create_refresh_token,
     extract_token_from_request,
+    refresh_access_token_with_refresh,
+    revoke_refresh_token,
     revoke_token,
+    store_refresh_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,12 +230,17 @@ async def auth_callback(request: Request):
 
         user_name = idinfo.get("name")
         user_picture = idinfo.get("picture")
+
+        # Create both access and refresh tokens
         jwt_token = create_access_token(
             user_email=email,
             user_name=user_name,
             user_picture=user_picture,
             additional_claims={"is_admin": is_admin, "user_id": user_id},
         )
+
+        refresh_token = create_refresh_token(user_email=email)
+        store_refresh_token(email, refresh_token)
 
         request.session["user_email"] = email
         request.session["user_info"] = {
@@ -279,15 +288,28 @@ async def auth_callback(request: Request):
             )
 
         response = RedirectResponse(url=redirect_url, status_code=302)
+
+        # Set access token cookie (short-lived)
         response.set_cookie(
             key="access_token",
             value=jwt_token,
             httponly=True,
             secure=False,
             samesite="lax",
-            max_age=86400,
+            max_age=900,  # 15 minutes (matches JWT_EXPIRATION_MINUTES)
         )
-        logger.info(f"Set cookie for {email}")
+
+        # Set refresh token cookie (long-lived)
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=604800,  # 7 days (matches REFRESH_TOKEN_DAYS)
+        )
+
+        logger.info(f"Set access and refresh cookies for {email}")
 
         return response
 
@@ -346,6 +368,7 @@ async def get_token(request: Request):
                 f"User {user_email} not found in database - creating JWT without admin privileges"
             )
 
+    # Create both access and refresh tokens
     jwt_token = create_access_token(
         user_email=user_email,
         user_name=user_info.get("name"),
@@ -353,13 +376,134 @@ async def get_token(request: Request):
         additional_claims={"is_admin": is_admin, "user_id": user_id},
     )
 
-    logger.info(f"Generated JWT token for {user_email} (is_admin={is_admin})")
+    refresh_token = create_refresh_token(user_email=user_email)
+    store_refresh_token(user_email, refresh_token)
+
+    logger.info(f"Generated JWT tokens for {user_email} (is_admin={is_admin})")
 
     return {
         "access_token": jwt_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": 86400,  # 24 hours in seconds
+        "expires_in": 900,  # 15 minutes in seconds
     }
+
+
+@router.post("/token/refresh")
+async def refresh_token_endpoint(request: Request):
+    """Refresh an expired access token using a refresh token.
+
+    This endpoint exchanges a valid refresh token for a new access token.
+    The refresh token can be provided either as a cookie or in the request body.
+
+    OAuth 2.0 Refresh Token Flow (RFC 6749):
+    - Client sends refresh token
+    - Server validates refresh token
+    - Server issues new access token (and optionally rotates refresh token)
+    - Client uses new access token for API requests
+
+    Returns:
+        JSON with new access_token and optionally new refresh_token
+
+    Example:
+        # With cookie (automatic):
+        curl -X POST http://localhost:6001/auth/token/refresh --cookie "refresh_token=eyJ..."
+
+        # With JSON body:
+        curl -X POST http://localhost:6001/auth/token/refresh \
+             -H "Content-Type: application/json" \
+             -d '{"refresh_token": "eyJ..."}'
+
+        # Returns:
+        {
+            "access_token": "eyJ...",
+            "refresh_token": "eyJ...",  # New refresh token (rotated)
+            "token_type": "bearer",
+            "expires_in": 900
+        }
+    """
+    # Try to get refresh token from cookie first, then from body
+    refresh_token = request.cookies.get("refresh_token")
+
+    if not refresh_token:
+        try:
+            body = await request.json()
+            refresh_token = body.get("refresh_token")
+        except Exception:
+            pass
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=401,
+            detail="No refresh token provided. Please login again at /auth/login",
+        )
+
+    try:
+        # Exchange refresh token for new access token (with rotation)
+        new_access_token, new_refresh_token = refresh_access_token_with_refresh(
+            refresh_token, rotate_refresh=True
+        )
+
+        logger.info("Successfully refreshed access token")
+
+        # Return new tokens
+        response_data = {
+            "access_token": new_access_token,
+            "token_type": "bearer",
+            "expires_in": 900,  # 15 minutes
+        }
+
+        if new_refresh_token:
+            response_data["refresh_token"] = new_refresh_token
+
+        # If client accepts JSON, return tokens in body
+        # If browser, set cookies and redirect
+        accept_header = request.headers.get("accept", "")
+        is_browser = "text/html" in accept_header
+
+        if is_browser:
+            # Browser - set cookies and redirect to referrer or home
+            from fastapi.responses import JSONResponse
+
+            response = JSONResponse(response_data)
+
+            # Set new access token cookie
+            response.set_cookie(
+                key="access_token",
+                value=new_access_token,
+                httponly=True,
+                secure=False,
+                samesite="lax",
+                max_age=900,  # 15 minutes
+            )
+
+            # Set new refresh token cookie if rotated
+            if new_refresh_token:
+                response.set_cookie(
+                    key="refresh_token",
+                    value=new_refresh_token,
+                    httponly=True,
+                    secure=False,
+                    samesite="lax",
+                    max_age=604800,  # 7 days
+                )
+
+            return response
+
+        # API client - return JSON
+        return response_data
+
+    except Exception as e:
+        logger.error(f"Token refresh failed: {e}")
+        AuditLogger.log_auth_event(
+            "token_refresh_failed",
+            success=False,
+            error=str(e),
+        )
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token. Please login again at /auth/login",
+        )
 
 
 @router.post("/logout")
@@ -374,6 +518,7 @@ async def logout(request: Request):
     """
     email = request.session.get("user_email")
 
+    # Revoke access token
     token = request.cookies.get("access_token")
     if not token:
         auth_header = request.headers.get("Authorization")
@@ -383,9 +528,22 @@ async def logout(request: Request):
     if token:
         revoked = revoke_token(token)
         if revoked:
-            logger.info(f"Revoked JWT token for {email}")
+            logger.info(f"Revoked access token for {email}")
         else:
-            logger.warning(f"Token revocation failed for {email} (Redis unavailable?)")
+            logger.warning(
+                f"Access token revocation failed for {email} (Redis unavailable?)"
+            )
+
+    # Revoke refresh token
+    refresh_revoked = False
+    if email:
+        refresh_revoked = revoke_refresh_token(email)
+        if refresh_revoked:
+            logger.info(f"Revoked refresh token for {email}")
+        else:
+            logger.warning(
+                f"Refresh token revocation failed for {email} (Redis unavailable?)"
+            )
 
     request.session.clear()
 
@@ -395,8 +553,16 @@ async def logout(request: Request):
     )
 
     response = RedirectResponse(url="/auth/logged-out", status_code=302)
+
+    # Delete both cookies
     response.delete_cookie(
         key="access_token",
+        path="/",
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key="refresh_token",
         path="/",
         httponly=True,
         samesite="lax",

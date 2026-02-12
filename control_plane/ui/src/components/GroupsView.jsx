@@ -67,13 +67,13 @@ function GroupsView({
       <div className="section-header">
         <h2>Permission Groups ({groups.length})</h2>
         <div>
-          <button onClick={onRefresh} className="btn-secondary">
+          <button onClick={onRefresh} className="btn btn-outline-secondary">
             <RefreshCw size={16} />
             Refresh
           </button>
           <button
             onClick={() => setShowCreateGroup(true)}
-            className="btn-primary"
+            className="btn btn-outline-primary"
             style={{ marginLeft: '0.5rem' }}
           >
             <Plus size={16} />
@@ -154,7 +154,7 @@ function GroupsView({
         <div className="empty-state">
           <Users size={48} />
           <p>No groups created yet</p>
-          <button onClick={() => setShowCreateGroup(true)} className="btn-primary">
+          <button onClick={() => setShowCreateGroup(true)} className="btn btn-outline-primary">
             Create Your First Group
           </button>
         </div>

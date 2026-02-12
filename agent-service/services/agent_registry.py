@@ -15,80 +15,39 @@ _agent_classes: dict[str, type] = {}
 
 
 def _load_agent_classes() -> dict[str, type]:
-    """Load agent classes from both system and external directories.
+    """Load all agents from merged langgraph.json.
 
-    System agents: LangGraph workflows baked into image (agents/system/)
-    External agents: Client-customizable workflows from volume mounts
+    All agents (system + custom) are defined in langgraph.json.
+    The startup.sh script merges configs at runtime.
 
     Returns:
-        Dict mapping agent names to agent classes/instances
+        Dict mapping agent names to CompiledStateGraph instances
     """
     global _agent_classes
 
+    # Return cached if available and non-empty
     if _agent_classes:
         return _agent_classes
 
-    all_agents = {}
-
-    # Load system agents first (shipped with framework)
+    # Load all agents from unified config
     try:
-        from services.system_agent_loader import get_system_loader
+        from services.unified_agent_loader import get_unified_loader
 
-        system_loader = get_system_loader()
-        system_agents = system_loader.discover_agents()
+        loader = get_unified_loader()
+        all_agents = loader.discover_agents()
 
-        for name, agent_class in system_agents.items():
-            all_agents[name.lower()] = agent_class
+        # Only cache if we actually loaded agents
+        if all_agents:
+            _agent_classes = all_agents
+            logger.info(f"Cached {len(all_agents)} agent classes")
+        else:
+            logger.warning("No agents loaded from unified loader, NOT caching")
 
-        if system_agents:
-            logger.info(
-                f"✅ Loaded {len(system_agents)} system agent(s) from agents/system/"
-            )
+        return all_agents
+
     except Exception as e:
-        logger.error(f"❌ Error loading system agents: {e}", exc_info=True)
-
-    # Load external agents (client-provided, CANNOT override system agents)
-    # Skip if EXTERNAL_AGENTS_IN_CLOUD=true (agents deployed to LangGraph Cloud)
-    import os
-
-    load_external = os.getenv("LOAD_EXTERNAL_AGENTS", "true").lower() == "true"
-
-    if load_external:
-        try:
-            from services.external_agent_loader import get_external_loader
-
-            external_loader = get_external_loader()
-            external_agents = external_loader.discover_agents()
-
-            # Prevent external agents from overriding system agents
-            for name, agent_class in external_agents.items():
-                name_lower = name.lower()
-                if name_lower in all_agents:
-                    logger.error(
-                        f"❌ External agent '{name}' conflicts with system agent - IGNORING external version"
-                    )
-                    # Skip this external agent - system takes precedence
-                else:
-                    all_agents[name_lower] = agent_class
-
-            if external_agents:
-                logger.info(
-                    f"✅ Loaded {len(external_agents)} external agent(s) from volume mount"
-                )
-            else:
-                logger.warning(
-                    "⚠️ No external agents loaded (EXTERNAL_AGENTS_PATH not set or empty)"
-                )
-        except Exception as e:
-            logger.error(f"❌ Error loading external agents: {e}", exc_info=True)
-    else:
-        logger.info(
-            "⏭️ Skipping external agents (LOAD_EXTERNAL_AGENTS=false - deployed to cloud)"
-        )
-
-    _agent_classes = all_agents
-    logger.info(f"📦 Total agents available: {len(_agent_classes)} (system + external)")
-    return _agent_classes
+        logger.error(f"❌ Error loading agents: {e}", exc_info=True)
+        return {}
 
 
 # Cache with TTL
@@ -98,11 +57,10 @@ _cache_ttl_seconds: int = 300  # 5 minutes - agents refresh automatically
 
 
 def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]:
-    """Get agent registry from control plane API.
+    """Get agent registry from local langgraph.json (source of truth).
 
-    Returns a dict mapping agent names/aliases to agent info.
-    Caches the result with TTL - refreshes automatically every 5 minutes.
-    Merges control plane metadata with local agent classes.
+    Optionally fetches metadata from control plane for access management,
+    but local agents are the source of truth for what can run.
 
     Args:
         force_refresh: Force refresh even if cache is valid
@@ -112,14 +70,44 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
     """
     global _cached_agents, _cache_timestamp  # noqa: PLW0603
 
-    # Check if cache is still valid
+    # Check if cache is still valid (and not empty!)
     if (
         not force_refresh
         and _cached_agents is not None
+        and _cached_agents  # Don't return empty cache
         and (time.time() - _cache_timestamp) < _cache_ttl_seconds
     ):
+        logger.debug(f"Returning cached registry with {len(_cached_agents)} agents")
         return _cached_agents
 
+    # Load agent classes from langgraph.json (source of truth)
+    agent_classes = _load_agent_classes()
+    logger.info(f"Loaded {len(agent_classes)} agent classes from langgraph.json")
+
+    # Don't proceed if no agents loaded
+    if not agent_classes:
+        logger.error("No agents loaded! Returning empty registry (will not cache)")
+        return {}
+
+    # Start with local agents as base
+    registry = {}
+    for agent_name, agent_class in agent_classes.items():
+        logger.debug(f"Adding agent '{agent_name}' to registry")
+        registry[agent_name.lower()] = {
+            "name": agent_name.lower(),
+            "display_name": agent_name.replace("_", " ").title(),
+            "description": "",
+            "aliases": [],
+            "is_enabled": True,
+            "requires_admin": False,
+            "is_system": False,
+            "is_primary": True,
+            "agent_class": agent_class,
+        }
+
+    logger.info(f"Built registry with {len(registry)} agents")
+
+    # Try to fetch metadata from control plane (for descriptions, aliases, etc.)
     try:
         import os
 
@@ -128,10 +116,11 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
 
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-        control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control_plane:6001")
+        control_plane_url = os.getenv("CONTROL_PLANE_URL", "http://control-plane:6001")
 
+        # nosemgrep: python.requests.security.disabled-cert-validation.disabled-cert-validation
         response = requests.get(
-            f"{control_plane_url}/api/agents",
+            f"{control_plane_url}/api/agents",  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-with-http.request-with-http
             timeout=5,
             verify=False,  # nosec B501 - Internal Docker network with self-signed certs
         )
@@ -139,68 +128,49 @@ def get_agent_registry(force_refresh: bool = False) -> dict[str, dict[str, Any]]
             data = response.json()
             agents = data.get("agents", [])
 
-            # Load agent classes from local registry
-            agent_classes = _load_agent_classes()
-
-            # Build registry dict mapping names/aliases to agent info
-            # Only include enabled agents (is_enabled=true)
-            registry = {}
+            # Merge control plane metadata into local agents
             for agent in agents:
-                # Skip disabled agents
-                if not agent.get("is_enabled", False):
-                    continue
-                name = agent["name"]
-                aliases = agent.get("aliases", [])
+                name = agent["name"].lower()
+                if name in registry:
+                    # Update with control plane metadata
+                    registry[name].update(
+                        {
+                            "display_name": agent.get(
+                                "display_name", registry[name]["display_name"]
+                            ),
+                            "description": agent.get("description", ""),
+                            "aliases": agent.get("aliases", []),
+                            "is_enabled": agent.get("is_enabled", True),
+                            "requires_admin": agent.get("requires_admin", False),
+                            "is_system": agent.get("is_system", False),
+                        }
+                    )
 
-                # Get agent class if available
-                agent_class = agent_classes.get(name.lower())
+                    # Register aliases
+                    for alias in agent.get("aliases", []):
+                        registry[alias.lower()] = {
+                            **registry[name],
+                            "is_primary": False,
+                        }
 
-                agent_info = {
-                    "name": name.lower(),
-                    "display_name": agent.get("display_name", name),
-                    "description": agent.get("description", ""),
-                    "aliases": aliases,
-                    "is_enabled": agent.get("is_enabled", True),
-                    "requires_admin": agent.get("requires_admin", False),
-                    "is_system": agent.get("is_system", False),
-                    "is_primary": True,
-                }
-
-                # Add agent_class if available
-                if agent_class:
-                    agent_info["agent_class"] = agent_class
-
-                # Register primary name
-                registry[name.lower()] = agent_info
-
-                # Register aliases
-                for alias in aliases:
-                    alias_info = {
-                        **agent_info,
-                        "is_primary": False,
-                    }
-                    # Also add agent_class to aliases
-                    if agent_class:
-                        alias_info["agent_class"] = agent_class
-                    registry[alias.lower()] = alias_info
-
-            _cached_agents = registry
-            _cache_timestamp = time.time()
-            logger.info(
-                f"Loaded {len(agents)} agents from control plane (TTL: {_cache_ttl_seconds}s)"
-            )
-            return registry
+            logger.info(f"Merged metadata from control plane for {len(agents)} agents")
         else:
-            logger.error(
-                f"Failed to fetch agents from control plane: HTTP {response.status_code}"
+            logger.warning(
+                f"Control plane returned status {response.status_code}, using local agents only"
             )
-            # Return cached data if available, even if stale
-            return _cached_agents or {}
 
     except Exception as e:
-        logger.error(f"Error fetching agents from control plane: {e}")
-        # Return cached data if available, even if stale
-        return _cached_agents or {}
+        logger.warning(f"Control plane unavailable: {e}, using local agents only")
+
+    # Only cache if we have agents
+    if registry:
+        _cached_agents = registry
+        _cache_timestamp = time.time()
+        logger.info(f"Agent registry ready with {len(registry)} agents")
+    else:
+        logger.error("Registry is empty after loading, NOT caching")
+
+    return registry
 
 
 def get_agent_info(agent_name: str) -> dict[str, Any] | None:

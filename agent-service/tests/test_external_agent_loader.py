@@ -102,7 +102,8 @@ class TestExternalAgentLoaderInitialization:
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop("EXTERNAL_AGENTS_PATH", None)
             loader = ExternalAgentLoader()
-            assert loader.external_path is None
+            # Now defaults to /app/custom_agents
+            assert loader.external_path == "/app/custom_agents"
 
 
 class TestAgentDiscovery:

@@ -85,7 +85,7 @@ test = [
 
 # Development tools with exact versions for reproducibility
 dev = [
-    "ruff==0.14.0",
+    "ruff==0.15.0",
     "pyright==1.1.390",
     "bandit[toml]==1.8.0",
     "pre-commit==4.0.1",

@@ -172,7 +172,7 @@ class TestFactoryRegistration:
         with pytest.raises(
             RuntimeError, match="Cannot register factories on closed container"
         ):
-            container.register_factory(MockService, lambda: MockService())
+            container.register_factory(MockService, MockService)
 
 
 class TestSingletonRegistration:
@@ -268,7 +268,7 @@ class TestServiceRetrieval:
     async def test_get_service_closed_container_raises_error(self):
         """Test that getting service from closed container raises error."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
         container._closed = True
 
         with pytest.raises(
@@ -331,9 +331,7 @@ class TestServiceInitializationHook:
     async def test_sync_initialize_called(self):
         """Test that sync initialize method is called during creation."""
         container = ServiceContainer()
-        container.register_factory(
-            MockServiceWithSyncInit, lambda: MockServiceWithSyncInit()
-        )
+        container.register_factory(MockServiceWithSyncInit, MockServiceWithSyncInit)
 
         service = await container.get(MockServiceWithSyncInit)
 
@@ -420,7 +418,7 @@ class TestServiceCreationErrors:
     async def test_initialization_exception_propagates(self):
         """Test that initialization exceptions are propagated."""
         container = ServiceContainer()
-        container.register_factory(MockBrokenService, lambda: MockBrokenService())
+        container.register_factory(MockBrokenService, MockBrokenService)
 
         with pytest.raises(RuntimeError, match="Initialization failed"):
             await container.get(MockBrokenService)
@@ -528,7 +526,7 @@ class TestContainerCloseAll:
     async def test_close_all_clears_services(self):
         """Test that close_all clears internal dictionaries."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
         container.register_singleton(MockAsyncService, MockAsyncService())
 
         await container.close_all()
@@ -726,7 +724,7 @@ class TestListServices:
     def test_list_services_only_registered(self):
         """Test listing shows registered factories."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
 
         services = container.list_services()
 
@@ -736,7 +734,7 @@ class TestListServices:
     async def test_list_services_initialized(self):
         """Test listing shows initialized services."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
 
         # Initialize the service
         await container.get(MockService)
@@ -775,7 +773,7 @@ class TestListServices:
         container = ServiceContainer()
 
         # Registered only (factory)
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
 
         # Initialized (singleton) - also needs factory registered for list_services to see it
         service = MockAsyncService()
@@ -909,8 +907,8 @@ class TestContainerEdgeCases:
     async def test_empty_factories_dict_after_close(self):
         """Test that factories are cleared after close."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
-        container.register_factory(MockAsyncService, lambda: MockAsyncService())
+        container.register_factory(MockService, MockService)
+        container.register_factory(MockAsyncService, MockAsyncService)
 
         await container.close_all()
 
@@ -920,7 +918,7 @@ class TestContainerEdgeCases:
     async def test_get_service_after_close_attempt(self):
         """Test error when trying to get service after close."""
         container = ServiceContainer()
-        container.register_factory(MockService, lambda: MockService())
+        container.register_factory(MockService, MockService)
 
         await container.close_all()
 

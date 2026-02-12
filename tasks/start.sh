@@ -18,6 +18,6 @@ alembic -c alembic_data.ini upgrade head
 
 echo "✅ Migrations completed successfully"
 
-# Start the FastAPI application with uvicorn
+# Start the FastAPI application with uvicorn (single worker since scheduler uses Redis lock)
 echo "🌐 Starting FastAPI application..."
-exec uvicorn app:app --host 0.0.0.0 --port 8081 --workers 4
+exec uvicorn app:app --host 0.0.0.0 --port 8081 --workers 1

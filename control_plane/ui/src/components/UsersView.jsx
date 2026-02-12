@@ -26,13 +26,13 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
       <div className="section-header">
         <h2>Users ({users.length})</h2>
         <div>
-          <button onClick={onRefresh} className="btn-secondary">
+          <button onClick={onRefresh} className="btn btn-outline-secondary">
             <RefreshCw size={16} />
             Refresh
           </button>
           <button
             onClick={onSync}
-            className="btn-primary"
+            className="btn btn-outline-primary"
             disabled={syncing}
             style={{ marginLeft: '0.5rem' }}
           >
@@ -80,7 +80,7 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
               <td>
                 <button
                   onClick={() => handleAdminToggle(user)}
-                  className={`btn-small ${user.is_admin ? 'btn-danger' : 'btn-primary'}`}
+                  className={`btn btn-small ${user.is_admin ? 'btn-outline-danger' : 'btn-outline-primary'}`}
                   disabled={updatingAdmin === user.id || (!hasAdmins ? false : !isCurrentUserAdmin)}
                   title={!hasAdmins ? 'Create first admin' : (isCurrentUserAdmin ? 'Toggle admin status' : 'Only admins can change admin status')}
                   style={{ minWidth: '80px' }}
@@ -92,7 +92,7 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
               <td>
                 <button
                   onClick={() => setSelectedUser(user)}
-                  className="btn-secondary btn-small"
+                  className="btn btn-outline-secondary btn-small"
                 >
                   <Shield size={14} />
                   Manage Groups
@@ -107,7 +107,7 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
         <div className="empty-state">
           <Users size={48} />
           <p>No users synced yet</p>
-          <button onClick={onSync} className="btn-primary" disabled={syncing}>
+          <button onClick={onSync} className="btn btn-outline-primary" disabled={syncing}>
             Sync Users from Slack
           </button>
         </div>

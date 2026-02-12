@@ -234,7 +234,11 @@ class TestServicesAgentRegistry:
     def test_get_agent_registry_handles_missing_agent_class(
         self, mock_requests_get, mock_load_classes
     ):
-        """Test that get_agent_registry handles missing agent_class gracefully."""
+        """Test that registry is empty when no local agents exist.
+
+        With new architecture, agents MUST be in langgraph.json to exist.
+        Control plane only provides metadata, not agent discovery.
+        """
         # No agent class available
         mock_load_classes.return_value = {}
 
@@ -261,9 +265,10 @@ class TestServicesAgentRegistry:
 
         registry = agent_registry.get_agent_registry(force_refresh=True)
 
-        assert "test" in registry
-        # agent_class should not be present if not available
-        assert "agent_class" not in registry["test"]
+        # With new behavior, no local agents = empty registry
+        # Control plane doesn't add agents, only metadata
+        assert "test" not in registry
+        assert registry == {}
 
     @patch.dict("sys.modules")
     @pytest.mark.integration

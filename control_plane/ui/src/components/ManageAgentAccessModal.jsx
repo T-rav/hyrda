@@ -1,13 +1,44 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Users, X, Plus, Trash2, Shield } from 'lucide-react'
 
-function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle, onDelete }) {
+function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevokeFromGroup, onToggle }) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [localAuthorizedGroups, setLocalAuthorizedGroups] = useState(new Set())
 
-  // Create set of authorized group names
-  const authorizedGroupNames = new Set(agent.authorized_group_names || [])
+  // Sync local authorized groups with agent.authorized_group_names prop
+  useEffect(() => {
+    setLocalAuthorizedGroups(new Set(agent.authorized_group_names || []))
+  }, [agent.authorized_group_names])
+
+  const handleGrant = async (groupName, agentName) => {
+    // Optimistically update UI
+    setLocalAuthorizedGroups(prev => new Set([...prev, groupName]))
+    try {
+      await onGrantToGroup(groupName, agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalAuthorizedGroups(prev => {
+        const next = new Set(prev)
+        next.delete(groupName)
+        return next
+      })
+    }
+  }
+
+  const handleRevoke = async (groupName, agentName) => {
+    // Optimistically update UI
+    setLocalAuthorizedGroups(prev => {
+      const next = new Set(prev)
+      next.delete(groupName)
+      return next
+    })
+    try {
+      await onRevokeFromGroup(groupName, agentName)
+    } catch (error) {
+      // Revert on error
+      setLocalAuthorizedGroups(prev => new Set([...prev, groupName]))
+    }
+  }
 
   // For system agents, only show all_users group
   const filteredGroups = groups
@@ -18,18 +49,6 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
 
   const handleToggle = () => {
     onToggle(agent.name)
-  }
-
-  const handleDelete = async () => {
-    try {
-      setDeleting(true)
-      await onDelete(agent.name)
-      onClose() // Close modal after successful deletion
-    } catch (err) {
-      // Error is handled by useAgents hook with toast
-      setDeleting(false)
-      setShowDeleteConfirm(false)
-    }
   }
 
   return (
@@ -100,7 +119,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
 
               <div className="user-selection-list">
             {filteredGroups.map(group => {
-              const hasAccess = authorizedGroupNames.has(group.group_name)
+              const hasAccess = localAuthorizedGroups.has(group.group_name)
               const isSystemGroup = group.group_name === 'all_users'
 
               return (
@@ -126,8 +145,8 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                   <div>
                     {!hasAccess && !agent.is_system && (
                       <button
-                        onClick={() => onGrantToGroup(group.group_name, agent.name)}
-                        className="btn-sm btn-primary"
+                        onClick={() => handleGrant(group.group_name, agent.name)}
+                        className="btn btn-sm btn-outline-primary"
                       >
                         <Plus size={14} />
                         Grant
@@ -135,8 +154,8 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
                     )}
                     {hasAccess && !(agent.is_system && isSystemGroup) && (
                       <button
-                        onClick={() => onRevokeFromGroup(group.group_name, agent.name)}
-                        className="btn-sm btn-danger"
+                        onClick={() => handleRevoke(group.group_name, agent.name)}
+                        className="btn btn-sm btn-outline-danger"
                       >
                         <Trash2 size={14} />
                         Revoke
@@ -157,41 +176,7 @@ function ManageAgentAccessModal({ agent, groups, onClose, onGrantToGroup, onRevo
         </div>
 
         <div className="modal-actions">
-          {!agent.is_system && (
-            <div style={{ marginRight: 'auto' }}>
-              {!showDeleteConfirm ? (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="btn-danger"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  <Trash2 size={16} />
-                  Delete Agent
-                </button>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ color: '#ef4444', fontWeight: '500' }}>
-                    Are you sure?
-                  </span>
-                  <button
-                    onClick={handleDelete}
-                    className="btn-danger"
-                    disabled={deleting}
-                  >
-                    {deleting ? 'Deleting...' : 'Yes, Delete'}
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="btn-secondary"
-                    disabled={deleting}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-          <button onClick={onClose} className="btn-primary">
+          <button onClick={onClose} className="btn btn-outline-secondary">
             Done
           </button>
         </div>

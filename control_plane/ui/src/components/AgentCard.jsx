@@ -1,5 +1,5 @@
 import React from 'react'
-import { Users, Shield, Activity } from 'lucide-react'
+import { Users, Shield, Activity, Key } from 'lucide-react'
 
 function AgentCard({ agent, onClick, usageStats }) {
   return (
@@ -40,6 +40,12 @@ function AgentCard({ agent, onClick, usageStats }) {
           <span className="stat-badge users">
             <Users size={14} />
             {agent.authorized_groups === 0 ? 'No groups' : `${agent.authorized_groups} ${agent.authorized_groups === 1 ? 'group' : 'groups'}`}
+          </span>
+          <span className="stat-badge api-keys">
+            <Key size={14} />
+            {(!agent.authorized_service_accounts || agent.authorized_service_accounts === 0)
+              ? 'No API keys'
+              : `${agent.authorized_service_accounts} ${agent.authorized_service_accounts === 1 ? 'API key' : 'API keys'}`}
           </span>
           {usageStats && usageStats.total_invocations > 0 && (
             <span className="stat-badge usage">

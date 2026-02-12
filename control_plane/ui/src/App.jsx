@@ -57,7 +57,6 @@ function App() {
     refreshAgents,
     fetchAgentDetails,
     toggleAgent,
-    deleteAgent,
   } = useAgents(toast)
 
   const {
@@ -235,7 +234,6 @@ function App() {
             onGrantToGroup={grantAgentToGroup}
             onRevokeFromGroup={revokeAgentFromGroup}
             onToggle={toggleAgent}
-            onDelete={deleteAgent}
           />
         )}
         {activeTab === 'users' && (

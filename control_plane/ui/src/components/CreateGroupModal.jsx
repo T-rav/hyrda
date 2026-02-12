@@ -1,5 +1,17 @@
 import React, { useState } from 'react'
-import { X } from 'lucide-react'
+import { Plus } from 'lucide-react'
+import Modal from './common/Modal'
+import Input from './common/Input'
+import Textarea from './common/Textarea'
+import Button from './common/Button'
+
+/**
+ * Modal for creating a new group
+ *
+ * @typedef {Object} CreateGroupModalProps
+ * @property {Function} onClose - Callback when modal should close
+ * @property {Function} onCreate - Callback when group is created
+ */
 
 function CreateGroupModal({ onClose, onCreate }) {
   const [formData, setFormData] = useState({
@@ -7,6 +19,9 @@ function CreateGroupModal({ onClose, onCreate }) {
     description: '',
     created_by: 'admin'
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+  const formId = 'create-group-form'
 
   // Auto-generate group_name from display_name (slugify)
   const generateGroupName = (displayName) => {
@@ -17,55 +32,80 @@ function CreateGroupModal({ onClose, onCreate }) {
       .replace(/_+/g, '_')           // Replace multiple underscores with single
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    const group_name = generateGroupName(formData.display_name)
-    onCreate({ ...formData, group_name })
+    setError(null)
+    setIsSubmitting(true)
+
+    try {
+      const group_name = generateGroupName(formData.display_name)
+      await onCreate({ ...formData, group_name })
+      // Modal will be closed by parent on success
+    } catch (err) {
+      setError(err.message || 'Failed to create group')
+      setIsSubmitting(false)
+    }
   }
 
+  const isFormValid = formData.display_name.trim().length > 0
+
+  const footer = (
+    <>
+      <Button
+        type="button"
+        variant="outline-secondary"
+        onClick={onClose}
+        disabled={isSubmitting}
+      >
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        variant="secondary"
+        isLoading={isSubmitting}
+        disabled={!isFormValid}
+        form={formId}
+      >
+        Create Group
+      </Button>
+    </>
+  )
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Create New Group</h2>
-          <button onClick={onClose} className="modal-close">
-            <X size={20} />
-          </button>
-        </div>
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={
+        <>
+          <Plus size={20} className="me-2" />
+          Create New Group
+        </>
+      }
+      size="md"
+      footer={footer}
+      hideDefaultFooter={true}
+    >
+      <form id={formId} onSubmit={handleSubmit}>
+        <Input
+          label="Group Name"
+          value={formData.display_name}
+          onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+          placeholder="Data Analysts"
+          required
+          autoFocus
+          error={error}
+        />
 
-        <form onSubmit={handleSubmit} className="modal-form">
-          <div className="form-group">
-            <label>Group Name</label>
-            <input
-              type="text"
-              value={formData.display_name}
-              onChange={e => setFormData({ ...formData, display_name: e.target.value })}
-              placeholder="Data Analysts"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Description (optional)</label>
-            <textarea
-              value={formData.description}
-              onChange={e => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Team members who analyze data"
-              rows={3}
-            />
-          </div>
-
-          <div className="modal-actions">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary">
-              Create Group
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <Textarea
+          label="Description"
+          value={formData.description}
+          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          placeholder="Team members who analyze data"
+          rows={3}
+          hint="Optional description to help identify this group"
+        />
+      </form>
+    </Modal>
   )
 }
 

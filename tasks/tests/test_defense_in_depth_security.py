@@ -230,20 +230,25 @@ class TestDatabaseAdminVerification:
 
 
 class TestJWTExpiry:
-    """Test JWT token expiry time."""
+    """Test JWT access token expiry time.
 
-    def test_jwt_expiration_is_4_hours(self):
-        """SECURITY: Test that JWT tokens expire in 4 hours, not 24 hours."""
+    Updated for OAuth 2.0 refresh token flow (commit 64290e4f):
+    - Access tokens: 15 minutes (short-lived)
+    - Refresh tokens: 4 hours (handled separately)
+    """
+
+    def test_jwt_expiration_is_15_minutes(self):
+        """SECURITY: Test that JWT access tokens expire in 15 minutes (OAuth 2.0 flow)."""
         # Import from shared module (already in path via PYTHONPATH)
-        from shared.utils.jwt_auth import JWT_EXPIRATION_HOURS
+        from shared.utils.jwt_auth import JWT_EXPIRATION_MINUTES
 
-        # Assert
-        assert JWT_EXPIRATION_HOURS == 4, (
-            f"JWT expiry should be 4 hours for security, not {JWT_EXPIRATION_HOURS}"
+        # Assert - access tokens are short-lived in OAuth 2.0 flow
+        assert JWT_EXPIRATION_MINUTES == 15, (
+            f"JWT access token expiry should be 15 minutes for OAuth 2.0, not {JWT_EXPIRATION_MINUTES}"
         )
 
-    def test_jwt_token_contains_expiry_4_hours_from_now(self):
-        """Test that generated JWT tokens expire in 4 hours."""
+    def test_jwt_token_contains_expiry_15_minutes_from_now(self):
+        """Test that generated JWT access tokens expire in 15 minutes."""
         from datetime import UTC, datetime, timedelta
 
         # Import from shared module (already in path via PYTHONPATH)
@@ -260,8 +265,8 @@ class TestJWTExpiry:
         exp = datetime.fromtimestamp(payload["exp"], UTC)
         iat = datetime.fromtimestamp(payload["iat"], UTC)
 
-        # Token should expire 4 hours from issuance
-        expected_expiry = iat + timedelta(hours=4)
+        # Token should expire 15 minutes from issuance (OAuth 2.0 access token)
+        expected_expiry = iat + timedelta(minutes=15)
         assert (
             abs((exp - expected_expiry).total_seconds()) < 2
         )  # Allow 2 second variance

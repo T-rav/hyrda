@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
+import CreateTaskModal from './components/CreateTaskModal'
+import ViewTaskModal from './components/ViewTaskModal'
 import './App.css'
 import { logError } from './utils/logger'
+import { setupTokenRefresh, fetchWithTokenRefresh } from './utils/tokenRefresh'
 
 // Custom hook for managing document title
 function useDocumentTitle(title) {
@@ -18,9 +21,44 @@ function useDocumentTitle(title) {
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [notification, setNotification] = useState(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState(null)
+
+  // Lifted state - SHARED between Dashboard and Tasks
+  const [jobs, setJobs] = useState([])
+  const [taskRuns, setTaskRuns] = useState([])
+  const [scheduler, setScheduler] = useState({})
+  const [loading, setLoading] = useState(false)
 
   // Use the custom hook to set document title
   useDocumentTitle('InsightMesh - Tasks Dashboard')
+
+  // Check authentication on mount
+  React.useEffect(() => {
+    const verifyAuth = async () => {
+      try {
+        const response = await fetch('/auth/me', {
+          credentials: 'include'
+        })
+        if (!response.ok) {
+          // Not authenticated - redirect to control plane login with redirect back to tasks
+          window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+          return
+        }
+        const data = await response.json()
+        if (data.email) {
+          setCurrentUserEmail(data.email)
+        }
+      } catch (error) {
+        logError('Auth check failed:', error)
+        window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+        return
+      }
+    }
+
+    verifyAuth()
+    // Setup automatic token refresh (checks token every 5 minutes)
+    setupTokenRefresh()
+  }, [])
 
   const handleTabChange = (tab) => {
     setActiveTab(tab)
@@ -29,6 +67,15 @@ function App() {
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type })
     setTimeout(() => setNotification(null), 3000)
+  }
+
+  const handleLogout = () => {
+    // POST to logout endpoint
+    const form = document.createElement('form')
+    form.method = 'POST'
+    form.action = 'https://localhost:6001/auth/logout'
+    document.body.appendChild(form)
+    form.submit()
   }
 
   return (
@@ -72,18 +119,56 @@ function App() {
               Health
             </a>
             <div className="nav-divider"></div>
+            <div className="logout-dropdown">
+              <button
+                className="nav-link logout-btn"
+                onClick={handleLogout}
+                title="Logout"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+              {currentUserEmail && (
+                <div className="dropdown-menu">
+                  <div className="dropdown-item user-email">
+                    <User size={16} />
+                    {currentUserEmail}
+                  </div>
+                </div>
+              )}
+            </div>
           </nav>
         </div>
       </header>
 
       <main className="main-content">
-        {activeTab === 'dashboard' && <DashboardContent showNotification={showNotification} />}
-        {activeTab === 'tasks' && <TasksContent showNotification={showNotification} />}
+        {activeTab === 'dashboard' && (
+          <DashboardContent
+            showNotification={showNotification}
+            jobs={jobs}
+            setJobs={setJobs}
+            taskRuns={taskRuns}
+            setTaskRuns={setTaskRuns}
+            scheduler={scheduler}
+            setScheduler={setScheduler}
+            loading={loading}
+            setLoading={setLoading}
+          />
+        )}
+        {activeTab === 'tasks' && (
+          <TasksContent
+            showNotification={showNotification}
+            jobs={jobs}
+            setJobs={setJobs}
+            loading={loading}
+            setLoading={setLoading}
+          />
+        )}
         {activeTab === 'credentials' && <CredentialsManager />}
       </main>
 
       <footer className="footer">
-        <p>InsightMesh Tasks v1.0.0</p>
+        <p>InsightMesh Tasks</p>
       </footer>
 
       {/* Notification */}
@@ -105,43 +190,50 @@ function App() {
 }
 
 // Dashboard Component with Real API Data
-function DashboardContent() {
-  const [loading, setLoading] = useState(false)
+function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, loading, setLoading }) {
   const [showAllRuns, setShowAllRuns] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const recordsPerPage = 20
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
-  const [data, setData] = useState({
-    jobs: [],
-    taskRuns: [],
-    scheduler: {}
-  })
 
   const loadData = async () => {
     setLoading(true)
     try {
       const [jobsRes, runsRes, schedulerRes] = await Promise.all([
-        fetch('/api/jobs').then(r => r.json()),
-        fetch('/api/task-runs').then(r => r.json()),
-        fetch('/api/scheduler/info').then(r => r.json())
+        fetchWithTokenRefresh('/api/jobs').then(async r => {
+          if (!r.ok) throw new Error(`Failed to load jobs: ${r.status}`)
+          return r.json()
+        }),
+        fetchWithTokenRefresh('/api/task-runs').then(async r => {
+          if (!r.ok) throw new Error(`Failed to load task runs: ${r.status}`)
+          return r.json()
+        }),
+        fetchWithTokenRefresh('/api/scheduler/info').then(async r => {
+          if (!r.ok) throw new Error(`Failed to load scheduler info: ${r.status}`)
+          return r.json()
+        })
       ])
 
-      setData({
-        jobs: jobsRes.jobs || [],
-        taskRuns: runsRes.task_runs || [],
-        scheduler: schedulerRes
-      })
+      setJobs(jobsRes.jobs || [])
+      setTaskRuns(runsRes.task_runs || [])
+      setScheduler(schedulerRes)
     } catch (error) {
       logError('Error loading data:', error)
+      setJobs([])
+      setTaskRuns([])
+      setScheduler({ running: false })
     } finally {
       setLoading(false)
     }
   }
 
-  // Load data on component mount
+  // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    loadData()
+    if (jobs.length === 0 && taskRuns.length === 0) {
+      loadData()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh effect
@@ -151,16 +243,15 @@ function DashboardContent() {
         loadData()
       }, 10000) // 10 seconds
       setRefreshInterval(interval)
+
+      return () => {
+        clearInterval(interval)
+      }
     } else if (refreshInterval) {
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
-
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval)
-      }
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh])
 
   const toggleAutoRefresh = () => {
@@ -168,12 +259,12 @@ function DashboardContent() {
   }
 
   // Calculate statistics
-  const totalTasks = data.jobs.length
-  const activeTasks = data.jobs.filter(job => job.next_run_time).length
-  const pausedTasks = data.jobs.filter(job => !job.next_run_time).length
+  const totalTasks = jobs.length
+  const activeTasks = jobs.filter(job => job.next_run_time).length
+  const pausedTasks = jobs.filter(job => !job.next_run_time).length
 
   // Calculate next run
-  const nextRuns = data.jobs
+  const nextRuns = jobs
     .filter(job => job.next_run_time)
     .map(job => new Date(job.next_run_time))
     .sort((a, b) => a - b)
@@ -187,8 +278,8 @@ function DashboardContent() {
   })() : 'None'
 
   // Calculate success rate
-  const totalRuns = data.taskRuns.length
-  const successfulRuns = data.taskRuns.filter(run => run.status === 'success').length
+  const totalRuns = taskRuns.length
+  const successfulRuns = taskRuns.filter(run => run.status === 'success').length
   const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0
 
   return (
@@ -273,7 +364,7 @@ function DashboardContent() {
           </button>
         </div>
         <RecentRunsTable
-          taskRuns={data.taskRuns}
+          taskRuns={taskRuns}
           showAllRuns={showAllRuns}
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
@@ -285,9 +376,7 @@ function DashboardContent() {
 }
 
 // Full Tasks Component with Management
-function TasksContent({ showNotification }) {
-  const [loading, setLoading] = useState(false)
-  const [tasks, setTasks] = useState([])
+function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) {
   const [actionLoading, setActionLoading] = useState({})
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showViewModal, setShowViewModal] = useState(false)
@@ -298,19 +387,26 @@ function TasksContent({ showNotification }) {
   const loadTasks = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/jobs')
+      const response = await fetchWithTokenRefresh('/api/jobs')
+      if (!response.ok) {
+        throw new Error(`Failed to load tasks: ${response.status}`)
+      }
       const data = await response.json()
-      setTasks(data.jobs || [])
+      setJobs(data.jobs || [])
     } catch (error) {
       logError('Error loading tasks:', error)
+      setJobs([])
     } finally {
       setLoading(false)
     }
   }
 
-  // Load data on component mount
+  // Load data on component mount (only if not already loaded)
   React.useEffect(() => {
-    loadTasks()
+    if (jobs.length === 0) {
+      loadTasks()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Auto-refresh effect
@@ -320,16 +416,15 @@ function TasksContent({ showNotification }) {
         loadTasks()
       }, 10000) // 10 seconds
       setRefreshInterval(interval)
+
+      return () => {
+        clearInterval(interval)
+      }
     } else if (refreshInterval) {
       clearInterval(refreshInterval)
       setRefreshInterval(null)
     }
-
-    return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval)
-      }
-    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh])
 
   const toggleAutoRefresh = () => {
@@ -360,9 +455,9 @@ function TasksContent({ showNotification }) {
       let response
       switch (action) {
         case 'pause':
-          response = await fetch(`/api/jobs/${taskId}/pause`, { method: 'POST' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/pause`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} paused successfully`, 'success')
             await loadTasks()
@@ -371,9 +466,9 @@ function TasksContent({ showNotification }) {
           }
           break
         case 'resume':
-          response = await fetch(`/api/jobs/${taskId}/resume`, { method: 'POST' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/resume`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} resumed successfully`, 'success')
             await loadTasks()
@@ -382,9 +477,9 @@ function TasksContent({ showNotification }) {
           }
           break
         case 'run-once':
-          response = await fetch(`/api/jobs/${taskId}/run-once`, { method: 'POST' })
+          response = await fetchWithTokenRefresh(`/api/jobs/${taskId}/run-once`, { method: 'POST' })
           if (response && response.ok) {
-            const task = tasks.find(t => t.id === taskId)
+            const task = jobs.find(t => t.id === taskId)
             const taskName = getTaskDisplayName(task)
             showNotification(`${taskName} triggered successfully`, 'success')
             await loadTasks()
@@ -393,10 +488,10 @@ function TasksContent({ showNotification }) {
           }
           break
         case 'delete':
-          const task = tasks.find(t => t.id === taskId)
+          const task = jobs.find(t => t.id === taskId)
           const taskName = getTaskDisplayName(task)
           if (window.confirm(`Are you sure you want to delete ${taskName}?`)) {
-            response = await fetch(`/api/jobs/${taskId}`, { method: 'DELETE' })
+            response = await fetchWithTokenRefresh(`/api/jobs/${taskId}`, { method: 'DELETE' })
             if (response && response.ok) {
               showNotification(`${taskName} deleted successfully`, 'success')
               await loadTasks()
@@ -411,7 +506,7 @@ function TasksContent({ showNotification }) {
         case 'view':
           // Load task details and show modal
           try {
-            const taskResponse = await fetch(`/api/jobs/${taskId}`)
+            const taskResponse = await fetchWithTokenRefresh(`/api/jobs/${taskId}`)
             if (taskResponse.ok) {
               const taskData = await taskResponse.json()
               setSelectedTask(taskData)
@@ -495,12 +590,12 @@ function TasksContent({ showNotification }) {
           <div className="header-title">
             <ListChecks size={24} />
             <h3>All Tasks</h3>
-            <span className="badge bg-primary ms-2">{tasks.length}</span>
+            <span className="badge bg-primary ms-2">{jobs.length}</span>
           </div>
         </div>
 
         <div className="table-container">
-          {tasks.length === 0 ? (
+          {jobs.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon">📋</div>
               <p>No tasks scheduled</p>
@@ -528,7 +623,7 @@ function TasksContent({ showNotification }) {
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task) => (
+                {jobs.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -581,7 +676,9 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const taskTypeDescriptions = {
     'slack_user_import': 'Slack User Import',
     'metric_sync': 'Metric.ai Data Sync',
-    'gdrive_ingest': 'Google Drive Ingestion'
+    'gdrive_ingest': 'Google Drive Ingestion',
+    'youtube_ingest': 'YouTube Ingestion',
+    'website_scrape': 'Website Scraping'
   }
 
   const taskDescription = taskTypeDescriptions[taskType] || taskType
@@ -821,865 +918,6 @@ function TaskRunRow({ run }) {
         </div>
       </td>
     </tr>
-  )
-}
-
-// Create Task Modal Component
-function CreateTaskModal({ onClose, onTaskCreated }) {
-  const [taskType, setTaskType] = useState('')
-  const [taskName, setTaskName] = useState('')
-  const [triggerType, setTriggerType] = useState('interval')
-  const [hours, setHours] = useState('1')
-  const [minutes, setMinutes] = useState('0')
-  const [seconds, setSeconds] = useState('0')
-  const [cronExpression, setCronExpression] = useState('0 0 * * *')
-  const [runDate, setRunDate] = useState('')
-  const [taskTypes, setTaskTypes] = useState([])
-  const [loading, setLoading] = useState(false)
-
-  // Load task types on component mount
-  React.useEffect(() => {
-    const loadTaskTypes = async () => {
-      try {
-        const response = await fetch('/api/job-types')
-        const data = await response.json()
-        setTaskTypes(data.job_types || [])
-      } catch (error) {
-        logError('Error loading task types:', error)
-      }
-    }
-    loadTaskTypes()
-  }, [])
-
-  // Helper function to extract parameter values from form elements
-  const getParameterValue = (element, param) => {
-    if (element.multiple) {
-      // Multi-select dropdown
-      const selectedValues = Array.from(element.selectedOptions).map(option => option.value)
-      return selectedValues.length > 0 ? selectedValues : null
-    } else if (element.tagName === 'SELECT') {
-      // Single select dropdown
-      if (element.value) {
-        // Convert boolean strings to actual booleans
-        if (element.value === 'true') {
-          return true
-        } else if (element.value === 'false') {
-          return false
-        } else {
-          return element.value
-        }
-      }
-      return null
-    } else if (element.tagName === 'TEXTAREA') {
-      // Textarea - try to parse as JSON for metadata fields
-      if (element.value.trim()) {
-        if (param === 'metadata') {
-          try {
-            return JSON.parse(element.value.trim())
-          } catch (e) {
-            // If not valid JSON, return as string
-            return element.value.trim()
-          }
-        }
-        return element.value.trim()
-      }
-      return null
-    } else if (element.type === 'number') {
-      // Number input
-      return element.value ? parseInt(element.value) : null
-    } else {
-      // Regular text input
-      return element.value.trim() || null
-    }
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!taskType || !taskName) {
-      alert('Please fill in all required fields')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
-      const parameters = {}
-
-      // Collect required parameters
-      if (selectedTaskType?.required_params) {
-        for (const param of selectedTaskType.required_params) {
-          const element = document.getElementById(`param_${param}`)
-          if (element) {
-            const value = getParameterValue(element, param)
-            if (value !== null && value !== '') {
-              parameters[param] = value
-            } else if (element.required) {
-              alert(`Required parameter '${param}' is missing`)
-              setLoading(false)
-              return
-            }
-          }
-        }
-      }
-
-      // Collect optional parameters
-      if (selectedTaskType?.optional_params) {
-        for (const param of selectedTaskType.optional_params) {
-          const element = document.getElementById(`param_${param}`)
-          if (element) {
-            const value = getParameterValue(element, param)
-            if (value !== null && value !== '') {
-              parameters[param] = value
-            }
-          }
-        }
-      }
-
-      // Generic validation for parameter groups (e.g., "one of X required")
-      if (selectedTaskType?.param_groups) {
-        for (const group of selectedTaskType.param_groups) {
-          const filledParams = group.params.filter(param => {
-            const value = parameters[param]
-            return value && value.toString().trim() !== ''
-          })
-
-          const filledCount = filledParams.length
-          const minRequired = group.min_required || 1
-          const maxRequired = group.max_required || group.params.length
-
-          // Check minimum requirement
-          if (filledCount < minRequired) {
-            const errorMsg = group.error_message ||
-              `${group.description || 'Parameter group'}: At least ${minRequired} parameter(s) required from: ${group.params.join(', ')}`
-            alert(errorMsg)
-            setLoading(false)
-            return
-          }
-
-          // Check maximum requirement
-          if (filledCount > maxRequired) {
-            const errorMsg = group.error_message ||
-              `${group.description || 'Parameter group'}: At most ${maxRequired} parameter(s) allowed from: ${group.params.join(', ')}`
-            alert(errorMsg)
-            setLoading(false)
-            return
-          }
-        }
-      }
-
-      // Special validation for gdrive_ingest credential (still task-specific for now)
-      if (taskType === 'gdrive_ingest') {
-        if (!parameters.credential_id || parameters.credential_id === '') {
-          alert('Please select a Google Drive credential from the dropdown.')
-          setLoading(false)
-          return
-        }
-      }
-
-      const taskData = {
-        job_type: taskType,
-        task_name: taskName,
-        schedule: {
-          trigger: triggerType,
-          hours: parseInt(hours) || 0,
-          minutes: parseInt(minutes) || 0,
-          seconds: parseInt(seconds) || 0
-        },
-        parameters: parameters
-      }
-
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(taskData)
-      })
-
-      if (response.ok) {
-        onTaskCreated('Task created successfully!')
-      } else {
-        throw new Error('Failed to create task')
-      }
-    } catch (error) {
-      logError('Error creating task:', error)
-      alert('Error creating task: ' + error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h5 className="modal-title">
-            <Plus size={20} className="me-2" />
-            Create New Task
-          </h5>
-          <button type="button" className="btn-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-        <div className="modal-body">
-          <form onSubmit={handleSubmit}>
-            <div className="row">
-              <div className="col-md-6">
-                <div className="mb-4">
-                  <label htmlFor="taskType" className="form-label">
-                    <CalendarClock size={16} className="me-1" />
-                    Task Type
-                  </label>
-                  <select
-                    className="form-select"
-                    id="taskType"
-                    value={taskType}
-                    onChange={(e) => setTaskType(e.target.value)}
-                    required
-                  >
-                    <option value="">Select task type...</option>
-                    {taskTypes.map((type) => (
-                      <option key={type.type} value={type.type}>
-                        {type.name} - {type.description}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="col-md-6">
-                <div className="mb-4">
-                  <label htmlFor="taskName" className="form-label">
-                    <Play size={16} className="me-1" />
-                    Task Name
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="taskName"
-                    value={taskName}
-                    onChange={(e) => setTaskName(e.target.value)}
-                    placeholder="Enter a name for this task"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="form-label">
-                <Activity size={16} className="me-1" />
-                Schedule
-              </label>
-              <div className="row align-items-end">
-                <div className="col-md-4">
-                  <select
-                    className="form-select"
-                    value={triggerType}
-                    onChange={(e) => setTriggerType(e.target.value)}
-                    required
-                  >
-                    <option value="interval">Interval</option>
-                    <option value="cron">Cron</option>
-                    <option value="date">Date</option>
-                  </select>
-                </div>
-                <div className="col-md-8">
-                  {triggerType === 'interval' && (
-                    <div className="row g-3">
-                      <div className="col-4">
-                        <label htmlFor="hours" className="form-label d-flex align-items-center">
-                          <Activity size={14} className="me-1" />
-                          Hours
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          id="hours"
-                          value={hours}
-                          onChange={(e) => setHours(e.target.value)}
-                          min="0"
-                        />
-                      </div>
-                      <div className="col-4">
-                        <label htmlFor="minutes" className="form-label d-flex align-items-center">
-                          <Activity size={14} className="me-1" />
-                          Minutes
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          id="minutes"
-                          value={minutes}
-                          onChange={(e) => setMinutes(e.target.value)}
-                          min="0"
-                          max="59"
-                        />
-                      </div>
-                      <div className="col-4">
-                        <label htmlFor="seconds" className="form-label d-flex align-items-center">
-                          <Activity size={14} className="me-1" />
-                          Seconds
-                        </label>
-                        <input
-                          type="number"
-                          className="form-control"
-                          id="seconds"
-                          value={seconds}
-                          onChange={(e) => setSeconds(e.target.value)}
-                          min="0"
-                          max="59"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {triggerType === 'cron' && (
-                    <div>
-                      <label htmlFor="cronExpression" className="form-label">
-                        <Activity size={16} className="me-1" />
-                        Cron Expression
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="cronExpression"
-                        value={cronExpression}
-                        onChange={(e) => setCronExpression(e.target.value)}
-                        placeholder="0 0 * * *"
-                        title="Cron expression (minute hour day month day_of_week)"
-                      />
-                      <div className="form-text">
-                        <small>Format: minute hour day month day_of_week (e.g., "0 0 * * *" for daily at midnight)</small>
-                      </div>
-                    </div>
-                  )}
-                  {triggerType === 'date' && (
-                    <div>
-                      <label htmlFor="runDate" className="form-label">
-                        <Activity size={16} className="me-1" />
-                        Run Date & Time
-                      </label>
-                      <input
-                        type="datetime-local"
-                        className="form-control"
-                        id="runDate"
-                        value={runDate}
-                        onChange={(e) => setRunDate(e.target.value)}
-                      />
-                      <div className="form-text">
-                        <small>Select the specific date and time to run this task</small>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="form-label">
-                <CalendarClock size={16} className="me-1" />
-                Task Parameters
-              </label>
-              {taskType ? (
-                <TaskParameters taskType={taskType} taskTypes={taskTypes} />
-              ) : (
-                <div className="alert alert-info">
-                  <Activity size={16} className="me-2" />
-                  <small>Parameters will appear here based on the selected task type</small>
-                </div>
-              )}
-            </div>
-          </form>
-        </div>
-        <div className="modal-footer">
-          <button type="button" className="btn btn-outline-secondary" onClick={onClose}>
-            <X size={16} className="me-1" />
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn btn-outline-success"
-            onClick={handleSubmit}
-            disabled={loading}
-          >
-            <Plus size={16} className="me-1" />
-            {loading ? 'Creating...' : 'Create Task'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// View Task Modal Component
-function ViewTaskModal({ task, onClose }) {
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A'
-    return new Date(dateString).toLocaleString()
-  }
-
-  // Extract task type from args (first element is the job type)
-  const taskType = task.args && task.args.length > 0 ? task.args[0] : 'Unknown'
-
-  // Extract parameters from args (second element is the params dict)
-  const parameters = task.args && task.args.length > 1 ? task.args[1] : {}
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h5 className="modal-title">
-            <Eye size={20} className="me-2" />
-            {task.name || taskType}
-          </h5>
-          <button type="button" className="btn-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-        <div className="modal-body" style={{fontSize: '14px'}}>
-          {/* Main Info Grid */}
-          <div className="row g-3 mb-4">
-            <div className="col-md-6">
-              <div className="p-3 border rounded">
-                <div className="text-muted small mb-1">TASK TYPE</div>
-                <div className="fw-bold"><code>{taskType}</code></div>
-              </div>
-            </div>
-            <div className="col-md-6">
-              <div className="p-3 border rounded">
-                <div className="text-muted small mb-1">SCHEDULE</div>
-                <div className="fw-bold"><code>{task.trigger || 'Unknown'}</code></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="row g-3 mb-4">
-            <div className="col-md-6">
-              <div className="p-3 border rounded">
-                <div className="text-muted small mb-1">STATUS</div>
-                <div>
-                  <span className={`badge ${task.next_run_time ? 'bg-success' : 'bg-warning'}`}>
-                    {task.next_run_time ? 'Active' : 'Paused'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="col-md-6">
-              <div className="p-3 border rounded">
-                <div className="text-muted small mb-1">NEXT RUN</div>
-                <div className="fw-bold">{task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Parameters Section */}
-          {Object.keys(parameters).length > 0 && (
-            <div className="mb-4">
-              <h6 className="mb-3">Parameters</h6>
-              <div className="table-responsive">
-                <table className="table table-sm table-bordered mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th style={{width: '30%'}}>Parameter</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(parameters).map(([key, value]) => (
-                      <tr key={key}>
-                        <td className="text-muted"><code className="text-dark">{key}</code></td>
-                        <td>
-                          {typeof value === 'object'
-                            ? <pre className="mb-0 small">{JSON.stringify(value, null, 2)}</pre>
-                            : <span className="fw-semibold">{String(value)}</span>
-                          }
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Task ID */}
-          <div className="text-muted small">
-            <strong>Task ID:</strong> <code className="text-muted">{task.id}</code>
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            <X size={16} className="me-1" />
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Task Parameters Component
-function TaskParameters({ taskType, taskTypes }) {
-  // All hooks must be called at the top, before any returns
-  const [selectedCredential, setSelectedCredential] = React.useState('')
-  const [availableCredentials, setAvailableCredentials] = React.useState([])
-
-  const selectedTaskType = taskTypes.find(tt => tt.type === taskType)
-
-  // Special handling for Google Drive ingestion - show credential selector
-  const isGDriveIngest = taskType === 'gdrive_ingest'
-
-  // Load available credentials for gdrive_ingest tasks
-  React.useEffect(() => {
-    if (isGDriveIngest) {
-      fetch('/api/credentials')
-        .then(r => r.json())
-        .then(data => {
-          setAvailableCredentials(data.credentials || [])
-          if (data.credentials && data.credentials.length === 1) {
-            setSelectedCredential(data.credentials[0].credential_id)
-          }
-        })
-        .catch(err => {
-          // Silently fail if credentials endpoint not available
-          logError('Error loading credentials:', err)
-        })
-    }
-  }, [isGDriveIngest])
-
-  if (!selectedTaskType) {
-    return (
-      <div className="alert alert-info">
-        <Activity size={16} className="me-2" />
-        <small>Parameters will appear here based on the selected task type</small>
-      </div>
-    )
-  }
-
-  const renderParameter = (param, isRequired = false) => {
-    // Skip credentials_file, token_file, and credential_id for gdrive_ingest (handled separately)
-    if (isGDriveIngest && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
-      return null
-    }
-
-    // Specific parameter handling for known parameters
-    switch(param) {
-      case 'workspace_filter':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              workspace_filter {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder="e.g., my-workspace-id"
-              required={isRequired}
-            />
-            <div className="form-text">
-              <small className="text-muted">Filter users by specific workspace ID (leave empty for all workspaces)</small>
-            </div>
-          </div>
-        )
-
-      case 'user_types':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              user_types {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} multiple required={isRequired}>
-              <option value="member" defaultSelected>Member</option>
-              <option value="admin" defaultSelected>Admin</option>
-              <option value="owner">Owner</option>
-              <option value="bot">Bot</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Select which types of users to import (hold Ctrl/Cmd to select multiple)</small>
-            </div>
-          </div>
-        )
-
-      case 'include_deactivated':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              include_deactivated {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} required={isRequired}>
-              <option value="false" defaultSelected>No - Active users only</option>
-              <option value="true">Yes - Include deactivated users</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Whether to include deactivated/deleted users in the import</small>
-            </div>
-          </div>
-        )
-
-      case 'folder_id':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              folder_id <span className="text-warning">*</span>
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder="Google Drive folder ID"
-            />
-            <div className="form-text">
-              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). Folder ID for ingesting a folder of documents.</small>
-            </div>
-          </div>
-        )
-
-      case 'file_id':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              file_id <span className="text-warning">*</span>
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder="Google Drive file ID"
-            />
-            <div className="form-text">
-              <small className="text-muted"><strong>Provide either folder_id OR file_id</strong> (not both). File ID for ingesting a single document.</small>
-            </div>
-          </div>
-        )
-
-      case 'recursive':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              recursive {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} required={isRequired}>
-              <option value="true" defaultSelected>Yes - Include subfolders</option>
-              <option value="false">No - Only top-level folder</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Whether to recursively ingest documents from subfolders (only applies to folder_id)</small>
-            </div>
-          </div>
-        )
-
-      case 'file_types':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              file_types {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder="pdf,docx,txt"
-              required={isRequired}
-            />
-            <div className="form-text">
-              <small className="text-muted">Comma-separated list of file types to process (e.g., pdf,docx,txt)</small>
-            </div>
-          </div>
-        )
-
-      case 'force_update':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              force_update {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} required={isRequired}>
-              <option value="false" defaultSelected>No - Skip already processed files</option>
-              <option value="true">Yes - Reprocess all files</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Whether to reprocess files that have already been ingested</small>
-            </div>
-          </div>
-        )
-
-      case 'metadata':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              metadata {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <textarea
-              className="form-control"
-              id={`param_${param}`}
-              rows="3"
-              placeholder='{"project": "my-project", "department": "engineering"}'
-              required={isRequired}
-            />
-            <div className="form-text">
-              <small className="text-muted">Additional metadata as JSON object (optional)</small>
-            </div>
-          </div>
-        )
-
-      case 'metric_types':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              metric_types {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} multiple required={isRequired}>
-              <option value="system" defaultSelected>System Metrics</option>
-              <option value="usage" defaultSelected>Usage Metrics</option>
-              <option value="performance">Performance Metrics</option>
-              <option value="errors">Error Metrics</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Select which types of metrics to collect</small>
-            </div>
-          </div>
-        )
-
-      case 'time_range_hours':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              time_range_hours {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <input
-              type="number"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder="24"
-              min="1"
-              max="168"
-              defaultValue="24"
-              required={isRequired}
-            />
-            <div className="form-text">
-              <small className="text-muted">Number of hours to collect metrics for (1-168 hours)</small>
-            </div>
-          </div>
-        )
-
-      case 'aggregate_level':
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              aggregate_level {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <select className="form-select" id={`param_${param}`} required={isRequired}>
-              <option value="hourly" defaultSelected>Hourly</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-            </select>
-            <div className="form-text">
-              <small className="text-muted">Level of aggregation for collected metrics</small>
-            </div>
-          </div>
-        )
-
-      // Generic fallback for unknown parameters
-      default:
-        return (
-          <div>
-            <label htmlFor={`param_${param}`} className="form-label">
-              {param} {isRequired && <span className="text-danger">*</span>}
-            </label>
-            <input
-              type="text"
-              className="form-control"
-              id={`param_${param}`}
-              placeholder={`Enter ${param}`}
-              required={isRequired}
-            />
-            <div className="form-text">
-              <small className="text-muted">Parameter: {param}</small>
-            </div>
-          </div>
-        )
-    }
-  }
-
-  return (
-    <div>
-      {/* Google Drive Credential Selection */}
-      {isGDriveIngest && (
-        <div className="mb-4">
-          <h6>Google Drive Authentication</h6>
-
-          {availableCredentials.length === 0 ? (
-            <div className="alert alert-warning">
-              <small>No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.</small>
-            </div>
-          ) : (
-            <div className="mb-3">
-              <label className="form-label">
-                Select Credential <span className="text-danger">*</span>
-              </label>
-              <select
-                className="form-select"
-                id="param_credential_id"
-                value={selectedCredential}
-                onChange={(e) => setSelectedCredential(e.target.value)}
-                required
-              >
-                <option value="">Choose a credential...</option>
-                {availableCredentials.map((cred) => (
-                  <option key={cred.credential_id} value={cred.credential_id}>
-                    {cred.credential_name}
-                  </option>
-                ))}
-              </select>
-              <div className="form-text">
-                <small className="text-muted">
-                  Select which Google account to use for this task
-                </small>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Required Parameters */}
-      {selectedTaskType.required_params && selectedTaskType.required_params.length > 0 && (
-        <div className="mb-4">
-          <h6>Required Parameters:</h6>
-          {selectedTaskType.required_params.map((param) => {
-            const rendered = renderParameter(param, true)
-            return rendered ? (
-              <div key={param} className="mb-3">
-                {rendered}
-              </div>
-            ) : null
-          })}
-        </div>
-      )}
-
-      {/* Optional Parameters */}
-      {selectedTaskType.optional_params && selectedTaskType.optional_params.length > 0 && (
-        <div>
-          <h6>Optional Parameters:</h6>
-          {selectedTaskType.optional_params.map((param) => {
-            const rendered = renderParameter(param, false)
-            return rendered ? (
-              <div key={param} className="mb-3">
-                {rendered}
-              </div>
-            ) : null
-          })}
-        </div>
-      )}
-
-      {/* Show message if no parameters */}
-      {(!selectedTaskType.required_params || selectedTaskType.required_params.length === 0) &&
-       (!selectedTaskType.optional_params || selectedTaskType.optional_params.length === 0) && (
-        <div className="alert alert-info">
-          <Activity size={16} className="me-2" />
-          <small>This task type has no configurable parameters</small>
-        </div>
-      )}
-    </div>
   )
 }
 

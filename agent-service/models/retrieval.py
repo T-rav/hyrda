@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .file_processing import DocumentChunk
 
 
-class RetrievalMethod(str, Enum):
+class RetrievalMethod(StrEnum):
     """Methods used for document retrieval."""
 
     DENSE = "dense"
@@ -21,7 +21,7 @@ class RetrievalMethod(str, Enum):
     RERANKED = "reranked"
 
 
-class SearchType(str, Enum):
+class SearchType(StrEnum):
     """Types of search operations."""
 
     SEMANTIC = "semantic"

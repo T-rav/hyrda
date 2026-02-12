@@ -22,7 +22,7 @@ export function useAgents(toast) {
             }
           } catch (err) {
             // Silently fail for individual agents
-            console.warn(`Failed to fetch usage for ${name}:`, err)
+            console.warn('Failed to fetch usage for agent:', name, err)
           }
         })
       )
@@ -38,6 +38,10 @@ export function useAgents(toast) {
       const response = await fetch('/api/agents')
       if (!response.ok) throw new Error('Failed to fetch agents')
       const data = await response.json()
+      // Debug: log first agent to see API response structure
+      if (data.agents && data.agents.length > 0) {
+        console.log('First agent:', data.agents[0])
+      }
       setAgents(data.agents || [])
       setError(null)
 

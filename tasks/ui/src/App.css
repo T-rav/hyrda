@@ -11,6 +11,8 @@ body {
 .app {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
 }
 
 /* Header */
@@ -94,6 +96,58 @@ body {
   height: 24px;
   background: rgba(139, 92, 246, 0.2);
   margin: 0 0.5rem;
+}
+
+.logout-dropdown {
+  position: relative;
+}
+
+.nav-link.logout-btn {
+  margin-left: 0.5rem;
+  color: #ef4444;
+}
+
+.nav-link.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  min-width: 200px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease;
+  z-index: 1000;
+}
+
+.logout-dropdown:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #1e293b;
+  font-size: 0.875rem;
+  cursor: default;
+}
+
+.dropdown-item.user-email {
+  color: #8b5cf6;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .nav-link.monitoring-link {
@@ -316,7 +370,7 @@ body {
   backdrop-filter: blur(10px);
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   padding: 1rem 0;
-  margin-top: 2rem;
+  margin-top: auto;
   text-align: center;
 }
 
@@ -372,9 +426,11 @@ body {
 
 /* Tasks-specific styles */
 .main-content {
+  flex: 1;
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
+  width: 100%;
 }
 
 .glass-card {
@@ -732,6 +788,18 @@ body {
 .table td:not(:first-child),
 .table th:not(:first-child) {
   text-align: center;
+}
+
+/* Ensure consistent vertical alignment for table cell content */
+.table td {
+  vertical-align: middle;
+}
+
+/* Fix badge alignment in table cells */
+.table td .badge {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
 }
 
 /* Tooltip styles */
@@ -1429,4 +1497,155 @@ body {
 
 .text-secondary {
   color: #6b7280 !important;
+}
+
+/* Toggle Switch Component Styles */
+.toggle-switch-wrapper {
+  margin-bottom: 1rem;
+}
+
+.toggle-switch-wrapper .form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.toggle-switch.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e5e7eb;
+  border-radius: 28px;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #10b981;
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+.toggle-switch input:focus + .toggle-slider {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+}
+
+.toggle-switch input:disabled + .toggle-slider {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+}
+
+.toggle-switch input:checked:disabled + .toggle-slider {
+  background-color: #6ee7b7;
+}
+
+.toggle-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.toggle-label.active {
+  color: #10b981;
+}
+
+/* Task Parameters in Read-Only Mode */
+.task-parameters-readonly .form-control {
+  background-color: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.task-parameters-readonly .toggle-switch {
+  pointer-events: none;
+}
+
+/* Schedule Preset Buttons */
+.schedule-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.schedule-presets .btn {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+}
+
+/* Modal Improvements */
+.modal-lg {
+  max-width: 800px;
+}
+
+.modal-body .form-label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.modal-body h6 {
+  color: #4b5563;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+/* Parameter Section Styling */
+.parameter-section {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.parameter-section h6 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: #374151;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }

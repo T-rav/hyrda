@@ -3,6 +3,7 @@
 import contextlib
 import json
 import logging
+import re
 import ssl
 import uuid as uuid_lib
 from datetime import UTC, datetime, timedelta
@@ -217,6 +218,112 @@ class WebsiteScrapeJob(BaseJob):
 
         return filtered
 
+    def _extract_google_doc_id(self, url: str) -> tuple[str | None, str | None]:
+        """
+        Extract Google Workspace document ID and type from URL.
+
+        Returns:
+            Tuple of (document_id, doc_type) or (None, None) if not a Google doc
+            doc_type can be: 'document', 'spreadsheets', 'presentation', 'file'
+        """
+        # Patterns for Google Workspace URLs
+        patterns = [
+            (r"docs\.google\.com/document/d/([a-zA-Z0-9_-]+)", "document"),
+            (r"docs\.google\.com/spreadsheets/d/([a-zA-Z0-9_-]+)", "spreadsheets"),
+            (r"docs\.google\.com/presentation/d/([a-zA-Z0-9_-]+)", "presentation"),
+            (r"drive\.google\.com/file/d/([a-zA-Z0-9_-]+)", "file"),
+        ]
+
+        for pattern, doc_type in patterns:
+            match = re.search(pattern, url)
+            if match:
+                doc_id = match.group(1)
+                logger.debug(f"Detected Google {doc_type}: {doc_id} from {url}")
+                return doc_id, doc_type
+
+        return None, None
+
+    def _enqueue_google_doc_jobs(
+        self, doc_ids: set[str], credential_id: str, metadata: dict | None = None
+    ) -> tuple[int, int]:
+        """
+        Enqueue daily recurring jobs for discovered Google Docs.
+        Checks if job already exists before creating to avoid duplicates.
+
+        Args:
+            doc_ids: Set of Google document IDs
+            credential_id: OAuth credential ID to use for ingestion
+            metadata: Additional metadata to add to documents
+
+        Returns:
+            Tuple of (created_count, skipped_count)
+        """
+        if not doc_ids:
+            return 0, 0
+
+        logger.info(
+            f"Checking/enqueueing jobs for {len(doc_ids)} discovered Google Docs..."
+        )
+
+        # Import here to avoid circular dependency
+        from jobs.job_registry import get_job_registry  # noqa: PLC0415
+
+        job_registry = get_job_registry()
+        created_count = 0
+        skipped_count = 0
+
+        # Get all existing jobs to check for duplicates
+        existing_jobs = job_registry.scheduler_service.get_jobs()
+
+        for doc_id in doc_ids:
+            # Check if job already exists for this doc ID
+            job_exists = False
+
+            for job in existing_jobs:
+                # Check if job ID matches this doc and file_id parameter matches
+                if (
+                    job.id
+                    and doc_id in job.id
+                    and "gdrive_ingest" in job.id
+                    and hasattr(job, "kwargs")
+                    and job.kwargs.get("params", {}).get("file_id") == doc_id
+                ):
+                    job_exists = True
+                    logger.debug(
+                        f"Job already exists for Google Doc {doc_id}, skipping"
+                    )
+                    skipped_count += 1
+                    break
+
+            if not job_exists:
+                # Create new daily job for this doc
+                job_params = {
+                    "file_id": doc_id,
+                    "credential_id": credential_id,
+                    "metadata": {
+                        **(metadata or {}),
+                        "source": "website_scrape_auto_discovery",
+                    },
+                }
+
+                schedule = {
+                    "trigger": "interval",
+                    "days": 1,  # Run once per day
+                }
+
+                try:
+                    job_registry.create_job(
+                        job_type="gdrive_ingest",
+                        schedule=schedule,
+                        params=job_params,
+                    )
+                    logger.info(f"📄 Created daily job for Google Doc: {doc_id}")
+                    created_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to create job for doc {doc_id}: {e}")
+
+        return created_count, skipped_count
+
     async def _crawl_site(
         self,
         start_url: str,
@@ -225,16 +332,26 @@ class WebsiteScrapeJob(BaseJob):
         exclude_patterns: list[str],
         auth_headers: dict[str, str] | None = None,
     ) -> list[str]:
-        # Import Crawlee only when needed (avoids import at top level)
+        # Import Crawlee only when needed
+        import asyncio  # noqa: PLC0415
+
         from crawlee.crawlers import (  # noqa: PLC0415
             BeautifulSoupCrawler,
             BeautifulSoupCrawlingContext,
         )
+        from crawlee.errors import SessionError  # noqa: PLC0415
 
         logger.info(f"No sitemap found, crawling site starting from: {start_url}")
 
         # Track discovered URLs
         discovered_urls = []
+
+        # Track discovered Google Docs
+        discovered_google_docs = set()
+
+        # Track rate limit backoff
+        rate_limit_backoff_count = 0
+        backoff_delays = [60, 120, 180, 300, 600]  # 1min, 2min, 3min, 5min, 10min
 
         async def request_handler(context: BeautifulSoupCrawlingContext) -> None:
             url = context.request.url
@@ -256,43 +373,94 @@ class WebsiteScrapeJob(BaseJob):
                 f"Discovered: {url} ({len(discovered_urls)}/{max_pages or 'unlimited'})"
             )
 
+            # Check if this URL contains Google Docs links
+            soup = context.soup
+            if soup:
+                # Find all links in the page
+                for link in soup.find_all("a", href=True):
+                    href = link["href"]
+                    doc_id, doc_type = self._extract_google_doc_id(href)
+                    if doc_id:
+                        discovered_google_docs.add(doc_id)
+                        logger.info(
+                            f"📄 Found Google {doc_type}: {doc_id} on page {url}"
+                        )
+
             # Enqueue links from this page (Crawlee handles deduplication)
+            # Note: Auth headers need to be passed via user_data and then applied in request
             await context.enqueue_links(
                 strategy="same-domain",  # Only follow links on same domain
             )
 
-        # Create crawler with custom configuration
-        crawler = BeautifulSoupCrawler(
-            max_requests_per_crawl=max_pages,  # Limit total pages
-            max_request_retries=2,
-            request_handler=request_handler,
-        )
+        async def error_handler(
+            context: BeautifulSoupCrawlingContext, error: Exception
+        ) -> None:
+            """Handle errors including rate limiting with exponential backoff."""
+            nonlocal rate_limit_backoff_count
 
-        # Add OAuth headers using pre-navigation hook if needed
+            # Check if this is a rate limit error (HTTP 429)
+            if isinstance(error, SessionError) and "429" in str(error):
+                # Calculate backoff delay (use last delay if we've exhausted the list)
+                delay_index = min(rate_limit_backoff_count, len(backoff_delays) - 1)
+                delay_seconds = backoff_delays[delay_index]
+                rate_limit_backoff_count += 1
+
+                logger.warning(
+                    f"⏳ Rate limited (429) - backing off for {delay_seconds}s "
+                    f"(backoff #{rate_limit_backoff_count}): {context.request.url}"
+                )
+
+                # Wait for backoff period
+                await asyncio.sleep(delay_seconds)
+
+                # Re-enqueue the request to retry
+                await context.add_requests([context.request.url])
+                logger.info(f"Retrying after backoff: {context.request.url}")
+            else:
+                # For non-rate-limit errors, log and continue
+                logger.error(f"Crawl error for {context.request.url}: {error}")
+
+        # Configure crawler with auth headers baked into configuration
         if auth_headers:
-            # Use add_requests with custom headers
-            await crawler.add_requests(
-                [
-                    {
-                        "url": start_url,
-                        "headers": auth_headers,
-                    }
-                ]
+            logger.info(
+                "Configuring crawler with OAuth authentication for all requests"
             )
-            # Run crawler (requests already added)
-            try:
-                await crawler.run()
-            except Exception as e:
-                logger.error(f"Crawler error: {e}")
-        else:
-            # Run crawler without auth headers
-            try:
-                await crawler.run([start_url])
-            except Exception as e:
-                logger.error(f"Crawler error: {e}")
 
-        logger.info(f"Crawling complete: discovered {len(discovered_urls)} pages")
-        return discovered_urls
+            # Create configuration dict with headers
+            crawler_config = {
+                "max_requests_per_crawl": max_pages,
+                "max_request_retries": 5,
+                "max_requests_per_minute": 30,
+                "request_handler": request_handler,
+                "error_handler": error_handler,
+                # Configure default headers for all requests
+                "additional_http_headers": auth_headers,
+            }
+
+            crawler = BeautifulSoupCrawler(**crawler_config)
+        else:
+            crawler = BeautifulSoupCrawler(
+                max_requests_per_crawl=max_pages,
+                max_request_retries=5,
+                max_requests_per_minute=30,
+                request_handler=request_handler,
+                error_handler=error_handler,
+            )
+
+        # Run crawler
+        try:
+            await crawler.run([start_url])
+        except Exception as e:
+            import traceback  # noqa: PLC0415
+
+            logger.error(f"Crawler error: {e}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+
+        logger.info(
+            f"Crawling complete: discovered {len(discovered_urls)} pages, "
+            f"{len(discovered_google_docs)} Google Docs"
+        )
+        return discovered_urls, discovered_google_docs
 
     async def _execute_job(self) -> dict[str, Any]:
         tracking_service = WebPageTrackingService()
@@ -415,13 +583,16 @@ class WebsiteScrapeJob(BaseJob):
             alternative_url = f"{website_url.rstrip('/')}/sitemap_index.xml"
             urls = await self._fetch_sitemap(alternative_url, auth_headers)
 
+        # Track discovered Google Docs
+        discovered_google_docs = set()
+
         # If no sitemap found, fall back to manual crawling
         if not urls:
             logger.info(
                 "No sitemap found, falling back to manual site crawling from base URL"
             )
             # website_url is guaranteed to be a string by validate_params()
-            urls = await self._crawl_site(
+            urls, discovered_google_docs = await self._crawl_site(
                 start_url=str(website_url),
                 max_pages=max_pages,
                 include_patterns=include_patterns,
@@ -639,16 +810,56 @@ class WebsiteScrapeJob(BaseJob):
                 )
                 # Don't fail entire job on tracking errors
 
+        # Enqueue daily jobs for discovered Google Docs
+        google_docs_jobs_created = 0
+        google_docs_jobs_skipped = 0
+
+        if discovered_google_docs and credential_id:
+            logger.info(
+                f"📄 Processing {len(discovered_google_docs)} discovered Google Workspace documents..."
+            )
+            try:
+                google_docs_jobs_created, google_docs_jobs_skipped = (
+                    self._enqueue_google_doc_jobs(
+                        discovered_google_docs, credential_id, metadata
+                    )
+                )
+
+                logger.info(
+                    f"Google Docs job scheduling complete: {google_docs_jobs_created} jobs created, "
+                    f"{google_docs_jobs_skipped} already scheduled"
+                )
+            except Exception as e:
+                logger.error(f"Error enqueueing Google Docs jobs: {e}")
+        elif discovered_google_docs and not credential_id:
+            logger.warning(
+                f"Found {len(discovered_google_docs)} Google Docs but no credential_id provided - skipping"
+            )
+
         total_processed = len(scraped_pages) + total_skipped + failed_count
+        total_success = len(pages_to_embed)
+        total_failed = failed_count
+
+        message_parts = [
+            f"Embedded {len(pages_to_embed)} new/changed pages",
+            f"skipped {not_modified_count} (304)",
+            f"{skipped_count} (hash)",
+            f"removed {removed_count}",
+        ]
+        if discovered_google_docs:
+            message_parts.append(
+                f"Google Docs: {google_docs_jobs_created} jobs created, {google_docs_jobs_skipped} already scheduled"
+            )
+
         return {
             # Standardized fields for task run tracking
             "records_processed": total_processed,
-            "records_success": len(pages_to_embed),
-            "records_failed": failed_count,
+            "records_success": total_success,
+            "records_failed": total_failed,
             # Job-specific details
             "records_skipped": total_skipped,
             "success": True,
-            "message": f"Embedded {len(pages_to_embed)} new/changed, skipped {not_modified_count} (304), {skipped_count} (hash), removed {removed_count}",
+            "message": ", ".join(message_parts),
             "website_url": website_url,
             "sitemap_url": sitemap_url,
             "pages_scraped": len(scraped_pages),
@@ -661,6 +872,9 @@ class WebsiteScrapeJob(BaseJob):
             "pages_indexed": success_count,
             "index_errors": error_count,
             "force_rescrape": force_rescrape,
+            "google_docs_discovered": len(discovered_google_docs),
+            "google_docs_jobs_created": google_docs_jobs_created,
+            "google_docs_jobs_skipped": google_docs_jobs_skipped,
             "details": {
                 "total_urls_in_sitemap": len(urls),
                 "urls_filtered_out": len(urls)

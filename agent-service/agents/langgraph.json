@@ -4,7 +4,8 @@
     "../../../"
   ],
   "graphs": {
-    "research": "agents.research.research_agent:research_agent"
+    "research": "agents.research.research_agent:research_agent",
+    "help": "agents.help.help_agent:help_agent"
   },
   "env": "../../../.env"
 }

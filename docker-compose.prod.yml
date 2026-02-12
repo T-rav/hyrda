@@ -1,0 +1,337 @@
+# Production Docker Compose for Signal Room Deployment
+#
+# This file uses pre-built images from a container registry.
+# Images are built and published using: make release REGISTRY=ghcr.io/yourorg
+#
+# Usage:
+#   1. Set REGISTRY and VERSION in .env file
+#   2. Run: docker compose -f docker-compose.prod.yml up -d
+#
+# Required environment variables in .env:
+#   - REGISTRY: Container registry (e.g., ghcr.io/myorg, docker.io/myuser)
+#   - VERSION: Image version tag (e.g., 1.2.0)
+#   - All other standard InsightMesh config (tokens, URLs, etc.)
+
+name: insightmesh-prod
+
+services:
+  # MySQL Database
+  mysql:
+    image: public.ecr.aws/docker/library/mysql:8.0
+    container_name: insightmesh-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -p${MYSQL_ROOT_PASSWORD} || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 30s
+    networks:
+      - insightmesh
+
+  # phpMyAdmin for database management
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: insightmesh-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - insightmesh
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: insightmesh-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./.ssl/qdrant-cert.pem:/qdrant/tls/cert.pem:ro
+      - ./.ssl/qdrant-key.pem:/qdrant/tls/key.pem:ro
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+      - QDRANT__SERVICE__API_KEY=${VECTOR_API_KEY}
+      - QDRANT__SERVICE__ENABLE_TLS=true
+      - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
+      - QDRANT__TLS__KEY=/qdrant/tls/key.pem
+    healthcheck:
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp && echo 'Port 6333 listening' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - insightmesh
+
+  # Task Scheduler Service
+  tasks:
+    image: ${REGISTRY}/insightmesh-tasks:${VERSION:-latest}
+    container_name: insightmesh-tasks
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TASK_DATABASE_URL=mysql+pymysql://insightmesh_tasks:insightmesh_tasks_password@mysql:3306/insightmesh_task
+      - DATA_DATABASE_URL=mysql+pymysql://insightmesh_data:insightmesh_data_password@mysql:3306/insightmesh_data
+      - SLACK_BOT_API_URL=http://bot:8080
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - QDRANT_API_KEY=${VECTOR_API_KEY}
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - FLASK_PORT=8081
+    ports:
+      - "${TASKS_PORT:-5001}:5001"
+    volumes:
+      - ./.ssl/tasks-cert.pem:/app/ssl/tasks-cert.pem:ro
+      - ./.ssl/tasks-key.pem:/app/ssl/tasks-key.pem:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    networks:
+      - insightmesh
+
+  # Redis Cache Service
+  redis:
+    image: public.ecr.aws/docker/library/redis:7-alpine
+    container_name: insightmesh-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - insightmesh
+
+  # AI Slack Bot Service
+  bot:
+    image: ${REGISTRY}/insightmesh-bot:${VERSION:-latest}
+    container_name: insightmesh-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/insightmesh_data
+      - CONTROL_PLANE_URL=${CONTROL_PLANE_URL:-http://control-plane:6001}
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
+      - VECTOR_ENABLED=false
+      - CACHE_REDIS_URL=${CACHE_REDIS_URL:-redis://redis:6379}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    ports:
+      - "${HEALTH_PORT:-8080}:8080"
+    volumes:
+      - ./.ssl/qdrant-cert.pem:/app/ssl/qdrant-cert.pem:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      control-plane:
+        condition: service_healthy
+      rag-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - insightmesh
+
+  # RAG Service - Vector Search & Knowledge Base
+  rag-service:
+    image: ${REGISTRY}/insightmesh-rag-service:${VERSION:-latest}
+    container_name: insightmesh-rag-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${RAG_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      qdrant:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - insightmesh
+
+  # Control Plane - Agent Registry & Management UI
+  control-plane:
+    image: ${REGISTRY}/insightmesh-control-plane:${VERSION:-latest}
+    container_name: insightmesh-control-plane
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - SECURITY_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/insightmesh_security
+      - DATA_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/insightmesh_data
+      - CACHE_REDIS_URL=redis://redis:6379
+    ports:
+      - "${CONTROL_PLANE_PORT:-6001}:6001"
+    volumes:
+      - ./.ssl/control-plane-cert.pem:/app/ssl/control-plane-cert.pem:ro
+      - ./.ssl/control-plane-key.pem:/app/ssl/control-plane-key.pem:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:6001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - insightmesh
+
+  # LangSmith to Langfuse Proxy
+  langsmith-proxy:
+    image: ${REGISTRY}/insightmesh-langsmith-proxy:${VERSION:-latest}
+    container_name: insightmesh-langsmith-proxy
+    restart: unless-stopped
+    environment:
+      - PROXY_API_KEY=${PROXY_API_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      - LANGFUSE_DEBUG=${LANGFUSE_DEBUG:-false}
+      - PORT=8003
+    ports:
+      - "8003:8003"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8003/health').raise_for_status()"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - insightmesh
+
+  # Agent Service - LangGraph HTTP API
+  agent-service:
+    image: ${REGISTRY}/insightmesh-agent-service:${VERSION:-latest}
+    container_name: insightmesh-agent-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://rag-service:8002}
+      - RAG_SERVICE_TOKEN=${RAG_SERVICE_TOKEN}
+      - VECTOR_HOST=qdrant
+      - VECTOR_PORT=6333
+      - VECTOR_API_KEY=${VECTOR_API_KEY}
+      - VECTOR_COLLECTION_NAME=${VECTOR_COLLECTION_NAME:-insightmesh-knowledge-base}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - REPORTS_BUCKET=${REPORTS_BUCKET:-profile-reports}
+    ports:
+      - "${AGENT_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./custom_agents:/app/custom_agents:ro
+      - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
+      - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
+    depends_on:
+      control-plane:
+        condition: service_healthy
+      rag-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - insightmesh
+
+  # Loki - Log Aggregation Server
+  loki:
+    image: grafana/loki:latest
+    container_name: insightmesh-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - insightmesh
+
+  # Promtail - Log Shipper
+  promtail:
+    image: grafana/promtail:latest
+    container_name: insightmesh-promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - insightmesh
+
+  # Jaeger - Distributed Tracing
+  jaeger:
+    image: jaegertracing/jaeger:2.3.0
+    container_name: insightmesh-jaeger
+    restart: unless-stopped
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "16686:16686"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - insightmesh
+
+volumes:
+  mysql_data:
+    driver: local
+  qdrant_data:
+    driver: local
+  redis_data:
+    driver: local
+  loki_data:
+    driver: local
+
+networks:
+  insightmesh:
+    name: insightmesh
+    driver: bridge

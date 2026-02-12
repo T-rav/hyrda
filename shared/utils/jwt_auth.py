@@ -54,7 +54,8 @@ if not JWT_SECRET_KEY:
     )
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = int(os.getenv("JWT_EXPIRATION_HOURS", "4"))  # 4 hours for better security
+JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "15"))  # 15 minutes for access tokens
+REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))  # 7 days for refresh tokens
 JWT_ISSUER = "insightmesh"
 
 
@@ -86,7 +87,7 @@ def create_access_token(
         token = create_access_token("user@8thlight.com", "John Doe")
     """
     now = datetime.now(UTC)
-    expiration = now + timedelta(hours=JWT_EXPIRATION_HOURS)
+    expiration = now + timedelta(minutes=JWT_EXPIRATION_MINUTES)
 
     payload = {
         "sub": user_email,  # Subject (user identifier)
@@ -96,6 +97,7 @@ def create_access_token(
         "iat": now,  # Issued at
         "exp": expiration,  # Expiration
         "iss": JWT_ISSUER,  # Issuer
+        "token_type": "access",  # Token type
     }
 
     # Add any additional claims
@@ -103,7 +105,48 @@ def create_access_token(
         payload.update(additional_claims)
 
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    logger.info(f"Created JWT token for {user_email}, expires at {expiration}")
+    logger.info(f"Created access token for {user_email}, expires at {expiration}")
+
+    return token
+
+
+def create_refresh_token(
+    user_email: str,
+    additional_claims: dict[str, Any] | None = None,
+) -> str:
+    """Create a JWT refresh token for a user.
+
+    Refresh tokens are longer-lived and used to obtain new access tokens
+    without requiring the user to log in again.
+
+    Args:
+        user_email: User's email address
+        additional_claims: Additional claims to include in the token
+
+    Returns:
+        JWT refresh token string
+
+    Example:
+        refresh_token = create_refresh_token("user@8thlight.com")
+    """
+    now = datetime.now(UTC)
+    expiration = now + timedelta(days=REFRESH_TOKEN_DAYS)
+
+    payload = {
+        "sub": user_email,  # Subject (user identifier)
+        "email": user_email,
+        "iat": now,  # Issued at
+        "exp": expiration,  # Expiration
+        "iss": JWT_ISSUER,  # Issuer
+        "token_type": "refresh",  # Token type
+    }
+
+    # Add any additional claims
+    if additional_claims:
+        payload.update(additional_claims)
+
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    logger.info(f"Created refresh token for {user_email}, expires at {expiration}")
 
     return token
 
@@ -123,7 +166,8 @@ def revoke_token(token: str) -> bool:
         return False
 
     try:
-        # Decode without verification to get expiration
+        # Decode without verification to get expiration (for TTL calculation only)
+        # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
         payload = jwt.decode(token, options={"verify_signature": False})
         exp = payload.get("exp")
 
@@ -159,21 +203,106 @@ def is_token_revoked(token: str) -> bool:
         return False
 
 
-def verify_token(token: str) -> dict[str, Any]:
+def store_refresh_token(user_email: str, refresh_token: str) -> bool:
+    """Store a refresh token in Redis for later validation.
+
+    Args:
+        user_email: User's email address
+        refresh_token: The refresh token to store
+
+    Returns:
+        True if stored successfully, False if Redis unavailable
+    """
+    redis = _get_redis()
+    if not redis:
+        logger.warning("Refresh token storage skipped - Redis not available")
+        return False
+
+    try:
+        # Store with TTL matching token expiration (7 days)
+        ttl = REFRESH_TOKEN_DAYS * 24 * 60 * 60  # Convert days to seconds
+        redis.setex(f"refresh_token:{user_email}", ttl, refresh_token)
+        logger.info(f"Stored refresh token for {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to store refresh token: {e}")
+        return False
+
+
+def revoke_refresh_token(user_email: str) -> bool:
+    """Revoke a user's refresh token by removing it from Redis.
+
+    Args:
+        user_email: User's email address
+
+    Returns:
+        True if revoked successfully, False if Redis unavailable
+    """
+    redis = _get_redis()
+    if not redis:
+        logger.warning("Refresh token revocation skipped - Redis not available")
+        return False
+
+    try:
+        redis.delete(f"refresh_token:{user_email}")
+        logger.info(f"Revoked refresh token for {user_email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to revoke refresh token: {e}")
+        return False
+
+
+def validate_refresh_token(user_email: str, refresh_token: str) -> bool:
+    """Validate a refresh token against stored token in Redis.
+
+    Args:
+        user_email: User's email address
+        refresh_token: The refresh token to validate
+
+    Returns:
+        True if valid, False otherwise
+    """
+    redis = _get_redis()
+    if not redis:
+        # If Redis unavailable, verify token signature only
+        try:
+            payload = jwt.decode(
+                refresh_token,
+                JWT_SECRET_KEY,
+                algorithms=[JWT_ALGORITHM],
+                issuer=JWT_ISSUER,
+            )
+            return (
+                payload.get("email") == user_email
+                and payload.get("token_type") == "refresh"
+            )
+        except Exception:
+            return False
+
+    try:
+        stored_token = redis.get(f"refresh_token:{user_email}")
+        return stored_token == refresh_token
+    except Exception as e:
+        logger.error(f"Failed to validate refresh token: {e}")
+        return False
+
+
+def verify_token(token: str, expected_type: str | None = None) -> dict[str, Any]:
     """Verify and decode a JWT token.
 
     Args:
         token: JWT token string
+        expected_type: Expected token type ("access" or "refresh"), None for any type
 
     Returns:
         Decoded token payload with user information
 
     Raises:
-        JWTAuthError: If token is invalid, expired, or revoked
+        JWTAuthError: If token is invalid, expired, revoked, or wrong type
 
     Example:
         try:
-            user_info = verify_token(token)
+            user_info = verify_token(token, expected_type="access")
             email = user_info["email"]
         except JWTAuthError as e:
             # Handle invalid token
@@ -194,6 +323,14 @@ def verify_token(token: str) -> dict[str, Any]:
         # Ensure required fields are present
         if "email" not in payload:
             raise JWTAuthError("Token missing required 'email' field")
+
+        # Verify token type if expected_type is specified
+        if expected_type:
+            token_type = payload.get("token_type")
+            if token_type != expected_type:
+                raise JWTAuthError(
+                    f"Invalid token type: expected '{expected_type}', got '{token_type}'"
+                )
 
         logger.debug(f"Verified JWT token for {payload.get('email')}")
         return payload
@@ -249,3 +386,59 @@ def get_user_from_token(token: str) -> dict[str, Any]:
         "name": payload.get("name"),
         "picture": payload.get("picture"),
     }
+
+
+def refresh_access_token_with_refresh(
+    refresh_token: str, rotate_refresh: bool = True
+) -> tuple[str, str | None]:
+    """Exchange a refresh token for a new access token.
+
+    Args:
+        refresh_token: The refresh token to exchange
+        rotate_refresh: Whether to rotate the refresh token (recommended for security)
+
+    Returns:
+        Tuple of (new_access_token, new_refresh_token)
+        If rotate_refresh is False, new_refresh_token will be None
+
+    Raises:
+        JWTAuthError: If refresh token is invalid or expired
+
+    Example:
+        try:
+            new_access, new_refresh = refresh_access_token_with_refresh(old_refresh)
+        except JWTAuthError as e:
+            # Refresh token invalid - redirect to login
+            pass
+    """
+    # Verify refresh token (must be type "refresh")
+    payload = verify_token(refresh_token, expected_type="refresh")
+
+    user_email = payload.get("email")
+    if not user_email:
+        raise JWTAuthError("Refresh token missing email")
+
+    # Validate against stored refresh token in Redis
+    if not validate_refresh_token(user_email, refresh_token):
+        raise JWTAuthError("Refresh token not valid or has been revoked")
+
+    # Create new access token with same claims
+    new_access_token = create_access_token(
+        user_email=user_email,
+        user_name=payload.get("name"),
+        user_picture=payload.get("picture"),
+        additional_claims={
+            k: v
+            for k, v in payload.items()
+            if k not in ("sub", "email", "name", "picture", "iat", "exp", "iss", "token_type")
+        },
+    )
+
+    # Optionally rotate refresh token for security
+    new_refresh_token = None
+    if rotate_refresh:
+        new_refresh_token = create_refresh_token(user_email)
+        store_refresh_token(user_email, new_refresh_token)
+        logger.info(f"Rotated refresh token for {user_email}")
+
+    return new_access_token, new_refresh_token

@@ -203,18 +203,17 @@ class TestNoSuppressedErrors:
     def test_all_imports_at_top_level(self):
         """Test all job imports are at module level, not inside functions.
 
-        Note: GDriveIngestJob has many imports inside methods due to lazy loading
-        of heavy dependencies (Google Drive API). This is acceptable for that job.
+        Note: GDriveIngestJob and WebsiteScrapeJob have imports inside methods
+        due to lazy loading of heavy dependencies (Google Drive API, Crawlee).
+        This is acceptable for those jobs.
         """
         from jobs.metric_sync import MetricSyncJob
         from jobs.slack_user_import import SlackUserImportJob
-        from jobs.website_scrape import WebsiteScrapeJob
 
-        # GDriveIngestJob excluded as it has intentional lazy loading
+        # GDriveIngestJob and WebsiteScrapeJob excluded (intentional lazy loading)
         jobs = [
             MetricSyncJob,
             SlackUserImportJob,
-            WebsiteScrapeJob,
         ]
 
         for job_class in jobs:

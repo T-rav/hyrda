@@ -299,7 +299,9 @@ class DocumentProcessor:
             client = OpenAI(api_key=self.openai_api_key)
 
             # Determine file extension from filename
-            file_ext = filename.split(".")[-1] if "." in filename else "mp3"
+            file_ext = (
+                filename.rsplit(".", maxsplit=1)[-1] if "." in filename else "mp3"
+            )
 
             # Create temporary file for audio content
             # (Whisper API requires a file-like object with a name attribute)
@@ -352,7 +354,9 @@ class DocumentProcessor:
             client = OpenAI(api_key=self.openai_api_key)
 
             # Determine file extension from filename
-            file_ext = filename.split(".")[-1] if "." in filename else "mp4"
+            file_ext = (
+                filename.rsplit(".", maxsplit=1)[-1] if "." in filename else "mp4"
+            )
 
             # Create temporary file for video content
             # Note: For video files, Whisper API will extract audio automatically

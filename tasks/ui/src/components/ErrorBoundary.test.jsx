@@ -12,12 +12,15 @@ const ThrowError = ({ shouldThrow }) => {
 
 describe('ErrorBoundary', () => {
   // Suppress console.error for these tests since we expect errors
+  // eslint-disable-next-line no-console
   const originalError = console.error
   beforeAll(() => {
+    // eslint-disable-next-line no-console
     console.error = vi.fn()
   })
 
   afterAll(() => {
+    // eslint-disable-next-line no-console
     console.error = originalError
   })
 

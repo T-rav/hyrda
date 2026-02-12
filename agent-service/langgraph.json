@@ -1,13 +1,10 @@
 {
   "dependencies": [
-    ".",
-    "../",
-    "../custom_agents"
+    "."
   ],
   "graphs": {
     "research": "agents.research.research_agent:research_agent",
-    "profile": "profiler.nodes.graph_builder:build_profile_researcher",
-    "meddic": "meddpicc_coach.nodes.graph_builder:build_meddpicc_coach"
+    "help": "agents.help.help_agent:help_agent"
   },
   "env": "../.env"
 }
