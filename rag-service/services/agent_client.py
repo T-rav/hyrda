@@ -17,12 +17,6 @@ from rag_types import AgentContext, AgentInfo, AgentResponse, CircuitBreakerStat
 
 # Import request signing and tracing utilities from shared directory
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # Add project root to path
-from shared.utils.otel_http_client import (
-    SPAN_KIND_CLIENT,
-    add_otel_headers,
-    create_span,
-    record_exception,
-)
 from shared.utils.request_signing import add_signature_headers
 from shared.utils.trace_propagation import add_trace_headers_to_request
 from shared.utils.tracing import add_trace_id_to_headers, get_or_create_trace_id
@@ -269,46 +263,31 @@ class AgentClient:
                     headers = add_trace_headers_to_request(headers, trace_context)
                     logger.debug(f"Added Langfuse trace context: {trace_context}")
 
-                # Add OpenTelemetry trace context propagation
-                headers = add_otel_headers(headers)
-
-                # Create span for HTTP client call
-                with create_span(
-                    "http.client.agent_service.invoke",
-                    attributes={
-                        "http.method": "POST",
-                        "http.url": url,
-                        "agent.name": agent_name,
-                        "service.name": "agent-service",
+                client = await self._get_client()
+                response = await client.post(
+                    url,
+                    content=request_body_str,
+                    headers={
+                        **headers,
+                        "Content-Type": "application/json",
                     },
-                    span_kind=SPAN_KIND_CLIENT,
-                ):
-                    client = await self._get_client()
-                    response = await client.post(
-                        url,
-                        content=request_body_str,
-                        headers={
-                            **headers,
-                            "Content-Type": "application/json",
-                        },
+                )
+
+                if response.status_code == 404:
+                    raise AgentClientError(f"Agent '{agent_name}' not found")
+
+                if response.status_code != 200:
+                    raise AgentClientError(
+                        f"Agent execution failed: {response.status_code} - {response.text}"
                     )
 
-                    if response.status_code == 404:
-                        raise AgentClientError(f"Agent '{agent_name}' not found")
-
-                    if response.status_code != 200:
-                        raise AgentClientError(
-                            f"Agent execution failed: {response.status_code} - {response.text}"
-                        )
-
-                    result = response.json()
-                    return {
-                        "response": result.get("response", ""),
-                        "metadata": result.get("metadata", {}),
-                    }
+                result = response.json()
+                return {
+                    "response": result.get("response", ""),
+                    "metadata": result.get("metadata", {}),
+                }
 
             except httpx.TimeoutException as e:
-                record_exception(e)
                 logger.warning(f"Timeout on attempt {attempt + 1}/{self.max_retries}: {e}")
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2**attempt)  # Exponential backoff
@@ -318,7 +297,6 @@ class AgentClient:
                 raise AgentClientError("Agent execution timed out after retries") from e
 
             except httpx.ConnectError as e:
-                record_exception(e)
                 logger.warning(f"Connection error on attempt {attempt + 1}/{self.max_retries}: {e}")
                 if attempt < self.max_retries - 1:
                     delay = self.retry_delay * (2**attempt)
@@ -328,7 +306,6 @@ class AgentClient:
                 raise AgentClientError("Unable to connect to agent service after retries") from e
 
             except Exception as e:
-                record_exception(e)
                 logger.error(f"Error calling agent-service: {e}", exc_info=True)
                 raise AgentClientError(f"Agent execution failed: {str(e)}") from e
         # NOTE: Agent invocation metrics are tracked in agent-service itself,
@@ -399,8 +376,6 @@ class AgentClient:
             if trace_context:
                 headers = add_trace_headers_to_request(headers, trace_context)
                 logger.debug(f"Added Langfuse trace context to stream: {trace_context}")
-
-            headers = add_otel_headers(headers)
 
             client = await self._get_client()
 

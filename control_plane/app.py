@@ -28,7 +28,6 @@ from shared.middleware.security import (
     SecurityHeadersMiddleware,
 )
 from shared.middleware.tracing import TracingMiddleware
-from shared.utils.otel_tracing import instrument_fastapi
 
 # Load environment from parent directory .env
 parent_env = Path(__file__).parent.parent / ".env"
@@ -131,9 +130,6 @@ def create_app() -> FastAPI:
 
     # Add tracing middleware (must be first for complete request tracking)
     app.add_middleware(TracingMiddleware, service_name="control-plane")
-
-    # Add OpenTelemetry instrumentation
-    instrument_fastapi(app, "control-plane")
 
     # Add Prometheus metrics middleware
     app.add_middleware(PrometheusMetricsMiddleware, service_name="control-plane")
