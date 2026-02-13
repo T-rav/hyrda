@@ -437,9 +437,12 @@ class AgentClient:
                             if isinstance(result, dict) and result:
                                 # Only emit results from designated "output" nodes
                                 # This prevents intermediate results from showing during revision loops
+                                # Nodes whose results should be emitted to the client
+                                # Includes final output nodes from different agent graphs
                                 EMIT_RESULT_NODES = {
-                                    "output"
-                                }  # Add other nodes here if needed
+                                    "output",  # Generic output node
+                                    "final_report_generation",  # Profile agent final report
+                                }
 
                                 if node_name not in EMIT_RESULT_NODES:
                                     logger.info(

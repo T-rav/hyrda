@@ -401,7 +401,7 @@ async def generate_response(
                 request,
                 agent_context,
                 research_depth,
-                trace_context=http_request.state.trace_context,
+                trace_context=getattr(http_request.state, "trace_context", None),
             )
 
         # Standard RAG pipeline

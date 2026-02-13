@@ -82,6 +82,7 @@ dependencies = [
 
     # Search and research APIs
     "tavily-python>=0.3.0",
+    "edgartools>=3.0.0",  # SEC EDGAR filings
 
     # Slack integration
     "slack-sdk>=3.0.0",

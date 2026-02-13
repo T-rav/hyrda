@@ -180,7 +180,8 @@ class AgentClient:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create persistent HTTP client."""
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=self.timeout)
+            # verify=False for internal Docker network with self-signed certs
+            self._client = httpx.AsyncClient(timeout=self.timeout, verify=False)  # nosec B501
         return self._client
 
     async def close(self):
