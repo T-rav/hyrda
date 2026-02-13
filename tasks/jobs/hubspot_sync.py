@@ -38,6 +38,9 @@ DEAL_PROPERTIES = [
     "deal_tech_stacks",  # Relevant Tech/Skills Required
     "tam",  # Client Service Lead
     "no_of_crafters_needed",  # Size of Team Needed
+    # Metric.ai integration fields
+    "metric_id",  # Metric Project ID
+    "metric_link",  # Metric Project URL
 ]
 
 
@@ -573,6 +576,10 @@ class HubSpotSyncJob(BaseJob):
         deal_tech_list = deal.get("deal_tech_stacks", [])
         deal_tech = ", ".join(deal_tech_list) if deal_tech_list else "Not specified"
 
+        # Get Metric integration fields
+        metric_id = deal.get("metric_id") or "Not linked"
+        metric_link = deal.get("metric_link") or "Not linked"
+
         # Build human-readable content for embedding
         content = f"""Client: {deal.get("company_name", "Unknown")}
 Deal Owner: {deal.get("owner_name", "Not specified")}
@@ -590,7 +597,9 @@ Deal ID: {deal.get("deal_id")}
 Amount: {deal.get("currency", "USD")} {deal.get("amount", 0):,.2f}
 Deal Name: {deal.get("deal_name", "Unknown")}
 Industry: {deal.get("industry", "Not specified")}
-Company Domain: {deal.get("company_domain", "Unknown")}"""
+Company Domain: {deal.get("company_domain", "Unknown")}
+Metric Project ID: {metric_id}
+Metric Link: {metric_link}"""
 
         # Build metadata for filtering and retrieval
         metadata = {
@@ -614,6 +623,8 @@ Company Domain: {deal.get("company_domain", "Unknown")}"""
             "source_channel": deal.get("source"),
             "qualified_services": deal.get("qualified_services"),
             "practice_studio": deal.get("practice_studio"),
+            "metric_id": deal.get("metric_id"),
+            "metric_link": deal.get("metric_link"),
             "ingested_at": datetime.now(UTC).isoformat(),
         }
 

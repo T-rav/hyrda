@@ -172,8 +172,9 @@ class MetricSyncJob(BaseJob):
         Build mapping from project ID/name to tech stack from HubSpot.
 
         Tries to match Metric projects to HubSpot deals by:
-        1. HubSpot integration link (if available in project data)
-        2. Client name matching
+        1. Metric project ID -> HubSpot metric_id field (most reliable)
+        2. Client name matching (fallback)
+        3. Project name matching (fallback)
 
         Args:
             projects: List of Metric project dictionaries
@@ -189,46 +190,17 @@ class MetricSyncJob(BaseJob):
                 continue
             project_name = project.get("name", "")
 
-            # Check for HubSpot integration data via linkedIntegrations
-            # Note: Metric API may not expose HubSpot integration data via GraphQL,
-            # even though the UI shows it. Fall back to name matching.
-            linked_integrations = project.get("linkedIntegrations", [])
-            hubspot_deal_id = None
-            hubspot_deal_name = None
-
-            for integration in linked_integrations:
-                # HubSpot integrations have integrationType containing "HubSpot"
-                int_type = integration.get("integrationType") or ""
-                if "hubspot" in int_type.lower():
-                    hubspot_deal_id = integration.get("id")
-                    hubspot_deal_name = integration.get("name")
-                    break
-
             tech_stack = []
 
-            # Try 1: Use HubSpot deal ID if available
-            if hubspot_deal_id:
-                tech_stack = self.hubspot_service.get_tech_stack_for_deal(
-                    hubspot_deal_id
+            # Try 1: Use Metric project ID to find linked HubSpot deal (most reliable)
+            # HubSpot deals store metric_id field linking back to Metric projects
+            tech_stack = self.hubspot_service.get_tech_stack_by_metric_id(project_id)
+            if tech_stack:
+                logger.debug(
+                    f"Found tech stack via metric_id for {project_name}: {tech_stack}"
                 )
-                if tech_stack:
-                    logger.debug(
-                        f"Found tech stack via deal ID for {project_name}: {tech_stack}"
-                    )
 
-            # Try 2: Use HubSpot deal name if available
-            if not tech_stack and hubspot_deal_name:
-                deal_info = self.hubspot_service.get_deal_by_name(hubspot_deal_name)
-                if deal_info and deal_info.get("hubspot_deal_id"):
-                    tech_stack = self.hubspot_service.get_tech_stack_for_deal(
-                        deal_info["hubspot_deal_id"]
-                    )
-                    if tech_stack:
-                        logger.debug(
-                            f"Found tech stack via deal name for {project_name}: {tech_stack}"
-                        )
-
-            # Try 3: Match by client name
+            # Try 2: Match by client name (fallback)
             if not tech_stack:
                 # Extract client from project groups
                 client = next(
@@ -248,7 +220,7 @@ class MetricSyncJob(BaseJob):
                             f"Found tech stack via client match for {project_name} ({client}): {tech_stack}"
                         )
 
-            # Try 4: Match by project name (contains client name usually)
+            # Try 3: Match by project name (fallback)
             if not tech_stack:
                 tech_stack = self.hubspot_service.get_tech_stack_by_client_name(
                     project_name

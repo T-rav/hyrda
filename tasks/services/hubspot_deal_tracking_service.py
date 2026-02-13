@@ -379,3 +379,49 @@ class HubSpotDealTrackingService:
                                 )
 
             return list(set(all_tech))
+
+    def get_tech_stack_by_metric_id(self, metric_project_id: str) -> list[str]:
+        """
+        Find tech stack for a Metric project by its ID.
+
+        This uses the metric_id field stored in HubSpot deals for direct matching.
+
+        Args:
+            metric_project_id: Metric.ai project ID (e.g., "70850")
+
+        Returns:
+            List of tech stack items from the linked HubSpot deal
+        """
+        with get_data_db_session() as session:
+            # Search for deals where document_content contains the metric ID
+            # The metric_id is stored in the document as "Metric Project ID: 70850"
+            deals = (
+                session.query(HubSpotDealTracking)
+                .filter(
+                    HubSpotDealTracking.document_content.ilike(
+                        f"%Metric Project ID: {metric_project_id}%"
+                    )
+                )
+                .all()
+            )
+
+            if not deals:
+                return []
+
+            # Extract tech stack from matching deals
+            all_tech = []
+            for deal in deals:
+                if deal.document_content:
+                    content = deal.document_content
+                    for line in content.split("\n"):
+                        if (
+                            "Deal Tech Requirements:" in line
+                            or "Company Tech Stack:" in line
+                        ):
+                            tech_part = line.split(":", 1)[1].strip()
+                            if tech_part and tech_part != "Not specified":
+                                all_tech.extend(
+                                    [t.strip() for t in tech_part.split(",")]
+                                )
+
+            return list(set(all_tech))
