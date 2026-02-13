@@ -8,10 +8,11 @@ from typing import Any
 
 import httpx
 
-# Add shared directory to path for request signing utilities
+# Add shared directory to path for request signing and tracing utilities
 sys.path.insert(0, "/app")
 from shared.utils.request_signing import add_signature_headers
 from shared.utils.trace_propagation import add_trace_headers_to_request
+from shared.utils.tracing import add_trace_id_to_headers, get_trace_id
 
 logger = logging.getLogger(__name__)
 
@@ -288,9 +289,9 @@ class RAGClient:
         # Remove None values
         request_body = {k: v for k, v in request_body.items() if v is not None}
 
+        trace_id = get_trace_id()
         logger.info(
-            f"Calling rag-service: query='{query[:50]}...', use_rag={use_rag}, "
-            f"conversation_id={conversation_id}"
+            f"[{trace_id}] Calling rag-service: query='{query[:50]}...', use_rag={use_rag}"
         )
 
         try:
@@ -303,10 +304,13 @@ class RAGClient:
                 "X-User-Email": user_email,
             }
 
-            # Add Langfuse trace context propagation for cross-service tracing
+            # Add distributed trace ID for cross-service correlation
+            headers = add_trace_id_to_headers(headers)
+
+            # Add Langfuse trace context propagation for LLM observability
             if trace_context:
                 headers = add_trace_headers_to_request(headers, trace_context)
-                logger.debug(f"Added Langfuse trace context: {trace_context}")
+                logger.debug(f"[{trace_id}] Added Langfuse trace context")
 
             # Serialize request body once and use the exact same string for signing and sending
             request_body_str = json.dumps(request_body)
@@ -397,6 +401,9 @@ class RAGClient:
             request_body["document_content"] = document_content
             request_body["document_filename"] = document_filename
 
+        trace_id = get_trace_id()
+        logger.info(f"[{trace_id}] Streaming rag-service: query='{query[:50]}...'")
+
         try:
             # Look up user email from database, fall back to placeholder if not found
             user_email = self._get_user_email(user_id)
@@ -407,10 +414,13 @@ class RAGClient:
                 "X-User-Email": user_email,
             }
 
-            # Add Langfuse trace context propagation for cross-service tracing
+            # Add distributed trace ID for cross-service correlation
+            headers = add_trace_id_to_headers(headers)
+
+            # Add Langfuse trace context propagation for LLM observability
             if trace_context:
                 headers = add_trace_headers_to_request(headers, trace_context)
-                logger.debug(f"Added Langfuse trace context to stream: {trace_context}")
+                logger.debug(f"[{trace_id}] Added Langfuse trace context to stream")
 
             # Serialize request body once
             request_body_str = json.dumps(request_body)
