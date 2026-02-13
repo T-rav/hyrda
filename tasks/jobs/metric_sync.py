@@ -305,9 +305,9 @@ class MetricSyncJob(BaseJob):
             except Exception as e:
                 logger.warning(f"Failed to fetch allocations for {year}: {e}")
 
-        # Build employee -> projects mapping (names and IDs for tech stack lookup)
-        employee_projects: dict[str, set[str]] = {}
-        employee_project_ids: dict[str, set[str]] = {}
+        # Build employee -> projects mapping with tech stack per project
+        # Structure: {emp_id: {project_name: {"id": project_id, "tech_stack": [...]}}}
+        employee_project_details: dict[str, dict[str, dict[str, Any]]] = {}
         for alloc in all_allocations:
             if not alloc or not alloc.get("id"):
                 continue
@@ -322,15 +322,22 @@ class MetricSyncJob(BaseJob):
 
             emp_id = employee["id"]
             project_name = project["name"]
-            project_id = project.get("id")
+            project_id = project.get("id", "")
 
-            if emp_id not in employee_projects:
-                employee_projects[emp_id] = set()
-                employee_project_ids[emp_id] = set()
+            if emp_id not in employee_project_details:
+                employee_project_details[emp_id] = {}
 
-            employee_projects[emp_id].add(project_name)
-            if project_id:
-                employee_project_ids[emp_id].add(project_id)
+            # Store project details with tech stack lookup
+            if project_name not in employee_project_details[emp_id]:
+                tech_stack = (
+                    self._project_tech_stack_cache.get(project_id, [])
+                    if project_id
+                    else []
+                )
+                employee_project_details[emp_id][project_name] = {
+                    "id": project_id,
+                    "tech_stack": tech_stack,
+                }
 
         texts, metadata_list, employees_to_sync = [], [], []
         skipped_count = 0
@@ -357,24 +364,47 @@ class MetricSyncJob(BaseJob):
             is_active = not employee.get("endedWorking")
             employment_status = "Active" if is_active else "Inactive"
 
-            # Get project history for this employee
-            projects = employee_projects.get(employee["id"], set())
-            project_history = (
-                ", ".join(sorted(projects)) if projects else "No project history"
-            )
+            # Get project history with per-project tech stack
+            emp_projects = employee_project_details.get(employee["id"], {})
 
-            # Collect tech stacks from all employee's projects
-            project_ids = employee_project_ids.get(employee["id"], set())
+            # Build per-project tech stack display
+            # Format: "- Project Alpha: Databricks, Generative AI"
+            project_lines = []
             all_tech_stack: set[str] = set()
-            for proj_id in project_ids:
-                proj_tech = self._project_tech_stack_cache.get(proj_id, [])
+            project_tech_details: list[dict[str, Any]] = []
+
+            for proj_name in sorted(emp_projects.keys()):
+                proj_info = emp_projects[proj_name]
+                proj_tech = proj_info.get("tech_stack", [])
                 all_tech_stack.update(proj_tech)
+
+                # Format tech stack for display
+                tech_display = (
+                    ", ".join(proj_tech) if proj_tech else "No tech specified"
+                )
+                project_lines.append(f"- {proj_name}: {tech_display}")
+
+                # Store for metadata
+                project_tech_details.append(
+                    {
+                        "project": proj_name,
+                        "project_id": proj_info.get("id"),
+                        "tech_stack": proj_tech,
+                    }
+                )
+
+            if project_lines:
+                project_history_text = "\n".join(project_lines)
+            else:
+                project_history_text = "No project history"
+
+            # Aggregated tech stack for searchability
             tech_stack_list = sorted(all_tech_stack)
             tech_stack_text = (
                 ", ".join(tech_stack_list) if tech_stack_list else "Not specified"
             )
 
-            # Create searchable text with project history and tech stack
+            # Create searchable text with per-project tech stack
             text = (
                 f"Employee: {employee['name']}\n"
                 f"Title: {title}\n"
@@ -383,8 +413,8 @@ class MetricSyncJob(BaseJob):
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
                 f"Ended: {employee.get('endedWorking', 'Active')}\n"
-                f"Project History: {project_history}\n"
-                f"Tech Stack Experience: {tech_stack_text}"
+                f"All Tech Stack Experience: {tech_stack_text}\n"
+                f"Project History with Tech Stack:\n{project_history_text}"
             )
 
             # Create metadata with source="metric"
@@ -401,7 +431,8 @@ class MetricSyncJob(BaseJob):
                 "on_bench": on_bench,
                 "started_working": employee.get("startedWorking", ""),
                 "ended_working": employee.get("endedWorking", ""),
-                "project_count": len(projects),
+                "project_count": len(emp_projects),
+                "projects_with_tech": project_tech_details,
                 "tech_stack": tech_stack_list,
                 "tech_stack_count": len(tech_stack_list),
                 "synced_at": datetime.now(UTC).isoformat(),

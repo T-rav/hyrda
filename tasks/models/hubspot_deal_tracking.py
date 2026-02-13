@@ -29,6 +29,11 @@ class HubSpotDealTracking(Base):
     # Deal info
     deal_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Metric.ai integration - direct link to Metric project
+    metric_id: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, index=True, comment="Metric.ai Project ID"
+    )
+
     # Full document content (stored for retrieval without vector DB)
     document_content: Mapped[str | None] = mapped_column(Text, nullable=True)
 

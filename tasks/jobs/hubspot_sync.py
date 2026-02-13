@@ -198,6 +198,10 @@ class HubSpotSyncJob(BaseJob):
                     enriched["team_size_needed"] = props.get("no_of_crafters_needed")
                     enriched["hubspot_updated_at"] = deal.get("updatedAt")
 
+                    # Metric.ai integration fields (for linking to Metric projects)
+                    enriched["metric_id"] = props.get("metric_id")
+                    enriched["metric_link"] = props.get("metric_link")
+
                     enriched_deals.append(enriched)
                     stats["processed"] += 1
 
@@ -260,6 +264,7 @@ class HubSpotSyncJob(BaseJob):
                                 "amount": enriched.get("amount"),
                                 "close_date": enriched.get("close_date"),
                             },
+                            metric_id=enriched.get("metric_id"),
                         )
 
                         stats["indexed"] += 1

@@ -122,6 +122,7 @@ class HubSpotDealTrackingService:
         status: str = "success",
         error_message: str | None = None,
         metadata: dict[str, Any] | None = None,
+        metric_id: str | None = None,
     ) -> None:
         """
         Record or update deal ingestion in the tracking table.
@@ -137,6 +138,7 @@ class HubSpotDealTrackingService:
             status: Ingestion status (success, failed, removed)
             error_message: Error message if ingestion failed
             metadata: Additional metadata to store
+            metric_id: Metric.ai project ID for direct linking
         """
         deal_hash = self.compute_deal_hash(deal_data)
 
@@ -150,6 +152,7 @@ class HubSpotDealTrackingService:
             if existing:
                 # Update existing record
                 existing.deal_name = deal_name
+                existing.metric_id = metric_id
                 existing.deal_data_hash = deal_hash
                 existing.vector_uuid = vector_uuid
                 existing.document_content = document_content
@@ -164,6 +167,7 @@ class HubSpotDealTrackingService:
                 new_record = HubSpotDealTracking(
                     hubspot_deal_id=hubspot_deal_id,
                     deal_name=deal_name,
+                    metric_id=metric_id,
                     deal_data_hash=deal_hash,
                     vector_uuid=vector_uuid,
                     document_content=document_content,
@@ -384,7 +388,7 @@ class HubSpotDealTrackingService:
         """
         Find tech stack for a Metric project by its ID.
 
-        This uses the metric_id field stored in HubSpot deals for direct matching.
+        Uses the indexed metric_id column for fast lookup.
 
         Args:
             metric_project_id: Metric.ai project ID (e.g., "70850")
@@ -393,17 +397,24 @@ class HubSpotDealTrackingService:
             List of tech stack items from the linked HubSpot deal
         """
         with get_data_db_session() as session:
-            # Search for deals where document_content contains the metric ID
-            # The metric_id is stored in the document as "Metric Project ID: 70850"
+            # Query by indexed metric_id column (fast lookup)
             deals = (
                 session.query(HubSpotDealTracking)
-                .filter(
-                    HubSpotDealTracking.document_content.ilike(
-                        f"%Metric Project ID: {metric_project_id}%"
-                    )
-                )
+                .filter(HubSpotDealTracking.metric_id == metric_project_id)
                 .all()
             )
+
+            # Fallback: search in document_content if column not populated yet
+            if not deals:
+                deals = (
+                    session.query(HubSpotDealTracking)
+                    .filter(
+                        HubSpotDealTracking.document_content.ilike(
+                            f"%Metric Project ID: {metric_project_id}%"
+                        )
+                    )
+                    .all()
+                )
 
             if not deals:
                 return []

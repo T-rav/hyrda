@@ -633,6 +633,154 @@ class TestHubSpotSyncJobDealProperties:
         assert "tam" in DEAL_PROPERTIES
         assert "no_of_crafters_needed" in DEAL_PROPERTIES
 
+    def test_deal_properties_includes_metric_fields(self):
+        """Test that DEAL_PROPERTIES includes Metric.ai integration fields."""
+        assert "metric_id" in DEAL_PROPERTIES
+        assert "metric_link" in DEAL_PROPERTIES
+
+
+class TestHubSpotSyncJobMetricIdHandling:
+    """Test metric_id extraction and recording."""
+
+    def test_build_deal_document_with_metric_id(self, mock_settings):
+        """Test building document includes metric_id fields."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        deal = {
+            "deal_id": "deal-123",
+            "deal_name": "Metric-Linked Deal",
+            "amount": 100000.0,
+            "company_name": "Acme Corp",
+            "metric_id": "70850",
+            "metric_link": "https://psa.metric.ai/projects/70850/overview",
+        }
+
+        result = job._build_deal_document(deal)
+
+        # Check content includes metric fields
+        assert "Metric Project ID: 70850" in result["content"]
+        assert (
+            "Metric Link: https://psa.metric.ai/projects/70850/overview"
+            in result["content"]
+        )
+
+        # Check metadata includes metric fields
+        assert result["metadata"]["metric_id"] == "70850"
+        assert (
+            result["metadata"]["metric_link"]
+            == "https://psa.metric.ai/projects/70850/overview"
+        )
+
+    def test_build_deal_document_without_metric_id(self, mock_settings):
+        """Test building document handles missing metric_id gracefully."""
+        job = HubSpotSyncJob(mock_settings, credential_id="test-cred")
+
+        deal = {
+            "deal_id": "deal-456",
+            "deal_name": "No Metric Deal",
+            "amount": 50000.0,
+        }
+
+        result = job._build_deal_document(deal)
+
+        # Should show "Not linked" for missing metric fields
+        assert "Metric Project ID: Not linked" in result["content"]
+        assert "Metric Link: Not linked" in result["content"]
+
+        # Metadata should have None values
+        assert result["metadata"]["metric_id"] is None
+        assert result["metadata"]["metric_link"] is None
+
+    @pytest.mark.asyncio
+    async def test_execute_job_passes_metric_id_to_tracking(self, mock_settings):
+        """Test that metric_id is passed to record_deal_ingestion."""
+        job = HubSpotSyncJob(
+            mock_settings,
+            credential_id="test-cred",
+            limit=5,
+        )
+
+        with patch.object(job, "_load_credentials", return_value="test-token"):
+            # Mock pipelines response
+            pipelines_response = Mock()
+            pipelines_response.status_code = 200
+            pipelines_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "pipeline-1",
+                        "label": "New Business",
+                        "stages": [
+                            {
+                                "id": "won-stage-id",
+                                "label": "Won",
+                                "metadata": {"isClosed": "true"},
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            # Mock search response with metric_id
+            search_response = Mock()
+            search_response.status_code = 200
+            search_response.json.return_value = {
+                "results": [
+                    {
+                        "id": "deal-1",
+                        "updatedAt": "2024-01-15T10:00:00Z",
+                        "properties": {
+                            "dealname": "Metric Deal",
+                            "amount": "10000",
+                            "dealstage": "won-stage-id",
+                            "metric_id": "70850",
+                            "metric_link": "https://psa.metric.ai/projects/70850",
+                        },
+                    }
+                ],
+                "paging": {},
+            }
+
+            assoc_response = Mock()
+            assoc_response.status_code = 200
+            assoc_response.json.return_value = {"results": []}
+
+            with patch("jobs.hubspot_sync.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client.get.side_effect = [pipelines_response, assoc_response]
+                mock_client.post.return_value = search_response
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                # Mock the services
+                mock_tracking = Mock()
+                mock_tracking.check_deal_needs_reindex.return_value = (True, None)
+                mock_tracking.generate_base_uuid.return_value = "uuid-123"
+
+                mock_embeddings = Mock()
+                mock_embeddings.embed_batch.return_value = [[0.1, 0.2, 0.3]]
+
+                mock_qdrant = AsyncMock()
+                mock_qdrant.initialize = AsyncMock()
+                mock_qdrant.upsert_with_namespace = AsyncMock()
+                mock_qdrant.close = AsyncMock()
+
+                with (
+                    patch(
+                        "jobs.hubspot_sync.HubSpotDealTrackingService",
+                        return_value=mock_tracking,
+                    ),
+                    patch(
+                        "jobs.hubspot_sync.OpenAIEmbeddings",
+                        return_value=mock_embeddings,
+                    ),
+                    patch("jobs.hubspot_sync.QdrantClient", return_value=mock_qdrant),
+                ):
+                    await job._execute_job()
+
+                    # Verify metric_id was passed to record_deal_ingestion
+                    mock_tracking.record_deal_ingestion.assert_called_once()
+                    call_kwargs = mock_tracking.record_deal_ingestion.call_args.kwargs
+                    assert call_kwargs["metric_id"] == "70850"
+
 
 class TestHubSpotSyncJobVectorIngestion:
     """Test vector ingestion integration."""

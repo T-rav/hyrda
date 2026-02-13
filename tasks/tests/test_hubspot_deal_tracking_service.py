@@ -462,3 +462,176 @@ class TestGetAllSyncedDeals:
         assert result[1]["hubspot_deal_id"] == "456"
         # Hash should be shortened for display
         assert len(result[0]["deal_data_hash"]) == 16
+
+
+class TestMetricIdIntegration:
+    """Test metric_id field functionality for HubSpot-Metric linking."""
+
+    def test_record_deal_ingestion_with_metric_id(self):
+        """Test recording a deal with metric_id stores it in the model."""
+        service = HubSpotDealTrackingService()
+
+        deal_data = {"deal_id": "123", "deal_name": "Test Deal", "amount": 50000.0}
+
+        mock_session = Mock()
+        mock_query = Mock()
+        mock_query.filter_by.return_value.first.return_value = None  # Not existing
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            service.record_deal_ingestion(
+                hubspot_deal_id="123",
+                deal_name="Test Deal",
+                deal_data=deal_data,
+                vector_uuid="uuid-123",
+                status="success",
+                metric_id="70850",
+            )
+
+        # Verify new record was added with metric_id
+        mock_session.add.assert_called_once()
+        added_record = mock_session.add.call_args[0][0]
+        assert added_record.metric_id == "70850"
+
+    def test_record_deal_ingestion_updates_metric_id(self):
+        """Test that updating a deal also updates metric_id."""
+        service = HubSpotDealTrackingService()
+
+        deal_data = {"deal_id": "123", "deal_name": "Updated Deal", "amount": 75000.0}
+
+        # Mock existing record
+        mock_existing = Mock()
+        mock_existing.metric_id = None  # Previously had no metric_id
+        mock_session = Mock()
+        mock_query = Mock()
+        mock_query.filter_by.return_value.first.return_value = mock_existing
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            service.record_deal_ingestion(
+                hubspot_deal_id="123",
+                deal_name="Updated Deal",
+                deal_data=deal_data,
+                vector_uuid="uuid-123",
+                status="success",
+                metric_id="70850",
+            )
+
+        # Verify metric_id was updated
+        assert mock_existing.metric_id == "70850"
+        mock_session.commit.assert_called_once()
+
+    def test_get_tech_stack_by_metric_id_column_query(self):
+        """Test that get_tech_stack_by_metric_id queries by column first."""
+        service = HubSpotDealTrackingService()
+
+        # Mock deal with tech stack in document content
+        mock_deal = Mock()
+        mock_deal.metric_id = "70850"
+        mock_deal.document_content = """Client: Acme Corp
+Deal Tech Requirements: Python, React, AWS
+Company Tech Stack: PostgreSQL, Docker"""
+
+        mock_session = Mock()
+        mock_query = Mock()
+        # First query by column returns the deal
+        mock_query.filter.return_value.all.return_value = [mock_deal]
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            result = service.get_tech_stack_by_metric_id("70850")
+
+        # Should find tech stack from document content
+        assert "Python" in result
+        assert "React" in result
+        assert "AWS" in result
+        assert "PostgreSQL" in result
+        assert "Docker" in result
+
+    def test_get_tech_stack_by_metric_id_falls_back_to_document_search(self):
+        """Test that get_tech_stack_by_metric_id falls back to document search."""
+        service = HubSpotDealTrackingService()
+
+        # Mock deal without metric_id column but with content match
+        mock_deal = Mock()
+        mock_deal.document_content = """Client: Acme Corp
+Metric Project ID: 70850
+Deal Tech Requirements: Java, Spring Boot
+Company Tech Stack: MySQL"""
+
+        mock_session = Mock()
+        mock_query = Mock()
+        # First query by column returns empty
+        # Second query (ilike) returns the deal
+        mock_query.filter.return_value.all.side_effect = [[], [mock_deal]]
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            result = service.get_tech_stack_by_metric_id("70850")
+
+        # Should find tech stack from document content via fallback
+        assert "Java" in result
+        assert "Spring Boot" in result
+        assert "MySQL" in result
+
+    def test_get_tech_stack_by_metric_id_returns_empty_when_not_found(self):
+        """Test that get_tech_stack_by_metric_id returns empty list when not found."""
+        service = HubSpotDealTrackingService()
+
+        mock_session = Mock()
+        mock_query = Mock()
+        # Both queries return empty
+        mock_query.filter.return_value.all.return_value = []
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            result = service.get_tech_stack_by_metric_id("nonexistent")
+
+        assert result == []
+
+    def test_get_tech_stack_by_metric_id_handles_not_specified(self):
+        """Test that 'Not specified' tech stacks are filtered out."""
+        service = HubSpotDealTrackingService()
+
+        mock_deal = Mock()
+        mock_deal.metric_id = "70850"
+        mock_deal.document_content = """Client: Acme Corp
+Deal Tech Requirements: Not specified
+Company Tech Stack: Python, Django"""
+
+        mock_session = Mock()
+        mock_query = Mock()
+        mock_query.filter.return_value.all.return_value = [mock_deal]
+        mock_session.query.return_value = mock_query
+
+        with patch(
+            "services.hubspot_deal_tracking_service.get_data_db_session"
+        ) as mock_get_session:
+            mock_get_session.return_value.__enter__.return_value = mock_session
+
+            result = service.get_tech_stack_by_metric_id("70850")
+
+        # Should only have Python and Django, not "Not specified"
+        assert "Python" in result
+        assert "Django" in result
+        assert "Not specified" not in result
