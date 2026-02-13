@@ -50,6 +50,15 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "minio"
+      component: "file-storage"
     networks:
       - insightmesh
 
@@ -193,6 +202,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "redis"
+      component: "cache"
     networks:
       - insightmesh
 
@@ -446,17 +464,19 @@ services:
     networks:
       - insightmesh
 
-  # Jaeger - Distributed Tracing
-  jaeger:
-    image: jaegertracing/jaeger:2.3.0
-    container_name: insightmesh-jaeger
+  # cAdvisor - Container Metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: insightmesh-cadvisor
     restart: unless-stopped
     ports:
-      - "4317:4317"       # OTLP gRPC
-      - "4318:4318"       # OTLP HTTP
-      - "16686:16686"     # Jaeger UI
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - "8082:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
     networks:
       - insightmesh
 
