@@ -176,7 +176,7 @@ class MetricClient:
         Fetch all projects with HubSpot integration data.
 
         Returns:
-            List of project dictionaries including integrations field
+            List of project dictionaries including linkedIntegrations field
         """
         query = """
             query {
@@ -193,11 +193,10 @@ class MetricClient:
                     groupType
                     name
                   }
-                  integrations {
-                    hubspot {
-                      dealId
-                      dealName
-                    }
+                  linkedIntegrations {
+                    id
+                    name
+                    integrationType
                   }
                 }
               }

@@ -189,11 +189,20 @@ class MetricSyncJob(BaseJob):
                 continue
             project_name = project.get("name", "")
 
-            # Check for HubSpot integration data (if Metric API exposes it)
-            integrations = project.get("integrations", {})
-            hubspot_data = integrations.get("hubspot", {})
-            hubspot_deal_id = hubspot_data.get("dealId")
-            hubspot_deal_name = hubspot_data.get("dealName")
+            # Check for HubSpot integration data via linkedIntegrations
+            # Note: Metric API may not expose HubSpot integration data via GraphQL,
+            # even though the UI shows it. Fall back to name matching.
+            linked_integrations = project.get("linkedIntegrations", [])
+            hubspot_deal_id = None
+            hubspot_deal_name = None
+
+            for integration in linked_integrations:
+                # HubSpot integrations have integrationType containing "HubSpot"
+                int_type = integration.get("integrationType") or ""
+                if "hubspot" in int_type.lower():
+                    hubspot_deal_id = integration.get("id")
+                    hubspot_deal_name = integration.get("name")
+                    break
 
             tech_stack = []
 
