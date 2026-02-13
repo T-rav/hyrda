@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from config.settings import TasksSettings
+from services.hubspot_deal_tracking_service import HubSpotDealTrackingService
 from services.metric_client import MetricClient
 from services.openai_embeddings import OpenAIEmbeddings
 from services.qdrant_client import QdrantClient
@@ -42,6 +43,7 @@ class MetricSyncJob(BaseJob):
         self.metric_client = MetricClient()
         self.embedding_client = OpenAIEmbeddings()
         self.vector_client = QdrantClient()
+        self.hubspot_service = HubSpotDealTrackingService()
 
         # Store which data types to sync (default: all)
         self.sync_employees = self.params.get("sync_employees", True)
@@ -53,6 +55,9 @@ class MetricSyncJob(BaseJob):
 
         # Get data database URL from settings (uses sync driver for database writes)
         self.data_db_url = self.settings.data_database_url
+
+        # Cache for project -> tech stack mapping
+        self._project_tech_stack_cache: dict[str, list[str]] = {}
 
     def _get_data_session(self):
         data_engine = create_engine(self.data_db_url)
@@ -160,12 +165,103 @@ class MetricSyncJob(BaseJob):
             if session:
                 session.close()
 
+    def _build_project_tech_stack_mapping(
+        self, projects: list[dict[str, Any]]
+    ) -> dict[str, list[str]]:
+        """
+        Build mapping from project ID/name to tech stack from HubSpot.
+
+        Tries to match Metric projects to HubSpot deals by:
+        1. HubSpot integration link (if available in project data)
+        2. Client name matching
+
+        Args:
+            projects: List of Metric project dictionaries
+
+        Returns:
+            Dict mapping project_id -> list of tech stack items
+        """
+        mapping: dict[str, list[str]] = {}
+
+        for project in projects:
+            project_id: str = project.get("id", "")
+            if not project_id:
+                continue
+            project_name = project.get("name", "")
+
+            # Check for HubSpot integration data (if Metric API exposes it)
+            integrations = project.get("integrations", {})
+            hubspot_data = integrations.get("hubspot", {})
+            hubspot_deal_id = hubspot_data.get("dealId")
+            hubspot_deal_name = hubspot_data.get("dealName")
+
+            tech_stack = []
+
+            # Try 1: Use HubSpot deal ID if available
+            if hubspot_deal_id:
+                tech_stack = self.hubspot_service.get_tech_stack_for_deal(
+                    hubspot_deal_id
+                )
+                if tech_stack:
+                    logger.debug(
+                        f"Found tech stack via deal ID for {project_name}: {tech_stack}"
+                    )
+
+            # Try 2: Use HubSpot deal name if available
+            if not tech_stack and hubspot_deal_name:
+                deal_info = self.hubspot_service.get_deal_by_name(hubspot_deal_name)
+                if deal_info and deal_info.get("hubspot_deal_id"):
+                    tech_stack = self.hubspot_service.get_tech_stack_for_deal(
+                        deal_info["hubspot_deal_id"]
+                    )
+                    if tech_stack:
+                        logger.debug(
+                            f"Found tech stack via deal name for {project_name}: {tech_stack}"
+                        )
+
+            # Try 3: Match by client name
+            if not tech_stack:
+                # Extract client from project groups
+                client = next(
+                    (
+                        g["name"]
+                        for g in project.get("groups", [])
+                        if g["groupType"] == "CLIENT"
+                    ),
+                    None,
+                )
+                if client:
+                    tech_stack = self.hubspot_service.get_tech_stack_by_client_name(
+                        client
+                    )
+                    if tech_stack:
+                        logger.debug(
+                            f"Found tech stack via client match for {project_name} ({client}): {tech_stack}"
+                        )
+
+            # Try 4: Match by project name (contains client name usually)
+            if not tech_stack:
+                tech_stack = self.hubspot_service.get_tech_stack_by_client_name(
+                    project_name
+                )
+                if tech_stack:
+                    logger.debug(
+                        f"Found tech stack via project name match for {project_name}: {tech_stack}"
+                    )
+
+            if tech_stack:
+                mapping[project_id] = tech_stack
+
+        logger.info(f"Built tech stack mapping for {len(mapping)} projects")
+        return mapping
+
     async def _execute_job(self) -> dict[str, Any]:
         stats = {
             "employees_synced": 0,
             "projects_synced": 0,
             "clients_synced": 0,
             "allocations_synced": 0,
+            "tech_stack_enriched": 0,
             "errors": [],
         }
 
@@ -173,15 +269,29 @@ class MetricSyncJob(BaseJob):
             # Initialize Qdrant
             await self.vector_client.initialize()
 
-            # Sync each data type
-            if self.sync_employees:
-                stats["employees_synced"] = await self._sync_employees()
+            # First, build project -> tech stack mapping from HubSpot
+            logger.info("Building project-to-tech-stack mapping from HubSpot...")
+            try:
+                projects = self.metric_client.get_projects_with_integrations()
+            except Exception:
+                projects = self.metric_client.get_projects()
 
+            self._project_tech_stack_cache = self._build_project_tech_stack_mapping(
+                projects
+            )
+            stats["tech_stack_enriched"] = len(self._project_tech_stack_cache)
+
+            # Sync projects (now with tech stack)
+            if self.sync_projects:
+                stats["projects_synced"] = await self._sync_projects()
+
+            # Sync clients
             if self.sync_clients:
                 stats["clients_synced"] = await self._sync_clients()
 
-            if self.sync_projects:
-                stats["projects_synced"] = await self._sync_projects()
+            # Sync employees (now with tech stack from their projects)
+            if self.sync_employees:
+                stats["employees_synced"] = await self._sync_employees()
 
             # Close connections
             await self.vector_client.close()
@@ -214,8 +324,9 @@ class MetricSyncJob(BaseJob):
             except Exception as e:
                 logger.warning(f"Failed to fetch allocations for {year}: {e}")
 
-        # Build employee -> projects mapping
-        employee_projects = {}
+        # Build employee -> projects mapping (names and IDs for tech stack lookup)
+        employee_projects: dict[str, set[str]] = {}
+        employee_project_ids: dict[str, set[str]] = {}
         for alloc in all_allocations:
             if not alloc or not alloc.get("id"):
                 continue
@@ -230,9 +341,15 @@ class MetricSyncJob(BaseJob):
 
             emp_id = employee["id"]
             project_name = project["name"]
+            project_id = project.get("id")
+
             if emp_id not in employee_projects:
                 employee_projects[emp_id] = set()
+                employee_project_ids[emp_id] = set()
+
             employee_projects[emp_id].add(project_name)
+            if project_id:
+                employee_project_ids[emp_id].add(project_id)
 
         texts, metadata_list, employees_to_sync = [], [], []
         skipped_count = 0
@@ -265,7 +382,18 @@ class MetricSyncJob(BaseJob):
                 ", ".join(sorted(projects)) if projects else "No project history"
             )
 
-            # Create searchable text with project history
+            # Collect tech stacks from all employee's projects
+            project_ids = employee_project_ids.get(employee["id"], set())
+            all_tech_stack: set[str] = set()
+            for proj_id in project_ids:
+                proj_tech = self._project_tech_stack_cache.get(proj_id, [])
+                all_tech_stack.update(proj_tech)
+            tech_stack_list = sorted(all_tech_stack)
+            tech_stack_text = (
+                ", ".join(tech_stack_list) if tech_stack_list else "Not specified"
+            )
+
+            # Create searchable text with project history and tech stack
             text = (
                 f"Employee: {employee['name']}\n"
                 f"Title: {title}\n"
@@ -274,7 +402,8 @@ class MetricSyncJob(BaseJob):
                 f"Status: {'On Bench' if on_bench else 'Allocated'}\n"
                 f"Started: {employee.get('startedWorking', 'N/A')}\n"
                 f"Ended: {employee.get('endedWorking', 'Active')}\n"
-                f"Project History: {project_history}"
+                f"Project History: {project_history}\n"
+                f"Tech Stack Experience: {tech_stack_text}"
             )
 
             # Create metadata with source="metric"
@@ -292,6 +421,8 @@ class MetricSyncJob(BaseJob):
                 "started_working": employee.get("startedWorking", ""),
                 "ended_working": employee.get("endedWorking", ""),
                 "project_count": len(projects),
+                "tech_stack": tech_stack_list,
+                "tech_stack_count": len(tech_stack_list),
                 "synced_at": datetime.now(UTC).isoformat(),
             }
 
@@ -388,11 +519,19 @@ class MetricSyncJob(BaseJob):
                 "Unknown",
             )
 
-            # Create searchable text with practice
+            # Get tech stack from HubSpot mapping
+            project_id = project.get("id", "")
+            tech_stack = (
+                self._project_tech_stack_cache.get(project_id, []) if project_id else []
+            )
+            tech_stack_text = ", ".join(tech_stack) if tech_stack else "Not specified"
+
+            # Create searchable text with practice and tech stack
             text = (
                 f"Project: {project['name']}\n"
                 f"Client: {client}\n"
                 f"Practice: {practice}\n"
+                f"Tech Stack: {tech_stack_text}\n"
                 f"Type: {project.get('projectType', 'Unknown')}\n"
                 f"Status: {project.get('projectStatus', 'Unknown')}\n"
                 f"Start Date: {project.get('startDate', 'N/A')}\n"
@@ -410,6 +549,8 @@ class MetricSyncJob(BaseJob):
                 "name": project["name"],
                 "client": client,
                 "practice": practice,
+                "tech_stack": tech_stack,
+                "tech_stack_count": len(tech_stack),
                 "project_type": project.get("projectType", ""),
                 "project_status": project.get("projectStatus", ""),
                 "start_date": project.get("startDate", ""),

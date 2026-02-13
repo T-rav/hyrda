@@ -84,8 +84,8 @@ def mock_metric_client():
         # Mock clients data
         client.get_clients.return_value = [{"id": "client1", "name": "Acme Corp"}]
 
-        # Mock projects data
-        client.get_projects.return_value = [
+        # Mock projects data (used by both get_projects and get_projects_with_integrations)
+        projects_data = [
             {
                 "id": "proj1",
                 "name": "Project Alpha",
@@ -104,6 +104,8 @@ def mock_metric_client():
                 ],
             }
         ]
+        client.get_projects.return_value = projects_data
+        client.get_projects_with_integrations.return_value = projects_data
 
         # Mock allocations data
         client.get_allocations.return_value = [
@@ -132,6 +134,16 @@ def mock_embedding_provider():
 
 
 @pytest.fixture
+def mock_hubspot_service():
+    """Mock HubSpot deal tracking service."""
+    hubspot = MagicMock()
+    hubspot.get_tech_stack_for_deal.return_value = []
+    hubspot.get_deal_by_name.return_value = None
+    hubspot.get_tech_stack_by_client_name.return_value = []
+    return hubspot
+
+
+@pytest.fixture
 def settings():
     """Create test settings."""
     return TasksSettings()
@@ -139,7 +151,11 @@ def settings():
 
 @pytest.mark.asyncio
 async def test_sync_employees(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test employee sync."""
     with (
@@ -147,6 +163,10 @@ async def test_sync_employees(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -167,7 +187,11 @@ async def test_sync_employees(
 
 @pytest.mark.asyncio
 async def test_sync_projects(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test project sync."""
     with (
@@ -175,6 +199,10 @@ async def test_sync_projects(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -192,7 +220,11 @@ async def test_sync_projects(
 
 @pytest.mark.asyncio
 async def test_sync_clients(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test client sync."""
     with (
@@ -200,6 +232,10 @@ async def test_sync_clients(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -216,7 +252,11 @@ async def test_sync_clients(
 
 @pytest.mark.asyncio
 async def test_sync_all_data_types(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test syncing all data types."""
     with (
@@ -224,6 +264,10 @@ async def test_sync_all_data_types(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(settings)
@@ -238,7 +282,11 @@ async def test_sync_all_data_types(
 
 @pytest.mark.asyncio
 async def test_employee_metadata_structure(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that employee metadata has correct structure."""
     with (
@@ -246,6 +294,10 @@ async def test_employee_metadata_structure(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -272,7 +324,11 @@ async def test_employee_metadata_structure(
 
 @pytest.mark.asyncio
 async def test_project_filtering(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that non-billable projects are filtered out."""
     # Add non-billable project to mock data
@@ -296,6 +352,10 @@ async def test_project_filtering(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
+        ),
     ):
         job = MetricSyncJob(
             settings,
@@ -312,7 +372,11 @@ async def test_project_filtering(
 
 @pytest.mark.asyncio
 async def test_database_writes_for_employees(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that _write_metric_records is called with correct employee data."""
     with (
@@ -320,6 +384,10 @@ async def test_database_writes_for_employees(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -353,7 +421,11 @@ async def test_database_writes_for_employees(
 
 @pytest.mark.asyncio
 async def test_database_writes_for_projects(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that _write_metric_records is called with correct project data."""
     with (
@@ -361,6 +433,10 @@ async def test_database_writes_for_projects(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -387,7 +463,11 @@ async def test_database_writes_for_projects(
 
 @pytest.mark.asyncio
 async def test_database_writes_for_clients(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that _write_metric_records is called with correct client data."""
     with (
@@ -395,6 +475,10 @@ async def test_database_writes_for_clients(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -421,7 +505,11 @@ async def test_database_writes_for_clients(
 
 @pytest.mark.asyncio
 async def test_database_write_failure_does_not_block_sync(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that database write failures don't prevent Qdrant sync."""
     with (
@@ -429,6 +517,10 @@ async def test_database_write_failure_does_not_block_sync(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -451,7 +543,11 @@ async def test_database_write_failure_does_not_block_sync(
 
 @pytest.mark.asyncio
 async def test_employee_project_history(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that employee records include project history from allocations."""
     # Mock allocations for project history
@@ -478,6 +574,10 @@ async def test_employee_project_history(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
+        ),
     ):
         job = MetricSyncJob(
             settings,
@@ -500,7 +600,11 @@ async def test_employee_project_history(
 
 @pytest.mark.asyncio
 async def test_project_practice_field_group_type_21(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that project practice field uses GROUP_TYPE_21 (not GROUP_TYPE_23)."""
     # Mock project with GROUP_TYPE_21 for practice
@@ -531,6 +635,10 @@ async def test_project_practice_field_group_type_21(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
         ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
+        ),
     ):
         job = MetricSyncJob(
             settings,
@@ -551,7 +659,11 @@ async def test_project_practice_field_group_type_21(
 
 @pytest.mark.asyncio
 async def test_project_practice_field_defaults_to_unknown(
-    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+    settings,
+    mock_metric_client,
+    mock_vector_store,
+    mock_embedding_provider,
+    mock_hubspot_service,
 ):
     """Test that project practice field defaults to 'Unknown' when GROUP_TYPE_21 is missing."""
     # Mock project without GROUP_TYPE_21
@@ -575,6 +687,10 @@ async def test_project_practice_field_defaults_to_unknown(
         patch(
             "jobs.metric_sync.OpenAIEmbeddings",
             return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=mock_hubspot_service,
         ),
     ):
         job = MetricSyncJob(
@@ -601,3 +717,133 @@ def test_job_metadata():
     assert "sync_employees" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_projects" in MetricSyncJob.OPTIONAL_PARAMS
     assert "sync_clients" in MetricSyncJob.OPTIONAL_PARAMS
+
+
+@pytest.mark.asyncio
+async def test_project_tech_stack_enrichment(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that projects are enriched with tech stack from HubSpot."""
+    # Create HubSpot mock first
+    hubspot_instance = MagicMock()
+    hubspot_instance.get_tech_stack_for_deal.return_value = []
+    hubspot_instance.get_deal_by_name.return_value = None
+    hubspot_instance.get_tech_stack_by_client_name.return_value = [
+        "Python",
+        "React",
+        "PostgreSQL",
+    ]
+
+    with (
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=hubspot_instance,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=True,
+            sync_clients=False,
+        )
+
+        await job._execute_job()
+
+        # Check that project text includes tech stack
+        call_args = mock_embedding_provider.embed_batch.call_args
+        texts = call_args[0][0]
+        project_text = texts[0]
+
+        assert "Tech Stack:" in project_text
+        assert "Python" in project_text or "React" in project_text
+
+
+@pytest.mark.asyncio
+async def test_employee_tech_stack_from_projects(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that employees get tech stack from their assigned projects."""
+    # Mock allocations
+    mock_metric_client.get_allocations.return_value = [
+        {
+            "id": "alloc1",
+            "startDate": "2024-01-01",
+            "endDate": "2024-12-31",
+            "employee": {"id": "emp1", "name": "John Doe"},
+            "project": {"id": "proj1", "name": "Project Alpha"},
+        }
+    ]
+
+    # Create HubSpot mock
+    hubspot_instance = MagicMock()
+    hubspot_instance.get_tech_stack_for_deal.return_value = []
+    hubspot_instance.get_deal_by_name.return_value = None
+    hubspot_instance.get_tech_stack_by_client_name.return_value = ["Java", "Kubernetes"]
+
+    with (
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=hubspot_instance,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=True,
+            sync_projects=False,
+            sync_clients=False,
+        )
+
+        await job._execute_job()
+
+        # Check that employee text includes tech stack experience
+        call_args = mock_embedding_provider.embed_batch.call_args
+        texts = call_args[0][0]
+        employee_text = texts[0]
+
+        assert "Tech Stack Experience:" in employee_text
+
+
+@pytest.mark.asyncio
+async def test_tech_stack_mapping_built_from_hubspot(
+    settings, mock_metric_client, mock_vector_store, mock_embedding_provider
+):
+    """Test that tech stack mapping is built from HubSpot during job execution."""
+    # Create HubSpot mock
+    hubspot_instance = MagicMock()
+    hubspot_instance.get_tech_stack_for_deal.return_value = []
+    hubspot_instance.get_deal_by_name.return_value = None
+    hubspot_instance.get_tech_stack_by_client_name.return_value = ["TypeScript", "AWS"]
+
+    with (
+        patch("jobs.metric_sync.QdrantClient", return_value=mock_vector_store),
+        patch(
+            "jobs.metric_sync.OpenAIEmbeddings",
+            return_value=mock_embedding_provider,
+        ),
+        patch(
+            "jobs.metric_sync.HubSpotDealTrackingService",
+            return_value=hubspot_instance,
+        ),
+    ):
+        job = MetricSyncJob(
+            settings,
+            sync_employees=False,
+            sync_projects=True,
+            sync_clients=False,
+        )
+
+        result = await job._execute_job()
+
+        # Verify tech stack enrichment count is tracked
+        assert "tech_stack_enriched" in result
+        assert isinstance(result["tech_stack_enriched"], int)

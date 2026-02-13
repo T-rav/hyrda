@@ -170,3 +170,75 @@ class MetricClient:
         variables = {"startDate": start_date, "endDate": end_date}
         result = self.execute(query, variables)
         return result.get("organization", {}).get("allocations", [])
+
+    def get_projects_with_integrations(self) -> list[dict[str, Any]]:
+        """
+        Fetch all projects with HubSpot integration data.
+
+        Returns:
+            List of project dictionaries including integrations field
+        """
+        query = """
+            query {
+              organization {
+                projects {
+                  id
+                  name
+                  projectType
+                  projectStatus
+                  endDate
+                  startDate
+                  groups {
+                    id
+                    groupType
+                    name
+                  }
+                  integrations {
+                    hubspot {
+                      dealId
+                      dealName
+                    }
+                  }
+                }
+              }
+            }
+        """
+        try:
+            result = self.execute(query)
+            return result.get("organization", {}).get("projects", [])
+        except Exception as e:
+            logger.warning(f"Failed to fetch projects with integrations: {e}")
+            # Fall back to basic query without integrations
+            return self.get_projects()
+
+    def introspect_project_fields(self) -> dict[str, Any]:
+        """
+        Introspect the GraphQL schema to discover available Project fields.
+
+        Returns:
+            Schema introspection result for Project type
+        """
+        query = """
+            query {
+              __type(name: "Project") {
+                name
+                fields {
+                  name
+                  type {
+                    name
+                    kind
+                    ofType {
+                      name
+                      kind
+                    }
+                  }
+                }
+              }
+            }
+        """
+        try:
+            result = self.execute(query)
+            return result.get("__type", {})
+        except Exception as e:
+            logger.error(f"Schema introspection failed: {e}")
+            return {}

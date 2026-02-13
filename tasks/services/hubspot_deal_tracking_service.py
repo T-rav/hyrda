@@ -269,3 +269,113 @@ class HubSpotDealTrackingService:
             deal.last_ingested_at = datetime.now(UTC)
             session.commit()
             return True
+
+    def get_deal_by_name(self, deal_name: str) -> dict[str, Any] | None:
+        """
+        Get deal tracking information by deal name (fuzzy match).
+
+        Args:
+            deal_name: Deal name to search for
+
+        Returns:
+            Dictionary with deal tracking info or None if not found
+        """
+        with get_data_db_session() as session:
+            # Try exact match first
+            deal = (
+                session.query(HubSpotDealTracking)
+                .filter_by(deal_name=deal_name)
+                .first()
+            )
+
+            if not deal:
+                # Try partial match (deal name contains search term)
+                deal = (
+                    session.query(HubSpotDealTracking)
+                    .filter(HubSpotDealTracking.deal_name.ilike(f"%{deal_name}%"))
+                    .first()
+                )
+
+            if not deal:
+                return None
+
+            return {
+                "hubspot_deal_id": deal.hubspot_deal_id,
+                "deal_name": deal.deal_name,
+                "document_content": deal.document_content,
+                "metadata": deal.extra_metadata,
+            }
+
+    def get_tech_stack_for_deal(self, deal_id: str) -> list[str]:
+        """
+        Extract tech stack from a stored deal's document content.
+
+        Args:
+            deal_id: HubSpot deal ID
+
+        Returns:
+            List of tech stack items, empty if not found
+        """
+        with get_data_db_session() as session:
+            deal = (
+                session.query(HubSpotDealTracking)
+                .filter_by(hubspot_deal_id=deal_id)
+                .first()
+            )
+
+            if not deal or not deal.document_content:
+                return []
+
+            # Parse tech stack from document content
+            # Format: "Deal Tech Requirements: tech1, tech2, tech3"
+            # and "Company Tech Stack: tech1, tech2"
+            tech_stack = []
+            content = deal.document_content
+
+            for line in content.split("\n"):
+                if "Deal Tech Requirements:" in line or "Company Tech Stack:" in line:
+                    tech_part = line.split(":", 1)[1].strip()
+                    if tech_part and tech_part != "Not specified":
+                        tech_stack.extend([t.strip() for t in tech_part.split(",")])
+
+            # Deduplicate and return
+            return list(set(tech_stack))
+
+    def get_tech_stack_by_client_name(self, client_name: str) -> list[str]:
+        """
+        Find tech stack for a client by matching deal names.
+
+        Args:
+            client_name: Client/company name to search for
+
+        Returns:
+            Combined tech stack from matching deals
+        """
+        with get_data_db_session() as session:
+            # Search for deals where deal_name contains the client name
+            deals = (
+                session.query(HubSpotDealTracking)
+                .filter(HubSpotDealTracking.deal_name.ilike(f"%{client_name}%"))
+                .all()
+            )
+
+            if not deals:
+                return []
+
+            # Combine tech stacks from all matching deals
+            all_tech = []
+            for deal in deals:
+                if deal.document_content:
+                    content = deal.document_content
+                    for line in content.split("\n"):
+                        if (
+                            "Deal Tech Requirements:" in line
+                            or "Company Tech Stack:" in line
+                        ):
+                            tech_part = line.split(":", 1)[1].strip()
+                            if tech_part and tech_part != "Not specified":
+                                all_tech.extend(
+                                    [t.strip() for t in tech_part.split(",")]
+                                )
+
+            return list(set(all_tech))
