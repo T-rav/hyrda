@@ -1,8 +1,8 @@
 """Add scraped_web_pages table for tracking website scraping
 
-Revision ID: 006_add_scraped_web_pages
-Revises: 005_add_oauth_credentials
-Create Date: 2026-01-20
+Revision ID: 019_add_scraped_web_pages
+Revises: 018_create_youtube_videos_data
+Create Date: 2026-02-12
 
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "006_add_scraped_web_pages"
-down_revision = "005_add_oauth_credentials"
+revision = "019"
+down_revision = "018"
 branch_labels = None
 depends_on = None
 
@@ -23,12 +23,8 @@ def upgrade():
         # Primary key
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         # URL identifiers
-        sa.Column(
-            "url", sa.Text, nullable=False
-        ),  # Use TEXT to avoid index length issues
-        sa.Column(
-            "url_hash", sa.String(64), nullable=False, unique=True
-        ),  # Hash is unique constraint
+        sa.Column("url", sa.Text, nullable=False),
+        sa.Column("url_hash", sa.String(64), nullable=False, unique=True),
         # Page info
         sa.Column("page_title", sa.String(512), nullable=True),
         sa.Column("website_domain", sa.String(255), nullable=False),

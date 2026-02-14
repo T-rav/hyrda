@@ -6,33 +6,9 @@ from agent-service, including node start/complete status updates.
 """
 
 import json
-from contextlib import contextmanager
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
-
-# Mock OpenTelemetry before importing
-@contextmanager
-def mock_create_span(*args, **kwargs):
-    """Mock create_span as a proper context manager."""
-    yield MagicMock()
-
-
-def mock_record_exception(*args, **kwargs):
-    """Mock record_exception as a no-op."""
-    pass
-
-
-# Apply mocks
-_create_span_patcher = patch(
-    "shared.utils.otel_http_client.create_span", side_effect=mock_create_span
-)
-_record_exception_patcher = patch(
-    "shared.utils.otel_http_client.record_exception", side_effect=mock_record_exception
-)
-_create_span_patcher.start()
-_record_exception_patcher.start()
 
 from bot.services.agent_client import AgentClient
 

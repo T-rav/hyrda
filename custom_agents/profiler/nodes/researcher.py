@@ -314,12 +314,14 @@ async def researcher_tools(
                 )
 
         elif tool_name == "web_search" and tavily_client:
-            # Execute web search
+            # Execute web search with caching
             try:
+                from profiler.services.search_service import cached_web_search
+
                 query = tool_args.get("query", "")
                 max_results = tool_args.get("max_results", 10)
 
-                search_results = await tavily_client.search(query, max_results)
+                search_results = await cached_web_search(query, max_results)
 
                 # Format results
                 result_text = f"Found {len(search_results)} results:\n\n"
@@ -345,15 +347,18 @@ async def researcher_tools(
                 )
 
         elif tool_name == "scrape_url" and tavily_client:
-            # Execute URL scraping
+            # Execute URL scraping with caching
             try:
+                from profiler.services.search_service import cached_scrape_url
+
                 url = tool_args.get("url", "")
 
-                scrape_result = await tavily_client.scrape_url(url)
+                scrape_result = await cached_scrape_url(url)
 
                 if scrape_result.get("success"):
                     content = scrape_result.get("content", "")
                     title = scrape_result.get("title", "")
+                    from_cache = scrape_result.get("from_cache", False)
 
                     result_text = f"# Scraped: {title}\n\nURL: {url}\n\n{content}\n\n"
                     from langchain_core.messages import ToolMessage
@@ -362,7 +367,8 @@ async def researcher_tools(
                         ToolMessage(content=result_text, tool_call_id=tool_id)
                     )
                     raw_notes.append(result_text)
-                    logger.info(f"Successfully scraped {len(content)} chars from {url}")
+                    cache_indicator = " (from cache)" if from_cache else ""
+                    logger.info(f"Successfully scraped {len(content)} chars from {url}{cache_indicator}")
                 else:
                     error = scrape_result.get("error", "Unknown error")
 

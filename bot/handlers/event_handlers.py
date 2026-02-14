@@ -1,6 +1,11 @@
 import logging
+import sys
 import traceback
 from typing import Any
+
+# Add shared directory to path for tracing utilities
+sys.path.insert(0, "/app")
+from shared.utils.tracing import TraceContext, generate_trace_id
 
 from handlers.message_handlers import handle_message
 from services.llm_service import LLMService
@@ -37,7 +42,10 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
     @app.event("app_mention")
     async def handle_mention(body: dict[str, Any], client: Any) -> None:
         """Handle when the bot is mentioned in a channel"""
-        logger.info("Received app mention")
+        # Generate trace_id at entry point for distributed tracing
+        trace_id = generate_trace_id()
+        logger.info(f"[{trace_id}] Received app mention")
+
         try:
             event = body["event"]
             user_id = event["user"]
@@ -51,23 +59,26 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
             thread_ts = event.get("thread_ts", event.get("ts"))
 
             logger.info(
-                f"Handling mention in channel {channel}, thread {thread_ts}, text: '{text}'"
+                f"[{trace_id}] Handling mention in channel {channel}, thread {thread_ts}"
             )
 
-            await handle_message(
-                text=text,
-                user_id=user_id,
-                slack_service=slack_service,
-                llm_service=llm_service,
-                channel=channel,
-                thread_ts=thread_ts,
-                files=body["event"].get("files", []),
-                conversation_cache=conversation_cache,
-                message_ts=event.get("ts"),
-            )
+            # Use TraceContext to propagate trace_id through all service calls
+            with TraceContext(trace_id):
+                await handle_message(
+                    text=text,
+                    user_id=user_id,
+                    slack_service=slack_service,
+                    llm_service=llm_service,
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    files=body["event"].get("files", []),
+                    conversation_cache=conversation_cache,
+                    message_ts=event.get("ts"),
+                )
 
             await _record_usage(user_id, thread_ts, channel, "app_mention")
         except Exception as e:
+            logger.error(f"[{trace_id}] Error handling mention: {e}")
             await handle_error(
                 client,
                 body["event"]["channel"],
@@ -79,21 +90,24 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
     @app.event("message")
     async def handle_message_event(body: dict[str, Any], client: Any) -> None:
         """Handle all message events including those in threads"""
-        logger.info("Received message event")
+        # Generate trace_id at entry point for distributed tracing
+        trace_id = generate_trace_id()
+        logger.info(f"[{trace_id}] Received message event")
+
         try:
             event = body["event"]
 
             logger.debug(
-                f"Message event: channel={event.get('channel')}, user={event.get('user')}, thread_ts={event.get('thread_ts')}"
+                f"[{trace_id}] Message event: channel={event.get('channel')}, user={event.get('user')}"
             )
 
             if event.get("bot_id") or event.get("subtype") == "bot_message":
-                logger.info("Skipping bot message")
+                logger.debug(f"[{trace_id}] Skipping bot message")
                 return
 
             user_id = event.get("user")
             if not user_id:
-                logger.info("Skipping message with no user")
+                logger.debug(f"[{trace_id}] Skipping message with no user")
                 return
 
             channel = event.get("channel")
@@ -103,27 +117,31 @@ async def register_handlers(app, slack_service, llm_service, conversation_cache=
             ts = event.get("ts")
 
             logger.debug(
-                f"Processing message: channel_type={channel_type}, thread_ts={thread_ts}, text='{text}'"
+                f"[{trace_id}] Processing message: channel_type={channel_type}, thread_ts={thread_ts}"
             )
 
             files = event.get("files", [])
 
-            await process_message_by_context(
-                user_id=user_id,
-                channel=channel,
-                channel_type=channel_type,
-                text=text,
-                thread_ts=thread_ts,
-                ts=ts,
-                slack_service=slack_service,
-                llm_service=llm_service,
-                conversation_cache=conversation_cache,
-                files=files,
-            )
+            # Use TraceContext to propagate trace_id through all service calls
+            with TraceContext(trace_id):
+                await process_message_by_context(
+                    user_id=user_id,
+                    channel=channel,
+                    channel_type=channel_type,
+                    text=text,
+                    thread_ts=thread_ts,
+                    ts=ts,
+                    slack_service=slack_service,
+                    llm_service=llm_service,
+                    conversation_cache=conversation_cache,
+                    files=files,
+                )
 
         except Exception as e:
-            logger.error(f"Error in message event handler: {e}")
-            logger.error(f"Message handler error: {traceback.format_exc()}")
+            logger.error(f"[{trace_id}] Error in message event handler: {e}")
+            logger.error(
+                f"[{trace_id}] Message handler error: {traceback.format_exc()}"
+            )
 
 
 async def _record_usage(

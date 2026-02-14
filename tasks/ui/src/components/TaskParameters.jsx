@@ -29,8 +29,10 @@ function TaskParameters({
 
   // Special handling for jobs that require credentials
   const isGDriveIngest = taskType === 'gdrive_ingest'
-  const isWebsiteScrape = taskType === 'website_scrape'
-  const needsCredentials = isGDriveIngest || isWebsiteScrape
+  const isHubSpotSync = taskType === 'hubspot_sync'
+  const needsGoogleCredentials = isGDriveIngest
+  const needsHubSpotCredentials = isHubSpotSync
+  const needsCredentials = needsGoogleCredentials || needsHubSpotCredentials
 
   // Load available credentials for jobs that need authentication
   useEffect(() => {
@@ -38,16 +40,30 @@ function TaskParameters({
       fetch('/api/credentials', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
-          setAvailableCredentials(data.credentials || [])
-          if (data.credentials && data.credentials.length === 1) {
-            setSelectedCredential(data.credentials[0].credential_id)
+          // Filter credentials by provider type
+          let filteredCreds = data.credentials || []
+          if (needsHubSpotCredentials) {
+            filteredCreds = filteredCreds.filter(c => c.provider === 'hubspot')
+          } else if (needsGoogleCredentials) {
+            // Google credentials use 'google_drive' or 'google' as provider
+            filteredCreds = filteredCreds.filter(c =>
+              c.provider === 'google_drive' || c.provider === 'google'
+            )
+          }
+          setAvailableCredentials(filteredCreds)
+          if (filteredCreds.length === 1) {
+            setSelectedCredential(filteredCreds[0].credential_id)
+            // Auto-set the credential_id param
+            if (onChange) {
+              onChange('credential_id', filteredCreds[0].credential_id)
+            }
           }
         })
         .catch(err => {
           logError('Error loading credentials:', err)
         })
     }
-  }, [needsCredentials, readOnly])
+  }, [needsCredentials, needsHubSpotCredentials, needsGoogleCredentials, readOnly])
 
   // Initialize selected credential from values in read-only mode
   useEffect(() => {
@@ -350,7 +366,7 @@ function TaskParameters({
 
   const renderParameter = (param, isRequired = false) => {
     // Skip credentials_file, token_file, and credential_id for jobs that use credential selector (handled separately)
-    if (needsCredentials && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
+    if ((needsGoogleCredentials || needsHubSpotCredentials) && (param === 'credentials_file' || param === 'token_file' || param === 'credential_id')) {
       return null
     }
 
@@ -562,6 +578,23 @@ function TaskParameters({
           false
         )
 
+      // HubSpot parameters
+      case 'limit':
+        if (isHubSpotSync) {
+          return renderNumberParam(
+            param,
+            isRequired,
+            'Max Deals',
+            '100',
+            'Maximum number of closed deals to sync',
+            1,
+            1000,
+            100
+          )
+        }
+        // Fall through to default for other job types
+        break
+
       // Generic fallback for unknown parameters
       default:
         return renderTextParam(
@@ -579,13 +612,21 @@ function TaskParameters({
       return null
     }
 
+    const sectionTitle = isHubSpotSync ? 'HubSpot Authentication' : 'Google Drive Authentication'
+    const noCredsMessage = isHubSpotSync
+      ? 'No HubSpot credentials found. Please go to the Credentials tab and add a HubSpot credential first.'
+      : 'No Google credentials found. Please go to the Credentials tab and add a Google OAuth credential first.'
+    const helpText = isHubSpotSync
+      ? 'Select which HubSpot account to use for this task'
+      : 'Select which Google account to use for this task'
+
     if (readOnly) {
       // In read-only mode, just show the selected credential
       const selectedCred = availableCredentials.find(c => c.credential_id === selectedCredential)
 
       return (
         <div className="mb-4">
-          <h6>{isGDriveIngest ? 'Google Drive Authentication' : 'Authentication'}</h6>
+          <h6>{sectionTitle}</h6>
           <div className="mb-3">
             <label className="form-label">Selected Credential</label>
             <div className="form-control" style={{ backgroundColor: '#f8f9fa' }}>
@@ -599,20 +640,16 @@ function TaskParameters({
     // Editable mode
     return (
       <div className="mb-4">
-        <h6>{isGDriveIngest ? 'Google Drive Authentication' : 'Authentication'}</h6>
+        <h6>{sectionTitle}</h6>
 
         {availableCredentials.length === 0 ? (
-          <div className={isGDriveIngest ? 'alert alert-warning' : 'alert alert-info'}>
-            <small>
-              {isGDriveIngest
-                ? 'No credentials found. Please go to the Credentials tab and add a Google OAuth credential first.'
-                : 'No credentials found. Add one in the Credentials tab if you need to scrape protected pages.'}
-            </small>
+          <div className="alert alert-warning">
+            <small>{noCredsMessage}</small>
           </div>
         ) : (
           <div className="mb-3">
             <label className="form-label">
-              Select Credential {isGDriveIngest && <span className="text-danger">*</span>}
+              Select Credential <span className="text-danger">*</span>
             </label>
             <select
               className="form-select"
@@ -622,7 +659,7 @@ function TaskParameters({
                 setSelectedCredential(e.target.value)
                 handleParamChange('credential_id', e.target.value)
               }}
-              required={isGDriveIngest}
+              required
             >
               <option value="">Choose a credential...</option>
               {availableCredentials.map((cred) => (
@@ -632,11 +669,7 @@ function TaskParameters({
               ))}
             </select>
             <div className="form-text">
-              <small className="text-muted">
-                {isGDriveIngest
-                  ? 'Select which Google account to use for this task'
-                  : 'Optional: Select OAuth credential for accessing protected pages (e.g., Google Sites)'}
-              </small>
+              <small className="text-muted">{helpText}</small>
             </div>
           </div>
         )}

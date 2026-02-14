@@ -15,11 +15,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 class GoogleAuthenticator:
     """Service for handling Google OAuth2 authentication"""
 
-    # Define the scopes needed for Google Drive API and Google Sites
+    # Define the scopes needed for Google Drive API (including shared drives)
     SCOPES = [
         "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/drive.metadata.readonly",
-        "https://www.googleapis.com/auth/sites.readonly",  # For Google Sites access
     ]
 
     def __init__(

@@ -31,6 +31,37 @@ services:
     networks:
       - insightmesh
 
+  # MinIO for file storage (PDFs, reports)
+  minio:
+    image: minio/minio:latest
+    container_name: insightmesh-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9002:9000"  # S3 API
+      - "9003:9001"  # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "minio"
+      component: "file-storage"
+    networks:
+      - insightmesh
+
   # phpMyAdmin for database management
   phpmyadmin:
     image: phpmyadmin/phpmyadmin:latest
@@ -171,6 +202,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "redis"
+      component: "cache"
     networks:
       - insightmesh
 
@@ -424,17 +464,19 @@ services:
     networks:
       - insightmesh
 
-  # Jaeger - Distributed Tracing
-  jaeger:
-    image: jaegertracing/jaeger:2.3.0
-    container_name: insightmesh-jaeger
+  # cAdvisor - Container Metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: insightmesh-cadvisor
     restart: unless-stopped
     ports:
-      - "4317:4317"       # OTLP gRPC
-      - "4318:4318"       # OTLP HTTP
-      - "16686:16686"     # Jaeger UI
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - "8082:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    privileged: true
     networks:
       - insightmesh
 
@@ -446,6 +488,8 @@ volumes:
   redis_data:
     driver: local
   loki_data:
+    driver: local
+  minio_data:
     driver: local
 
 networks:

@@ -6,7 +6,7 @@ ARG VERSION=0.0.0
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
 
-# Install security updates and dependencies including nginx and ffmpeg
+# Install security updates and dependencies including nginx, ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
@@ -85,4 +85,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 COPY tasks/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Use supervisor to manage both nginx and FastAPI
+# Note: Supervisor runs as root to manage nginx (www-data) and FastAPI (appuser)
+# The actual services run as non-root users (see supervisord.conf)
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["/usr/bin/supervisord"]

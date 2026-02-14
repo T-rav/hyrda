@@ -5,6 +5,17 @@ import sys
 from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 
+# Import tracing utilities for trace_id correlation
+try:
+    from shared.utils.tracing import get_parent_trace_id, get_trace_id
+except ImportError:
+    # Fallback if shared module not available
+    def get_trace_id() -> str | None:
+        return None
+
+    def get_parent_trace_id() -> str | None:
+        return None
+
 
 class JSONFormatter(logging.Formatter):
     """JSON formatter for structured logging in production"""
@@ -21,6 +32,15 @@ class JSONFormatter(logging.Formatter):
             "line": record.lineno,
         }
 
+        # Add trace_id for distributed tracing correlation
+        trace_id = get_trace_id()
+        if trace_id:
+            log_entry["trace_id"] = trace_id
+
+        parent_trace_id = get_parent_trace_id()
+        if parent_trace_id:
+            log_entry["parent_trace_id"] = parent_trace_id
+
         # Add exception info if present
         if record.exc_info:
             log_entry["exception"] = self.formatException(record.exc_info)
@@ -32,6 +52,8 @@ class JSONFormatter(logging.Formatter):
             log_entry["channel_id"] = record.channel_id
         if hasattr(record, "request_id"):
             log_entry["request_id"] = record.request_id
+        if hasattr(record, "trace_id"):
+            log_entry["trace_id"] = record.trace_id
 
         return json.dumps(log_entry)
 

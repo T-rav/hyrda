@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from models.base import Base, get_db_session
+from models.base import Base, get_data_db_session
 
 
 class ScrapedWebPage(Base):
@@ -161,7 +161,7 @@ class WebPageTrackingService:
         """
         url_hash = self.compute_url_hash(url)
 
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             existing_page = (
                 session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
             )
@@ -212,7 +212,7 @@ class WebPageTrackingService:
         url_hash = self.compute_url_hash(url)
         domain = self.extract_domain(url)
 
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             existing_page = (
                 session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
             )
@@ -264,7 +264,7 @@ class WebPageTrackingService:
         """
         url_hash = self.compute_url_hash(url)
 
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             page = session.query(ScrapedWebPage).filter_by(url_hash=url_hash).first()
 
             if not page:
@@ -303,7 +303,7 @@ class WebPageTrackingService:
         Returns:
             List of page info dictionaries
         """
-        with get_db_session() as session:
+        with get_data_db_session() as session:
             pages = (
                 session.query(ScrapedWebPage)
                 .filter_by(website_domain=domain)

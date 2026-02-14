@@ -5,8 +5,12 @@ Includes Langfuse tracing for observability.
 """
 
 import logging
+import os
+import re
 from datetime import datetime
+from typing import Optional
 
+import boto3
 from langchain_core.runnables import RunnableConfig
 
 from profiler import prompts
@@ -22,6 +26,100 @@ from profiler.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def upload_report_to_s3(report_content: str, company_name: str) -> Optional[str]:
+    """Convert markdown to PDF and upload to MinIO/S3.
+
+    Args:
+        report_content: Full markdown report content
+        company_name: Company name for filename
+
+    Returns:
+        Presigned URL to PDF or None if upload fails
+    """
+    try:
+        from profiler.pdf_utils.pdf_generator import markdown_to_pdf
+
+        logger.info("Converting markdown to PDF...")
+
+        # Strip LLM preambles (e.g., "Here is the revised report...")
+        cleaned_content = re.sub(
+            r'^.*?(?=^#\s)',
+            '',
+            report_content,
+            flags=re.MULTILINE | re.DOTALL
+        ).strip()
+
+        # Strip metadata fields
+        cleaned_content = re.sub(
+            r'^(Date|Profile Type|Focus Area):\s*.*?$',
+            '',
+            cleaned_content,
+            flags=re.MULTILINE
+        )
+
+        cleaned_content = re.sub(r'\n{3,}', '\n\n', cleaned_content).strip()
+
+        # Generate PDF
+        pdf_buffer = markdown_to_pdf(
+            markdown_content=cleaned_content,
+            title=f"{company_name.title()} - Company Profile",
+            metadata={},
+            style="professional"
+        )
+
+        if not pdf_buffer:
+            raise Exception("PDF generation failed")
+
+        pdf_bytes = pdf_buffer.getvalue()
+
+        # MinIO configuration
+        s3_endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
+        s3_access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+        s3_secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+        bucket_name = os.getenv("REPORTS_BUCKET", "profile-reports")
+
+        s3_client = boto3.client(
+            "s3",
+            endpoint_url=s3_endpoint,
+            aws_access_key_id=s3_access_key,
+            aws_secret_access_key=s3_secret_key,
+        )
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+        filename = f"profile_{safe_company_name}_{timestamp}.pdf"
+
+        # Create bucket if needed
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+        except Exception:
+            s3_client.create_bucket(Bucket=bucket_name)
+            logger.info(f"Created bucket: {bucket_name}")
+
+        # Upload PDF
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=filename,
+            Body=pdf_bytes,
+            ContentType="application/pdf",
+        )
+
+        # Generate presigned URL
+        url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket_name, "Key": filename},
+            ExpiresIn=2592000,  # 30 days
+        )
+
+        logger.info(f"Uploaded PDF to S3: {filename} ({len(pdf_bytes)} bytes)")
+        return url
+
+    except Exception as e:
+        logger.error(f"Failed to generate/upload PDF: {e}")
+        return None
 
 
 async def final_report_generation(
@@ -233,9 +331,31 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
                     "_Or start your message with `profile [company name]` to profile another company._"
                 )
 
+            # Extract company name and upload PDF
+            query = state.get("query", "company")
+            company_name = query.replace("profile ", "").strip() or "company"
+            report_url = upload_report_to_s3(final_report, company_name)
+
+            # Build attachments
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+            slack_filename = f"profile_{safe_company_name}_{timestamp}.pdf"
+
+            attachments = []
+            if report_url:
+                attachments.append({
+                    "url": report_url,
+                    "inject": True,
+                    "type": "pdf",
+                    "filename": slack_filename
+                })
+
             return {
                 "final_report": final_report,
                 "executive_summary": executive_summary,
+                "message": executive_summary,  # For bot display
+                "attachments": attachments,  # PDF for Slack
+                "followup_mode": True,  # Enable conversational follow-ups
             }
 
         except Exception as e:
@@ -254,7 +374,29 @@ Ensure at least 1-2 of your 3 bullet points directly address {focus_area}."""
         + "\n\n".join(notes[:3])
     )
 
+    # Try to upload fallback report
+    query = state.get("query", "company")
+    company_name = query.replace("profile ", "").strip() or "company"
+    report_url = upload_report_to_s3(fallback_report, company_name)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_company_name = "".join(c if c.isalnum() else "_" for c in company_name)
+    slack_filename = f"profile_{safe_company_name}_{timestamp}.pdf"
+
+    attachments = []
+    if report_url:
+        attachments.append({
+            "url": report_url,
+            "inject": True,
+            "type": "pdf",
+            "filename": slack_filename
+        })
+
+    fallback_summary = "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_"
     return {
         "final_report": fallback_report,
-        "executive_summary": "📊 *Executive Summary*\n\n• Partial report generated\n\n📎 _See full report for details_",
+        "executive_summary": fallback_summary,
+        "message": fallback_summary,
+        "attachments": attachments,
+        "followup_mode": True,
     }

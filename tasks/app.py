@@ -101,6 +101,7 @@ def register_routers(app: FastAPI) -> None:
     from api.credentials import router as credentials_router
     from api.gdrive import router as gdrive_router
     from api.health import router as health_router
+    from api.hubspot import router as hubspot_router
     from api.jobs import router as jobs_router
     from api.task_runs import router as task_runs_router
 
@@ -110,6 +111,7 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(jobs_router)
     app.include_router(credentials_router)
     app.include_router(gdrive_router)
+    app.include_router(hubspot_router)
     app.include_router(task_runs_router)
 
     logger.info("Registered all API routers")

@@ -13,16 +13,12 @@ from slack_bolt.async_app import AsyncApp
 from slack_sdk import WebClient
 from slack_sdk.web.async_client import AsyncWebClient
 
-# Initialize OpenTelemetry for distributed tracing
+# Add shared directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from shared.utils.otel_tracing import get_tracer
 
 from config.settings import Settings
 from handlers.event_handlers import register_handlers
 from health import HealthChecker
-
-# Initialize OTel tracer for bot service
-get_tracer("bot")
 from services.conversation_cache import ConversationCache
 from services.langfuse_service import get_langfuse_service
 from services.llm_service import LLMService

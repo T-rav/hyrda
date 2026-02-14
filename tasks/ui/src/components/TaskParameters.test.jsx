@@ -243,4 +243,203 @@ describe('TaskParameters', () => {
 
     expect(screen.getByText('Daily')).toBeInTheDocument()
   })
+
+  describe('Credential filtering by provider', () => {
+    const hubspotTaskType = {
+      type: 'hubspot_sync',
+      name: 'HubSpot Sync',
+      required_params: ['credential_id'],
+      optional_params: ['limit'],
+    }
+
+    const websiteScrapeTaskType = {
+      type: 'website_scrape',
+      name: 'Website Scrape',
+      required_params: ['start_url'],
+      optional_params: ['max_pages'],
+    }
+
+    const allTaskTypes = [
+      ...mockTaskTypes,
+      hubspotTaskType,
+      websiteScrapeTaskType,
+    ]
+
+    const mixedCredentials = {
+      credentials: [
+        { credential_id: 'google-cred-1', credential_name: 'Google Account', provider: 'google_drive' },
+        { credential_id: 'hubspot-cred-1', credential_name: 'HubSpot Account', provider: 'hubspot' },
+        { credential_id: 'google-cred-2', credential_name: 'Another Google', provider: 'google' },
+      ],
+    }
+
+    it('filters for HubSpot credentials only when hubspot_sync is selected', async () => {
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve(mixedCredentials),
+      })
+
+      render(
+        <TaskParameters
+          taskType="hubspot_sync"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith('/api/credentials', { credentials: 'include' })
+      })
+
+      // Should show HubSpot Authentication section
+      await waitFor(() => {
+        expect(screen.getByText('HubSpot Authentication')).toBeInTheDocument()
+      })
+
+      // Wait for dropdown to be populated with credentials
+      await waitFor(() => {
+        const select = screen.getByRole('combobox')
+        const options = select.querySelectorAll('option')
+        // Should have 2 options: "Choose a credential..." + 1 HubSpot credential
+        expect(options.length).toBe(2)
+        expect(options[1].textContent).toBe('HubSpot Account')
+      })
+    })
+
+    it('filters for Google credentials only when gdrive_ingest is selected', async () => {
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve(mixedCredentials),
+      })
+
+      render(
+        <TaskParameters
+          taskType="gdrive_ingest"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith('/api/credentials', { credentials: 'include' })
+      })
+
+      // Should show Google Drive Authentication section
+      await waitFor(() => {
+        expect(screen.getByText('Google Drive Authentication')).toBeInTheDocument()
+      })
+
+      // Wait for dropdown to be populated with credentials
+      await waitFor(() => {
+        const select = screen.getByRole('combobox')
+        const options = select.querySelectorAll('option')
+        // Should have 3 options: "Choose a credential..." + 2 Google credentials
+        expect(options.length).toBe(3)
+        expect(options[1].textContent).toBe('Google Account')
+        expect(options[2].textContent).toBe('Another Google')
+      })
+    })
+
+    it('does not show credential section for website_scrape', () => {
+      render(
+        <TaskParameters
+          taskType="website_scrape"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      // Should NOT call fetch for credentials
+      expect(fetch).not.toHaveBeenCalled()
+
+      // Should not show any authentication section
+      expect(screen.queryByText('Authentication')).not.toBeInTheDocument()
+      expect(screen.queryByText('Google Drive Authentication')).not.toBeInTheDocument()
+      expect(screen.queryByText('HubSpot Authentication')).not.toBeInTheDocument()
+    })
+
+    it('shows warning when no matching credentials exist for HubSpot', async () => {
+      const googleOnlyCredentials = {
+        credentials: [
+          { credential_id: 'google-cred-1', credential_name: 'Google Account', provider: 'google_drive' },
+        ],
+      }
+
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve(googleOnlyCredentials),
+      })
+
+      render(
+        <TaskParameters
+          taskType="hubspot_sync"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText(/No HubSpot credentials found/)).toBeInTheDocument()
+      })
+    })
+
+    it('shows warning when no matching credentials exist for Google Drive', async () => {
+      const hubspotOnlyCredentials = {
+        credentials: [
+          { credential_id: 'hubspot-cred-1', credential_name: 'HubSpot Account', provider: 'hubspot' },
+        ],
+      }
+
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve(hubspotOnlyCredentials),
+      })
+
+      render(
+        <TaskParameters
+          taskType="gdrive_ingest"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText(/No Google credentials found/)).toBeInTheDocument()
+      })
+    })
+
+    it('auto-selects credential when only one matching credential exists', async () => {
+      const singleHubspotCred = {
+        credentials: [
+          { credential_id: 'hubspot-only', credential_name: 'Only HubSpot', provider: 'hubspot' },
+          { credential_id: 'google-cred', credential_name: 'Google Cred', provider: 'google_drive' },
+        ],
+      }
+
+      const handleChange = vi.fn()
+
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve(singleHubspotCred),
+      })
+
+      render(
+        <TaskParameters
+          taskType="hubspot_sync"
+          taskTypes={allTaskTypes}
+          onChange={handleChange}
+        />
+      )
+
+      await waitFor(() => {
+        // Should auto-select the only HubSpot credential
+        expect(handleChange).toHaveBeenCalledWith('credential_id', 'hubspot-only')
+      })
+    })
+
+    it('renders limit parameter for hubspot_sync', () => {
+      fetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({ credentials: [] }),
+      })
+
+      render(
+        <TaskParameters
+          taskType="hubspot_sync"
+          taskTypes={allTaskTypes}
+        />
+      )
+
+      expect(screen.getByText('Max Deals')).toBeInTheDocument()
+    })
+  })
 })

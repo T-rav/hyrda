@@ -3,10 +3,15 @@
 import json
 import logging
 import os
+import sys
 from collections.abc import AsyncGenerator
 from typing import Any
 
 import httpx
+
+# Add shared directory to path for tracing utilities
+sys.path.insert(0, "/app")
+from shared.utils.tracing import add_trace_id_to_headers, get_trace_id
 
 from services.langfuse_service import get_langfuse_service
 from utils.trace_propagation import add_trace_headers_to_request
@@ -51,8 +56,9 @@ class AgentClient:
         """
         context = context or {}
 
+        trace_id = get_trace_id()
         logger.info(
-            f"Invoking agent '{agent_name}' via HTTP with thread_id={context.get('thread_id')}"
+            f"[{trace_id}] Invoking agent '{agent_name}' via HTTP with thread_id={context.get('thread_id')}"
         )
 
         payload = {"query": query, "context": context}
@@ -61,6 +67,18 @@ class AgentClient:
             "X-Service-Token": self.service_token,
             "Content-Type": "application/json",
         }
+
+        # Add distributed trace ID for cross-service correlation
+        headers = add_trace_id_to_headers(headers)
+
+        # Add Langfuse trace context for LLM observability
+        trace_context = context.get("trace_context")
+        if not trace_context:
+            langfuse_service = get_langfuse_service()
+            if langfuse_service:
+                trace_context = langfuse_service.get_current_trace_context()
+        if trace_context:
+            headers = add_trace_headers_to_request(headers, trace_context)
 
         # Use HTTPS with verify=False for internal services (they use self-signed certs)
         # Security: Internal service-to-service calls within Docker network
@@ -108,8 +126,9 @@ class AgentClient:
         """
         context = context or {}
 
+        trace_id = get_trace_id()
         logger.info(
-            f"Streaming agent '{agent_name}' via HTTP with thread_id={context.get('thread_id')}"
+            f"[{trace_id}] Streaming agent '{agent_name}' via HTTP with thread_id={context.get('thread_id')}"
         )
 
         payload = {"query": query, "context": context}
@@ -120,9 +139,10 @@ class AgentClient:
             "Accept": "text/event-stream",
         }
 
-        # Add Langfuse trace context for distributed tracing
-        # Prefer trace_context from context dict (passed from message handler)
-        # Fall back to current decorator context if available
+        # Add distributed trace ID for cross-service correlation
+        headers = add_trace_id_to_headers(headers)
+
+        # Add Langfuse trace context for LLM observability
         trace_context = context.get("trace_context")
         if not trace_context:
             langfuse_service = get_langfuse_service()
@@ -131,7 +151,7 @@ class AgentClient:
 
         if trace_context:
             headers = add_trace_headers_to_request(headers, trace_context)
-            logger.info(f"Added trace context to request: {trace_context}")
+            logger.debug(f"[{trace_id}] Added Langfuse trace context")
 
         # Use 30 minute timeout for long-running agents
         timeout = httpx.Timeout(1800.0, connect=30.0)
