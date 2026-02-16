@@ -111,10 +111,11 @@ class TestListJobsEndpoint:
             "name": "Default Name",
         }
 
-        # Mock metadata with custom name
+        # Mock metadata with custom name and group
         mock_metadata = Mock(spec=TaskMetadata)
         mock_metadata.job_id = "job-1"
         mock_metadata.task_name = "Custom Task Name"
+        mock_metadata.group_name = None
 
         mock_session = MagicMock()
         mock_session.query().all.return_value = [mock_metadata]
@@ -124,6 +125,7 @@ class TestListJobsEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["jobs"][0]["name"] == "Custom Task Name"
+        assert data["jobs"][0]["group_name"] is None
 
     def test_list_jobs_scheduler_not_initialized(self, authenticated_client, app):
         """Test listing jobs when scheduler not initialized."""
@@ -135,13 +137,21 @@ class TestListJobsEndpoint:
 class TestGetJobEndpoint:
     """Test GET /api/jobs/{job_id} endpoint."""
 
-    def test_get_job_success(self, client_with_services, mock_scheduler):
+    @patch("api.jobs.get_db_session")
+    def test_get_job_success(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
         """Test getting specific job successfully."""
         mock_scheduler.get_job_info.return_value = {
             "id": "job-1",
             "name": "Test Job",
             "next_run_time": "2024-01-20T10:00:00Z",
         }
+
+        # Mock no metadata found
+        mock_session = MagicMock()
+        mock_session.query().filter().first.return_value = None
+        mock_db_session.return_value.__enter__.return_value = mock_session
 
         response = client_with_services.get("/api/jobs/job-1")
         assert response.status_code == 200
@@ -459,3 +469,206 @@ class TestListJobTypesEndpoint:
         response = authenticated_client.get("/api/job-types")
         assert response.status_code == 500
         assert "not initialized" in response.json()["detail"]
+
+
+class TestGroupNameFunctionality:
+    """Test group_name functionality in jobs API."""
+
+    @patch("api.jobs.get_db_session")
+    def test_create_job_with_group_name(
+        self, mock_db_session, client_with_services, mock_job_registry
+    ):
+        """Test creating job with group_name saves it to metadata."""
+        mock_job = Mock()
+        mock_job.id = "job-with-group"
+        mock_job_registry.create_job.return_value = mock_job
+
+        mock_session = MagicMock()
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.post(
+            "/api/jobs",
+            json={
+                "job_type": "slack_user_import",
+                "schedule": {"type": "cron", "cron": "0 0 * * *"},
+                "parameters": {},
+                "task_name": "Daily User Import",
+                "group_name": "Slack Syncs",
+            },
+        )
+
+        assert response.status_code == 200
+        # Verify TaskMetadata was created with group_name
+        mock_session.add.assert_called_once()
+        added_metadata = mock_session.add.call_args[0][0]
+        assert added_metadata.group_name == "Slack Syncs"
+
+    @patch("api.jobs.get_db_session")
+    def test_create_job_without_group_name(
+        self, mock_db_session, client_with_services, mock_job_registry
+    ):
+        """Test creating job without group_name works (optional field)."""
+        mock_job = Mock()
+        mock_job.id = "job-no-group"
+        mock_job_registry.create_job.return_value = mock_job
+
+        mock_session = MagicMock()
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.post(
+            "/api/jobs",
+            json={
+                "job_type": "slack_user_import",
+                "schedule": {"type": "cron", "cron": "0 0 * * *"},
+                "parameters": {},
+                "task_name": "Daily User Import",
+            },
+        )
+
+        assert response.status_code == 200
+        # Verify TaskMetadata was created with None group_name
+        mock_session.add.assert_called_once()
+        added_metadata = mock_session.add.call_args[0][0]
+        assert added_metadata.group_name is None
+
+    @patch("api.jobs.get_db_session")
+    def test_list_jobs_includes_group_name(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
+        """Test listing jobs includes group_name from metadata."""
+        from models.task_metadata import TaskMetadata
+
+        mock_job = Mock()
+        mock_job.id = "job-1"
+        mock_scheduler.get_jobs.return_value = [mock_job]
+        mock_scheduler.get_job_info.return_value = {
+            "id": "job-1",
+            "name": "Default Name",
+        }
+
+        # Mock metadata with group_name
+        mock_metadata = Mock(spec=TaskMetadata)
+        mock_metadata.job_id = "job-1"
+        mock_metadata.task_name = "Custom Task Name"
+        mock_metadata.group_name = "Data Syncs"
+
+        mock_session = MagicMock()
+        mock_session.query().all.return_value = [mock_metadata]
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.get("/api/jobs")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["jobs"][0]["group_name"] == "Data Syncs"
+
+    @patch("api.jobs.get_db_session")
+    def test_get_job_includes_group_name(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
+        """Test getting single job includes group_name from metadata."""
+        from models.task_metadata import TaskMetadata
+
+        mock_scheduler.get_job_info.return_value = {
+            "id": "job-1",
+            "name": "Default Name",
+        }
+
+        # Mock metadata with group_name
+        mock_metadata = Mock(spec=TaskMetadata)
+        mock_metadata.job_id = "job-1"
+        mock_metadata.task_name = "Custom Task Name"
+        mock_metadata.group_name = "Podcast Scrapes"
+
+        mock_session = MagicMock()
+        mock_session.query().filter().first.return_value = mock_metadata
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.get("/api/jobs/job-1")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Custom Task Name"
+        assert data["group_name"] == "Podcast Scrapes"
+
+
+class TestListGroupsEndpoint:
+    """Test GET /api/groups endpoint."""
+
+    @patch("api.jobs.get_db_session")
+    def test_list_groups_success(self, mock_db_session, client_with_services):
+        """Test listing groups returns unique group names."""
+        mock_session = MagicMock()
+        mock_session.query().filter().filter().distinct().all.return_value = [
+            ("Data Syncs",),
+            ("Podcast Scrapes",),
+            ("Slack Imports",),
+        ]
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.get("/api/groups")
+        assert response.status_code == 200
+        data = response.json()
+        assert "groups" in data
+        # Groups should be sorted alphabetically
+        assert data["groups"] == ["Data Syncs", "Podcast Scrapes", "Slack Imports"]
+
+    @patch("api.jobs.get_db_session")
+    def test_list_groups_empty(self, mock_db_session, client_with_services):
+        """Test listing groups when no groups exist."""
+        mock_session = MagicMock()
+        mock_session.query().filter().filter().distinct().all.return_value = []
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.get("/api/groups")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["groups"] == []
+
+
+class TestUpdateJobGroupName:
+    """Test updating job group_name."""
+
+    @patch("api.jobs.get_db_session")
+    def test_update_job_group_name(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
+        """Test updating job group_name via PUT."""
+        from models.task_metadata import TaskMetadata
+
+        mock_metadata = Mock(spec=TaskMetadata)
+        mock_metadata.job_id = "job-1"
+        mock_metadata.task_name = "Original Name"
+        mock_metadata.group_name = "Old Group"
+
+        mock_session = MagicMock()
+        mock_session.query().filter().first.return_value = mock_metadata
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.put(
+            "/api/jobs/job-1", json={"group_name": "New Group"}
+        )
+
+        assert response.status_code == 200
+        assert mock_metadata.group_name == "New Group"
+
+    @patch("api.jobs.get_db_session")
+    def test_update_job_clear_group_name(
+        self, mock_db_session, client_with_services, mock_scheduler
+    ):
+        """Test clearing job group_name by setting to null."""
+        from models.task_metadata import TaskMetadata
+
+        mock_metadata = Mock(spec=TaskMetadata)
+        mock_metadata.job_id = "job-1"
+        mock_metadata.task_name = "Task Name"
+        mock_metadata.group_name = "Has Group"
+
+        mock_session = MagicMock()
+        mock_session.query().filter().first.return_value = mock_metadata
+        mock_db_session.return_value.__enter__.return_value = mock_session
+
+        response = client_with_services.put(
+            "/api/jobs/job-1", json={"group_name": None}
+        )
+
+        assert response.status_code == 200
+        assert mock_metadata.group_name is None

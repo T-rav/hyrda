@@ -73,11 +73,13 @@ async def list_task_runs(
 
             runs_data = []
             for run in task_runs:
-                # Extract job type and name from task config snapshot
+                # Extract job type, name, and group from task config snapshot
                 job_type = None
                 job_name = "Unknown Job"
+                group_name = None
                 if run.task_config_snapshot:
                     job_type = run.task_config_snapshot.get("job_type")
+                    group_name = run.task_config_snapshot.get("group_name")
                     # Try to get task_name from snapshot first (most reliable)
                     task_name_from_snapshot = run.task_config_snapshot.get("task_name")
                     if task_name_from_snapshot:
@@ -104,6 +106,7 @@ async def list_task_runs(
                         "run_id": run.run_id,
                         "job_type": job_type,
                         "job_name": job_name,
+                        "group_name": group_name,
                         "status": run.status,
                         "started_at": (
                             run.started_at.isoformat() if run.started_at else None

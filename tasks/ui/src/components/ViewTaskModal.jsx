@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Eye, X, Activity, CalendarClock } from 'lucide-react'
+import { Eye, X, Activity, CalendarClock, Folder } from 'lucide-react'
 import TaskParameters from './TaskParameters'
 import { logError } from '../utils/logger'
 
@@ -139,6 +139,24 @@ function ViewTaskModal({ task, onClose }) {
                 <div className="text-muted small mb-1">NEXT RUN</div>
                 <div className="fw-bold">
                   {task.next_run_time ? formatDate(task.next_run_time) : 'Paused'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="row g-3 mb-4">
+            <div className="col-md-6">
+              <div className="p-3 border rounded">
+                <div className="text-muted small mb-1">
+                  <Folder size={14} className="me-1" />
+                  GROUP
+                </div>
+                <div className="fw-bold">
+                  {task.group_name ? (
+                    <span className="badge bg-info">{task.group_name}</span>
+                  ) : (
+                    <span className="text-muted">None</span>
+                  )}
                 </div>
               </div>
             </div>

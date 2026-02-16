@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, ListChecks, Activity, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, ChevronDown, Play, Pause, Trash2, RefreshCw, PlayCircle, Eye, Plus, X, Key, LogOut, User, Folder } from 'lucide-react'
 import CredentialsManager from './components/CredentialsManager'
 import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
@@ -383,6 +383,7 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
   const [selectedTask, setSelectedTask] = useState(null)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
+  const [expandedGroups, setExpandedGroups] = useState({})
 
   const loadTasks = async () => {
     setLoading(true)
@@ -548,6 +549,93 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
     return `${minutes}m`
   }
 
+  // Group jobs by group_name
+  const groupedJobs = React.useMemo(() => {
+    const groups = {}
+    jobs.forEach(job => {
+      const groupKey = job.group_name || '__ungrouped__'
+      if (!groups[groupKey]) {
+        groups[groupKey] = []
+      }
+      groups[groupKey].push(job)
+    })
+    // Sort groups alphabetically, with ungrouped last (at bottom)
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === '__ungrouped__') return 1
+      if (b === '__ungrouped__') return -1
+      return a.localeCompare(b)
+    })
+    return sortedKeys.map(key => ({
+      name: key === '__ungrouped__' ? null : key,
+      tasks: groups[key]
+    }))
+  }, [jobs])
+
+  const toggleGroup = (groupName) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName || '__ungrouped__']: !prev[groupName || '__ungrouped__']
+    }))
+  }
+
+  const isGroupExpanded = (groupName) => {
+    return expandedGroups[groupName || '__ungrouped__'] || false
+  }
+
+  // Handle group actions (pause/resume/run-once/delete all tasks in group)
+  const handleGroupAction = async (action, groupTasks) => {
+    const groupName = groupTasks[0]?.group_name || 'Ungrouped'
+
+    if (action === 'delete') {
+      if (!window.confirm(`Are you sure you want to delete all ${groupTasks.length} tasks in "${groupName}"?`)) {
+        return
+      }
+    }
+
+    setActionLoading(prev => ({ ...prev, [`group_${groupName}`]: action }))
+
+    try {
+      for (const task of groupTasks) {
+        let response
+        switch (action) {
+          case 'pause':
+            if (task.next_run_time) { // Only pause active tasks
+              response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/pause`, { method: 'POST' })
+              if (!response.ok) throw new Error(`Failed to pause ${task.name}`)
+            }
+            break
+          case 'resume':
+            if (!task.next_run_time) { // Only resume paused tasks
+              response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/resume`, { method: 'POST' })
+              if (!response.ok) throw new Error(`Failed to resume ${task.name}`)
+            }
+            break
+          case 'run-once':
+            response = await fetchWithTokenRefresh(`/api/jobs/${task.id}/run-once`, { method: 'POST' })
+            if (!response.ok) throw new Error(`Failed to run ${task.name}`)
+            break
+          case 'delete':
+            response = await fetchWithTokenRefresh(`/api/jobs/${task.id}`, { method: 'DELETE' })
+            if (!response.ok) throw new Error(`Failed to delete ${task.name}`)
+            break
+          default:
+            break
+        }
+      }
+
+      const actionVerb = action === 'pause' ? 'paused' :
+                         action === 'resume' ? 'resumed' :
+                         action === 'run-once' ? 'triggered' : 'deleted'
+      showNotification(`All tasks in "${groupName}" ${actionVerb} successfully`, 'success')
+      await loadTasks()
+    } catch (error) {
+      logError(`Error ${action} group:`, error)
+      showNotification(`Error: ${error.message}`, 'error')
+    } finally {
+      setActionLoading(prev => ({ ...prev, [`group_${groupName}`]: null }))
+    }
+  }
+
   return (
     <div className="tasks-list">
       {/* Task Management Header */}
@@ -623,14 +711,44 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    onAction={handleTaskAction}
-                    actionLoading={actionLoading}
-                    formatNextRun={formatNextRun}
-                  />
+                {groupedJobs.map((group) => (
+                  <React.Fragment key={group.name || '__ungrouped__'}>
+                    {/* Ungrouped tasks render directly without a group header */}
+                    {!group.name ? (
+                      group.tasks.map((task) => (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          onAction={handleTaskAction}
+                          actionLoading={actionLoading}
+                          formatNextRun={formatNextRun}
+                          isGrouped={false}
+                        />
+                      ))
+                    ) : (
+                      <>
+                        {/* Group Header Row */}
+                        <GroupRow
+                          group={group}
+                          isExpanded={isGroupExpanded(group.name)}
+                          onToggle={() => toggleGroup(group.name)}
+                          onGroupAction={handleGroupAction}
+                          actionLoading={actionLoading}
+                        />
+                        {/* Task Rows (when expanded) */}
+                        {isGroupExpanded(group.name) && group.tasks.map((task) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            onAction={handleTaskAction}
+                            actionLoading={actionLoading}
+                            formatNextRun={formatNextRun}
+                            isGrouped={true}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
@@ -664,8 +782,80 @@ function TasksContent({ showNotification, jobs, setJobs, loading, setLoading }) 
   )
 }
 
+// Group Row Component (collapsible header)
+function GroupRow({ group, isExpanded, onToggle, onGroupAction, actionLoading }) {
+  const groupName = group.name || 'Ungrouped'
+  const taskCount = group.tasks.length
+  const activeCount = group.tasks.filter(t => t.next_run_time).length
+  const pausedCount = taskCount - activeCount
+  const currentAction = actionLoading[`group_${groupName}`]
+
+  // Determine if we should show pause or resume based on majority
+  const showPause = activeCount > pausedCount
+
+  return (
+    <tr className="group-row" style={{ backgroundColor: group.name ? 'rgba(99, 102, 241, 0.1)' : 'rgba(156, 163, 175, 0.1)' }}>
+      <td colSpan={4}>
+        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={onToggle}>
+          {isExpanded ? (
+            <ChevronDown size={18} className="me-2" />
+          ) : (
+            <ChevronRight size={18} className="me-2" />
+          )}
+          {group.name ? (
+            <Folder size={16} className="me-2" style={{ color: '#6366f1' }} />
+          ) : null}
+          <strong style={{ fontSize: '1rem' }}>{groupName}</strong>
+          <span className="badge bg-primary ms-2">{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+          {!isExpanded && (
+            <>
+              {activeCount > 0 && <span className="badge bg-success ms-2">{activeCount} active</span>}
+              {pausedCount > 0 && <span className="badge bg-warning ms-2">{pausedCount} paused</span>}
+            </>
+          )}
+        </div>
+      </td>
+      <td>
+        <div className="btn-group btn-group-sm" role="group">
+          <button
+            className="btn btn-outline-primary btn-sm"
+            disabled={true}
+            title="View (select individual task)"
+          >
+            <Eye size={12} />
+          </button>
+          <button
+            className={`btn ${showPause ? 'btn-outline-warning' : 'btn-outline-success'} btn-sm`}
+            onClick={(e) => { e.stopPropagation(); onGroupAction(showPause ? 'pause' : 'resume', group.tasks) }}
+            disabled={currentAction === 'pause' || currentAction === 'resume'}
+            title={showPause ? 'Pause All' : 'Resume All'}
+          >
+            {showPause ? <Pause size={12} /> : <Play size={12} />}
+          </button>
+          <button
+            className="btn btn-outline-info btn-sm"
+            onClick={(e) => { e.stopPropagation(); onGroupAction('run-once', group.tasks) }}
+            disabled={currentAction === 'run-once'}
+            title="Run All Once"
+          >
+            <PlayCircle size={12} />
+          </button>
+          <button
+            className="btn btn-outline-danger btn-sm"
+            onClick={(e) => { e.stopPropagation(); onGroupAction('delete', group.tasks) }}
+            disabled={currentAction === 'delete'}
+            title="Delete All"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // Task Row Component
-function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
+function TaskRow({ task, onAction, actionLoading, formatNextRun, isGrouped = false }) {
   const isActive = !!task.next_run_time
   const currentAction = actionLoading[task.id]
 
@@ -684,8 +874,8 @@ function TaskRow({ task, onAction, actionLoading, formatNextRun }) {
   const taskDescription = taskTypeDescriptions[taskType] || taskType
 
   return (
-    <tr>
-      <td>
+    <tr style={isGrouped ? { backgroundColor: 'rgba(99, 102, 241, 0.03)' } : {}}>
+      <td style={isGrouped ? { paddingLeft: '2.5rem' } : {}}>
         <div>
           <strong>{task.name && task.name !== task.id ? task.name : taskDescription}</strong>
           {isActive ? (
@@ -897,6 +1087,9 @@ function TaskRunRow({ run }) {
     <tr>
         <td>
           <div className="task-name">
+            {run.group_name && (
+              <span className="badge bg-secondary me-2">{run.group_name}</span>
+            )}
             <strong>{run.job_name || 'Unknown Job'}</strong>
             {run.triggered_by === 'manual' && (
               <span className="badge bg-primary ms-1">MANUAL</span>

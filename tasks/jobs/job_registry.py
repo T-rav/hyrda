@@ -74,8 +74,9 @@ def execute_job_by_type(
     settings = TasksSettings()
     job_instance = job_class(settings, **job_params)
 
-    # Get task name from metadata if available
+    # Get task name and group from metadata if available
     task_name = None
+    group_name = None
     if job_id:
         try:
             with get_db_session() as session:
@@ -86,6 +87,7 @@ def execute_job_by_type(
                 )
                 if metadata:
                     task_name = metadata.task_name
+                    group_name = metadata.group_name
         except Exception as e:
             logger.error(f"Error loading task metadata: {e}")
 
@@ -96,6 +98,8 @@ def execute_job_by_type(
         config_snapshot["job_id"] = job_id
     if task_name:
         config_snapshot["task_name"] = task_name
+    if group_name:
+        config_snapshot["group_name"] = group_name
 
     task_run = TaskRun(
         run_id=run_id,
