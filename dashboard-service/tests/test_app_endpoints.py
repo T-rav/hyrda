@@ -3,7 +3,7 @@
 Tests all endpoints including health checks, metrics aggregation, and service health.
 """
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import aiohttp
 import pytest
@@ -63,24 +63,35 @@ class TestReadinessEndpoint:
     @pytest.mark.asyncio
     async def test_ready_endpoint_when_all_services_healthy(self, client):
         """Test /api/ready returns ready when all services are healthy."""
-        mock_responses = {
-            "bot": Mock(status=200, json=AsyncMock(return_value={"status": "healthy"})),
-            "agent_service": Mock(
-                status=200, json=AsyncMock(return_value={"status": "healthy"})
-            ),
-            "tasks": Mock(
-                status=200, json=AsyncMock(return_value={"status": "healthy"})
-            ),
-            "control_plane": Mock(
-                status=200, json=AsyncMock(return_value={"status": "healthy"})
-            ),
-        }
 
-        async def mock_get(url, **kwargs):
-            for service_name in mock_responses:
+        class HealthyResponse:
+            status = 200
+
+            async def json(self):
+                return {"status": "healthy"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        class NotFoundResponse:
+            status = 404
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        mock_services = ["bot", "agent_service", "tasks", "control_plane"]
+
+        def mock_get(url, *_args, **_kwargs):
+            for service_name in mock_services:
                 if service_name in url:
-                    return mock_responses[service_name]
-            return Mock(status=404)
+                    return HealthyResponse()
+            return NotFoundResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -96,11 +107,30 @@ class TestReadinessEndpoint:
     async def test_ready_endpoint_when_service_unavailable(self, client):
         """Test /api/ready returns not_ready when a service is unavailable."""
 
-        async def mock_get(url, **kwargs):
+        class ErrorContextManager:
+            async def __aenter__(self):
+                raise aiohttp.ClientConnectorError(Mock(), Mock())
+
+            async def __aexit__(self, *_args):
+                pass
+
+        class HealthyResponse:
+            status = 200
+
+            async def json(self):
+                return {"status": "healthy"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(url, *_args, **_kwargs):
             # Simulate bot service being unavailable
             if "bot" in url:
-                raise aiohttp.ClientConnectorError(Mock(), Mock())
-            return Mock(status=200, json=AsyncMock(return_value={"status": "healthy"}))
+                return ErrorContextManager()
+            return HealthyResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -126,11 +156,34 @@ class TestMetricsAggregation:
             "control_plane": {"active_users": 5},
         }
 
-        async def mock_get(url, **kwargs):
+        class MetricsResponse:
+            def __init__(self, status, data):
+                self.status = status
+                self._data = data
+
+            async def json(self):
+                return self._data
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        class NotFoundResponse:
+            status = 404
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(url, *_args, **_kwargs):
             for service_name, metrics in mock_metrics.items():
                 if service_name in url:
-                    return Mock(status=200, json=AsyncMock(return_value=metrics))
-            return Mock(status=404)
+                    return MetricsResponse(200, metrics)
+            return NotFoundResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -146,10 +199,26 @@ class TestMetricsAggregation:
     async def test_get_all_metrics_handles_service_errors(self, client):
         """Test /api/metrics handles errors from services gracefully."""
 
-        async def mock_get(url, **kwargs):
-            if "bot" in url:
+        class ErrorContextManager:
+            async def __aenter__(self):
                 raise aiohttp.ClientConnectorError(Mock(), Mock())
-            return Mock(status=500)
+
+            async def __aexit__(self, *_args):
+                pass
+
+        class ServerErrorResponse:
+            status = 500
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(url, *_args, **_kwargs):
+            if "bot" in url:
+                return ErrorContextManager()
+            return ServerErrorResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -169,8 +238,20 @@ class TestServicesHealthEndpoint:
     async def test_get_services_health_returns_all_services(self, client):
         """Test /api/services/health returns health for all services."""
 
-        async def mock_get(url, **kwargs):
-            return Mock(status=200, json=AsyncMock(return_value={"status": "healthy"}))
+        class HealthyResponse:
+            status = 200
+
+            async def json(self):
+                return {"status": "healthy"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(*_args, **_kwargs):
+            return HealthyResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -186,10 +267,31 @@ class TestServicesHealthEndpoint:
     async def test_get_services_health_handles_unhealthy_service(self, client):
         """Test /api/services/health handles unhealthy services."""
 
-        async def mock_get(url, **kwargs):
+        class HealthyResponse:
+            status = 200
+
+            async def json(self):
+                return {"status": "healthy"}
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        class UnhealthyResponse:
+            status = 503
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(url, *_args, **_kwargs):
             if "bot" in url:
-                return Mock(status=503)  # Service unavailable
-            return Mock(status=200, json=AsyncMock(return_value={"status": "healthy"}))
+                return UnhealthyResponse()  # Service unavailable
+            return HealthyResponse()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
@@ -244,8 +346,17 @@ class TestErrorHandling:
     async def test_endpoints_handle_network_errors_gracefully(self, client):
         """Test endpoints handle network errors without crashing."""
 
-        async def mock_get(url, **kwargs):
-            raise aiohttp.ClientError("Network error")
+        # Create async context manager that raises on entry
+        class ErrorContextManager:
+            async def __aenter__(self):
+                raise aiohttp.ClientError("Network error")
+
+            async def __aexit__(self, *_args):
+                pass
+
+        def mock_get(*_args, **_kwargs):
+            """Return async context manager that raises on entry."""
+            return ErrorContextManager()
 
         with patch("aiohttp.ClientSession") as mock_session:
             mock_session.return_value.__aenter__.return_value.get = mock_get
