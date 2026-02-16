@@ -135,6 +135,10 @@ async def retrieve_chunks(
         f"max_chunks={request.max_chunks}, user_id={request.user_id}"
     )
 
+    # Initialize trace/langfuse before try block to avoid UnboundLocalError
+    langfuse_service = None
+    trace = None
+
     try:
         # Get services
         settings = get_settings()
@@ -144,7 +148,6 @@ async def retrieve_chunks(
 
         # Get langfuse for tracing
         langfuse_service = get_langfuse_service()
-        trace = None
         if langfuse_service:
             trace = langfuse_service.start_trace(
                 name="retrieve_chunks",
