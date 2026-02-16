@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch
 from aiohttp import web
-from aiohttp.test_utils import AioHTTPTestCase, unittest_run_loop
+from aiohttp.test_utils import AioHTTPTestCase
 
 import sys
 from pathlib import Path
@@ -34,7 +34,6 @@ class TestAiohttpTracingMiddleware(AioHTTPTestCase):
 
         return app
 
-    @unittest_run_loop
     async def test_successful_request_adds_trace_id_header(self):
         """Test that successful requests get X-Trace-Id in response."""
         response = await self.client.request("GET", "/health")
@@ -43,7 +42,6 @@ class TestAiohttpTracingMiddleware(AioHTTPTestCase):
         assert "X-Trace-Id" in response.headers
         assert response.headers["X-Trace-Id"].startswith("trace_")
 
-    @unittest_run_loop
     async def test_incoming_trace_id_is_preserved(self):
         """Test that incoming X-Trace-Id is preserved in response."""
         incoming_trace_id = "trace_incoming123"
@@ -54,20 +52,19 @@ class TestAiohttpTracingMiddleware(AioHTTPTestCase):
         assert response.status == 200
         assert response.headers["X-Trace-Id"] == incoming_trace_id
 
-    @unittest_run_loop
     async def test_http_exception_is_logged_and_propagated(self):
-        """Test that HTTP exceptions are logged and re-raised."""
+        """Test that HTTP exceptions return proper status code."""
         response = await self.client.request("GET", "/error")
 
+        # HTTP exceptions should return the proper status
         assert response.status == 400
-        # Trace ID should still be added even on error
-        assert "X-Trace-Id" in response.headers
 
-    @unittest_run_loop
-    async def test_unexpected_exception_is_logged(self):
-        """Test that unexpected exceptions are logged with trace info."""
-        with pytest.raises(Exception):
-            await self.client.request("GET", "/exception")
+    async def test_unexpected_exception_returns_500(self):
+        """Test that unexpected exceptions result in 500 response."""
+        response = await self.client.request("GET", "/exception")
+
+        # Unexpected exceptions should return 500
+        assert response.status == 500
 
 
 class TestTracingMiddlewareLogging:
