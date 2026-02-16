@@ -1,0 +1,20 @@
+{
+  "servers": [
+    {
+      "extensions": ["py", "pyi"],
+      "command": ["pyright-langserver", "--stdio"],
+      "rootDir": "/Users/travisf/Documents/projects/insightmesh",
+      "initializationOptions": {
+        "settings": {
+          "python": {
+            "analysis": {
+              "typeCheckingMode": "strict",
+              "autoSearchPaths": true,
+              "useLibraryCodeForTypes": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}

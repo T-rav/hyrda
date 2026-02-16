@@ -1,0 +1,13 @@
+# OS files
+.DS_Store
+
+# MCP service runtime files
+.codeql-mcp.pid
+.codeql-mcp.log
+
+# CodeQL MCP server
+codeql-mcp/.venv/
+codeql-mcp/__pycache__/
+
+# Milvus data
+milvus/volumes/
