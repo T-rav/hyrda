@@ -196,6 +196,8 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
   const recordsPerPage = 20
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [refreshInterval, setRefreshInterval] = useState(null)
+  const [taskRunsPagination, setTaskRunsPagination] = useState({ total: 0, page: 1, has_next: false })
+  const [loadingMore, setLoadingMore] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -217,6 +219,7 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
 
       setJobs(jobsRes.jobs || [])
       setTaskRuns(runsRes.task_runs || [])
+      setTaskRunsPagination(runsRes.pagination || { total: 0, page: 1, has_next: false })
       setScheduler(schedulerRes)
     } catch (error) {
       logError('Error loading data:', error)
@@ -225,6 +228,27 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
       setScheduler({ running: false })
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Load more task runs (next page)
+  const loadMoreRuns = async () => {
+    if (!taskRunsPagination.has_next || loadingMore) return
+
+    setLoadingMore(true)
+    try {
+      const nextPage = taskRunsPagination.page + 1
+      const response = await fetchWithTokenRefresh(`/api/task-runs?page=${nextPage}`)
+      if (!response.ok) throw new Error(`Failed to load more runs: ${response.status}`)
+      const data = await response.json()
+
+      // Append new runs to existing
+      setTaskRuns(prev => [...prev, ...(data.task_runs || [])])
+      setTaskRunsPagination(data.pagination || { total: 0, page: nextPage, has_next: false })
+    } catch (error) {
+      logError('Error loading more runs:', error)
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -277,10 +301,11 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
     return minutes > 0 ? `${minutes}m` : 'Now'
   })() : 'None'
 
-  // Calculate success rate
-  const totalRuns = taskRuns.length
+  // Calculate success rate (use actual total from pagination, success rate from loaded data)
+  const totalRuns = taskRunsPagination.total || taskRuns.length
   const successfulRuns = taskRuns.filter(run => run.status === 'success').length
-  const successRate = totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0
+  const loadedRuns = taskRuns.length
+  const successRate = loadedRuns > 0 ? Math.round((successfulRuns / loadedRuns) * 100) : 0
 
   return (
     <div className="dashboard">
@@ -336,7 +361,7 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
               successRate >= 70 ? 'bg-warning' :
               'bg-danger'
             }`}>
-              {successRate}% ({successfulRuns}/{totalRuns})
+              {successRate}% ({successfulRuns}/{loadedRuns} loaded)
             </span>
           </div>
         </div>
@@ -369,6 +394,9 @@ function DashboardContent({ jobs, setJobs, taskRuns, setTaskRuns, setScheduler, 
           currentPage={currentPage}
           recordsPerPage={recordsPerPage}
           onPageChange={setCurrentPage}
+          pagination={taskRunsPagination}
+          onLoadMore={loadMoreRuns}
+          loadingMore={loadingMore}
         />
       </div>
     </div>
@@ -959,7 +987,10 @@ function StatCard({ title, value, variant = 'primary' }) {
 
 
 // Recent Runs Table Component with Pagination
-function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, onPageChange }) {
+function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, onPageChange, pagination, onLoadMore, loadingMore }) {
+  const totalFromServer = pagination?.total || taskRuns.length
+  const hasMore = pagination?.has_next || false
+
   if (!taskRuns || taskRuns.length === 0) {
     return (
       <div className="table-container">
@@ -981,7 +1012,7 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
     displayedRuns = taskRuns.slice(0, 5)
   }
 
-  // Pagination info
+  // Pagination info (use loaded count for local pagination)
   const totalPages = Math.ceil(taskRuns.length / recordsPerPage)
   const startRecord = (currentPage - 1) * recordsPerPage + 1
   const endRecord = Math.min(currentPage * recordsPerPage, taskRuns.length)
@@ -1005,11 +1036,11 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
       </table>
 
       {/* Pagination Controls */}
-      {showAllRuns && totalPages > 1 && (
+      {showAllRuns && (
         <div className="pagination-controls">
           <div className="pagination-info">
             <span className="text-muted">
-              Showing {startRecord}-{endRecord} of {taskRuns.length} runs
+              Showing {startRecord}-{endRecord} of {taskRuns.length} loaded ({totalFromServer} total)
             </span>
           </div>
           <nav className="pagination-nav">
@@ -1053,6 +1084,17 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
               Next
               <ChevronRight size={16} />
             </button>
+
+            {/* Load More button when at last page of loaded data but more exists on server */}
+            {currentPage === totalPages && hasMore && (
+              <button
+                className="btn btn-sm btn-outline-primary ms-3"
+                onClick={onLoadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? 'Loading...' : `Load More (${totalFromServer - taskRuns.length} remaining)`}
+              </button>
+            )}
           </nav>
         </div>
       )}
