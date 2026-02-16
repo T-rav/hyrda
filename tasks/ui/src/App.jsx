@@ -1092,7 +1092,7 @@ function RecentRunsTable({ taskRuns, showAllRuns, currentPage, recordsPerPage, o
                 onClick={onLoadMore}
                 disabled={loadingMore}
               >
-                {loadingMore ? 'Loading...' : `Load More (${totalFromServer - taskRuns.length} remaining)`}
+                {loadingMore ? 'Loading...' : 'Load 50 more'}
               </button>
             )}
           </nav>
