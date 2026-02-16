@@ -58,6 +58,37 @@ make install      # Install Python dependencies
 make setup-dev    # Install dev tools + pre-commit hooks (run once)
 ```
 
+### AI Code Navigation & Memory (Optional)
+```bash
+# Enable semantic code navigation + long-term memory for Claude Code
+./dx/setup-mcp-servers.sh  # Install MCP servers (one-time)
+./dx/mcp-services.sh start       # Start required services (Milvus)
+
+# Provides IDE-level capabilities:
+# - Go to definition across services
+# - Find all references (where is this called?)
+# - Type information and call hierarchies
+# - Cross-microservice navigation
+# - Long-term memory (remembers decisions, patterns, architecture)
+#
+# Code navigation examples:
+# "Show all implementations of VectorStore protocol"
+# "Trace Slack event flow through handlers"
+# "Find all callers of process_message"
+#
+# Memory examples:
+# "Remember: InsightMesh uses OAuth2 for Google Drive authentication"
+# "What architectural decisions have we made about the RAG service?"
+# "Recall our conversation about security best practices"
+#
+# Manage services:
+./dx/mcp-services.sh status      # Check if Milvus is running
+./dx/mcp-services.sh stop        # Stop services (saves resources)
+./dx/mcp-services.sh help        # Full command reference
+#
+# See dx/MCP_SERVERS.md for complete documentation
+```
+
 ### Running the Application
 ```bash
 make run          # Run the Slack bot (requires .env file)
