@@ -89,7 +89,7 @@ class TestInvokeAgentAuthorization:
 
             # Verify response
             assert result.agent_name == "test_agent"
-            assert result.response == "ok"
+            assert result.output.get("response") == "ok"
 
     async def test_invoke_passes_user_context_from_jwt(
         self, mock_request, mock_invoke_request, mock_agent_info, mock_auth_result_jwt
