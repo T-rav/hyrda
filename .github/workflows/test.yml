@@ -322,11 +322,11 @@ jobs:
 
     - name: Pull LibreChat Docker image
       run: |
-        docker compose -f docker-compose.librechat.yml pull
+        docker compose pull librechat librechat-mongodb
 
     - name: Verify image was pulled
       run: |
-        docker images | grep "danny-avila/librechat"
+        docker images | grep -E "danny-avila/librechat|mongo"
 
   # ===== DOCKER SECURITY SCAN =====
   docker-security:
@@ -446,7 +446,7 @@ jobs:
 
     - name: Run Checkov (infrastructure security)
       run: |
-        checkov --file docker-compose.yml --file docker-compose.librechat.yml --quiet --compact || true
+        checkov --file docker-compose.yml --quiet --compact || true
       continue-on-error: true
 
     - name: Install Semgrep
