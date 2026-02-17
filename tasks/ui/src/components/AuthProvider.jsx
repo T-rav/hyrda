@@ -40,14 +40,14 @@ export function AuthProvider({ children }) {
         } else {
           // Not authenticated - redirect to control-plane OAuth
           const currentUrl = window.location.href
-          const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || 'https://localhost:6001'
+          const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
           window.location.href = `${controlPlaneUrl}/auth/login?redirect=${encodeURIComponent(currentUrl)}`
           return
         }
       } else if (response.status === 401) {
         // Not authenticated - redirect to control-plane OAuth
         const currentUrl = window.location.href
-        const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || 'https://localhost:6001'
+        const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
         window.location.href = `${controlPlaneUrl}/auth/login?redirect=${encodeURIComponent(currentUrl)}`
         return
       } else {
@@ -70,7 +70,7 @@ export function AuthProvider({ children }) {
       setUser(null)
       // Redirect to login
       const currentUrl = window.location.origin
-      const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || 'https://localhost:6001'
+      const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
       window.location.href = `${controlPlaneUrl}/auth/login?redirect=${encodeURIComponent(currentUrl)}`
     } catch (err) {
       logError('Logout failed:', err)
