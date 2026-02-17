@@ -7,13 +7,13 @@ class TestAuthProxyConfiguration:
     def test_control_plane_internal_url_env_var(self):
         """Test that CONTROL_PLANE_INTERNAL_URL environment variable is configured."""
         # This test verifies the expected environment variable for auth proxy
-        # In production, this should be set to http://control-plane:6001
+        # In production behind nginx, this uses HTTP for internal communication
         expected_url = "http://control-plane:6001"
 
         # Verify the format of the expected URL
         assert "control-plane" in expected_url
         assert "6001" in expected_url
-        assert expected_url.startswith("https://")
+        assert expected_url.startswith("http://")
 
     def test_control_plane_base_url_format(self):
         """Test that control plane URLs follow the expected format."""
