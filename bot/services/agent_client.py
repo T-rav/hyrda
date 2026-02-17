@@ -32,7 +32,7 @@ class AgentClient:
             base_url: Agent-service base URL (defaults to env var or localhost)
         """
         self.base_url = base_url or os.getenv(
-            "AGENT_SERVICE_URL", "https://agent-service:8000"
+            "AGENT_SERVICE_URL", "http://agent-service:8000"
         )
         self.service_token = os.getenv("BOT_SERVICE_TOKEN", "dev-bot-service-token")
 

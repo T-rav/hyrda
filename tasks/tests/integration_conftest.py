@@ -18,13 +18,13 @@ import pytest
 def set_control_plane_url_for_tests(monkeypatch):
     """Set CONTROL_PLANE_INTERNAL_URL for all integration tests."""
     # This ensures dependencies/auth.py uses localhost instead of Docker hostname
-    monkeypatch.setenv("CONTROL_PLANE_INTERNAL_URL", "https://localhost:6001")
+    monkeypatch.setenv("CONTROL_PLANE_INTERNAL_URL", "http://localhost:6001")
 
 
 @pytest.fixture
 def control_plane_url() -> str:
     """Control plane service URL for integration testing."""
-    return os.getenv("CONTROL_PLANE_URL", "https://localhost:6001")
+    return os.getenv("CONTROL_PLANE_URL", "http://localhost:6001")
 
 
 @pytest.fixture

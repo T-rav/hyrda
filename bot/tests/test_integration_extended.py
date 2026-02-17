@@ -23,7 +23,7 @@ def service_urls():
     return {
         "bot": os.getenv("BOT_SERVICE_URL", "http://localhost:8080"),
         "rag_service": os.getenv("RAG_SERVICE_URL", "http://localhost:8002"),
-        "agent_service": os.getenv("AGENT_SERVICE_URL", "https://localhost:8000"),
+        "agent_service": os.getenv("AGENT_SERVICE_URL", "http://localhost:8000"),
         "control_plane": os.getenv("CONTROL_PLANE_URL", "http://localhost:6001"),
         "tasks": os.getenv("TASKS_SERVICE_URL", "http://localhost:5001"),
     }
@@ -656,7 +656,7 @@ async def test_agent_registration_flow(http_client, service_urls):
         "version": "1.0.0",
         "capabilities": ["query", "search", "analysis"],
         "required_permissions": ["read_documents", "web_search"],
-        "endpoint": "https://localhost:8000/api/agents/test_agent",
+        "endpoint": "http://localhost:8000/api/agents/test_agent",
     }
 
     try:
