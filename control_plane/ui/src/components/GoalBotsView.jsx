@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { RefreshCw, Target, Play, X, Clock, CheckCircle, XCircle, AlertCircle, Loader } from 'lucide-react'
+import { RefreshCw, Target, Play, X, Clock, CheckCircle, XCircle, AlertCircle, Loader, Plus, Edit2 } from 'lucide-react'
 import GoalBotCard from './GoalBotCard'
+import CreateGoalBotModal from './CreateGoalBotModal'
 
 // Format seconds into human-readable duration
 const formatDuration = (seconds) => {
@@ -37,10 +38,16 @@ function GoalBotsView({
   onFetchRuns,
   onFetchRunDetails,
   onResetState,
+  onCreate,
+  onUpdate,
+  showCreateModal,
+  setShowCreateModal,
+  agents = [],
 }) {
   const [runs, setRuns] = useState([])
   const [selectedRun, setSelectedRun] = useState(null)
   const [viewMode, setViewMode] = useState('details') // 'details' | 'runs' | 'state'
+  const [editingBot, setEditingBot] = useState(null)
 
   // Fetch details when bot is selected
   useEffect(() => {
@@ -97,10 +104,16 @@ function GoalBotsView({
     <div className="content-section">
       <div className="section-header">
         <h2>Goals ({goalBots.length})</h2>
-        <button onClick={onRefresh} className="btn btn-outline-secondary">
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="header-actions">
+          <button onClick={() => setShowCreateModal(true)} className="btn btn-primary">
+            <Plus size={16} />
+            Create Goal
+          </button>
+          <button onClick={onRefresh} className="btn btn-outline-secondary">
+            <RefreshCw size={16} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="agents-grid">
@@ -334,6 +347,17 @@ function GoalBotsView({
             </div>
 
             <div className="modal-footer">
+              <div className="footer-left">
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    setEditingBot(selectedBot)
+                    setShowCreateModal(true)
+                  }}
+                >
+                  <Edit2 size={16} /> Edit
+                </button>
+              </div>
               <div className="footer-right" style={{ marginLeft: 'auto' }}>
                 {selectedBot.has_running_job ? (
                   <button className="btn btn-danger" onClick={() => onCancel(selectedBot.bot_id)}>
@@ -354,6 +378,30 @@ function GoalBotsView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Create/Edit Goal Bot Modal */}
+      {showCreateModal && (
+        <CreateGoalBotModal
+          isOpen={showCreateModal}
+          onClose={() => {
+            setShowCreateModal(false)
+            setEditingBot(null)
+          }}
+          onCreate={async (data) => {
+            await onCreate(data)
+            onRefresh()
+          }}
+          onUpdate={async (botId, data) => {
+            await onUpdate(botId, data)
+            onRefresh()
+            if (selectedBot?.bot_id === botId) {
+              onFetchDetails(botId)
+            }
+          }}
+          editingBot={editingBot}
+          agents={agents}
+        />
       )}
     </div>
   )

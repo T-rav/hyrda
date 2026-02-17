@@ -34,6 +34,9 @@ class GoalBotConfig:
     and log milestones as they work toward their goal.
     """
 
+    goal_prompt: str
+    """The goal/objective for this bot to achieve. Required."""
+
     schedule_type: str = "interval"
     """Schedule type: 'cron' or 'interval'."""
 
@@ -55,6 +58,9 @@ class GoalBotConfig:
 
     is_paused: bool = False
     """Whether the bot is paused by default."""
+
+    tools: list[str] = field(default_factory=list)
+    """List of tool names this bot can use."""
 
 
 def agent_metadata(
@@ -90,6 +96,7 @@ def agent_metadata(
         # Add goal bot configuration if provided
         if goal_bot is not None:
             metadata["goal_bot"] = {
+                "goal_prompt": goal_bot.goal_prompt,
                 "schedule_type": goal_bot.schedule_type,
                 "schedule_config": goal_bot.schedule_config,
                 "max_runtime_seconds": goal_bot.max_runtime_seconds,
@@ -97,6 +104,7 @@ def agent_metadata(
                 "notification_channel": goal_bot.notification_channel,
                 "is_enabled": goal_bot.is_enabled,
                 "is_paused": goal_bot.is_paused,
+                "tools": goal_bot.tools,
             }
 
         agent_graph.__agent_metadata__ = metadata

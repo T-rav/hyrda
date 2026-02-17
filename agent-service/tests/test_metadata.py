@@ -265,8 +265,9 @@ class TestGoalBotConfig:
 
     def test_default_values(self):
         """Test that GoalBotConfig has correct default values."""
-        config = GoalBotConfig()
+        config = GoalBotConfig(goal_prompt="Test goal")
 
+        assert config.goal_prompt == "Test goal"
         assert config.schedule_type == "interval"
         assert config.schedule_config == {"interval_seconds": 86400}
         assert config.max_runtime_seconds == 3600
@@ -274,10 +275,12 @@ class TestGoalBotConfig:
         assert config.notification_channel is None
         assert config.is_enabled is True
         assert config.is_paused is False
+        assert config.tools == []
 
     def test_custom_values(self):
         """Test GoalBotConfig with custom values."""
         config = GoalBotConfig(
+            goal_prompt="Custom goal prompt",
             schedule_type="cron",
             schedule_config={"cron_expression": "0 9 * * *"},
             max_runtime_seconds=7200,
@@ -285,8 +288,10 @@ class TestGoalBotConfig:
             notification_channel="#alerts",
             is_enabled=False,
             is_paused=True,
+            tools=["web_search", "knowledge_base"],
         )
 
+        assert config.goal_prompt == "Custom goal prompt"
         assert config.schedule_type == "cron"
         assert config.schedule_config == {"cron_expression": "0 9 * * *"}
         assert config.max_runtime_seconds == 7200
@@ -294,6 +299,7 @@ class TestGoalBotConfig:
         assert config.notification_channel == "#alerts"
         assert config.is_enabled is False
         assert config.is_paused is True
+        assert config.tools == ["web_search", "knowledge_base"]
 
 
 class TestGoalBotMetadata:
@@ -306,6 +312,7 @@ class TestGoalBotMetadata:
             display_name="Test Goal Bot",
             description="A test goal bot",
             goal_bot=GoalBotConfig(
+                goal_prompt="Find and process test data",
                 schedule_type="interval",
                 schedule_config={"interval_seconds": 3600},
                 max_runtime_seconds=1800,
@@ -317,6 +324,7 @@ class TestGoalBotMetadata:
         metadata = test_goal_bot.__agent_metadata__
 
         assert "goal_bot" in metadata
+        assert metadata["goal_bot"]["goal_prompt"] == "Find and process test data"
         assert metadata["goal_bot"]["schedule_type"] == "interval"
         assert metadata["goal_bot"]["schedule_config"] == {"interval_seconds": 3600}
         assert metadata["goal_bot"]["max_runtime_seconds"] == 1800
@@ -327,7 +335,7 @@ class TestGoalBotMetadata:
         @agent_metadata(
             display_name="Structure Test Bot",
             description="Test structure",
-            goal_bot=GoalBotConfig(),
+            goal_bot=GoalBotConfig(goal_prompt="Structure test goal"),
         )
         def test_func():
             return None
@@ -336,6 +344,7 @@ class TestGoalBotMetadata:
         goal_bot = metadata["goal_bot"]
 
         # Check all expected keys exist
+        assert "goal_prompt" in goal_bot
         assert "schedule_type" in goal_bot
         assert "schedule_config" in goal_bot
         assert "max_runtime_seconds" in goal_bot
@@ -343,6 +352,7 @@ class TestGoalBotMetadata:
         assert "notification_channel" in goal_bot
         assert "is_enabled" in goal_bot
         assert "is_paused" in goal_bot
+        assert "tools" in goal_bot
 
     def test_goal_bot_with_cron_schedule(self):
         """Test goal bot with cron schedule."""
@@ -351,6 +361,7 @@ class TestGoalBotMetadata:
             display_name="Cron Bot",
             description="Runs on cron schedule",
             goal_bot=GoalBotConfig(
+                goal_prompt="Run scheduled task on weekdays",
                 schedule_type="cron",
                 schedule_config={"cron_expression": "0 9 * * MON-FRI"},
             ),
@@ -384,7 +395,7 @@ class TestGoalBotMetadata:
         @agent_metadata(
             display_name="Callable Goal Bot",
             description="Test callable",
-            goal_bot=GoalBotConfig(),
+            goal_bot=GoalBotConfig(goal_prompt="Callable test goal"),
         )
         def test_func(x, y):
             return x * y

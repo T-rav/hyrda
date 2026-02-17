@@ -72,7 +72,7 @@ async def _execute_goal_bot_background(
                 control_plane_url,
                 headers,
                 run_id,
-                "plan",
+                "plan_created",
                 "Starting goal bot execution",
                 {"agent_name": agent_name, "max_iterations": max_iterations},
             )
@@ -103,7 +103,7 @@ async def _execute_goal_bot_background(
                 control_plane_url,
                 headers,
                 run_id,
-                "execute",
+                "action_taken",
                 "Executing agent",
                 {"goal_prompt": goal_prompt[:200]},
             )
@@ -131,7 +131,7 @@ async def _execute_goal_bot_background(
                 control_plane_url,
                 headers,
                 run_id,
-                "checkpoint",
+                "goal_achieved",
                 "Goal bot completed successfully",
                 {"response_length": len(final_response)},
             )

@@ -247,6 +247,10 @@ All saved prospects persist to MinIO for review by the team."""
     aliases=["prospect_bot", "prospect_finder", "market_intel"],
     is_system=False,
     goal_bot=GoalBotConfig(
+        goal_prompt="Find and qualify 5 new Dev/AI/DevOps prospects that match our ICP: "
+        "Series A-C funded startups in the developer tools, AI infrastructure, or DevOps space. "
+        "Research each prospect thoroughly, check for existing relationships in HubSpot, "
+        "and save qualified prospects with comprehensive profiles.",
         schedule_type="interval",
         schedule_config={"interval_seconds": 86400},  # Daily
         max_runtime_seconds=21600,  # 6 hours max
