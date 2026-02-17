@@ -344,7 +344,7 @@ health-ui:
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
+	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && VITE_BASE_PATH=/tasks/ npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 
 control-plane-ui:
