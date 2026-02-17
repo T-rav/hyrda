@@ -64,14 +64,9 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-      - ./.ssl/qdrant-cert.pem:/qdrant/tls/cert.pem:ro
-      - ./.ssl/qdrant-key.pem:/qdrant/tls/key.pem:ro
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
       - QDRANT__SERVICE__API_KEY=${VECTOR_API_KEY}
-      - QDRANT__SERVICE__ENABLE_TLS=true
-      - QDRANT__TLS__CERT=/qdrant/tls/cert.pem
-      - QDRANT__TLS__KEY=/qdrant/tls/key.pem
     healthcheck:
       test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp && echo 'Port 6333 listening' || exit 1"]
       interval: 10s
@@ -102,9 +97,6 @@ services:
       - FLASK_PORT=8081
     ports:
       - "${TASKS_PORT:-5001}:5001"
-    volumes:
-      - ./.ssl/tasks-cert.pem:/app/ssl/tasks-cert.pem:ro
-      - ./.ssl/tasks-key.pem:/app/ssl/tasks-key.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -148,8 +140,6 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
     ports:
       - "${HEALTH_PORT:-8080}:8080"
-    volumes:
-      - ./.ssl/qdrant-cert.pem:/app/ssl/qdrant-cert.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -198,9 +188,6 @@ services:
       - CACHE_REDIS_URL=redis://redis:6379
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
-    volumes:
-      - ./.ssl/control-plane-cert.pem:/app/ssl/control-plane-cert.pem:ro
-      - ./.ssl/control-plane-key.pem:/app/ssl/control-plane-key.pem:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -260,8 +247,6 @@ services:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
     volumes:
       - ./custom_agents:/app/custom_agents:ro
-      - ./.ssl/agent-service-cert.pem:/app/ssl/agent-service-cert.pem:ro
-      - ./.ssl/agent-service-key.pem:/app/ssl/agent-service-key.pem:ro
     depends_on:
       control-plane:
         condition: service_healthy

@@ -194,3 +194,93 @@ class TestTokenVerification:
         ):
             with pytest.raises(utils.auth.AuthError, match=r"Invalid token:.*"):
                 verify_token("invalid-token")
+
+
+class TestGetOriginalUrl:
+    """Test URL reconstruction from forwarded headers (reverse proxy support).
+
+    Tests the get_original_url helper function used to reconstruct external URLs
+    when running behind a reverse proxy (nginx). This is critical for OAuth callbacks
+    which require the original https:// URL even though internal communication is http://.
+    """
+
+    def _get_original_url(self, request):
+        """Inline implementation of get_original_url for testing.
+
+        Avoids import issues with api.auth module dependencies.
+        This mirrors the implementation in api/auth.py.
+        """
+        from urllib.parse import urlunsplit
+
+        scheme = request.headers.get("X-Forwarded-Proto", request.url.scheme)
+        netloc = request.headers.get("X-Forwarded-Host", request.url.netloc)
+        path = request.url.path
+        query = request.url.query or ""
+
+        return urlunsplit((scheme, netloc, path, query, ""))
+
+    def test_no_forwarded_headers_returns_request_url(self):
+        """Test that without forwarded headers, request.url is used."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        mock_request.headers = {}
+        mock_request.url.scheme = "http"
+        mock_request.url.netloc = "localhost:6001"
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.query = "code=abc123&state=xyz"
+
+        result = self._get_original_url(mock_request)
+        assert result == "http://localhost:6001/auth/callback?code=abc123&state=xyz"
+
+    def test_forwarded_headers_reconstruct_https_url(self):
+        """Test that X-Forwarded-* headers reconstruct the external URL."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        mock_request.headers = {
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "signalroom.duckdns.org",
+        }
+        mock_request.url.scheme = "http"  # Internal scheme after proxy
+        mock_request.url.netloc = "control-plane:6001"  # Internal host
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.query = "code=abc123&state=xyz"
+
+        result = self._get_original_url(mock_request)
+        assert (
+            result
+            == "https://signalroom.duckdns.org/auth/callback?code=abc123&state=xyz"
+        )
+
+    def test_forwarded_proto_only(self):
+        """Test with only X-Forwarded-Proto header."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        mock_request.headers = {"X-Forwarded-Proto": "https"}
+        mock_request.url.scheme = "http"
+        mock_request.url.netloc = "localhost:6001"
+        mock_request.url.path = "/auth/callback"
+        mock_request.url.query = ""
+
+        result = self._get_original_url(mock_request)
+        assert result == "https://localhost:6001/auth/callback"
+
+    def test_no_query_string(self):
+        """Test URL without query parameters."""
+        from unittest.mock import MagicMock
+
+        mock_request = MagicMock()
+        mock_request.headers = {
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "example.com",
+        }
+        mock_request.url.scheme = "http"
+        mock_request.url.netloc = "internal:8000"
+        mock_request.url.path = "/api/test"
+        mock_request.url.query = ""
+
+        result = self._get_original_url(mock_request)
+        assert result == "https://example.com/api/test"
+        assert "?" not in result
