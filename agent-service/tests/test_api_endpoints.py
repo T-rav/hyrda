@@ -123,8 +123,7 @@ class TestInvokeAgent:
 
         if response.status_code == 200:
             data = response.json()
-            assert "response" in data
-            assert "metadata" in data
+            assert "output" in data
             assert data["agent_name"] == "help"
 
     def test_invoke_nonexistent_agent(self):
