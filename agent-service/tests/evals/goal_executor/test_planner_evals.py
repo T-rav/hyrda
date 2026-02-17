@@ -11,10 +11,18 @@ import os
 import pytest
 from langchain_core.messages import HumanMessage
 
-# Skip all tests if no API key
+
+def _has_real_api_key() -> bool:
+    """Check if a real OpenAI API key is available (not a test placeholder)."""
+    key = os.getenv("OPENAI_API_KEY", "")
+    # Real keys start with sk- and are 40+ chars, test keys contain "test"
+    return key.startswith("sk-") and len(key) >= 40 and "test" not in key.lower()
+
+
+# Skip all tests if no real API key
 pytestmark = pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OPENAI_API_KEY required for evals",
+    not _has_real_api_key(),
+    reason="Real OPENAI_API_KEY required for evals (not test placeholder)",
 )
 
 
