@@ -362,13 +362,16 @@ dashboard-health-ui:
 	cd $(PROJECT_ROOT_DIR)/dashboard-service/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Dashboard Health UI built successfully!$(RESET)"
 
-# Setup SSL certificates (clean broken dirs first)
+# Setup SSL certificates (skip if USE_SSL=false)
 setup-ssl:
-	@echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"
-	@# Remove any broken directories that might exist
-	@rm -rf $(PROJECT_ROOT_DIR)/.ssl/*-cert.pem $(PROJECT_ROOT_DIR)/.ssl/*-key.pem
-	@bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh
-	@echo "$(GREEN)✅ SSL certificates ready!$(RESET)"
+	@if [ "$(USE_SSL)" = "false" ]; then \
+		echo "$(YELLOW)⏭️  Skipping SSL setup (USE_SSL=false)$(RESET)"; \
+	else \
+		echo "$(BLUE)🔐 Setting up SSL certificates...$(RESET)"; \
+		rm -rf $(PROJECT_ROOT_DIR)/.ssl/*-cert.pem $(PROJECT_ROOT_DIR)/.ssl/*-key.pem; \
+		bash $(PROJECT_ROOT_DIR)/scripts/setup-ssl.sh; \
+		echo "$(GREEN)✅ SSL certificates ready!$(RESET)"; \
+	fi
 
 docker-build: setup-ssl health-ui tasks-ui control-plane-ui dashboard-health-ui
 	@echo "$(BLUE)🔨 Building all Docker images (main stack + LibreChat)...$(RESET)"
