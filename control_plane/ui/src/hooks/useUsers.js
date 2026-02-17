@@ -30,7 +30,7 @@ export function useUsers(toast) {
 
       setTotalUsers(pagination.total || newUsers.length)
       setCurrentPage(pagination.page || page)
-      setHasMore(pagination.page < pagination.pages)
+      setHasMore(pagination.has_next || false)
 
       // Get current user email from session
       const meResponse = await fetch('/api/users/me')
@@ -63,7 +63,7 @@ export function useUsers(toast) {
 
       setUsers(prev => [...prev, ...newUsers])
       setCurrentPage(pagination.page || nextPage)
-      setHasMore(pagination.page < pagination.pages)
+      setHasMore(pagination.has_next || false)
     } catch (err) {
       console.error('Error loading more users:', err)
       if (toast) toast.error(`Failed to load more users: ${err.message}`)
