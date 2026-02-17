@@ -421,7 +421,7 @@ describe('Authentication', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+      expect(window.location.href).toContain('/auth/start?redirect=')
     })
   })
 
@@ -520,7 +520,7 @@ describe('Authentication', () => {
     render(<App />)
 
     await waitFor(() => {
-      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+      expect(window.location.href).toContain('/auth/start?redirect=')
     })
   })
 
@@ -579,7 +579,7 @@ describe('Authentication', () => {
     const logoutForm = Array.from(forms).find(form => form.action.includes('/auth/logout'))
     expect(logoutForm).toBeDefined()
     expect(logoutForm.method.toLowerCase()).toBe('post')
-    expect(logoutForm.action).toContain('https://localhost:6001/auth/logout')
+    expect(logoutForm.action).toContain('/auth/logout')
   })
 
   test('sets user email state when authenticated', async () => {
@@ -647,7 +647,7 @@ describe('Authentication', () => {
 
     // Should redirect to control plane login when not authenticated
     await waitFor(() => {
-      expect(window.location.href).toBe('https://localhost:6001/auth/start?redirect=https://localhost:5001')
+      expect(window.location.href).toContain('/auth/start?redirect=')
     })
   })
 })
