@@ -10,6 +10,7 @@ Tests cover:
 
 import asyncio
 import os
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -1424,6 +1425,194 @@ class TestMemorySkills:
 
             assert result.is_success
             assert result.data["count"] == 2
+
+
+class TestGoalMemorySessionScoping:
+    """Tests for session-scoped and goal-wide memory features."""
+
+    def test_session_activity_logging(self):
+        """Test logging activities for a session."""
+        from agents.goal_executor.services.memory import GoalMemory
+
+        memory = GoalMemory(bot_id="test_bot", thread_id="thread_123")
+
+        # Log some activities
+        memory.log_activity("search", {"query": "AI startups"}, persist=False)
+        memory.log_activity("company_research", {"company": "Acme Corp"}, persist=False)
+
+        # Get session activity
+        activities = memory.get_session_activity()
+        assert len(activities) == 2
+        # Most recent first
+        assert activities[0]["data"]["company"] == "Acme Corp"
+        assert activities[1]["data"]["query"] == "AI startups"
+
+    def test_session_activity_filtering_by_type(self):
+        """Test filtering session activities by type."""
+        from agents.goal_executor.services.memory import GoalMemory
+
+        memory = GoalMemory(bot_id="test_bot", thread_id="thread_123")
+
+        memory.log_activity("search", {"query": "AI"}, persist=False)
+        memory.log_activity("company_research", {"company": "Acme"}, persist=False)
+        memory.log_activity("search", {"query": "DevOps"}, persist=False)
+
+        # Filter by type
+        searches = memory.get_session_activity(activity_type="search")
+        assert len(searches) == 2
+        assert all(a["type"] == "search" for a in searches)
+
+    def test_session_summary(self):
+        """Test getting session summary."""
+        from agents.goal_executor.services.memory import GoalMemory
+
+        memory = GoalMemory(bot_id="test_bot", thread_id="thread_123")
+
+        memory.log_activity("search", {"query": "AI"}, persist=False)
+        memory.log_activity("search", {"query": "ML"}, persist=False)
+        memory.log_activity("company_research", {"company": "Acme"}, persist=False)
+
+        summary = memory.get_session_summary()
+        assert summary["thread_id"] == "thread_123"
+        assert summary["total_activities"] == 3
+        assert summary["by_type"]["search"] == 2
+        assert summary["by_type"]["company_research"] == 1
+
+    def test_goal_wide_sets(self):
+        """Test goal-wide set operations."""
+        from agents.goal_executor.services.memory import GoalMemory
+
+        memory = GoalMemory(bot_id="test_bot")
+
+        # Mock the remember/recall methods
+        stored_sets: dict = {}
+
+        def mock_remember(key, value):
+            stored_sets[key] = value
+            return True
+
+        def mock_recall(key):
+            return stored_sets.get(key)
+
+        memory.remember = mock_remember
+        memory.recall = mock_recall
+
+        # Add to set
+        assert memory.add_to_set("companies", "Acme") is True
+        assert memory.add_to_set("companies", "TechCo") is True
+        assert memory.add_to_set("companies", "Acme") is False  # Already exists
+
+        # Check membership
+        assert memory.is_in_set("companies", "Acme") is True
+        assert memory.is_in_set("companies", "Unknown") is False
+
+        # Get all
+        companies = memory.get_set("companies")
+        assert "Acme" in companies
+        assert "TechCo" in companies
+
+        # Remove
+        assert memory.remove_from_set("companies", "Acme") is True
+        assert memory.remove_from_set("companies", "Acme") is False  # Already removed
+
+    def test_convenience_methods(self):
+        """Test convenience methods for logging."""
+        from agents.goal_executor.services.memory import GoalMemory
+
+        memory = GoalMemory(bot_id="test_bot", thread_id="thread_123")
+
+        # Mock set operations
+        stored_sets: dict = {}
+
+        def mock_remember(key, value):
+            stored_sets[key] = value
+            return True
+
+        def mock_recall(key):
+            return stored_sets.get(key)
+
+        memory.remember = mock_remember
+        memory.recall = mock_recall
+
+        # Log search
+        memory.log_search("AI infrastructure", results_count=5, source="tavily")
+
+        # Log company research
+        memory.log_company_researched("Acme Corp", {"funding": "$10M"})
+
+        # Check session activity
+        activities = memory.get_session_activity()
+        assert len(activities) == 2
+
+        # Check goal-wide tracking
+        assert memory.was_company_researched("Acme Corp") is True
+        assert memory.was_company_researched("Unknown Co") is False
+
+        all_companies = memory.get_all_companies_researched()
+        assert "Acme Corp" in all_companies
+
+
+class TestVectorMemory:
+    """Tests for VectorMemory (semantic search)."""
+
+    def test_temporal_decay_calculation(self):
+        """Test temporal decay score adjustment."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        # Today's memory - no decay
+        now = datetime.now().isoformat()
+        score = memory._apply_decay(1.0, now)
+        assert score > 0.99  # Almost no decay
+
+        # 30-day old memory - half decay
+        old_date = (datetime.now() - timedelta(days=30)).isoformat()
+        score = memory._apply_decay(1.0, old_date)
+        assert 0.45 < score < 0.55  # ~50% due to half-life
+
+        # 90-day old memory - significant decay
+        very_old = (datetime.now() - timedelta(days=90)).isoformat()
+        score = memory._apply_decay(1.0, very_old)
+        assert score < 0.15  # ~12.5%
+
+    def test_memory_id_generation(self):
+        """Test deterministic memory ID generation."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        # Same inputs = same ID
+        id1 = memory._generate_memory_id("thread_1", "outcome A")
+        id2 = memory._generate_memory_id("thread_1", "outcome A")
+        assert id1 == id2
+
+        # Different inputs = different ID
+        id3 = memory._generate_memory_id("thread_2", "outcome A")
+        assert id1 != id3
+
+    def test_simple_summary_generation(self):
+        """Test simple summary generation without LLM."""
+        from agents.goal_executor.services.vector_memory import VectorMemory
+
+        memory = VectorMemory(bot_id="test_bot")
+
+        activities = [
+            {"type": "search", "data": {"query": "AI startups"}},
+            {"type": "company_research", "data": {"company": "Acme Corp"}},
+            {"type": "company_research", "data": {"company": "TechCo"}},
+        ]
+
+        summary = memory._simple_summary(
+            activities,
+            outcome="Found 2 qualified prospects",
+            goal="Find AI infrastructure companies",
+        )
+
+        assert "Goal:" in summary
+        assert "Companies:" in summary
+        assert "Acme Corp" in summary
+        assert "Found 2 qualified" in summary
 
 
 class TestYouTubeSkill:

@@ -1,10 +1,26 @@
 """Goal executor memory service using MinIO.
 
-Provides persistent memory for goal bots:
-- Run history and results
-- Saved prospects
-- Learned information across runs
-- Research artifacts
+Provides persistent memory for goal bots at two scopes:
+
+1. **Session-scoped** (run_id): What happened THIS run
+   - Searches performed, companies looked at, actions taken
+   - Cleared/archived when run completes
+
+2. **Goal-wide** (bot_id): Persistent across ALL runs
+   - All companies ever searched
+   - Learned patterns, successful signals
+   - Aggregate statistics
+
+Usage:
+    memory = get_goal_memory(bot_id="prospect_bot", run_id="run_123")
+
+    # Session: track this run's activity
+    memory.log_activity("search", {"query": "AI startups", "results": 5})
+    memory.get_session_activity()  # ["search: AI startups"]
+
+    # Goal-wide: persist across runs
+    memory.add_to_set("companies_searched", "Acme Corp")
+    memory.get_set("companies_searched")  # All companies ever searched
 """
 
 import hashlib
@@ -25,22 +41,29 @@ BUCKETS = {
     "runs": "goal-executor-runs",
     "memory": "goal-executor-memory",
     "research": "goal-executor-research",
+    "sessions": "goal-executor-sessions",
 }
 
 
 class GoalMemory:
     """Persistent memory for goal executors using MinIO S3.
 
+    Two scopes:
+    - Session (run_id): Activity log for current run
+    - Goal-wide (bot_id): Persistent across all runs
+
     Stores:
     - prospects: Saved qualified prospects
     - runs: Run history and results
-    - memory: Learned information, context
+    - memory: Learned information, context (goal-wide)
     - research: Research artifacts (search results, company profiles)
+    - sessions: Activity logs per run (session-scoped)
     """
 
     def __init__(
         self,
         bot_id: str | None = None,
+        thread_id: str | None = None,
         endpoint_url: str | None = None,
         access_key: str | None = None,
         secret_key: str | None = None,
@@ -48,18 +71,24 @@ class GoalMemory:
         """Initialize MinIO memory.
 
         Args:
-            bot_id: Goal bot identifier for namespacing
+            bot_id: Goal bot identifier for namespacing (goal-wide)
+            thread_id: LangGraph thread_id for session scoping
+                       (from config["configurable"]["thread_id"])
             endpoint_url: MinIO endpoint
             access_key: MinIO access key
             secret_key: MinIO secret key
         """
         self.bot_id = bot_id or "default"
+        self.thread_id = thread_id
         self.endpoint_url = endpoint_url or os.getenv("MINIO_ENDPOINT")
         self.access_key = access_key or os.getenv("MINIO_ACCESS_KEY")
         self.secret_key = secret_key or os.getenv("MINIO_SECRET_KEY")
 
         self._client: boto3.client | None = None
         self._initialized = False
+
+        # In-memory session activity (also persisted to MinIO)
+        self._session_activity: list[dict[str, Any]] = []
 
     def _ensure_client(self) -> bool:
         """Ensure S3 client is initialized."""
@@ -104,8 +133,13 @@ class GoalMemory:
                 except Exception as e:
                     logger.error(f"Failed to create bucket {bucket}: {e}")
 
-    def _key(self, category: str, name: str) -> str:
-        """Generate namespaced key."""
+    def _key(self, _category: str, name: str) -> str:
+        """Generate namespaced key.
+
+        Args:
+            _category: Category hint (unused, buckets provide separation)
+            name: Key name
+        """
         return f"{self.bot_id}/{name}"
 
     # =========================================================================
@@ -460,20 +494,361 @@ class GoalMemory:
             logger.error(f"Failed to search research cache: {e}")
             return []
 
+    # =========================================================================
+    # Session-Scoped Memory (thread_id)
+    # =========================================================================
 
-# Singleton instance
+    def log_activity(
+        self, activity_type: str, data: dict[str, Any], persist: bool = True
+    ) -> None:
+        """Log an activity for this session/thread.
+
+        Session-scoped: tracks what happened THIS run.
+
+        Args:
+            activity_type: Type of activity (search, analyze, save, etc.)
+            data: Activity data
+            persist: Whether to persist to MinIO (default True)
+        """
+        activity = {
+            "type": activity_type,
+            "data": data,
+            "timestamp": datetime.now().isoformat(),
+            "thread_id": self.thread_id,
+        }
+        self._session_activity.append(activity)
+
+        if persist and self.thread_id:
+            self._persist_session_activity()
+
+    def get_session_activity(
+        self, activity_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Get activity log for this session.
+
+        Args:
+            activity_type: Optional filter by type
+
+        Returns:
+            List of activities (most recent first)
+        """
+        # Load from MinIO if we have a thread_id and empty local cache
+        if self.thread_id and not self._session_activity:
+            self._load_session_activity()
+
+        activities = self._session_activity
+        if activity_type:
+            activities = [a for a in activities if a.get("type") == activity_type]
+
+        return list(reversed(activities))
+
+    def get_session_summary(self) -> dict[str, Any]:
+        """Get summary of this session's activity.
+
+        Returns:
+            Summary with counts by type, recent items
+        """
+        activities = self.get_session_activity()
+        by_type: dict[str, int] = {}
+        for a in activities:
+            t = a.get("type", "unknown")
+            by_type[t] = by_type.get(t, 0) + 1
+
+        return {
+            "thread_id": self.thread_id,
+            "total_activities": len(activities),
+            "by_type": by_type,
+            "recent": activities[:5],
+        }
+
+    def _persist_session_activity(self) -> None:
+        """Persist session activity to MinIO."""
+        if not self._ensure_client() or not self.thread_id:
+            return
+
+        key = f"{self.bot_id}/threads/{self.thread_id}.json"
+        session_data = {
+            "thread_id": self.thread_id,
+            "bot_id": self.bot_id,
+            "activities": self._session_activity,
+            "updated_at": datetime.now().isoformat(),
+        }
+
+        try:
+            self._client.put_object(
+                Bucket=BUCKETS["sessions"],
+                Key=key,
+                Body=json.dumps(session_data, indent=2).encode("utf-8"),
+                ContentType="application/json",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to persist session activity: {e}")
+
+    def _load_session_activity(self) -> None:
+        """Load session activity from MinIO."""
+        if not self._ensure_client() or not self.thread_id:
+            return
+
+        key = f"{self.bot_id}/threads/{self.thread_id}.json"
+
+        try:
+            data = self._client.get_object(
+                Bucket=BUCKETS["sessions"],
+                Key=key,
+            )
+            session_data = json.loads(data["Body"].read().decode("utf-8"))
+            self._session_activity = session_data.get("activities", [])
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "NoSuchKey":
+                logger.warning(f"Failed to load session activity: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to load session activity: {e}")
+
+    # =========================================================================
+    # Goal-Wide Sets (for tracking across all runs)
+    # =========================================================================
+
+    def add_to_set(self, set_name: str, value: str) -> bool:
+        """Add a value to a goal-wide set.
+
+        Goal-wide: persists across ALL runs for this bot.
+        Use for tracking things like "all companies ever searched".
+
+        Args:
+            set_name: Name of the set (e.g., "companies_searched")
+            value: Value to add
+
+        Returns:
+            True if added (False if already existed)
+        """
+        current = self.get_set(set_name)
+        if value in current:
+            return False
+
+        current.add(value)
+        self.remember(f"set:{set_name}", list(current))
+        return True
+
+    def get_set(self, set_name: str) -> set[str]:
+        """Get all values in a goal-wide set.
+
+        Args:
+            set_name: Name of the set
+
+        Returns:
+            Set of values
+        """
+        values = self.recall(f"set:{set_name}")
+        if values is None:
+            return set()
+        return set(values)
+
+    def is_in_set(self, set_name: str, value: str) -> bool:
+        """Check if a value is in a goal-wide set.
+
+        Args:
+            set_name: Name of the set
+            value: Value to check
+
+        Returns:
+            True if value is in the set
+        """
+        return value in self.get_set(set_name)
+
+    def remove_from_set(self, set_name: str, value: str) -> bool:
+        """Remove a value from a goal-wide set.
+
+        Args:
+            set_name: Name of the set
+            value: Value to remove
+
+        Returns:
+            True if removed (False if didn't exist)
+        """
+        current = self.get_set(set_name)
+        if value not in current:
+            return False
+
+        current.discard(value)
+        self.remember(f"set:{set_name}", list(current))
+        return True
+
+    # =========================================================================
+    # Convenience Methods
+    # =========================================================================
+
+    def log_search(self, query: str, results_count: int, source: str = "web") -> None:
+        """Log a search activity (session) and track query (goal-wide).
+
+        Args:
+            query: Search query
+            results_count: Number of results found
+            source: Search source
+        """
+        # Session-scoped: what we searched this run
+        self.log_activity(
+            "search",
+            {"query": query, "results_count": results_count, "source": source},
+        )
+        # Goal-wide: track all queries ever
+        self.add_to_set("queries_searched", query)
+
+    def log_company_researched(
+        self, company_name: str, data: dict | None = None
+    ) -> None:
+        """Log company research (session) and track company (goal-wide).
+
+        Args:
+            company_name: Company name
+            data: Additional data about the research
+        """
+        # Session-scoped
+        self.log_activity(
+            "company_research",
+            {"company": company_name, **(data or {})},
+        )
+        # Goal-wide
+        self.add_to_set("companies_researched", company_name)
+
+    def was_company_researched(self, company_name: str) -> bool:
+        """Check if a company was ever researched (goal-wide).
+
+        Args:
+            company_name: Company name
+
+        Returns:
+            True if company was researched in any run
+        """
+        return self.is_in_set("companies_researched", company_name)
+
+    def get_all_companies_researched(self) -> set[str]:
+        """Get all companies ever researched (goal-wide).
+
+        Returns:
+            Set of company names
+        """
+        return self.get_set("companies_researched")
+
+    # =========================================================================
+    # Session Compaction (bridges to VectorMemory)
+    # =========================================================================
+
+    async def compact_and_archive(
+        self,
+        outcome: str,
+        goal: str | None = None,
+    ) -> dict[str, Any]:
+        """Compact and archive the current session.
+
+        Call this when a run completes. This:
+        1. Gets all session activities
+        2. Creates an LLM summary → embeds in Qdrant for semantic search
+        3. Saves full session markdown to MinIO for detailed retrieval
+
+        Args:
+            outcome: Final outcome/summary of the run
+            goal: The goal that was executed
+
+        Returns:
+            Dict with archive details (memory_id, activity_count, etc.)
+        """
+        if not self.thread_id:
+            return {"error": "No thread_id - cannot compact session"}
+
+        # Get session activities
+        activities = self.get_session_activity()
+
+        # Archive to vector memory
+        from .vector_memory import get_vector_memory
+
+        vector_memory = get_vector_memory(self.bot_id)
+        memory_id = await vector_memory.compact_session(
+            thread_id=self.thread_id,
+            activities=activities,
+            outcome=outcome,
+            goal=goal,
+        )
+
+        # Also save full session to MinIO
+        self._persist_session_activity()
+
+        # Save run record
+        self.save_run(
+            run_id=self.thread_id,
+            run_data={
+                "goal": goal,
+                "outcome": outcome,
+                "activity_count": len(activities),
+                "memory_id": memory_id,
+            },
+        )
+
+        return {
+            "thread_id": self.thread_id,
+            "memory_id": memory_id,
+            "activity_count": len(activities),
+            "archived": True,
+        }
+
+    async def search_past_runs(
+        self,
+        query: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Semantic search across past session summaries.
+
+        Args:
+            query: Natural language query (e.g., "companies with funding")
+            limit: Maximum results
+
+        Returns:
+            List of matching past sessions
+        """
+        from .vector_memory import get_vector_memory
+
+        vector_memory = get_vector_memory(self.bot_id)
+        return await vector_memory.search(query, limit=limit)
+
+
+# Singleton instances by bot_id (goal-wide instances without thread_id)
 _memory_instances: dict[str, GoalMemory] = {}
 
 
-def get_goal_memory(bot_id: str = "default") -> GoalMemory:
-    """Get or create GoalMemory instance for bot.
+def get_goal_memory(
+    bot_id: str = "default", thread_id: str | None = None
+) -> GoalMemory:
+    """Get or create GoalMemory instance.
+
+    For goal-wide operations (no session tracking), omit thread_id.
+    For session-scoped operations, pass thread_id from LangGraph config.
 
     Args:
-        bot_id: Bot identifier
+        bot_id: Bot identifier (goal-wide scope)
+        thread_id: LangGraph thread_id for session scope
+                   (from config["configurable"]["thread_id"])
 
     Returns:
         GoalMemory instance
+
+    Example:
+        # In a LangGraph node:
+        def my_node(state, config):
+            thread_id = config["configurable"].get("thread_id")
+            memory = get_goal_memory(bot_id="prospect_bot", thread_id=thread_id)
+
+            # Session-scoped
+            memory.log_search("AI startups", results_count=5)
+
+            # Goal-wide
+            if memory.was_company_researched("Acme Corp"):
+                # Skip, already researched in a previous run
+                pass
     """
+    # If thread_id provided, create a new instance (session-scoped)
+    if thread_id:
+        return GoalMemory(bot_id=bot_id, thread_id=thread_id)
+
+    # Otherwise use singleton (goal-wide only)
     if bot_id not in _memory_instances:
         _memory_instances[bot_id] = GoalMemory(bot_id=bot_id)
     return _memory_instances[bot_id]
