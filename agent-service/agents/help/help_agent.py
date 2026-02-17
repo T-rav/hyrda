@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
     display_name="Help Agent",
     description="List available bot agents and their aliases (filtered by your access)",
     aliases=["help", "agents"],
-    is_system=False,
+    is_system=True,
 )
 def help_agent():
     """Build and return help agent graph."""
