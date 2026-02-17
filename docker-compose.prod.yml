@@ -315,7 +315,7 @@ services:
       - librechat_mongodb_data:/data/db
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=${LIBRECHAT_MONGO_PASSWORD:-librechat_mongo_pass}
+      - MONGO_INITDB_ROOT_PASSWORD=${LIBRECHAT_MONGO_PASSWORD}
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -337,7 +337,7 @@ services:
       - .env
     environment:
       # MongoDB Configuration
-      - MONGO_URI=mongodb://admin:${LIBRECHAT_MONGO_PASSWORD:-librechat_mongo_pass}@librechat-mongodb:27017/LibreChat?authSource=admin
+      - MONGO_URI=mongodb://admin:${LIBRECHAT_MONGO_PASSWORD}@librechat-mongodb:27017/LibreChat?authSource=admin
       # App Configuration
       - HOST=0.0.0.0
       - PORT=3080
