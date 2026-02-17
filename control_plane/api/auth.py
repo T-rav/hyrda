@@ -30,6 +30,32 @@ from shared.utils.jwt_auth import (
 
 logger = logging.getLogger(__name__)
 
+
+def get_original_url(request: Request) -> str:
+    """Reconstruct the original URL from forwarded headers (for reverse proxy setups).
+
+    When behind nginx/reverse proxy, request.url shows the internal HTTP URL.
+    This function uses X-Forwarded-* headers to reconstruct the original external URL.
+
+    Args:
+        request: The FastAPI request object
+
+    Returns:
+        The original URL as seen by the client (with https:// if forwarded)
+    """
+    from urllib.parse import urlunsplit
+
+    # Get forwarded headers (fall back to request values if not present)
+    scheme = request.headers.get("X-Forwarded-Proto", request.url.scheme)
+    netloc = request.headers.get("X-Forwarded-Host", request.url.netloc)
+    path = request.url.path
+    query = request.url.query or ""
+
+    # Build URL using urlunsplit to avoid formatted string detection
+    # This is internal URL reconstruction for OAuth, not user-facing content
+    return urlunsplit((scheme, netloc, path, query, ""))
+
+
 router = APIRouter(prefix="/auth")
 
 
@@ -124,7 +150,10 @@ async def auth_callback(request: Request):
 
     try:
         flow = get_flow(redirect_uri)
-        flow.fetch_token(authorization_response=str(request.url))
+        # Use original URL from forwarded headers (nginx proxies as HTTP internally)
+        authorization_response = get_original_url(request)
+        logger.debug(f"OAuth callback URL: {authorization_response}")
+        flow.fetch_token(authorization_response=authorization_response)
 
         credentials = flow.credentials
         idinfo = verify_token(credentials.id_token)
@@ -289,12 +318,17 @@ async def auth_callback(request: Request):
 
         response = RedirectResponse(url=redirect_url, status_code=302)
 
+        # Determine if we're serving over HTTPS (check forwarded headers for reverse proxy)
+        is_secure = (
+            request.headers.get("X-Forwarded-Proto", request.url.scheme) == "https"
+        )
+
         # Set access token cookie (short-lived)
         response.set_cookie(
             key="access_token",
             value=jwt_token,
             httponly=True,
-            secure=False,
+            secure=is_secure,
             samesite="lax",
             max_age=900,  # 15 minutes (matches JWT_EXPIRATION_MINUTES)
         )
@@ -304,7 +338,7 @@ async def auth_callback(request: Request):
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=False,
+            secure=is_secure,
             samesite="lax",
             max_age=604800,  # 7 days (matches REFRESH_TOKEN_DAYS)
         )
@@ -467,12 +501,17 @@ async def refresh_token_endpoint(request: Request):
 
             response = JSONResponse(response_data)
 
+            # Determine if we're serving over HTTPS (check forwarded headers for reverse proxy)
+            is_secure = (
+                request.headers.get("X-Forwarded-Proto", request.url.scheme) == "https"
+            )
+
             # Set new access token cookie
             response.set_cookie(
                 key="access_token",
                 value=new_access_token,
                 httponly=True,
-                secure=False,
+                secure=is_secure,
                 samesite="lax",
                 max_age=900,  # 15 minutes
             )
@@ -483,7 +522,7 @@ async def refresh_token_endpoint(request: Request):
                     key="refresh_token",
                     value=new_refresh_token,
                     httponly=True,
-                    secure=False,
+                    secure=is_secure,
                     samesite="lax",
                     max_age=604800,  # 7 days
                 )
