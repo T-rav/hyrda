@@ -467,6 +467,99 @@ services:
     networks:
       - insightmesh
 
+  # MongoDB for LibreChat user data
+  librechat-mongodb:
+    image: mongo:latest
+    container_name: insightmesh-librechat-mongodb
+    restart: unless-stopped
+    volumes:
+      - librechat_mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=${LIBRECHAT_MONGO_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "librechat-mongodb"
+      component: "database"
+    networks:
+      - insightmesh
+
+  # LibreChat - ChatGPT-style UI for RAG
+  librechat:
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: insightmesh-librechat
+    restart: unless-stopped
+    depends_on:
+      librechat-mongodb:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # MongoDB Configuration
+      - MONGO_URI=mongodb://admin:${LIBRECHAT_MONGO_PASSWORD}@librechat-mongodb:27017/LibreChat?authSource=admin
+      # App Configuration
+      - HOST=0.0.0.0
+      - PORT=3080
+      - DOMAIN_CLIENT=${LIBRECHAT_DOMAIN_CLIENT:-http://localhost:3080}
+      - DOMAIN_SERVER=${LIBRECHAT_DOMAIN_SERVER:-http://localhost:3080}
+      # Session & Security
+      - JWT_SECRET=${LIBRECHAT_JWT_SECRET:-}
+      - JWT_REFRESH_SECRET=${LIBRECHAT_JWT_REFRESH_SECRET:-}
+      - CREDS_KEY=${LIBRECHAT_CREDS_KEY:-}
+      - CREDS_IV=${LIBRECHAT_CREDS_IV:-}
+      # OAuth Configuration (Google for InsightMesh SSO)
+      - GOOGLE_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - GOOGLE_CALLBACK_URL=${GOOGLE_CALLBACK_URL}
+      # InsightMesh Service Integration
+      - RAG_API_URL=http://rag-service:8002
+      - AGENT_SERVICE_URL=http://agent-service:8000
+      - CONTROL_PLANE_URL=http://control-plane:6001
+      # LLM Provider Configuration
+      - ANTHROPIC_API_KEY=${LLM_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Feature Flags - OAuth only, no email/password login
+      - ALLOW_REGISTRATION=true
+      - ALLOW_EMAIL_LOGIN=false
+      - ALLOW_SOCIAL_LOGIN=true
+      - ALLOW_SOCIAL_REGISTRATION=true
+      # Domain Restrictions
+      - DOMAIN_WHITELIST=${ALLOWED_EMAIL_DOMAIN:-8thlight.com}
+      - ALLOW_EMAIL_WHITELIST=true
+    ports:
+      - "${LIBRECHAT_PORT:-3080}:3080"
+    volumes:
+      - librechat_data:/app/client/public/images
+      - librechat_logs:/app/api/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3080/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        tag: "{{.Name}}"
+        labels: "service,component"
+    labels:
+      logging: "promtail"
+      service: "librechat"
+      component: "chat-ui"
+    networks:
+      - insightmesh
+
 volumes:
   mysql_data:
     driver: local
@@ -477,6 +570,12 @@ volumes:
   loki_data:
     driver: local
   minio_data:
+    driver: local
+  librechat_mongodb_data:
+    driver: local
+  librechat_data:
+    driver: local
+  librechat_logs:
     driver: local
 
 networks:
