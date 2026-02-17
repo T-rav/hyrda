@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Key, Trash2, Plus, AlertCircle, ExternalLink } from 'lucide-react'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 /**
  * Credentials Manager Component
@@ -23,7 +24,7 @@ function CredentialsManager() {
     try {
       setLoading(true)
       // Load all credentials (provider field is already in the data)
-      const response = await fetch('/api/credentials')
+      const response = await fetch(withBasePath('/api/credentials'))
       const data = await response.json()
 
       // Use provider from credential data, default to 'google' for legacy credentials
@@ -49,8 +50,8 @@ function CredentialsManager() {
 
     try {
       const endpoint = cred.provider === 'hubspot'
-        ? `/api/hubspot/credentials/${cred.credential_id}`
-        : `/api/credentials/${cred.credential_id}`
+        ? withBasePath(`/api/hubspot/credentials/${cred.credential_id}`)
+        : withBasePath(`/api/credentials/${cred.credential_id}`)
 
       const response = await fetch(endpoint, {
         method: 'DELETE',
@@ -192,7 +193,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
 
       const tempTaskId = `cred_setup_${Date.now()}`
 
-      const response = await fetch('/api/gdrive/auth/initiate', {
+      const response = await fetch(withBasePath('/api/gdrive/auth/initiate'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -249,7 +250,7 @@ function AddCredentialModal({ onClose, onSuccess }) {
       setSaving(true)
       setError(null)
 
-      const response = await fetch('/api/hubspot/credentials', {
+      const response = await fetch(withBasePath('/api/hubspot/credentials'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

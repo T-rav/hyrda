@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Activity } from 'lucide-react'
 import ToggleSwitch from './ToggleSwitch'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 /**
  * TaskParameters Component
@@ -37,7 +38,7 @@ function TaskParameters({
   // Load available credentials for jobs that need authentication
   useEffect(() => {
     if (needsCredentials && !readOnly) {
-      fetch('/api/credentials', { credentials: 'include' })
+      fetch(withBasePath('/api/credentials'), { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           // Filter credentials by provider type

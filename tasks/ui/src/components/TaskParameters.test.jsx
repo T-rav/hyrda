@@ -8,6 +8,11 @@ vi.mock('../utils/logger', () => ({
   logError: vi.fn(),
 }))
 
+// Mock withBasePath to return path unchanged
+vi.mock('../utils/tokenRefresh', () => ({
+  withBasePath: (url) => url,
+}))
+
 // Mock fetch for credentials
 global.fetch = vi.fn()
 

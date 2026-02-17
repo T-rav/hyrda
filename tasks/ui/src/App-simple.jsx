@@ -1,5 +1,6 @@
 import React from 'react'
 import './App.css'
+import { withBasePath } from './utils/tokenRefresh'
 
 function App() {
   return (
@@ -19,7 +20,7 @@ function App() {
           <p>API Test: Fetching from localhost:5001/api/scheduler/info</p>
 
           <button onClick={() => {
-            fetch('/api/scheduler/info')
+            fetch(withBasePath('/api/scheduler/info'))
               .then(r => r.json())
               .then(data => alert('API Response: ' + JSON.stringify(data)))
               .catch(err => alert('API Error: ' + err.message))
