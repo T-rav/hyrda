@@ -6,13 +6,17 @@ plan-execute-check loop for goal-driven execution.
 This is designed to be embedded in other agents (like prospect_research)
 that provide their specific tools and goal prompts.
 
-State persistence is handled via LangGraph's SQLite checkpointer,
-allowing goal bots to resume from where they left off.
+Features:
+- State persistence via LangGraph's SQLite checkpointer
+- Auto-compaction flush before ending (OpenClaw pattern)
+- Session summaries embedded in Qdrant for semantic search
+- Full session archives in MinIO
 """
 
 import logging
 import os
 
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -154,14 +158,19 @@ def build_goal_executor(
         return builder.compile()
 
 
-async def save_state(state: GoalExecutorState) -> dict:
-    """Save persistent state for goal bot resume.
+async def save_state(
+    state: GoalExecutorState, config: RunnableConfig | None = None
+) -> dict:
+    """Save persistent state and auto-compact to vector memory.
 
-    Saves the current plan and progress to persistent_state
-    so execution can resume on the next run.
+    This is the pre-compaction flush (like OpenClaw). Before ending:
+    1. Save plan/progress to persistent_state
+    2. Compact session to vector memory (LLM summary → embed → Qdrant)
+    3. Archive full session to MinIO
 
     Args:
         state: Current goal executor state
+        config: LangGraph config with thread_id
 
     Returns:
         Updated state with persistent_state populated
@@ -212,7 +221,106 @@ async def save_state(state: GoalExecutorState) -> dict:
         )
         persistent_state["previous_runs"] = runs[-5:]  # Keep last 5
 
+    # =========================================================================
+    # Auto-compact to vector memory (OpenClaw pre-compaction flush)
+    # =========================================================================
+    await _auto_compact_session(state, config, persistent_state)
+
     return {"persistent_state": persistent_state}
+
+
+async def _auto_compact_session(
+    state: GoalExecutorState,
+    config: RunnableConfig | None,
+    persistent_state: dict,
+) -> None:
+    """Auto-compact session to vector memory before ending.
+
+    This is the OpenClaw-style pre-compaction flush that:
+    1. Gets thread_id from config
+    2. Gathers session activity
+    3. Compacts to vector memory (LLM summary → embed → Qdrant)
+
+    Args:
+        state: Goal executor state
+        config: LangGraph config
+        persistent_state: Persistent state dict
+    """
+    try:
+        # Get thread_id from config
+        thread_id = None
+        if config:
+            configurable = config.get("configurable", {})
+            thread_id = configurable.get("thread_id")
+
+        if not thread_id:
+            logger.debug("No thread_id in config, skipping auto-compact")
+            return
+
+        # Get bot_id from persistent state or default
+        bot_id = persistent_state.get("bot_id", "goal_executor")
+
+        # Build outcome summary
+        status = state.get("status", GoalStatus.RUNNING)
+        final_outcome = state.get("final_outcome", "")
+        error_message = state.get("error_message", "")
+
+        if status == GoalStatus.COMPLETED:
+            outcome = final_outcome or "Goal completed successfully"
+        elif status == GoalStatus.FAILED:
+            outcome = (
+                f"Goal failed: {error_message}" if error_message else "Goal failed"
+            )
+        else:
+            outcome = f"Goal ended with status: {status}"
+
+        # Get goal
+        goal = state.get("goal", "")
+
+        # Build activities from completed results
+        completed_results = state.get("completed_results", {})
+        activities = []
+        for step_id, result in completed_results.items():
+            activities.append(
+                {
+                    "type": "step_completed",
+                    "data": {
+                        "step_id": step_id,
+                        "result": result[:200] if result else "",
+                    },
+                }
+            )
+
+        # Import and call compact
+        from ..services import get_goal_memory
+
+        memory = get_goal_memory(bot_id=bot_id, thread_id=thread_id)
+
+        # Log activities to session memory
+        for activity in activities:
+            memory.log_activity(
+                activity["type"],
+                activity["data"],
+                persist=False,  # Will persist in compact
+            )
+
+        # Compact and archive
+        archive_result = await memory.compact_and_archive(
+            outcome=outcome,
+            goal=goal,
+        )
+
+        if archive_result.get("archived"):
+            logger.info(
+                f"Auto-compacted session {thread_id} → "
+                f"memory_id={archive_result.get('memory_id')}"
+            )
+        else:
+            logger.debug(f"Session compact skipped: {archive_result}")
+
+    except Exception as e:
+        # Don't fail the run if compaction fails
+        logger.warning(f"Auto-compact failed (non-fatal): {e}")
 
 
 logger.info("Goal executor graph builder loaded")
