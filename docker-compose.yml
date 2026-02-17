@@ -542,6 +542,7 @@ services:
     volumes:
       - librechat_data:/app/client/public/images
       - librechat_logs:/app/api/logs
+      - ./librechat/librechat.yaml:/app/librechat.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:3080/ || exit 1"]
       interval: 30s
