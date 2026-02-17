@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from shared.utils.jwt_auth import (  # noqa: E402
     JWT_ALGORITHM,
-    JWT_EXPIRATION_HOURS,
+    JWT_EXPIRATION_MINUTES,
     JWT_ISSUER,
     JWT_SECRET_KEY,
     JWTAuthError,
@@ -91,7 +91,7 @@ class TestJWTTokenCreation:
         exp_time = datetime.fromtimestamp(payload["exp"], tz=UTC)
         iat_time = datetime.fromtimestamp(payload["iat"], tz=UTC)
 
-        expected_delta = timedelta(hours=JWT_EXPIRATION_HOURS)
+        expected_delta = timedelta(minutes=JWT_EXPIRATION_MINUTES)
         actual_delta = exp_time - iat_time
 
         # Allow 1 second tolerance
@@ -591,9 +591,9 @@ class TestEnvironmentConfiguration:
         """Test that JWT algorithm is HS256."""
         assert JWT_ALGORITHM == "HS256"
 
-    def test_jwt_expiration_hours_default(self) -> None:
-        """Test default JWT expiration hours."""
-        assert JWT_EXPIRATION_HOURS == 4  # 4 hours for better security
+    def test_jwt_expiration_minutes_default(self) -> None:
+        """Test default JWT expiration minutes."""
+        assert JWT_EXPIRATION_MINUTES == 15  # 15 minutes for access tokens
 
     def test_jwt_issuer_is_insightmesh(self) -> None:
         """Test JWT issuer is set correctly."""
