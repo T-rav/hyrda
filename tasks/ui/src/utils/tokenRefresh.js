@@ -45,7 +45,8 @@ function onTokenRefreshed(newToken) {
  */
 async function refreshAccessToken() {
   try {
-    const response = await fetch('https://localhost:6001/auth/token/refresh', {
+    const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
+    const response = await fetch(`${controlPlaneUrl}/auth/token/refresh`, {
       method: 'POST',
       credentials: 'include', // Send refresh token cookie
       headers: {
@@ -107,8 +108,8 @@ export async function fetchWithTokenRefresh(url, options = {}) {
             resolve(retryResponse)
           } else {
             // Refresh failed - redirect to login
-            window.location.href =
-              'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+            const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
+            window.location.href = `${controlPlaneUrl}/auth/start?redirect=${encodeURIComponent(window.location.origin + (import.meta.env.BASE_URL || '/'))}`
             resolve(response)
           }
         })
@@ -128,8 +129,8 @@ export async function fetchWithTokenRefresh(url, options = {}) {
       } else {
         // Refresh failed - redirect to login
         onTokenRefreshed(null)
-        window.location.href =
-          'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+        const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
+        window.location.href = `${controlPlaneUrl}/auth/start?redirect=${encodeURIComponent(window.location.origin + (import.meta.env.BASE_URL || '/'))}`
       }
     } finally {
       isRefreshing = false
