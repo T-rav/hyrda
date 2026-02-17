@@ -41,8 +41,9 @@ class AgentInvokeResponse(BaseModel):
     """Response model for agent invocation."""
 
     agent_name: str
-    response: str
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    output: dict[str, Any] = Field(
+        default_factory=dict, description="Agent output data"
+    )
 
 
 class AgentListResponse(BaseModel):
@@ -214,8 +215,7 @@ async def invoke_agent(
         status = "success"
         return AgentInvokeResponse(
             agent_name=primary_name,
-            response=result.get("response", ""),
-            metadata=result.get("metadata", {}),
+            output=result if isinstance(result, dict) else {"response": str(result)},
         )
 
     except ValueError as e:
