@@ -64,9 +64,13 @@ function App() {
 
   const {
     users,
+    totalUsers,
+    hasMore,
+    loadingMore,
     syncing,
     currentUserEmail,
     fetchUsers,
+    loadMoreUsers,
     syncUsers,
     updateAdminStatus,
   } = useUsers(toast)
@@ -274,10 +278,14 @@ function App() {
         {activeTab === 'users' && (
           <UsersView
             users={users}
+            totalUsers={totalUsers}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
             groups={groups}
             onRefresh={fetchUsers}
             onSync={syncUsers}
             syncing={syncing}
+            onLoadMore={loadMoreUsers}
             onAddUserToGroup={addUserToGroup}
             onRemoveUserFromGroup={removeUserFromGroup}
             onUpdateAdminStatus={updateAdminStatus}

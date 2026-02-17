@@ -1,8 +1,22 @@
 import React, { useState } from 'react'
-import { Users, RefreshCw, Shield } from 'lucide-react'
+import { Users, RefreshCw, Shield, ChevronDown } from 'lucide-react'
 import ManageUserGroupsModal from './ManageUserGroupsModal'
 
-function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup, onRemoveUserFromGroup, onUpdateAdminStatus, currentUserEmail }) {
+function UsersView({
+  users,
+  totalUsers,
+  hasMore,
+  loadingMore,
+  groups,
+  onRefresh,
+  onSync,
+  syncing,
+  onLoadMore,
+  onAddUserToGroup,
+  onRemoveUserFromGroup,
+  onUpdateAdminStatus,
+  currentUserEmail
+}) {
   const [selectedUser, setSelectedUser] = useState(null)
   const [updatingAdmin, setUpdatingAdmin] = useState(null)
 
@@ -21,10 +35,12 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
   const currentUser = users.find(u => u.email === currentUserEmail)
   const isCurrentUserAdmin = currentUser?.is_admin || false
 
+  const remainingUsers = totalUsers - users.length
+
   return (
     <div className="content-section">
       <div className="section-header">
-        <h2>Users ({users.length})</h2>
+        <h2>Users ({users.length} of {totalUsers})</h2>
         <div>
           <button onClick={onRefresh} className="btn btn-outline-secondary">
             <RefreshCw size={16} />
@@ -102,6 +118,30 @@ function UsersView({ users, groups, onRefresh, onSync, syncing, onAddUserToGroup
           ))}
         </tbody>
       </table>
+
+      {/* Load More Button */}
+      {hasMore && (
+        <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
+          <button
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="btn btn-outline-primary"
+            style={{ minWidth: '200px' }}
+          >
+            {loadingMore ? (
+              <>
+                <RefreshCw size={16} className="spinning" />
+                Loading...
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                Load 50 more ({remainingUsers} remaining)
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {users.length === 0 && (
         <div className="empty-state">
