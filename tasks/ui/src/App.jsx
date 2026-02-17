@@ -41,7 +41,8 @@ function App() {
         })
         if (!response.ok) {
           // Not authenticated - redirect to control plane login with redirect back to tasks
-          window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+          const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
+          window.location.href = `${controlPlaneUrl}/auth/start?redirect=${encodeURIComponent(window.location.origin + (import.meta.env.BASE_URL || '/'))}`
           return
         }
         const data = await response.json()
@@ -50,7 +51,8 @@ function App() {
         }
       } catch (error) {
         logError('Auth check failed:', error)
-        window.location.href = 'https://localhost:6001/auth/start?redirect=https://localhost:5001'
+        const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
+        window.location.href = `${controlPlaneUrl}/auth/start?redirect=${encodeURIComponent(window.location.origin + (import.meta.env.BASE_URL || '/'))}`
         return
       }
     }
@@ -71,9 +73,10 @@ function App() {
 
   const handleLogout = () => {
     // POST to logout endpoint
+    const controlPlaneUrl = import.meta.env.VITE_CONTROL_PLANE_URL || `${window.location.protocol}//${window.location.hostname}:6001`
     const form = document.createElement('form')
     form.method = 'POST'
-    form.action = 'https://localhost:6001/auth/logout'
+    form.action = `${controlPlaneUrl}/auth/logout`
     document.body.appendChild(form)
     form.submit()
   }
