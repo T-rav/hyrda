@@ -2,6 +2,7 @@
 
 Executes individual steps using LLM with tool access.
 Provides a factory function to create executors with custom tools.
+Includes context pruning to manage token limits during long executions.
 """
 
 import logging
@@ -9,13 +10,192 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    BaseMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.tools import BaseTool, tool
 from langchain_openai import ChatOpenAI
 
 from ..state import GoalExecutorState, StepStatus
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Context Pruning Configuration
+# =============================================================================
+
+# Pruning thresholds (in characters, ~4 chars per token)
+SOFT_TRIM_THRESHOLD = 50_000  # ~12.5k tokens - soft trim
+HARD_CLEAR_THRESHOLD = 100_000  # ~25k tokens - hard clear
+MIN_PRUNABLE_CHARS = 10_000  # Don't prune small results
+
+# How much to keep when soft-trimming (head + tail)
+SOFT_TRIM_KEEP_RATIO = 0.2  # Keep 20% from head and 20% from tail
+
+# Protect recent tool results from pruning
+KEEP_LAST_TOOL_RESULTS = 3
+
+# Placeholder for cleared content
+HARD_CLEAR_PLACEHOLDER = "[Tool result cleared - content exceeded size limit]"
+
+
+def _soft_trim_content(content: str, threshold: int = SOFT_TRIM_THRESHOLD) -> str:
+    """Soft-trim content by keeping head and tail.
+
+    Removes the middle portion of large content while preserving
+    the beginning and end for context.
+
+    Args:
+        content: The content to trim
+        threshold: Size threshold for trimming
+
+    Returns:
+        Trimmed content with middle replaced by ellipsis
+    """
+    if len(content) <= threshold:
+        return content
+
+    keep_chars = int(threshold * SOFT_TRIM_KEEP_RATIO)
+    head = content[:keep_chars]
+    tail = content[-keep_chars:]
+    removed_chars = len(content) - (keep_chars * 2)
+
+    return f"{head}\n\n... [{removed_chars:,} characters trimmed] ...\n\n{tail}"
+
+
+def _hard_clear_content(content: str) -> str:
+    """Hard-clear content by replacing with placeholder.
+
+    Args:
+        content: The content to clear
+
+    Returns:
+        Placeholder string with original size info
+    """
+    return f"{HARD_CLEAR_PLACEHOLDER} (original: {len(content):,} chars)"
+
+
+def _is_image_content(content: str) -> bool:
+    """Check if content appears to be image/binary data.
+
+    Args:
+        content: The content to check
+
+    Returns:
+        True if content looks like image/binary data
+    """
+    # Check for common image data patterns
+    if content.startswith(("data:image/", "iVBOR", "/9j/", "R0lGOD")):
+        return True
+
+    # Check for base64-like content characteristics:
+    # - High alphanumeric ratio (>95%)
+    # - Mixed case (base64 uses both upper and lower)
+    # - Contains digits (base64 uses 0-9)
+    # - Low character diversity in longer strings suggests NOT base64
+    if len(content) > 1000:
+        sample = content[:1000]
+        alnum_ratio = sum(c.isalnum() for c in sample) / len(sample)
+        if alnum_ratio > 0.95:
+            # Additional checks to distinguish base64 from repetitive text
+            has_upper = any(c.isupper() for c in sample)
+            has_lower = any(c.islower() for c in sample)
+            has_digit = any(c.isdigit() for c in sample)
+            unique_chars = len(set(sample))
+
+            # Base64 typically has mixed case, digits, and high character diversity
+            # Repetitive text (like "AAAA...") has very low diversity
+            if has_upper and has_lower and has_digit and unique_chars > 20:
+                return True
+
+    return False
+
+
+def prune_tool_results(
+    messages: list[BaseMessage],
+    soft_threshold: int = SOFT_TRIM_THRESHOLD,
+    hard_threshold: int = HARD_CLEAR_THRESHOLD,
+    keep_last: int = KEEP_LAST_TOOL_RESULTS,
+) -> list[BaseMessage]:
+    """Prune tool results to manage context window size.
+
+    Applies soft-trim or hard-clear to large tool results while
+    protecting recent results and image content.
+
+    Strategy:
+    - Results < soft_threshold: Keep as-is
+    - Results between soft and hard threshold: Soft-trim (keep head + tail)
+    - Results > hard_threshold: Hard-clear (replace with placeholder)
+    - Last N tool results: Never prune
+    - Image content: Never prune
+
+    Args:
+        messages: List of messages to prune
+        soft_threshold: Character count for soft trimming
+        hard_threshold: Character count for hard clearing
+        keep_last: Number of recent tool results to protect
+
+    Returns:
+        Pruned message list (modified in place for efficiency)
+    """
+    # Find all tool message indices
+    tool_indices = [i for i, msg in enumerate(messages) if isinstance(msg, ToolMessage)]
+
+    if not tool_indices:
+        return messages
+
+    # Protect the last N tool results
+    protected_indices = set(tool_indices[-keep_last:]) if keep_last > 0 else set()
+
+    pruned_count = 0
+    trimmed_count = 0
+
+    for idx in tool_indices:
+        if idx in protected_indices:
+            continue
+
+        msg = messages[idx]
+        # Type narrowing: we know this is a ToolMessage from the indices filter
+        if not isinstance(msg, ToolMessage):
+            continue
+
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+
+        # Skip small results
+        if len(content) < MIN_PRUNABLE_CHARS:
+            continue
+
+        # Skip image content
+        if _is_image_content(content):
+            continue
+
+        # Apply pruning
+        if len(content) > hard_threshold:
+            # Hard clear
+            messages[idx] = ToolMessage(
+                content=_hard_clear_content(content),
+                tool_call_id=msg.tool_call_id,
+            )
+            pruned_count += 1
+        elif len(content) > soft_threshold:
+            # Soft trim
+            messages[idx] = ToolMessage(
+                content=_soft_trim_content(content, soft_threshold),
+                tool_call_id=msg.tool_call_id,
+            )
+            trimmed_count += 1
+
+    if pruned_count or trimmed_count:
+        logger.debug(
+            f"Context pruning: {pruned_count} hard-cleared, {trimmed_count} soft-trimmed"
+        )
+
+    return messages
 
 
 # Default tools available to step execution
@@ -239,6 +419,9 @@ Execute this step and provide your findings."""
                 messages.append(response)
                 messages.extend(tool_messages)
 
+                # Prune old tool results before next LLM call
+                messages = prune_tool_results(messages)
+
                 # Get final response
                 final_response = await llm_with_tools.ainvoke(messages)
 
@@ -252,6 +435,8 @@ Execute this step and provide your findings."""
                             messages.append(
                                 ToolMessage(content=tr, tool_call_id=tc["id"])
                             )
+                        # Prune before each subsequent LLM call
+                        messages = prune_tool_results(messages)
                         final_response = await llm_with_tools.ainvoke(messages)
                     else:
                         break
