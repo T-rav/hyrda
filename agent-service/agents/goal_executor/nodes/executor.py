@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -18,7 +19,6 @@ from langchain_core.messages import (
     ToolMessage,
 )
 from langchain_core.tools import BaseTool, tool
-from langchain_openai import ChatOpenAI
 
 from ..state import GoalExecutorState, StepStatus
 
@@ -377,8 +377,8 @@ def create_step_executor(
 
         context = "\n".join(context_parts) if context_parts else "No previous context."
 
-        # Create LLM with tools
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+        # Create LLM with tools (Claude Opus 4.5)
+        llm = ChatAnthropic(model="claude-opus-4-5-20251101", temperature=0.3)
         llm_with_tools = llm.bind_tools(executor_tools)
 
         messages = [

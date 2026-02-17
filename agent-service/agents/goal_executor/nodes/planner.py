@@ -8,8 +8,8 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from ..state import GoalExecutorState, GoalPlan, GoalStatus, GoalStep, StepStatus
@@ -99,8 +99,8 @@ async def create_plan(state: GoalExecutorState) -> dict:
             ],
         }
 
-    # Create LLM with structured output
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+    # Create LLM with structured output (Claude Opus 4.5)
+    llm = ChatAnthropic(model="claude-opus-4-5-20251101", temperature=0.3)
     structured_llm = llm.with_structured_output(GeneratedPlan)
 
     # Build context from persistent state if available

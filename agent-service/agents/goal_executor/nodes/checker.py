@@ -6,8 +6,8 @@ Follows the OpenClaw pattern of plan-execute-check loops.
 
 import logging
 
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import AIMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from ..state import GoalExecutorState, GoalStatus, StepStatus
@@ -124,8 +124,8 @@ async def check_progress(state: GoalExecutorState) -> dict:
             ],
         }
 
-    # Use LLM for nuanced evaluation
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    # Use LLM for nuanced evaluation (Claude Opus 4.5)
+    llm = ChatAnthropic(model="claude-opus-4-5-20251101", temperature=0)
     structured_llm = llm.with_structured_output(ProgressEvaluation)
 
     # Build progress summary
