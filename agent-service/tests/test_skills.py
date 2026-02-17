@@ -1426,6 +1426,71 @@ class TestMemorySkills:
             assert result.is_success
             assert result.data["count"] == 2
 
+    @pytest.mark.asyncio
+    async def test_search_past_runs_skill(self, skill_context):
+        """Test searching past runs semantically."""
+        from agents.goal_executor.skills.primitives import SearchPastRunsSkill
+
+        with patch(
+            "agents.goal_executor.services.vector_memory.get_vector_memory"
+        ) as mock_vmem_fn:
+            mock_vmem = AsyncMock()
+            mock_vmem.search.return_value = [
+                {
+                    "summary": "Found AI infrastructure companies",
+                    "outcome": "Qualified 3 prospects",
+                    "goal": "Find AI prospects",
+                    "companies": ["Acme", "TechCo"],
+                    "queries": ["AI startups"],
+                    "score": 0.85,
+                    "created_at": "2024-01-15T10:00:00",
+                }
+            ]
+            mock_vmem_fn.return_value = mock_vmem
+
+            skill = SearchPastRunsSkill(context=skill_context)
+            result = await skill.run(query="AI infrastructure")
+
+            assert result.is_success
+            assert result.data.total_found == 1
+            assert "Acme" in result.data.runs[0]["companies"]
+
+    @pytest.mark.asyncio
+    async def test_check_company_researched_skill(self, skill_context):
+        """Test checking if company was researched."""
+        from agents.goal_executor.skills.primitives import CheckCompanyResearchedSkill
+
+        with patch(
+            "agents.goal_executor.skills.primitives.get_goal_memory"
+        ) as mock_memory_fn:
+            mock_memory = MagicMock()
+            mock_memory.was_company_researched.return_value = True
+            mock_memory_fn.return_value = mock_memory
+
+            skill = CheckCompanyResearchedSkill(context=skill_context)
+            result = await skill.run(company_name="Acme Corp")
+
+            assert result.is_success
+            assert result.data["previously_researched"] is True
+
+    @pytest.mark.asyncio
+    async def test_mark_company_researched_skill(self, skill_context):
+        """Test marking company as researched."""
+        from agents.goal_executor.skills.primitives import MarkCompanyResearchedSkill
+
+        with patch(
+            "agents.goal_executor.skills.primitives.get_goal_memory"
+        ) as mock_memory_fn:
+            mock_memory = MagicMock()
+            mock_memory_fn.return_value = mock_memory
+
+            skill = MarkCompanyResearchedSkill(context=skill_context)
+            result = await skill.run(company_name="NewCo")
+
+            assert result.is_success
+            assert result.data["marked"] is True
+            mock_memory.log_company_researched.assert_called_once_with("NewCo")
+
 
 class TestGoalMemorySessionScoping:
     """Tests for session-scoped and goal-wide memory features."""

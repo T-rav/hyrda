@@ -9,6 +9,9 @@ Available primitives:
 - deep_research: Direct Perplexity research
 - recall_memory: Search and recall from persistent memory
 - save_memory: Save information to persistent memory
+- search_past_runs: Semantic search over past run summaries
+- check_company_researched: Check if company was already researched
+- mark_company_researched: Mark company as researched (dedup)
 - list_prospects: List saved prospects from memory
 - get_run_history: Get recent run history
 - rephrase: Generate alternative phrases/queries (unstick tool)
@@ -437,6 +440,226 @@ class SaveMemorySkill(BaseSkill):
                 message="Memory not persisted (MinIO not configured) but cached for session",
                 steps_completed=["save"],
             )
+
+
+# =============================================================================
+# Semantic Memory Search Skill
+# =============================================================================
+
+
+@dataclass
+class PastRunData:
+    """Data from a past run search."""
+
+    query: str
+    runs: list[dict[str, Any]] = field(default_factory=list)
+    total_found: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "query": self.query,
+            "runs": self.runs,
+            "total_found": self.total_found,
+        }
+
+
+@register_skill
+class SearchPastRunsSkill(BaseSkill):
+    """Search past runs using semantic similarity.
+
+    Use this to find relevant context from previous goal executions.
+    Searches over LLM-generated summaries of past sessions.
+
+    POWERFUL FOR:
+    - "What did we learn about companies with funding?"
+    - "Find previous research on AI infrastructure"
+    - "What prospects did we find in DevOps space?"
+    - "Any past runs about Series B startups?"
+
+    Features:
+    - Hybrid search: vector similarity + keyword matching
+    - Temporal decay: recent runs rank higher
+    - MMR diversity: avoids redundant results
+
+    Parameters:
+        query: Natural language query (semantic search)
+        limit: Maximum results (default: 5)
+        use_hybrid: Enable BM25 keyword matching (default: True)
+
+    Returns:
+        List of matching past runs with summaries and metadata
+    """
+
+    name = "search_past_runs"
+    description = "Semantic search over past runs - find relevant context and learnings"
+    version = "1.0.0"
+
+    async def execute(
+        self,
+        query: str,
+        limit: int = 5,
+        use_hybrid: bool = True,
+    ) -> SkillResult[PastRunData]:
+        """Search past runs semantically.
+
+        Args:
+            query: Natural language query
+            limit: Max results
+            use_hybrid: Use vector + BM25 (default: True)
+
+        Returns:
+            SkillResult with matching past runs
+        """
+        self._step("search")
+
+        # Import vector memory
+        from ..services.vector_memory import get_vector_memory
+
+        vector_memory = get_vector_memory(self.context.bot_id)
+
+        try:
+            results = await vector_memory.search(
+                query=query,
+                limit=limit,
+                use_hybrid=use_hybrid,
+                use_mmr=True,  # Always use diversity
+                apply_temporal_decay=True,
+            )
+
+            # Format for agent consumption
+            runs = []
+            for r in results:
+                runs.append(
+                    {
+                        "summary": r.get("summary", ""),
+                        "outcome": r.get("outcome", ""),
+                        "goal": r.get("goal", ""),
+                        "companies": r.get("companies", []),
+                        "queries": r.get("queries", []),
+                        "score": round(r.get("score", 0), 3),
+                        "created_at": r.get("created_at", ""),
+                    }
+                )
+
+            if runs:
+                return SkillResult(
+                    status=SkillStatus.SUCCESS,
+                    data=PastRunData(
+                        query=query,
+                        runs=runs,
+                        total_found=len(runs),
+                    ),
+                    message=f"Found {len(runs)} relevant past runs",
+                    steps_completed=["search"],
+                )
+            else:
+                return SkillResult(
+                    status=SkillStatus.PARTIAL,
+                    data=PastRunData(query=query, runs=[], total_found=0),
+                    message="No matching past runs found",
+                    steps_completed=["search"],
+                )
+
+        except Exception as e:
+            logger.warning(f"Past runs search failed: {e}")
+            return SkillResult(
+                status=SkillStatus.FAILED,
+                data=PastRunData(query=query, runs=[], total_found=0),
+                message=f"Search failed: {e}",
+                error=str(e),
+                steps_completed=["search"],
+            )
+
+
+@register_skill
+class CheckCompanyResearchedSkill(BaseSkill):
+    """Check if a company was already researched in any past run.
+
+    Use this to avoid duplicate work - check before researching a company.
+
+    Parameters:
+        company_name: Company name to check
+
+    Returns:
+        Whether the company was previously researched
+    """
+
+    name = "check_company_researched"
+    description = "Check if a company was already researched - avoid duplicates"
+    version = "1.0.0"
+
+    async def execute(
+        self,
+        company_name: str,
+    ) -> SkillResult[dict[str, Any]]:
+        """Check if company was researched.
+
+        Args:
+            company_name: Company to check
+
+        Returns:
+            SkillResult with researched status
+        """
+        self._step("check")
+
+        memory = get_goal_memory(self.context.bot_id)
+        was_researched = memory.was_company_researched(company_name)
+
+        return SkillResult(
+            status=SkillStatus.SUCCESS,
+            data={
+                "company": company_name,
+                "previously_researched": was_researched,
+            },
+            message=f"{company_name}: {'already researched' if was_researched else 'not yet researched'}",
+            steps_completed=["check"],
+        )
+
+
+@register_skill
+class MarkCompanyResearchedSkill(BaseSkill):
+    """Mark a company as researched (for deduplication).
+
+    Call this after researching a company to prevent duplicate work
+    in future runs.
+
+    Parameters:
+        company_name: Company name to mark
+
+    Returns:
+        Confirmation
+    """
+
+    name = "mark_company_researched"
+    description = "Mark a company as researched - for deduplication"
+    version = "1.0.0"
+
+    async def execute(
+        self,
+        company_name: str,
+    ) -> SkillResult[dict[str, Any]]:
+        """Mark company as researched.
+
+        Args:
+            company_name: Company to mark
+
+        Returns:
+            SkillResult confirming mark
+        """
+        self._step("mark")
+
+        memory = get_goal_memory(self.context.bot_id)
+        memory.log_company_researched(company_name)
+
+        return SkillResult(
+            status=SkillStatus.SUCCESS,
+            data={
+                "company": company_name,
+                "marked": True,
+            },
+            message=f"Marked '{company_name}' as researched",
+            steps_completed=["mark"],
+        )
 
 
 @register_skill
