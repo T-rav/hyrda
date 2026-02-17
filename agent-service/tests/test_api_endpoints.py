@@ -20,6 +20,13 @@ AGENT_SERVICE_TOKEN = os.getenv(
 )
 AUTH_HEADERS = {"X-Service-Token": AGENT_SERVICE_TOKEN}
 
+
+@pytest.fixture(autouse=True)
+def setup_mock_agents(mock_unified_loader_env):
+    """Use the standard mock loader from conftest for all tests."""
+    yield
+
+
 # Mark all tests in this module as integration tests
 pytestmark = pytest.mark.integration
 

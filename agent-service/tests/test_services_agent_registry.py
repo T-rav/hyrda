@@ -272,33 +272,31 @@ class TestServicesAgentRegistry:
 
     @patch.dict("sys.modules")
     @pytest.mark.integration
-    def test_load_agent_classes_loads_from_local_registry(self):
-        """Test that _load_agent_classes loads from local registry.
+    def test_load_agent_classes_loads_from_unified_loader(
+        self, mock_loader_builder, mock_agent_builder
+    ):
+        """Test that _load_agent_classes loads from unified agent loader.
 
-        INTEGRATION TEST: Loads actual agents from filesystem.
+        Uses builder pattern for creating mock fixtures.
         """
-        # This test verifies the function can load from system loader
-        test_agent_class = TestAgentFactory.create_simple_agent(name="test")
+        # Build test agent using builder
+        test_agent = mock_agent_builder().with_name("test").build()
 
-        # Mock the system loader to return our test agent
-        mock_system_loader = Mock()
-        mock_system_loader.discover_agents.return_value = {"test": test_agent_class}
+        # Build loader using builder
+        mock_loader = mock_loader_builder().with_agents({"test": test_agent}).build()
 
         # Clear the cache to force reload
         agent_registry._agent_classes = {}
 
-        # Disable external agents to test only system loader
-        with (
-            patch(
-                "services.system_agent_loader.get_system_loader",
-                return_value=mock_system_loader,
-            ),
-            patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "false"}),
+        # Mock the unified loader
+        with patch(
+            "services.unified_agent_loader.get_unified_loader",
+            return_value=mock_loader,
         ):
             classes = agent_registry._load_agent_classes()
 
         assert "test" in classes
-        assert classes["test"] == test_agent_class
+        assert classes["test"] == test_agent
 
     def test_clear_cache_clears_cached_data(self):
         """Test that clear_cache clears cached registry."""
@@ -311,75 +309,68 @@ class TestServicesAgentRegistry:
         assert agent_registry._cached_agents is None
         assert agent_registry._cache_timestamp == 0
 
-    @pytest.mark.integration
-    @patch("services.system_agent_loader.get_system_loader")
-    @patch("services.external_agent_loader.get_external_loader")
-    def test_external_cannot_override_system_agent(
-        self, mock_external_loader, mock_system_loader
+    def test_unified_loader_loads_multiple_agents(
+        self, mock_loader_builder, mock_agent_builder
     ):
-        """Test that external agents cannot override system agents.
+        """Test that unified loader loads multiple agents from langgraph.json.
 
-        INTEGRATION TEST: Tests agent loader behavior.
+        Uses builder pattern for creating mock fixtures.
         """
-        # Mock system agent
-        system_agent_class = Mock()
-        system_agent_class.__name__ = "SystemResearchAgent"
-        mock_system_loader.return_value.discover_agents.return_value = {
-            "research": system_agent_class
-        }
+        # Build agents using builder
+        research_agent = (
+            mock_agent_builder()
+            .with_name("research")
+            .with_display_name("Research Agent")
+            .build()
+        )
+        help_agent = (
+            mock_agent_builder()
+            .with_name("help")
+            .with_display_name("Help Agent")
+            .as_system_agent()
+            .build()
+        )
 
-        # Mock external agent with SAME name (conflict)
-        external_agent_class = Mock()
-        external_agent_class.__name__ = "ExternalResearchAgent"
-        mock_external_loader.return_value.discover_agents.return_value = {
-            "research": external_agent_class
-        }
+        # Build loader with multiple agents
+        mock_loader = (
+            mock_loader_builder()
+            .with_agents({"research": research_agent, "help": help_agent})
+            .build()
+        )
 
         # Clear cache to force reload
         agent_registry._agent_classes = {}
 
-        # Load agents
-        with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "true"}):
-            classes = agent_registry._load_agent_classes()
-
-        # Verify system agent wins, external rejected
-        assert "research" in classes
-        assert classes["research"] == system_agent_class  # System wins!
-        assert classes["research"] != external_agent_class  # External rejected
-
-    @pytest.mark.integration
-    @patch("services.system_agent_loader.get_system_loader")
-    @patch("services.external_agent_loader.get_external_loader")
-    def test_external_loads_when_no_conflict(
-        self, mock_external_loader, mock_system_loader
-    ):
-        """Test that external agents load normally when no conflict.
-
-        INTEGRATION TEST: Tests agent loader behavior.
-        """
-        # Mock system agent
-        system_agent_class = Mock()
-        system_agent_class.__name__ = "ResearchAgent"
-        mock_system_loader.return_value.discover_agents.return_value = {
-            "research": system_agent_class
-        }
-
-        # Mock external agent with DIFFERENT name (no conflict)
-        external_agent_class = Mock()
-        external_agent_class.__name__ = "ProfileAgent"
-        mock_external_loader.return_value.discover_agents.return_value = {
-            "profile": external_agent_class
-        }
-
-        # Clear cache to force reload
-        agent_registry._agent_classes = {}
-
-        # Load agents
-        with patch.dict(os.environ, {"LOAD_EXTERNAL_AGENTS": "true"}):
+        # Load agents via unified loader
+        with patch(
+            "services.unified_agent_loader.get_unified_loader",
+            return_value=mock_loader,
+        ):
             classes = agent_registry._load_agent_classes()
 
         # Verify both loaded
         assert "research" in classes
-        assert "profile" in classes
-        assert classes["research"] == system_agent_class
-        assert classes["profile"] == external_agent_class
+        assert "help" in classes
+        assert classes["research"] == research_agent
+        assert classes["help"] == help_agent
+
+    def test_unified_loader_handles_empty_config(self, mock_loader_builder):
+        """Test that unified loader handles empty langgraph.json gracefully.
+
+        Uses builder pattern for creating mock fixtures.
+        """
+        # Build empty loader
+        mock_loader = mock_loader_builder().empty().build()
+
+        # Clear cache to force reload
+        agent_registry._agent_classes = {}
+
+        # Load agents via unified loader
+        with patch(
+            "services.unified_agent_loader.get_unified_loader",
+            return_value=mock_loader,
+        ):
+            classes = agent_registry._load_agent_classes()
+
+        # Should return empty dict, not crash
+        assert classes == {}
