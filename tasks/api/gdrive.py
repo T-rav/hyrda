@@ -99,9 +99,11 @@ async def initiate_gdrive_auth(request: Request):
         )
 
         # Generate authorization URL
+        # Note: include_granted_scopes="false" prevents scope accumulation issues
+        # where Google adds previously granted scopes (like openid, userinfo)
         authorization_url, state = flow.authorization_url(
             access_type="offline",
-            include_granted_scopes="true",
+            include_granted_scopes="false",
             prompt="consent",
         )
 

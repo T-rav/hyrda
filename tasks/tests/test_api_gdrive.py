@@ -52,6 +52,48 @@ class TestInitiateGDriveAuth:
         assert "credential_id" in data
         assert data["state"] == "test-state-123"
 
+    @patch("api.gdrive.Flow")
+    @patch("api.gdrive.get_settings")
+    def test_initiate_auth_disables_scope_accumulation(
+        self, mock_get_settings, mock_flow_class, authenticated_client, mock_oauth_env
+    ):
+        """Test that include_granted_scopes=false prevents scope mismatch errors.
+
+        When include_granted_scopes is true, Google may add previously granted
+        scopes (openid, userinfo.email, userinfo.profile) which causes scope
+        mismatch errors during token exchange. Setting it to false ensures only
+        the requested scopes are returned.
+        """
+        # Mock settings
+        mock_settings = Mock()
+        mock_settings.server_base_url = "http://localhost:5001"
+        mock_get_settings.return_value = mock_settings
+
+        # Mock OAuth flow
+        mock_flow = Mock()
+        mock_flow.authorization_url.return_value = (
+            "https://accounts.google.com/o/oauth2/auth?client_id=test",
+            "test-state-123",
+        )
+        mock_flow_class.from_client_config.return_value = mock_flow
+
+        response = authenticated_client.post(
+            "/api/gdrive/auth/initiate",
+            json={
+                "task_id": "test-task-1",
+                "credential_name": "Test GDrive Credential",
+            },
+        )
+
+        assert response.status_code == 200
+
+        # Verify authorization_url was called with include_granted_scopes="false"
+        mock_flow.authorization_url.assert_called_once_with(
+            access_type="offline",
+            include_granted_scopes="false",
+            prompt="consent",
+        )
+
     def test_initiate_auth_missing_task_id(self, authenticated_client):
         """Test initiate auth fails without task_id."""
         response = authenticated_client.post(
