@@ -344,7 +344,10 @@ health-ui:
 
 tasks-ui:
 	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && npm run build
+	@cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && \
+		if [ -f $(PROJECT_ROOT_DIR)/.env ]; then . $(PROJECT_ROOT_DIR)/.env; fi && \
+		VITE_BASE_PATH=$${TASKS_BASE_PATH:-/} npm run build && \
+		echo "Built with base path: $${TASKS_BASE_PATH:-/}"
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 
 control-plane-ui:
