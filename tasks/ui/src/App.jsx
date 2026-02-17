@@ -5,7 +5,7 @@ import CreateTaskModal from './components/CreateTaskModal'
 import ViewTaskModal from './components/ViewTaskModal'
 import './App.css'
 import { logError } from './utils/logger'
-import { setupTokenRefresh, fetchWithTokenRefresh } from './utils/tokenRefresh'
+import { setupTokenRefresh, fetchWithTokenRefresh, withBasePath } from './utils/tokenRefresh'
 
 // Custom hook for managing document title
 function useDocumentTitle(title) {
@@ -36,7 +36,7 @@ function App() {
   React.useEffect(() => {
     const verifyAuth = async () => {
       try {
-        const response = await fetch('/auth/me', {
+        const response = await fetch(withBasePath('/auth/me'), {
           credentials: 'include'
         })
         if (!response.ok) {

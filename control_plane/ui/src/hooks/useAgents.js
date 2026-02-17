@@ -69,20 +69,29 @@ export function useAgents(toast) {
   }
 
   const toggleAgent = async (agentName) => {
+    // Optimistic update - immediately update local state
+    const previousAgents = [...agents]
+    setAgents(agents.map(agent =>
+      agent.name === agentName
+        ? { ...agent, is_enabled: !agent.is_enabled }
+        : agent
+    ))
+
     try {
       const response = await fetch(`/api/agents/${agentName}/toggle`, {
         method: 'POST',
         credentials: 'include',
       })
-      if (!response.ok) throw new Error('Failed to toggle agent')
+      if (!response.ok) {
+        // Revert on error
+        setAgents(previousAgents)
+        throw new Error('Failed to toggle agent')
+      }
       const data = await response.json()
 
       if (toast) {
         toast.success(`Agent ${data.is_enabled ? 'enabled' : 'disabled'}`)
       }
-
-      // Refresh agent list to show new state
-      await fetchAgents()
 
       // Also refresh agent details if currently viewing this agent
       if (selectedAgent && selectedAgent.name === agentName) {

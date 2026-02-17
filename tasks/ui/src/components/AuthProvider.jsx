@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { logError } from '../utils/logger'
+import { withBasePath } from '../utils/tokenRefresh'
 
 const AuthContext = createContext(null)
 
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/auth/me', {
+      const response = await fetch(withBasePath('/auth/me'), {
         credentials: 'include'
       })
 
@@ -62,7 +63,7 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      await fetch('/auth/logout', {
+      await fetch(withBasePath('/auth/logout'), {
         method: 'POST',
         credentials: 'include'
       })

@@ -49,11 +49,6 @@ describe('useAgents', () => {
         ok: true,
         json: async () => ({ is_enabled: false })
       })
-      // Mock the subsequent fetchAgents call
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ agents: [] })
-      })
 
       const { result } = renderHook(() => useAgents(mockToast))
 
@@ -75,10 +70,6 @@ describe('useAgents', () => {
         ok: true,
         json: async () => ({ is_enabled: true })
       })
-      fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ agents: [] })
-      })
 
       const { result } = renderHook(() => useAgents(mockToast))
 
@@ -86,7 +77,9 @@ describe('useAgents', () => {
         await result.current.toggleAgent('test_agent')
       })
 
-      expect(mockToast.success).toHaveBeenCalledWith('Agent enabled')
+      await waitFor(() => {
+        expect(mockToast.success).toHaveBeenCalledWith('Agent enabled')
+      })
     })
 
     it('should show error toast on toggle failure', async () => {
@@ -100,7 +93,9 @@ describe('useAgents', () => {
         await result.current.toggleAgent('test_agent')
       })
 
-      expect(mockToast.error).toHaveBeenCalled()
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalled()
+      })
     })
   })
 
@@ -166,7 +161,9 @@ describe('useAgents', () => {
         }
       })
 
-      expect(mockToast.error).toHaveBeenCalledWith('Failed to delete agent: Cannot delete system agent')
+      await waitFor(() => {
+        expect(mockToast.error).toHaveBeenCalledWith('Failed to delete agent: Cannot delete system agent')
+      })
     })
   })
 })
