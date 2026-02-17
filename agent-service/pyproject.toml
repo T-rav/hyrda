@@ -179,6 +179,7 @@ asyncio_mode = "auto"
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
     "unit: marks tests as unit tests",
+    "eval: marks tests as LLM evals (require API keys, may be slow)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
