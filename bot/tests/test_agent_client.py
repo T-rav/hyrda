@@ -186,7 +186,7 @@ class TestAgentClientInitialization:
         # Mock BOT_SERVICE_TOKEN to avoid picking up environment value
         with patch.dict("os.environ", {"BOT_SERVICE_TOKEN": "dev-bot-service-token"}):
             client = AgentClient()
-            assert client.base_url == "https://agent-service:8000"
+            assert client.base_url == "http://agent-service:8000"
             assert client.service_token == "dev-bot-service-token"
 
     def test_init_custom_base_url(self):
@@ -372,7 +372,7 @@ class TestGetAgentClient:
         }
         with patch.dict("os.environ", env_without_url, clear=True):
             client = get_agent_client()
-            assert client.base_url == "https://agent-service:8000"
+            assert client.base_url == "http://agent-service:8000"
 
         # Cleanup
         _AgentClientSingleton._instance = None

@@ -27,7 +27,7 @@ async def get_current_user(request: Request):
 
     # Get control-plane URL (use Docker service name for internal communication)
     control_plane_url = os.getenv(
-        "CONTROL_PLANE_INTERNAL_URL", "https://control-plane:6001"
+        "CONTROL_PLANE_INTERNAL_URL", "http://control-plane:6001"
     )
 
     # Forward the request to control-plane with all cookies

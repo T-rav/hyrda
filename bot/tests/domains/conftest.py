@@ -40,8 +40,8 @@ def service_urls() -> dict[str, str]:
     return {
         "bot": os.getenv("BOT_SERVICE_URL", "http://localhost:8080"),
         "rag_service": os.getenv("RAG_SERVICE_URL", "http://localhost:8002"),
-        "agent_service": os.getenv("AGENT_SERVICE_URL", "https://localhost:8000"),
-        "control_plane": os.getenv("CONTROL_PLANE_URL", "https://localhost:6001"),
+        "agent_service": os.getenv("AGENT_SERVICE_URL", "http://localhost:8000"),
+        "control_plane": os.getenv("CONTROL_PLANE_URL", "http://localhost:6001"),
         "tasks": os.getenv("TASKS_SERVICE_URL", "https://localhost:5001"),
     }
 

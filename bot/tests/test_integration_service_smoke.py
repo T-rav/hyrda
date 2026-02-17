@@ -10,9 +10,9 @@ import httpx
 import pytest
 
 # Service endpoints from environment or defaults
-CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_URL", "https://control-plane:6001")
+CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_URL", "http://control-plane:6001")
 RAG_SERVICE_URL = os.getenv("RAG_SERVICE_URL", "http://rag-service:8002")
-AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "https://agent-service:8000")
+AGENT_SERVICE_URL = os.getenv("AGENT_SERVICE_URL", "http://agent-service:8000")
 TASKS_URL = os.getenv("TASKS_URL", "http://tasks:5001")
 
 # Service tokens for auth

@@ -118,6 +118,11 @@ def create_app() -> FastAPI:
         )
 
     # Use Redis session middleware for persistent sessions
+    # Session cookie domain - None allows browser to use current domain
+    session_domain = os.getenv("SESSION_COOKIE_DOMAIN", None)
+    if session_domain == "":
+        session_domain = None  # Empty string means use browser default
+
     app.add_middleware(
         RedisSessionMiddleware,
         secret_key=secret_key,
@@ -125,7 +130,7 @@ def create_app() -> FastAPI:
         max_age=3600 * 24 * 7,  # 7 days
         same_site="lax",
         https_only=is_production,
-        domain="localhost",  # Share session cookie across all localhost ports
+        domain=session_domain,
     )
 
     # Add tracing middleware (must be first for complete request tracking)
