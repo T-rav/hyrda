@@ -11,7 +11,7 @@ export function useGoalBots(toast) {
   const fetchGoalBots = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true)
-      const response = await fetch('/api/goal-bots')
+      const response = await fetch('/api/goal-bots', { credentials: 'include' })
       if (!response.ok) throw new Error('Failed to fetch goal bots')
       const data = await response.json()
       setGoalBots(data.goal_bots || [])
@@ -25,7 +25,7 @@ export function useGoalBots(toast) {
 
   const fetchBotDetails = async (botId) => {
     try {
-      const response = await fetch(`/api/goal-bots/${botId}`)
+      const response = await fetch(`/api/goal-bots/${botId}`, { credentials: 'include' })
       if (!response.ok) throw new Error('Failed to fetch bot details')
       const data = await response.json()
       setSelectedBotDetails(data)
@@ -42,6 +42,7 @@ export function useGoalBots(toast) {
       const response = await fetch('/api/goal-bots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(botData),
       })
 
@@ -66,6 +67,7 @@ export function useGoalBots(toast) {
       const response = await fetch(`/api/goal-bots/${botId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(updates),
       })
 
@@ -89,6 +91,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}`, {
         method: 'DELETE',
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -114,6 +117,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/toggle`, {
         method: 'POST',
+        credentials: 'include',
       })
 
       if (!response.ok) throw new Error('Failed to toggle goal bot')
@@ -131,6 +135,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/pause`, {
         method: 'POST',
+        credentials: 'include',
       })
 
       if (!response.ok) throw new Error('Failed to pause goal bot')
@@ -146,6 +151,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/resume`, {
         method: 'POST',
+        credentials: 'include',
       })
 
       if (!response.ok) throw new Error('Failed to resume goal bot')
@@ -161,6 +167,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/trigger`, {
         method: 'POST',
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -183,6 +190,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/cancel`, {
         method: 'POST',
+        credentials: 'include',
       })
 
       if (!response.ok) {
@@ -200,7 +208,9 @@ export function useGoalBots(toast) {
 
   const fetchBotRuns = async (botId, page = 1) => {
     try {
-      const response = await fetch(`/api/goal-bots/${botId}/runs?page=${page}&per_page=20`)
+      const response = await fetch(`/api/goal-bots/${botId}/runs?page=${page}&per_page=20`, {
+        credentials: 'include',
+      })
       if (!response.ok) throw new Error('Failed to fetch runs')
       return await response.json()
     } catch (err) {
@@ -211,7 +221,9 @@ export function useGoalBots(toast) {
 
   const fetchRunDetails = async (botId, runId) => {
     try {
-      const response = await fetch(`/api/goal-bots/${botId}/runs/${runId}`)
+      const response = await fetch(`/api/goal-bots/${botId}/runs/${runId}`, {
+        credentials: 'include',
+      })
       if (!response.ok) throw new Error('Failed to fetch run details')
       return await response.json()
     } catch (err) {
@@ -224,6 +236,7 @@ export function useGoalBots(toast) {
     try {
       const response = await fetch(`/api/goal-bots/${botId}/state`, {
         method: 'DELETE',
+        credentials: 'include',
       })
 
       if (!response.ok) throw new Error('Failed to reset state')

@@ -76,6 +76,7 @@ export function useAgents(toast) {
     try {
       const response = await fetch(`/api/agents/${agentName}/toggle`, {
         method: 'POST',
+        credentials: 'include',
       })
       if (!response.ok) throw new Error('Failed to toggle agent')
       const data = await response.json()
@@ -101,6 +102,7 @@ export function useAgents(toast) {
     try {
       const response = await fetch(`/api/agents/${agentName}`, {
         method: 'DELETE',
+        credentials: 'include',
       })
 
       if (!response.ok) {
