@@ -79,7 +79,9 @@ class TestPlanner:
             reasoning="Two-step approach",
         )
 
-        with patch("agents.goal_executor.nodes.planner.ChatOpenAI") as mock_llm_class:
+        with patch(
+            "agents.goal_executor.nodes.planner.ChatAnthropic"
+        ) as mock_llm_class:
             mock_llm = MagicMock()
             mock_structured = MagicMock()
             mock_structured.ainvoke = AsyncMock(return_value=mock_plan)
@@ -165,7 +167,9 @@ class TestExecutor:
             ],
         )
 
-        with patch("agents.goal_executor.nodes.executor.ChatOpenAI") as mock_llm_class:
+        with patch(
+            "agents.goal_executor.nodes.executor.ChatAnthropic"
+        ) as mock_llm_class:
             mock_response = MagicMock()
             mock_response.content = "Step completed successfully"
             mock_response.tool_calls = None
