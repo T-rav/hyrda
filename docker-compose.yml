@@ -299,7 +299,7 @@ services:
       - SECURITY_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/insightmesh_security
       - DATA_DATABASE_URL=mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-password}@mysql:3306/insightmesh_data
       - CACHE_REDIS_URL=redis://redis:6379
-      - USE_SSL=${USE_SSL:-true}
+
     ports:
       - "${CONTROL_PLANE_PORT:-6001}:6001"
     depends_on:
@@ -391,7 +391,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - REPORTS_BUCKET=${REPORTS_BUCKET:-profile-reports}
-      - USE_SSL=${USE_SSL:-true}
+
     ports:
       - "${AGENT_SERVICE_PORT:-8000}:8000"
       - "9000:9000"  # LangGraph dev mode
