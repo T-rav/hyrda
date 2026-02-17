@@ -342,9 +342,12 @@ health-ui:
 	cd $(PROJECT_ROOT_DIR)/bot/health_ui && npm install --no-audit && npm run build
 	@echo "$(GREEN)✅ Health UI built successfully!$(RESET)"
 
+# TASKS_BASE_PATH: Set to /tasks/ for production (behind reverse proxy), defaults to / for local
+TASKS_BASE_PATH ?= /
+
 tasks-ui:
-	@echo "$(BLUE)Building React tasks dashboard...$(RESET)"
-	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && VITE_BASE_PATH=/tasks/ npm run build
+	@echo "$(BLUE)Building React tasks dashboard (base: $(TASKS_BASE_PATH))...$(RESET)"
+	cd $(PROJECT_ROOT_DIR)/tasks/ui && npm install --no-audit && VITE_BASE_PATH=$(TASKS_BASE_PATH) npm run build
 	@echo "$(GREEN)✅ Tasks UI built successfully!$(RESET)"
 
 control-plane-ui:
