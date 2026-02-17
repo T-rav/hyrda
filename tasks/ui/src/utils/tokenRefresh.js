@@ -6,6 +6,19 @@
  * the access token using the refresh token before retrying the request.
  */
 
+// Get base path from Vite (set by VITE_BASE_PATH env var)
+const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+
+/**
+ * Prepend base path to URL if it starts with /
+ */
+export function withBasePath(url) {
+  if (url.startsWith('/')) {
+    return basePath + url
+  }
+  return url
+}
+
 let isRefreshing = false
 let refreshSubscribers = []
 
@@ -78,8 +91,9 @@ export async function fetchWithTokenRefresh(url, options = {}) {
     credentials: 'include',
   }
 
-  // Make initial request
-  let response = await fetch(url, fetchOptions)
+  // Make initial request (prepend base path if needed)
+  const fullUrl = withBasePath(url)
+  let response = await fetch(fullUrl, fetchOptions)
 
   // If 401 Unauthorized, try to refresh token
   if (response.status === 401) {
@@ -89,7 +103,7 @@ export async function fetchWithTokenRefresh(url, options = {}) {
         subscribeTokenRefresh(async (newToken) => {
           if (newToken) {
             // Retry with refreshed token
-            const retryResponse = await fetch(url, fetchOptions)
+            const retryResponse = await fetch(fullUrl, fetchOptions)
             resolve(retryResponse)
           } else {
             // Refresh failed - redirect to login
@@ -109,7 +123,7 @@ export async function fetchWithTokenRefresh(url, options = {}) {
 
       if (refreshed) {
         // Token refreshed successfully - retry original request
-        response = await fetch(url, fetchOptions)
+        response = await fetch(fullUrl, fetchOptions)
         onTokenRefreshed(true)
       } else {
         // Refresh failed - redirect to login
@@ -136,7 +150,7 @@ export function setupTokenRefresh() {
   setInterval(async () => {
     try {
       // Check if we have a valid session
-      const response = await fetch('/auth/me', {
+      const response = await fetch(withBasePath('/auth/me'), {
         credentials: 'include',
       })
 
