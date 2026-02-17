@@ -1,6 +1,53 @@
 """Pytest configuration - disable tracing during tests."""
 
 import os
+from pathlib import Path
+
+# Load only API keys from .env (needed for evals)
+# This must happen BEFORE setting fallback test values
+# Only load specific API keys to avoid affecting test defaults
+_API_KEYS_TO_LOAD = {
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "LLM_API_KEY",
+    "PERPLEXITY_API_KEY",
+    "TAVILY_API_KEY",
+}
+
+
+def _load_dotenv():
+    """Load API keys from .env file for evals."""
+    # Find project root (contains .env)
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        env_file = current / ".env"
+        if env_file.exists():
+            with open(env_file) as f:
+                for raw_line in f:
+                    line = raw_line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, value = line.partition("=")
+                        key = key.strip()
+                        # Only load specific API keys
+                        if key not in _API_KEYS_TO_LOAD:
+                            continue
+                        value = value.strip()
+                        # Remove surrounding quotes
+                        if (value.startswith('"') and value.endswith('"')) or (
+                            value.startswith("'") and value.endswith("'")
+                        ):
+                            value = value[1:-1]
+                        # Remove inline comments
+                        elif "#" in value:
+                            value = value.split("#")[0].strip()
+                        # Only set if not already in environment
+                        if key and not os.getenv(key):
+                            os.environ[key] = value
+            break
+        current = current.parent
+
+
+_load_dotenv()
 
 # Set environment variables BEFORE imports (critical for jwt_auth module initialization)
 os.environ["OTEL_TRACES_ENABLED"] = "false"
@@ -324,8 +371,22 @@ def mock_unified_loader_env(standard_mock_loader):
 
 
 @pytest.fixture(autouse=True)
-def mock_openai_client():
-    """Mock OpenAI client for all tests to avoid actual API calls."""
+def mock_openai_client(request):
+    """Mock OpenAI client for unit tests to avoid actual API calls.
+
+    Skips mocking for eval tests (marked with @pytest.mark.eval) which need
+    real API calls.
+    """
+    # Skip mocking for eval tests
+    if request.node.get_closest_marker("eval"):
+        yield None
+        return
+
+    # Skip mocking for tests in evals directory
+    if "evals" in str(request.fspath):
+        yield None
+        return
+
     with patch("openai.AsyncOpenAI") as mock_client:
         # Create a mock instance
         mock_instance = Mock()

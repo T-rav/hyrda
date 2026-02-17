@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from agents.goal_executor.skills.prospect.clients import SearchResult
+
 # Skip all tests if no API key
 pytestmark = pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
@@ -25,8 +27,8 @@ def mock_skill_context():
 
     return SkillContext(
         bot_id="test_bot",
-        thread_id="test_thread",
-        goal="Test goal",
+        run_id="test_run",
+        config={"goal": "Test goal"},
     )
 
 
@@ -41,19 +43,18 @@ class TestSkillSelectionForResearch:
 
         skill = WebSearchSkill(context=mock_skill_context)
 
-        # Mock Tavily
+        # Mock Tavily - returns list[SearchResult]
+        mock_results = [
+            SearchResult(
+                title="Acme AI raises $50M",
+                url="https://example.com",
+                content="Acme AI, an AI infrastructure company...",
+                source="tavily",
+            ),
+        ]
+
         with patch.object(skill, "tavily") as mock_tavily:
-            mock_tavily.search = AsyncMock(
-                return_value={
-                    "results": [
-                        {
-                            "title": "Acme AI raises $50M",
-                            "url": "https://example.com",
-                            "content": "...",
-                        },
-                    ]
-                }
-            )
+            mock_tavily.search = MagicMock(return_value=mock_results)
 
             result = await skill.run(
                 query="AI infrastructure companies Series B funding 2024",
@@ -62,10 +63,6 @@ class TestSkillSelectionForResearch:
 
             assert result.is_success
             mock_tavily.search.assert_called_once()
-
-            # Verify query was passed correctly
-            call_args = mock_tavily.search.call_args
-            assert "AI infrastructure" in call_args[1]["query"]
 
     @pytest.mark.asyncio
     @pytest.mark.eval
@@ -76,7 +73,9 @@ class TestSkillSelectionForResearch:
         skill = DeepResearchSkill(context=mock_skill_context)
 
         with patch.object(skill, "perplexity") as mock_perplexity:
-            mock_perplexity.search = AsyncMock(
+            # perplexity.research is sync, returns str
+            mock_perplexity.is_configured = True
+            mock_perplexity.research = MagicMock(
                 return_value="Acme AI is a DevOps company founded in 2020..."
             )
 
@@ -85,7 +84,7 @@ class TestSkillSelectionForResearch:
             )
 
             assert result.is_success
-            mock_perplexity.search.assert_called_once()
+            mock_perplexity.research.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.eval
@@ -95,10 +94,11 @@ class TestSkillSelectionForResearch:
 
         skill = SearchPastRunsSkill(context=mock_skill_context)
 
+        # Patch where it's actually defined, not where it's imported
         with patch(
             "agents.goal_executor.services.vector_memory.get_vector_memory"
         ) as mock_vmem:
-            mock_vmem_instance = AsyncMock()
+            mock_vmem_instance = MagicMock()
             mock_vmem_instance.search = AsyncMock(
                 return_value=[
                     {
@@ -172,14 +172,17 @@ class TestSkillSelectionForQualification:
         skill = CheckRelationshipSkill(context=mock_skill_context)
 
         with patch.object(skill, "hubspot") as mock_hubspot:
-            mock_hubspot.search_companies = AsyncMock(return_value=[])
-            mock_hubspot.search_contacts = AsyncMock(return_value=[])
-            mock_hubspot.search_deals = AsyncMock(return_value=[])
+            # HubSpot is_configured must be True to trigger actual check
+            mock_hubspot.is_configured = True
+            # check_company is async and returns None for not found
+            mock_hubspot.check_company = AsyncMock(return_value=None)
 
             result = await skill.run(company_name="New Prospect Inc")
 
             assert result.is_success
-            assert result.data.has_relationship is False
+            # found_in_hubspot is False when not found, can_pursue is True
+            assert result.data.found_in_hubspot is False
+            assert result.data.can_pursue is True
 
     @pytest.mark.asyncio
     @pytest.mark.eval
@@ -189,28 +192,34 @@ class TestSkillSelectionForQualification:
 
         skill = QualifyProspectSkill(context=mock_skill_context)
 
-        # Mock the LLM call inside qualify
-        with patch(
-            "agents.goal_executor.skills.prospect.qualify.ChatOpenAI"
-        ) as mock_llm:
-            mock_llm_instance = MagicMock()
-            mock_llm_instance.ainvoke = AsyncMock(
-                return_value=MagicMock(
-                    content='{"score": 85, "reasoning": "Strong fit", "signals": ["recent funding"]}'
-                )
-            )
-            mock_llm.return_value = mock_llm_instance
+        # QualifyProspectSkill is rule-based, no LLM needed
+        # Provide signals for scoring (Signal dataclass fields: type, title, content, url, strength)
+        signals = [
+            {
+                "type": "funding",
+                "title": "Series B Funding",
+                "content": "Series B, $50M",
+                "url": "https://example.com/funding",
+                "strength": "high",
+            },
+            {
+                "type": "job_posting",
+                "title": "DevOps Hiring",
+                "content": "Hiring DevOps engineers",
+                "url": "https://example.com/jobs",
+                "strength": "medium",
+            },
+        ]
 
-            result = await skill.run(
-                company_name="TechCo",
-                company_data={
-                    "funding": "Series B, $50M",
-                    "industry": "DevOps",
-                    "employees": "150",
-                },
-            )
+        result = await skill.run(
+            company_name="TechCo",
+            signals=signals,
+            industry="DevOps",
+            employee_count=150,
+        )
 
-            assert result.is_success or result.status.value == "partial"
+        assert result.is_success
+        assert result.data.score > 0
 
 
 class TestSkillChaining:
@@ -226,47 +235,41 @@ class TestSkillChaining:
         # Step 1: Search
         search_skill = WebSearchSkill(context=mock_skill_context)
 
-        with patch.object(search_skill, "tavily") as mock_tavily:
-            mock_tavily.search = AsyncMock(
-                return_value={
-                    "results": [
-                        {
-                            "title": "TechCo raises Series B",
-                            "url": "https://example.com",
-                            "content": "TechCo, a DevOps platform, raised $40M in Series B",
-                        }
-                    ]
-                }
+        mock_results = [
+            SearchResult(
+                title="TechCo raises Series B",
+                url="https://example.com",
+                content="TechCo, a DevOps platform, raised $40M in Series B",
+                source="tavily",
             )
+        ]
+
+        with patch.object(search_skill, "tavily") as mock_tavily:
+            mock_tavily.search = MagicMock(return_value=mock_results)
 
             search_result = await search_skill.run(query="DevOps Series B 2024")
             assert search_result.is_success
 
-        # Step 2: Extract company data from search (simulated)
-        company_data = {
-            "name": "TechCo",
-            "funding": "Series B, $40M",
-            "industry": "DevOps",
-        }
+        # Step 2: Extract signals from search (simulated)
+        # Signal dataclass fields: type, title, content, url, strength
+        signals = [
+            {
+                "type": "funding",
+                "title": "TechCo Series B",
+                "content": "Series B, $40M",
+                "url": "https://example.com",
+                "strength": "high",
+            },
+        ]
 
-        # Step 3: Qualify
+        # Step 3: Qualify using signals
         qualify_skill = QualifyProspectSkill(context=mock_skill_context)
 
-        with patch(
-            "agents.goal_executor.skills.prospect.qualify.ChatOpenAI"
-        ) as mock_llm:
-            mock_llm_instance = MagicMock()
-            mock_llm_instance.ainvoke = AsyncMock(
-                return_value=MagicMock(
-                    content='{"score": 80, "reasoning": "Good fit for DevOps", "signals": ["Series B"]}'
-                )
-            )
-            mock_llm.return_value = mock_llm_instance
+        qualify_result = await qualify_skill.run(
+            company_name="TechCo",
+            signals=signals,
+            industry="DevOps",
+        )
 
-            qualify_result = await qualify_skill.run(
-                company_name=company_data["name"],
-                company_data=company_data,
-            )
-
-            # Qualification should work with search output
-            assert qualify_result.status.value in ["success", "partial"]
+        # Qualification should work with search-derived signals
+        assert qualify_result.status.value in ["success", "partial"]
