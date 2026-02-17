@@ -17,16 +17,28 @@ depends_on = None
 
 
 def upgrade():
-    """Add group_name column to task_metadata table."""
-    op.add_column(
-        "task_metadata",
-        sa.Column("group_name", sa.String(100), nullable=True),
-    )
-    op.create_index(
-        "ix_task_metadata_group_name",
-        "task_metadata",
-        ["group_name"],
-    )
+    """Add group_name column to task_metadata table (idempotent)."""
+    from sqlalchemy import inspect
+
+    bind = op.get_bind()
+    inspector = inspect(bind)
+
+    # Check if column already exists
+    columns = [col["name"] for col in inspector.get_columns("task_metadata")]
+    if "group_name" not in columns:
+        op.add_column(
+            "task_metadata",
+            sa.Column("group_name", sa.String(100), nullable=True),
+        )
+
+    # Check if index already exists
+    indexes = [idx["name"] for idx in inspector.get_indexes("task_metadata")]
+    if "ix_task_metadata_group_name" not in indexes:
+        op.create_index(
+            "ix_task_metadata_group_name",
+            "task_metadata",
+            ["group_name"],
+        )
 
 
 def downgrade():
